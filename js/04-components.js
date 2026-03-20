@@ -233,18 +233,33 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
   const isSub = !!task.parentTask;
   const stepInfo = isSub ? `Step ${task.stepIndex||1} of ${task.totalSteps||"?"} of ${task.parentTask}` : null;
 
-  // ─── Shabbos countdown (20h from now, Friday only) ──────────────────
-  const [shabbosEnd] = useState(() => {
+  // ─── Shabbos mode (Friday or ?shabbosTimer=1) ───────────────────────
+  const isShabbosMode = (() => {
     const now = new Date();
-    // Show on Fridays (day 5) OR if manually triggered via URL param
     const isFriday = now.getDay() === 5;
     const params = new URLSearchParams(window.location.search);
-    if (!isFriday && !params.get("shabbosTimer")) return null;
-    return new Date(now.getTime() + 20 * 60 * 60 * 1000); // 20 hours from now
-  });
-  const shabbosRemaining = shabbosEnd ? Math.max(0, shabbosEnd - zenClock) : null;
-  const shabbosHrs = shabbosRemaining != null ? Math.floor(shabbosRemaining / 3600000) : null;
-  const shabbosMins = shabbosRemaining != null ? Math.floor((shabbosRemaining % 3600000) / 60000) : null;
+    return isFriday || !!params.get("shabbosTimer");
+  })();
+
+  // If Shabbos mode — render a completely clean, black, peaceful screen
+  if (isShabbosMode) {
+    return (
+      <div
+        style={{position:"fixed",inset:0,zIndex:9999,background:"#000",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-zen 2s ease forwards",cursor:"pointer"}}
+        onClick={onExit}
+      >
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"clamp(16px,3vh,28px)",animation:"ot-reveal 2.5s ease 0.3s both"}}>
+          <div style={{fontSize:"clamp(80px,18vw,140px)",lineHeight:1}}>🕯️🕯️</div>
+          <p style={{margin:0,fontSize:"clamp(15px,2.5vw,20px)",fontFamily:"Georgia,serif",fontStyle:"italic",fontWeight:400,color:"rgba(255,255,255,0.35)",letterSpacing:"0.05em",textAlign:"center"}}>
+            All you have to do now is…
+          </p>
+          <p style={{margin:0,fontSize:"clamp(28px,5vw,44px)",fontFamily:"Georgia,serif",fontWeight:400,color:"rgba(255,255,255,0.7)",letterSpacing:"0.04em",textAlign:"center"}}>
+            enjoy Shabbos
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -258,19 +273,6 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
           {zenClock.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
         </span>
       </div>
-
-      {/* Good Shabbos banner + countdown */}
-      {shabbosRemaining != null && shabbosRemaining > 0 && (
-        <div style={{position:"absolute",top:"clamp(54px,7vh,80px)",left:"50%",transform:"translateX(-50%)",zIndex:10,pointerEvents:"none",textAlign:"center",animation:"ot-reveal 2s ease 0.5s both"}}>
-          <div style={{fontSize:"clamp(48px,10vw,80px)",lineHeight:1,marginBottom:8}}>🕯️🕯️</div>
-          <span style={{fontSize:"clamp(20px,3.5vw,30px)",fontFamily:"Georgia,serif",fontStyle:"italic",color:"rgba(255,255,255,0.5)",letterSpacing:"0.08em"}}>
-            Good Shabbos
-          </span>
-          <div style={{marginTop:4,fontSize:"clamp(11px,1.5vw,14px)",fontFamily:"system-ui",fontWeight:300,color:"rgba(255,255,255,0.3)",letterSpacing:1}}>
-            {shabbosHrs}h {shabbosMins}m remaining
-          </div>
-        </div>
-      )}
 
       {/* Glow blob */}
       <div style={{position:"absolute",width:"60vw",height:"50vh",borderRadius:"25%",background:p.isShaila?"#2ECC71":p.color,opacity:.2,filter:"blur(60px)",animation:"ot-glow 5s ease-in-out infinite",pointerEvents:"none"}}/>
