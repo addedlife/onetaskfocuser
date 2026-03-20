@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>OneTask Data Merge</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f5; color: #333; padding: 20px; line-height: 1.5; max-width: 800px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 5px; }
+    h2 { font-size: 17px; margin-top: 20px; color: #444; }
+    p { margin-bottom: 12px; color: #555; font-size: 14px; }
+    textarea { width: 100%; height: 280px; padding: 10px; font-family: monospace; font-size: 12px; border: 1px solid #ccc; border-radius: 6px; margin-bottom: 10px; resize: vertical; }
+    button { background: #007bff; color: white; border: none; padding: 10px 18px; font-size: 15px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-right: 8px; margin-bottom: 8px; }
+    button:active { opacity: 0.85; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .btn-green { background: #28a745; }
+    .task-row { background: white; border: 1px solid #e0e0e0; border-radius: 6px; padding: 9px 12px; margin-bottom: 5px; font-size: 13px; display: flex; align-items: center; gap: 10px; }
+    .task-row.completed { opacity: 0.55; text-decoration: line-through; }
+    .pri-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .task-text { flex: 1; }
+    .task-meta { font-size: 11px; color: #999; white-space: nowrap; }
+    .stat-box { display: inline-block; background: white; border: 1px solid #ddd; border-radius: 6px; padding: 8px 14px; margin-right: 8px; margin-bottom: 8px; font-size: 13px; }
+    .stat-num { font-weight: bold; font-size: 18px; color: #333; }
+    .msg { padding: 12px; border-radius: 6px; margin-top: 10px; font-weight: bold; text-align: center; display: none; }
+    .msg-success { background: #d4edda; color: #155724; }
+    .msg-error { background: #f8d7da; color: #721c24; }
+    #authZone { border: 1px solid #ddd; padding: 12px; border-radius: 6px; margin-top: 15px; background: white; font-size: 14px; display: none; }
+    hr { border: none; border-top: 2px solid #ddd; margin: 20px 0; }
+  </style>
+</head>
+<body>
+
+  <h1>🔀 OneTask Data Merge</h1>
+  <p>Paste <strong>all</strong> your recovery data below — from every browser and device, all jumbled together in one box. The tool will find every valid task list in the blob, deduplicate everything, and give you one clean merged list.</p>
+
+  <textarea id="bigPaste" placeholder="Paste everything here — multiple --- OneTask LocalStorage Recovery --- blocks, JSON objects, whatever you have. More is fine."></textarea>
+
+  <button onclick="mergeAll()">🔍 Parse &amp; Merge</button>
+
+  <div id="results"></div>
+
+  <div id="authZone">
+    <div id="authStatus"></div>
+    <div id="loginForm" style="display:none; margin-top:10px;">
+      <button onclick="googleLogin()" style="background:#4285F4; width:100%;">Sign in with Google</button>
+    </div>
+  </div>
+  <button id="pushBtn" class="btn-green" style="display:none; width:100%; margin-top:10px; padding:14px; font-size:16px;" onclick="pushToFirebase()">Push Merged Data to Firebase</button>
+  <div id="msgSuccess" class="msg msg-success">✅ Pushed to Firebase! Refresh the main app.</div>
+  <div id="msgError" class="msg msg-error"></div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA",
+      authDomain: "onetaskonly-app.firebaseapp.com",
+      projectId: "onetaskonly-app",
+      storageBucket: "onetaskonly-app.firebasestorage.app",
+      messagingSenderId: "1017463520129",
+      appId: "1:1017463520129:web:b4d8ca01864dfb2a35c680"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    let currentUserUid = null;
+    let mergedState = null;
+
+    function canonicalUid(user) {
+      return (user.email || "").split("@")[0].toLowerCase().trim() || user.uid;
+    }
+
+    firebase.auth().onAuthStateChanged((user) => {
+      const authZone = document.getElementById('authZone');
+      const authStatus = document.getElementById('authStatus');
+      const loginForm = document.getElementById('loginForm');
+      authZone.style.display = 'block';
+      if (user) {
+        currentUserUid = canonicalUid(user);
+        authStatus.innerHTML = '<strong>Logged in as:</strong> ' + user.email;
+        loginForm.style.display = 'none';
+        if (document.getElementById('pushBtn').style.display === 'block')
+          document.getElementById('pushBtn').disabled = false;
+      } else {
+        currentUserUid = null;
+        authStatus.innerHTML = '<strong>Not logged in</strong>';
+        loginForm.style.display = 'block';
+      }
+    });
+
+    function googleLogin() {
+      firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider())
+        .catch(err => showError("Login failed: " + err.message));
+    }
+
+    // Normalize varied task schemas to the current one
+    function normalizeTask(t) {
+      const task = { ...t };
+      // Map title -> text
+      if (!task.text && task.title) task.text = task.title;
+      // Map ISO dates or strings to timestamps
+      const toTs = (v) => {
+        if (!v) return null;
+        if (typeof v === 'number') return v;
+        const d = new Date(v);
+        return isNaN(d.getTime()) ? null : d.getTime();
+      };
+      if (task.created_date) task.createdAt = toTs(task.created_date);
+      if (task.completed_at) task.completedAt = toTs(task.completed_at);
+      if (!task.createdAt && task.timestamp) task.createdAt = toTs(task.timestamp);
+      
+      // Map priority names (legacy backups use "pink", "blue", "orange")
+      const priMap = { pink: 'shaila', orange: 'now', today: 'today', blue: 'eventually' };
+      if (priMap[task.priority]) task.priority = priMap[task.priority];
+      
+      // Default ID if missing (simple hash of text + date)
+      if (!task.id) {
+        let hash = 0;
+        const str = (task.text || '') + (task.createdAt || '');
+        for (let i = 0; i < str.length; i++) {
+          hash = ((hash << 5) - hash) + str.charCodeAt(i);
+          hash |= 0;
+        }
+        task.id = 'gen-' + Math.abs(hash).toString(36) + '-' + (task.createdAt || '0');
+      }
+      return task;
+    }
+
+    // Recursively find anything that looks like a task
+    function deepSearchTasks(obj, tasks = []) {
+      if (!obj || typeof obj !== 'object') return tasks;
+      
+      if (Array.isArray(obj)) {
+        obj.forEach(item => deepSearchTasks(item, tasks));
+      } else {
+        // Does this object look like a task?
+        if ((obj.text || obj.title) && (obj.id || obj.createdAt || obj.created_date)) {
+          tasks.push(normalizeTask(obj));
+        }
+        // Search children
+        Object.values(obj).forEach(val => {
+          if (val && typeof val === 'object') deepSearchTasks(val, tasks);
+        });
+      }
+      return tasks;
+    }
+
+    function fmtDate(ts) {
+      if (!ts) return '?';
+      return new Date(ts).toLocaleDateString() + ' ' + new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    }
+
+    function getPriColor(pri) {
+      return ({shaila:'#C8A84C', now:'#E09AB8', today:'#E0B472', eventually:'#7EB0DE'})[pri] || '#bbb';
+    }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+    function mergeAll() {
+      try {
+        const text = document.getElementById('bigPaste').value;
+        if (!text.trim()) { showError("Nothing pasted yet!"); return; }
+
+        // 1. Extract all JSON blobs
+        const blobs = [];
+        let depth = 0, start = -1;
+        for (let i = 0; i < text.length; i++) {
+          if (text[i] === '{') { if (depth === 0) start = i; depth++; }
+          else if (text[i] === '}') {
+            depth--;
+            if (depth === 0 && start >= 0) {
+              try { blobs.push(JSON.parse(text.substring(start, i + 1))); } catch(e) {}
+              start = -1;
+            }
+          }
+        }
+
+        const allTasks = [];
+        blobs.forEach(blob => deepSearchTasks(blob, allTasks));
+
+        if (allTasks.length === 0) {
+          document.getElementById('results').innerHTML = '<p style="color:#dc3545;font-weight:bold;margin-top:15px;">No tasks found. Paste the full recovery text or JSON files.</p>';
+          return;
+        }
+
+        // ── Merge all tasks ──────────────────────────
+        const taskMap = new Map();   // task id → best task object
+        allTasks.forEach(task => {
+          const existing = taskMap.get(task.id);
+          if (!existing) {
+            taskMap.set(task.id, task);
+          } else {
+            const winCompleted = task.completed && !existing.completed;
+            const winNewer = (task.completedAt || task.createdAt || 0) > (existing.completedAt || existing.createdAt || 0);
+            if (winCompleted || winNewer) taskMap.set(task.id, task);
+          }
+        });
+
+        // Group into "Migrated Tasks" list
+        const mergedTasks = Array.from(taskMap.values());
+        const base = {
+          lists: [{ id: 'migrated', name: 'Migrated Tasks', tasks: mergedTasks }],
+          _lsModified: Date.now()
+        };
+        mergedState = base;
+
+        // ── Display ───────────────────────────────────────────────────
+        const active = mergedTasks.filter(t => !t.completed).sort((a,b) => (b.createdAt||0)-(a.createdAt||0));
+        const completed = mergedTasks.filter(t => t.completed).sort((a,b) => (b.completedAt||0)-(a.completedAt||0));
+
+        let html = '<hr>';
+        html += '<div>';
+        html += '<span class="stat-box">Total Unique Tasks: <span class="stat-num">' + mergedTasks.length + '</span></span>';
+        html += '<span class="stat-box">Active: <span class="stat-num">' + active.length + '</span></span>';
+        html += '<span class="stat-box">Completed: <span class="stat-num">' + completed.length + '</span></span>';
+        html += '</div>';
+
+        html += '<h2>Active Tasks (' + active.length + ')</h2>';
+        active.forEach(t => {
+          html += '<div class="task-row"><div class="pri-dot" style="background:' + getPriColor(t.priority) + '"></div>';
+          html += '<div class="task-text">' + esc(t.text) + '</div>';
+          html += '<div class="task-meta">' + (t.priority||'') + ' · ' + fmtDate(t.createdAt) + '</div></div>';
+        });
+
+        html += '<h2>Completed Tasks (' + completed.length + ')</h2>';
+        completed.forEach(t => {
+          html += '<div class="task-row completed"><div class="pri-dot" style="background:#bbb"></div>';
+          html += '<div class="task-text">' + esc(t.text) + '</div>';
+          html += '<div class="task-meta">✓ ' + fmtDate(t.completedAt) + '</div></div>';
+        });
+
+        document.getElementById('results').innerHTML = html;
+        const pushBtn = document.getElementById('pushBtn');
+        pushBtn.style.display = 'block';
+        pushBtn.disabled = !currentUserUid;
+      } catch (e) {
+        console.error(e);
+        showError("Merge error: " + e.message);
+      }
+    }
+
+    async function pushToFirebase() {
+      if (!currentUserUid) { showError("Please sign in first."); return; }
+      if (!mergedState) { showError("No merged data. Run Parse & Merge first."); return; }
+      const btn = document.getElementById('pushBtn');
+      btn.disabled = true; btn.innerText = "Pushing..."; hideMsg();
+      try {
+        mergedState._lsModified = Date.now();
+        const ref = db.collection("users").doc(currentUserUid).collection("appData").doc("appState_v4");
+        await ref.set({ state: mergedState, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+        document.getElementById('msgSuccess').style.display = 'block';
+        btn.innerText = "Done!";
+      } catch(err) {
+        showError("Firebase write failed: " + err.message);
+        btn.disabled = false; btn.innerText = "Push Merged Data to Firebase";
+      }
+    }
+
+    function showError(msg) { const e = document.getElementById('msgError'); e.textContent = msg; e.style.display = 'block'; }
+    function hideMsg() { document.getElementById('msgError').style.display = 'none'; document.getElementById('msgSuccess').style.display = 'none'; }
+  </script>
+</body>
+</html>

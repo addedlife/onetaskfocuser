@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>OneTask Data Restoration</title>
+  
+  <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <!-- Add Firebase products that you want to use -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #333; padding: 20px; line-height: 1.5; max-width: 600px; margin: 0 auto; }
+    h1 { font-size: 24px; margin-bottom: 10px; }
+    p { margin-bottom: 20px; color: #555; }
+    textarea { width: 100%; height: 300px; padding: 10px; font-family: monospace; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-bottom: 20px; }
+    button { background: #007bff; color: white; border: none; padding: 12px 20px; font-size: 16px; border-radius: 4px; cursor: pointer; display: block; width: 100%; font-weight: bold; margin-bottom: 10px; }
+    button:active { background: #0056b3; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    input[type="email"], input[type="password"] { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    .success { color: #28a745; font-weight: bold; margin-top: 10px; display: none; text-align: center; }
+    .error { color: #dc3545; font-weight: bold; margin-top: 10px; display: none; text-align: center; }
+    #authZone { border: 1px solid #ddd; padding: 15px; border-radius: 4px; margin-bottom: 20px; background: #f9f9f9; }
+  </style>
+</head>
+<body>
+
+  <h1>Data Restoration</h1>
+  <p>Paste the text you copied from the recovery page into the box below. We'll reconstruct your data and save it straight to the cloud.</p>
+
+  <div id="authZone">
+    <div id="authStatus">Checking login status...</div>
+    <div id="loginForm" style="display:none; margin-top: 15px;">
+      <p style="font-size: 14px; margin-bottom: 5px;"><strong>Log in to restore data:</strong></p>
+      <input type="email" id="email" placeholder="Email" />
+      <input type="password" id="password" placeholder="Password" />
+      <button onclick="login()" style="background: #28a745;">Log In with Email</button>
+      <div style="text-align: center; margin: 10px 0; color: #777;">&mdash; OR &mdash;</div>
+      <button onclick="googleLogin()" style="background: #4285F4; border-radius: 4px; border: none; padding: 12px 20px; width: 100%; color: white; font-weight: bold; cursor: pointer;">Sign in with Google</button>
+    </div>
+  </div>
+
+  <textarea id="dataBox" placeholder="Paste the --- OneTask LocalStorage Recovery --- text here..."></textarea>
+  
+  <button id="restoreBtn" onclick="restoreData()" disabled>Restore to Firebase</button>
+  <div id="msgSuccess" class="success">Successfully restored to Firebase! You can now open the app.</div>
+  <div id="msgError" class="error"></div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA",
+      authDomain: "onetaskonly-app.firebaseapp.com",
+      projectId: "onetaskonly-app",
+      storageBucket: "onetaskonly-app.firebasestorage.app",
+      messagingSenderId: "1017463520129",
+      appId: "1:1017463520129:web:b4d8ca01864dfb2a35c680"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    let currentUserUid = null;
+
+    function canonicalUid(user) {
+      if (!user) return null;
+      const prefix = (user.email || "").split("@")[0].toLowerCase().trim();
+      return prefix || user.uid;
+    }
+
+    firebase.auth().onAuthStateChanged((user) => {
+      const authStatus = document.getElementById('authStatus');
+      const restoreBtn = document.getElementById('restoreBtn');
+      const loginForm = document.getElementById('loginForm');
+      
+      if (user) {
+        currentUserUid = canonicalUid(user);
+        authStatus.innerHTML = `<strong>Logged in as:</strong> ${user.email} (UID: ${currentUserUid})`;
+        restoreBtn.disabled = false;
+        loginForm.style.display = 'none';
+      } else {
+        currentUserUid = null;
+        authStatus.innerHTML = `<strong>Not logged in!</strong>`;
+        restoreBtn.disabled = true;
+        loginForm.style.display = 'block';
+      }
+    });
+
+    function login() {
+      const email = document.getElementById('email').value.trim();
+      const pass = document.getElementById('password').value;
+      if (!email || !pass) { showError("Please enter email and password"); return; }
+      
+      hideMsg();
+      firebase.auth().signInWithEmailAndPassword(email, pass)
+        .catch(err => showError("Login failed: " + err.message));
+    }
+
+    function googleLogin() {
+      hideMsg();
+      const provider = new firebase.auth.GoogleAuthProvider();
+      firebase.auth().signInWithPopup(provider)
+        .catch(err => showError("Google login failed: " + err.message));
+    }
+
+    async function restoreData() {
+      if (!currentUserUid) {
+        showError("You must be logged in.");
+        return;
+      }
+
+      const text = document.getElementById('dataBox').value;
+      if (!text.trim()) {
+        showError("Please paste the data first.");
+        return;
+      }
+
+      // We need to find the actual JSON payload.
+      // Look for a JSON block inside the pasted text.
+      let parsedData = null;
+      
+      // The text format is roughly:
+      // KEY: onetaskonly_v4_rabbidanziger
+      // {
+      //   "lists": [...
+      // }
+      // ---------------------------------------
+
+      try {
+        // Simple extraction: find the first '{' and the last '}'
+        const firstBrace = text.indexOf('{');
+        const lastBrace = text.lastIndexOf('}');
+        
+        if (firstBrace === -1 || lastBrace === -1) {
+            throw new Error("Could not find any JSON braces {} in the text.");
+        }
+        
+        const possibleJson = text.substring(firstBrace, lastBrace + 1);
+        parsedData = JSON.parse(possibleJson);
+        
+        if (!parsedData.lists) {
+            throw new Error("JSON parsed successfully, but it doesn't look like OneTask app data (no 'lists' array found).");
+        }
+      } catch (err) {
+        console.error(err);
+        showError("Could not parse the data: " + err.message);
+        return;
+      }
+
+      const btn = document.getElementById('restoreBtn');
+      btn.disabled = true;
+      btn.innerText = "Restoring...";
+      hideMsg();
+
+      try {
+        const ref = db.collection("users").doc(currentUserUid).collection("appData").doc("appState_v4");
+        
+        // Ensure _lsModified is updated so that onSnapshot recognizes it's new
+        parsedData._lsModified = Date.now();
+        
+        await ref.set({
+          state: parsedData,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        document.getElementById('msgSuccess').style.display = 'block';
+        btn.innerText = "Restore Complete!";
+      } catch (err) {
+        showError("Firebase write failed: " + err.message);
+        btn.disabled = false;
+        btn.innerText = "Restore to Firebase";
+      }
+    }
+
+    function showError(msg) {
+        const errDiv = document.getElementById('msgError');
+        errDiv.innerText = msg;
+        errDiv.style.display = 'block';
+    }
+    
+    function hideMsg() {
+        document.getElementById('msgError').style.display = 'none';
+        document.getElementById('msgSuccess').style.display = 'none';
+    }
+  </script>
+</body>
+</html>

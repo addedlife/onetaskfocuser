@@ -1,0 +1,30 @@
+# Live site snapshots (downloaded by sync script, not part of the project)
+_live_snapshot/
+
+# Deploy staging area
+deploy_staging/
+
+# Temp deploy files
+deploy_temp.zip
+
+# Netlify local state
+.netlify/
+
+# Claude Code project files
+.claude/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Backup/recovery files that shouldn't be in the repo
+v4_restore_state.json
+status.json
+status_cmd.txt
+netlify_status.txt
+
+# Old deploy scripts (deprecated, kept locally but not tracked)
+deploy.bat
+deploy_api.ps1
+check_deploy.ps1
