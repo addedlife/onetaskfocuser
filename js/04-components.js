@@ -233,6 +233,19 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
   const isSub = !!task.parentTask;
   const stepInfo = isSub ? `Step ${task.stepIndex||1} of ${task.totalSteps||"?"} of ${task.parentTask}` : null;
 
+  // ─── Shabbos countdown (20h from now, Friday only) ──────────────────
+  const [shabbosEnd] = useState(() => {
+    const now = new Date();
+    // Show on Fridays (day 5) OR if manually triggered via URL param
+    const isFriday = now.getDay() === 5;
+    const params = new URLSearchParams(window.location.search);
+    if (!isFriday && !params.get("shabbosTimer")) return null;
+    return new Date(now.getTime() + 20 * 60 * 60 * 1000); // 20 hours from now
+  });
+  const shabbosRemaining = shabbosEnd ? Math.max(0, shabbosEnd - zenClock) : null;
+  const shabbosHrs = shabbosRemaining != null ? Math.floor(shabbosRemaining / 3600000) : null;
+  const shabbosMins = shabbosRemaining != null ? Math.floor((shabbosRemaining % 3600000) / 60000) : null;
+
   return (
     <div
       ref={zenRef}
@@ -245,6 +258,19 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
           {zenClock.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
         </span>
       </div>
+
+      {/* Good Shabbos banner + countdown */}
+      {shabbosRemaining != null && shabbosRemaining > 0 && (
+        <div style={{position:"absolute",top:"clamp(54px,7vh,80px)",left:"50%",transform:"translateX(-50%)",zIndex:10,pointerEvents:"none",textAlign:"center",animation:"ot-reveal 2s ease 0.5s both"}}>
+          <div style={{fontSize:"clamp(48px,10vw,80px)",lineHeight:1,marginBottom:8}}>🕯️🕯️</div>
+          <span style={{fontSize:"clamp(20px,3.5vw,30px)",fontFamily:"Georgia,serif",fontStyle:"italic",color:"rgba(255,255,255,0.5)",letterSpacing:"0.08em"}}>
+            Good Shabbos
+          </span>
+          <div style={{marginTop:4,fontSize:"clamp(11px,1.5vw,14px)",fontFamily:"system-ui",fontWeight:300,color:"rgba(255,255,255,0.3)",letterSpacing:1}}>
+            {shabbosHrs}h {shabbosMins}m remaining
+          </div>
+        </div>
+      )}
 
       {/* Glow blob */}
       <div style={{position:"absolute",width:"60vw",height:"50vh",borderRadius:"25%",background:p.isShaila?"#2ECC71":p.color,opacity:.2,filter:"blur(60px)",animation:"ot-glow 5s ease-in-out infinite",pointerEvents:"none"}}/>
