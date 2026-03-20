@@ -241,6 +241,12 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
     return isFriday || !!params.get("shabbosTimer");
   })();
 
+  // Shabbos 24h countdown — starts when zen mode opens
+  const [shabbosStart] = useState(() => isShabbosMode ? Date.now() : null);
+  const shabbosMs = shabbosStart ? Math.max(0, (shabbosStart + 24*60*60*1000) - zenClock.getTime()) : null;
+  const sHrs = shabbosMs != null ? Math.floor(shabbosMs / 3600000) : null;
+  const sMins = shabbosMs != null ? Math.floor((shabbosMs % 3600000) / 60000) : null;
+
   // If Shabbos mode — render a completely clean, black, peaceful screen
   if (isShabbosMode) {
     return (
@@ -256,6 +262,11 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
           <p style={{margin:0,fontSize:"clamp(28px,5vw,44px)",fontFamily:"Georgia,serif",fontWeight:400,color:"rgba(255,255,255,0.7)",letterSpacing:"0.04em",textAlign:"center"}}>
             enjoy Shabbos
           </p>
+          {sHrs != null && shabbosMs > 0 && (
+            <p style={{margin:0,marginTop:8,fontSize:"clamp(13px,2vw,17px)",fontFamily:"system-ui",fontWeight:300,color:"rgba(255,255,255,0.2)",letterSpacing:2}}>
+              {sHrs}h {sMins}m
+            </p>
+          )}
         </div>
       </div>
     );
