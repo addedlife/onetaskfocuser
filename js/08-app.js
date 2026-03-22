@@ -91,7 +91,6 @@ function App({ user, onSignOut }) {
   const [showShailaManager, setShowShailaManager] = useState(false); // shaila log panel
   const [minTick, setMinTick] = useState(0);              // ticks every 60s for snooze auto-wake
   const sessionCompCount = useRef(0);                     // session completions (no re-render needed)
-  const [migBanner, setMigBanner] = useState(false);      // one-time restore banner for rabbidanziger
   const [sharedGeminiKey, setSharedGeminiKey] = useState(""); // app-level key from server
   const [fbOffline, setFbOffline] = useState(false);      // Firebase unreachable on load — warn user
 
@@ -205,15 +204,6 @@ function App({ user, onSignOut }) {
       .catch(() => {});
   }, []);
 
-  // ─── One-time migration banner (rabbidanziger only) ──────────────────────
-  useEffect(() => {
-    if (!loaded) return;
-    if (user?.displayName !== "rabbidanziger") return;
-    try {
-      const raw = localStorage.getItem("onetaskonly_v4");
-      if (raw) { const old = JSON.parse(raw); if (old?.lists) setMigBanner(true); }
-    } catch(e) {}
-  }, [loaded]); // eslint-disable-line
 
   // ─── Auto-aging: nudge stale tasks up one priority tier on load ─────────────
   useEffect(() => {
@@ -238,26 +228,6 @@ function App({ user, onSignOut }) {
     if (count > 0) showToast(`↑ ${count} task${count!==1?"s":""} nudged up — been sitting too long`, 8000);
   }, [loaded]); // eslint-disable-line
 
-  function applyOldMigration() {
-    try {
-      const raw = localStorage.getItem("onetaskonly_v4");
-      if (!raw) { setMigBanner(false); return; }
-      const old = JSON.parse(raw);
-      if (!old?.lists) { setMigBanner(false); return; }
-      if (!old.priorities) old.priorities = defS.priorities.map(p=>({...p}));
-      if (!old.colorScheme) old.colorScheme = "claude";
-      if (old.completionSound === undefined) old.completionSound = true;
-      if (!old.overwhelmThreshold) old.overwhelmThreshold = 7;
-      if (!old.ageThresholds) old.ageThresholds = {...DEF_AGE_THRESHOLDS};
-      if (!old.mrsWWindows) old.mrsWWindows = defS.mrsWWindows;
-      if (old.geminiKey === undefined) old.geminiKey = "";
-      if (old.soferaiKey === undefined) old.soferaiKey = "";
-      setAS(old);
-      Store.save(old);
-      localStorage.removeItem("onetaskonly_v4"); // clear so other accounts on this browser start fresh
-      setMigBanner(false);
-    } catch(e) { alert("Restore failed: " + e.message); }
-  }
 
   // ─── Real-time cross-window sync (Firestore onSnapshot) ─────────────────
   useEffect(() => {
@@ -1304,16 +1274,6 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         </div>
       )}
 
-      {/* One-time migration banner — rabbidanziger only */}
-      {migBanner && (
-        <div style={{position:"fixed",top:0,left:0,right:0,zIndex:9999,background:"#3D3633",color:"#EDE5D8",padding:"12px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",fontFamily:"system-ui",fontSize:13,gap:12}}>
-          <span>📦 Pre-login backup found — restore your tasks & API keys?</span>
-          <div style={{display:"flex",gap:8,flexShrink:0}}>
-            <button onClick={applyOldMigration} style={{padding:"6px 14px",borderRadius:8,background:"#E0B472",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,color:"#3D3633"}}>Restore</button>
-            <button onClick={()=>setMigBanner(false)} style={{padding:"6px 14px",borderRadius:8,background:"none",border:"1px solid rgba(255,255,255,0.3)",cursor:"pointer",fontSize:12,color:"#EDE5D8"}}>Dismiss</button>
-          </div>
-        </div>
-      )}
 
       {/* Modals */}
       {showBulk && <BulkAdd pris={pris} T={T} onAddAll={bulkAdd} onClose={()=>setShowBulk(false)}/>}
