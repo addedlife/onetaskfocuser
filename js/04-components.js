@@ -169,7 +169,7 @@ function GoodEnoughBadge({task}) {
 
 // Zen mode — Click anywhere to exit EXCEPT the done button
 // Done button: completes task with celebration effect, stays in zen for next task
-function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJustStart, jsMinimized, onRestoreJs, showBodyDouble, bdMinimized, onRestoreBd, onCloseBd, onCapture, zenDumpParsing}) {
+function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJustStart, jsMinimized, onRestoreJs, showBodyDouble, bdMinimized, onRestoreBd, onCloseBd, onCapture, zenDumpParsing, onOpenShailos}) {
   const p = gP(pris, task.priority);
   const [showEffect, setShowEffect] = useState(false);
   const [showUI, setShowUI] = useState(true);
@@ -267,6 +267,16 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
               {sHrs}h {sMins}m
             </p>
           )}
+          {/* Shaila button — subtle, always accessible */}
+          <button
+            onClick={(e) => { e.stopPropagation(); if(onOpenShailos) onOpenShailos(); }}
+            style={{marginTop:"clamp(20px,4vh,40px)",background:"none",border:"1px solid rgba(255,255,255,0.12)",borderRadius:20,padding:"10px 22px",cursor:"pointer",display:"flex",alignItems:"center",gap:8,transition:"border-color 0.3s"}}
+            onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.3)"}
+            onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.12)"}
+          >
+            <span style={{fontSize:16}}>🎙️</span>
+            <span style={{fontSize:"clamp(12px,1.8vw,15px)",fontFamily:"system-ui",fontWeight:300,color:"rgba(255,255,255,0.35)",letterSpacing:"0.03em"}}>Record Shaila</span>
+          </button>
         </div>
       </div>
     );
@@ -356,6 +366,17 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
         >
           <IC.Check s={22} c="#fff"/>
         </button>
+      </div>
+
+      {/* Record Shaila — bottom left, subtle */}
+      <div
+        onClick={e=>{e.stopPropagation();if(onOpenShailos)onOpenShailos();}}
+        title="Record a shaila"
+        style={{position:"absolute",bottom:"clamp(60px,10vh,100px)",left:24,zIndex:10,width:36,height:36,borderRadius:"50%",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.13)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"opacity 0.5s",opacity:showUI?0.55:0.08}}
+        onMouseEnter={e=>e.currentTarget.style.opacity=1}
+        onMouseLeave={e=>e.currentTarget.style.opacity=showUI?0.55:0.08}
+      >
+        <span style={{fontSize:14}}>🎙️</span>
       </div>
 
       {/* Brain dump icon — bottom right, subtle */}

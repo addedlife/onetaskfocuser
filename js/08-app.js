@@ -38,6 +38,7 @@ function App({ user, onSignOut }) {
   const [bdMinimized, setBdMinimized] = useState(false);
   const [jsMinimized, setJsMinimized] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
+  const [showShailos, setShowShailos] = useState(false);
   const [justStartId, setJustStartId] = useState(null);
   const [tipCat, setTipCat] = useState("All");
   const [showOverwhelm, setShowOverwhelm] = useState(false);
@@ -354,6 +355,8 @@ function App({ user, onSignOut }) {
   const hasAI = aiOpts && (aiOpts.provider === 'claude' ? !!aiOpts.claudeKey : !!aiOpts.geminiKey);
   const sc = SCHEMES[AS?.colorScheme] || AS?.customSchemes?.[AS?.colorScheme] || SCHEMES.claude;
   const T = {...sc, shadow:"0 2px 12px rgba(0,0,0,0.06)", shadowLg:"0 6px 24px rgba(0,0,0,0.09)"};
+  // Share theme with Shaila sub-app via localStorage
+  try { localStorage.setItem('onetask_theme', JSON.stringify(sc)); } catch(e) {}
   const softBorderC = AS?.colorScheme === "midnight" ? "#7A78A8" : "#B8A88E";
   const pris = AS?.priorities || DEF_PRI;
   const aList = AS ? AS.lists.find(l => l.id === AS.activeListId) || AS.lists[0] : null;
@@ -1138,6 +1141,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         justStartId={justStartId} curTaskId={curT?.id} onDoneJustStart={()=>setJustStartId(null)} jsMinimized={jsMinimized} onRestoreJs={()=>setJsMinimized(false)}
         showBodyDouble={showBodyDouble} bdMinimized={bdMinimized} onRestoreBd={()=>setBdMinimized(false)} onCloseBd={()=>{setShowBodyDouble(false);setBdMinimized(false);}}
         onCapture={captureZenDump} zenDumpParsing={zenDumpParsing}
+        onOpenShailos={()=>setShowShailos(true)}
       />}
       {showZenReview && (
         <ZenDumpReview
@@ -1332,6 +1336,16 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         />
       )}
       {showBrainDump && <BrainDump T={T} pris={pris} onCapture={(text)=>{captureZenDump(text);setShowZenReview(true);setShowBrainDump(false);}} onClose={()=>setShowBrainDump(false)}/>}
+      {/* Shaila Transcriber — full-screen iframe overlay */}
+      {showShailos && (
+        <div style={{position:"fixed",inset:0,zIndex:9000,background:T.bg,display:"flex",flexDirection:"column",animation:"ot-fade 0.2s"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",borderBottom:`1px solid ${T.brd}`,background:T.card,flexShrink:0}}>
+            <span style={{fontSize:14,fontWeight:600,color:T.text,fontFamily:"system-ui"}}>Shaila Transcriber</span>
+            <button onClick={()=>setShowShailos(false)} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft,padding:4}}>✕</button>
+          </div>
+          <iframe src="/shailos/" style={{flex:1,border:"none",width:"100%"}} title="Shaila Transcriber"/>
+        </div>
+      )}
       {blockedModal && <BlockedModal task={blockedModal} T={T} pris={pris} onBlock={blockTask} onClose={()=>setBlockedModal(null)}/>}
       {/* Context tags removed */}
       {showSet && <SettingsModal AS={AS} setAS={setAS} T={T} ap={ap} onClose={()=>setShowSet(false)} onSignOut={onSignOut}
@@ -1737,7 +1751,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
               <p style={{color:T.tFaint,fontSize:13,margin:"4px 0 0",fontStyle:"italic"}}>{gG()} — {dateStr}</p>
               <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
                 <span style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui"}}>@{user?.displayName || user?.email?.split("@")[0] || ""}</span>
-                <button onClick={()=>window.open("/shailos/","_blank")} style={{fontSize:11,color:T.accent||"#6366f1",fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>Shailos</button>
+                <button onClick={()=>setShowShailos(true)} style={{fontSize:11,color:T.accent||"#C8A84C",fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>Shailos</button>
                 <button onClick={()=>{if(onSignOut)onSignOut();}} style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>sign out</button>
               </div>
             </header>

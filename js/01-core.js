@@ -853,12 +853,12 @@ async function callGemini(gk, prompt) {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${gk}`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.7, maxOutputTokens:2048}})
+      body: JSON.stringify({contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.7, maxOutputTokens:4096}})
     });
     const d = await r.json();
-    if (d.error) return null;
+    if (d.error) { console.warn("[AI] Gemini error:", d.error); return null; }
     return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  } catch(e) { return null; }
+  } catch(e) { console.warn("[AI] Gemini call failed:", e); return null; }
 }
 
 async function callClaude(ck, prompt) {

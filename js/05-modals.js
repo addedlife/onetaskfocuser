@@ -86,6 +86,49 @@ function TaskBD({task, pris, T, onConfirm, onClose, aiOpts}) {
   const [cm, setCm] = useState("");
   const [ch, setCh] = useState([]);
   const [err, setErr] = useState("");
+  const [micRec, setMicRec] = useState(false);
+  const bdMicRef = useRef(null);
+  const bdChunks = useRef([]);
+
+  const startBdMic = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      const mr = new MediaRecorder(stream);
+      bdChunks.current = [];
+      mr.ondataavailable = e => bdChunks.current.push(e.data);
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(bdChunks.current, {type:"audio/webm"});
+        if (!aiOpts?.geminiKey) { setErr("Set a Gemini key in Settings for mic."); return; }
+        setLd(true);
+        try {
+          const buf = await blob.arrayBuffer();
+          const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+          const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${aiOpts.geminiKey}`, {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({contents:[{parts:[
+              {inline_data:{mime_type:"audio/webm",data:b64}},
+              {text:"Transcribe this audio exactly verbatim. The speaker uses Yeshivish English. Return ONLY the transcript, nothing else."}
+            ]}], generationConfig:{temperature:0, maxOutputTokens:2048}})
+          });
+          const d = await r.json();
+          const txt = d.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          if (txt) setInp(prev => prev ? prev + " " + txt.trim() : txt.trim());
+          else setErr("Couldn't transcribe.");
+        } catch(e) { setErr("Mic transcribe failed."); }
+        setLd(false);
+      };
+      mr.start();
+      bdMicRef.current = mr;
+      setMicRec(true);
+      // Auto-stop after 30s
+      setTimeout(() => { if (mr.state === "recording") { mr.stop(); setMicRec(false); } }, 30000);
+    } catch(e) { setErr("Mic access denied."); }
+  };
+
+  const stopBdMic = () => {
+    if (bdMicRef.current?.state === "recording") { bdMicRef.current.stop(); setMicRec(false); }
+  };
 
   const callG = async (pr) => {
     if (!aiOpts) { setErr("Set an API key in Settings."); return null; }
@@ -128,7 +171,7 @@ function TaskBD({task, pris, T, onConfirm, onClose, aiOpts}) {
     <div style={{position:"fixed",inset:0,zIndex:8500,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s",overflowY:"auto",padding:20}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:22,padding:"24px 20px",maxWidth:520,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 12px 48px rgba(0,0,0,0.2)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><h3 style={{fontSize:16,fontWeight:600,margin:0,display:"flex",alignItems:"center",gap:8}}><IC.Split s={18} c={T.text}/> Shatter Task</h3><button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft}}>✕</button></div>
-        <div style={{marginBottom:16}}><label style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",fontWeight:700}}>Big task:</label><input value={inp} onChange={e=>setInp(e.target.value)} placeholder="e.g. Prepare shiur" style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1px solid ${T.brd}`,outline:"none",fontSize:14,fontFamily:"Georgia,serif",background:T.bgW,color:T.text,marginTop:6}} onKeyDown={e=>{if(e.key==="Enter")bd();}}/></div>
+        <div style={{marginBottom:16}}><label style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",fontWeight:700}}>Big task:</label><div style={{display:"flex",gap:6,alignItems:"center",marginTop:6}}><input value={inp} onChange={e=>setInp(e.target.value)} placeholder="e.g. Prepare shiur" style={{flex:1,padding:"10px 14px",borderRadius:10,border:`1px solid ${T.brd}`,outline:"none",fontSize:14,fontFamily:"Georgia,serif",background:T.bgW,color:T.text}} onKeyDown={e=>{if(e.key==="Enter")bd();}}/><button onClick={micRec?stopBdMic:startBdMic} title={micRec?"Stop recording":"Speak your task"} style={{width:38,height:38,borderRadius:10,border:`1px solid ${micRec?"#B87A5A":T.brd}`,background:micRec?"#B87A5A20":T.bgW,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>{micRec?<div style={{width:10,height:10,borderRadius:2,background:"#B87A5A"}}/>:<IC.Mic s={16} c={T.tSoft}/>}</button></div></div>
         <button onClick={bd} disabled={ld||!inp.trim()} style={{width:"100%",padding:12,borderRadius:12,border:"none",background:ld?"#aaa":pris[0]?.color,color:ld?"#fff":textOnColor(pris[0]?.color||"#5A9E7C"),cursor:ld?"wait":"pointer",fontSize:13,fontWeight:600,fontFamily:"system-ui",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
           {ld&&<span style={{display:"inline-block",width:14,height:14,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"ot-spin 0.8s linear infinite"}}/>}
           {ld?"Thinking...":"Shatter with AI ✦"}
