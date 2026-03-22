@@ -245,7 +245,88 @@ const Store = {
     }
   },
 
-  flushSync(s) { this.ls(s); this.saveToFB(s); }
+  flushSync(s) { this.ls(s); this.saveToFB(s); },
+
+  // ── Cloud backup helpers ──────────────────────────────────────────────────
+  // Saves a daily snapshot to users/{uid}/backups/{YYYY-MM-DD}.
+  // Cross-device accessible via Firestore. Keeps the last 30 daily backups.
+
+  backupCollRef() {
+    if (!db || !this.uid) return null;
+    return db.collection("users").doc(this.uid).collection("backups");
+  },
+
+  async saveCloudBackup(state) {
+    if (!db || !this.uid) return;
+    // Only save once we've confirmed Firebase is alive (no risk of blank-state wipe)
+    if (this._fbLoadStatus !== 'ok' && this._fbLoadStatus !== 'empty') return;
+
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const pruneKey = `${this.lsKey()}_last_cloud_bk`;
+    if (localStorage.getItem(pruneKey) === today) return; // already backed up today
+
+    const coll = this.backupCollRef();
+    if (!coll) return;
+    try {
+      const cleaned = this._clean(state);
+      await coll.doc(today).set({
+        savedAt: typeof firebase !== "undefined" ? firebase.firestore.FieldValue.serverTimestamp() : new Date(),
+        state: cleaned
+      });
+      localStorage.setItem(pruneKey, today);
+
+      // Prune backups older than 30 days (run weekly to avoid extra reads)
+      const pruneWeekKey = `${this.lsKey()}_last_cloud_prune`;
+      const lastPrune = localStorage.getItem(pruneWeekKey) || '';
+      const thisWeek = new Date().toISOString().slice(0, 7) + '-W' + Math.ceil(new Date().getDate() / 7);
+      if (lastPrune !== thisWeek) {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 30);
+        const cutoffStr = cutoff.toISOString().slice(0, 10);
+        try {
+          const old = await coll.where(
+            firebase.firestore.FieldPath.documentId(), '<', cutoffStr
+          ).get();
+          if (!old.empty) {
+            const batch = db.batch();
+            old.docs.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+          }
+          localStorage.setItem(pruneWeekKey, thisWeek);
+        } catch(e) { /* prune failure is non-critical */ }
+      }
+    } catch(e) {
+      console.warn('[Store] Cloud backup failed', e);
+    }
+  },
+
+  async listBackups() {
+    const coll = this.backupCollRef();
+    if (!coll) return [];
+    try {
+      const snap = await coll.orderBy('savedAt', 'desc').limit(30).get();
+      return snap.docs.map(d => ({
+        id: d.id, // YYYY-MM-DD
+        savedAt: d.data().savedAt?.toDate ? d.data().savedAt.toDate() : new Date(d.id)
+      }));
+    } catch(e) {
+      console.warn('[Store] listBackups failed', e);
+      return [];
+    }
+  },
+
+  async restoreFromBackup(docId) {
+    const coll = this.backupCollRef();
+    if (!coll) return null;
+    try {
+      const doc = await coll.doc(docId).get();
+      if (!doc.exists) return null;
+      return doc.data().state || null;
+    } catch(e) {
+      console.warn('[Store] restoreFromBackup failed', e);
+      return null;
+    }
+  }
 };
 
 const DEF_PRI = [

@@ -189,6 +189,7 @@ function App({ user, onSignOut }) {
     asRef.current = toSave;                    // keep ref current for beforeunload flush
     Store.ls(toSave);                          // Refresh optional offline cache
     Store.autoFileBackup(toSave);              // Weekly file backup
+    Store.saveCloudBackup(toSave);             // Daily cloud backup (Firestore)
     clearTimeout(saveTmr.current);
     saveTmr.current = setTimeout(() => Store.saveToFB(toSave), 1500); // debounced Firebase write
     return () => clearTimeout(saveTmr.current);

@@ -8,11 +8,39 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   const [sTab, setSTab] = useState("queue");
   const [backupFolderSet, setBackupFolderSet] = useState(false);
   const [backupFolderSetting, setBackupFolderSetting] = useState(false);
+  const [cloudBackups, setCloudBackups] = useState(null); // null=not loaded, []=empty, [...]
+  const [cloudBackupsLoading, setCloudBackupsLoading] = useState(false);
+  const [restoringBackup, setRestoringBackup] = useState(null); // docId being restored
 
   // Check on mount whether a backup folder handle is already stored
   React.useEffect(() => {
     Store._idbGet('backupDir').then(h => setBackupFolderSet(!!h));
   }, []);
+
+  async function handleLoadCloudBackups() {
+    setCloudBackupsLoading(true);
+    const list = await Store.listBackups();
+    setCloudBackups(list);
+    setCloudBackupsLoading(false);
+  }
+
+  async function handleRestoreBackup(docId) {
+    const label = docId; // YYYY-MM-DD
+    if (!window.confirm(`Restore backup from ${label}?\n\nThis will replace your current tasks with the saved state from that date. Your current state will be saved as today's backup first.`)) return;
+    setRestoringBackup(docId);
+    // Save current state as today's backup before overwriting
+    try { await Store.saveCloudBackup({ ...AS, _lsModified: Date.now() }); } catch(e) {}
+    const state = await Store.restoreFromBackup(docId);
+    if (state) {
+      const restored = { ...state, _lsModified: Date.now() };
+      Store.ls(restored);
+      await Store.saveToFB(restored);
+      setAS(restored);
+    } else {
+      window.alert('Could not load that backup. Try again.');
+    }
+    setRestoringBackup(null);
+  }
 
   async function handleSetBackupFolder() {
     setBackupFolderSetting(true);
@@ -312,6 +340,43 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             >
               {backupFolderSetting ? "Opening…" : backupFolderSet ? "✓ Backup folder set — click to change" : "Set backup folder…"}
             </button>
+
+            <div style={{height:1,background:T.brdS,margin:"0 0 16px"}}/>
+            <h4 style={{fontSize:11,fontWeight:700,color:T.tSoft,fontFamily:"system-ui",margin:"0 0 8px",textTransform:"uppercase",letterSpacing:1}}>Cloud Backup Points</h4>
+            <p style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 10px",lineHeight:1.5}}>
+              Daily snapshots saved to the cloud. Accessible from any device. Keeps the last 30 days.
+            </p>
+            {cloudBackups === null ? (
+              <button
+                onClick={handleLoadCloudBackups}
+                disabled={cloudBackupsLoading}
+                style={{width:"100%",padding:"10px",borderRadius:10,border:`1px solid ${T.brd}`,background:"none",color:T.tSoft,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"system-ui",marginBottom:16}}
+              >
+                {cloudBackupsLoading ? "Loading…" : "Show cloud backups"}
+              </button>
+            ) : cloudBackups.length === 0 ? (
+              <p style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",marginBottom:16}}>No cloud backups yet — one will be created on your next save.</p>
+            ) : (
+              <div style={{marginBottom:16}}>
+                {cloudBackups.map(bk => {
+                  const label = bk.savedAt instanceof Date
+                    ? bk.savedAt.toLocaleDateString(undefined, {weekday:'short',month:'short',day:'numeric',year:'numeric'})
+                    : bk.id;
+                  return (
+                    <div key={bk.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",borderRadius:8,border:`1px solid ${T.brdS}`,marginBottom:6,background:T.bgW}}>
+                      <span style={{fontSize:12,color:T.text,fontFamily:"system-ui"}}>{label}</span>
+                      <button
+                        onClick={() => handleRestoreBackup(bk.id)}
+                        disabled={!!restoringBackup}
+                        style={{fontSize:11,color:T.tSoft,fontFamily:"system-ui",background:"none",border:`1px solid ${T.brd}`,borderRadius:6,padding:"4px 10px",cursor:"pointer",fontWeight:600}}
+                      >
+                        {restoringBackup === bk.id ? "Restoring…" : "Restore"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {onSignOut && (
               <>
