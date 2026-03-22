@@ -228,6 +228,19 @@ function App({ user, onSignOut }) {
     if (count > 0) showToast(`↑ ${count} task${count!==1?"s":""} nudged up — been sitting too long`, 8000);
   }, [loaded]); // eslint-disable-line
 
+  // ─── Shaila → Task auto-sync ──────────────────────────────────────────────
+  // Checks the shailos collection for pending shailos not yet linked to a task.
+  // Creates a task at "shaila" priority for each new one.
+  useEffect(() => {
+    if (!loaded) return;
+    const tasks = AS?.lists?.find(l => l.id === AS.activeListId)?.tasks || [];
+    Store.syncShailos(tasks).then(newTasks => {
+      if (newTasks.length) {
+        uT(ts => [...ts, ...newTasks]);
+        showToast(`📋 ${newTasks.length} new shaila${newTasks.length!==1?"s":""} added to your queue`, 6000);
+      }
+    });
+  }, [loaded]); // eslint-disable-line
 
   // ─── Real-time cross-window sync ─────────────────────────────────────────
   // V5: listens to the tasks COLLECTION + settings doc (per-document changes)
@@ -1724,6 +1737,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
               <p style={{color:T.tFaint,fontSize:13,margin:"4px 0 0",fontStyle:"italic"}}>{gG()} — {dateStr}</p>
               <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
                 <span style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui"}}>@{user?.displayName || user?.email?.split("@")[0] || ""}</span>
+                <button onClick={()=>window.open("/shailos/","_blank")} style={{fontSize:11,color:T.accent||"#6366f1",fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>Shailos</button>
                 <button onClick={()=>{if(onSignOut)onSignOut();}} style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>sign out</button>
               </div>
             </header>

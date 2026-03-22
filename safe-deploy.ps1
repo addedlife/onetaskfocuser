@@ -139,6 +139,9 @@ Copy-Item (Join-Path $sandbox "index.html") "$tempDir\" -Force
 Copy-Item (Join-Path $sandbox "netlify.toml") "$tempDir\" -Force
 Copy-Item (Join-Path $sandbox "js") "$tempDir\js" -Recurse -Force
 Copy-Item (Join-Path $sandbox "netlify") "$tempDir\netlify" -Recurse -Force
+if (Test-Path (Join-Path $sandbox "shailos")) {
+    Copy-Item (Join-Path $sandbox "shailos") "$tempDir\shailos" -Recurse -Force
+}
 
 # Remove non-deploy files from staging
 $junkFiles = @("08-app-clean.js")

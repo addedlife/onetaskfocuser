@@ -4,52 +4,28 @@
                       {
                           "value":  [
                                         {
-                                            "changedFiles":  [
-                                                                 "index.html",
-                                                                 "js/01-core.js",
-                                                                 "js/04-components.js",
-                                                                 "js/05-modals.js",
-                                                                 "js/07-settings.js",
-                                                                 "js/08-app.js"
-                                                             ],
-                                            "timestamp":  "2026-03-20 18:11:50",
-                                            "fileHashes":  {
-                                                               "js/00-auth.js":  "0E1123A7ADAFD8F19318B847E4E0F6CC56AD9DFA210F057475CC48D535C8BB99",
-                                                               "index.html":  "48FBBA8C755313EC3952178678DCD37E8E4C69B59DD542BB584B63D49C6DECB3",
-                                                               "js/03-voice.js":  "5F68D3C22D4FD8697CD1D20A3B3C1CDF91CFCCD063617A2E5FD8585A36553251",
-                                                               "js/01-core.js":  "C3C8E6E7EEB27BFA8385F66F33604717AF96A2F2910B8D3EBDE22A402C9F654B",
-                                                               "js/05-modals.js":  "93B5FC7CB6D24F772437BF9E5104E6EC20619ABAB030DC99185E7CDF1BE6210C",
-                                                               "js/02-icons.js":  "D3444FAD7B9BA66BF247A367E993C93E3935CBF462A663A8C0CD5D40B128F45D",
-                                                               "js/10-devmode.js":  "D2774AA5116E7C0218D9771D8F6B26F0E6D4E8D1A0FE7545A0197B0B29EA1588",
-                                                               "js/08-app.js":  "167DD1CEBB6E5616647FB4254D2228440EB802860DDAE6CB437B444B188C4ED0",
-                                                               "js/04-components.js":  "0DAF1350CA4F59A49F19EE15B9AD96B35A35BE41305DA12A8E1D8B523602AB3B",
-                                                               "js/06-shelf.js":  "12E62AC8BD1B84D8124B192D9308FE512F4D9C3F6DDC262BA798FCACA92FB7C5",
-                                                               "js/09-render.js":  "6BB33250F0209E2AE8B1B021F31AB5B7C3956460C7ED23E9D64053EAD9FAB72A",
-                                                               "js/07-settings.js":  "A7BC4566917570AB3A713F7F0D15B811A98B5154C3DC3FCDC016509A5181E810"
-                                                           },
-                                            "newFiles":  [
-
-                                                         ],
-                                            "state":  "ready",
-                                            "removedFiles":  [
-                                                                 "10-devmode.js"
-                                                             ],
-                                            "deployId":  "69bdc61bfd19e2cd2d8ece08"
+                                            "value":  [
+                                                          "@{value=System.Object[]; Count=2}",
+                                                          "@{changedFiles=System.Object[]; timestamp=2026-03-22 05:52:52; fileHashes=; newFiles=System.Object[]; state=ready; removedFiles=System.Object[]; deployId=69bfbbf08945e442fc3fe3ce}"
+                                                      ],
+                                            "Count":  2
                                         },
                                         {
                                             "changedFiles":  [
-                                                                 "js/01-core.js"
+                                                                 "js/01-core.js",
+                                                                 "js/04-components.js",
+                                                                 "js/08-app.js"
                                                              ],
-                                            "timestamp":  "2026-03-20 18:21:35",
+                                            "timestamp":  "2026-03-22 05:58:40",
                                             "fileHashes":  {
                                                                "js/00-auth.js":  "0E1123A7ADAFD8F19318B847E4E0F6CC56AD9DFA210F057475CC48D535C8BB99",
                                                                "index.html":  "48FBBA8C755313EC3952178678DCD37E8E4C69B59DD542BB584B63D49C6DECB3",
                                                                "js/03-voice.js":  "5F68D3C22D4FD8697CD1D20A3B3C1CDF91CFCCD063617A2E5FD8585A36553251",
-                                                               "js/01-core.js":  "1F51B0DE57BF87BAB27D78243A0D0821A5C378737208A47685D84109C51DB8B0",
+                                                               "js/01-core.js":  "46FDB6917EB08B2D2616B6654DE1B37ABD50F603719A9EB0876650DA13E0E996",
                                                                "js/05-modals.js":  "93B5FC7CB6D24F772437BF9E5104E6EC20619ABAB030DC99185E7CDF1BE6210C",
                                                                "js/02-icons.js":  "D3444FAD7B9BA66BF247A367E993C93E3935CBF462A663A8C0CD5D40B128F45D",
-                                                               "js/08-app.js":  "167DD1CEBB6E5616647FB4254D2228440EB802860DDAE6CB437B444B188C4ED0",
-                                                               "js/04-components.js":  "0DAF1350CA4F59A49F19EE15B9AD96B35A35BE41305DA12A8E1D8B523602AB3B",
+                                                               "js/08-app.js":  "FC1D0436957F816D282E99047B84C6021CC5D396DA81965A086E245BE32F5DE9",
+                                                               "js/04-components.js":  "5B6AA7BA3CA0ADB32A8B3934C68B70D539D00BE4B9584222826B9AB44586FE97",
                                                                "js/06-shelf.js":  "12E62AC8BD1B84D8124B192D9308FE512F4D9C3F6DDC262BA798FCACA92FB7C5",
                                                                "js/09-render.js":  "6BB33250F0209E2AE8B1B021F31AB5B7C3956460C7ED23E9D64053EAD9FAB72A",
                                                                "js/07-settings.js":  "A7BC4566917570AB3A713F7F0D15B811A98B5154C3DC3FCDC016509A5181E810"
@@ -61,25 +37,26 @@
                                             "removedFiles":  [
 
                                                              ],
-                                            "deployId":  "69bdc86559f45bd05f1890dc"
+                                            "deployId":  "69bfbd4c1e80d05d21c2445a"
                                         }
                                     ],
                           "Count":  2
                       },
                       {
                           "changedFiles":  [
+                                               "js/01-core.js",
                                                "js/08-app.js"
                                            ],
-                          "timestamp":  "2026-03-20 18:30:49",
+                          "timestamp":  "2026-03-22 06:07:28",
                           "fileHashes":  {
                                              "js/00-auth.js":  "0E1123A7ADAFD8F19318B847E4E0F6CC56AD9DFA210F057475CC48D535C8BB99",
                                              "index.html":  "48FBBA8C755313EC3952178678DCD37E8E4C69B59DD542BB584B63D49C6DECB3",
                                              "js/03-voice.js":  "5F68D3C22D4FD8697CD1D20A3B3C1CDF91CFCCD063617A2E5FD8585A36553251",
-                                             "js/01-core.js":  "1F51B0DE57BF87BAB27D78243A0D0821A5C378737208A47685D84109C51DB8B0",
+                                             "js/01-core.js":  "927708B06A957115A734A95265BE3708BFE8BCF9A2DA3F8875E037715CB85C46",
                                              "js/05-modals.js":  "93B5FC7CB6D24F772437BF9E5104E6EC20619ABAB030DC99185E7CDF1BE6210C",
                                              "js/02-icons.js":  "D3444FAD7B9BA66BF247A367E993C93E3935CBF462A663A8C0CD5D40B128F45D",
-                                             "js/08-app.js":  "51025600A82E12F47047A5A2ECD6277E48A7FA67191A58E6D5C5363D24358583",
-                                             "js/04-components.js":  "0DAF1350CA4F59A49F19EE15B9AD96B35A35BE41305DA12A8E1D8B523602AB3B",
+                                             "js/08-app.js":  "87CCA77E61B4F2E68B5AE3AD364293E02F0D0401220FE1DF9EA2025E6DBDF850",
+                                             "js/04-components.js":  "5B6AA7BA3CA0ADB32A8B3934C68B70D539D00BE4B9584222826B9AB44586FE97",
                                              "js/06-shelf.js":  "12E62AC8BD1B84D8124B192D9308FE512F4D9C3F6DDC262BA798FCACA92FB7C5",
                                              "js/09-render.js":  "6BB33250F0209E2AE8B1B021F31AB5B7C3956460C7ED23E9D64053EAD9FAB72A",
                                              "js/07-settings.js":  "A7BC4566917570AB3A713F7F0D15B811A98B5154C3DC3FCDC016509A5181E810"
@@ -91,25 +68,27 @@
                           "removedFiles":  [
 
                                            ],
-                          "deployId":  "69bdca8fe6282fd20213bf47"
+                          "deployId":  "69bfbf5c7955c64319fa9af7"
                       }
                   ],
         "Count":  2
     },
     {
         "changedFiles":  [
-                             "js/01-core.js"
+                             "js/01-core.js",
+                             "js/04-components.js",
+                             "js/08-app.js"
                          ],
-        "timestamp":  "2026-03-20 18:42:49",
+        "timestamp":  "2026-03-22 15:11:56",
         "fileHashes":  {
                            "js/00-auth.js":  "0E1123A7ADAFD8F19318B847E4E0F6CC56AD9DFA210F057475CC48D535C8BB99",
                            "index.html":  "48FBBA8C755313EC3952178678DCD37E8E4C69B59DD542BB584B63D49C6DECB3",
                            "js/03-voice.js":  "5F68D3C22D4FD8697CD1D20A3B3C1CDF91CFCCD063617A2E5FD8585A36553251",
-                           "js/01-core.js":  "5C9323843C7C62FBB0DDA8A6163BCB1642D0F47AAC172506F0437A35FDA86A51",
+                           "js/01-core.js":  "1575E8610ADB436756DA2A15C7EAAE3479311A2BC7FD50D77B6D55B6A6E5DE63",
                            "js/05-modals.js":  "93B5FC7CB6D24F772437BF9E5104E6EC20619ABAB030DC99185E7CDF1BE6210C",
                            "js/02-icons.js":  "D3444FAD7B9BA66BF247A367E993C93E3935CBF462A663A8C0CD5D40B128F45D",
-                           "js/08-app.js":  "51025600A82E12F47047A5A2ECD6277E48A7FA67191A58E6D5C5363D24358583",
-                           "js/04-components.js":  "0DAF1350CA4F59A49F19EE15B9AD96B35A35BE41305DA12A8E1D8B523602AB3B",
+                           "js/08-app.js":  "B121D1EAE1C4F04299DBB003DE9ED51C170E843772C4212FCF73116E94C9B879",
+                           "js/04-components.js":  "5B6AA7BA3CA0ADB32A8B3934C68B70D539D00BE4B9584222826B9AB44586FE97",
                            "js/06-shelf.js":  "12E62AC8BD1B84D8124B192D9308FE512F4D9C3F6DDC262BA798FCACA92FB7C5",
                            "js/09-render.js":  "6BB33250F0209E2AE8B1B021F31AB5B7C3956460C7ED23E9D64053EAD9FAB72A",
                            "js/07-settings.js":  "A7BC4566917570AB3A713F7F0D15B811A98B5154C3DC3FCDC016509A5181E810"
@@ -121,6 +100,6 @@
         "removedFiles":  [
 
                          ],
-        "deployId":  "69bdcd60b640cfd94c124c47"
+        "deployId":  "69c03ef3baf859b5f7cee01f"
     }
 ]

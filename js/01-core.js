@@ -326,6 +326,39 @@ const Store = {
   settingsDoc() { return db && this.uid ? db.collection("users").doc(this.uid).collection("config").doc("settings") : null; },
   metaDoc()     { return db && this.uid ? db.collection("users").doc(this.uid).collection("config").doc("meta") : null; },
 
+  // ── Shaila → Task auto-sync ──
+  // Reads the shailos collection, compares against existing tasks (by shailaId tag),
+  // and creates tasks for any new shailos. Returns count of tasks created.
+  async syncShailos(currentTasks) {
+    if (!db || !this.uid) return [];
+    try {
+      const snap = await db.collection("users").doc(this.uid).collection("shailos")
+        .where("status", "==", "pending")
+        .get();
+      if (snap.empty) return [];
+      // Find shailaIds already linked to tasks
+      const linked = new Set((currentTasks || []).filter(t => t.shailaId).map(t => t.shailaId));
+      const newTasks = [];
+      snap.forEach(doc => {
+        if (linked.has(doc.id)) return; // already has a task
+        const s = doc.data();
+        newTasks.push({
+          id: uid(),
+          text: s.synopsis || s.content?.substring(0, 80) || "New shaila",
+          completed: false,
+          priority: "shaila",
+          createdAt: Date.now(),
+          shailaId: doc.id, // link back so we don't duplicate
+        });
+      });
+      if (newTasks.length) console.log("[Store] Shaila sync: created", newTasks.length, "task(s)");
+      return newTasks;
+    } catch(e) {
+      console.warn("[Store] Shaila sync failed:", e);
+      return [];
+    }
+  },
+
   // ── Extract settings fields from AS (everything except lists and tasks) ──
   _extractSettings(s) {
     const { lists, _lsModified, ...settings } = s || {};
