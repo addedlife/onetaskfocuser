@@ -385,9 +385,10 @@ const Store = {
       const now = new Date();
       const dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
       const ref = task.shailaId ? col.doc(task.shailaId) : col.doc();
+      const synopsis = task.text.length > 60 ? task.text.substring(0, 57) + "…" : task.text;
       await ref.set(this._clean({
         content: task.text,
-        synopsis: task.text,
+        synopsis: synopsis,
         status: "pending",
         date: dateStr,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -431,6 +432,75 @@ const Store = {
     } catch(e) {
       console.warn("[Store] deleteShailaDoc failed:", e);
     }
+  },
+
+  // ── Manual full backup: tasks + shailos → downloadable JSON ──
+  async fullBackup(appState) {
+    try {
+      const col = this.shailosCol();
+      let shailos = [];
+      if (col) {
+        const snap = await col.get();
+        snap.forEach(doc => shailos.push({ id: doc.id, ...doc.data() }));
+      }
+      const backup = {
+        _backupVersion: 1,
+        _backupDate: new Date().toISOString(),
+        _uid: this.uid,
+        appState: appState ? this._clean(appState) : null,
+        shailos: shailos.map(s => this._clean(s)),
+      };
+      const content = JSON.stringify(backup, null, 2);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const fileName = `onetask_full_backup_${dateStr}.json`;
+      const blob = new Blob([content], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      console.log("[Backup] Full backup downloaded:", fileName, "— tasks:", appState?.lists?.reduce((n, l) => n + (l.tasks?.length || 0), 0) || 0, ", shailos:", shailos.length);
+      return { tasks: appState?.lists?.reduce((n, l) => n + (l.tasks?.length || 0), 0) || 0, shailos: shailos.length };
+    } catch(e) {
+      console.error("[Backup] Full backup failed:", e);
+      return null;
+    }
+  },
+
+  // ── Restore from backup JSON ──
+  // Returns { appState, shailos, backupDate, warning } or null on error
+  parseBackup(jsonStr) {
+    try {
+      const data = JSON.parse(jsonStr);
+      if (!data._backupVersion || !data.appState) {
+        // Try legacy format (just appState directly)
+        if (data.lists) {
+          return { appState: data, shailos: [], backupDate: data._lsModified ? new Date(data._lsModified).toISOString() : null, warning: null };
+        }
+        return null;
+      }
+      return { appState: data.appState, shailos: data.shailos || [], backupDate: data._backupDate, warning: null };
+    } catch(e) {
+      console.error("[Backup] Parse failed:", e);
+      return null;
+    }
+  },
+
+  // Restore shailos from backup into Firebase
+  async restoreShailos(shailos) {
+    const col = this.shailosCol();
+    if (!col || !shailos?.length) return 0;
+    let count = 0;
+    for (const s of shailos) {
+      try {
+        const { id, ...data } = s;
+        if (id) await col.doc(id).set(this._clean(data), { merge: true });
+        else await col.add(this._clean(data));
+        count++;
+      } catch(e) { console.warn("[Backup] Restore shaila failed:", e); }
+    }
+    console.log("[Backup] Restored", count, "shailos");
+    return count;
   },
 
   // ── Full reconciliation check ──

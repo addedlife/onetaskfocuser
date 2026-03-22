@@ -789,6 +789,65 @@ function App({ user, onSignOut }) {
   const [shailaReconcile, setShailaReconcile] = useState(null); // {missingTasks, missingShailos, statusMismatches}
   const [reconcileLoading, setReconcileLoading] = useState(false);
 
+  // ─── Full backup & restore ──────────────────────────────────────────────
+  const [backupLoading, setBackupLoading] = useState(false);
+
+  async function doFullBackup() {
+    setBackupLoading(true);
+    const result = await Store.fullBackup(AS);
+    setBackupLoading(false);
+    if (result) showToast(`💾 Backup saved — ${result.tasks} tasks, ${result.shailos} shailos`, 5000);
+    else showToast("Backup failed — check console", 5000, "#C06060");
+  }
+
+  function doLoadBackup() {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const text = await file.text();
+      const parsed = Store.parseBackup(text);
+      if (!parsed) { showToast("Invalid backup file", 4000, "#C06060"); return; }
+
+      // Check if backup is older than most recent task/shaila
+      const backupDate = parsed.backupDate ? new Date(parsed.backupDate) : null;
+      const newestTask = tasks.reduce((max, t) => Math.max(max, t.createdAt || 0, t.completedAt || 0), 0);
+      const newestData = Math.max(newestTask, AS?._lsModified || 0);
+      let warning = "";
+      if (backupDate && newestData && backupDate.getTime() < newestData) {
+        const bkStr = backupDate.toLocaleDateString();
+        const curStr = new Date(newestData).toLocaleDateString();
+        warning = `\n\n⚠️ This backup is from ${bkStr}, but your current data was last modified ${curStr}. Restoring will OVERWRITE newer changes.`;
+      }
+
+      const taskCount = parsed.appState?.lists?.reduce((n, l) => n + (l.tasks?.length || 0), 0) || 0;
+      const shailaCount = parsed.shailos?.length || 0;
+      const ok = window.confirm(
+        `Restore from backup?\n\n` +
+        `• ${taskCount} tasks\n• ${shailaCount} shaila records\n` +
+        `• From: ${parsed.backupDate ? new Date(parsed.backupDate).toLocaleString() : "unknown date"}` +
+        warning +
+        `\n\nThis will replace your current tasks and restore shailos. Continue?`
+      );
+      if (!ok) return;
+
+      // Restore tasks (replace AS)
+      if (parsed.appState) {
+        parsed.appState._lsModified = Date.now();
+        setAS(parsed.appState);
+      }
+      // Restore shailos to Firebase
+      if (parsed.shailos?.length) {
+        const count = await Store.restoreShailos(parsed.shailos);
+        showToast(`✅ Restored ${taskCount} tasks and ${count} shailos from backup`, 6000);
+      } else {
+        showToast(`✅ Restored ${taskCount} tasks from backup`, 5000);
+      }
+    };
+    input.click();
+  }
+
   async function runShailaReconcile() {
     setReconcileLoading(true);
     const result = await Store.reconcileShailos(tasks);
@@ -1431,7 +1490,12 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         <div style={{position:"fixed",inset:0,zIndex:9000,background:T.bg,display:"flex",flexDirection:"column",animation:"ot-fade 0.2s"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",borderBottom:`1px solid ${T.brd}`,background:T.card,flexShrink:0}}>
             <span style={{fontSize:14,fontWeight:600,color:T.text,fontFamily:"system-ui"}}>Shaila Transcriber</span>
-            <button onClick={()=>setShowShailos(false)} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft,padding:4}}>✕</button>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <button onClick={doFullBackup} disabled={backupLoading} title="Download full backup (tasks + shailos)" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500,opacity:backupLoading?.5:1}}>{backupLoading?"⏳":"💾"} Backup</button>
+              <button onClick={doLoadBackup} title="Restore from backup file" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500}}>📂 Restore</button>
+              <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500,opacity:reconcileLoading?.5:1}}>{reconcileLoading?"⏳":"🔄"}</button>
+              <button onClick={()=>setShowShailos(false)} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft,padding:4}}>✕</button>
+            </div>
           </div>
           <iframe src="/shailos/" style={{flex:1,border:"none",width:"100%"}} title="Shaila Transcriber"/>
         </div>
@@ -1865,6 +1929,9 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                 {icon:<IC.Brain s={16} c={T.tSoft}/>, label:"Brain dump", action:()=>setShowBrainDump(true)},
                 {icon:<IC.Plus  s={16} c={T.tSoft}/>, label:"Bulk add",   action:()=>setShowBulk(true)},
                 {icon:<IC.Split s={16} c={T.tSoft}/>, label:"Shatter",    action:()=>setShowBD(true)},
+                "sep",
+                {icon:<span style={{fontSize:15,lineHeight:1,color:T.tSoft}}>💾</span>, label: backupLoading ? "Saving…" : "Backup", action: doFullBackup},
+                {icon:<span style={{fontSize:15,lineHeight:1,color:T.tSoft}}>📂</span>, label:"Restore", action: doLoadBackup},
               ];
 
               // RIGHT column: zen (top) + task-actions (bottom, task-conditional ones only when task exists)
