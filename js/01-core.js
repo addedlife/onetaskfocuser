@@ -416,6 +416,18 @@ const Store = {
     }
   },
 
+  // Delete a shaila doc from the transcriber collection
+  async deleteShailaDoc(shailaId) {
+    const col = this.shailosCol();
+    if (!col || !shailaId) return;
+    try {
+      await col.doc(shailaId).delete();
+      console.log("[Store] Deleted shaila doc:", shailaId);
+    } catch(e) {
+      console.warn("[Store] deleteShailaDoc failed:", e);
+    }
+  },
+
   // Real-time listener for shaila changes (returns unsubscribe function)
   listenShailos(callback) {
     const col = this.shailosCol();

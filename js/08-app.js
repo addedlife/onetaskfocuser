@@ -254,8 +254,10 @@ function App({ user, onSignOut }) {
       const taskByShailaId = {};
       tasks.forEach(t => { if (t.shailaId) taskByShailaId[t.shailaId] = t; });
 
+      const shailaIdSet = new Set(shailos.map(s => s.id));
       const newTasks = [];
       const completedIds = [];
+      const deletedIds = [];
 
       shailos.forEach(s => {
         const linked = taskByShailaId[s.id];
@@ -269,6 +271,13 @@ function App({ user, onSignOut }) {
         }
       });
 
+      // Detect deletions: tasks with shailaId that no longer exists in shailos collection
+      tasks.forEach(t => {
+        if (t.shailaId && !t.completed && !shailaIdSet.has(t.shailaId)) {
+          deletedIds.push(t.id);
+        }
+      });
+
       if (newTasks.length) {
         uT(ts => [...ts, ...newTasks]);
         showToast(`📋 ${newTasks.length} new shaila${newTasks.length!==1?"s":""} from transcriber`, 5000);
@@ -276,6 +285,10 @@ function App({ user, onSignOut }) {
       if (completedIds.length) {
         uT(ts => ts.map(t => completedIds.includes(t.id) ? {...t, completed: true, completedAt: Date.now()} : t));
         showToast(`✅ ${completedIds.length} shaila${completedIds.length!==1?"s":""} answered`, 5000);
+      }
+      if (deletedIds.length) {
+        uT(ts => ts.filter(t => !deletedIds.includes(t.id)));
+        showToast(`🗑️ ${deletedIds.length} shaila task${deletedIds.length!==1?"s":""} removed (deleted in transcriber)`, 5000);
       }
     });
     return unsub;
@@ -766,6 +779,8 @@ function App({ user, onSignOut }) {
   function legacyCompTask(id) { compTask(id, false, true); showToast("Logged ✓ (no timestamp)", 2000); }
 
   function uncompTask(id) { uT(ts => doOpt(ts.map(t => t.id===id ? {...t, completed:false, completedAt:undefined, goodEnough:undefined} : t))); }
+  const [shailaDelPrompt, setShailaDelPrompt] = useState(null); // {shailaId, taskText}
+
   function delTask(id) {
     const task = tasks.find(t => t.id === id);
     uT(ts => ts.filter(t => t.id !== id));
@@ -773,6 +788,10 @@ function App({ user, onSignOut }) {
       clearTimeout(deletedTmr.current);
       setDeletedUndo({task, listId: AS.activeListId});
       deletedTmr.current = setTimeout(() => setDeletedUndo(null), 6000);
+      // If shaila task with a linked shaila doc, prompt user
+      if (task.shailaId && task.priority === "shaila") {
+        setShailaDelPrompt({ shailaId: task.shailaId, taskText: task.text });
+      }
     }
   }
   function parkTask(id) {
@@ -1398,6 +1417,21 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
             <button onClick={()=>setShowShailos(false)} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft,padding:4}}>✕</button>
           </div>
           <iframe src="/shailos/" style={{flex:1,border:"none",width:"100%"}} title="Shaila Transcriber"/>
+        </div>
+      )}
+      {/* Shaila delete prompt — asks if user also wants to delete from transcriber record */}
+      {shailaDelPrompt && (
+        <div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setShailaDelPrompt(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"22px 20px",maxWidth:380,width:"90%",boxShadow:"0 12px 48px rgba(0,0,0,0.2)"}}>
+            <h3 style={{fontSize:15,fontWeight:600,margin:"0 0 8px",color:T.text,fontFamily:"system-ui"}}>Also delete from Shaila record?</h3>
+            <p style={{fontSize:13,color:T.tSoft,margin:"0 0 18px",lineHeight:1.5,fontFamily:"system-ui"}}>
+              The task <strong>"{shailaDelPrompt.taskText?.substring(0,50)}"</strong> was removed from your queue. Delete it from the Shaila Transcriber record too?
+            </p>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{setShailaDelPrompt(null);}} style={{flex:1,padding:11,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontFamily:"system-ui",fontSize:13,fontWeight:500}}>Keep record</button>
+              <button onClick={()=>{Store.deleteShailaDoc(shailaDelPrompt.shailaId);setShailaDelPrompt(null);showToast("Shaila record deleted",3000);}} style={{flex:1,padding:11,borderRadius:12,border:"none",background:"#C06060",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontSize:13,fontWeight:600}}>Delete both</button>
+            </div>
+          </div>
         </div>
       )}
       {blockedModal && <BlockedModal task={blockedModal} T={T} pris={pris} onBlock={blockTask} onClose={()=>setBlockedModal(null)}/>}
