@@ -880,16 +880,29 @@ function optTasks(tasks, pris) {
       .map(([gn]) => gn)
   );
 
+  // Score a subtask group by its parent's priority weight ONLY — no age/stale bonuses.
+  // Subtasks should stay anchored to their parent's priority level, not float up
+  // because individual steps have been sitting in the queue for a long time.
+  const scoreGroup = (gn, subs) => {
+    const parentTask = unp.find(t => t.text === gn);
+    if (parentTask) {
+      const p = gP(pris, parentTask.priority);
+      return p.weight * 100;  // priority only, no age drift
+    }
+    // No parent found — use the first subtask's priority
+    const p = gP(pris, subs[0]?.priority);
+    return (p?.weight || 0) * 100;
+  };
+
+  // Parent tasks that have subtask groups should not also appear as standalone items
+  const groupParentNames = new Set(Object.keys(groupMap));
+
   // Scored items: regular unpinned tasks + unpinned groups (as one unit)
   const sc = [
-    ...unp.map(t => ({type:'task', task:t, _s:scoreTask(t)})),
+    ...unp.filter(t => !groupParentNames.has(t.text)).map(t => ({type:'task', task:t, _s:scoreTask(t)})),
     ...Object.entries(groupMap)
       .filter(([gn]) => !pinnedGroupNames.has(gn))
-      .map(([gn, subs]) => {
-        const parentTask = unp.find(t => t.text === gn);
-        const _s = parentTask ? scoreTask(parentTask) : Math.max(...subs.map(scoreTask));
-        return {type:'group', groupName:gn, subs, _s};
-      })
+      .map(([gn, subs]) => ({type:'group', groupName:gn, subs, _s:scoreGroup(gn, subs)}))
   ];
   sc.sort((a, b) => b._s - a._s);
 
