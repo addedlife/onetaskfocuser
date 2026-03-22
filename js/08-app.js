@@ -230,65 +230,70 @@ function App({ user, onSignOut }) {
   }, [loaded]); // eslint-disable-line
 
   // ─── Shaila ↔ Task real-time sync ───────────────────────────────────────
-  // Single listener handles ALL sync: new shailos → tasks, answered → complete, deleted → remove.
-  // Uses uT(callback) to read CURRENT tasks (avoids stale closure bugs).
-  // No separate initial sync needed — onSnapshot fires immediately with current data.
+  // Uses setAS directly (not uT) so it can check ALL lists for existing shailaId links.
+  // uT only sees active list, which caused duplicates when shaila tasks existed in other lists.
   useEffect(() => {
     if (!loaded || !db) return;
     const unsub = Store.listenShailos((shailos) => {
-      uT(currentTasks => {
+      setAS(prev => {
+        if (!prev?.lists) return prev;
+        // Gather ALL tasks across ALL lists
+        const allTasks = prev.lists.flatMap(l => (l.tasks || []).map(t => ({...t, _listId: l.id})));
+
         // Build lookup: shailaId → task
         const taskByShailaId = {};
-        currentTasks.forEach(t => { if (t.shailaId) taskByShailaId[t.shailaId] = t; });
+        allTasks.forEach(t => { if (t.shailaId) taskByShailaId[t.shailaId] = t; });
 
-        // Also build text lookup for shaila-priority tasks (fallback dedup when shailaId hasn't been set yet)
+        // Text lookup for shaila-priority tasks (fallback dedup)
         const shailaTextSet = new Set(
-          currentTasks.filter(t => t.priority === "shaila" && !t.completed)
+          allTasks.filter(t => t.priority === "shaila" && !t.completed)
             .map(t => t.text.trim().toLowerCase())
         );
 
         const shailaIdSet = new Set(shailos.map(s => s.id));
         const toAdd = [];
-        const toCompleteIds = [];
-        const toDeleteIds = [];
+        const toCompleteIds = new Set();
+        const toDeleteIds = new Set();
 
         shailos.forEach(s => {
           const linked = taskByShailaId[s.id];
-          console.log("[Shaila sync]", s.id, "status:", s.status, "linked:", !!linked, linked?.completed ? "(completed)" : "");
           if (!linked && s.status === "pending") {
-            // Text-based dedup: skip if a shaila-priority task with matching text already exists
             const text = s.synopsis || s.content?.substring(0, 80) || "New shaila";
-            if (shailaTextSet.has(text.trim().toLowerCase())) {
-              console.log("[Shaila sync] Skipped (text dedup):", text.substring(0, 40));
-              return;
-            }
+            if (shailaTextSet.has(text.trim().toLowerCase())) return; // text dedup
             toAdd.push({
               id: uid(), text,
               completed: false, priority: "shaila", createdAt: Date.now(), shailaId: s.id,
             });
           } else if (linked && !linked.completed && s.status === "answered") {
-            console.log("[Shaila sync] Completing task for answered shaila:", linked.text?.substring(0, 40));
-            toCompleteIds.push(linked.id);
+            toCompleteIds.add(linked.id);
           }
         });
 
         // Detect deletions: tasks with shailaId no longer in shailos collection
-        currentTasks.forEach(t => {
+        allTasks.forEach(t => {
           if (t.shailaId && !t.completed && !shailaIdSet.has(t.shailaId)) {
-            toDeleteIds.push(t.id);
+            toDeleteIds.add(t.id);
           }
         });
 
-        if (!toAdd.length && !toCompleteIds.length && !toDeleteIds.length) return currentTasks;
+        if (!toAdd.length && !toCompleteIds.size && !toDeleteIds.size) return prev;
 
         if (toAdd.length) showToast(`📋 ${toAdd.length} new shaila${toAdd.length!==1?"s":""} from transcriber`, 5000);
-        if (toCompleteIds.length) showToast(`✅ ${toCompleteIds.length} shaila${toCompleteIds.length!==1?"s":""} answered`, 5000);
-        if (toDeleteIds.length) showToast(`🗑️ ${toDeleteIds.length} shaila task${toDeleteIds.length!==1?"s":""} removed`, 5000);
+        if (toCompleteIds.size) showToast(`✅ ${toCompleteIds.size} shaila${toCompleteIds.size!==1?"s":""} answered`, 5000);
+        if (toDeleteIds.size) showToast(`🗑️ ${toDeleteIds.size} shaila task${toDeleteIds.size!==1?"s":""} removed`, 5000);
 
-        let result = [...currentTasks, ...toAdd];
-        if (toCompleteIds.length) result = result.map(t => toCompleteIds.includes(t.id) ? {...t, completed:true, completedAt:Date.now()} : t);
-        if (toDeleteIds.length) result = result.filter(t => !toDeleteIds.includes(t.id));
-        return result;
+        // Apply changes across ALL lists (complete/delete where they live, add to active list)
+        const activeId = prev.lists.find(l => l.id === prev.activeListId) ? prev.activeListId : prev.lists[0]?.id;
+        const newLists = prev.lists.map(l => {
+          let tasks = l.tasks || [];
+          // Complete/delete in whichever list the task lives
+          if (toCompleteIds.size) tasks = tasks.map(t => toCompleteIds.has(t.id) ? {...t, completed:true, completedAt:Date.now()} : t);
+          if (toDeleteIds.size) tasks = tasks.filter(t => !toDeleteIds.has(t.id));
+          // Add new tasks to active list
+          if (toAdd.length && l.id === activeId) tasks = [...tasks, ...toAdd];
+          return tasks !== l.tasks ? {...l, tasks} : l;
+        });
+        return {...prev, lists: newLists};
       });
     });
     return unsub;
