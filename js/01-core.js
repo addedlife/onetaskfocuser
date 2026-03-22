@@ -326,37 +326,105 @@ const Store = {
   settingsDoc() { return db && this.uid ? db.collection("users").doc(this.uid).collection("config").doc("settings") : null; },
   metaDoc()     { return db && this.uid ? db.collection("users").doc(this.uid).collection("config").doc("meta") : null; },
 
-  // ── Shaila → Task auto-sync ──
-  // Reads the shailos collection, compares against existing tasks (by shailaId tag),
-  // and creates tasks for any new shailos. Returns count of tasks created.
+  // ── Shaila ↔ Task bidirectional sync ──
+  // Returns { newTasks: [...], completedTaskIds: [...] }
+  //
+  // Flow 1: Transcriber → Task — pending shailos without a linked task get one created
+  // Flow 3: Transcriber answered → Task completed — answered shailos mark linked tasks done
+  shailosCol() { return db && this.uid ? db.collection("users").doc(this.uid).collection("shailos") : null; },
+
   async syncShailos(currentTasks) {
-    if (!db || !this.uid) return [];
+    const col = this.shailosCol();
+    if (!col) return { newTasks: [], completedTaskIds: [] };
     try {
-      const snap = await db.collection("users").doc(this.uid).collection("shailos")
-        .where("status", "==", "pending")
-        .get();
-      if (snap.empty) return [];
-      // Find shailaIds already linked to tasks
-      const linked = new Set((currentTasks || []).filter(t => t.shailaId).map(t => t.shailaId));
+      const snap = await col.get();
+      if (snap.empty) return { newTasks: [], completedTaskIds: [] };
+
+      // Build lookup: shailaId → task
+      const taskByShailaId = {};
+      (currentTasks || []).forEach(t => { if (t.shailaId) taskByShailaId[t.shailaId] = t; });
+
       const newTasks = [];
+      const completedTaskIds = [];
+
       snap.forEach(doc => {
-        if (linked.has(doc.id)) return; // already has a task
         const s = doc.data();
-        newTasks.push({
-          id: uid(),
-          text: s.synopsis || s.content?.substring(0, 80) || "New shaila",
-          completed: false,
-          priority: "shaila",
-          createdAt: Date.now(),
-          shailaId: doc.id, // link back so we don't duplicate
-        });
+        const linkedTask = taskByShailaId[doc.id];
+
+        if (!linkedTask && s.status === "pending") {
+          // Flow 1: new pending shaila → create task
+          newTasks.push({
+            id: uid(),
+            text: s.synopsis || s.content?.substring(0, 80) || "New shaila",
+            completed: false,
+            priority: "shaila",
+            createdAt: Date.now(),
+            shailaId: doc.id,
+          });
+        } else if (linkedTask && !linkedTask.completed && s.status === "answered") {
+          // Flow 3: shaila answered in transcriber → complete the task
+          completedTaskIds.push(linkedTask.id);
+        }
       });
+
       if (newTasks.length) console.log("[Store] Shaila sync: created", newTasks.length, "task(s)");
-      return newTasks;
+      if (completedTaskIds.length) console.log("[Store] Shaila sync: completing", completedTaskIds.length, "answered task(s)");
+      return { newTasks, completedTaskIds };
     } catch(e) {
       console.warn("[Store] Shaila sync failed:", e);
-      return [];
+      return { newTasks: [], completedTaskIds: [] };
     }
+  },
+
+  // Flow 2: Task → Transcriber — new shaila-priority task (no shailaId) → create shaila doc
+  async createShailaFromTask(task) {
+    const col = this.shailosCol();
+    if (!col || task.shailaId) return null; // already linked
+    try {
+      const docRef = await col.add(this._clean({
+        content: task.text,
+        synopsis: task.text,
+        status: "pending",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        userId: firebase.auth().currentUser?.uid || this.uid,
+        askerName: "",
+        answer: "",
+        answererName: "",
+        parsedShaila: task.text,
+      }));
+      console.log("[Store] Created shaila doc from task:", docRef.id);
+      return docRef.id; // caller should set task.shailaId = this
+    } catch(e) {
+      console.warn("[Store] createShailaFromTask failed:", e);
+      return null;
+    }
+  },
+
+  // Flow 4: Task completed → Transcriber updated — mark shaila as answered
+  async markShailaAnswered(shailaId, answerText) {
+    const col = this.shailosCol();
+    if (!col || !shailaId) return;
+    try {
+      await col.doc(shailaId).update({
+        status: "answered",
+        answer: answerText || "Completed in OneTask",
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log("[Store] Marked shaila answered:", shailaId);
+    } catch(e) {
+      console.warn("[Store] markShailaAnswered failed:", e);
+    }
+  },
+
+  // Real-time listener for shaila changes (returns unsubscribe function)
+  listenShailos(callback) {
+    const col = this.shailosCol();
+    if (!col) return () => {};
+    return col.onSnapshot(snap => {
+      const shailos = [];
+      snap.forEach(doc => shailos.push({ id: doc.id, ...doc.data() }));
+      callback(shailos);
+    }, err => console.warn("[Store] Shaila listener error:", err));
   },
 
   // ── Extract settings fields from AS (everything except lists and tasks) ──

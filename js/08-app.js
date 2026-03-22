@@ -229,18 +229,56 @@ function App({ user, onSignOut }) {
     if (count > 0) showToast(`↑ ${count} task${count!==1?"s":""} nudged up — been sitting too long`, 8000);
   }, [loaded]); // eslint-disable-line
 
-  // ─── Shaila → Task auto-sync ──────────────────────────────────────────────
-  // Checks the shailos collection for pending shailos not yet linked to a task.
-  // Creates a task at "shaila" priority for each new one.
+  // ─── Shaila ↔ Task bidirectional sync ───────────────────────────────────
+  // On load: creates tasks for new pending shailos, completes tasks for answered ones
   useEffect(() => {
     if (!loaded) return;
     const tasks = AS?.lists?.find(l => l.id === AS.activeListId)?.tasks || [];
-    Store.syncShailos(tasks).then(newTasks => {
+    Store.syncShailos(tasks).then(({ newTasks, completedTaskIds }) => {
       if (newTasks.length) {
         uT(ts => [...ts, ...newTasks]);
         showToast(`📋 ${newTasks.length} new shaila${newTasks.length!==1?"s":""} added to your queue`, 6000);
       }
+      if (completedTaskIds.length) {
+        uT(ts => ts.map(t => completedTaskIds.includes(t.id) ? {...t, completed: true, completedAt: Date.now()} : t));
+        showToast(`✅ ${completedTaskIds.length} shaila${completedTaskIds.length!==1?"s":""} answered — tasks completed`, 6000);
+      }
     });
+  }, [loaded]); // eslint-disable-line
+
+  // Real-time shaila listener — picks up changes from the Shaila Transcriber in real time
+  useEffect(() => {
+    if (!loaded || !db) return;
+    const unsub = Store.listenShailos((shailos) => {
+      const tasks = AS?.lists?.find(l => l.id === AS?.activeListId)?.tasks || [];
+      const taskByShailaId = {};
+      tasks.forEach(t => { if (t.shailaId) taskByShailaId[t.shailaId] = t; });
+
+      const newTasks = [];
+      const completedIds = [];
+
+      shailos.forEach(s => {
+        const linked = taskByShailaId[s.id];
+        if (!linked && s.status === "pending") {
+          newTasks.push({
+            id: uid(), text: s.synopsis || s.content?.substring(0, 80) || "New shaila",
+            completed: false, priority: "shaila", createdAt: Date.now(), shailaId: s.id,
+          });
+        } else if (linked && !linked.completed && s.status === "answered") {
+          completedIds.push(linked.id);
+        }
+      });
+
+      if (newTasks.length) {
+        uT(ts => [...ts, ...newTasks]);
+        showToast(`📋 ${newTasks.length} new shaila${newTasks.length!==1?"s":""} from transcriber`, 5000);
+      }
+      if (completedIds.length) {
+        uT(ts => ts.map(t => completedIds.includes(t.id) ? {...t, completed: true, completedAt: Date.now()} : t));
+        showToast(`✅ ${completedIds.length} shaila${completedIds.length!==1?"s":""} answered`, 5000);
+      }
+    });
+    return unsub;
   }, [loaded]); // eslint-disable-line
 
   // ─── Real-time cross-window sync ─────────────────────────────────────────
@@ -664,6 +702,12 @@ function App({ user, onSignOut }) {
     if (entryEnergy) newT.energy = entryEnergy;
     uT(ts => [...ts, newT]);
     setNewTask(""); setSelPri(null); setEntryEnergy(null); flashOpt();
+    // Flow 2: shaila-priority task → create shaila doc in transcriber collection
+    if (selPri === "shaila") {
+      Store.createShailaFromTask(newT).then(shailaId => {
+        if (shailaId) uT(ts => ts.map(t => t.id === newT.id ? {...t, shailaId} : t));
+      });
+    }
     // Show "Added to queue" toast in priority color
     clearTimeout(queueToastTmr.current);
     const priColor = gP(pris, newT.priority).color;
@@ -674,7 +718,13 @@ function App({ user, onSignOut }) {
 
   function addVT(text, pri) {
     if (!text.trim()) return;
-    uT(ts => [...ts, {id:uid(), text:text.trim(), completed:false, priority:pri, createdAt:Date.now()}]);
+    const newT = {id:uid(), text:text.trim(), completed:false, priority:pri, createdAt:Date.now()};
+    uT(ts => [...ts, newT]);
+    if (pri === "shaila") {
+      Store.createShailaFromTask(newT).then(shailaId => {
+        if (shailaId) uT(ts => ts.map(t => t.id === newT.id ? {...t, shailaId} : t));
+      });
+    }
     flashOpt();
   }
 
@@ -688,6 +738,10 @@ function App({ user, onSignOut }) {
     setTimeout(() => {
       uT(ts => {
         const task = ts.find(t => t.id === id);
+        // Flow 4: shaila task completed → mark shaila doc as answered
+        if (task?.shailaId && task.priority === "shaila") {
+          Store.markShailaAnswered(task.shailaId, task.text);
+        }
         const u = ts.map(t => t.id===id ? {...t, completed:true, completedAt:isLegacy?null:Date.now(), goodEnough} : t);
         if (task?.parentTask) {
           const r = u.filter(t => t.parentTask === task.parentTask && !t.completed);
