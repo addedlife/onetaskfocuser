@@ -428,6 +428,47 @@ const Store = {
     }
   },
 
+  // ── Full reconciliation check ──
+  // Compares all shailos vs all shaila-priority tasks, returns mismatches
+  // Returns { missingTasks: [{shaila doc}], missingShailos: [{task}], statusMismatches: [{task, shaila}] }
+  async reconcileShailos(currentTasks) {
+    const col = this.shailosCol();
+    if (!col) return { missingTasks: [], missingShailos: [], statusMismatches: [] };
+    try {
+      const snap = await col.get();
+      const shailoMap = {};
+      snap.forEach(doc => { shailoMap[doc.id] = { id: doc.id, ...doc.data() }; });
+
+      const shailaTasks = (currentTasks || []).filter(t => t.priority === "shaila" && !t.completed);
+      const linkedShailaIds = new Set(shailaTasks.filter(t => t.shailaId).map(t => t.shailaId));
+
+      // Shailos that exist in transcriber but have no task
+      const missingTasks = Object.values(shailoMap).filter(s =>
+        s.status === "pending" && !linkedShailaIds.has(s.id)
+      );
+
+      // Shaila-priority tasks that have no matching shaila doc
+      const missingShailos = shailaTasks.filter(t =>
+        !t.shailaId || !shailoMap[t.shailaId]
+      );
+
+      // Status mismatches: task is active but shaila is answered, or vice versa
+      const statusMismatches = [];
+      shailaTasks.forEach(t => {
+        if (!t.shailaId) return;
+        const s = shailoMap[t.shailaId];
+        if (s && s.status === "answered" && !t.completed) {
+          statusMismatches.push({ task: t, shaila: s, type: "shaila_answered" });
+        }
+      });
+
+      return { missingTasks, missingShailos, statusMismatches };
+    } catch(e) {
+      console.warn("[Store] reconcileShailos failed:", e);
+      return { missingTasks: [], missingShailos: [], statusMismatches: [] };
+    }
+  },
+
   // Real-time listener for shaila changes (returns unsubscribe function)
   listenShailos(callback) {
     const col = this.shailosCol();

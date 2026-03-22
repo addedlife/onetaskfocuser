@@ -780,6 +780,20 @@ function App({ user, onSignOut }) {
 
   function uncompTask(id) { uT(ts => doOpt(ts.map(t => t.id===id ? {...t, completed:false, completedAt:undefined, goodEnough:undefined} : t))); }
   const [shailaDelPrompt, setShailaDelPrompt] = useState(null); // {shailaId, taskText}
+  const [shailaReconcile, setShailaReconcile] = useState(null); // {missingTasks, missingShailos, statusMismatches}
+  const [reconcileLoading, setReconcileLoading] = useState(false);
+
+  async function runShailaReconcile() {
+    setReconcileLoading(true);
+    const result = await Store.reconcileShailos(tasks);
+    setReconcileLoading(false);
+    const total = result.missingTasks.length + result.missingShailos.length + result.statusMismatches.length;
+    if (total === 0) {
+      showToast("✅ Shailos are in sync — nothing to fix", 4000);
+    } else {
+      setShailaReconcile(result);
+    }
+  }
 
   function delTask(id) {
     const task = tasks.find(t => t.id === id);
@@ -1434,6 +1448,79 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           </div>
         </div>
       )}
+      {/* Shaila reconciliation modal — shows mismatches, lets user fix each one */}
+      {shailaReconcile && (
+        <div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setShailaReconcile(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"22px 20px",maxWidth:480,width:"90%",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 12px 48px rgba(0,0,0,0.2)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <h3 style={{fontSize:15,fontWeight:600,margin:0,color:T.text,fontFamily:"system-ui"}}>🔄 Shaila Sync Check</h3>
+              <button onClick={()=>setShailaReconcile(null)} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft}}>✕</button>
+            </div>
+
+            {/* Shailos in transcriber without a task */}
+            {shailaReconcile.missingTasks.length > 0 && (
+              <div style={{marginBottom:16}}>
+                <p style={{fontSize:12,fontWeight:700,color:T.tSoft,margin:"0 0 8px",fontFamily:"system-ui"}}>In Transcriber, no task in queue:</p>
+                {shailaReconcile.missingTasks.map(s => (
+                  <div key={s.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",background:T.bgW,borderRadius:10,marginBottom:4}}>
+                    <span style={{fontSize:13,color:T.text,fontFamily:"Georgia,serif",flex:1,marginRight:8}}>{s.synopsis || s.content?.substring(0,60) || "Shaila"}</span>
+                    <button onClick={()=>{
+                      const newT = {id:uid(), text:s.synopsis||s.content?.substring(0,80)||"New shaila", completed:false, priority:"shaila", createdAt:Date.now(), shailaId:s.id};
+                      uT(ts=>[...ts, newT]);
+                      setShailaReconcile(prev=>({...prev, missingTasks:prev.missingTasks.filter(x=>x.id!==s.id)}));
+                      showToast("Added to queue",2000);
+                    }} style={{fontSize:11,padding:"5px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600,whiteSpace:"nowrap"}}>+ Add task</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Tasks without a shaila record */}
+            {shailaReconcile.missingShailos.length > 0 && (
+              <div style={{marginBottom:16}}>
+                <p style={{fontSize:12,fontWeight:700,color:T.tSoft,margin:"0 0 8px",fontFamily:"system-ui"}}>In task queue, no transcriber record:</p>
+                {shailaReconcile.missingShailos.map(t => (
+                  <div key={t.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",background:T.bgW,borderRadius:10,marginBottom:4}}>
+                    <span style={{fontSize:13,color:T.text,fontFamily:"Georgia,serif",flex:1,marginRight:8}}>{t.text?.substring(0,60)}</span>
+                    <button onClick={()=>{
+                      Store.createShailaFromTask(t).then(shailaId=>{
+                        if(shailaId) uT(ts=>ts.map(x=>x.id===t.id?{...x,shailaId}:x));
+                        setShailaReconcile(prev=>({...prev, missingShailos:prev.missingShailos.filter(x=>x.id!==t.id)}));
+                        showToast("Added to transcriber",2000);
+                      });
+                    }} style={{fontSize:11,padding:"5px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600,whiteSpace:"nowrap"}}>+ Add record</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Status mismatches */}
+            {shailaReconcile.statusMismatches.length > 0 && (
+              <div style={{marginBottom:16}}>
+                <p style={{fontSize:12,fontWeight:700,color:T.tSoft,margin:"0 0 8px",fontFamily:"system-ui"}}>Status mismatch:</p>
+                {shailaReconcile.statusMismatches.map(m => (
+                  <div key={m.task.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",background:T.bgW,borderRadius:10,marginBottom:4}}>
+                    <div style={{flex:1,marginRight:8}}>
+                      <span style={{fontSize:13,color:T.text,fontFamily:"Georgia,serif"}}>{m.task.text?.substring(0,50)}</span>
+                      <span style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",marginLeft:6}}>— answered in transcriber, still active in queue</span>
+                    </div>
+                    <button onClick={()=>{
+                      uT(ts=>ts.map(x=>x.id===m.task.id?{...x,completed:true,completedAt:Date.now()}:x));
+                      setShailaReconcile(prev=>({...prev, statusMismatches:prev.statusMismatches.filter(x=>x.task.id!==m.task.id)}));
+                      showToast("Task completed",2000);
+                    }} style={{fontSize:11,padding:"5px 10px",borderRadius:8,border:"none",background:"#4A8040",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600,whiteSpace:"nowrap"}}>Complete ✓</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* All fixed */}
+            {shailaReconcile.missingTasks.length === 0 && shailaReconcile.missingShailos.length === 0 && shailaReconcile.statusMismatches.length === 0 && (
+              <p style={{textAlign:"center",fontSize:14,color:T.tSoft,fontFamily:"system-ui",margin:"20px 0"}}>✅ All synced!</p>
+            )}
+          </div>
+        </div>
+      )}
       {blockedModal && <BlockedModal task={blockedModal} T={T} pris={pris} onBlock={blockTask} onClose={()=>setBlockedModal(null)}/>}
       {/* Context tags removed */}
       {showSet && <SettingsModal AS={AS} setAS={setAS} T={T} ap={ap} onClose={()=>setShowSet(false)} onSignOut={onSignOut}
@@ -1840,6 +1927,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
               <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
                 <span style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui"}}>@{user?.displayName || user?.email?.split("@")[0] || ""}</span>
                 <button onClick={()=>setShowShailos(true)} style={{fontSize:11,color:T.accent||"#C8A84C",fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>Shailos</button>
+                <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check — reconcile shailos between transcriber and tasks" style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",background:"none",border:`1px solid ${T.brd}`,borderRadius:8,cursor:"pointer",padding:"2px 6px",opacity:reconcileLoading?.5:1}}>{reconcileLoading?"⏳":"🔄"}</button>
                 <button onClick={()=>{if(onSignOut)onSignOut();}} style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>sign out</button>
               </div>
             </header>
