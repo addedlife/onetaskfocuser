@@ -193,10 +193,13 @@ const Store = {
       if (version === 'v5') {
         // Already migrated — load from per-task collections
         const state = await this._loadV5();
-        if (state) return state;
-        // If V5 load failed, fall through to blob as fallback
-        console.warn("[Store] V5 load failed, falling back to blob");
-      } else {
+        // Only use V5 state if it actually has tasks. If collection is empty
+        // (e.g. migration wrote meta but tasks failed), fall back to blob.
+        if (state && state.lists?.some(l => l.tasks?.length > 0)) return state;
+        console.warn("[Store] V5 collection empty or load failed, falling back to blob + re-migrate");
+        // Fall through to blob load, which will attempt re-migration
+      }
+      {
         // Need to migrate: load blob first, then migrate
         if (ref) {
           for (const src of ["server", "cache"]) {
@@ -371,8 +374,15 @@ const Store = {
       // Write each task as its own document
       for (const list of blobState.lists) {
         for (const task of (list.tasks || [])) {
-          const taskDoc = this.tasksCol().doc(task.id);
-          const cleaned = this._clean({ ...task, listId: list.id, _lastModified: Date.now() });
+          // Firestore doc IDs must be non-empty strings. Some legacy tasks
+          // may have numeric IDs or missing IDs — sanitize them.
+          let docId = task.id;
+          if (typeof docId === 'number') docId = String(docId);
+          if (typeof docId !== 'string' || !docId || docId.includes('/')) {
+            docId = 't_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+          }
+          const taskDoc = this.tasksCol().doc(docId);
+          const cleaned = this._clean({ ...task, id: docId, listId: list.id, _lastModified: Date.now() });
           batch.set(taskDoc, cleaned);
           docCount++;
         }

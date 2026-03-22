@@ -271,22 +271,10 @@ function App({ user, onSignOut }) {
   useEffect(() => {
     if (!loaded || !db) return;
     async function syncFromServer() {
-      if (Store._v5) {
-        // V5: reload from per-task collections
-        try {
-          const fresh = await Store._loadV5();
-          if (fresh) {
-            const freshTs = fresh._lsModified || 0;
-            if (freshTs > lastSavedModified.current) {
-              adoptedRemote.current = true;
-              lastSavedModified.current = freshTs;
-              Store.ls(fresh);
-              setAS(fresh);
-            }
-          }
-        } catch(e) {}
-        return;
-      }
+      // V5: collection listener handles reconnection automatically.
+      // Do NOT reload from server here — _loadV5() stamps a fresh timestamp
+      // that makes empty results look "newer", wiping real data.
+      if (Store._v5) return;
       // V4 fallback
       const ref = Store.docRef();
       if (!ref) return;
