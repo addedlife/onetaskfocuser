@@ -26,6 +26,7 @@ const Store = {
   _lastSavedToFB: 0,
   _lastSavedFbModified: 0,
   _fbLoadStatus: null,
+  _fbLoadedTs: 0,              // _lsModified timestamp of the data we loaded FROM Firebase — our freshness baseline
   uid: null,
 
   setUid(uid) { if (this.uid !== uid) { this.uid = uid; this._fbLoadStatus = null; } },
@@ -192,6 +193,7 @@ const Store = {
           if (doc.exists && doc.data().state) {
             const fbState = doc.data().state;
             this._fbLoadStatus = 'ok';
+            this._fbLoadedTs = fbState._lsModified || 0;  // remember what Firebase gave us — our freshness floor
             this.ls(fbState); // refresh optional offline cache
             return fbState;
           }
@@ -221,31 +223,45 @@ const Store = {
 
   async saveToFB(s) {
     const ref = this.docRef();
-    if (!ref) return;
-    // SAFETY: never overwrite Firebase with an empty/default state if we couldn't
-    // confirm Firebase has no data for this user. This prevents the catastrophic
-    // scenario where a failed load causes a blank state to wipe real Firebase data.
+    if (!ref || !db) return;
+    // SAFETY GUARD 1: never overwrite Firebase with blank/default state
     const hasTasks = s?.lists?.some(l => l.tasks?.length > 0);
     if (!hasTasks && this._fbLoadStatus !== 'ok' && this._fbLoadStatus !== 'empty') {
-      console.log("[Store] Skipping blank-state save — Firebase load status unknown, protecting existing data");
+      console.log("[Store] Skipping blank-state save — protecting existing data");
       return;
     }
     try {
-      const cleaned = this._clean({ ...s, _lsModified: s._lsModified || Date.now() });
-      await ref.set({
-        state: cleaned,
-        updatedAt: typeof firebase !== "undefined" ? firebase.firestore.FieldValue.serverTimestamp() : new Date()
-      }, { merge: true });
+      const localTs = s._lsModified || Date.now();
+      const cleaned = this._clean({ ...s, _lsModified: localTs });
+      // SAFETY GUARD 2: Firestore TRANSACTION — the database itself checks
+      // whether our data is newer before accepting the write. This is atomic
+      // and race-condition-free. A stale tab physically cannot overwrite fresh data.
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        const fbTs = snap.exists ? (snap.data()?.state?._lsModified || 0) : 0;
+        if (fbTs > localTs) {
+          console.warn("[Store] TRANSACTION BLOCKED — Firebase has newer data:", fbTs, "> local:", localTs);
+          return; // abort: Firebase is newer, don't overwrite
+        }
+        tx.set(ref, {
+          state: cleaned,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      });
       this._lastSavedToFB = Date.now();
-      this._lastSavedFbModified = s._lsModified || 0;
-      this._fbLoadStatus = 'ok'; // mark confirmed once we've written
+      this._lastSavedFbModified = localTs;
+      this._fbLoadedTs = localTs;            // raise freshness floor
+      this._fbLoadStatus = 'ok';
     } catch(e) {
       console.warn("[Store] Firebase save failed", e);
       this._fbSaveError = e;
     }
   },
 
-  flushSync(s) { this.ls(s); this.saveToFB(s); }
+  // localStorage-only flush — used by beforeunload/pagehide where we must NOT
+  // write to Firebase (risk of stale data overwriting fresh). localStorage is
+  // safe because it only affects THIS device and will be reconciled on next load.
+  flushToLocalOnly(s) { this.ls(s); }
 };
 
 const DEF_PRI = [

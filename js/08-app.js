@@ -245,6 +245,7 @@ function App({ user, onSignOut }) {
       if (fbTs > lastSavedModified.current) {
         adoptedRemote.current = true;           // tell save effect to skip
         lastSavedModified.current = fbTs;       // update baseline
+        Store._fbLoadedTs = fbTs;               // raise freshness floor so stale tabs can't overwrite
         Store.ls(fbState);
         setAS(fbState);
       }
@@ -270,6 +271,7 @@ function App({ user, onSignOut }) {
         if (fbTs > lastSavedModified.current) {
           adoptedRemote.current = true;
           lastSavedModified.current = fbTs;
+          Store._fbLoadedTs = fbTs;             // raise freshness floor
           Store.ls(fbState);
           setAS(fbState);
         }
@@ -287,19 +289,20 @@ function App({ user, onSignOut }) {
   }, [loaded]); // eslint-disable-line
 
   // ─── Tab-close flush + periodic Firebase sync ───────────────────────────
-  // Single consolidated handler for beforeunload/pagehide. Uses asRef.current
-  // (always the latest state) instead of closure-captured AS, so it never
-  // flushes stale data. Depends only on [loaded] so the 15s interval doesn't
-  // tear down and restart on every state change.
+  // beforeunload/pagehide: save to localStorage ONLY — NEVER to Firebase.
+  // This is the structural fix for stale-data corruption. Every single data
+  // loss incident was caused by a stale tab's beforeunload flushing old data
+  // to Firebase. localStorage is safe because it only affects this device.
+  // The debounced save (above) and periodic sync (below) handle Firebase writes
+  // during normal operation when we have time to do it safely via transaction.
   useEffect(() => {
     if (!loaded) return;
-    function flush() {
-      clearTimeout(saveTmr.current);                 // cancel pending debounce
+    function flushLocal() {
       const cur = asRef.current;
-      if (cur) { Store.ls(cur); Store.saveToFB(cur); }
+      if (cur) Store.flushToLocalOnly(cur);
     }
-    window.addEventListener("beforeunload", flush);
-    window.addEventListener("pagehide", flush);
+    window.addEventListener("beforeunload", flushLocal);
+    window.addEventListener("pagehide", flushLocal);
     // Periodic Firebase sync — catches anything the debounce missed
     // (e.g. user idle for 15s after a change that was debounced then cancelled)
     const iv = setInterval(() => {
@@ -309,8 +312,8 @@ function App({ user, onSignOut }) {
       }
     }, 15000);
     return () => {
-      window.removeEventListener("beforeunload", flush);
-      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("beforeunload", flushLocal);
+      window.removeEventListener("pagehide", flushLocal);
       clearInterval(iv);
     };
   }, [loaded]);
