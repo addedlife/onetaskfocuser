@@ -376,14 +376,16 @@ const Store = {
     }
   },
 
-  // Flow 2: Task → Transcriber — new shaila-priority task (no shailaId) → create shaila doc
+  // Flow 2: Task → Transcriber — new shaila-priority task → create shaila doc
+  // Uses task.shailaId (pre-assigned) as doc ID to avoid race with onSnapshot listener
   async createShailaFromTask(task) {
     const col = this.shailosCol();
-    if (!col || task.shailaId) return null; // already linked
+    if (!col) return null;
     try {
       const now = new Date();
       const dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-      const docRef = await col.add(this._clean({
+      const ref = task.shailaId ? col.doc(task.shailaId) : col.doc();
+      await ref.set(this._clean({
         content: task.text,
         synopsis: task.text,
         status: "pending",
@@ -395,8 +397,8 @@ const Store = {
         answererName: "",
         parsedShaila: task.text,
       }));
-      console.log("[Store] Created shaila doc from task:", docRef.id);
-      return docRef.id; // caller should set task.shailaId = this
+      console.log("[Store] Created shaila doc from task:", ref.id);
+      return ref.id;
     } catch(e) {
       console.warn("[Store] createShailaFromTask failed:", e);
       return null;

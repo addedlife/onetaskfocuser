@@ -229,32 +229,23 @@ function App({ user, onSignOut }) {
     if (count > 0) showToast(`↑ ${count} task${count!==1?"s":""} nudged up — been sitting too long`, 8000);
   }, [loaded]); // eslint-disable-line
 
-  // ─── Shaila ↔ Task bidirectional sync ───────────────────────────────────
-  // On load: creates tasks for new pending shailos, completes tasks for answered ones
-  useEffect(() => {
-    if (!loaded) return;
-    const tasks = AS?.lists?.find(l => l.id === AS.activeListId)?.tasks || [];
-    Store.syncShailos(tasks).then(({ newTasks, completedTaskIds }) => {
-      if (newTasks.length) {
-        uT(ts => [...ts, ...newTasks]);
-        showToast(`📋 ${newTasks.length} new shaila${newTasks.length!==1?"s":""} added to your queue`, 6000);
-      }
-      if (completedTaskIds.length) {
-        uT(ts => ts.map(t => completedTaskIds.includes(t.id) ? {...t, completed: true, completedAt: Date.now()} : t));
-        showToast(`✅ ${completedTaskIds.length} shaila${completedTaskIds.length!==1?"s":""} answered — tasks completed`, 6000);
-      }
-    });
-  }, [loaded]); // eslint-disable-line
-
-  // Real-time shaila listener — picks up changes from the Shaila Transcriber in real time
-  // Uses uT(callback) to read current tasks from latest state, avoiding stale closure bugs
+  // ─── Shaila ↔ Task real-time sync ───────────────────────────────────────
+  // Single listener handles ALL sync: new shailos → tasks, answered → complete, deleted → remove.
+  // Uses uT(callback) to read CURRENT tasks (avoids stale closure bugs).
+  // No separate initial sync needed — onSnapshot fires immediately with current data.
   useEffect(() => {
     if (!loaded || !db) return;
     const unsub = Store.listenShailos((shailos) => {
-      // Use uT with a function to get the CURRENT tasks (avoids stale AS closure)
       uT(currentTasks => {
+        // Build lookup: shailaId → task
         const taskByShailaId = {};
         currentTasks.forEach(t => { if (t.shailaId) taskByShailaId[t.shailaId] = t; });
+
+        // Also build text lookup for shaila-priority tasks (fallback dedup when shailaId hasn't been set yet)
+        const shailaTextSet = new Set(
+          currentTasks.filter(t => t.priority === "shaila" && !t.completed)
+            .map(t => t.text.trim().toLowerCase())
+        );
 
         const shailaIdSet = new Set(shailos.map(s => s.id));
         const toAdd = [];
@@ -263,12 +254,20 @@ function App({ user, onSignOut }) {
 
         shailos.forEach(s => {
           const linked = taskByShailaId[s.id];
+          console.log("[Shaila sync]", s.id, "status:", s.status, "linked:", !!linked, linked?.completed ? "(completed)" : "");
           if (!linked && s.status === "pending") {
+            // Text-based dedup: skip if a shaila-priority task with matching text already exists
+            const text = s.synopsis || s.content?.substring(0, 80) || "New shaila";
+            if (shailaTextSet.has(text.trim().toLowerCase())) {
+              console.log("[Shaila sync] Skipped (text dedup):", text.substring(0, 40));
+              return;
+            }
             toAdd.push({
-              id: uid(), text: s.synopsis || s.content?.substring(0, 80) || "New shaila",
+              id: uid(), text,
               completed: false, priority: "shaila", createdAt: Date.now(), shailaId: s.id,
             });
           } else if (linked && !linked.completed && s.status === "answered") {
+            console.log("[Shaila sync] Completing task for answered shaila:", linked.text?.substring(0, 40));
             toCompleteIds.push(linked.id);
           }
         });
@@ -280,7 +279,6 @@ function App({ user, onSignOut }) {
           }
         });
 
-        // If nothing changed, return tasks unchanged (no re-render)
         if (!toAdd.length && !toCompleteIds.length && !toDeleteIds.length) return currentTasks;
 
         if (toAdd.length) showToast(`📋 ${toAdd.length} new shaila${toAdd.length!==1?"s":""} from transcriber`, 5000);
@@ -715,13 +713,16 @@ function App({ user, onSignOut }) {
     if (!tx || !selPri) return;
     const newT = {id:uid(), text:tx, completed:false, priority:selPri, createdAt:Date.now()};
     if (entryEnergy) newT.energy = entryEnergy;
+    // Pre-assign shailaId BEFORE adding to state (prevents race with onSnapshot listener)
+    if (selPri === "shaila") {
+      const col = Store.shailosCol();
+      if (col) newT.shailaId = col.doc().id;
+    }
     uT(ts => [...ts, newT]);
     setNewTask(""); setSelPri(null); setEntryEnergy(null); flashOpt();
-    // Flow 2: shaila-priority task → create shaila doc in transcriber collection
-    if (selPri === "shaila") {
-      Store.createShailaFromTask(newT).then(shailaId => {
-        if (shailaId) uT(ts => ts.map(t => t.id === newT.id ? {...t, shailaId} : t));
-      });
+    // Flow 2: shaila-priority task → create shaila doc with the pre-assigned ID
+    if (newT.shailaId) {
+      Store.createShailaFromTask(newT);
     }
     // Show "Added to queue" toast in priority color
     clearTimeout(queueToastTmr.current);
@@ -734,11 +735,14 @@ function App({ user, onSignOut }) {
   function addVT(text, pri) {
     if (!text.trim()) return;
     const newT = {id:uid(), text:text.trim(), completed:false, priority:pri, createdAt:Date.now()};
-    uT(ts => [...ts, newT]);
+    // Pre-assign shailaId BEFORE adding to state
     if (pri === "shaila") {
-      Store.createShailaFromTask(newT).then(shailaId => {
-        if (shailaId) uT(ts => ts.map(t => t.id === newT.id ? {...t, shailaId} : t));
-      });
+      const col = Store.shailosCol();
+      if (col) newT.shailaId = col.doc().id;
+    }
+    uT(ts => [...ts, newT]);
+    if (newT.shailaId) {
+      Store.createShailaFromTask(newT);
     }
     flashOpt();
   }
@@ -1047,28 +1051,25 @@ function App({ user, onSignOut }) {
   // Remove duplicate unparented tasks — keeps the first occurrence of each text,
   // drops any later copies. Completed tasks and subtasks are left alone.
   function deduplicateTasks() {
-    const current = tasksRef.current || [];
-    const seen = new Set();
-    const hasDupes = current.some(t => {
-      if (t.parentTask || t.completed) return false;
-      const k = t.text.trim().toLowerCase();
-      if (seen.has(k)) return true;
-      seen.add(k);
-      return false;
-    });
-    if (!hasDupes) { showToast("✓ No duplicates found", 3000); return; }
-
     uT(ts => {
-      const seenKeys = new Set();
+      const seenText = new Set();
+      const seenShailaId = new Set();
       let removed = 0;
       const deduped = ts.filter(t => {
         if (t.parentTask || t.completed) return true;
+        // Dedup by shailaId (most important — prevents listener dupes)
+        if (t.shailaId) {
+          if (seenShailaId.has(t.shailaId)) { removed++; return false; }
+          seenShailaId.add(t.shailaId);
+        }
+        // Also dedup by text
         const k = t.text.trim().toLowerCase();
-        if (seenKeys.has(k)) { removed++; return false; }
-        seenKeys.add(k);
+        if (seenText.has(k)) { removed++; return false; }
+        seenText.add(k);
         return true;
       });
-      showToast(`✓ Removed ${removed} duplicate${removed === 1 ? "" : "s"}`, 3000);
+      if (removed) showToast(`✓ Removed ${removed} duplicate${removed === 1 ? "" : "s"}`, 3000);
+      else showToast("✓ No duplicates found", 3000);
       return deduped;
     });
   }
@@ -2427,7 +2428,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       {/* ── Floating "Record Shaila" button — always visible except during Zen ── */}
       {!zen && (
         <button
-          onClick={() => window.open("/shailos/", "_blank")}
+          onClick={() => setShowShailos(true)}
           style={{
             position:"fixed", bottom:24, right:24, zIndex:9999,
             background:"#C8A84C", color:"#fff", border:"none",
