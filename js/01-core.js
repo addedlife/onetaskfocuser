@@ -160,14 +160,27 @@ const Store = {
     const local  = this.ll();
     const ref    = this.docRef();
 
-    // Emergency restore: ?restoreLocal=1 forces this device's localStorage to win over Firebase
-    // Use this on a device that still has old data to push it back to the cloud
+    // Emergency restore: ?restoreLocal=1 offers to push this device's localStorage to Firebase.
+    // Always asks for confirmation first — this will overwrite whatever is currently in Firebase.
     if (new URLSearchParams(window.location.search).get('restoreLocal') === '1') {
       if (local && local.lists?.some(l => l.tasks?.length > 0)) {
-        console.log("[Store] restoreLocal mode: pushing local data to Firebase");
-        this._fbLoadStatus = 'ok'; // allow saveToFB to proceed
-        if (ref) await this.saveToFB(local);
-        return local;
+        const taskCount = local.lists.reduce((n, l) => n + (l.tasks?.length || 0), 0);
+        const ok = window.confirm(
+          `This device has a local backup with ${taskCount} task(s).\n\n` +
+          `Save this to Firebase? This will OVERWRITE whatever is currently saved in the cloud.\n\n` +
+          `Only tap OK if you are sure this device has your most recent data.`
+        );
+        if (ok) {
+          console.log("[Store] restoreLocal confirmed: pushing local data to Firebase");
+          this._fbLoadStatus = 'ok';
+          if (ref) await this.saveToFB(local);
+          return local;
+        } else {
+          // User declined — strip the param and load normally from Firebase
+          const url = new URL(window.location.href);
+          url.searchParams.delete('restoreLocal');
+          window.history.replaceState({}, '', url);
+        }
       }
     }
 
