@@ -1811,7 +1811,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
               </div>
               {/* Text input — shown once priority selected */}
               {qAddPri && (
-                <form onSubmit={e=>{e.preventDefault();const t=qAddText.trim();if(!t)return;const newQT={id:uid(),text:t,completed:false,priority:qAddPri,createdAt:Date.now()};uT(ts=>doOpt([...ts,newQT]));setQAddText("");setQAddPri(null);setLastTaskAddedAt(Date.now());clearTimeout(queueToastTmr.current);const clr=gP(pris,newQT.priority).isShaila?"#2ECC71":gP(pris,newQT.priority).color;setQueueToast(clr);setQueueToastKey(k=>k+1);queueToastTmr.current=setTimeout(()=>setQueueToast(null),5000);triggerAIPrioritize();}} style={{display:"flex",gap:6,animation:"ot-fade 0.15s"}}>
+                <form onSubmit={e=>{e.preventDefault();const t=qAddText.trim();if(!t)return;const newQT={id:uid(),text:t,completed:false,priority:qAddPri,createdAt:Date.now()};uT(ts=>doOpt([...ts,newQT]));setQAddText("");setQAddPri(null);clearTimeout(queueToastTmr.current);const clr=gP(pris,newQT.priority).isShaila?"#2ECC71":gP(pris,newQT.priority).color;setQueueToast(clr);setQueueToastKey(k=>k+1);queueToastTmr.current=setTimeout(()=>setQueueToast(null),5000);triggerAIPrioritize();}} style={{display:"flex",gap:6,animation:"ot-fade 0.15s"}}>
                   <input autoFocus value={qAddText} onChange={e=>setQAddText(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Escape"){setQAddPri(null);setQAddText("");}}}
                     placeholder={qAddPri==="shaila"?"Who + what shaila?":"What needs doing?"}
