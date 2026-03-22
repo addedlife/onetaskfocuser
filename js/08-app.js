@@ -247,49 +247,51 @@ function App({ user, onSignOut }) {
   }, [loaded]); // eslint-disable-line
 
   // Real-time shaila listener — picks up changes from the Shaila Transcriber in real time
+  // Uses uT(callback) to read current tasks from latest state, avoiding stale closure bugs
   useEffect(() => {
     if (!loaded || !db) return;
     const unsub = Store.listenShailos((shailos) => {
-      const tasks = AS?.lists?.find(l => l.id === AS?.activeListId)?.tasks || [];
-      const taskByShailaId = {};
-      tasks.forEach(t => { if (t.shailaId) taskByShailaId[t.shailaId] = t; });
+      // Use uT with a function to get the CURRENT tasks (avoids stale AS closure)
+      uT(currentTasks => {
+        const taskByShailaId = {};
+        currentTasks.forEach(t => { if (t.shailaId) taskByShailaId[t.shailaId] = t; });
 
-      const shailaIdSet = new Set(shailos.map(s => s.id));
-      const newTasks = [];
-      const completedIds = [];
-      const deletedIds = [];
+        const shailaIdSet = new Set(shailos.map(s => s.id));
+        const toAdd = [];
+        const toCompleteIds = [];
+        const toDeleteIds = [];
 
-      shailos.forEach(s => {
-        const linked = taskByShailaId[s.id];
-        if (!linked && s.status === "pending") {
-          newTasks.push({
-            id: uid(), text: s.synopsis || s.content?.substring(0, 80) || "New shaila",
-            completed: false, priority: "shaila", createdAt: Date.now(), shailaId: s.id,
-          });
-        } else if (linked && !linked.completed && s.status === "answered") {
-          completedIds.push(linked.id);
-        }
+        shailos.forEach(s => {
+          const linked = taskByShailaId[s.id];
+          if (!linked && s.status === "pending") {
+            toAdd.push({
+              id: uid(), text: s.synopsis || s.content?.substring(0, 80) || "New shaila",
+              completed: false, priority: "shaila", createdAt: Date.now(), shailaId: s.id,
+            });
+          } else if (linked && !linked.completed && s.status === "answered") {
+            toCompleteIds.push(linked.id);
+          }
+        });
+
+        // Detect deletions: tasks with shailaId no longer in shailos collection
+        currentTasks.forEach(t => {
+          if (t.shailaId && !t.completed && !shailaIdSet.has(t.shailaId)) {
+            toDeleteIds.push(t.id);
+          }
+        });
+
+        // If nothing changed, return tasks unchanged (no re-render)
+        if (!toAdd.length && !toCompleteIds.length && !toDeleteIds.length) return currentTasks;
+
+        if (toAdd.length) showToast(`📋 ${toAdd.length} new shaila${toAdd.length!==1?"s":""} from transcriber`, 5000);
+        if (toCompleteIds.length) showToast(`✅ ${toCompleteIds.length} shaila${toCompleteIds.length!==1?"s":""} answered`, 5000);
+        if (toDeleteIds.length) showToast(`🗑️ ${toDeleteIds.length} shaila task${toDeleteIds.length!==1?"s":""} removed`, 5000);
+
+        let result = [...currentTasks, ...toAdd];
+        if (toCompleteIds.length) result = result.map(t => toCompleteIds.includes(t.id) ? {...t, completed:true, completedAt:Date.now()} : t);
+        if (toDeleteIds.length) result = result.filter(t => !toDeleteIds.includes(t.id));
+        return result;
       });
-
-      // Detect deletions: tasks with shailaId that no longer exists in shailos collection
-      tasks.forEach(t => {
-        if (t.shailaId && !t.completed && !shailaIdSet.has(t.shailaId)) {
-          deletedIds.push(t.id);
-        }
-      });
-
-      if (newTasks.length) {
-        uT(ts => [...ts, ...newTasks]);
-        showToast(`📋 ${newTasks.length} new shaila${newTasks.length!==1?"s":""} from transcriber`, 5000);
-      }
-      if (completedIds.length) {
-        uT(ts => ts.map(t => completedIds.includes(t.id) ? {...t, completed: true, completedAt: Date.now()} : t));
-        showToast(`✅ ${completedIds.length} shaila${completedIds.length!==1?"s":""} answered`, 5000);
-      }
-      if (deletedIds.length) {
-        uT(ts => ts.filter(t => !deletedIds.includes(t.id)));
-        showToast(`🗑️ ${deletedIds.length} shaila task${deletedIds.length!==1?"s":""} removed (deleted in transcriber)`, 5000);
-      }
     });
     return unsub;
   }, [loaded]); // eslint-disable-line

@@ -381,10 +381,13 @@ const Store = {
     const col = this.shailosCol();
     if (!col || task.shailaId) return null; // already linked
     try {
+      const now = new Date();
+      const dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
       const docRef = await col.add(this._clean({
         content: task.text,
         synopsis: task.text,
         status: "pending",
+        date: dateStr,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         userId: firebase.auth().currentUser?.uid || this.uid,
         askerName: "",
