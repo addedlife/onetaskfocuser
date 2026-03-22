@@ -2231,6 +2231,27 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
 
         {tab !== "focus" && <footer style={{textAlign:"center",padding:"20px 0 36px",borderTop:`1px solid ${T.brdS}`,marginTop:16,flexShrink:0}}><p style={{color:T.tFaint,fontSize:12,fontStyle:"italic",margin:0}}>One thing at a time.</p></footer>}
       </div>
+
+      {/* ── Floating "Record Shaila" button — always visible except during Zen ── */}
+      {!zen && (
+        <button
+          onClick={() => window.open("/shailos/", "_blank")}
+          style={{
+            position:"fixed", bottom:24, right:24, zIndex:9999,
+            background:"#C8A84C", color:"#fff", border:"none",
+            borderRadius:50, padding:"14px 20px",
+            fontSize:14, fontWeight:600, fontFamily:"system-ui",
+            cursor:"pointer", boxShadow:"0 4px 16px rgba(0,0,0,.25)",
+            display:"flex", alignItems:"center", gap:8,
+            transition:"transform 0.15s, box-shadow 0.15s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.07)"; e.currentTarget.style.boxShadow = "0 6px 24px rgba(0,0,0,.35)"; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,.25)"; }}
+          title="Record a new shaila"
+        >
+          <span style={{fontSize:18}}>📋</span> Shaila
+        </button>
+      )}
     </div>
   );
 }
