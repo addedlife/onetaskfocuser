@@ -337,8 +337,9 @@ const Store = {
     const map = new Map();
     if (!s?.lists) return map;
     for (const list of s.lists) {
-      for (const task of (list.tasks || [])) {
-        map.set(task.id, { ...task, listId: list.id });
+      for (let i = 0; i < (list.tasks || []).length; i++) {
+        const task = list.tasks[i];
+        map.set(task.id, { ...task, listId: list.id, _sortIndex: i });
       }
     }
     return map;
@@ -440,10 +441,17 @@ const Store = {
         const t = doc.data();
         const lid = t.listId || "default";
         if (!tasksByList[lid]) tasksByList[lid] = [];
-        // Remove listId from task data (it's metadata, not part of the task)
-        const { listId, _lastModified, ...taskData } = t;
+        // Remove internal fields from task data (metadata, not part of the task)
+        const { listId, _lastModified, _sortIndex, ...taskData } = t;
+        taskData._sortIndex = _sortIndex ?? 9999; // keep for sorting, strip after
         tasksByList[lid].push(taskData);
       });
+
+      // Sort each list's tasks by _sortIndex (preserves user's manual ordering)
+      for (const lid in tasksByList) {
+        tasksByList[lid].sort((a, b) => (a._sortIndex ?? 9999) - (b._sortIndex ?? 9999));
+        tasksByList[lid].forEach(t => delete t._sortIndex); // clean up
+      }
 
       // Reconstruct lists array
       const lists = listMeta
@@ -558,7 +566,8 @@ const Store = {
           id: lm.id,
           name: lm.name,
           tasks: [...taskCache.values()].filter(t => (t.listId || "default") === lm.id)
-            .map(({ listId, _lastModified, ...t }) => t)
+            .sort((a, b) => (a._sortIndex ?? 9999) - (b._sortIndex ?? 9999))
+            .map(({ listId, _lastModified, _sortIndex, ...t }) => t)
         }));
       return { ...settings, lists, _lsModified: Date.now() };
     };
