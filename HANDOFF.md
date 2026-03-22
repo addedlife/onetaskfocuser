@@ -1,5 +1,5 @@
-# OneTaskOnly — Full Handoff Document
-*Generated 2026-03-14. Copy this into a new chat to continue seamlessly.*
+# OneTaskFocuser — Full Handoff Document
+*Updated 2026-03-22. Copy this into a new chat to continue seamlessly.*
 
 ---
 
@@ -14,7 +14,7 @@
 ---
 
 ## 2. THE APP
-- **Name**: OneTaskOnly (internal: OneTask)
+- **Name**: OneTaskFocuser (internal: OneTask)
 - **Live URL**: https://onetaskfocuser.netlify.app
 - **Purpose**: A focus task manager — shows one task at a time, AI-prioritized, with zen mode, brain dump, multiple lists, energy filtering, Mrs. W schedule overlay, and more.
 
@@ -32,19 +32,21 @@
 
 ## 4. FILE STRUCTURE
 ```
-C:\Users\ydanz\OneDrive\Documents\taskmanager app\Claude Code OneTask Project\
+/home/user/onetaskfocuser/
 ├── index.html          — loads all CDN scripts + all JS files via Babel
 ├── netlify.toml        — publish="."; functions="netlify/functions"
-├── deploy.bat          — legacy deploy (unreliable in current env, use PowerShell API instead)
+├── restore_data.html   — paste JSON → push to Firebase (overwrites current state)
+├── recover.html        — preview current localStorage contents
+├── HANDOFF.md          — this file
 ├── js/
 │   ├── 00-auth.js      — Firebase Auth gate, canonicalUid(), Google sign-in
-│   ├── 01-core.js      — Store object, Firebase init, constants, TIPS, SCHEMES, helpers, AI
+│   ├── 01-core.js      — Store object, Firebase init, constants, TIPS, SCHEMES, helpers, AI, cloud backup methods
 │   ├── 02-icons.js     — SVG icon components
 │   ├── 03-voice.js     — Voice input
 │   ├── 04-components.js — ZenMode, BrainDump, ZenDumpReview, PostItStack, BlockedBadge, etc.
 │   ├── 05-modals.js    — Modal components
 │   ├── 06-shelf.js     — Completed tasks shelf
-│   ├── 07-settings.js  — Settings panel (API key, MrsW schedule, color scheme, etc.)
+│   ├── 07-settings.js  — Settings panel + Cloud Backup UI (added this session)
 │   ├── 08-app.js       — Main App component, all state, all task actions
 │   └── 09-render.js    — ReactDOM.createRoot render call
 └── netlify/functions/
@@ -56,113 +58,169 @@ C:\Users\ydanz\OneDrive\Documents\taskmanager app\Claude Code OneTask Project\
 
 ## 5. KEY ARCHITECTURE
 - **Firestore path**: `users/{canonicalUid}/appData/appState_v4`
+- **Backup path**: `users/{canonicalUid}/backups/{YYYY-MM-DD}` (added this session)
 - **canonicalUid**: strips email to prefix — `rabbidanziger@anything` → `"rabbidanziger"`
 - **localStorage key**: `onetaskonly_v4_{uid}` (e.g. `onetaskonly_v4_rabbidanziger`)
-- **State object** (`AS`): `{ lists[], activeListId, colorScheme, mrsWWindows, geminiKey, ... }`
+- **State object** (`AS`): `{ lists[], activeListId, colorScheme, mrsWWindows, geminiKey, _lsModified, ... }`
+- **`_lsModified`**: Unix timestamp on state — used to compare recency across devices
 - **`Store`** object in 01-core.js handles all read/write to Firebase + localStorage
 - **`uT(fn)`** — helper to mutate the active list's tasks array
 - **`curT`** = `displayedActT[0]` — the current focused task
 - **Firestore onSnapshot** listener in 08-app.js keeps all open windows in sync (2s echo buffer)
+- **`justLoaded` guard**: prevents saving immediately after load, but NOT if user interacts first
+- **`beforeunload`/`pagehide`**: flushes state to Firebase when tab closes — **this caused the corruption incident (see below)**
 
 ---
 
-## 6. THE STORAGE BUG (FIXED) + WHAT STILL NEEDS DOING
+## 6. CLOUD BACKUP FEATURE (added 2026-03-22 — LIVE)
 
-### What happened
-When the user cleared browser localStorage, the app loaded with a blank default state
-and saved it to Firebase within 50ms — wiping all tasks for `rabbidanziger`. This is confirmed:
-Firebase shows 0 tasks, last written 2026-03-13.
+Daily Firestore snapshots stored at `users/{uid}/backups/YYYY-MM-DD`.
+- One snapshot per day max (throttled via localStorage flag)
+- 30-day retention (auto-pruned weekly)
+- Accessible from any device (cross-device, tied to Firebase user account)
+- UI in Settings modal: "Show cloud backups" → list of dated entries → "Restore" button per entry
 
-### Fix already deployed
-In `js/01-core.js`, `Store` now has:
-- `_fbLoadStatus`: tracks whether Firebase confirmed data exists (`'ok'`), empty (`'empty'`), or unreachable (`'error'`)
-- `saveToFB()` guard: **never saves empty/default state unless Firebase confirmed the account is new**
-- `setUid()` only resets status when UID actually changes (not on every render)
-- `?restoreLocal=1` URL param: forces localStorage to win over Firebase and push to cloud
-- `fbOffline` warning banner in 08-app.js when Firebase unreachable on load
+**Files changed:**
 
-### What still needs doing (CRITICAL)
-**The architecture must be rebuilt to be Firebase-first, not localStorage-first.**
-User's exact request: *"needs nothing to do with local storage and is cleanly saved in the cloud,
-maintaining accurate completions deletions submissions etc without being affected by a new signing
-or by local states anywhere."*
-
-The current design: localStorage = primary, Firebase = secondary.
-Required design: Firebase = only source of truth. localStorage = optional offline cache only.
-Never save a blank state to Firebase. If Firebase is unreachable, show error, don't silently save.
-
----
-
-## 7. DATA RECOVERY STATUS (IN PROGRESS)
-
-The user's task data was wiped from Firebase. An iPad (Safari) likely still has the old data
-in localStorage. Recovery plan:
-
-1. `?restoreLocal=1` feature is **already deployed** to production
-2. User should open **`onetaskfocuser.netlify.app/?restoreLocal=1`** on the iPad
-3. The feature detects tasks in localStorage and pushes them to Firebase before Firebase can respond
-4. **Issue**: iPad was showing white screen — likely Babel transpilation delay (60–90 seconds on mobile)
-5. **Next step**: Confirm whether iPad shows the app after waiting longer, or try Chrome on iPad
-
----
-
-## 8. DEPLOYING (IMPORTANT — USE THIS METHOD)
-
-**`deploy.bat` does NOT work** in the current Desktop Commander (DXT) environment.
-Node.js processes spawn silently with exit code 0 and no output.
-
-**WORKING DEPLOY METHOD — PowerShell inline via Netlify REST API:**
-
-```powershell
-# Step 1: Create zip
-$zipPath = "C:\Users\ydanz\deploy_temp.zip"
-$tempDir = "C:\Users\ydanz\deploy_staging"
-if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force }
-New-Item -ItemType Directory -Path $tempDir | Out-Null
-$src = "C:\Users\ydanz\OneDrive\Documents\taskmanager app\Claude Code OneTask Project"
-Copy-Item "$src\index.html" "$tempDir\" -Force
-Copy-Item "$src\netlify.toml" "$tempDir\" -Force
-Copy-Item "$src\js" "$tempDir\js" -Recurse -Force
-Copy-Item "$src\netlify" "$tempDir\netlify" -Recurse -Force
-Compress-Archive -Path "$tempDir\*" -DestinationPath $zipPath
-Remove-Item $tempDir -Recurse -Force
-Write-Output "Zip size: $((Get-Item $zipPath).Length) bytes"
-
-# Step 2: Upload to Netlify API
-$token = "nfc_sFsYCTMmnimttJVAVcw6fjvS6GR4mFreac04"
-$siteId = "c603b156-f9ee-4b67-bcf4-d4b7f64fbccd"
-$headers = @{ "Authorization" = "Bearer $token"; "Content-Type" = "application/zip" }
-$bytes = [System.IO.File]::ReadAllBytes($zipPath)
-$result = Invoke-RestMethod -Uri "https://api.netlify.com/api/v1/sites/$siteId/deploys" -Method Post -Headers $headers -Body $bytes
-Write-Output "ID: $($result.id)"; Write-Output "State: $($result.state)"
-
-# Step 3: Poll until ready
-$deployId = $result.id
-Start-Sleep 8
-$check = Invoke-RestMethod -Uri "https://api.netlify.com/api/v1/deploys/$deployId" -Headers @{ "Authorization" = "Bearer $token" }
-Write-Output "Final state: $($check.state)"
+### `js/01-core.js` — Added to `Store` object after `flushSync`:
+```javascript
+backupCollRef() {
+  if (!db || !this.uid) return null;
+  return db.collection("users").doc(this.uid).collection("backups");
+},
+async saveCloudBackup(state) {
+  if (!db || !this.uid) return;
+  if (this._fbLoadStatus !== 'ok' && this._fbLoadStatus !== 'empty') return;
+  const today = new Date().toISOString().slice(0, 10);
+  const pruneKey = `${this.lsKey()}_last_cloud_bk`;
+  if (localStorage.getItem(pruneKey) === today) return;
+  const coll = this.backupCollRef();
+  if (!coll) return;
+  try {
+    const cleaned = this._clean(state);
+    await coll.doc(today).set({
+      savedAt: typeof firebase !== "undefined" ? firebase.firestore.FieldValue.serverTimestamp() : new Date(),
+      state: cleaned
+    });
+    localStorage.setItem(pruneKey, today);
+    const pruneWeekKey = `${this.lsKey()}_last_cloud_prune`;
+    const lastPrune = localStorage.getItem(pruneWeekKey) || '';
+    const thisWeek = new Date().toISOString().slice(0, 7) + '-W' + Math.ceil(new Date().getDate() / 7);
+    if (lastPrune !== thisWeek) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 30);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      try {
+        const old = await coll.where(firebase.firestore.FieldPath.documentId(), '<', cutoffStr).get();
+        if (!old.empty) { const batch = db.batch(); old.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); }
+        localStorage.setItem(pruneWeekKey, thisWeek);
+      } catch(e) {}
+    }
+  } catch(e) { console.warn('[Store] Cloud backup failed', e); }
+},
+async listBackups() {
+  const coll = this.backupCollRef();
+  if (!coll) return [];
+  try {
+    const snap = await coll.orderBy('savedAt', 'desc').limit(30).get();
+    return snap.docs.map(d => ({ id: d.id, savedAt: d.data().savedAt?.toDate ? d.data().savedAt.toDate() : new Date(d.id) }));
+  } catch(e) { return []; }
+},
+async restoreFromBackup(docId) {
+  const coll = this.backupCollRef();
+  if (!coll) return null;
+  try {
+    const doc = await coll.doc(docId).get();
+    if (!doc.exists) return null;
+    return doc.data().state || null;
+  } catch(e) { return null; }
+}
 ```
 
-Run each step as a separate Desktop Commander `start_process` command (inline PowerShell).
+### `js/08-app.js` — Save effect now calls cloud backup:
+```javascript
+Store.ls(toSave);                          // Refresh optional offline cache
+Store.autoFileBackup(toSave);             // Weekly file backup
+Store.saveCloudBackup(toSave);            // Daily cloud backup (Firestore)
+```
+
+### `js/07-settings.js` — Settings modal:
+Added Cloud Backup Points UI section with state (`cloudBackups`, `cloudBackupsLoading`, `restoringBackup`), load handler, restore handler, and button list UI. Inserted between backup folder button and sign-out section.
+
+**Git:** Committed + pushed to `claude/check-focused-app-10FMv` → merged to `main` → Netlify auto-deployed. Feature is live.
 
 ---
 
-## 9. ACCESS CREDENTIALS
+## 7. CORRUPTION INCIDENT & RECOVERY
+
+### What Happened
+A device that had been closed for days (stale localStorage) was reopened. It loaded the old localStorage state. When the tab was closed, `beforeunload` flushed that stale state to Firebase, overwriting the current/correct data.
+
+### Root Cause
+`beforeunload` writes to Firebase without checking whether local state is newer than what was loaded from Firebase. Any device with old localStorage can corrupt the cloud state when the tab closes.
+
+### Backup Sources Evaluated
+
+| Source | `_lsModified` | Approx Date | Aveil Completed? | Notes |
+|--------|--------------|-------------|-----------------|-------|
+| Stale device localStorage | `1774159533225` | ~Mar 19 | NO | This is the corrupted state that overwrote Firebase |
+| File backup #1 | `1773572821555` | ~Mar 12 | NO | Oldest, ~100 duplicate tasks |
+| File backup #2 | `1773947786444` | ~Mar 14 | YES | Good but older |
+| **Best localStorage** | **`1773973396144`** | **~Mar 17** | **YES** | **BEST — use this** |
+
+### Best Backup: `_lsModified: 1773973396144` (~March 17)
+- `mmihzozt70i64` (Aveil Shabbos Sheva Brachos) → `completed: true`, `completedAt: 1773600418399` ✓
+- Newsletter tasks completed ✓
+- Watch repair tasks auto-aged to "today" priority ✓
+- Newest correct timestamp of all available backups ✓
+
+### **STATUS: RESTORE NOT YET DONE**
+User still needs to restore this backup.
+
+**How to restore:**
+1. Go to: https://onetaskfocuser.netlify.app/restore_data.html
+2. Paste the full JSON from the Mar 17 localStorage dump
+3. Submit — overwrites Firebase with correct state
+
+---
+
+## 8. UTILITY PAGES
+
+| URL | Purpose |
+|-----|---------|
+| `/restore_data.html` | Paste JSON → push to Firebase (overwrites current state) |
+| `/recover.html` | Preview current localStorage contents |
+| `?restoreLocal=1` | URL param: triggers dialog to restore localStorage → Firebase |
+
+---
+
+## 9. DEPLOYING
+
+The app is a GitHub repo connected to Netlify. Push to `main` → Netlify auto-deploys.
+
+```bash
+git add -A
+git commit -m "your message"
+git push origin main
+```
+
+Claude Code works directly in `/home/user/onetaskfocuser` and pushes via git.
+
+---
+
+## 10. ACCESS CREDENTIALS
 
 | Resource | Value |
 |---|---|
-| Netlify auth token | `nfc_sFsYCTMmnimttJVAVcw6fjvS6GR4mFreac04` |
-| Netlify site ID | `c603b156-f9ee-4b67-bcf4-d4b7f64fbccd` |
 | Netlify site name | `onetaskfocuser` |
 | Firebase project ID | `onetaskonly-app` |
-| Firebase plan | Spark (free) — no PITR, no backups |
+| Firebase plan | Spark (free) — no PITR, no built-in backups |
 | Gemini API key | Stored in Netlify env var `GEMINI_API_KEY` (not in code) |
 | Firebase API key | `AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA` (in 01-core.js, safe to expose) |
 
 ---
 
-## 10. CODING CONVENTIONS
+## 11. CODING CONVENTIONS
 - Inline styles everywhere — no CSS classes except `@keyframes` animations in index.html
 - `T` = theme object from `SCHEMES[AS.colorScheme]` — use `T.tFaint`, `T.tSoft`, `T.card`, etc.
 - `fontFamily:"system-ui"` for UI chrome; `Georgia,serif` for task text
@@ -172,7 +230,7 @@ Run each step as a separate Desktop Commander `start_process` command (inline Po
 
 ---
 
-## 11. COMPLETED FEATURES (don't rebuild these)
+## 12. COMPLETED FEATURES (don't rebuild these)
 - AI reprioritization on add/completion
 - Zen mode + brain dump (stream-of-consciousness → AI parse → ZenDumpReview)
 - Energy filter wired to curT and queueT
@@ -185,12 +243,32 @@ Run each step as a separate Desktop Commander `start_process` command (inline Po
 - MrsW schedule overlay
 - Body double mode
 - Firebase offline banner warning
+- `_fbLoadStatus` guard — never saves empty state unless Firebase confirmed new account
+- `?restoreLocal=1` emergency restore
+- **Cloud backup points** (daily Firestore snapshots, Settings UI) — added 2026-03-22
 
 ---
 
-## 12. IMMEDIATE NEXT STEPS (in order)
+## 13. IMMEDIATE NEXT STEPS (in order)
 
-1. **Confirm iPad recovery**: Did `?restoreLocal=1` work after waiting 90 seconds? If not, try Chrome on iPad
-2. **Rebuild storage to Firebase-only**: Remove localStorage as primary store. Firebase is truth.
-3. **Verify all settings persist**: MrsW windows, home button, API key, color scheme — all must survive cache clear
-4. **Test**: Clear localStorage manually, sign in fresh, confirm all data and settings intact from Firebase
+1. **Restore the Mar 17 backup** via `restore_data.html` (see Section 7 above) — CRITICAL, not done yet
+2. **Verify** the app loads correctly: Aveil Shabbos completed, all tasks intact
+3. **Test cloud backup feature** — open Settings → "Show cloud backups" → confirm dated snapshots appear after a day of use
+4. **Fix the `beforeunload` stale-state bug** (see Section 14 below)
+
+---
+
+## 14. KNOWN BUG — `beforeunload` stale-state overwrite
+
+**Problem:** When any device with old localStorage closes a tab, `beforeunload` flushes that old state to Firebase unconditionally — overwriting current data.
+
+**Proposed fix:** Before flushing on close, compare `_lsModified` timestamp:
+```javascript
+// In beforeunload/flushSync — only write if local state is newer than what was loaded from Firebase
+if (localState._lsModified >= this._fbLoadedModified) {
+  this.flushSync(localState);
+}
+```
+This requires storing `_fbLoadedModified` when Firebase data is first loaded into memory.
+
+**This fix has NOT been implemented yet.**
