@@ -229,36 +229,65 @@ function App({ user, onSignOut }) {
   }, [loaded]); // eslint-disable-line
 
 
-  // ─── Real-time cross-window sync (Firestore onSnapshot) ─────────────────
+  // ─── Real-time cross-window sync ─────────────────────────────────────────
+  // V5: listens to the tasks COLLECTION + settings doc (per-document changes)
+  // V4: listens to the single blob document (legacy fallback)
   useEffect(() => {
     if (!loaded || !db) return;
+
+    if (Store._v5) {
+      // V5: per-task collection listener — each task change is surgical
+      const unsub = Store._listenV5((newState) => {
+        adoptedRemote.current = true;
+        lastSavedModified.current = newState._lsModified || Date.now();
+        Store.ls(newState);
+        setAS(newState);
+      });
+      return () => unsub();
+    }
+
+    // V4 fallback: single-document listener
     const ref = Store.docRef(); if (!ref) return;
     const unsub = ref.onSnapshot(snap => {
       if (!snap.exists) return;
       const fbState = snap.data()?.state;
       if (!fbState) return;
       const fbTs = fbState._lsModified || 0;
-      // Compare against the ref (always current) rather than closure-captured state.
-      // The save effect stamps lastSavedModified whenever it writes, so this
-      // comparison catches self-echoes even for mutations that don't set _lsModified
-      // on the React state (which is now all of them — stamping is centralized).
       if (fbTs > lastSavedModified.current) {
-        adoptedRemote.current = true;           // tell save effect to skip
-        lastSavedModified.current = fbTs;       // update baseline
-        Store._fbLoadedTs = fbTs;               // raise freshness floor so stale tabs can't overwrite
+        adoptedRemote.current = true;
+        lastSavedModified.current = fbTs;
+        Store._fbLoadedTs = fbTs;
         Store.ls(fbState);
         setAS(fbState);
       }
-    }, () => {}); // silently ignore listener errors
+    }, () => {});
     return () => unsub();
   }, [loaded]); // eslint-disable-line
 
-  // ─── Visibility-change sync: iOS Safari kills WebSocket listeners in the
-  //     background, so onSnapshot goes silent. Force a server fetch whenever
-  //     the app comes back into view (tab switch, home→app, etc.). ──────────
+  // ─── Visibility-change sync ──────────────────────────────────────────────
+  // iOS Safari kills WebSocket listeners in the background. Force a server
+  // fetch when the app comes back into view. In V5 mode, reload from per-task
+  // collections; in V4, from the blob document.
   useEffect(() => {
     if (!loaded || !db) return;
     async function syncFromServer() {
+      if (Store._v5) {
+        // V5: reload from per-task collections
+        try {
+          const fresh = await Store._loadV5();
+          if (fresh) {
+            const freshTs = fresh._lsModified || 0;
+            if (freshTs > lastSavedModified.current) {
+              adoptedRemote.current = true;
+              lastSavedModified.current = freshTs;
+              Store.ls(fresh);
+              setAS(fresh);
+            }
+          }
+        } catch(e) {}
+        return;
+      }
+      // V4 fallback
       const ref = Store.docRef();
       if (!ref) return;
       try {
@@ -267,11 +296,10 @@ function App({ user, onSignOut }) {
         const fbState = snap.data()?.state;
         if (!fbState) return;
         const fbTs = fbState._lsModified || 0;
-        // Same logic as onSnapshot: compare against ref, flag adoption
         if (fbTs > lastSavedModified.current) {
           adoptedRemote.current = true;
           lastSavedModified.current = fbTs;
-          Store._fbLoadedTs = fbTs;             // raise freshness floor
+          Store._fbLoadedTs = fbTs;
           Store.ls(fbState);
           setAS(fbState);
         }

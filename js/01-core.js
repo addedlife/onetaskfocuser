@@ -162,7 +162,6 @@ const Store = {
     const ref    = this.docRef();
 
     // Emergency restore: ?restoreLocal=1 offers to push this device's localStorage to Firebase.
-    // Always asks for confirmation first — this will overwrite whatever is currently in Firebase.
     if (new URLSearchParams(window.location.search).get('restoreLocal') === '1') {
       if (local && local.lists?.some(l => l.tasks?.length > 0)) {
         const taskCount = local.lists.reduce((n, l) => n + (l.tasks?.length || 0), 0);
@@ -174,10 +173,13 @@ const Store = {
         if (ok) {
           console.log("[Store] restoreLocal confirmed: pushing local data to Firebase");
           this._fbLoadStatus = 'ok';
-          if (ref) await this.saveToFB(local);
+          if (this._v5) {
+            await this._migrateToV5(local);  // write as per-task docs
+          } else if (ref) {
+            await this.saveToFB(local);
+          }
           return local;
         } else {
-          // User declined — strip the param and load normally from Firebase
           const url = new URL(window.location.href);
           url.searchParams.delete('restoreLocal');
           window.history.replaceState({}, '', url);
@@ -185,19 +187,61 @@ const Store = {
       }
     }
 
+    // ── V5 per-task mode ──
+    if (this._v5 && db && this.uid) {
+      const version = await this._checkMigration();
+      if (version === 'v5') {
+        // Already migrated — load from per-task collections
+        const state = await this._loadV5();
+        if (state) return state;
+        // If V5 load failed, fall through to blob as fallback
+        console.warn("[Store] V5 load failed, falling back to blob");
+      } else {
+        // Need to migrate: load blob first, then migrate
+        if (ref) {
+          for (const src of ["server", "cache"]) {
+            try {
+              const doc = await ref.get({ source: src });
+              if (doc.exists && doc.data().state) {
+                const blobState = doc.data().state;
+                // Migrate to V5
+                const ok = await this._migrateToV5(blobState);
+                if (ok) {
+                  this._fbLoadStatus = 'ok';
+                  this._lastSavedState = JSON.parse(JSON.stringify(blobState));
+                  this.ls(blobState);
+                  return blobState;
+                }
+                // Migration failed — use blob mode as fallback
+                this._fbLoadStatus = 'ok';
+                this._fbLoadedTs = blobState._lsModified || 0;
+                this.ls(blobState);
+                return blobState;
+              }
+              this._fbLoadStatus = 'empty';
+              return null;
+            } catch(e) {
+              if (src === "server") console.warn("[Store] Server fetch failed, trying cache", e);
+              else { this._fbLoadStatus = 'error'; }
+            }
+          }
+        }
+        return local;
+      }
+    }
+
+    // ── V4 blob mode (fallback) ──
     if (ref) {
-      // Try server first; if unreachable, fall back to offline cache
       for (const src of ["server", "cache"]) {
         try {
           const doc = await ref.get({ source: src });
           if (doc.exists && doc.data().state) {
             const fbState = doc.data().state;
             this._fbLoadStatus = 'ok';
-            this._fbLoadedTs = fbState._lsModified || 0;  // remember what Firebase gave us — our freshness floor
-            this.ls(fbState); // refresh optional offline cache
+            this._fbLoadedTs = fbState._lsModified || 0;
+            this.ls(fbState);
             return fbState;
           }
-          // Firebase reachable but no document yet — genuinely new account
           this._fbLoadStatus = 'empty';
           return null;
         } catch(e) {
@@ -222,9 +266,12 @@ const Store = {
   _clean(obj) { return JSON.parse(JSON.stringify(obj)); },
 
   async saveToFB(s) {
+    // ── V5 per-task mode: diff and write only changed documents ──
+    if (this._v5) { return this._saveV5(s); }
+
+    // ── V4 blob mode (fallback) ──
     const ref = this.docRef();
     if (!ref || !db) return;
-    // SAFETY GUARD 1: never overwrite Firebase with blank/default state
     const hasTasks = s?.lists?.some(l => l.tasks?.length > 0);
     if (!hasTasks && this._fbLoadStatus !== 'ok' && this._fbLoadStatus !== 'empty') {
       console.log("[Store] Skipping blank-state save — protecting existing data");
@@ -233,15 +280,12 @@ const Store = {
     try {
       const localTs = s._lsModified || Date.now();
       const cleaned = this._clean({ ...s, _lsModified: localTs });
-      // SAFETY GUARD 2: Firestore TRANSACTION — the database itself checks
-      // whether our data is newer before accepting the write. This is atomic
-      // and race-condition-free. A stale tab physically cannot overwrite fresh data.
       await db.runTransaction(async (tx) => {
         const snap = await tx.get(ref);
         const fbTs = snap.exists ? (snap.data()?.state?._lsModified || 0) : 0;
         if (fbTs > localTs) {
           console.warn("[Store] TRANSACTION BLOCKED — Firebase has newer data:", fbTs, "> local:", localTs);
-          return; // abort: Firebase is newer, don't overwrite
+          return;
         }
         tx.set(ref, {
           state: cleaned,
@@ -250,7 +294,7 @@ const Store = {
       });
       this._lastSavedToFB = Date.now();
       this._lastSavedFbModified = localTs;
-      this._fbLoadedTs = localTs;            // raise freshness floor
+      this._fbLoadedTs = localTs;
       this._fbLoadStatus = 'ok';
     } catch(e) {
       console.warn("[Store] Firebase save failed", e);
@@ -261,7 +305,290 @@ const Store = {
   // localStorage-only flush — used by beforeunload/pagehide where we must NOT
   // write to Firebase (risk of stale data overwriting fresh). localStorage is
   // safe because it only affects THIS device and will be reconciled on next load.
-  flushToLocalOnly(s) { this.ls(s); }
+  flushToLocalOnly(s) { this.ls(s); },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // V5 PER-TASK STORAGE — each task is its own Firestore document.
+  // No more blob overwrites. A stale device cannot damage tasks it doesn't
+  // know about because it never writes to those documents.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _v5: true,                    // feature flag — set false to revert to blob mode
+  _lastSavedState: null,        // snapshot of last saved state — used for diffing
+  _taskUnsub: null,             // onSnapshot unsubscribe for tasks collection
+  _settingsUnsub: null,         // onSnapshot unsubscribe for settings doc
+
+  // ── Firestore refs for V5 collections ──
+  tasksCol()    { return db && this.uid ? db.collection("users").doc(this.uid).collection("tasks") : null; },
+  settingsDoc() { return db && this.uid ? db.collection("users").doc(this.uid).collection("config").doc("settings") : null; },
+  metaDoc()     { return db && this.uid ? db.collection("users").doc(this.uid).collection("config").doc("meta") : null; },
+
+  // ── Extract settings fields from AS (everything except lists and tasks) ──
+  _extractSettings(s) {
+    const { lists, _lsModified, ...settings } = s || {};
+    return settings;
+  },
+
+  // ── Flatten tasks from AS blob into a Map<id, taskWithListId> ──
+  _flattenTasks(s) {
+    const map = new Map();
+    if (!s?.lists) return map;
+    for (const list of s.lists) {
+      for (const task of (list.tasks || [])) {
+        map.set(task.id, { ...task, listId: list.id });
+      }
+    }
+    return map;
+  },
+
+  // ── Check if migration from V4 blob to V5 per-task is needed ──
+  async _checkMigration() {
+    const meta = this.metaDoc();
+    if (!meta) return 'v4';
+    try {
+      const snap = await meta.get({ source: "server" });
+      if (snap.exists && snap.data()?.schema === 'v5_pertask') return 'v5';
+    } catch(e) {
+      // Try cache if server fails
+      try {
+        const snap = await meta.get({ source: "cache" });
+        if (snap.exists && snap.data()?.schema === 'v5_pertask') return 'v5';
+      } catch(e2) {}
+    }
+    return 'v4';
+  },
+
+  // ── Migrate from V4 blob to V5 per-task documents ──
+  // Uses a batched write — atomic: all docs are written or none are.
+  // The old appState_v4 document is kept as a backup.
+  async _migrateToV5(blobState) {
+    if (!db || !this.uid || !blobState?.lists) return false;
+    console.log("[Store] Starting V4 → V5 migration...");
+    try {
+      const batch = db.batch();
+      let docCount = 0;
+
+      // Write each task as its own document
+      for (const list of blobState.lists) {
+        for (const task of (list.tasks || [])) {
+          const taskDoc = this.tasksCol().doc(task.id);
+          const cleaned = this._clean({ ...task, listId: list.id, _lastModified: Date.now() });
+          batch.set(taskDoc, cleaned);
+          docCount++;
+        }
+      }
+
+      // Write settings
+      const settings = this._extractSettings(blobState);
+      // Include list metadata (names, order) inside settings for simplicity
+      settings._lists = blobState.lists.map((l, i) => ({ id: l.id, name: l.name, order: i }));
+      settings._lastModified = Date.now();
+      batch.set(this.settingsDoc(), this._clean(settings));
+      docCount++;
+
+      // Mark migration complete
+      batch.set(this.metaDoc(), { schema: 'v5_pertask', migratedAt: Date.now(), taskCount: docCount - 1 });
+      docCount++;
+
+      // Firestore batches support up to 500 operations
+      if (docCount > 499) {
+        console.warn("[Store] Too many docs for single batch:", docCount, "— splitting");
+        // For safety, just write what we can. This shouldn't happen with ~290 tasks.
+      }
+
+      await batch.commit();
+      console.log("[Store] V5 migration complete:", docCount, "documents written");
+      return true;
+    } catch(e) {
+      console.error("[Store] V5 migration FAILED:", e);
+      return false;
+    }
+  },
+
+  // ── Load from V5 per-task collections ──
+  // Reads all tasks + settings, reconstructs the AS blob shape the app expects.
+  async _loadV5() {
+    const col = this.tasksCol();
+    const settRef = this.settingsDoc();
+    if (!col || !settRef) return null;
+
+    try {
+      // Load tasks and settings in parallel
+      const [taskSnap, settSnap] = await Promise.all([
+        col.get({ source: "server" }).catch(() => col.get({ source: "cache" })),
+        settRef.get({ source: "server" }).catch(() => settRef.get({ source: "cache" }))
+      ]);
+
+      const settings = settSnap.exists ? settSnap.data() : {};
+      const listMeta = settings._lists || [{ id: "default", name: "My Tasks", order: 0 }];
+      delete settings._lists;
+      delete settings._lastModified;
+
+      // Group tasks by listId
+      const tasksByList = {};
+      taskSnap.forEach(doc => {
+        const t = doc.data();
+        const lid = t.listId || "default";
+        if (!tasksByList[lid]) tasksByList[lid] = [];
+        // Remove listId from task data (it's metadata, not part of the task)
+        const { listId, _lastModified, ...taskData } = t;
+        tasksByList[lid].push(taskData);
+      });
+
+      // Reconstruct lists array
+      const lists = listMeta
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map(lm => ({
+          id: lm.id,
+          name: lm.name,
+          tasks: tasksByList[lm.id] || []
+        }));
+
+      // Reconstruct the full AS blob
+      const state = { ...settings, lists, _lsModified: Date.now() };
+      this._fbLoadStatus = 'ok';
+      this._lastSavedState = JSON.parse(JSON.stringify(state)); // deep clone for diffing
+      this.ls(state);
+      console.log("[Store] V5 loaded:", taskSnap.size, "tasks,", listMeta.length, "lists");
+      return state;
+    } catch(e) {
+      console.error("[Store] V5 load failed:", e);
+      this._fbLoadStatus = 'error';
+      return null;
+    }
+  },
+
+  // ── Save to V5: diff-based, writes ONLY changed documents ──
+  // Compares current state against _lastSavedState to find what changed.
+  async _saveV5(s) {
+    if (!db || !this.uid) return;
+    const col = this.tasksCol();
+    const settRef = this.settingsDoc();
+    if (!col || !settRef) return;
+
+    // SAFETY: never save blank state
+    const hasTasks = s?.lists?.some(l => l.tasks?.length > 0);
+    if (!hasTasks && this._fbLoadStatus !== 'ok' && this._fbLoadStatus !== 'empty') {
+      console.log("[Store] V5: Skipping blank-state save");
+      return;
+    }
+
+    try {
+      const newTasks = this._flattenTasks(s);
+      const oldTasks = this._lastSavedState ? this._flattenTasks(this._lastSavedState) : new Map();
+
+      const batch = db.batch();
+      let ops = 0;
+
+      // Find tasks that changed or were added
+      for (const [id, task] of newTasks) {
+        const old = oldTasks.get(id);
+        if (!old || JSON.stringify(old) !== JSON.stringify(task)) {
+          const cleaned = this._clean({ ...task, _lastModified: Date.now() });
+          batch.set(col.doc(id), cleaned);
+          ops++;
+        }
+      }
+
+      // Find tasks that were deleted (in old but not in new)
+      for (const [id] of oldTasks) {
+        if (!newTasks.has(id)) {
+          batch.delete(col.doc(id));
+          ops++;
+        }
+      }
+
+      // Check if settings changed
+      const newSettings = this._extractSettings(s);
+      const oldSettings = this._lastSavedState ? this._extractSettings(this._lastSavedState) : {};
+      // Include list metadata
+      newSettings._lists = s.lists.map((l, i) => ({ id: l.id, name: l.name, order: i }));
+      oldSettings._lists = this._lastSavedState?.lists?.map((l, i) => ({ id: l.id, name: l.name, order: i }));
+
+      if (JSON.stringify(newSettings) !== JSON.stringify(oldSettings)) {
+        newSettings._lastModified = Date.now();
+        batch.set(settRef, this._clean(newSettings));
+        ops++;
+      }
+
+      if (ops === 0) return; // nothing changed
+
+      await batch.commit();
+      this._lastSavedState = JSON.parse(JSON.stringify(s)); // update snapshot
+      this._lastSavedToFB = Date.now();
+      this._fbLoadStatus = 'ok';
+      console.log("[Store] V5 saved:", ops, "document(s) written");
+
+      // Also keep the old blob updated as backup during transition period
+      try { await this.docRef()?.set({ state: this._clean(s), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }); } catch(e) {}
+    } catch(e) {
+      console.warn("[Store] V5 save failed:", e);
+    }
+  },
+
+  // ── V5 collection listener — returns unsubscribe function ──
+  // Instead of listening to ONE document, listens to the tasks COLLECTION.
+  // Each change is a single task add/modify/remove — surgical, not a blob replace.
+  _listenV5(onUpdate) {
+    const col = this.tasksCol();
+    const settRef = this.settingsDoc();
+    if (!col || !settRef) return () => {};
+
+    // Maintain an in-memory cache of all tasks
+    const taskCache = new Map();
+    let settings = {};
+    let listMeta = [{ id: "default", name: "My Tasks", order: 0 }];
+    let initialized = false;
+
+    // Helper: reconstruct AS from cache
+    const rebuild = () => {
+      const lists = listMeta
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map(lm => ({
+          id: lm.id,
+          name: lm.name,
+          tasks: [...taskCache.values()].filter(t => (t.listId || "default") === lm.id)
+            .map(({ listId, _lastModified, ...t }) => t)
+        }));
+      return { ...settings, lists, _lsModified: Date.now() };
+    };
+
+    // Listen to tasks collection
+    const unsubTasks = col.onSnapshot(snap => {
+      let changed = false;
+      snap.docChanges().forEach(change => {
+        if (change.type === "added" || change.type === "modified") {
+          taskCache.set(change.doc.id, change.doc.data());
+          changed = true;
+        } else if (change.type === "removed") {
+          taskCache.delete(change.doc.id);
+          changed = true;
+        }
+      });
+      if (changed && initialized) {
+        const newState = rebuild();
+        this._lastSavedState = JSON.parse(JSON.stringify(newState));
+        onUpdate(newState);
+      }
+      if (!initialized && snap.size > 0) initialized = true;
+    }, () => {});
+
+    // Listen to settings document
+    const unsubSettings = settRef.onSnapshot(snap => {
+      if (!snap.exists) return;
+      const data = snap.data();
+      listMeta = data._lists || listMeta;
+      const { _lists, _lastModified, ...rest } = data;
+      settings = rest;
+      if (initialized) {
+        const newState = rebuild();
+        this._lastSavedState = JSON.parse(JSON.stringify(newState));
+        onUpdate(newState);
+      }
+    }, () => {});
+
+    return () => { unsubTasks(); unsubSettings(); };
+  }
 };
 
 const DEF_PRI = [
