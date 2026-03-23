@@ -141,15 +141,27 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
           <div>
             <h4 style={sh}>Theme</h4>
             <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:10}}>
-              {Object.entries(SCHEMES).map(([k,v]) => (
-                <button key={k} onClick={()=>setAS(p=>({...p,colorScheme:k}))} style={{padding:"8px 14px",borderRadius:10,border:`2px solid ${AS.colorScheme===k?v.text:v.brd}`,background:`linear-gradient(135deg,${v.grad[0]},${v.grad[2]})`,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"system-ui",color:v.text}}>{v.name}</button>
-              ))}
-              {Object.entries(AS.customSchemes || {}).map(([k,v]) => (
+              {Object.entries(SCHEMES).map(([k,v]) => {
+                // Auto-contrast: pick white or dark text based on gradient luminance
+                const hex = v.grad?.[0] || v.bg || "#888";
+                const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+                const lum = (r*299+g*587+b*114)/1000;
+                const btnText = lum < 140 ? "#F0F0F0" : "#2A2A2A";
+                const brdC = AS.colorScheme===k ? btnText : (lum<140?"#ffffff30":"#00000020");
+                return <button key={k} onClick={()=>setAS(p=>({...p,colorScheme:k}))} style={{padding:"8px 14px",borderRadius:10,border:`2px solid ${brdC}`,background:`linear-gradient(135deg,${v.grad[0]},${v.grad[2]})`,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"system-ui",color:btnText,textShadow:lum<140?"0 1px 3px rgba(0,0,0,0.5)":"none"}}>{v.name}</button>;
+              })}
+              {Object.entries(AS.customSchemes || {}).map(([k,v]) => {
+                const hex = v.grad?.[0] || v.bg || "#888";
+                const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+                const lum = (r*299+g*587+b*114)/1000;
+                const btnText = lum < 140 ? "#F0F0F0" : "#2A2A2A";
+                const brdC = AS.colorScheme===k ? btnText : (lum<140?"#ffffff30":"#00000020");
+                return (
                 <div key={k} style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
-                  <button onClick={()=>setAS(p=>({...p,colorScheme:k}))} style={{padding:"8px 14px",borderRadius:10,border:`2px solid ${AS.colorScheme===k?v.text:v.brd}`,background:`linear-gradient(135deg,${v.grad[0]},${v.grad[2]})`,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"system-ui",color:v.text,paddingRight:28}}>{v.name}</button>
-                  <button onClick={e=>{e.stopPropagation();setAS(p=>{const c={...(p.customSchemes||{})};delete c[k];return {...p,customSchemes:c,colorScheme:p.colorScheme===k?"claude":p.colorScheme};});}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:12,color:v.tFaint||v.text,lineHeight:1,padding:0,opacity:0.6}}>✕</button>
-                </div>
-              ))}
+                  <button onClick={()=>setAS(p=>({...p,colorScheme:k}))} style={{padding:"8px 14px",borderRadius:10,border:`2px solid ${brdC}`,background:`linear-gradient(135deg,${v.grad[0]},${v.grad[2]})`,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"system-ui",color:btnText,textShadow:lum<140?"0 1px 3px rgba(0,0,0,0.5)":"none",paddingRight:28}}>{v.name}</button>
+                  <button onClick={e=>{e.stopPropagation();setAS(p=>{const c={...(p.customSchemes||{})};delete c[k];return {...p,customSchemes:c,colorScheme:p.colorScheme===k?"claude":p.colorScheme};});}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:12,color:btnText,lineHeight:1,padding:0,opacity:0.6}}>✕</button>
+                </div>);
+              })}
             </div>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
               <button onClick={handleGenSchemes} disabled={schemeGenLoading} style={{fontSize:11,color:T.tSoft,background:"none",border:`1px dashed ${T.brd}`,borderRadius:8,padding:"6px 14px",cursor:schemeGenLoading?"default":"pointer",fontFamily:"system-ui",opacity:schemeGenLoading?0.6:1}}>

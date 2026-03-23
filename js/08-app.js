@@ -2007,7 +2007,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                     <IC.List s={16} c={T.tSoft}/>
                   </button>
                   {lpMenu && (
-                    <div style={{position:"absolute",top:42,left:0,background:T.card,border:`1px solid ${T.brd}`,borderRadius:14,padding:"8px 0",minWidth:200,boxShadow:T.glow?`0 4px 30px ${T.bg}cc, 0 0 20px ${T.brd}60`:"0 8px 32px rgba(0,0,0,0.15)",animation:"ot-fade 0.15s"}}
+                    <div style={{position:"absolute",top:42,left:0,background:T.card,border:`1px solid ${T.brd}`,borderRadius:14,padding:"8px 0",minWidth:200,boxShadow:T.glow?`0 4px 30px ${T.bg}cc, 0 0 20px ${T.brd}60`:"0 8px 32px rgba(0,0,0,0.15)",animation:"ot-fade 0.15s",maxHeight:"calc(100vh - 70px)",overflowY:"auto"}}
                       onClick={()=>setLpMenu(false)}>
                       {menuSections.map((sec,si)=>(
                         <div key={si}>
