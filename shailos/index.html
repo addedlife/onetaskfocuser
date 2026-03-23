@@ -100,6 +100,13 @@
       .shadow-sm { box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important; }
       .shadow-lg { box-shadow: 0 10px 30px rgba(0,0,0,0.1) !important; }
 
+      /* Sefer citation links (→ Google/Sefaria) — warm amber/gold */
+      a[href*="google.com/search"] { color: #B8860B; text-decoration: underline; }
+      a[href*="google.com/search"]:hover { color: #8B6508; }
+      /* Verified external source links — teal */
+      a:not([href*="google.com/search"]) { color: #2A7A6A; text-decoration: underline; }
+      a:not([href*="google.com/search"]):hover { color: #1A5A4A; }
+
       /* Back-to-app link */
       .onetask-back {
         position: fixed; bottom: 20px; left: 20px; z-index: 999;
