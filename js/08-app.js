@@ -39,6 +39,7 @@ function App({ user, onSignOut }) {
   const [jsMinimized, setJsMinimized] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
   const [showShailos, setShowShailos] = useState(false);
+  const [lpMenu, setLpMenu] = useState(false);
   const [shailosAction, setShailosAction] = useState(null); // null | "record-shaila" | "record-call"
   const [justStartId, setJustStartId] = useState(null);
   const [tipCat, setTipCat] = useState("All");
@@ -146,6 +147,15 @@ function App({ user, onSignOut }) {
         if (!s.mrsWWindows) s.mrsWWindows = defS.mrsWWindows;
         if (s.completionSound === undefined) s.completionSound = true;
         if (!s.overwhelmThreshold) s.overwhelmThreshold = 7;
+        // One-time: remove "home" custom priority — reassign tasks to "eventually" (or "now" if text sounds urgent)
+        if (s.priorities?.some(p => p.id !== "now" && p.id !== "today" && p.id !== "eventually" && p.id !== "shaila" && !p.isShaila && (p.label||"").toLowerCase() === "home" && !p.deleted)) {
+          const homeId = s.priorities.find(p => (p.label||"").toLowerCase() === "home" && !p.deleted)?.id;
+          if (homeId) {
+            s.priorities = s.priorities.map(p => p.id === homeId ? {...p, deleted: true} : p);
+            s.lists = s.lists.map(l => ({...l, tasks: (l.tasks||[]).map(t => t.priority === homeId ? {...t, priority: "eventually"} : t)}));
+            console.log("[migration] Removed 'home' priority, reassigned tasks to 'eventually'");
+          }
+        }
         // Mark justLoaded so the save-effect skips the immediate echo-back to Firebase
         justLoaded.current = true;
         lastSavedModified.current = s._lsModified || 0; // baseline for sync comparison
@@ -419,10 +429,12 @@ function App({ user, onSignOut }) {
   const aiOpts = AS ? {provider: AS.aiProvider || 'gemini', geminiKey: effectiveGK, claudeKey: AS.claudeApiKey} : null;
   const hasAI = aiOpts && (aiOpts.provider === 'claude' ? !!aiOpts.claudeKey : !!aiOpts.geminiKey);
   const sc = SCHEMES[AS?.colorScheme] || AS?.customSchemes?.[AS?.colorScheme] || SCHEMES.claude;
-  const T = {...sc, shadow:"0 2px 12px rgba(0,0,0,0.06)", shadowLg:"0 6px 24px rgba(0,0,0,0.09)"};
+  // Detect dark theme by checking bg luminance
+  const isDark = (()=>{const h=sc.bg||"#EDE5D8";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000<128;})();
+  const T = {...sc, isDark, glow:!!sc.glow, shadow: isDark?"0 2px 12px rgba(0,0,0,0.3)":"0 2px 12px rgba(0,0,0,0.06)", shadowLg: isDark?"0 6px 24px rgba(0,0,0,0.4)":"0 6px 24px rgba(0,0,0,0.09)"};
   // Share theme with Shaila sub-app via localStorage
   try { localStorage.setItem('onetask_theme', JSON.stringify(sc)); } catch(e) {}
-  const softBorderC = AS?.colorScheme === "midnight" ? "#7A78A8" : "#B8A88E";
+  const softBorderC = isDark ? "#7A78A8" : "#B8A88E";
   const pris = AS?.priorities || DEF_PRI;
   const aList = AS ? AS.lists.find(l => l.id === AS.activeListId) || AS.lists[0] : null;
   const tasks = aList?.tasks || [];
@@ -1854,12 +1866,18 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                     const shailaGreen="#2ECC71";
                     const clr = p.isShaila ? shailaGreen : p.color;
                     const sz = a ? "clamp(82px,13vw,104px)" : "clamp(70px,11vw,90px)";
+                    // Glow effect for dark themes with glow:true — circles glow like celestial bodies
+                    const glowShadow = T.glow
+                      ? (a ? `0 0 30px ${clr}90, 0 0 60px ${clr}50, 0 0 100px ${clr}25` : `0 0 18px ${clr}70, 0 0 40px ${clr}30, 0 0 70px ${clr}15`)
+                      : p.isShaila
+                        ? (a?`0 0 28px ${shailaGreen}90,0 0 56px ${shailaGreen}40`:`0 0 16px ${shailaGreen}65,0 0 32px ${shailaGreen}30`)
+                        : (a?`0 6px 28px ${clr}65`:`0 3px 12px ${clr}35`);
                     return (
                       <div key={p.id} style={{display:"flex",flexDirection:"column",alignItems:"center"}}
                         onMouseEnter={e=>{const m=e.currentTarget.querySelector(".mic-btn");if(m)m.style.opacity=1;}}
                         onMouseLeave={e=>{const m=e.currentTarget.querySelector(".mic-btn");if(m)m.style.opacity=a?1:0;}}>
                         <button className="mic-btn" onClick={()=>{setSelPri(p.id);setShowVoice(true);}} title="Voice input" style={{width:30,height:30,borderRadius:"50%",background:clr,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:a?1:0,transition:"opacity 0.2s",marginBottom:8,flexShrink:0}}><IC.Mic s={13} c="#fff"/></button>
-                        <button onClick={()=>setSelPri(a?null:p.id)} title={p.label} style={{width:sz,height:sz,borderRadius:"50%",background:clr,border:a?`3px solid ${softBorderC}`:"3px solid transparent",cursor:"pointer",transition:"all 0.25s",boxShadow:p.isShaila?(a?`0 0 28px ${shailaGreen}90,0 0 56px ${shailaGreen}40`:`0 0 16px ${shailaGreen}65,0 0 32px ${shailaGreen}30`):(a?`0 6px 28px ${clr}65`:`0 3px 12px ${clr}35`),flexShrink:0}}/>
+                        <button onClick={()=>setSelPri(a?null:p.id)} title={p.label} style={{width:sz,height:sz,borderRadius:"50%",background:T.glow?`radial-gradient(circle at 35% 35%, ${clr}dd, ${clr}88, ${clr}44)`:clr,border:a?`3px solid ${softBorderC}`:"3px solid transparent",cursor:"pointer",transition:"all 0.25s",boxShadow:glowShadow,flexShrink:0}}/>
                         <span style={{fontSize:12,color:T.tFaint,fontFamily:"system-ui",fontWeight:600,textAlign:"center",marginTop:10,letterSpacing:.3}}>{p.isShaila?"Shaila":p.label}</span>
                       </div>
                     );
@@ -1905,97 +1923,68 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
               </div>
             </div>{/* end spine */}
 
-            {/* ── Side columns — shared helper + symmetric top/bottom groups ── */}
+            {/* ── Clean categorized menu — replaces side icon columns ── */}
             {(()=>{
-              // pin range: top of clock row → bottom of circles
-              // spine height ≈ 28(clock)+gap+card+gap+circles+gap+customrow ≈ 420px centered
-              const PIN_TOP = "calc(50vh - 210px)";
-              const PIN_BOT = "calc(50vh - 210px)";
-              const EDGE = "clamp(14px,2.5vw,28px)";
+              const spinnerIcon = <div style={{width:14,height:14,borderRadius:"50%",border:`2px solid ${T.tSoft}`,borderTopColor:"transparent",animation:"ot-spin 0.7s linear infinite"}}/>;
+              const menuSections = [
+                { cat: "Navigate", items: [
+                  {icon:<IC.List s={14} c={T.tSoft}/>, label:`Queue (${effectiveCount})`, action:()=>switchTab("queue")},
+                  {icon:<IC.Bulb s={14} c={T.tSoft}/>, label:"Insights", action:()=>switchTab("insights")},
+                  {icon:<IC.Gear s={14} c={T.tSoft}/>, label:"Settings", action:()=>setShowSet(true)},
+                ]},
+                { cat: "Focus", items: [
+                  {icon:<IC.Moon s={14} c={T.tSoft}/>, label:"Enter zen", action:()=>setZen(true)},
+                  {icon:<IC.Moon s={14} c={zenOn?"#2ECC71":T.tFaint}/>, label:zenOn?"Auto-zen ✓":"Auto-zen ✗", action:()=>setAS(p=>({...p,zenEnabled:!p.zenEnabled}))},
+                  {icon:<IC.Timer s={14} c={T.tSoft}/>, label:"Just Start timer", action:()=>{if(curT)setJustStartId(justStartId===curT?.id?null:curT?.id);}},
+                  {icon:<IC.Person s={14} c={T.tSoft}/>, label:"Body double", action:()=>setShowBodyDouble(true)},
+                ]},
+                { cat: "Add & Organize", items: [
+                  {icon: optLoading ? spinnerIcon : <IC.Sparkle s={14} c={T.tSoft}/>, label: optLoading?"Thinking…": hasAI?"AI Prioritize":"Prioritize", action: launchpadOptimize},
+                  {icon:<IC.Brain s={14} c={T.tSoft}/>, label:"Brain dump", action:()=>setShowBrainDump(true)},
+                  {icon:<IC.Plus s={14} c={T.tSoft}/>, label:"Bulk add", action:()=>setShowBulk(true)},
+                  {icon:<IC.Split s={14} c={T.tSoft}/>, label:"Shatter task", action:()=>setShowBD(true)},
+                ]},
+                ...(curT ? [{ cat: "Current Task", items: [
+                  {icon:<span style={{fontSize:14,lineHeight:1,color:T.tSoft,fontFamily:"Georgia,serif"}}>≈</span>, label:"Good enough", action:()=>goodEnoughTask(curT.id)},
+                  {icon:<IC.Pause s={14} c={T.tSoft}/>, label:"Mark blocked", action:()=>setBlockedModal(curT)},
+                  {icon:<IC.PriC s={14} c={T.tSoft}/>, label:"Change priority", action:()=>setChgPri(curT.id)},
+                  ...(curT?.parentTask ? [{icon:<span style={{fontSize:12,lineHeight:1}}>🌿</span>, label:"Park rest", action:()=>parkRestOfGroup(curT)}] : []),
+                  {icon:<IC.Trash s={14} c="#C06060"/>, label:"Delete", action:()=>delTask(curT.id)},
+                ]}] : []),
+                { cat: "Data", items: [
+                  {icon:<span style={{fontSize:13,lineHeight:1}}>💾</span>, label: backupLoading?"Saving…":"Backup", action: doFullBackup},
+                  {icon:<span style={{fontSize:13,lineHeight:1}}>📂</span>, label:"Restore", action: doLoadBackup},
+                  {icon:<span style={{fontSize:13,lineHeight:1,color:T.tSoft}}>✡</span>, label:"Shaila log", action:()=>setShowShailaManager(true)},
+                ]},
+              ];
 
-              const mkIcon = (item, i) => {
-                if (!item || item === "sep") return <div key={i} style={{width:20,height:1,background:T.brdS,alignSelf:"center",flexShrink:0,margin:"2px 0"}}/>;
-                if (item.icon === "zen-toggle") return (
-                  <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,opacity:.5,transition:"opacity 0.15s",cursor:"pointer"}}
-                    onClick={()=>setAS(p=>({...p,zenEnabled:!p.zenEnabled}))}
-                    onMouseEnter={e=>{e.currentTarget.style.opacity=1;const l=e.currentTarget.querySelector(".sl2");if(l)l.style.opacity=1;}}
-                    onMouseLeave={e=>{e.currentTarget.style.opacity=.5;const l=e.currentTarget.querySelector(".sl2");if(l)l.style.opacity=0;}}>
-                    <div style={{width:34,height:34,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
-                      <IC.Moon s={16} c={T.tSoft}/>
-                      {zenOn  && <svg width={12} height={12} viewBox="0 0 13 13" style={{position:"absolute",bottom:2,right:2}}><circle cx={6.5} cy={6.5} r={6} fill="#2ECC71"/><polyline points="3,6.5 5.5,9 10,4" fill="none" stroke="#fff" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                      {!zenOn && <svg width={12} height={12} viewBox="0 0 13 13" style={{position:"absolute",bottom:2,right:2}}><circle cx={6.5} cy={6.5} r={5.5} fill={T.bgW} stroke="#B06060" strokeWidth={1.5}/><line x1={3} y1={10} x2={10} y2={3} stroke="#B06060" strokeWidth={1.5} strokeLinecap="round"/></svg>}
+              return (
+                <div style={{position:"fixed",top:"clamp(12px,2vh,20px)",left:"clamp(12px,2vw,20px)",zIndex:200}}>
+                  <button onClick={()=>setLpMenu(p=>!p)} style={{width:36,height:36,borderRadius:10,background:T.glow?`${T.card}cc`:T.card,border:`1px solid ${T.brd}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:T.glow?`0 0 12px ${T.brd}80`:T.shadow,transition:"all 0.2s"}}
+                    onMouseEnter={e=>{e.currentTarget.style.boxShadow=T.glow?`0 0 20px ${T.brd}`:"0 4px 16px rgba(0,0,0,0.12)";}}
+                    onMouseLeave={e=>{e.currentTarget.style.boxShadow=T.glow?`0 0 12px ${T.brd}80`:T.shadow;}}>
+                    <IC.List s={16} c={T.tSoft}/>
+                  </button>
+                  {lpMenu && (
+                    <div style={{position:"absolute",top:42,left:0,background:T.card,border:`1px solid ${T.brd}`,borderRadius:14,padding:"8px 0",minWidth:200,boxShadow:T.glow?`0 4px 30px ${T.bg}cc, 0 0 20px ${T.brd}60`:"0 8px 32px rgba(0,0,0,0.15)",animation:"ot-fade 0.15s",maxHeight:"70vh",overflowY:"auto"}}
+                      onClick={()=>setLpMenu(false)}>
+                      {menuSections.map((sec,si)=>(
+                        <div key={si}>
+                          <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,color:T.tFaint,padding:"8px 16px 4px",fontFamily:"system-ui"}}>{sec.cat}</div>
+                          {sec.items.map((item,ii)=>(
+                            <button key={ii} onClick={item.action} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"7px 16px",background:"none",border:"none",cursor:"pointer",fontFamily:"system-ui",fontSize:13,color:T.text,textAlign:"left",transition:"background 0.1s"}}
+                              onMouseEnter={e=>{e.currentTarget.style.background=T.bgW;}} onMouseLeave={e=>{e.currentTarget.style.background="none";}}>
+                              <span style={{width:20,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{item.icon}</span>
+                              {item.label}
+                            </button>
+                          ))}
+                          {si < menuSections.length-1 && <div style={{height:1,background:T.brdS,margin:"4px 12px"}}/>}
+                        </div>
+                      ))}
                     </div>
-                    <span className="sl2" style={{fontSize:8,fontFamily:"system-ui",color:T.tFaint,opacity:0,transition:"opacity 0.15s",whiteSpace:"nowrap"}}>{zenOn?"Auto-zen on":"Auto-zen off"}</span>
-                  </div>
-                );
-                return (
-                  <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,opacity:.5,transition:"opacity 0.15s",cursor:"pointer"}}
-                    onClick={item.action}
-                    onMouseEnter={e=>{e.currentTarget.style.opacity=1;const l=e.currentTarget.querySelector(".sl2");if(l)l.style.opacity=1;}}
-                    onMouseLeave={e=>{e.currentTarget.style.opacity=.5;const l=e.currentTarget.querySelector(".sl2");if(l)l.style.opacity=0;}}>
-                    <div style={{width:34,height:34,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center"}}>{item.icon}</div>
-                    <span className="sl2" style={{fontSize:8,fontFamily:"system-ui",color:T.tFaint,opacity:0,transition:"opacity 0.15s",whiteSpace:"nowrap"}}>{item.label}</span>
-                  </div>
-                );
-              };
-
-              // LEFT column: nav (top) + add-tools (bottom)
-              const leftTop = [
-                {icon:<IC.List s={16} c={T.tSoft}/>, label:`Queue${effectiveCount>0?" ("+effectiveCount+")":""}`, action:()=>switchTab("queue")},
-                {icon:<IC.Bulb s={16} c={T.tSoft}/>, label:"Insights", action:()=>switchTab("insights")},
-                {icon:<span style={{fontSize:15,lineHeight:1,color:T.tSoft}}>✡</span>, label:"Shaila log", action:()=>setShowShailaManager(true)},
-                {icon:<IC.Gear s={16} c={T.tSoft}/>, label:"Settings", action:()=>setShowSet(true)},
-              ];
-              const spinnerIcon = <div style={{width:16,height:16,borderRadius:"50%",border:`2px solid ${T.tSoft}`,borderTopColor:"transparent",animation:"ot-spin 0.7s linear infinite"}}/>;
-              const leftBot = [
-                {icon: optLoading ? spinnerIcon : <IC.Sparkle s={16} c={T.tSoft}/>, label: optLoading ? "Thinking…" : hasAI ? "AI Prioritize" : "Prioritize", action: launchpadOptimize},
-                {icon:<IC.Brain s={16} c={T.tSoft}/>, label:"Brain dump", action:()=>setShowBrainDump(true)},
-                {icon:<IC.Plus  s={16} c={T.tSoft}/>, label:"Bulk add",   action:()=>setShowBulk(true)},
-                {icon:<IC.Split s={16} c={T.tSoft}/>, label:"Shatter",    action:()=>setShowBD(true)},
-                "sep",
-                {icon:<span style={{fontSize:15,lineHeight:1,color:T.tSoft}}>💾</span>, label: backupLoading ? "Saving…" : "Backup", action: doFullBackup},
-                {icon:<span style={{fontSize:15,lineHeight:1,color:T.tSoft}}>📂</span>, label:"Restore", action: doLoadBackup},
-              ];
-
-              // RIGHT column: zen (top) + task-actions (bottom, task-conditional ones only when task exists)
-              const rightTop = [
-                {icon:<IC.Moon s={16} c={T.tSoft}/>, label:"Enter zen", action:()=>setZen(true)},
-                {icon:"zen-toggle", label:"Auto-zen"},
-              ];
-              const rightBot = [
-                {icon:<IC.Timer  s={16} c={T.tSoft}/>, label:"Just Start",   action:()=>{if(curT)setJustStartId(justStartId===curT?.id?null:curT?.id);}},
-                {icon:<IC.Person s={16} c={T.tSoft}/>, label:"Body double",  action:()=>setShowBodyDouble(true)},
-                ...(curT ? [
-                  "sep",
-                  {icon:<span style={{fontSize:16,lineHeight:1,color:T.tSoft,fontFamily:"Georgia,serif"}}>≈</span>, label:"Good enough", action:()=>goodEnoughTask(curT.id)},
-                  {icon:<IC.Pause s={16} c={T.tSoft}/>, label:"Mark blocked",     action:()=>setBlockedModal(curT)},
-                  {icon:<IC.PriC  s={16} c={T.tSoft}/>, label:"Change priority",  action:()=>setChgPri(curT.id)},
-                  ...(curT?.parentTask ? [{icon:<span style={{fontSize:13,lineHeight:1}}>🌿</span>, label:"Park rest for later", action:()=>parkRestOfGroup(curT)}] : []),
-                  "sep",
-                  {icon:<IC.Trash s={16} c="#C06060"/>, label:"Delete",           action:()=>delTask(curT.id)},
-                ] : []),
-              ];
-
-              const colStyle = (side) => ({
-                position:"fixed", [side]: EDGE,
-                top: PIN_TOP, bottom: PIN_BOT,
-                display:"flex", flexDirection:"column",
-                justifyContent:"space-between", alignItems:"center",
-                zIndex:200,
-              });
-
-              return <>
-                {/* Left column */}
-                <div style={colStyle("left")}>
-                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>{leftTop.map(mkIcon)}</div>
-                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>{leftBot.map(mkIcon)}</div>
+                  )}
                 </div>
-                {/* Right column */}
-                <div style={colStyle("right")}>
-                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>{rightTop.map(mkIcon)}</div>
-                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>{rightBot.map(mkIcon)}</div>
-                </div>
-              </>;
+              );
             })()}
 
             {/* PostIt stack — bottom left, high z so expanded cards float above icon columns */}
@@ -2515,29 +2504,27 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         {tab !== "focus" && <footer style={{textAlign:"center",padding:"20px 0 36px",borderTop:`1px solid ${T.brdS}`,marginTop:16,flexShrink:0}}><p style={{color:T.tFaint,fontSize:12,fontStyle:"italic",margin:0}}>One thing at a time.</p></footer>}
       </div>
 
-      {/* ── Floating Shaila buttons — icon-only, always visible except during Zen ── */}
-      {!zen && (
-        <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,display:"flex",flexDirection:"column",gap:10,alignItems:"center"}}>
-          <button
-            onClick={()=>{setShailosAction("record-shaila");setShowShailos(true);}}
-            style={{width:44,height:44,background:"#B87A5A",color:"#fff",border:"none",borderRadius:"50%",fontSize:20,cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.2)",display:"flex",alignItems:"center",justifyContent:"center",transition:"transform 0.15s"}}
-            onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.12)";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
-            title="Record a new shaila"
-          >🎙️</button>
-          <button
-            onClick={()=>{setShailosAction("record-call");setShowShailos(true);}}
-            style={{width:44,height:44,background:"#B87A5A",color:"#fff",border:"none",borderRadius:"50%",fontSize:20,cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.2)",display:"flex",alignItems:"center",justifyContent:"center",transition:"transform 0.15s"}}
-            onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.12)";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
-            title="Record a phone call"
-          >📞</button>
-          <button
-            onClick={()=>{setShailosAction(null);setShowShailos(true);}}
-            style={{width:44,height:44,background:"#C8A84C",color:"#fff",border:"none",borderRadius:"50%",fontSize:20,cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.2)",display:"flex",alignItems:"center",justifyContent:"center",transition:"transform 0.15s"}}
-            onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.12)";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
-            title="View shaila records"
-          >📋</button>
-        </div>
-      )}
+      {/* ── Floating Shaila buttons — icon-only, themed, always visible except during Zen ── */}
+      {!zen && (()=>{
+        const fbBg = T.isDark ? T.card : T.bgW;
+        const fbBrd = `1px solid ${T.brd}`;
+        const fbSh = T.glow ? `0 0 14px ${T.brd}80` : "0 3px 12px rgba(0,0,0,.15)";
+        const fbShH = T.glow ? `0 0 22px ${T.brd}` : "0 4px 16px rgba(0,0,0,.25)";
+        const fbS = {width:40,height:40,background:fbBg,border:fbBrd,borderRadius:"50%",fontSize:18,cursor:"pointer",boxShadow:fbSh,display:"flex",alignItems:"center",justifyContent:"center",transition:"transform 0.15s, box-shadow 0.15s"};
+        return (
+          <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,display:"flex",flexDirection:"column",gap:10,alignItems:"center"}}>
+            <button onClick={()=>{setShailosAction("record-shaila");setShowShailos(true);}} style={fbS}
+              onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.12)";e.currentTarget.style.boxShadow=fbShH;}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow=fbSh;}}
+              title="Record a new shaila">🎙️</button>
+            <button onClick={()=>{setShailosAction("record-call");setShowShailos(true);}} style={fbS}
+              onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.12)";e.currentTarget.style.boxShadow=fbShH;}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow=fbSh;}}
+              title="Record a phone call">📞</button>
+            <button onClick={()=>{setShailosAction(null);setShowShailos(true);}} style={fbS}
+              onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.12)";e.currentTarget.style.boxShadow=fbShH;}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow=fbSh;}}
+              title="View shaila records">📋</button>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -859,6 +859,10 @@ const SCHEMES = {
   slate:     {name:"Dusty Slate",     bg:"#E4ECF0",bgW:"#D6E2E8",card:"#EEF3F6",text:"#2C3E46",tSoft:"#466070",tFaint:"#627A86",brd:"#BECCD6",brdS:"#D2DFE6",grad:["#E4ECF0","#D8E8F0","#CCDEE8"]},
   rose:      {name:"Dusty Rose",      bg:"#F0E4E4",bgW:"#E6D4D4",card:"#F6EEEE",text:"#422C2C",tSoft:"#6A4444",tFaint:"#886262",brd:"#D4BCBC",brdS:"#E6D0D0",grad:["#F0E4E4","#ECD8D8","#E6CCCC"]},
   parchment: {name:"Old Parchment",   bg:"#F2EAD8",bgW:"#EAE0C8",card:"#F8F2E8",text:"#3C2E18",tSoft:"#5E4A2A",tFaint:"#7A6442",brd:"#DCC8A0",brdS:"#EAD8B8",grad:["#F2EAD8","#ECE2CA","#E6D6BA"]},
+  starlit:   {name:"Starlit Night",   bg:"#0C1220",bgW:"#111828",card:"#141E30",text:"#D8E0F0",tSoft:"#8899BB",tFaint:"#667799",brd:"#263050",brdS:"#1C2640",grad:["#0C1220","#101826","#141E30"],glow:true},
+  obsidian:  {name:"Obsidian",        bg:"#181818",bgW:"#202020",card:"#242424",text:"#E0E0E0",tSoft:"#999999",tFaint:"#707070",brd:"#363636",brdS:"#2A2A2A",grad:["#181818","#1E1E1E","#242424"]},
+  deepocean: {name:"Deep Ocean",      bg:"#0A1628",bgW:"#0E1C32",card:"#12223C",text:"#C8D8F0",tSoft:"#7090B8",tFaint:"#506888",brd:"#1E3450",brdS:"#162A42",grad:["#0A1628","#0E1C32","#12223C"],glow:true},
+  ember:     {name:"Dying Ember",     bg:"#1A1210",bgW:"#221816",card:"#281E1A",text:"#E8D0C0",tSoft:"#A08070",tFaint:"#806858",brd:"#3A2820",brdS:"#2E2018",grad:["#1A1210","#201614","#261A18"]},
 };
 
 const PALETTE = ["#C8A84C","#E09AB8","#E0B472","#7EB0DE","#9BD4A0","#D4A0D8","#E0A090","#A0D0C8","#C8B8E0","#E0C890","#90BCE0","#D8B090","#A8C8A0","#E8A0A0","#A0A8E0","#C0D890"];
@@ -1393,7 +1397,7 @@ Each scheme must have exactly these keys:
 - tFaint: low contrast text (for hints/placeholders)
 - brd: border color
 - brdS: subtle border (slightly lighter than brd)
-- grad: array of 3 hex colors [bg, mid, bgW] for a gradient
+- grad: array of exactly 3 hex color strings for bg gradient
 
 Rules:
 - All schemes must be calm, low-saturation, restful — think spa, library, monastery, nature
@@ -1401,15 +1405,27 @@ Rules:
 - text must contrast strongly against bg (dark text on light bg OR light text on dark bg)
 - bg, bgW, card should be muted, close to each other in tone
 - All hex values must be valid 6-digit hex strings starting with #
+- The grad array must contain exactly 3 quoted hex strings separated by commas
 
-Return ONLY a valid JSON array, no markdown, no commentary:
-[{"id":"...","name":"...","bg":"...","bgW":"...","card":"...","text":"...","tSoft":"...","tFaint":"...","brd":"...","brdS":"...","grad":["...","...","..."]}, ...]`,
+Return ONLY a valid JSON array. No markdown fences, no commentary, no trailing commas:
+[{"id":"x","name":"X","bg":"#aaa","bgW":"#bbb","card":"#ccc","text":"#ddd","tSoft":"#eee","tFaint":"#fff","brd":"#ggg","brdS":"#hhh","grad":["#aaa","#bbb","#ccc"]}]`,
     aiOpts
   );
   if (!r) throw new Error('no response');
-  const m = r.match(/\[[\s\S]*?\]/);
+  // Use greedy match to capture full array including nested grad arrays
+  const m = r.match(/\[[\s\S]*\]/);
   if (!m) throw new Error('no json');
-  const items = JSON.parse(m[0]);
+  // Sanitize: strip trailing commas before ] or } (common AI mistake that causes JSON parse errors)
+  let jsonStr = m[0].replace(/,\s*([}\]])/g, '$1');
+  let items;
+  try { items = JSON.parse(jsonStr); }
+  catch(e) {
+    // Fallback: extract individual objects
+    const objMatches = [...jsonStr.matchAll(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g)];
+    if (!objMatches.length) throw new Error(e.message);
+    items = objMatches.map(om => { try { return JSON.parse(om[0]); } catch { return null; } }).filter(Boolean);
+    if (!items.length) throw new Error(e.message);
+  }
   // Validate and clean each scheme
   return items.filter(s => s.id && s.name && s.bg && s.text && Array.isArray(s.grad) && s.grad.length === 3);
 }
