@@ -10,11 +10,22 @@ function _toEmail(username) {
   return `${username.toLowerCase().trim()}@${_AUTH_DOMAIN}`;
 }
 
+// Localhost-only dev bypass — creates a mock user so the preview can render the full app
+window.__OT_DEV = (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"));
+window.__OT_DEV_USER = window.__OT_DEV ? {
+  uid: "dev_test_user",
+  email: "devtest@onetaskapp.local",
+  displayName: "DevTest",
+  isAnonymous: false,
+  _isDev: true,
+} : null;
+
 function AuthGate() {
-  const [authState, setAuthState] = React.useState("loading"); // "loading"|"authed"|"anon"
-  const [user, setUser] = React.useState(null);
+  const [authState, setAuthState] = React.useState(window.__OT_DEV ? "authed" : "loading");
+  const [user, setUser] = React.useState(window.__OT_DEV_USER);
 
   React.useEffect(() => {
+    if (window.__OT_DEV) return; // skip Firebase auth on localhost
     if (typeof firebase === "undefined" || !firebase.auth) {
       setAuthState("anon"); return;
     }

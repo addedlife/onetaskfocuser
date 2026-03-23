@@ -3,117 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Shaila Transcriber — OneTaskFocuser</title>
-    <script type="module" crossorigin src="/shailos/assets/index-B9H63dN6.js"></script>
-    <link rel="stylesheet" crossorigin href="/shailos/assets/index-SgPF7Yha.css">
-    <script>
-      // Read theme from OneTask (stored in localStorage) and apply as CSS variables
-      (function() {
-        var fallback = {bg:"#EDE5D8",bgW:"#E4DACB",card:"#F5EFE5",text:"#3D3633",tSoft:"#6E5848",tFaint:"#7E6858",brd:"#D8CEBC",brdS:"#E4DBCE"};
-        try { var t = JSON.parse(localStorage.getItem('onetask_theme')); if (t && t.bg) fallback = t; } catch(e){}
-        var s = document.documentElement.style;
-        s.setProperty('--ot-bg', fallback.bg);
-        s.setProperty('--ot-bgW', fallback.bgW);
-        s.setProperty('--ot-card', fallback.card || fallback.bgW);
-        s.setProperty('--ot-text', fallback.text);
-        s.setProperty('--ot-tSoft', fallback.tSoft);
-        s.setProperty('--ot-tFaint', fallback.tFaint);
-        s.setProperty('--ot-brd', fallback.brd);
-        s.setProperty('--ot-brdS', fallback.brdS || fallback.brd);
-        // Detect if dark theme (dark bg = light text)
-        var r = parseInt(fallback.bg.slice(1,3),16), g = parseInt(fallback.bg.slice(3,5),16), b = parseInt(fallback.bg.slice(5,7),16);
-        var lum = (r*299 + g*587 + b*114) / 1000;
-        document.documentElement.setAttribute('data-ot-dark', lum < 128 ? 'true' : 'false');
-      })();
-    </script>
-    <style>
-      /* ── Dynamic OneTask theme overrides ── */
-      /* Backgrounds */
-      .bg-slate-50  { background-color: var(--ot-bg) !important; }
-      .bg-white     { background-color: var(--ot-card) !important; }
-      .bg-slate-100 { background-color: var(--ot-bgW) !important; }
-      .bg-slate-200 { background-color: var(--ot-brd) !important; }
-
-      /* Accent — warm gold (shaila priority color) instead of harsh indigo */
-      .bg-indigo-600  { background-color: #C8A84C !important; }
-      .bg-indigo-700, .hover\:bg-indigo-700:hover  { background-color: #B89A3C !important; }
-      .bg-indigo-100  { background-color: color-mix(in srgb, var(--ot-bg) 70%, #C8A84C 30%) !important; }
-      .text-indigo-600 { color: #C8A84C !important; }
-      .text-indigo-700 { color: #B89A3C !important; }
-      .ring-indigo-600 { --tw-ring-color: #C8A84C !important; }
-      .border-indigo-200 { border-color: var(--ot-brd) !important; }
-      .focus\:ring-indigo-500:focus { --tw-ring-color: #C8A84C !important; }
-
-      /* Red buttons → calm warm accent (muted terracotta instead of harsh red) */
-      .bg-red-600  { background-color: #B87A5A !important; }
-      .bg-red-700, .hover\:bg-red-700:hover { background-color: #A86A4A !important; }
-      .bg-red-100  { background-color: color-mix(in srgb, var(--ot-bg) 75%, #B87A5A 25%) !important; }
-      .text-red-600 { color: #B87A5A !important; }
-      .text-red-700 { color: #A86A4A !important; }
-      .hover\:bg-red-600:hover { background-color: #B87A5A !important; }
-      .hover\:bg-red-700:hover { background-color: #A86A4A !important; }
-
-      /* Text: inherit from OneTask theme */
-      .text-slate-900 { color: var(--ot-text) !important; }
-      .text-slate-800 { color: var(--ot-text) !important; }
-      .text-slate-700 { color: var(--ot-text) !important; }
-      .text-slate-600 { color: var(--ot-tSoft) !important; }
-      .text-slate-500 { color: var(--ot-tFaint) !important; }
-      .text-slate-400 { color: var(--ot-tFaint) !important; }
-      .text-white     { color: var(--ot-card) !important; }
-
-      /* Dark mode: fix white-on-white issue */
-      [data-ot-dark="true"] .text-white { color: var(--ot-text) !important; }
-      [data-ot-dark="true"] .bg-indigo-600 { background-color: #D4B85C !important; }
-      [data-ot-dark="true"] .bg-red-600 { background-color: #C88A6A !important; }
-
-      /* Borders */
-      .border-slate-200 { border-color: var(--ot-brd) !important; }
-      .border-slate-300 { border-color: var(--ot-brdS) !important; }
-      .divide-slate-200 > * + * { border-color: var(--ot-brd) !important; }
-
-      /* Hover states */
-      .hover\:bg-slate-50:hover  { background-color: var(--ot-bg) !important; }
-      .hover\:bg-slate-100:hover { background-color: var(--ot-bgW) !important; }
-      .hover\:bg-slate-200:hover { background-color: var(--ot-brd) !important; }
-
-      /* Status colors: keep but soften */
-      .bg-green-100 { background-color: color-mix(in srgb, var(--ot-bg) 70%, #6A8A50 30%) !important; }
-      .text-green-700 { color: #4A6430 !important; }
-      .bg-amber-100 { background-color: color-mix(in srgb, var(--ot-bg) 70%, #C8A84C 30%) !important; }
-      .text-amber-700 { color: #8A6820 !important; }
-
-      /* Scrollbar */
-      ::-webkit-scrollbar { width: 6px; }
-      ::-webkit-scrollbar-track { background: var(--ot-bg); }
-      ::-webkit-scrollbar-thumb { background: var(--ot-brd); border-radius: 3px; }
-      ::-webkit-scrollbar-thumb:hover { background: var(--ot-tFaint); }
-
-      /* Sticky action bar — use theme background */
-      .sticky { background-color: var(--ot-bg) !important; backdrop-filter: blur(8px); }
-      .bg-white\/95 { background-color: color-mix(in srgb, var(--ot-bg) 95%, transparent) !important; }
-
-      /* Font family to match OneTask */
-      body { font-family: system-ui, -apple-system, sans-serif; }
-
-      /* Subtle shadow warmth */
-      .shadow-sm { box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important; }
-      .shadow-lg { box-shadow: 0 10px 30px rgba(0,0,0,0.1) !important; }
-
-      /* Back-to-app link */
-      .onetask-back {
-        position: fixed; bottom: 20px; left: 20px; z-index: 999;
-        background: var(--ot-card); border: 1px solid var(--ot-brd); border-radius: 12px;
-        padding: 8px 14px; font-size: 12px; color: var(--ot-tSoft);
-        text-decoration: none; font-family: system-ui;
-        box-shadow: 0 2px 8px rgba(0,0,0,.1);
-        transition: background 0.15s;
-      }
-      .onetask-back:hover { background: var(--ot-bg); }
-    </style>
+    <title>My Google AI Studio App</title>
+    <script type="module" crossorigin src="/shailos/assets/index-CScRzNLx.js"></script>
+    <link rel="stylesheet" crossorigin href="/shailos/assets/index-cnFrfbM0.css">
   </head>
   <body>
     <div id="root"></div>
-    <a href="/" class="onetask-back">← Back to OneTask</a>
   </body>
 </html>
+
