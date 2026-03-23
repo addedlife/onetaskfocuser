@@ -859,7 +859,7 @@ const SCHEMES = {
   slate:     {name:"Dusty Slate",     bg:"#E4ECF0",bgW:"#D6E2E8",card:"#EEF3F6",text:"#2C3E46",tSoft:"#466070",tFaint:"#627A86",brd:"#BECCD6",brdS:"#D2DFE6",grad:["#E4ECF0","#D8E8F0","#CCDEE8"]},
   rose:      {name:"Dusty Rose",      bg:"#F0E4E4",bgW:"#E6D4D4",card:"#F6EEEE",text:"#422C2C",tSoft:"#6A4444",tFaint:"#886262",brd:"#D4BCBC",brdS:"#E6D0D0",grad:["#F0E4E4","#ECD8D8","#E6CCCC"]},
   parchment: {name:"Old Parchment",   bg:"#F2EAD8",bgW:"#EAE0C8",card:"#F8F2E8",text:"#3C2E18",tSoft:"#5E4A2A",tFaint:"#7A6442",brd:"#DCC8A0",brdS:"#EAD8B8",grad:["#F2EAD8","#ECE2CA","#E6D6BA"]},
-  starlit:   {name:"Starlit Night",   bg:"#0C1220",bgW:"#111828",card:"#141E30",text:"#D8E0F0",tSoft:"#8899BB",tFaint:"#667799",brd:"#263050",brdS:"#1C2640",grad:["#0C1220","#101826","#141E30"],glow:true},
+  starlit:   {name:"Starlit Night",   bg:"#0C1220",bgW:"#111828",card:"#141E30",text:"#EEF2FF",tSoft:"#C0CCE8",tFaint:"#8899BB",brd:"#263050",brdS:"#1C2640",grad:["#0C1220","#101826","#141E30"],glow:true},
   obsidian:  {name:"Obsidian",        bg:"#181818",bgW:"#202020",card:"#242424",text:"#E0E0E0",tSoft:"#999999",tFaint:"#707070",brd:"#363636",brdS:"#2A2A2A",grad:["#181818","#1E1E1E","#242424"]},
   deepocean: {name:"Deep Ocean",      bg:"#0A1628",bgW:"#0E1C32",card:"#12223C",text:"#C8D8F0",tSoft:"#7090B8",tFaint:"#506888",brd:"#1E3450",brdS:"#162A42",grad:["#0A1628","#0E1C32","#12223C"],glow:true},
   ember:     {name:"Dying Ember",     bg:"#1A1210",bgW:"#221816",card:"#281E1A",text:"#E8D0C0",tSoft:"#A08070",tFaint:"#806858",brd:"#3A2820",brdS:"#2E2018",grad:["#1A1210","#201614","#261A18"]},

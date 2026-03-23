@@ -77,8 +77,8 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   const actionBtn = {width:"100%",padding:"10px 14px",borderRadius:10,border:`1px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:12,fontFamily:"system-ui",color:T.tSoft,display:"flex",alignItems:"center",gap:8,marginBottom:8};
 
   return (
-    <div style={{position:"fixed",inset:0,zIndex:8500,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto",padding:20}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:22,padding:"24px 20px",maxWidth:460,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:`0 6px 24px rgba(0,0,0,0.15)`}}>
+    <div style={{position:"fixed",inset:0,zIndex:8500,background:sTab==="appearance"?"rgba(0,0,0,0.08)":"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto",padding:20,transition:"background 0.3s"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:sTab==="appearance"?T.card+"ee":T.card,borderRadius:22,padding:"24px 20px",maxWidth:460,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:`0 6px 24px rgba(0,0,0,0.15)`,transition:"background 0.3s"}}>
 
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
