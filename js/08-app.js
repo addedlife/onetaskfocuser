@@ -1968,6 +1968,13 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
             {(()=>{
               const spinnerIcon = <div style={{width:14,height:14,borderRadius:"50%",border:`2px solid ${T.tSoft}`,borderTopColor:"transparent",animation:"ot-spin 0.7s linear infinite"}}/>;
               const menuSections = [
+                ...(curT ? [{ cat: "Current Task", items: [
+                  {icon:<span style={{fontSize:14,lineHeight:1,color:T.tSoft,fontFamily:"Georgia,serif"}}>≈</span>, label:"Good enough", action:()=>goodEnoughTask(curT.id)},
+                  {icon:<IC.Pause s={14} c={T.tSoft}/>, label:"Mark blocked", action:()=>setBlockedModal(curT)},
+                  {icon:<IC.PriC s={14} c={T.tSoft}/>, label:"Change priority", action:()=>setChgPri(curT.id)},
+                  ...(curT?.parentTask ? [{icon:<span style={{fontSize:12,lineHeight:1}}>🌿</span>, label:"Park rest", action:()=>parkRestOfGroup(curT)}] : []),
+                  {icon:<IC.Trash s={14} c="#C06060"/>, label:"Delete", action:()=>delTask(curT.id)},
+                ]}] : []),
                 { cat: "Navigate", items: [
                   {icon:<IC.List s={14} c={T.tSoft}/>, label:`Queue (${effectiveCount})`, action:()=>switchTab("queue")},
                   {icon:<IC.Bulb s={14} c={T.tSoft}/>, label:"Insights", action:()=>switchTab("insights")},
@@ -1985,13 +1992,6 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                   {icon:<IC.Plus s={14} c={T.tSoft}/>, label:"Bulk add", action:()=>setShowBulk(true)},
                   {icon:<IC.Split s={14} c={T.tSoft}/>, label:"Shatter task", action:()=>setShowBD(true)},
                 ]},
-                ...(curT ? [{ cat: "Current Task", items: [
-                  {icon:<span style={{fontSize:14,lineHeight:1,color:T.tSoft,fontFamily:"Georgia,serif"}}>≈</span>, label:"Good enough", action:()=>goodEnoughTask(curT.id)},
-                  {icon:<IC.Pause s={14} c={T.tSoft}/>, label:"Mark blocked", action:()=>setBlockedModal(curT)},
-                  {icon:<IC.PriC s={14} c={T.tSoft}/>, label:"Change priority", action:()=>setChgPri(curT.id)},
-                  ...(curT?.parentTask ? [{icon:<span style={{fontSize:12,lineHeight:1}}>🌿</span>, label:"Park rest", action:()=>parkRestOfGroup(curT)}] : []),
-                  {icon:<IC.Trash s={14} c="#C06060"/>, label:"Delete", action:()=>delTask(curT.id)},
-                ]}] : []),
                 { cat: "Data", items: [
                   {icon:<span style={{fontSize:13,lineHeight:1}}>💾</span>, label: backupLoading?"Saving…":"Backup", action: doFullBackup},
                   {icon:<span style={{fontSize:13,lineHeight:1}}>📂</span>, label:"Restore", action: doLoadBackup},
@@ -2007,7 +2007,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                     <IC.List s={16} c={T.tSoft}/>
                   </button>
                   {lpMenu && (
-                    <div style={{position:"absolute",top:42,left:0,background:T.card,border:`1px solid ${T.brd}`,borderRadius:14,padding:"8px 0",minWidth:200,boxShadow:T.glow?`0 4px 30px ${T.bg}cc, 0 0 20px ${T.brd}60`:"0 8px 32px rgba(0,0,0,0.15)",animation:"ot-fade 0.15s",maxHeight:"70vh",overflowY:"auto"}}
+                    <div style={{position:"absolute",top:42,left:0,background:T.card,border:`1px solid ${T.brd}`,borderRadius:14,padding:"8px 0",minWidth:200,boxShadow:T.glow?`0 4px 30px ${T.bg}cc, 0 0 20px ${T.brd}60`:"0 8px 32px rgba(0,0,0,0.15)",animation:"ot-fade 0.15s"}}
                       onClick={()=>setLpMenu(false)}>
                       {menuSections.map((sec,si)=>(
                         <div key={si}>
