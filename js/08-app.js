@@ -2515,27 +2515,27 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         {tab !== "focus" && <footer style={{textAlign:"center",padding:"20px 0 36px",borderTop:`1px solid ${T.brdS}`,marginTop:16,flexShrink:0}}><p style={{color:T.tFaint,fontSize:12,fontStyle:"italic",margin:0}}>One thing at a time.</p></footer>}
       </div>
 
-      {/* ── Floating Shaila buttons — always visible except during Zen ── */}
+      {/* ── Floating Shaila buttons — icon-only, always visible except during Zen ── */}
       {!zen && (
-        <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}>
+        <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,display:"flex",flexDirection:"column",gap:10,alignItems:"center"}}>
           <button
             onClick={()=>{setShailosAction("record-shaila");setShowShailos(true);}}
-            style={{background:"#B87A5A",color:"#fff",border:"none",borderRadius:50,padding:"10px 16px",fontSize:12,fontWeight:600,fontFamily:"system-ui",cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.2)",display:"flex",alignItems:"center",gap:6,transition:"transform 0.15s, box-shadow 0.15s",whiteSpace:"nowrap"}}
-            onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.07)";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
+            style={{width:44,height:44,background:"#B87A5A",color:"#fff",border:"none",borderRadius:"50%",fontSize:20,cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.2)",display:"flex",alignItems:"center",justifyContent:"center",transition:"transform 0.15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.12)";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
             title="Record a new shaila"
-          ><span style={{fontSize:15}}>🎙️</span> Record Shaila</button>
+          >🎙️</button>
           <button
             onClick={()=>{setShailosAction("record-call");setShowShailos(true);}}
-            style={{background:"#B87A5A",color:"#fff",border:"none",borderRadius:50,padding:"10px 16px",fontSize:12,fontWeight:600,fontFamily:"system-ui",cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.2)",display:"flex",alignItems:"center",gap:6,transition:"transform 0.15s, box-shadow 0.15s",whiteSpace:"nowrap"}}
-            onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.07)";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
+            style={{width:44,height:44,background:"#B87A5A",color:"#fff",border:"none",borderRadius:"50%",fontSize:20,cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.2)",display:"flex",alignItems:"center",justifyContent:"center",transition:"transform 0.15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.12)";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
             title="Record a phone call"
-          ><span style={{fontSize:15}}>📞</span> Record Call</button>
+          >📞</button>
           <button
             onClick={()=>{setShailosAction(null);setShowShailos(true);}}
-            style={{background:"#C8A84C",color:"#fff",border:"none",borderRadius:50,padding:"10px 16px",fontSize:12,fontWeight:600,fontFamily:"system-ui",cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.2)",display:"flex",alignItems:"center",gap:6,transition:"transform 0.15s, box-shadow 0.15s",whiteSpace:"nowrap"}}
-            onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.07)";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
+            style={{width:44,height:44,background:"#C8A84C",color:"#fff",border:"none",borderRadius:"50%",fontSize:20,cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.2)",display:"flex",alignItems:"center",justifyContent:"center",transition:"transform 0.15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.12)";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
             title="View shaila records"
-          ><span style={{fontSize:15}}>📋</span> Shaila Records</button>
+          >📋</button>
         </div>
       )}
     </div>
