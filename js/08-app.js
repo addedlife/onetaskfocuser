@@ -39,6 +39,7 @@ function App({ user, onSignOut }) {
   const [jsMinimized, setJsMinimized] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
   const [showShailos, setShowShailos] = useState(false);
+  const [shailosAction, setShailosAction] = useState(null); // null | "record-shaila" | "record-call"
   const [justStartId, setJustStartId] = useState(null);
   const [tipCat, setTipCat] = useState("All");
   const [showOverwhelm, setShowOverwhelm] = useState(false);
@@ -92,6 +93,7 @@ function App({ user, onSignOut }) {
   const [showShailaManager, setShowShailaManager] = useState(false); // shaila log panel
   const [minTick, setMinTick] = useState(0);              // ticks every 60s for snooze auto-wake
   const sessionCompCount = useRef(0);                     // session completions (no re-render needed)
+  const pendingShailaIds = useRef(new Set());              // shailaIds assigned but not yet in state (prevents listener dupes)
   const [sharedGeminiKey, setSharedGeminiKey] = useState(""); // app-level key from server
   const [fbOffline, setFbOffline] = useState(false);      // Firebase unreachable on load — warn user
 
@@ -240,9 +242,14 @@ function App({ user, onSignOut }) {
         // Gather ALL tasks across ALL lists
         const allTasks = prev.lists.flatMap(l => (l.tasks || []).map(t => ({...t, _listId: l.id})));
 
-        // Build lookup: shailaId → task
+        // Build lookup: shailaId → task — and clear any pending flags for IDs now in state
         const taskByShailaId = {};
-        allTasks.forEach(t => { if (t.shailaId) taskByShailaId[t.shailaId] = t; });
+        allTasks.forEach(t => {
+          if (t.shailaId) {
+            taskByShailaId[t.shailaId] = t;
+            pendingShailaIds.current.delete(t.shailaId); // safely in state now
+          }
+        });
 
         // Text lookup for shaila-priority tasks (fallback dedup)
         const shailaTextSet = new Set(
@@ -257,6 +264,8 @@ function App({ user, onSignOut }) {
 
         shailos.forEach(s => {
           const linked = taskByShailaId[s.id];
+          // Skip shailaIds that were just pre-assigned but haven't made it into state yet
+          if (pendingShailaIds.current.has(s.id)) return;
           if (!linked && s.status === "pending") {
             const text = s.synopsis || s.content?.substring(0, 80) || "New shaila";
             if (shailaTextSet.has(text.trim().toLowerCase())) return; // text dedup
@@ -721,13 +730,18 @@ function App({ user, onSignOut }) {
     // Pre-assign shailaId BEFORE adding to state (prevents race with onSnapshot listener)
     if (selPri === "shaila") {
       const col = Store.shailosCol();
-      if (col) newT.shailaId = col.doc().id;
+      if (col) {
+        newT.shailaId = col.doc().id;
+        pendingShailaIds.current.add(newT.shailaId);
+      }
     }
     uT(ts => [...ts, newT]);
     setNewTask(""); setSelPri(null); setEntryEnergy(null); flashOpt();
     // Flow 2: shaila-priority task → create shaila doc with the pre-assigned ID
     if (newT.shailaId) {
       Store.createShailaFromTask(newT);
+      // Clear from pending after a short delay (state will have updated by then)
+      setTimeout(() => pendingShailaIds.current.delete(newT.shailaId), 3000);
     }
     // Show "Added to queue" toast in priority color
     clearTimeout(queueToastTmr.current);
@@ -743,11 +757,15 @@ function App({ user, onSignOut }) {
     // Pre-assign shailaId BEFORE adding to state
     if (pri === "shaila") {
       const col = Store.shailosCol();
-      if (col) newT.shailaId = col.doc().id;
+      if (col) {
+        newT.shailaId = col.doc().id;
+        pendingShailaIds.current.add(newT.shailaId);
+      }
     }
     uT(ts => [...ts, newT]);
     if (newT.shailaId) {
       Store.createShailaFromTask(newT);
+      setTimeout(() => pendingShailaIds.current.delete(newT.shailaId), 3000);
     }
     flashOpt();
   }
@@ -1499,10 +1517,10 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
               <button onClick={doFullBackup} disabled={backupLoading} title="Download full backup (tasks + shailos)" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500,opacity:backupLoading?.5:1}}>{backupLoading?"⏳":"💾"} Backup</button>
               <button onClick={doLoadBackup} title="Restore from backup file" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500}}>📂 Restore</button>
               <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500,opacity:reconcileLoading?.5:1}}>{reconcileLoading?"⏳":"🔄"}</button>
-              <button onClick={()=>setShowShailos(false)} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft,padding:4}}>✕</button>
+              <button onClick={()=>{setShowShailos(false);setShailosAction(null);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft,padding:4}}>✕</button>
             </div>
           </div>
-          <iframe src="/shailos/" style={{flex:1,border:"none",width:"100%"}} title="Shaila Transcriber"/>
+          <iframe src={shailosAction ? `/shailos/?action=${shailosAction}` : "/shailos/"} style={{flex:1,border:"none",width:"100%"}} title="Shaila Transcriber"/>
         </div>
       )}
       {/* Shaila delete prompt — asks if user also wants to delete from transcriber record */}
@@ -2497,25 +2515,28 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         {tab !== "focus" && <footer style={{textAlign:"center",padding:"20px 0 36px",borderTop:`1px solid ${T.brdS}`,marginTop:16,flexShrink:0}}><p style={{color:T.tFaint,fontSize:12,fontStyle:"italic",margin:0}}>One thing at a time.</p></footer>}
       </div>
 
-      {/* ── Floating "Record Shaila" button — always visible except during Zen ── */}
+      {/* ── Floating Shaila buttons — always visible except during Zen ── */}
       {!zen && (
-        <button
-          onClick={() => setShowShailos(true)}
-          style={{
-            position:"fixed", bottom:24, right:24, zIndex:9999,
-            background:"#C8A84C", color:"#fff", border:"none",
-            borderRadius:50, padding:"14px 20px",
-            fontSize:14, fontWeight:600, fontFamily:"system-ui",
-            cursor:"pointer", boxShadow:"0 4px 16px rgba(0,0,0,.25)",
-            display:"flex", alignItems:"center", gap:8,
-            transition:"transform 0.15s, box-shadow 0.15s",
-          }}
-          onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.07)"; e.currentTarget.style.boxShadow = "0 6px 24px rgba(0,0,0,.35)"; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,.25)"; }}
-          title="Record a new shaila"
-        >
-          <span style={{fontSize:18}}>📋</span> Shaila
-        </button>
+        <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}>
+          <button
+            onClick={()=>{setShailosAction("record-shaila");setShowShailos(true);}}
+            style={{background:"#B87A5A",color:"#fff",border:"none",borderRadius:50,padding:"10px 16px",fontSize:12,fontWeight:600,fontFamily:"system-ui",cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.2)",display:"flex",alignItems:"center",gap:6,transition:"transform 0.15s, box-shadow 0.15s",whiteSpace:"nowrap"}}
+            onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.07)";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
+            title="Record a new shaila"
+          ><span style={{fontSize:15}}>🎙️</span> Record Shaila</button>
+          <button
+            onClick={()=>{setShailosAction("record-call");setShowShailos(true);}}
+            style={{background:"#B87A5A",color:"#fff",border:"none",borderRadius:50,padding:"10px 16px",fontSize:12,fontWeight:600,fontFamily:"system-ui",cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.2)",display:"flex",alignItems:"center",gap:6,transition:"transform 0.15s, box-shadow 0.15s",whiteSpace:"nowrap"}}
+            onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.07)";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
+            title="Record a phone call"
+          ><span style={{fontSize:15}}>📞</span> Record Call</button>
+          <button
+            onClick={()=>{setShailosAction(null);setShowShailos(true);}}
+            style={{background:"#C8A84C",color:"#fff",border:"none",borderRadius:50,padding:"10px 16px",fontSize:12,fontWeight:600,fontFamily:"system-ui",cursor:"pointer",boxShadow:"0 3px 12px rgba(0,0,0,.2)",display:"flex",alignItems:"center",gap:6,transition:"transform 0.15s, box-shadow 0.15s",whiteSpace:"nowrap"}}
+            onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.07)";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";}}
+            title="View shaila records"
+          ><span style={{fontSize:15}}>📋</span> Shaila Records</button>
+        </div>
       )}
     </div>
   );

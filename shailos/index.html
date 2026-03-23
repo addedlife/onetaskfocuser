@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Shaila Transcriber — OneTaskFocuser</title>
-    <script type="module" crossorigin src="/shailos/assets/index-BE8rnxM0.js"></script>
-    <link rel="stylesheet" crossorigin href="/shailos/assets/index-BqKuRTOU.css">
+    <script type="module" crossorigin src="/shailos/assets/index-uqQlS0ts.js"></script>
+    <link rel="stylesheet" crossorigin href="/shailos/assets/index-BjM569J-.css">
     <script>
       // Read theme from OneTask (stored in localStorage) and apply as CSS variables
       (function() {
@@ -88,6 +88,10 @@
       ::-webkit-scrollbar-track { background: var(--ot-bg); }
       ::-webkit-scrollbar-thumb { background: var(--ot-brd); border-radius: 3px; }
       ::-webkit-scrollbar-thumb:hover { background: var(--ot-tFaint); }
+
+      /* Sticky action bar — use theme background */
+      .sticky { background-color: var(--ot-bg) !important; backdrop-filter: blur(8px); }
+      .bg-white\/95 { background-color: color-mix(in srgb, var(--ot-bg) 95%, transparent) !important; }
 
       /* Font family to match OneTask */
       body { font-family: system-ui, -apple-system, sans-serif; }
