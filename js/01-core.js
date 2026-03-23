@@ -517,9 +517,9 @@ const Store = {
       const shailaTasks = (currentTasks || []).filter(t => t.priority === "shaila" && !t.completed);
       const linkedShailaIds = new Set(shailaTasks.filter(t => t.shailaId).map(t => t.shailaId));
 
-      // Shailos that exist in transcriber but have no task
+      // Shailos that exist in transcriber but have no task (treat missing status as pending)
       const missingTasks = Object.values(shailoMap).filter(s =>
-        s.status === "pending" && !linkedShailaIds.has(s.id)
+        s.status !== "answered" && !linkedShailaIds.has(s.id)
       );
 
       // Shaila-priority tasks that have no matching shaila doc

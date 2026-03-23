@@ -298,7 +298,7 @@ function App({ user, onSignOut }) {
           // Skip shailaIds that were just pre-assigned but haven't made it into state yet
           if (pendingShailaIds.current.has(s.id)) return;
           if (addedShailaIds.has(s.id)) return; // already adding in this batch
-          if (!linked && s.status === "pending") {
+          if (!linked && s.status !== "answered") {
             // Use the formatted question (content) for task text, synopsis as fallback
             const text = s.content || s.parsedShaila || s.synopsis || "New shaila";
             if (shailaTextSet.has(text.trim().toLowerCase())) return; // text dedup
@@ -909,7 +909,9 @@ function App({ user, onSignOut }) {
 
   async function runShailaReconcile() {
     setReconcileLoading(true);
-    const result = await Store.reconcileShailos(tasks);
+    // Pass ALL tasks across ALL lists, not just active list
+    const allTasks = AS ? AS.lists.flatMap(l => l.tasks || []) : tasks;
+    const result = await Store.reconcileShailos(allTasks);
     setReconcileLoading(false);
     const total = result.missingTasks.length + result.missingShailos.length + result.statusMismatches.length;
     if (total === 0) {
@@ -1586,18 +1588,33 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
             {/* Shailos in transcriber without a task */}
             {shailaReconcile.missingTasks.length > 0 && (
               <div style={{marginBottom:16}}>
-                <p style={{fontSize:12,fontWeight:700,color:T.tSoft,margin:"0 0 8px",fontFamily:"system-ui"}}>In Transcriber, no task in queue:</p>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                  <p style={{fontSize:12,fontWeight:700,color:T.tSoft,margin:0,fontFamily:"system-ui"}}>In Transcriber, no task in queue ({shailaReconcile.missingTasks.length}):</p>
+                  <button onClick={()=>{
+                    const newTasks = shailaReconcile.missingTasks.map(s => ({id:uid(), text:s.content||s.parsedShaila||s.synopsis||"New shaila", completed:false, priority:"shaila", createdAt:Date.now(), shailaId:s.id}));
+                    uT(ts=>[...ts, ...newTasks]);
+                    setShailaReconcile(prev=>({...prev, missingTasks:[]}));
+                    showToast(`Added ${newTasks.length} tasks to queue`,3000);
+                  }} style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600,whiteSpace:"nowrap"}}>+ Add all ({shailaReconcile.missingTasks.length})</button>
+                </div>
+                <div style={{maxHeight:240,overflowY:"auto"}}>
                 {shailaReconcile.missingTasks.map(s => (
                   <div key={s.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",background:T.bgW,borderRadius:10,marginBottom:4}}>
                     <span style={{fontSize:13,color:T.text,fontFamily:"Georgia,serif",flex:1,marginRight:8}}>{s.synopsis || s.content?.substring(0,60) || "Shaila"}</span>
-                    <button onClick={()=>{
-                      const newT = {id:uid(), text:s.content||s.parsedShaila||s.synopsis||"New shaila", completed:false, priority:"shaila", createdAt:Date.now(), shailaId:s.id};
-                      uT(ts=>[...ts, newT]);
-                      setShailaReconcile(prev=>({...prev, missingTasks:prev.missingTasks.filter(x=>x.id!==s.id)}));
-                      showToast("Added to queue",2000);
-                    }} style={{fontSize:11,padding:"5px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600,whiteSpace:"nowrap"}}>+ Add task</button>
+                    <div style={{display:"flex",gap:4,flexShrink:0}}>
+                      <button onClick={()=>{
+                        const newT = {id:uid(), text:s.content||s.parsedShaila||s.synopsis||"New shaila", completed:false, priority:"shaila", createdAt:Date.now(), shailaId:s.id};
+                        uT(ts=>[...ts, newT]);
+                        setShailaReconcile(prev=>({...prev, missingTasks:prev.missingTasks.filter(x=>x.id!==s.id)}));
+                        showToast("Added to queue",2000);
+                      }} style={{fontSize:11,padding:"5px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600}}>+ Add</button>
+                      <button onClick={()=>{
+                        setShailaReconcile(prev=>({...prev, missingTasks:prev.missingTasks.filter(x=>x.id!==s.id)}));
+                      }} style={{fontSize:11,padding:"5px 8px",borderRadius:8,border:`1px solid ${T.brd}`,background:"none",color:T.tFaint,cursor:"pointer",fontFamily:"system-ui"}}>Skip</button>
+                    </div>
                   </div>
                 ))}
+                </div>
               </div>
             )}
 
