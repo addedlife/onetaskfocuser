@@ -2548,10 +2548,10 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       {/* ── Floating Shaila buttons — muted outline icons, always visible except during Zen ── */}
       {!zen && (()=>{
         const outC = T.isDark ? T.tFaint : T.tSoft;  // outline/icon color
-        const fbS = {width:36,height:36,background:"transparent",border:`1.5px solid ${outC}40`,borderRadius:"50%",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s",opacity:.55};
+        const fbS = {width:40,height:40,background:T.card+"88",border:`1.5px solid ${outC}40`,borderRadius:"50%",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s",opacity:.65};
         const onE = e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.borderColor=outC;e.currentTarget.style.transform="scale(1.1)";};
-        const onL = e=>{e.currentTarget.style.opacity=".55";e.currentTarget.style.borderColor=outC+"40";e.currentTarget.style.transform="scale(1)";};
-        const icS = {width:16,height:16,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round"};
+        const onL = e=>{e.currentTarget.style.opacity=".65";e.currentTarget.style.borderColor=outC+"40";e.currentTarget.style.transform="scale(1)";};
+        const icS = {width:17,height:17,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
         return (
           <div style={{position:"fixed",bottom:20,right:20,zIndex:9100,display:"flex",gap:8,alignItems:"center"}}>
             <button onClick={()=>{setShailosAction("record-shaila");setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="Record a new shaila">
