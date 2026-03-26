@@ -1,7 +1,7 @@
 [build]
-  publish = "dist"
+  publish = "."
   functions = "netlify/functions"
-  command = "npm run build"
+  command = "echo static"
 
 # ── Security headers on every response ─────────────────────────────────────
 [[headers]]
@@ -42,4 +42,3 @@
   from = "/*"
   to = "/index.html"
   status = 200
-
