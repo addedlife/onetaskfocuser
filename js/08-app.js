@@ -162,11 +162,12 @@ function App({ user, onSignOut }) {
           let removed = 0;
           const deduped = (l.tasks||[]).filter(t => {
             if (t.completed) return true;
-            if (t.shailaId) {
+            if (t.shailaId && !t.parentTask) {
+              // Only dedup standalone shaila tasks — subtasks in a group share a shailaId by design
               if (seenSId.has(t.shailaId)) { removed++; return false; }
               seenSId.add(t.shailaId);
             }
-            if (t.priority === "shaila") {
+            if (t.priority === "shaila" && !t.parentTask) {
               const k = t.text.trim().toLowerCase();
               if (seenText.has(k)) { removed++; return false; }
               seenText.add(k);
@@ -272,18 +273,19 @@ function App({ user, onSignOut }) {
         // Gather ALL tasks across ALL lists
         const allTasks = prev.lists.flatMap(l => (l.tasks || []).map(t => ({...t, _listId: l.id})));
 
-        // Build lookup: shailaId → task — and clear any pending flags for IDs now in state
-        const taskByShailaId = {};
+        // Build lookup: shailaId → [tasks] (multiple subtasks can share one shailaId)
+        const tasksByShailaId = {};
         allTasks.forEach(t => {
           if (t.shailaId) {
-            taskByShailaId[t.shailaId] = t;
+            if (!tasksByShailaId[t.shailaId]) tasksByShailaId[t.shailaId] = [];
+            tasksByShailaId[t.shailaId].push(t);
             pendingShailaIds.current.delete(t.shailaId); // safely in state now
           }
         });
 
-        // Text lookup for shaila-priority tasks (fallback dedup)
+        // Text lookup for standalone shaila-priority tasks (fallback dedup — subtasks excluded)
         const shailaTextSet = new Set(
-          allTasks.filter(t => t.priority === "shaila" && !t.completed)
+          allTasks.filter(t => t.priority === "shaila" && !t.completed && !t.parentTask)
             .map(t => t.text.trim().toLowerCase())
         );
 
@@ -294,21 +296,39 @@ function App({ user, onSignOut }) {
 
         const addedShailaIds = new Set(); // prevent dupes within this batch
         shailos.forEach(s => {
-          const linked = taskByShailaId[s.id];
+          const linkedTasks = tasksByShailaId[s.id] || [];
           // Skip shailaIds that were just pre-assigned but haven't made it into state yet
           if (pendingShailaIds.current.has(s.id)) return;
           if (addedShailaIds.has(s.id)) return; // already adding in this batch
-          if (!linked && s.status !== "answered") {
+          if (!linkedTasks.length && s.status !== "answered" && s.status !== "got_back") {
             // Use the formatted question (content) for task text, synopsis as fallback
-            const text = s.content || s.parsedShaila || s.synopsis || "New shaila";
-            if (shailaTextSet.has(text.trim().toLowerCase())) return; // text dedup
+            const parentText = s.content || s.parsedShaila || s.synopsis || "New shaila";
+            if (shailaTextSet.has(parentText.trim().toLowerCase())) return; // text dedup
             addedShailaIds.add(s.id);
+            const baseTime = Date.now();
             toAdd.push({
-              id: uid(), text,
-              completed: false, priority: "shaila", createdAt: Date.now(), shailaId: s.id,
+              id: uid(), text: "Research answer",
+              completed: false, priority: "shaila", createdAt: baseTime,
+              shailaId: s.id, parentTask: parentText, stepIndex: 1, totalSteps: 2,
             });
-          } else if (linked && !linked.completed && s.status === "answered") {
-            toCompleteIds.add(linked.id);
+            toAdd.push({
+              id: uid(), text: "Get back to asker with answer",
+              completed: false, priority: "shaila", createdAt: baseTime,
+              shailaId: s.id, isGetBackStep: true,
+              parentTask: parentText, stepIndex: 2, totalSteps: 2,
+            });
+          } else if (linkedTasks.length) {
+            const isGroup = linkedTasks.some(t => t.parentTask);
+            if (s.status === "answered") {
+              // Complete research step (step 1) only; leave "get back" step pending
+              const step1 = isGroup
+                ? linkedTasks.find(t => !t.isGetBackStep && !t.completed)
+                : linkedTasks.find(t => !t.completed); // backward compat: single task
+              if (step1) toCompleteIds.add(step1.id);
+            } else if (s.status === "got_back") {
+              // Complete all remaining linked tasks
+              linkedTasks.filter(t => !t.completed).forEach(t => toCompleteIds.add(t.id));
+            }
           }
         });
 
@@ -321,7 +341,10 @@ function App({ user, onSignOut }) {
 
         if (!toAdd.length && !toCompleteIds.size && !toDeleteIds.size) return prev;
 
-        if (toAdd.length) showToast(`📋 ${toAdd.length} new shaila${toAdd.length!==1?"s":""} from transcriber`, 5000);
+        if (toAdd.length) {
+          const newShailaCount = Math.ceil(toAdd.length / 2);
+          showToast(`📋 ${newShailaCount} new shaila${newShailaCount!==1?"s":""} from transcriber`, 5000);
+        }
         if (toCompleteIds.size) showToast(`✅ ${toCompleteIds.size} shaila${toCompleteIds.size!==1?"s":""} answered`, 5000);
         if (toDeleteIds.size) showToast(`🗑️ ${toDeleteIds.size} shaila task${toDeleteIds.size!==1?"s":""} removed`, 5000);
 
@@ -789,20 +812,34 @@ function App({ user, onSignOut }) {
 
   function addVT(text, pri) {
     if (!text.trim()) return;
-    const newT = {id:uid(), text:text.trim(), completed:false, priority:pri, createdAt:Date.now()};
-    // Pre-assign shailaId BEFORE adding to state
-    if (pri === "shaila") {
+    const isShaila = pris.find(p => p.id === pri && p.isShaila) || pri === "shaila";
+    if (isShaila) {
+      // Shaila tasks get a 2-step subtask group: research answer + get back to asker
       const col = Store.shailosCol();
-      if (col) {
-        newT.shailaId = col.doc().id;
-        pendingShailaIds.current.add(newT.shailaId);
+      const shailaId = col ? col.doc().id : null;
+      if (shailaId) pendingShailaIds.current.add(shailaId);
+      const parentText = text.trim();
+      const baseTime = Date.now();
+      const step1 = {
+        id: uid(), text: "Research answer", completed: false, priority: pri,
+        createdAt: baseTime, shailaId: shailaId,
+        parentTask: parentText, stepIndex: 1, totalSteps: 2,
+      };
+      const step2 = {
+        id: uid(), text: "Get back to asker with answer", completed: false, priority: pri,
+        createdAt: baseTime, shailaId: shailaId, isGetBackStep: true,
+        parentTask: parentText, stepIndex: 2, totalSteps: 2,
+      };
+      uT(ts => [...ts, step1, step2]);
+      if (shailaId) {
+        Store.createShailaFromTask({...step1, text: parentText});
+        setTimeout(() => pendingShailaIds.current.delete(shailaId), 3000);
       }
+      flashOpt();
+      return;
     }
+    const newT = {id:uid(), text:text.trim(), completed:false, priority:pri, createdAt:Date.now()};
     uT(ts => [...ts, newT]);
-    if (newT.shailaId) {
-      Store.createShailaFromTask(newT);
-      setTimeout(() => pendingShailaIds.current.delete(newT.shailaId), 3000);
-    }
     flashOpt();
   }
 
@@ -816,9 +853,13 @@ function App({ user, onSignOut }) {
     setTimeout(() => {
       uT(ts => {
         const task = ts.find(t => t.id === id);
-        // Flow 4: shaila task completed → mark shaila doc as answered
-        if (task?.shailaId && task.priority === "shaila") {
-          Store.markShailaAnswered(task.shailaId, task.text);
+        // Flow 4: shaila task completed → update shaila doc status
+        if (task?.shailaId) {
+          if (task.isGetBackStep) {
+            Store.markShailaStatus(task.shailaId, "got_back");
+          } else {
+            Store.markShailaAnswered(task.shailaId, task.text);
+          }
         }
         const u = ts.map(t => t.id===id ? {...t, completed:true, completedAt:isLegacy?null:Date.now(), goodEnough} : t);
         if (task?.parentTask) {
@@ -954,15 +995,37 @@ function App({ user, onSignOut }) {
     setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => t.id===id ? {...t, [field]: value} : t)}))}));
   }
 
+  function handleShailaGotBack(id, value) {
+    saveShailaField(id, "gotBackToAsker", value);
+    // Also sync to the linked Firebase shaila doc
+    const task = (AS?.lists || []).flatMap(l => l.tasks).find(t => t.id === id);
+    if (task?.shailaId) {
+      Store.markShailaStatus(task.shailaId, value ? "got_back" : "answered");
+    }
+  }
+
   function addShailas(items) {
     const shailaPriId = pris.find(p => p.isShaila)?.id || "shaila";
-    const newTasks = items.map(item => ({
-      id: item.id, text: item.shaila, priority: shailaPriId,
-      shailaAnswer: item.answer || "",
-      askedBy: item.askedBy || "", answeredBy: item.answeredBy || "",
-      createdAt: Date.now(),
-      blocked: false, completed: false, energy: null, pinned: false,
-    }));
+    const newTasks = [];
+    items.forEach(item => {
+      const parentText = item.shaila;
+      const baseTime = Date.now();
+      newTasks.push({
+        id: item.id, text: "Research answer", priority: shailaPriId,
+        shailaAnswer: item.answer || "",
+        askedBy: item.askedBy || "", answeredBy: item.answeredBy || "",
+        createdAt: baseTime,
+        blocked: false, completed: false, energy: null, pinned: false,
+        parentTask: parentText, stepIndex: 1, totalSteps: 2,
+      });
+      newTasks.push({
+        id: uid(), text: "Get back to asker with answer", priority: shailaPriId,
+        createdAt: baseTime,
+        blocked: false, completed: false, energy: null, pinned: false,
+        parentTask: parentText, stepIndex: 2, totalSteps: 2,
+        isGetBackStep: true,
+      });
+    });
     setAS(p => ({...p, lists: p.lists.map(l =>
       l.id === p.activeListId ? {...l, tasks: [...l.tasks, ...newTasks]} : l
     )}));
@@ -1591,10 +1654,17 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
                   <p style={{fontSize:12,fontWeight:700,color:T.tSoft,margin:0,fontFamily:"system-ui"}}>In Transcriber, no task in queue ({shailaReconcile.missingTasks.length}):</p>
                   <button onClick={()=>{
-                    const newTasks = shailaReconcile.missingTasks.map(s => ({id:uid(), text:s.content||s.parsedShaila||s.synopsis||"New shaila", completed:false, priority:"shaila", createdAt:Date.now(), shailaId:s.id}));
+                    const newTasks = shailaReconcile.missingTasks.flatMap(s => {
+                      const parentText = s.content||s.parsedShaila||s.synopsis||"New shaila";
+                      const baseTime = Date.now();
+                      return [
+                        {id:uid(), text:"Research answer", completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, parentTask:parentText, stepIndex:1, totalSteps:2},
+                        {id:uid(), text:"Get back to asker with answer", completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, isGetBackStep:true, parentTask:parentText, stepIndex:2, totalSteps:2},
+                      ];
+                    });
                     uT(ts=>[...ts, ...newTasks]);
                     setShailaReconcile(prev=>({...prev, missingTasks:[]}));
-                    showToast(`Added ${newTasks.length} tasks to queue`,3000);
+                    showToast(`Added ${shailaReconcile.missingTasks.length} shaila${shailaReconcile.missingTasks.length!==1?"s":""} to queue`,3000);
                   }} style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600,whiteSpace:"nowrap"}}>+ Add all ({shailaReconcile.missingTasks.length})</button>
                 </div>
                 <div style={{maxHeight:240,overflowY:"auto"}}>
@@ -1603,8 +1673,13 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                     <span style={{fontSize:13,color:T.text,fontFamily:"Georgia,serif",flex:1,marginRight:8}}>{s.synopsis || s.content?.substring(0,60) || "Shaila"}</span>
                     <div style={{display:"flex",gap:4,flexShrink:0}}>
                       <button onClick={()=>{
-                        const newT = {id:uid(), text:s.content||s.parsedShaila||s.synopsis||"New shaila", completed:false, priority:"shaila", createdAt:Date.now(), shailaId:s.id};
-                        uT(ts=>[...ts, newT]);
+                        const parentText = s.content||s.parsedShaila||s.synopsis||"New shaila";
+                        const baseTime = Date.now();
+                        const newTasks = [
+                          {id:uid(), text:"Research answer", completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, parentTask:parentText, stepIndex:1, totalSteps:2},
+                          {id:uid(), text:"Get back to asker with answer", completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, isGetBackStep:true, parentTask:parentText, stepIndex:2, totalSteps:2},
+                        ];
+                        uT(ts=>[...ts, ...newTasks]);
                         setShailaReconcile(prev=>({...prev, missingTasks:prev.missingTasks.filter(x=>x.id!==s.id)}));
                         showToast("Added to queue",2000);
                       }} style={{fontSize:11,padding:"5px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600}}>+ Add</button>
@@ -1775,7 +1850,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
 
       {/* ShailaManager */}
       {showShailaManager && (
-        <ShailaManager AS={AS} T={T} aiOpts={aiOpts} onSaveField={saveShailaField} onClose={()=>setShowShailaManager(false)}/>
+        <ShailaManager AS={AS} T={T} aiOpts={aiOpts} onSaveField={saveShailaField} onGotBack={handleShailaGotBack} onClose={()=>setShowShailaManager(false)}/>
       )}
 
       {/* Noise texture */}

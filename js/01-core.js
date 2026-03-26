@@ -422,6 +422,21 @@ const Store = {
     }
   },
 
+  // Generic shaila status setter — "pending" | "answered" | "got_back"
+  async markShailaStatus(shailaId, status) {
+    const col = this.shailosCol();
+    if (!col || !shailaId) return;
+    try {
+      await col.doc(shailaId).update({
+        status: status,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log("[Store] Shaila status →", status, ":", shailaId);
+    } catch(e) {
+      console.warn("[Store] markShailaStatus failed:", e);
+    }
+  },
+
   // Delete a shaila doc from the transcriber collection
   async deleteShailaDoc(shailaId) {
     const col = this.shailosCol();
@@ -519,7 +534,7 @@ const Store = {
 
       // Shailos that exist in transcriber but have no task (treat missing status as pending)
       const missingTasks = Object.values(shailoMap).filter(s =>
-        s.status !== "answered" && !linkedShailaIds.has(s.id)
+        s.status !== "answered" && s.status !== "got_back" && !linkedShailaIds.has(s.id)
       );
 
       // Shaila-priority tasks that have no matching shaila doc
@@ -532,7 +547,7 @@ const Store = {
       shailaTasks.forEach(t => {
         if (!t.shailaId) return;
         const s = shailoMap[t.shailaId];
-        if (s && s.status === "answered" && !t.completed) {
+        if (s && (s.status === "answered" || s.status === "got_back") && !t.completed) {
           statusMismatches.push({ task: t, shaila: s, type: "shaila_answered" });
         }
       });
