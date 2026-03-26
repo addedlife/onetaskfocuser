@@ -1063,22 +1063,31 @@ function BlockReflectModal({task, T, aiOpts, onClose}) {
 }
 
 // ──────────────────────────────────────────────────────────────────
-// ShailaManager — bullet list: date, Q, A, askedBy, answeredBy
+// ShailaManager — bullet list: date, Q, A, askedBy, answeredBy, got-back status
 // ──────────────────────────────────────────────────────────────────
-function ShailaManager({AS, T, aiOpts, onSaveField, onClose}) {
+function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onClose}) {
   const pris = AS?.priorities || DEF_PRI;
   const GOLD = "#C8A84C";
+  // Status palette
+  const CLR_PENDING  = "#C87C6E"; // soft terracotta — no answer yet
+  const CLR_ANSWERED = "#C8A84C"; // gold — answered, waiting to get back
+  const CLR_GOT_BACK = "#6AB87D"; // soft green — answered and got back
 
-  const allShailas = (AS?.lists || []).flatMap(l =>
-    l.tasks.filter(t => {
-      const p = pris.find(x => x.id === t.priority) || {};
-      return p.isShaila;
-    })
-  ).sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+  // All shaila-priority tasks across all lists
+  const allShailaTasks = (AS?.lists || []).flatMap(l =>
+    l.tasks.filter(t => pris.find(x => x.id === t.priority)?.isShaila)
+  );
+
+  // Display entries: old single tasks (!parentTask) + step-1 subtasks.
+  // Skips "Get back to asker" subtasks — they are reflected via gotBack status.
+  const allShailas = allShailaTasks
+    .filter(t => !t.isGetBackStep)
+    .sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
 
   const [localEdits, setLocalEdits]   = React.useState({});
   const [copyDone, setCopyDone]       = React.useState(false);
   const [bulkLoading, setBulkLoading] = React.useState(false);
+  const [sort, setSort]               = React.useState("newest"); // "newest" | "status"
 
   function getF(s, field) {
     return localEdits[s.id]?.[field] !== undefined
@@ -1089,16 +1098,67 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onClose}) {
     setLocalEdits(p => ({...p, [id]: {...(p[id]||{}), [field]: val}}));
   }
 
+  // Q text: subtask entries store the question in shailaQuestion (or parentTask), old tasks in text
+  function getQ(s) {
+    const override = localEdits[s.id]?.shailaQuestion;
+    if (override !== undefined) return override;
+    return s.shailaQuestion || (s.parentTask && s.parentTask !== s.text ? s.parentTask : null) || s.text || "";
+  }
+  function saveQ(s, val) {
+    const field = (s.parentTask) ? "shailaQuestion" : "text";
+    setF(s.id, "shailaQuestion", val);
+    onSaveField(s.id, field, val);
+  }
+
+  // Derive got-back status: explicit field OR step-2 subtask completed
+  function isGotBack(s) {
+    if (getF(s, "gotBackToAsker") === true || s.gotBackToAsker === true) return true;
+    if (s.parentTask) {
+      const step2 = allShailaTasks.find(t => t.parentTask === s.parentTask && t.isGetBackStep);
+      return step2?.completed || false;
+    }
+    return false;
+  }
+
+  // 3-state status: "pending" | "answered" | "got_back"
+  function shailaStatus(s) {
+    if (isGotBack(s)) return "got_back";
+    if (getF(s, "shailaAnswer").trim()) return "answered";
+    return "pending";
+  }
+
+  function statusSortWeight(s) {
+    const st = shailaStatus(s);
+    if (st === "pending")   return 0;
+    if (st === "answered")  return 1;
+    return 2; // got_back
+  }
+
+  const sorted = sort === "status"
+    ? [...allShailas].sort((a,b) => statusSortWeight(a) - statusSortWeight(b) || (b.createdAt||0) - (a.createdAt||0))
+    : allShailas; // already sorted newest-first
+
+  const statusLabel = { pending: "Pending", answered: "Answered — waiting to get back", got_back: "Got back to asker ✓" };
+  const statusColor = { pending: CLR_PENDING, answered: CLR_ANSWERED, got_back: CLR_GOT_BACK };
+
+  function cycleGotBack(s) {
+    const st = shailaStatus(s);
+    if (st === "pending") return; // need an answer first
+    const next = st === "answered"; // answered→true, got_back→false
+    setF(s.id, "gotBackToAsker", next);
+    if (onGotBack) onGotBack(s.id, next);
+  }
+
   function buildText() {
     const out = ["SHAILA LOG", "==========", ""];
-    allShailas.forEach((s, i) => {
+    sorted.forEach((s, i) => {
       const dateStr = s.createdAt ? new Date(s.createdAt).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : "unknown date";
       const askedBy   = getF(s,"askedBy");
       const answeredBy= getF(s,"answeredBy");
       out.push(`${i+1}. [${dateStr}]`);
       if (askedBy)    out.push(`   Asked by: ${askedBy}`);
       if (answeredBy) out.push(`   Answered by: ${answeredBy}`);
-      out.push(`   Q: ${getF(s,"text")}`);
+      out.push(`   Q: ${getQ(s)}`);
       const a = getF(s,"shailaAnswer");
       if (a) out.push(`   A: ${a}`);
       out.push("");
@@ -1157,6 +1217,11 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onClose}) {
             <p style={{margin:0,fontSize:11,color:T.tFaint}}>{allShailas.length} shailo{allShailas.length!==1?"s":""}</p>
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+            {/* Sort toggle */}
+            <button onClick={()=>setSort(s=>s==="newest"?"status":"newest")}
+              style={{fontSize:11,color:sort==="status"?GOLD:T.tFaint,background:"none",border:`1px solid ${sort==="status"?GOLD:T.brd}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:"system-ui",transition:"color 0.2s,border-color 0.2s"}}>
+              {sort==="status"?"↕ By status":"↕ Newest"}
+            </button>
             {aiOpts && (
               <button onClick={detectAllAnswers} disabled={bulkLoading} style={{fontSize:11,color:GOLD,background:"none",border:`1px solid ${GOLD}60`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:"system-ui",opacity:bulkLoading?0.6:1}}>
                 {bulkLoading ? "Detecting..." : "&#x2721; Detect answers"}
@@ -1170,30 +1235,61 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onClose}) {
           </div>
         </div>
 
+        {/* Status legend */}
+        <div style={{padding:"8px 20px",borderBottom:`1px solid ${T.brd}`,background:T.card,display:"flex",gap:14,flexShrink:0}}>
+          {[["pending",CLR_PENDING,"Pending"],["answered",CLR_ANSWERED,"Answered"],["got_back",CLR_GOT_BACK,"Got back ✓"]].map(([k,c,lbl])=>(
+            <div key={k} style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:T.tFaint,fontFamily:"system-ui"}}>
+              <span style={{width:9,height:9,borderRadius:"50%",background:c,display:"inline-block",flexShrink:0}}/>
+              {lbl}
+            </div>
+          ))}
+        </div>
+
         {/* Bullet list */}
         <div style={{flex:1,overflowY:"auto",padding:"14px 20px 20px"}}>
-          {allShailas.length === 0 && (
+          {sorted.length === 0 && (
             <p style={{color:T.tFaint,fontSize:13,textAlign:"center",marginTop:40,lineHeight:1.8}}>No shailos yet.<br/>Add tasks with the Shaila priority.</p>
           )}
-          {allShailas.map((s, i) => {
+          {sorted.map((s, i) => {
             const dateStr = s.createdAt ? new Date(s.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "";
+            const st = shailaStatus(s);
+            const stColor = statusColor[st];
+            const stTip = statusLabel[st];
+            const canCycle = st !== "pending";
             return (
               <div key={s.id} style={{display:"flex",gap:10,paddingBottom:18,marginBottom:18,borderBottom:`1px solid ${T.brd}`}}>
-                {/* Number */}
-                <div style={{flexShrink:0,width:22,paddingTop:2,textAlign:"right",fontSize:12,color:GOLD,fontWeight:700,fontFamily:"system-ui"}}>{i+1}.</div>
+                {/* Number + status dot */}
+                <div style={{flexShrink:0,width:28,paddingTop:2,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
+                  <span style={{fontSize:12,color:GOLD,fontWeight:700,fontFamily:"system-ui"}}>{i+1}.</span>
+                  <button
+                    title={canCycle ? (st==="answered" ? "Mark: got back to asker" : "Mark: waiting to get back") : "Add an answer to change status"}
+                    onClick={()=>cycleGotBack(s)}
+                    style={{
+                      width:13,height:13,borderRadius:"50%",border:"none",padding:0,cursor:canCycle?"pointer":"default",
+                      background:stColor,flexShrink:0,
+                      boxShadow:`0 0 0 2px ${stColor}40`,
+                      opacity:canCycle?1:0.75,
+                      transition:"background 0.2s,box-shadow 0.2s",
+                    }}
+                    aria-label={stTip}
+                  />
+                </div>
                 {/* Content */}
                 <div style={{flex:1,minWidth:0}}>
-                  {/* Date */}
+                  {/* Date + status label */}
                   {dateStr && (
                     <div style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",marginBottom:5}}>
-                      {dateStr}{s.completed ? " \u00b7 completed" : ""}
+                      {dateStr}
+                      {s.completed ? " \u00b7 completed" : ""}
+                      {" \u00b7 "}
+                      <span style={{color:stColor,fontWeight:600}}>{stTip}</span>
                     </div>
                   )}
                   {/* Q */}
                   <div style={labelSt}>Q</div>
-                  <textarea value={getF(s,"text")} rows={2}
-                    onChange={e=>setF(s.id,"text",e.target.value)}
-                    onBlur={e=>onSaveField(s.id,"text",e.target.value)}
+                  <textarea value={getQ(s)} rows={2}
+                    onChange={e=>setF(s.id,"shailaQuestion",e.target.value)}
+                    onBlur={e=>saveQ(s,e.target.value)}
                     style={inputSt({minHeight:40,marginBottom:8})}
                   />
                   {/* A */}
