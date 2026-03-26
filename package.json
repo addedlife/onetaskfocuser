@@ -1,0 +1,15 @@
+{
+  "name": "onetaskfocuser",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OneTask Focus App — React 18 CDN + Firebase + Netlify",
+  "scripts": {
+    "lint": "eslint js/*.js",
+    "lint:fix": "eslint js/*.js --fix"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.34.0",
+    "eslint-plugin-react-hooks": "^4.6.0"
+  }
+}

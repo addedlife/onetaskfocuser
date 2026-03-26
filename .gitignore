@@ -23,6 +23,18 @@ v4_restore_state.json
 status.json
 status_cmd.txt
 netlify_status.txt
+pending_restore.json
+DEPLOY_LOG.json
+
+# Private admin/recovery tools — never serve publicly
+HANDOFF.md
+merge.html
+recover.html
+restore_data.html
+quick_restore.html
+safe-deploy.ps1
+sync-from-live.ps1
+tools/
 
 # Old deploy scripts (deprecated, kept locally but not tracked)
 deploy.bat

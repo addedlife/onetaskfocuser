@@ -8,6 +8,67 @@
   [headers.values]
     Content-Type = "application/javascript"
 
+# Block all private/admin files from public access
+[[redirects]]
+  from = "/HANDOFF.md"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/DEPLOY_LOG.json"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/pending_restore.json"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/quick_restore.html"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/merge.html"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/recover.html"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/restore_data.html"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/safe-deploy.ps1"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/sync-from-live.ps1"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/tools/*"
+  to = "/404"
+  status = 404
+  force = true
+
 # Shaila Transcriber SPA — serve its index.html for all sub-routes
 # Only applies when the requested file doesn't exist (assets like .js/.css are served directly)
 [[redirects]]
