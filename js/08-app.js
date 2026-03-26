@@ -995,10 +995,59 @@ function App({ user, onSignOut }) {
   }
 
   function saveShailaField(id, field, value) {
-    setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => t.id===id ? {...t, [field]: value} : t)}))}));
+    setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t =>
+      t.id === id ? {...t, [field]: value} : t
+    )}))}));
+  }
+
+  function markShailaGotBack(taskId) {
+    setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t =>
+      t.id === taskId ? {...t, shailaGotBack: true} : t
+    )}))}));
+    // Mirror the status to the Firestore shailos collection
+    const task = AS.lists.flatMap(l => l.tasks).find(t => t.id === taskId);
+    if (task?.shailaId) Store.markShailaGotBack(task.shailaId);
+  }
+
+  function addShailaManually({text, shailaAnswer, askedBy, answeredBy}) {
+    const shailaPriId = pris.find(p => p.isShaila)?.id || "shaila";
+    const newT = {
+      id: uid(), text: text.trim(), priority: shailaPriId,
+      shailaAnswer: shailaAnswer || "",
+      askedBy: askedBy || "", answeredBy: answeredBy || "",
+      shailaGotBack: false,
+      createdAt: Date.now(), completed: false, blocked: false, energy: null, pinned: false,
+    };
+    // Pre-assign shailaId so the snapshot listener doesn't create a duplicate
+    const col = Store.shailosCol();
+    if (col) {
+      newT.shailaId = col.doc().id;
+      pendingShailaIds.current.add(newT.shailaId);
+      Store.createShailaFromTask(newT);
+      setTimeout(() => pendingShailaIds.current.delete(newT.shailaId), 3000);
+    }
+    setAS(p => ({...p, lists: p.lists.map(l =>
+      l.id === p.activeListId ? {...l, tasks: [newT, ...l.tasks]} : l
+    )}));
+    showToast("✡ Shaila added", 2500);
   }
 
   function addShailas(items) {
+    const shailaPriId = pris.find(p => p.isShaila)?.id || "shaila";
+    const newTasks = items.map(item => ({
+      id: item.id, text: item.shaila, priority: shailaPriId,
+      shailaAnswer: item.answer || "",
+      askedBy: item.askedBy || "", answeredBy: item.answeredBy || "",
+      createdAt: Date.now(),
+      blocked: false, completed: false, energy: null, pinned: false,
+    }));
+    setAS(p => ({...p, lists: p.lists.map(l =>
+      l.id === p.activeListId ? {...l, tasks: [...l.tasks, ...newTasks]} : l
+    )}));
+    setShowVoice(false);
+  }
+
+
     const shailaPriId = pris.find(p => p.isShaila)?.id || "shaila";
     const newTasks = items.map(item => ({
       id: item.id, text: item.shaila, priority: shailaPriId,
@@ -1829,7 +1878,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
 
       {/* ShailaManager */}
       {showShailaManager && (
-        <ShailaManager AS={AS} T={T} aiOpts={aiOpts} onSaveField={saveShailaField} onClose={()=>setShowShailaManager(false)}/>
+        <ShailaManager AS={AS} T={T} aiOpts={aiOpts} onSaveField={saveShailaField} onMarkGotBack={markShailaGotBack} onAddManual={addShailaManually} onClose={()=>setShowShailaManager(false)}/>
       )}
 
       {/* Noise texture */}

@@ -4,12 +4,12 @@
 ---
 
 ## 1. WHO YOU'RE WORKING WITH
-- User: Yosef Danziger (ydanziger20@gmail.com)
+- User: Yosef Danziger (<YOUR_EMAIL>)
 - Non-programmer, intelligent and curious. **Coding Coach Mode is ALWAYS ON.**
   - After every action, add a plain-English explanation (1–3 sentences)
   - Define programming terms in context when they come up naturally
   - Warm, direct tone — never condescending
-- Firebase login username: `rabbidanziger` / Google: `rabbidanziger@hocsouthbend.com`
+- Firebase login username: `YOUR_USERNAME` / Google: `<your-google-email>`
 
 ---
 
@@ -56,8 +56,8 @@ C:\Users\ydanz\OneDrive\Documents\taskmanager app\Claude Code OneTask Project\
 
 ## 5. KEY ARCHITECTURE
 - **Firestore path**: `users/{canonicalUid}/appData/appState_v4`
-- **canonicalUid**: strips email to prefix — `rabbidanziger@anything` → `"rabbidanziger"`
-- **localStorage key**: `onetaskonly_v4_{uid}` (e.g. `onetaskonly_v4_rabbidanziger`)
+- **canonicalUid**: strips email to prefix — `username@anything` → `"YOUR_USERNAME"`
+- **localStorage key**: `onetaskonly_v4_{uid}` (e.g. `onetaskonly_v4_{username}`)
 - **State object** (`AS`): `{ lists[], activeListId, colorScheme, mrsWWindows, geminiKey, ... }`
 - **`Store`** object in 01-core.js handles all read/write to Firebase + localStorage
 - **`uT(fn)`** — helper to mutate the active list's tasks array
@@ -70,7 +70,7 @@ C:\Users\ydanz\OneDrive\Documents\taskmanager app\Claude Code OneTask Project\
 
 ### What happened
 When the user cleared browser localStorage, the app loaded with a blank default state
-and saved it to Firebase within 50ms — wiping all tasks for `rabbidanziger`. This is confirmed:
+and saved it to Firebase within 50ms — wiping all tasks for `YOUR_USERNAME`. This is confirmed:
 Firebase shows 0 tasks, last written 2026-03-13.
 
 ### Fix already deployed
@@ -130,8 +130,8 @@ Remove-Item $tempDir -Recurse -Force
 Write-Output "Zip size: $((Get-Item $zipPath).Length) bytes"
 
 # Step 2: Upload to Netlify API
-$token = "nfc_sFsYCTMmnimttJVAVcw6fjvS6GR4mFreac04"
-$siteId = "c603b156-f9ee-4b67-bcf4-d4b7f64fbccd"
+$token = "<NETLIFY_TOKEN_IN_GITHUB_SECRET>"
+$siteId = "<NETLIFY_SITE_ID>"
 $headers = @{ "Authorization" = "Bearer $token"; "Content-Type" = "application/zip" }
 $bytes = [System.IO.File]::ReadAllBytes($zipPath)
 $result = Invoke-RestMethod -Uri "https://api.netlify.com/api/v1/sites/$siteId/deploys" -Method Post -Headers $headers -Body $bytes
@@ -152,13 +152,13 @@ Run each step as a separate Desktop Commander `start_process` command (inline Po
 
 | Resource | Value |
 |---|---|
-| Netlify auth token | `nfc_sFsYCTMmnimttJVAVcw6fjvS6GR4mFreac04` |
-| Netlify site ID | `c603b156-f9ee-4b67-bcf4-d4b7f64fbccd` |
+| Netlify auth token | `<NETLIFY_TOKEN_IN_GITHUB_SECRET>` |
+| Netlify site ID | `<NETLIFY_SITE_ID>` |
 | Netlify site name | `onetaskfocuser` |
 | Firebase project ID | `onetaskonly-app` |
 | Firebase plan | Spark (free) — no PITR, no backups |
 | Gemini API key | Stored in Netlify env var `GEMINI_API_KEY` (not in code) |
-| Firebase API key | `AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA` (in 01-core.js, safe to expose) |
+| Firebase API key | `<FIREBASE_API_KEY>` (in 01-core.js, safe to expose) |
 
 ---
 

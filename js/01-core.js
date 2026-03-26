@@ -437,6 +437,21 @@ const Store = {
     }
   },
 
+  // Flow: "Got back to asker" — marks the shaila doc with a dedicated status
+  async markShailaGotBack(shailaId) {
+    const col = this.shailosCol();
+    if (!col || !shailaId) return;
+    try {
+      await col.doc(shailaId).update({
+        status: "got_back",
+        gotBackAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log("[Store] Marked shaila got-back:", shailaId);
+    } catch(e) {
+      console.warn("[Store] markShailaGotBack failed:", e);
+    }
+  },
+
   // ── Manual full backup: tasks + shailos → downloadable JSON ──
   async fullBackup(appState) {
     try {
@@ -905,6 +920,14 @@ const TIPS = [
   {t:"Physical momentum (making your bed, one pushup) activates behavioral momentum for larger tasks.", s:"Behavioral psychology", cat:"Motivation", url:"https://en.wikipedia.org/wiki/Behavioral_momentum"},
 ];
 
+// Yeshivish-aware system context injected into every AI call.
+// Gemini receives it as systemInstruction; Claude receives it server-side in the proxy.
+const YESHIVISH_CONTEXT = `You are assisting a rabbi and Orthodox Jewish community. You understand "Yeshivish" — a dialect blending English with Hebrew, Aramaic, and Yiddish Torah terms.
+
+Key vocabulary: shaila/shaylos = halachic questions; psak/paskening = halachic ruling; halacha = Jewish law; gemara = Talmud; mishnah = Mishna; chumash = Pentateuch; Rashi/Tosafos = classic commentators; Rambam/Ramban = medieval authorities; Shabbos = Sabbath; Yom Tov = Jewish holiday; davening = prayer; shiur = Torah class; kollel = full-time Torah study; beis medrash = Torah study hall; rosh yeshiva = yeshiva head; chavrusa = study partner; machlokes = dispute; svara = logical argument; pshat = simple meaning; mutar/assur = permitted/forbidden; kashrus = dietary laws; treif = non-kosher; fleishig/milchig/pareve = meat/dairy/neutral; mikvah = ritual bath; mezuzah = doorpost parchment; tefillin = phylacteries; bracha = blessing; kiddush = Shabbos wine sanctification; teshuvah = repentance; tzaddik = righteous person; tzedakah = charity; chasuna = wedding; mazel tov = congratulations; Baruch Hashem / B"H = thank God / with God's help; tachlis = bottom line.
+
+Interpret all content in this Torah, halachic, and Orthodox Jewish context. When processing voice transcripts, recognize terms even when phonetically transcribed (e.g. "shyla"=shaila, "holla ka"=halacha, "shah bus"=Shabbos, "gomorrah"=gemara).`;
+
 // Yeshivish correction map
 const YC = {
   "shyla":"shaila","shayla":"shaila","shy la":"shaila","shy los":"shailos","shaylas":"shailos",
@@ -1053,10 +1076,14 @@ function isTaskAged(task, pris, thresholds) {
 async function callGemini(gk, prompt) {
   if (!gk) return null;
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${gk}`, {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${gk}`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.7, maxOutputTokens:4096}})
+      body: JSON.stringify({
+        systemInstruction: {parts: [{text: YESHIVISH_CONTEXT}]},
+        contents: [{parts: [{text: prompt}]}],
+        generationConfig: {temperature: 0.7, maxOutputTokens: 8192}
+      })
     });
     const d = await r.json();
     if (d.error) { console.warn("[AI] Gemini error:", d.error); return null; }
