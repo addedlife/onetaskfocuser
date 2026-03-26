@@ -397,6 +397,9 @@ const Store = {
         answer: "",
         answererName: "",
         parsedShaila: task.text,
+        // Marks this doc as originating from the task app so the real-time listener
+        // can skip it (the corresponding task already exists in state).
+        _taskAppSource: true,
       }));
       console.log("[Store] Created shaila doc from task:", ref.id);
       return ref.id;
