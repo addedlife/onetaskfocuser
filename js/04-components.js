@@ -1065,7 +1065,7 @@ function BlockReflectModal({task, T, aiOpts, onClose}) {
 // ──────────────────────────────────────────────────────────────────
 // ShailaManager — bullet list: date, Q, A, askedBy, answeredBy, got-back status
 // ──────────────────────────────────────────────────────────────────
-function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onClose}) {
+function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onClose}) {
   const pris = AS?.priorities || DEF_PRI;
   const GOLD = "#C8A84C";
   // Status palette
@@ -1088,6 +1088,12 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onClose}) {
   const [copyDone, setCopyDone]       = React.useState(false);
   const [bulkLoading, setBulkLoading] = React.useState(false);
   const [sort, setSort]               = React.useState("newest"); // "newest" | "status"
+  const [confettiActive, setConfettiActive] = React.useState(false);
+  // Manual add form
+  const [addingNew, setAddingNew]     = React.useState(false);
+  const [newForm, setNewForm]         = React.useState({text:"", shailaAnswer:"", askedBy:"", answeredBy:""});
+  const [micField, setMicField]       = React.useState(null); // which field has active mic
+  const micRecRef                     = React.useRef(null);
 
   function getF(s, field) {
     return localEdits[s.id]?.[field] !== undefined
@@ -1147,6 +1153,55 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onClose}) {
     const next = st === "answered"; // answered→true, got_back→false
     setF(s.id, "gotBackToAsker", next);
     if (onGotBack) onGotBack(s.id, next);
+    if (next) {
+      setConfettiActive(true);
+      setTimeout(() => setConfettiActive(false), 2800);
+      if (AS?.completionSound !== false) {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = "sine"; osc.frequency.value = freq;
+            const t = ctx.currentTime + i * 0.13;
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.18, t + 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+            osc.start(t); osc.stop(t + 0.6);
+          });
+        } catch(e) {}
+      }
+    }
+  }
+
+  // ── Voice capture for manual-add form fields ──
+  function startFieldMic(fieldName) {
+    if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) return;
+    const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const r = new Rec();
+    r.lang = "en-US"; r.continuous = false; r.interimResults = false;
+    r.onresult = e => {
+      const transcript = cleanYT(e.results[0][0].transcript || "");
+      setNewForm(p => ({...p, [fieldName]: (p[fieldName] ? p[fieldName] + " " : "") + transcript}));
+      setMicField(null);
+    };
+    r.onerror = () => setMicField(null);
+    r.onend   = () => setMicField(null);
+    micRecRef.current = r;
+    r.start();
+    setMicField(fieldName);
+  }
+  function stopFieldMic() {
+    micRecRef.current?.stop();
+    setMicField(null);
+  }
+
+  function submitNewShaila() {
+    if (!newForm.text.trim()) return;
+    if (onAddManual) onAddManual({...newForm});
+    setNewForm({text:"", shailaAnswer:"", askedBy:"", answeredBy:""});
+    setAddingNew(false);
   }
 
   function buildText() {
@@ -1204,36 +1259,122 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onClose}) {
     ...extra,
   });
   const labelSt = {fontSize:9,color:T.tFaint,fontWeight:700,letterSpacing:1,marginBottom:2,fontFamily:"system-ui"};
+  const micBtnSt = (active) => ({
+    width:28, height:28, borderRadius:"50%",
+    border:`1px solid ${active?"#B87A5A":T.brd}`,
+    background:active?"#B87A5A20":T.bgW||T.bg, flexShrink:0,
+    display:"flex", alignItems:"center", justifyContent:"center",
+    cursor:"pointer",
+  });
 
   return (
     <>
+      {confettiActive && <Confetti colors={["#2ECC71","#C8A84C","#27AE60","#F1C40F","#1ABC9C","#58D68D"]}/>}
       <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:10010,animation:"ot-fade 0.2s"}}/>
       <div style={{position:"fixed",top:0,right:0,height:"100vh",width:"min(560px,100vw)",background:T.bg,zIndex:10011,boxShadow:"-4px 0 32px rgba(0,0,0,0.15)",display:"flex",flexDirection:"column",animation:"ot-slide-in-right 0.3s cubic-bezier(.22,1,.36,1)",fontFamily:"system-ui"}}>
 
         {/* Header */}
-        <div style={{padding:"18px 20px 12px",borderBottom:`1px solid ${T.brd}`,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center",background:T.card}}>
-          <div>
-            <h3 style={{margin:"0 0 1px",fontSize:16,fontWeight:600,color:T.text}}>&#x2721; Shaila Log</h3>
-            <p style={{margin:0,fontSize:11,color:T.tFaint}}>{allShailas.length} shailo{allShailas.length!==1?"s":""}</p>
-          </div>
-          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-            {/* Sort toggle */}
-            <button onClick={()=>setSort(s=>s==="newest"?"status":"newest")}
-              style={{fontSize:11,color:sort==="status"?GOLD:T.tFaint,background:"none",border:`1px solid ${sort==="status"?GOLD:T.brd}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:"system-ui",transition:"color 0.2s,border-color 0.2s"}}>
-              {sort==="status"?"↕ By status":"↕ Newest"}
-            </button>
-            {aiOpts && (
-              <button onClick={detectAllAnswers} disabled={bulkLoading} style={{fontSize:11,color:GOLD,background:"none",border:`1px solid ${GOLD}60`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:"system-ui",opacity:bulkLoading?0.6:1}}>
-                {bulkLoading ? "Detecting..." : "&#x2721; Detect answers"}
+        <div style={{padding:"18px 20px 12px",borderBottom:`1px solid ${T.brd}`,flexShrink:0,background:T.card}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+            <div>
+              <h3 style={{margin:"0 0 1px",fontSize:16,fontWeight:600,color:T.text}}>&#x2721; Shaila Log</h3>
+              <p style={{margin:0,fontSize:11,color:T.tFaint}}>{allShailas.length} shailo{allShailas.length!==1?"s":""}</p>
+            </div>
+            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              {/* Sort toggle */}
+              <button onClick={()=>setSort(s=>s==="newest"?"status":"newest")}
+                style={{fontSize:11,color:sort==="status"?GOLD:T.tFaint,background:"none",border:`1px solid ${sort==="status"?GOLD:T.brd}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:"system-ui",transition:"color 0.2s,border-color 0.2s"}}>
+                {sort==="status"?"↕ By status":"↕ Newest"}
               </button>
-            )}
-            <button onClick={copyAll} style={{fontSize:11,color:copyDone?"#2ECC71":T.tFaint,background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:"system-ui",transition:"color 0.2s"}}>
-              {copyDone ? "Copied!" : "Copy all"}
-            </button>
-            <button onClick={downloadAll} style={{fontSize:11,color:T.tFaint,background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:"system-ui"}}>Download</button>
-            <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:T.tFaint,padding:"0 0 0 6px",lineHeight:1}}>&times;</button>
+              {aiOpts && (
+                <button onClick={detectAllAnswers} disabled={bulkLoading} style={{fontSize:11,color:GOLD,background:"none",border:`1px solid ${GOLD}60`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:"system-ui",opacity:bulkLoading?0.6:1}}>
+                  {bulkLoading ? "Detecting..." : "&#x2721; Detect answers"}
+                </button>
+              )}
+              <button onClick={copyAll} style={{fontSize:11,color:copyDone?"#2ECC71":T.tFaint,background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:"system-ui",transition:"color 0.2s"}}>
+                {copyDone ? "Copied!" : "Copy all"}
+              </button>
+              <button onClick={downloadAll} style={{fontSize:11,color:T.tFaint,background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:"system-ui"}}>Download</button>
+              <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:T.tFaint,padding:"0 0 0 6px",lineHeight:1}}>&times;</button>
+            </div>
           </div>
+          {/* "New Shaila" toggle button */}
+          <button
+            onClick={()=>setAddingNew(p=>!p)}
+            style={{width:"100%",padding:"8px 0",borderRadius:10,border:`1.5px dashed ${addingNew?T.text:T.brd}`,background:addingNew?T.bgW:"transparent",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"system-ui",color:addingNew?T.text:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all 0.15s"}}>
+            {addingNew ? "✕ Cancel new shaila" : "+ Add shaila manually"}
+          </button>
         </div>
+
+        {/* Manual-add form (slides open under header) */}
+        {addingNew && (
+          <div style={{padding:"14px 20px 16px",borderBottom:`1px solid ${T.brd}`,background:T.bgW||T.bg,flexShrink:0}}>
+            <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:T.tSoft,fontFamily:"system-ui",letterSpacing:.5}}>NEW SHAILA</p>
+
+            {/* Question */}
+            <div style={{marginBottom:10}}>
+              <div style={labelSt}>Q — SHAILA</div>
+              <div style={{display:"flex",gap:6,alignItems:"flex-start"}}>
+                <textarea value={newForm.text} rows={2}
+                  onChange={e=>setNewForm(p=>({...p,text:e.target.value}))}
+                  placeholder="Write or speak the shaila…"
+                  style={inputSt({flex:1,minHeight:48})}
+                />
+                <button onClick={micField==="text"?stopFieldMic:()=>startFieldMic("text")} style={micBtnSt(micField==="text")} title={micField==="text"?"Stop recording":"Speak question"}>
+                  {micField==="text" ? <div style={{width:8,height:8,borderRadius:2,background:"#B87A5A"}}/> : <IC.Mic s={13} c={T.tSoft}/>}
+                </button>
+              </div>
+            </div>
+
+            {/* Answer */}
+            <div style={{marginBottom:10}}>
+              <div style={labelSt}>A — ANSWER</div>
+              <div style={{display:"flex",gap:6,alignItems:"flex-start"}}>
+                <textarea value={newForm.shailaAnswer} rows={2}
+                  onChange={e=>setNewForm(p=>({...p,shailaAnswer:e.target.value}))}
+                  placeholder="Answer (optional)…"
+                  style={inputSt({flex:1,minHeight:48})}
+                />
+                <button onClick={micField==="shailaAnswer"?stopFieldMic:()=>startFieldMic("shailaAnswer")} style={micBtnSt(micField==="shailaAnswer")} title={micField==="shailaAnswer"?"Stop":"Speak answer"}>
+                  {micField==="shailaAnswer" ? <div style={{width:8,height:8,borderRadius:2,background:"#B87A5A"}}/> : <IC.Mic s={13} c={T.tSoft}/>}
+                </button>
+              </div>
+            </div>
+
+            {/* Asked by / Answered by */}
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <div style={{flex:1}}>
+                <div style={labelSt}>ASKED BY</div>
+                <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                  <input value={newForm.askedBy} placeholder="Name…"
+                    onChange={e=>setNewForm(p=>({...p,askedBy:e.target.value}))}
+                    style={inputSt({resize:"none",flex:1})}
+                  />
+                  <button onClick={micField==="askedBy"?stopFieldMic:()=>startFieldMic("askedBy")} style={micBtnSt(micField==="askedBy")} title="Speak">
+                    {micField==="askedBy"?<div style={{width:8,height:8,borderRadius:2,background:"#B87A5A"}}/>:<IC.Mic s={11} c={T.tSoft}/>}
+                  </button>
+                </div>
+              </div>
+              <div style={{flex:1}}>
+                <div style={labelSt}>ANSWERED BY</div>
+                <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                  <input value={newForm.answeredBy} placeholder="Rabbi…"
+                    onChange={e=>setNewForm(p=>({...p,answeredBy:e.target.value}))}
+                    style={inputSt({resize:"none",flex:1})}
+                  />
+                  <button onClick={micField==="answeredBy"?stopFieldMic:()=>startFieldMic("answeredBy")} style={micBtnSt(micField==="answeredBy")} title="Speak">
+                    {micField==="answeredBy"?<div style={{width:8,height:8,borderRadius:2,background:"#B87A5A"}}/>:<IC.Mic s={11} c={T.tSoft}/>}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <button onClick={submitNewShaila} disabled={!newForm.text.trim()}
+              style={{width:"100%",padding:"10px 0",borderRadius:12,border:"none",background:newForm.text.trim()?GOLD:"#aaa",color:newForm.text.trim()?"#fff":"#eee",cursor:newForm.text.trim()?"pointer":"default",fontSize:13,fontWeight:700,fontFamily:"system-ui",transition:"all 0.15s"}}>
+              Add Shaila
+            </button>
+          </div>
+        )}
 
         {/* Status legend */}
         <div style={{padding:"8px 20px",borderBottom:`1px solid ${T.brd}`,background:T.card,display:"flex",gap:14,flexShrink:0}}>
@@ -1248,7 +1389,8 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onClose}) {
         {/* Bullet list */}
         <div style={{flex:1,overflowY:"auto",padding:"14px 20px 20px"}}>
           {sorted.length === 0 && (
-            <p style={{color:T.tFaint,fontSize:13,textAlign:"center",marginTop:40,lineHeight:1.8}}>No shailos yet.<br/>Add tasks with the Shaila priority.</p>
+            <p style={{color:T.tFaint,fontSize:13,textAlign:"center",marginTop:40,lineHeight:1.8}}>No shailos yet.<br/>Add tasks with the Shaila priority{onAddManual?", or use \"+ Add shaila manually\" above":""}.
+</p>
           )}
           {sorted.map((s, i) => {
             const dateStr = s.createdAt ? new Date(s.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "";

@@ -397,6 +397,9 @@ const Store = {
         answer: "",
         answererName: "",
         parsedShaila: task.text,
+        // Marks this doc as originating from the task app so the real-time listener
+        // can skip it (the corresponding task already exists in state).
+        _taskAppSource: true,
       }));
       console.log("[Store] Created shaila doc from task:", ref.id);
       return ref.id;
@@ -1065,7 +1068,7 @@ function isTaskAged(task, pris, thresholds) {
 async function callGemini(gk, prompt) {
   if (!gk) return null;
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${gk}`, {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${gk}`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.7, maxOutputTokens:4096}})

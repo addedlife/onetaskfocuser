@@ -104,7 +104,7 @@ function TaskBD({task, pris, T, onConfirm, onClose, aiOpts}) {
         try {
           const buf = await blob.arrayBuffer();
           const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-          const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${aiOpts.geminiKey}`, {
+          const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${aiOpts.geminiKey}`, {
             method:"POST", headers:{"Content-Type":"application/json"},
             body: JSON.stringify({contents:[{parts:[
               {inline_data:{mime_type:"audio/webm",data:b64}},
