@@ -3,42 +3,15 @@
   functions = "netlify/functions"
   command = "echo static"
 
-# ── Security headers on every response ─────────────────────────────────────
 [[headers]]
-  for = "/*"
+  for = "/*.js"
   [headers.values]
-    X-Frame-Options = "DENY"
-    X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "camera=(), microphone=(self), geolocation=()"
+    Content-Type = "application/javascript"
 
-# ── Block private/internal files from being served ─────────────────────────
-[[redirects]]
-  from = "/HANDOFF.md"
-  to = "/404"
-  status = 404
-  force = true
-
-[[redirects]]
-  from = "/*.ps1"
-  to = "/404"
-  status = 404
-  force = true
-
-[[redirects]]
-  from = "/DEPLOY_LOG.json"
-  to = "/404"
-  status = 404
-  force = true
-
-# ── Shaila Transcriber SPA — serve its index.html for all sub-routes ────────
+# Shaila Transcriber SPA — serve its index.html for all sub-routes
+# Only applies when the requested file doesn't exist (assets like .js/.css are served directly)
 [[redirects]]
   from = "/shailos/*"
   to = "/shailos/index.html"
   status = 200
 
-# ── SPA fallback — serve index.html for all non-asset routes ────────────────
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
