@@ -1004,6 +1004,33 @@ function App({ user, onSignOut }) {
     }
   }
 
+  function handleAddManualShaila({text, shailaAnswer, askedBy, answeredBy}) {
+    if (!text?.trim()) return;
+    const shailaPriId = pris.find(p => p.isShaila)?.id || "shaila";
+    const baseTime = Date.now();
+    const parentText = text.trim();
+    const newTasks = [
+      {
+        id: uid(), text: "Research answer", priority: shailaPriId,
+        shailaAnswer: shailaAnswer || "",
+        askedBy: askedBy || "", answeredBy: answeredBy || "",
+        createdAt: baseTime,
+        blocked: false, completed: false, energy: null, pinned: false,
+        parentTask: parentText, stepIndex: 1, totalSteps: 2,
+      },
+      {
+        id: uid(), text: "Get back to asker with answer", priority: shailaPriId,
+        createdAt: baseTime + 1,
+        blocked: false, completed: false, energy: null, pinned: false,
+        parentTask: parentText, stepIndex: 2, totalSteps: 2,
+        isGetBackStep: true,
+      },
+    ];
+    setAS(p => ({...p, lists: p.lists.map(l =>
+      l.id === p.activeListId ? {...l, tasks: [...l.tasks, ...newTasks]} : l
+    )}));
+  }
+
   function addShailas(items) {
     const shailaPriId = pris.find(p => p.isShaila)?.id || "shaila";
     const newTasks = [];
@@ -1850,7 +1877,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
 
       {/* ShailaManager */}
       {showShailaManager && (
-        <ShailaManager AS={AS} T={T} aiOpts={aiOpts} onSaveField={saveShailaField} onGotBack={handleShailaGotBack} onClose={()=>setShowShailaManager(false)}/>
+        <ShailaManager AS={AS} T={T} aiOpts={aiOpts} onSaveField={saveShailaField} onGotBack={handleShailaGotBack} onAddManual={handleAddManualShaila} onClose={()=>setShowShailaManager(false)}/>
       )}
 
       {/* Noise texture */}
