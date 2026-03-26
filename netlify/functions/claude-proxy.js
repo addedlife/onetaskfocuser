@@ -3,9 +3,18 @@
 // POST / with JSON body {prompt, maxTokens?, mode?}
 // mode "research" enables web_search tool for halachic source lookup
 
+const ALLOWED_ORIGINS = [
+  "https://onetaskfocuser.netlify.app",
+  "http://localhost:5173",
+  "http://localhost:4173",
+];
+
 exports.handler = async (event) => {
+  const origin = (event.headers.origin || event.headers.Origin || "").trim();
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+
   const cors = {
-    "Access-Control-Allow-Origin":  "*",
+    "Access-Control-Allow-Origin":  allowedOrigin,
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
