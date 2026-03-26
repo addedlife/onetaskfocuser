@@ -1088,6 +1088,7 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
   const [copyDone, setCopyDone]       = React.useState(false);
   const [bulkLoading, setBulkLoading] = React.useState(false);
   const [sort, setSort]               = React.useState("newest"); // "newest" | "status"
+  const [statusFilter, setStatusFilter] = React.useState(null); // null | "pending" | "answered" | "got_back"
   const [confettiActive, setConfettiActive] = React.useState(false);
   // Manual add form
   const [addingNew, setAddingNew]     = React.useState(false);
@@ -1140,11 +1141,15 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
     return 2; // got_back
   }
 
-  const sorted = sort === "status"
-    ? [...allShailas].sort((a,b) => statusSortWeight(a) - statusSortWeight(b) || (b.createdAt||0) - (a.createdAt||0))
-    : allShailas; // already sorted newest-first
+  const sorted = (() => {
+    const base = sort === "status"
+      ? [...allShailas].sort((a,b) => statusSortWeight(a) - statusSortWeight(b) || (b.createdAt||0) - (a.createdAt||0))
+      : allShailas; // already sorted newest-first
+    return statusFilter ? base.filter(s => shailaStatus(s) === statusFilter) : base;
+  })();
 
   const statusLabel = { pending: "Pending", answered: "Answered — waiting to get back", got_back: "Got back to asker ✓" };
+  const statusShort = { pending: "pending", answered: "answered", got_back: "got back" };
   const statusColor = { pending: CLR_PENDING, answered: CLR_ANSWERED, got_back: CLR_GOT_BACK };
 
   function cycleGotBack(s) {
@@ -1376,21 +1381,33 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
           </div>
         )}
 
-        {/* Status legend */}
-        <div style={{padding:"8px 20px",borderBottom:`1px solid ${T.brd}`,background:T.card,display:"flex",gap:14,flexShrink:0}}>
-          {[["pending",CLR_PENDING,"Pending"],["answered",CLR_ANSWERED,"Answered"],["got_back",CLR_GOT_BACK,"Got back ✓"]].map(([k,c,lbl])=>(
-            <div key={k} style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:T.tFaint,fontFamily:"system-ui"}}>
-              <span style={{width:9,height:9,borderRadius:"50%",background:c,display:"inline-block",flexShrink:0}}/>
-              {lbl}
-            </div>
-          ))}
+        {/* Status legend / filter */}
+        <div style={{padding:"8px 20px",borderBottom:`1px solid ${T.brd}`,background:T.card,display:"flex",gap:8,flexShrink:0,alignItems:"center"}}>
+          <span style={{fontSize:9,color:T.tFaint,fontFamily:"system-ui",fontWeight:700,letterSpacing:.5,marginRight:4}}>FILTER:</span>
+          {[["pending",CLR_PENDING,"Pending"],["answered",CLR_ANSWERED,"Answered"],["got_back",CLR_GOT_BACK,"Got back ✓"]].map(([k,c,lbl])=>{
+            const active = statusFilter === k;
+            return (
+              <button key={k} onClick={()=>setStatusFilter(p=>p===k?null:k)}
+                style={{display:"flex",alignItems:"center",gap:4,fontSize:10,fontFamily:"system-ui",cursor:"pointer",padding:"3px 8px",borderRadius:10,border:`1px solid ${active?c:T.brd}`,background:active?`${c}22`:"transparent",color:active?c:T.tFaint,transition:"all 0.15s",fontWeight:active?700:400}}>
+                <span style={{width:8,height:8,borderRadius:"50%",background:c,display:"inline-block",flexShrink:0}}/>
+                {lbl}
+              </button>
+            );
+          })}
+          {statusFilter && (
+            <button onClick={()=>setStatusFilter(null)}
+              style={{fontSize:10,color:T.tFaint,background:"none",border:"none",cursor:"pointer",padding:"2px 4px",fontFamily:"system-ui",marginLeft:2,opacity:.7}}>
+              ✕ clear
+            </button>
+          )}
         </div>
 
         {/* Bullet list */}
         <div style={{flex:1,overflowY:"auto",padding:"14px 20px 20px"}}>
           {sorted.length === 0 && (
-            <p style={{color:T.tFaint,fontSize:13,textAlign:"center",marginTop:40,lineHeight:1.8}}>No shailos yet.<br/>Add tasks with the Shaila priority{onAddManual?", or use \"+ Add shaila manually\" above":""}.
-</p>
+            <p style={{color:T.tFaint,fontSize:13,textAlign:"center",marginTop:40,lineHeight:1.8}}>
+              {statusFilter ? `No "${statusShort[statusFilter]}" shailos.` : <>No shailos yet.<br/>Add tasks with the Shaila priority{onAddManual?", or use \"+ Add shaila manually\" above":""}.</>}
+            </p>
           )}
           {sorted.map((s, i) => {
             const dateStr = s.createdAt ? new Date(s.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "";
