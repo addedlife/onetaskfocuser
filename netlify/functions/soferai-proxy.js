@@ -14,9 +14,18 @@
 
 const BASE = "https://api.sofer.ai";
 
+const ALLOWED_ORIGINS = [
+  "https://onetaskfocuser.netlify.app",
+  "http://localhost:5173",
+  "http://localhost:4173",
+];
+
 exports.handler = async (event) => {
+  const origin = (event.headers.origin || event.headers.Origin || "").trim();
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+
   const cors = {
-    "Access-Control-Allow-Origin":  "*",
+    "Access-Control-Allow-Origin":  allowedOrigin,
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Soferai-Key",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   };
