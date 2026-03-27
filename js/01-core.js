@@ -96,7 +96,8 @@ const Store = {
   // If the user has set a backup folder: writes silently — no browser prompt at all.
   // If not (or permission lapsed): falls back to a standard browser download.
   // force=true skips the weekly-stamp check — use for logout/close backups
-  async autoFileBackup(d, force = false) {
+  // shailos = array of shaila documents from Firebase (for combined backup)
+  async autoFileBackup(d, shailos = [], force = false) {
     if (!d || !d.lists || !d.lists.some(l => l.tasks?.length > 0)) return;
     try {
       const now = new Date();
@@ -110,7 +111,15 @@ const Store = {
         if (lastBk === weekStamp) return; // already backed up this week
       }
 
-      const content = JSON.stringify(d, null, 2);
+      // Combined backup — both apps in one file
+      const combined = {
+        _version: 2,
+        _backupDate: now.toISOString(),
+        _uid: this.uid || "unknown",
+        appState: d,
+        shailos: Array.isArray(shailos) ? shailos : [],
+      };
+      const content = JSON.stringify(combined, null, 2);
       const fileName = `onetask_backup_${weekStamp}.json`;
 
       // ── Try silent write to chosen folder ──

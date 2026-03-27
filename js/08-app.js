@@ -70,7 +70,8 @@ function App({ user, onSignOut }) {
   const [qAddText, setQAddText] = useState(""); // queue quick-add text
   const [isPrioritizing] = useState(false); // legacy — kept for safety, unused
   const tasksRef = useRef([]);               // always-current tasks for async AI calls
-  const asRef    = useRef(null);             // mirror of AS — always current, used by beforeunload flush
+  const asRef       = useRef(null);             // mirror of AS — always current, used by beforeunload flush
+  const shailosRef  = useRef([]);               // mirror of latest shailos — for combined backup
   const justLoaded = useRef(false);           // true for one render cycle after initial load — skip auto-save
   const lastSavedModified = useRef(0);       // _lsModified of last save/load — sync comparison baseline
   const adoptedRemote = useRef(false);       // true when onSnapshot adopted remote data — skip next save
@@ -222,7 +223,7 @@ function App({ user, onSignOut }) {
     lastSavedModified.current = now;
     asRef.current = toSave;                    // keep ref current for beforeunload flush
     Store.ls(toSave);                          // Refresh optional offline cache
-    Store.autoFileBackup(toSave);              // Weekly file backup
+    Store.autoFileBackup(toSave, shailosRef.current); // Weekly combined backup
     clearTimeout(saveTmr.current);
     saveTmr.current = setTimeout(() => Store.saveToFB(toSave), 1500); // debounced Firebase write
     return () => clearTimeout(saveTmr.current);
@@ -268,6 +269,7 @@ function App({ user, onSignOut }) {
   useEffect(() => {
     if (!loaded || !db) return;
     const unsub = Store.listenShailos((shailos) => {
+      shailosRef.current = shailos; // keep ref current for combined backup
       setAS(prev => {
         if (!prev?.lists) return prev;
         // Gather ALL tasks across ALL lists
@@ -453,7 +455,7 @@ function App({ user, onSignOut }) {
       const cur = asRef.current;
       if (cur) {
         Store.flushToLocalOnly(cur);
-        Store.autoFileBackup(cur, true).catch(() => {}); // best-effort on close
+        Store.autoFileBackup(cur, shailosRef.current, true).catch(() => {}); // best-effort on close
       }
     }
     window.addEventListener("beforeunload", flushLocal);
@@ -2157,9 +2159,13 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                 <button onClick={()=>setShowShailos(true)} style={{fontSize:11,color:T.accent||"#C8A84C",fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>Shailos</button>
                 <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check — reconcile shailos between transcriber and tasks" style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",background:"none",border:`1px solid ${T.brd}`,borderRadius:8,cursor:"pointer",padding:"2px 6px",opacity:reconcileLoading?.5:1}}>{reconcileLoading?"⏳":"🔄"}</button>
                 <button onClick={async ()=>{
-                  if(AS) await Store.autoFileBackup(AS, true).catch(()=>{});
+                  if(AS) await Store.autoFileBackup(AS, shailosRef.current, true).catch(()=>{});
                   if(onSignOut) onSignOut();
                 }} style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>sign out</button>
+                <button onClick={async ()=>{
+                  if(AS) await Store.autoFileBackup(AS, shailosRef.current, true).catch(()=>{});
+                  window.close();
+                }} title="Save backup and close window" style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",background:"none",border:`1px solid ${T.brd}`,borderRadius:8,cursor:"pointer",padding:"2px 8px"}}>save &amp; close</button>
               </div>
             </header>
             <div style={{display:"flex",gap:3,marginTop:16,background:T.bgW,borderRadius:16,padding:3,flexShrink:0,position:"relative"}}>
