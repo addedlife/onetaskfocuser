@@ -1148,8 +1148,8 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
     return statusFilter ? base.filter(s => shailaStatus(s) === statusFilter) : base;
   })();
 
-  const statusLabel = { pending: "Pending", answered: "Answered — waiting to get back", got_back: "Got back to asker ✓" };
-  const statusShort = { pending: "pending", answered: "answered", got_back: "got back" };
+  const statusLabel = { pending: "Pending", answered: "Got answer — waiting to get back", got_back: "Got back to asker ✓" };
+  const statusShort = { pending: "pending", answered: "got answer", got_back: "got back" };
   const statusColor = { pending: CLR_PENDING, answered: CLR_ANSWERED, got_back: CLR_GOT_BACK };
 
   function cycleGotBack(s) {
@@ -1384,7 +1384,7 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
         {/* Status legend / filter */}
         <div style={{padding:"8px 20px",borderBottom:`1px solid ${T.brd}`,background:T.card,display:"flex",gap:8,flexShrink:0,alignItems:"center"}}>
           <span style={{fontSize:9,color:T.tFaint,fontFamily:"system-ui",fontWeight:700,letterSpacing:.5,marginRight:4}}>FILTER:</span>
-          {[["pending",CLR_PENDING,"Pending"],["answered",CLR_ANSWERED,"Answered"],["got_back",CLR_GOT_BACK,"Got back ✓"]].map(([k,c,lbl])=>{
+          {[["pending",CLR_PENDING,"Pending"],["answered",CLR_ANSWERED,"Got answer"],["got_back",CLR_GOT_BACK,"Got back to asker"]].map(([k,c,lbl])=>{
             const active = statusFilter === k;
             return (
               <button key={k} onClick={()=>setStatusFilter(p=>p===k?null:k)}
@@ -1421,7 +1421,7 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                 <div style={{flexShrink:0,width:28,paddingTop:2,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
                   <span style={{fontSize:12,color:GOLD,fontWeight:700,fontFamily:"system-ui"}}>{i+1}.</span>
                   <button
-                    title={canCycle ? (st==="answered" ? "Mark: got back to asker" : "Mark: waiting to get back") : "Add an answer to change status"}
+                    title={canCycle ? (st==="answered" ? "Mark: got back to asker" : "Mark: not yet got back") : "Add an answer to change status"}
                     onClick={()=>cycleGotBack(s)}
                     style={{
                       width:13,height:13,borderRadius:"50%",border:"none",padding:0,cursor:canCycle?"pointer":"default",
@@ -1456,8 +1456,44 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                   <textarea value={getF(s,"shailaAnswer")} rows={2} placeholder="No answer recorded..."
                     onChange={e=>setF(s.id,"shailaAnswer",e.target.value)}
                     onBlur={e=>onSaveField(s.id,"shailaAnswer",e.target.value)}
-                    style={inputSt({minHeight:40,marginBottom:8})}
+                    style={inputSt({minHeight:40,marginBottom:6})}
                   />
+                  {/* Got back pill — appears when answered, yellow→green on check */}
+                  {(st === "answered" || st === "got_back") && (
+                    <div style={{
+                      display:"flex", alignItems:"center", gap:8,
+                      margin:"6px 0 10px",
+                      background: st === "got_back" ? "#6AB87D18" : "#C8A84C18",
+                      border: `1.5px solid ${st === "got_back" ? "#6AB87D" : "#C8A84C"}`,
+                      borderRadius: 24,
+                      padding: "7px 14px 7px 16px",
+                      transition: "background 0.35s, border-color 0.35s",
+                    }}>
+                      <span style={{
+                        fontSize: 13, fontFamily:"system-ui", fontWeight: 600,
+                        color: st === "got_back" ? "#6AB87D" : "#C8A84C",
+                        flex: 1,
+                      }}>
+                        {st === "got_back" ? "Got back to asker! ✓" : "Got back to asker?"}
+                      </span>
+                      {st === "answered" && (
+                        <button
+                          onClick={() => cycleGotBack(s)}
+                          title="Mark: got back to asker"
+                          style={{
+                            width: 30, height: 30, borderRadius: "50%",
+                            border: "none",
+                            background: "#C8A84C",
+                            color: "#fff",
+                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 17, fontWeight: 700, flexShrink: 0,
+                            transition: "background 0.2s",
+                          }}
+                        >✓</button>
+                      )}
+                    </div>
+                  )}
                   {/* Asked by / Answered by */}
                   <div style={{display:"flex",gap:8}}>
                     <div style={{flex:1}}>
