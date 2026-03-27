@@ -95,7 +95,8 @@ const Store = {
   // Weekly auto-backup. Called from the save effect in 08-app.js (not from ls()).
   // If the user has set a backup folder: writes silently — no browser prompt at all.
   // If not (or permission lapsed): falls back to a standard browser download.
-  async autoFileBackup(d) {
+  // force=true skips the weekly-stamp check — use for logout/close backups
+  async autoFileBackup(d, force = false) {
     if (!d || !d.lists || !d.lists.some(l => l.tasks?.length > 0)) return;
     try {
       const now = new Date();
@@ -104,8 +105,10 @@ const Store = {
       const weekNumber = Math.ceil((now.getDay() + 1 + days) / 7);
       const weekStamp = `${now.getFullYear()}_W${String(weekNumber).padStart(2, '0')}`;
 
-      const lastBk = localStorage.getItem(`${this.lsKey()}_last_file_bk`);
-      if (lastBk === weekStamp) return; // already backed up this week
+      if (!force) {
+        const lastBk = localStorage.getItem(`${this.lsKey()}_last_file_bk`);
+        if (lastBk === weekStamp) return; // already backed up this week
+      }
 
       const content = JSON.stringify(d, null, 2);
       const fileName = `onetask_backup_${weekStamp}.json`;

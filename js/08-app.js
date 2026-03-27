@@ -451,7 +451,10 @@ function App({ user, onSignOut }) {
     if (!loaded) return;
     function flushLocal() {
       const cur = asRef.current;
-      if (cur) Store.flushToLocalOnly(cur);
+      if (cur) {
+        Store.flushToLocalOnly(cur);
+        Store.autoFileBackup(cur, true).catch(() => {}); // best-effort on close
+      }
     }
     window.addEventListener("beforeunload", flushLocal);
     window.addEventListener("pagehide", flushLocal);
@@ -2153,7 +2156,10 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                 <span style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui"}}>@{user?.displayName || user?.email?.split("@")[0] || ""}</span>
                 <button onClick={()=>setShowShailos(true)} style={{fontSize:11,color:T.accent||"#C8A84C",fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>Shailos</button>
                 <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check — reconcile shailos between transcriber and tasks" style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",background:"none",border:`1px solid ${T.brd}`,borderRadius:8,cursor:"pointer",padding:"2px 6px",opacity:reconcileLoading?.5:1}}>{reconcileLoading?"⏳":"🔄"}</button>
-                <button onClick={()=>{if(onSignOut)onSignOut();}} style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>sign out</button>
+                <button onClick={async ()=>{
+                  if(AS) await Store.autoFileBackup(AS, true).catch(()=>{});
+                  if(onSignOut) onSignOut();
+                }} style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>sign out</button>
               </div>
             </header>
             <div style={{display:"flex",gap:3,marginTop:16,background:T.bgW,borderRadius:16,padding:3,flexShrink:0,position:"relative"}}>
