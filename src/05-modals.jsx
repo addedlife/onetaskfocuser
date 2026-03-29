@@ -1,7 +1,7 @@
 // === 05-modals.js ===
 
 import React, { useState } from 'react';
-import { uid, callGemini, textOnColor, gP, pBg } from './01-core.js';
+import { uid, callGemini, callAI, textOnColor, gP, pBg } from './01-core.js';
 import { IC } from './02-icons.jsx';
 import { CTX_TAG_COLORS } from './04-components.jsx';
 
