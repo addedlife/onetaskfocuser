@@ -1069,32 +1069,44 @@ function BlockReflectModal({task, T, aiOpts, onClose}) {
 // ──────────────────────────────────────────────────────────────────
 // ShailaManager — bullet list: date, Q, A, askedBy, answeredBy, got-back status
 // ──────────────────────────────────────────────────────────────────
+// Statuses: researching | have_answer | got_back
+// ──────────────────────────────────────────────────────────────────
 function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onClose}) {
   const pris = AS?.priorities || DEF_PRI;
   const GOLD = "#C8A84C";
   // Status palette
-  const CLR_PENDING  = "#C87C6E"; // soft terracotta — no answer yet
-  const CLR_ANSWERED = "#C8A84C"; // gold — answered, waiting to get back
-  const CLR_GOT_BACK = "#6AB87D"; // soft green — answered and got back
+  const CLR_RESEARCHING = "#C87C6E"; // soft terracotta — no answer yet
+  const CLR_HAVE_ANSWER = "#C8A84C"; // gold — answered, waiting to get back
+  const CLR_GOT_BACK    = "#6AB87D"; // soft green — answered and got back
 
   // All shaila-priority tasks across all lists
   const allShailaTasks = (AS?.lists || []).flatMap(l =>
     l.tasks.filter(t => pris.find(x => x.id === t.priority)?.isShaila)
   );
 
-  // Display entries: old single tasks (!parentTask) + step-1 subtasks.
-  // Skips "Get back to asker" subtasks — they are reflected via gotBack status.
-  const allShailas = allShailaTasks
+  // Master list sorted by createdAt ascending — used for permanent numbering
+  const allShailasByAge = allShailaTasks
     .filter(t => !t.isGetBackStep)
-    .sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+    .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+
+  // Index map: id → 1-based number (stable, by submission order)
+  const shailaNumberMap = React.useMemo(() => {
+    const m = {};
+    allShailasByAge.forEach((s, i) => { m[s.id] = i + 1; });
+    return m;
+  }, [allShailaTasks.length]);
+
+  // Display list (newest first by default)
+  const allShailas = [...allShailasByAge].reverse();
 
   const [localEdits, setLocalEdits]   = React.useState({});
   const [copyDone, setCopyDone]       = React.useState(false);
   const [bulkLoading, setBulkLoading] = React.useState(false);
-  const [sort, setSort]               = React.useState("newest"); // "newest" | "status"
-  const [statusFilter, setStatusFilter] = React.useState(null); // null | "pending" | "answered" | "got_back"
+  // "researching" | "have_answer" | both (null = default newest-first, non-status sort)
+  const [sortFirst, setSortFirst]     = React.useState(null); // null | "researching" | "have_answer"
+  const [statusFilter, setStatusFilter] = React.useState(null); // null | "researching" | "have_answer" | "got_back"
   const [confettiActive, setConfettiActive] = React.useState(false);
-  // Manual add form
+  // Manual add form — opens with blank fields, no Save button (autosave on blur)
   const [addingNew, setAddingNew]     = React.useState(false);
   const [newForm, setNewForm]         = React.useState({text:"", shailaAnswer:"", askedBy:"", answeredBy:""});
   const [micField, setMicField]       = React.useState(null); // which field has active mic
@@ -1131,35 +1143,55 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
     return false;
   }
 
-  // 3-state status: "pending" | "answered" | "got_back"
+  // 3-state status: "researching" | "have_answer" | "got_back"
   function shailaStatus(s) {
     if (isGotBack(s)) return "got_back";
-    if (getF(s, "shailaAnswer").trim()) return "answered";
-    return "pending";
+    if (getF(s, "shailaAnswer").trim()) return "have_answer";
+    return "researching";
   }
 
-  function statusSortWeight(s) {
+  function statusSortWeight(s, first) {
     const st = shailaStatus(s);
-    if (st === "pending")   return 0;
-    if (st === "answered")  return 1;
-    return 2; // got_back
+    if (first === "researching") {
+      // researching (latest first within group) / have_answer / got_back
+      if (st === "researching") return 0;
+      if (st === "have_answer") return 1;
+      return 2;
+    } else {
+      // have_answer / researching / got_back
+      if (st === "have_answer") return 0;
+      if (st === "researching") return 1;
+      return 2;
+    }
   }
 
   const sorted = (() => {
-    const base = sort === "status"
-      ? [...allShailas].sort((a,b) => statusSortWeight(a) - statusSortWeight(b) || (b.createdAt||0) - (a.createdAt||0))
-      : allShailas; // already sorted newest-first
+    let base;
+    if (sortFirst) {
+      base = [...allShailas].sort((a,b) => {
+        const wA = statusSortWeight(a, sortFirst), wB = statusSortWeight(b, sortFirst);
+        if (wA !== wB) return wA - wB;
+        // Within same group: researching = latest first, others = newest first too
+        return (b.createdAt||0) - (a.createdAt||0);
+      });
+    } else {
+      base = allShailas; // newest-first default
+    }
     return statusFilter ? base.filter(s => shailaStatus(s) === statusFilter) : base;
   })();
 
-  const statusLabel = { pending: "Pending", answered: "Got answer — waiting to get back", got_back: "Got back to asker ✓" };
-  const statusShort = { pending: "pending", answered: "got answer", got_back: "got back" };
-  const statusColor = { pending: CLR_PENDING, answered: CLR_ANSWERED, got_back: CLR_GOT_BACK };
+  const statusLabel = {
+    researching: "Researching",
+    have_answer: "Have answer — not yet got back",
+    got_back:    "Got back to asker ✓"
+  };
+  const statusShort = { researching: "researching", have_answer: "have answer", got_back: "got back" };
+  const statusColor = { researching: CLR_RESEARCHING, have_answer: CLR_HAVE_ANSWER, got_back: CLR_GOT_BACK };
 
   function cycleGotBack(s) {
     const st = shailaStatus(s);
-    if (st === "pending") return; // need an answer first
-    const next = st === "answered"; // answered→true, got_back→false
+    if (st === "researching") return; // need an answer first
+    const next = st === "have_answer"; // have_answer→true, got_back→false (undo)
     setF(s.id, "gotBackToAsker", next);
     if (onGotBack) onGotBack(s.id, next);
     if (next) {
@@ -1207,19 +1239,42 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
   }
 
   function submitNewShaila() {
+    // Called on blur of last field — only submits if the question has content
     if (!newForm.text.trim()) return;
     if (onAddManual) onAddManual({...newForm});
     setNewForm({text:"", shailaAnswer:"", askedBy:"", answeredBy:""});
     setAddingNew(false);
   }
 
+  // Auto-submit when user blurs out of any field (if question is filled)
+  function handleNewFormBlur(field, val) {
+    const updated = {...newForm, [field]: val};
+    setNewForm(updated);
+    // Commit if question is filled (don't need all fields)
+    if (updated.text.trim() && onAddManual) {
+      // Wait a tick to see if focus moves to another field in the same form
+      setTimeout(() => {
+        // Check if focus stayed in form — use document.activeElement
+        const active = document.activeElement;
+        const inForm = active && active.closest('[data-new-shaila-form]');
+        if (!inForm) {
+          onAddManual({...updated});
+          setNewForm({text:"", shailaAnswer:"", askedBy:"", answeredBy:""});
+          setAddingNew(false);
+        }
+      }, 120);
+    }
+  }
+
   function buildText() {
     const out = ["SHAILA LOG", "==========", ""];
-    sorted.forEach((s, i) => {
+    // Use age-sorted list for numbered output
+    allShailasByAge.forEach((s, i) => {
       const dateStr = s.createdAt ? new Date(s.createdAt).toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : "unknown date";
       const askedBy   = getF(s,"askedBy");
       const answeredBy= getF(s,"answeredBy");
-      out.push(`${i+1}. [${dateStr}]`);
+      const st = shailaStatus(s);
+      out.push(`${i+1}. [${dateStr}] — ${statusShort[st]}`);
       if (askedBy)    out.push(`   Asked by: ${askedBy}`);
       if (answeredBy) out.push(`   Answered by: ${answeredBy}`);
       out.push(`   Q: ${getQ(s)}`);
@@ -1290,10 +1345,14 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
               <p style={{margin:0,fontSize:11,color:T.tFaint}}>{allShailas.length} shailo{allShailas.length!==1?"s":""}</p>
             </div>
             <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-              {/* Sort toggle */}
-              <button onClick={()=>setSort(s=>s==="newest"?"status":"newest")}
-                style={{fontSize:11,color:sort==="status"?GOLD:T.tFaint,background:"none",border:`1px solid ${sort==="status"?GOLD:T.brd}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:"system-ui",transition:"color 0.2s,border-color 0.2s"}}>
-                {sort==="status"?"↕ By status":"↕ Newest"}
+              {/* Sort buttons */}
+              <button onClick={()=>setSortFirst(f=>f==="researching"?null:"researching")}
+                style={{fontSize:11,color:sortFirst==="researching"?CLR_RESEARCHING:T.tFaint,background:"none",border:`1px solid ${sortFirst==="researching"?CLR_RESEARCHING:T.brd}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:"system-ui",transition:"color 0.2s,border-color 0.2s"}}>
+                ↕ Researching first
+              </button>
+              <button onClick={()=>setSortFirst(f=>f==="have_answer"?null:"have_answer")}
+                style={{fontSize:11,color:sortFirst==="have_answer"?CLR_HAVE_ANSWER:T.tFaint,background:"none",border:`1px solid ${sortFirst==="have_answer"?CLR_HAVE_ANSWER:T.brd}`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:"system-ui",transition:"color 0.2s,border-color 0.2s"}}>
+                ↕ Have answer first
               </button>
               {aiOpts && (
                 <button onClick={detectAllAnswers} disabled={bulkLoading} style={{fontSize:11,color:GOLD,background:"none",border:`1px solid ${GOLD}60`,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontFamily:"system-ui",opacity:bulkLoading?0.6:1}}>
@@ -1315,10 +1374,10 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
           </button>
         </div>
 
-        {/* Manual-add form (slides open under header) */}
+        {/* Manual-add form (slides open under header) — autosaves on blur, no Save button */}
         {addingNew && (
-          <div style={{padding:"14px 20px 16px",borderBottom:`1px solid ${T.brd}`,background:T.bgW||T.bg,flexShrink:0}}>
-            <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:T.tSoft,fontFamily:"system-ui",letterSpacing:.5}}>NEW SHAILA</p>
+          <div data-new-shaila-form="true" style={{padding:"14px 20px 16px",borderBottom:`1px solid ${T.brd}`,background:T.bgW||T.bg,flexShrink:0}}>
+            <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:T.tSoft,fontFamily:"system-ui",letterSpacing:.5}}>NEW SHAILA — fill in what you have, click away when done</p>
 
             {/* Question */}
             <div style={{marginBottom:10}}>
@@ -1326,6 +1385,7 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
               <div style={{display:"flex",gap:6,alignItems:"flex-start"}}>
                 <textarea value={newForm.text} rows={2}
                   onChange={e=>setNewForm(p=>({...p,text:e.target.value}))}
+                  onBlur={e=>handleNewFormBlur("text",e.target.value)}
                   placeholder="Write or speak the shaila…"
                   style={inputSt({flex:1,minHeight:48})}
                 />
@@ -1337,10 +1397,11 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
 
             {/* Answer */}
             <div style={{marginBottom:10}}>
-              <div style={labelSt}>A — ANSWER</div>
+              <div style={labelSt}>A — ANSWER (optional)</div>
               <div style={{display:"flex",gap:6,alignItems:"flex-start"}}>
                 <textarea value={newForm.shailaAnswer} rows={2}
                   onChange={e=>setNewForm(p=>({...p,shailaAnswer:e.target.value}))}
+                  onBlur={e=>handleNewFormBlur("shailaAnswer",e.target.value)}
                   placeholder="Answer (optional)…"
                   style={inputSt({flex:1,minHeight:48})}
                 />
@@ -1351,12 +1412,13 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
             </div>
 
             {/* Asked by / Answered by */}
-            <div style={{display:"flex",gap:8,marginBottom:12}}>
+            <div style={{display:"flex",gap:8,marginBottom:4}}>
               <div style={{flex:1}}>
                 <div style={labelSt}>ASKED BY</div>
                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
                   <input value={newForm.askedBy} placeholder="Name…"
                     onChange={e=>setNewForm(p=>({...p,askedBy:e.target.value}))}
+                    onBlur={e=>handleNewFormBlur("askedBy",e.target.value)}
                     style={inputSt({resize:"none",flex:1})}
                   />
                   <button onClick={micField==="askedBy"?stopFieldMic:()=>startFieldMic("askedBy")} style={micBtnSt(micField==="askedBy")} title="Speak">
@@ -1369,26 +1431,23 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
                   <input value={newForm.answeredBy} placeholder="Rabbi…"
                     onChange={e=>setNewForm(p=>({...p,answeredBy:e.target.value}))}
+                    onBlur={e=>handleNewFormBlur("answeredBy",e.target.value)}
                     style={inputSt({resize:"none",flex:1})}
                   />
-                  <button onClick={micField==="answeredBy"?stopFieldMic:()=>startFieldMic("answeredBy")} style={micBtnSt(micField==="answeredBy")} title="Speak">
+                  <button onClick={micField==="answeredBy"?stopFieldMic:()=>startFieldMic("answeredBy")} title="Speak" style={micBtnSt(micField==="answeredBy")}>
                     {micField==="answeredBy"?<div style={{width:8,height:8,borderRadius:2,background:"#B87A5A"}}/>:<IC.Mic s={11} c={T.tSoft}/>}
                   </button>
                 </div>
               </div>
             </div>
-
-            <button onClick={submitNewShaila} disabled={!newForm.text.trim()}
-              style={{width:"100%",padding:"10px 0",borderRadius:12,border:"none",background:newForm.text.trim()?GOLD:"#aaa",color:newForm.text.trim()?"#fff":"#eee",cursor:newForm.text.trim()?"pointer":"default",fontSize:13,fontWeight:700,fontFamily:"system-ui",transition:"all 0.15s"}}>
-              Add Shaila
-            </button>
+            <p style={{margin:"6px 0 0",fontSize:10,color:T.tFaint,fontFamily:"system-ui"}}>Fields save automatically when you click away</p>
           </div>
         )}
 
         {/* Status legend / filter */}
         <div style={{padding:"8px 20px",borderBottom:`1px solid ${T.brd}`,background:T.card,display:"flex",gap:8,flexShrink:0,alignItems:"center"}}>
           <span style={{fontSize:9,color:T.tFaint,fontFamily:"system-ui",fontWeight:700,letterSpacing:.5,marginRight:4}}>FILTER:</span>
-          {[["pending",CLR_PENDING,"Pending"],["answered",CLR_ANSWERED,"Got answer"],["got_back",CLR_GOT_BACK,"Got back to asker"]].map(([k,c,lbl])=>{
+          {[["researching",CLR_RESEARCHING,"Researching"],["have_answer",CLR_HAVE_ANSWER,"Have answer"],["got_back",CLR_GOT_BACK,"Got back"]].map(([k,c,lbl])=>{
             const active = statusFilter === k;
             return (
               <button key={k} onClick={()=>setStatusFilter(p=>p===k?null:k)}
@@ -1413,19 +1472,20 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
               {statusFilter ? `No "${statusShort[statusFilter]}" shailos.` : <>No shailos yet.<br/>Add tasks with the Shaila priority{onAddManual?", or use \"+ Add shaila manually\" above":""}.</>}
             </p>
           )}
-          {sorted.map((s, i) => {
+          {sorted.map((s) => {
+            const shailaNum = shailaNumberMap[s.id] || "?";
             const dateStr = s.createdAt ? new Date(s.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "";
             const st = shailaStatus(s);
             const stColor = statusColor[st];
             const stTip = statusLabel[st];
-            const canCycle = st !== "pending";
+            const canCycle = st !== "researching";
             return (
               <div key={s.id} style={{display:"flex",gap:10,paddingBottom:18,marginBottom:18,borderBottom:`1px solid ${T.brd}`}}>
                 {/* Number + status dot */}
                 <div style={{flexShrink:0,width:28,paddingTop:2,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
-                  <span style={{fontSize:12,color:GOLD,fontWeight:700,fontFamily:"system-ui"}}>{i+1}.</span>
+                  <span style={{fontSize:12,color:GOLD,fontWeight:700,fontFamily:"system-ui"}}>{shailaNum}.</span>
                   <button
-                    title={canCycle ? (st==="answered" ? "Mark: got back to asker" : "Mark: not yet got back") : "Add an answer to change status"}
+                    title={canCycle ? (st==="have_answer" ? "Mark: got back to asker" : "Undo: not yet got back") : "Add an answer first"}
                     onClick={()=>cycleGotBack(s)}
                     style={{
                       width:13,height:13,borderRadius:"50%",border:"none",padding:0,cursor:canCycle?"pointer":"default",
@@ -1442,9 +1502,9 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                   {/* Date + status label */}
                   {dateStr && (
                     <div style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",marginBottom:5}}>
-                      {dateStr}
-                      {s.completed ? " \u00b7 completed" : ""}
-                      {" \u00b7 "}
+                      #{shailaNum} · {dateStr}
+                      {s.completed ? " · completed" : ""}
+                      {" · "}
                       <span style={{color:stColor,fontWeight:600}}>{stTip}</span>
                     </div>
                   )}
@@ -1462,8 +1522,8 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                     onBlur={e=>onSaveField(s.id,"shailaAnswer",e.target.value)}
                     style={inputSt({minHeight:40,marginBottom:6})}
                   />
-                  {/* Got back pill — appears when answered, yellow→green on check */}
-                  {(st === "answered" || st === "got_back") && (
+                  {/* Got back pill — yellow when have_answer, green when got_back */}
+                  {(st === "have_answer" || st === "got_back") && (
                     <div style={{
                       display:"flex", alignItems:"center", gap:8,
                       margin:"6px 0 10px",
@@ -1480,7 +1540,7 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                       }}>
                         {st === "got_back" ? "Got back to asker! ✓" : "Got back to asker?"}
                       </span>
-                      {st === "answered" && (
+                      {st === "have_answer" && (
                         <button
                           onClick={() => cycleGotBack(s)}
                           title="Mark: got back to asker"
@@ -1495,6 +1555,18 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                             transition: "background 0.2s",
                           }}
                         >✓</button>
+                      )}
+                      {st === "got_back" && (
+                        <button
+                          onClick={() => cycleGotBack(s)}
+                          title="Undo: not yet got back"
+                          style={{
+                            background: "none", border: "1px solid #6AB87D60",
+                            borderRadius: 8, padding: "3px 7px",
+                            cursor: "pointer", fontSize: 10,
+                            color: "#6AB87D", fontFamily: "system-ui",
+                          }}
+                        >↩</button>
                       )}
                     </div>
                   )}
@@ -1528,4 +1600,39 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
 }
 
 
-export { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, CTX_TAG_COLORS, CTX_TAG_TEXT, ContextBadges, MrsWBadge, BlockedBadge, GoodEnoughBadge, ZenMode, ZenDumpReview, TabBtn, PriEditor, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, PostItStack, BlockReflectModal, ShailaManager };
+// ─── ShailaMiniPill ──────────────────────────────────────────────────────────
+// Compact inline got-back pill for use on SubtaskGroup "get back" rows.
+// Props: status ("have_answer"|"got_back"), shailaNum, onToggle
+// ─────────────────────────────────────────────────────────────────────────────
+function ShailaMiniPill({status, shailaNum, onToggle}) {
+  const isGotBack = status === "got_back";
+  return (
+    <div
+      onClick={e => { e.stopPropagation(); onToggle?.(); }}
+      title={isGotBack ? "Undo: not yet got back" : "Mark: got back to asker"}
+      style={{
+        display:"inline-flex", alignItems:"center", gap:4,
+        background: isGotBack ? "#6AB87D18" : "#C8A84C18",
+        border: `1px solid ${isGotBack ? "#6AB87D" : "#C8A84C"}`,
+        borderRadius: 20,
+        padding: "2px 8px 2px 6px",
+        cursor: "pointer",
+        flexShrink: 0,
+        transition: "background 0.2s, border-color 0.2s",
+      }}
+    >
+      {shailaNum && (
+        <span style={{fontSize:9,fontWeight:700,fontFamily:"system-ui",color:"#C8A84C",marginRight:1}}>#{shailaNum}</span>
+      )}
+      <span style={{fontSize:10,fontWeight:600,fontFamily:"system-ui",color:isGotBack?"#6AB87D":"#C8A84C"}}>
+        {isGotBack ? "Got back! ✓" : "Got back?"}
+      </span>
+      {isGotBack
+        ? <span style={{fontSize:9,color:"#6AB87D",opacity:.7}}>↩</span>
+        : <span style={{fontSize:10,background:"#C8A84C",color:"#fff",borderRadius:"50%",width:14,height:14,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:700,flexShrink:0}}>✓</span>
+      }
+    </div>
+  );
+}
+
+export { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, CTX_TAG_COLORS, CTX_TAG_TEXT, ContextBadges, MrsWBadge, BlockedBadge, GoodEnoughBadge, ZenMode, ZenDumpReview, TabBtn, PriEditor, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, PostItStack, BlockReflectModal, ShailaManager, ShailaMiniPill };

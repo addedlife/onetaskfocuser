@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { IC } from './02-icons.jsx';
 import { gP, textOnColor, _lum, pBg } from './01-core.js';
+import { ShailaMiniPill } from './04-components.jsx';
 
 // TaskActions: defined OUTSIDE ShelfView (B13 fix) - used in fanned view
 const TaskActionsShelf = ({t, onUncomp, onClone, onDel, iconColor}) => {
