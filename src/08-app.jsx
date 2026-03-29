@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callGemini, callAI, suggestFirstStep, aiParseShailos, aiParseBrainDump, gG, fmtMs, db, _lum, priText, textOnPastel } from './01-core.js';
 import { IC } from './02-icons.jsx';
 import { VoiceInput } from './03-voice.jsx';
-import { playCompletionSound, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack } from './04-components.jsx';
+import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack } from './04-components.jsx';
 import { BulkAdd, TaskBD, BlockedModal, ContextTagPicker, ListManager } from './05-modals.jsx';
 import { ShelfView, SubtaskGroup } from './06-shelf.jsx';
 import { SettingsModal } from './07-settings.jsx';
