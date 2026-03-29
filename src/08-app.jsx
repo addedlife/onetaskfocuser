@@ -48,9 +48,7 @@ function App({ user, onSignOut }) {
   const [bdMinimized, setBdMinimized] = useState(false);
   const [jsMinimized, setJsMinimized] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
-  const [showShailos, setShowShailos] = useState(false);
   const [lpMenu, setLpMenu] = useState(false);
-  const [shailosAction, setShailosAction] = useState(null); // null | "record-shaila" | "record-call"
   const [justStartId, setJustStartId] = useState(null);
   const [tipCat, setTipCat] = useState("All");
   const [showOverwhelm, setShowOverwhelm] = useState(false);
@@ -1488,7 +1486,6 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         justStartId={justStartId} curTaskId={curT?.id} onDoneJustStart={()=>setJustStartId(null)} jsMinimized={jsMinimized} onRestoreJs={()=>setJsMinimized(false)}
         showBodyDouble={showBodyDouble} bdMinimized={bdMinimized} onRestoreBd={()=>setBdMinimized(false)} onCloseBd={()=>{setShowBodyDouble(false);setBdMinimized(false);}}
         onCapture={captureZenDump} zenDumpParsing={zenDumpParsing}
-        onOpenShailos={()=>setShowShailos(true)}
       />}
       {showZenReview && (
         <ZenDumpReview
@@ -1691,21 +1688,6 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         />
       )}
       {showBrainDump && <BrainDump T={T} pris={pris} onCapture={(text)=>{captureZenDump(text);setShowZenReview(true);setShowBrainDump(false);}} onClose={()=>setShowBrainDump(false)}/>}
-      {/* Shaila Transcriber — full-screen iframe overlay */}
-      {showShailos && (
-        <div style={{position:"fixed",inset:0,zIndex:9000,background:T.bg,display:"flex",flexDirection:"column",animation:"ot-fade 0.2s"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",borderBottom:`1px solid ${T.brd}`,background:T.card,flexShrink:0}}>
-            <span style={{fontSize:14,fontWeight:600,color:T.text,fontFamily:"system-ui"}}>Shaila Transcriber</span>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <button onClick={doFullBackup} disabled={backupLoading} title="Download full backup (tasks + shailos)" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500,opacity:backupLoading?.5:1}}>{backupLoading?"⏳":"💾"} Backup</button>
-              <button onClick={doLoadBackup} title="Restore from backup file" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500}}>📂 Restore</button>
-              <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500,opacity:reconcileLoading?.5:1}}>{reconcileLoading?"⏳":"🔄"}</button>
-              <button onClick={()=>{setShowShailos(false);setShailosAction(null);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft,padding:4}}>✕</button>
-            </div>
-          </div>
-          <iframe src={shailosAction ? `/shailos/?action=${shailosAction}` : "/shailos/"} style={{flex:1,border:"none",width:"100%"}} title="Shaila Transcriber"/>
-        </div>
-      )}
       {/* Shaila delete prompt — asks if user also wants to delete from transcriber record */}
       {shailaDelPrompt && (
         <div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setShailaDelPrompt(null)}>
@@ -2207,8 +2189,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
               <p style={{color:T.tFaint,fontSize:13,margin:"4px 0 0",fontStyle:"italic"}}>{gG()} — {dateStr}</p>
               <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
                 <span style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui"}}>@{user?.displayName || user?.email?.split("@")[0] || ""}</span>
-                <button onClick={()=>setShowShailos(true)} style={{fontSize:11,color:T.accent||"#C8A84C",fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>Shailos</button>
-                <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check — reconcile shailos between transcriber and tasks" style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",background:"none",border:`1px solid ${T.brd}`,borderRadius:8,cursor:"pointer",padding:"2px 6px",opacity:reconcileLoading?.5:1}}>{reconcileLoading?"⏳":"🔄"}</button>
+<button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check — reconcile shailos between transcriber and tasks" style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",background:"none",border:`1px solid ${T.brd}`,borderRadius:8,cursor:"pointer",padding:"2px 6px",opacity:reconcileLoading?.5:1}}>{reconcileLoading?"⏳":"🔄"}</button>
                 <button onClick={async ()=>{
                   if(AS) await Store.autoFileBackup(AS, shailosRef.current, true).catch(()=>{});
                   if(onSignOut) onSignOut();
@@ -2735,19 +2716,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         const onE = e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.borderColor=outC;e.currentTarget.style.transform="scale(1.1)";};
         const onL = e=>{e.currentTarget.style.opacity=".65";e.currentTarget.style.borderColor=outC+"40";e.currentTarget.style.transform="scale(1)";};
         const icS = {width:17,height:17,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
-        return (
-          <div style={{position:"fixed",bottom:20,right:20,zIndex:9100,display:"flex",gap:8,alignItems:"center"}}>
-            <button onClick={()=>{setShailosAction("record-shaila");setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="Record a new shaila">
-              <svg {...icS} viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            </button>
-            <button onClick={()=>{setShailosAction("record-call");setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="Record a phone call">
-              <svg {...icS} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.86 19.86 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.68 2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.74-1.25a2 2 0 0 1 2.11-.45c.74.32 1.53.55 2.34.68A2 2 0 0 1 22 16.92z"/></svg>
-            </button>
-            <button onClick={()=>{setShailosAction(null);setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="View shaila records">
-              <svg {...icS} viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            </button>
-          </div>
-        );
+        return null;
       })()}
     </div>
   );
