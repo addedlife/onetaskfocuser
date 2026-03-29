@@ -119,7 +119,7 @@ function ShelfView({allComp, compT, pris, T, onDel, onUncomp, onClone}) {
 
 // Subtask group view (C06) - collapsible single-row in Queue tab
 // Counts as ONE item in the queue. Click to expand subtask list.
-function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onEdit, onAdd, onReorder, onChgPri, searchQ, onLegacyComp}) {
+function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onEdit, onAdd, onReorder, onChgPri, searchQ, onLegacyComp, shailaNumberMap, onShailaGotBack}) {
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState(null);
   const [editTx, setEditTx] = useState("");
@@ -210,6 +210,22 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
                     {st.stepIndex && <span style={{fontSize:10,color:T.tFaint,marginRight:4,fontFamily:"system-ui"}}>#{st.stepIndex}</span>}
                     {st.text}
                   </span>
+                )}
+                {/* Mini got-back pill on "Get back to asker" step */}
+                {st.isGetBackStep && st.shailaId && shailaNumberMap && (
+                  <ShailaMiniPill
+                    status={(() => {
+                      // Derive status: if sibling research steps all done → have_answer, else researching
+                      // Also check if gotBackToAsker already set
+                      const siblings = tasks.filter(t => t.shailaId === st.shailaId && !t.isGetBackStep);
+                      const researchTask = siblings.find(t => !t.completed);
+                      if (st.gotBackToAsker) return "got_back";
+                      if (!researchTask) return "have_answer";
+                      return "researching";
+                    })()}
+                    shailaNum={shailaNumberMap[st.shailaId]}
+                    onToggle={() => onShailaGotBack && onShailaGotBack(st.shailaId, !st.gotBackToAsker)}
+                  />
                 )}
                 <button onClick={e=>{e.stopPropagation();if(onChgPri)onChgPri(st.id);}} title="Change priority" style={{background:"none",border:"none",cursor:"pointer",padding:2,opacity:.5,flexShrink:0,display:"flex",alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.5}>
                   <div style={{width:9,height:9,borderRadius:"50%",background:gP(pris,st.priority).color,boxShadow:`0 0 0 1.5px ${gP(pris,st.priority).color}60`}}/>

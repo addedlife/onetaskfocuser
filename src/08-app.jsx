@@ -517,6 +517,22 @@ function App({ user, onSignOut }) {
     return m;
   }, [AS?.lists, pris]);
 
+  // Shaila status map: shailaId → "researching"|"have_answer"|"got_back"
+  // Derived from task fields so SubtaskGroup can show the right pill color
+  const shailaStatusMap = useMemo(() => {
+    const shailaPriIds = new Set(pris.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
+    const allT = (AS?.lists || []).flatMap(l => l.tasks || []);
+    const m = {};
+    allT.filter(t => shailaPriIds.has(t.priority) && !t.isGetBackStep && t.shailaId).forEach(t => {
+      // Check if got-back step is completed
+      const gb = allT.find(x => x.shailaId === t.shailaId && x.isGetBackStep);
+      if (t.gotBackToAsker || gb?.completed) { m[t.shailaId] = "got_back"; }
+      else if (t.shailaAnswer?.trim()) { m[t.shailaId] = "have_answer"; }
+      else { m[t.shailaId] = "researching"; }
+    });
+    return m;
+  }, [AS?.lists, pris]);
+
   // Energy-filtered + snooze-filtered queue
   const curEnergy = AS?.currentEnergy;
   const displayedActT = useMemo(() => {
@@ -1655,6 +1671,14 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onResult={t=>{addVT(t,selPri);setShowVoice(false);}}
           onClose={()=>setShowVoice(false)}
           onAddShailos={addShailas}
+          onAnswerExisting={(shailaTaskId, answer) => {
+            // Mark the research step answered, save the answer field
+            saveShailaField(shailaTaskId, "shailaAnswer", answer);
+            // Also auto-complete the research step
+            compTask(shailaTaskId, false, true);
+            showToast("✅ Answer saved to existing shaila", 3000);
+          }}
+          existingShailos={actT.filter(t => t.priority === "shaila" && !t.isGetBackStep)}
           color={gP(pris,selPri).color}
           T={T}
           soferaiKey={AS.soferaiKey}

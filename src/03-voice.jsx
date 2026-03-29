@@ -1,7 +1,7 @@
 // === 03-voice.js ===
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { cleanYT, callGemini, aiParseShailos, uid, textOnColor } from './01-core.js';
+import { cleanYT, callGemini, aiParseShailos, callAI, uid, textOnColor } from './01-core.js';
 // VoiceInput: Web Speech (live preview) + MediaRecorder run together.
 // Web Speech starts first to get mic priority; MediaRecorder starts 300ms later.
 //
@@ -49,7 +49,7 @@ async function webmToWavBase64(webmBlob) {
   });
 }
 
-function VoiceInput({ onResult, onClose, onAddShailos, color, T, soferaiKey, geminiKey }) {
+function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, existingShailos, color, T, soferaiKey, geminiKey }) {
   const [phase, setPhase]             = React.useState("recording");
   const [liveText, setLiveText]       = React.useState("");
   const [editText, setEditText]       = React.useState("");
@@ -61,6 +61,8 @@ function VoiceInput({ onResult, onClose, onAddShailos, color, T, soferaiKey, gem
   const [parsedShailas, setParsedShailas] = React.useState([]);
   const [shailaLoading, setShailaLoading] = React.useState(false);
   const [shailaMode, setShailaMode]       = React.useState(false);
+  const [detectedAnswers, setDetectedAnswers] = React.useState([]); // [{shaila, answer, approved}]
+  const [answerDetectLoading, setAnswerDetectLoading] = React.useState(false);
 
   const phaseRef    = React.useRef("recording");
   const liveRef     = React.useRef("");
@@ -189,6 +191,19 @@ function VoiceInput({ onResult, onClose, onAddShailos, color, T, soferaiKey, gem
       parseAsShailos(editText);
     }
   }, [phase, editText, shailaMode]); // eslint-disable-line
+
+  // ── Auto-detect answers to existing shailos when transcript is ready ───────
+  const answerDetectFiredRef = React.useRef(false);
+  React.useEffect(() => {
+    if (phase === "recording") { answerDetectFiredRef.current = false; return; }
+    if (answerDetectFiredRef.current) return;
+    if ((phase === "reviewing" || phase === "soferai_done") && editText.trim() && existingShailos?.length) {
+      if (true) {
+        answerDetectFiredRef.current = true;
+        detectAnswersInTranscript(editText);
+      }
+    }
+  }, [phase, editText]); // eslint-disable-line
 
   // ── Stop recording ─────────────────────────────────────────────────────────
   function stopRec() {
@@ -397,6 +412,45 @@ Do not add punctuation beyond what is spoken. Do not summarize or rephrase. Retu
     finally { setShailaLoading(false); }
   }
 
+  // ── Detect answers to existing shailos in transcript ──────────────────────
+  async function detectAnswersInTranscript(text) {
+    if (!geminiKey || !existingShailos?.length || !text.trim()) return;
+    setAnswerDetectLoading(true);
+    setDetectedAnswers([]);
+    try {
+      const shailoList = existingShailos
+        .filter(s => !s.shailaAnswer?.trim()) // only unanswered
+        .slice(0, 20) // cap for prompt size
+        .map((s, i) => `${i+1}. [ID:${s.id}] ${s.parsedShaila || s.content || s.synopsis || s.text || ""}`)
+        .join("\n");
+      if (!shailoList.trim()) { setAnswerDetectLoading(false); return; }
+      const prompt = `You are analyzing a voice transcript of a call or shaila-recording session.
+
+Existing open shailos (unanswered questions) that need answers:
+${shailoList}
+
+Transcript:
+${text}
+
+Identify any shailos from the list above that are answered in the transcript. For each match, return a JSON array of objects: {"id": "<exact ID>", "shaila": "<question text>", "answer": "<extracted answer>"}. If the answer is partial or implied, include it. Only return answers you are confident are present in the transcript. If none match, return []. Return only raw JSON, no markdown.`;
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${geminiKey}`,
+        { method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0,maxOutputTokens:2048} })
+        }
+      );
+      const d = await resp.json();
+      if (d.error) throw new Error(d.error.message);
+      const raw = (d.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+      const clean = raw.replace(/```json|```/g,"").trim();
+      const parsed = JSON.parse(clean);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setDetectedAnswers(parsed.map(x => ({...x, approved: true})));
+      }
+    } catch(e) { /* silently fail — not critical */ }
+    setAnswerDetectLoading(false);
+  }
+
   const shailaParseBtn = (
     geminiKey ? (
       <button onClick={parseAsShailos} disabled={shailaLoading} style={{
@@ -600,6 +654,34 @@ Do not add punctuation beyond what is spoken. Do not summarize or rephrase. Retu
         {closeBtn}
       </div>
       <div style={{ flex:1, overflowY:"auto", display:"flex", flexDirection:"column", gap:10, marginBottom:10 }}>
+        {/* ── Detected answers to existing shailos ── */}
+        {answerDetectLoading && (
+          <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px", background:T.bgW, borderRadius:10, border:`1px solid ${T.brd}` }}>
+            <div style={{ width:12, height:12, border:`2px solid ${T.brd}`, borderTopColor:"#C8A84C", borderRadius:"50%", animation:"ot-spin 0.8s linear infinite", flexShrink:0 }}/>
+            <span style={{ fontSize:11, color:T.tFaint, fontFamily:"system-ui" }}>Checking for answers to existing shailos…</span>
+          </div>
+        )}
+        {detectedAnswers.length > 0 && (
+          <div style={{ background:"#C8A84C14", borderRadius:10, border:"1px solid #C8A84C50", padding:"8px 10px", display:"flex", flexDirection:"column", gap:8 }}>
+            <div style={{ fontSize:9, fontWeight:800, color:"#C8A84C", letterSpacing:1.2, marginBottom:2 }}>POSSIBLE ANSWERS TO EXISTING SHAILOS</div>
+            {detectedAnswers.filter(x => x.approved !== false).map((match, i) => (
+              <div key={match.id || i} style={{ background:T.bgW, borderRadius:8, padding:"8px 10px", borderLeft:"3px solid #C8A84C" }}>
+                <div style={{ fontSize:11, color:T.tSoft, fontFamily:"system-ui", marginBottom:3 }}>Answers existing shailo:</div>
+                <div style={{ fontSize:12, fontFamily:"Georgia,serif", color:T.text, marginBottom:4, lineHeight:1.4 }}>{match.shaila}</div>
+                <div style={{ fontSize:9, fontWeight:700, color:"#C8A84C", letterSpacing:1, marginBottom:2 }}>ANSWER FOUND:</div>
+                <div style={{ fontSize:12, fontFamily:"Georgia,serif", color:T.tSoft, marginBottom:8, lineHeight:1.4 }}>{match.answer}</div>
+                <div style={{ display:"flex", gap:6 }}>
+                  <button onClick={() => {
+                    if (onExistingShailaAnswers) onExistingShailaAnswers(match.id, match.answer);
+                    setDetectedAnswers(p => p.map((x, j) => j===i ? {...x, approved:false} : x));
+                  }} style={{ flex:1, padding:"5px 8px", borderRadius:7, border:"none", background:"#C8A84C", color:"#fff", cursor:"pointer", fontSize:11, fontWeight:700, fontFamily:"system-ui" }}>✓ Yes, save this answer</button>
+                  <button onClick={() => setDetectedAnswers(p => p.map((x, j) => j===i ? {...x, approved:false} : x))}
+                    style={{ padding:"5px 8px", borderRadius:7, border:`1px solid ${T.brd}`, background:"none", color:T.tFaint, cursor:"pointer", fontSize:11, fontFamily:"system-ui" }}>Skip</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         {parsedShailas.map((item, i) => (
           <div key={item.id} style={{ background:T.bgW, borderRadius:10, padding:"10px 12px", borderLeft:"3px solid #C8A84C" }}>
             <textarea
