@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callGemini, callAI, suggestFirstStep, aiParseShailos, aiParseBrainDump, gG, fmtMs, db, _lum, priText, textOnPastel } from './01-core.js';
 import { IC } from './02-icons.jsx';
 import { VoiceInput } from './03-voice.jsx';
-import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack } from './04-components.jsx';
+import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from './04-components.jsx';
 import { BulkAdd, TaskBD, BlockedModal, ContextTagPicker, ListManager } from './05-modals.jsx';
 import { ShelfView, SubtaskGroup } from './06-shelf.jsx';
 import { SettingsModal } from './07-settings.jsx';
@@ -505,6 +505,17 @@ function App({ user, onSignOut }) {
   const compT = tasks.filter(t => t.completed);
   const allComp = AS ? AS.lists.flatMap(l => l.tasks.filter(t => t.completed)) : [];
   const ap = pris.filter(p => !p.deleted);
+
+  // Shaila number map: shailaId → 1-based number by createdAt (stable, for queue + mini pill)
+  const shailaNumberMap = useMemo(() => {
+    const shailaPriIds = new Set(pris.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
+    const allShailaTasks = (AS?.lists || []).flatMap(l =>
+      (l.tasks || []).filter(t => shailaPriIds.has(t.priority) && !t.isGetBackStep && !t.completed)
+    ).sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    const m = {};
+    allShailaTasks.forEach((t, i) => { if (t.shailaId) m[t.shailaId] = i + 1; });
+    return m;
+  }, [AS?.lists, pris]);
 
   // Energy-filtered + snooze-filtered queue
   const curEnergy = AS?.currentEnergy;
@@ -2306,7 +2317,10 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                               {dispPos}
                             </span>
                             <span onClick={()=>setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;})}
-                              style={{flex:1,fontSize:14,cursor:"pointer",fontWeight:isF?500:400,color:_qText,fontFamily:"Georgia,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{task.parentTask}</span>
+                              style={{flex:1,fontSize:14,cursor:"pointer",fontWeight:isF?500:400,color:_qText,fontFamily:"Georgia,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                              {task.shailaId && shailaNumberMap[task.shailaId] && <span style={{fontSize:10,color:"#C8A84C",fontWeight:700,fontFamily:"system-ui",marginRight:5}}>#{shailaNumberMap[task.shailaId]}</span>}
+                              {task.parentTask}
+                            </span>
                             <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.7}}/>
                             <div style={{display:"flex",gap:0,flexShrink:0}}>
                               <button onClick={e=>{e.stopPropagation();compTask(gSteps[0]?.id);}} title="Complete next step" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Check s={13} c={tp.color}/></button>
@@ -2333,6 +2347,15 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                                     {st.stepIndex && <span style={{fontSize:10,color:T.tFaint,marginRight:4,fontFamily:"system-ui"}}>#{st.stepIndex}</span>}{st.text}
                                   </span>
                                 )}
+                                {/* Mini got-back pill on the "Get back to asker" step */}
+                                {st.isGetBackStep && st.shailaId && (() => {
+                                  const shailaNum = shailaNumberMap[st.shailaId];
+                                  // Determine status from sibling step (research step completion = have_answer)
+                                  const siblings = actT.filter(t => t.shailaId === st.shailaId && !t.isGetBackStep);
+                                  const researchDone = siblings.length === 0 || siblings.every(t => t.completed);
+                                  const pillStatus = researchDone ? "have_answer" : "researching";
+                                  return <ShailaMiniPill status={pillStatus} shailaNum={shailaNum} onToggle={()=>handleShailaGotBack(st.id, pillStatus === "have_answer")}/>;
+                                })()}
                                 <button onClick={e=>{e.stopPropagation();delTask(st.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:2,opacity:.3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.3}><IC.Trash s={11} c={T.tFaint}/></button>
                               </div>
                             ))}
