@@ -1,6 +1,6 @@
 // === 08-app.js ===
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callGemini, callAI, suggestFirstStep, aiParseShailos, aiParseBrainDump, gG, fmtMs, db, _lum, priText, textOnPastel } from './01-core.js';
 import { IC } from './02-icons.jsx';
 import { VoiceInput } from './03-voice.jsx';

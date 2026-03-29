@@ -1,7 +1,7 @@
 // === 03-voice.js ===
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { cleanYT, callGemini, aiParseShailos, uid } from './01-core.js';
+import { cleanYT, callGemini, aiParseShailos, uid, textOnColor } from './01-core.js';
 // VoiceInput: Web Speech (live preview) + MediaRecorder run together.
 // Web Speech starts first to get mic priority; MediaRecorder starts 300ms later.
 //

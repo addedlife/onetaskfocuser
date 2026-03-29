@@ -1,6 +1,6 @@
 // === 10-devmode.js ===
 
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 // In-app Claude dev assistant — floating chat panel for live code changes.
 // Visible to any authenticated user who has a Claude API key saved.
 
