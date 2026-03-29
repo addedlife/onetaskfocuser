@@ -1522,53 +1522,14 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                     onBlur={e=>onSaveField(s.id,"shailaAnswer",e.target.value)}
                     style={inputSt({minHeight:40,marginBottom:6})}
                   />
-                  {/* Got back pill — yellow when have_answer, green when got_back */}
+                  {/* Got back pill — uses shared ShailaMiniPill, full size */}
                   {(st === "have_answer" || st === "got_back") && (
-                    <div style={{
-                      display:"flex", alignItems:"center", gap:8,
-                      margin:"6px 0 10px",
-                      background: st === "got_back" ? "#6AB87D18" : "#C8A84C18",
-                      border: `1.5px solid ${st === "got_back" ? "#6AB87D" : "#C8A84C"}`,
-                      borderRadius: 24,
-                      padding: "7px 14px 7px 16px",
-                      transition: "background 0.35s, border-color 0.35s",
-                    }}>
-                      <span style={{
-                        fontSize: 13, fontFamily:"system-ui", fontWeight: 600,
-                        color: st === "got_back" ? "#6AB87D" : "#C8A84C",
-                        flex: 1,
-                      }}>
-                        {st === "got_back" ? "Got back to asker! ✓" : "Got back to asker?"}
-                      </span>
-                      {st === "have_answer" && (
-                        <button
-                          onClick={() => cycleGotBack(s)}
-                          title="Mark: got back to asker"
-                          style={{
-                            width: 30, height: 30, borderRadius: "50%",
-                            border: "none",
-                            background: "#C8A84C",
-                            color: "#fff",
-                            cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 17, fontWeight: 700, flexShrink: 0,
-                            transition: "background 0.2s",
-                          }}
-                        >✓</button>
-                      )}
-                      {st === "got_back" && (
-                        <button
-                          onClick={() => cycleGotBack(s)}
-                          title="Undo: not yet got back"
-                          style={{
-                            background: "none", border: "1px solid #6AB87D60",
-                            borderRadius: 8, padding: "3px 7px",
-                            cursor: "pointer", fontSize: 10,
-                            color: "#6AB87D", fontFamily: "system-ui",
-                          }}
-                        >↩</button>
-                      )}
-                    </div>
+                    <ShailaMiniPill
+                      size="full"
+                      status={st}
+                      shailaNum={shailaNum}
+                      onToggle={() => cycleGotBack(s)}
+                    />
                   )}
                   {/* Asked by / Answered by */}
                   <div style={{display:"flex",gap:8}}>
@@ -1601,11 +1562,51 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
 
 
 // ─── ShailaMiniPill ──────────────────────────────────────────────────────────
-// Compact inline got-back pill for use on SubtaskGroup "get back" rows.
-// Props: status ("have_answer"|"got_back"), shailaNum, onToggle
+// Got-back pill, two sizes:
+//   size="mini"  (default) — compact, for SubtaskGroup "get back" rows
+//   size="full"            — full-width pill for ShailaManager rows
+// Props: status ("researching"|"have_answer"|"got_back"), shailaNum, onToggle, size
 // ─────────────────────────────────────────────────────────────────────────────
-function ShailaMiniPill({status, shailaNum, onToggle}) {
+function ShailaMiniPill({status, shailaNum, onToggle, size="mini"}) {
   const isGotBack = status === "got_back";
+  const hasAnswer = status === "have_answer" || isGotBack;
+  // Don't render anything for "researching" — no answer yet, pill doesn't apply
+  if (!hasAnswer) return null;
+
+  if (size === "full") {
+    return (
+      <div style={{
+        display:"flex", alignItems:"center", gap:8,
+        background: isGotBack ? "#6AB87D18" : "#C8A84C18",
+        border: `1.5px solid ${isGotBack ? "#6AB87D" : "#C8A84C"}`,
+        borderRadius: 24,
+        padding: "7px 14px 7px 16px",
+        transition: "background 0.35s, border-color 0.35s",
+        margin: "6px 0 10px",
+      }}>
+        {shailaNum && (
+          <span style={{fontSize:11,fontWeight:700,fontFamily:"system-ui",color:"#C8A84C",flexShrink:0}}>#{shailaNum}</span>
+        )}
+        <span style={{fontSize:13,fontFamily:"system-ui",fontWeight:600,color:isGotBack?"#6AB87D":"#C8A84C",flex:1}}>
+          {isGotBack ? "Got back to asker! ✓" : "Got back to asker?"}
+        </span>
+        {!isGotBack && (
+          <button onClick={e=>{e.stopPropagation();onToggle?.();}} title="Mark: got back to asker"
+            style={{width:30,height:30,borderRadius:"50%",border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,fontWeight:700,flexShrink:0,transition:"background 0.2s"}}>
+            ✓
+          </button>
+        )}
+        {isGotBack && (
+          <button onClick={e=>{e.stopPropagation();onToggle?.();}} title="Undo: not yet got back"
+            style={{background:"none",border:"1px solid #6AB87D60",borderRadius:8,padding:"3px 7px",cursor:"pointer",fontSize:10,color:"#6AB87D",fontFamily:"system-ui"}}>
+            ↩
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // size="mini"
   return (
     <div
       onClick={e => { e.stopPropagation(); onToggle?.(); }}
