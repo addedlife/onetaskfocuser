@@ -1,14 +1,30 @@
 [build]
-  publish = "."
+  command = "npm run build && cp -r shailos dist/"
+  publish = "dist"
   functions = "netlify/functions"
-  command = "echo static"
 
+[build.environment]
+  NODE_VERSION = "20"
+
+[functions]
+  node_bundler = "esbuild"
+
+[functions."claude-proxy"]
+  timeout = 60
+
+# Vite-hashed assets — cache forever (filename changes on every deploy)
 [[headers]]
-  for = "/*.js"
+  for = "/assets/*"
   [headers.values]
-    Content-Type = "application/javascript"
+    Cache-Control = "public, max-age=31536000, immutable"
 
-# Block all private/admin files from public access
+# index.html — always re-check so users get latest deploy instantly
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+# Block private/admin files from public access
 [[redirects]]
   from = "/HANDOFF.md"
   to = "/404"
@@ -70,9 +86,7 @@
   force = true
 
 # Shaila Transcriber SPA — serve its index.html for all sub-routes
-# Only applies when the requested file doesn't exist (assets like .js/.css are served directly)
 [[redirects]]
   from = "/shailos/*"
   to = "/shailos/index.html"
   status = 200
-

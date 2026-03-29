@@ -1,3 +1,12 @@
+# Dependencies
+node_modules/
+
+# Vite build output
+dist/
+
+# One-time migration script (already ran, not needed)
+vite-migrate.js
+
 # Live site snapshots (downloaded by sync script, not part of the project)
 _live_snapshot/
 
