@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callGemini, callAI, suggestFirstStep, aiParseShailos, aiParseBrainDump, gG, fmtMs, db, _lum, priText, textOnPastel } from './01-core.js';
 import { IC } from './02-icons.jsx';
 import { VoiceInput } from './03-voice.jsx';
-import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, PostItStack, ShailaMiniPill } from './04-components.jsx';
+import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from './04-components.jsx';
 import { BulkAdd, TaskBD, BlockedModal, ContextTagPicker, ListManager } from './05-modals.jsx';
 import { ShelfView, SubtaskGroup } from './06-shelf.jsx';
 import { SettingsModal } from './07-settings.jsx';
@@ -102,6 +102,7 @@ function App({ user, onSignOut }) {
   const [compFlash, setCompFlash] = useState(false);      // brief ✓ overlay on card
   const [showStreak, setShowStreak] = useState(false);    // "On a roll!" celebration
   const [showBlockReflect, setShowBlockReflect] = useState(false); // what's in the way modal
+  const [showShailaManager, setShowShailaManager] = useState(false); // shaila log panel
 
   const [minTick, setMinTick] = useState(0);              // ticks every 60s for snooze auto-wake
   const sessionCompCount = useRef(0);                     // session completions (no re-render needed)
@@ -1930,6 +1931,11 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       )}
 
 
+      {/* ShailaManager */}
+      {showShailaManager && (
+        <ShailaManager AS={AS} T={T} aiOpts={aiOpts} onSaveField={saveShailaField} onGotBack={handleShailaGotBack} onAddManual={handleAddManualShaila} onClose={()=>setShowShailaManager(false)}/>
+      )}
+
       {/* Noise texture */}
       <div style={{position:"fixed",inset:0,pointerEvents:"none",opacity:.025,backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`}}/>
 
@@ -2147,7 +2153,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                 { cat: "Data", items: [
                   {icon:<span style={{fontSize:13,lineHeight:1}}>💾</span>, label: backupLoading?"Saving…":"Backup", action: doFullBackup},
                   {icon:<span style={{fontSize:13,lineHeight:1}}>📂</span>, label:"Restore", action: doLoadBackup},
-                  {icon:<span style={{fontSize:13,lineHeight:1,color:T.tSoft}}>✡</span>, label:"Shailos", action:()=>window.location.href="/shailos/"},
+                  {icon:<span style={{fontSize:13,lineHeight:1,color:T.tSoft}}>✡</span>, label:"Shaila log", action:()=>setShowShailaManager(true)},
                 ]},
               ];
 
