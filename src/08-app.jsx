@@ -1051,9 +1051,11 @@ function App({ user, onSignOut }) {
     const shailaPriId = pris.find(p => p.isShaila)?.id || "shaila";
     const baseTime = Date.now();
     const parentText = text.trim();
+    const snip = parentText.length > 38 ? parentText.slice(0, 38) + "…" : parentText;
+    const askerSuffix = askedBy?.trim() ? ` (${askedBy.trim()})` : "";
     const newTasks = [
       {
-        id: uid(), text: "Research answer", priority: shailaPriId,
+        id: uid(), text: `Research: ${snip}`, priority: shailaPriId,
         shailaAnswer: shailaAnswer || "",
         askedBy: askedBy || "", answeredBy: answeredBy || "",
         createdAt: baseTime,
@@ -1061,7 +1063,7 @@ function App({ user, onSignOut }) {
         parentTask: parentText, stepIndex: 1, totalSteps: 2,
       },
       {
-        id: uid(), text: "Get back to asker with answer", priority: shailaPriId,
+        id: uid(), text: `Get back about: ${snip}${askerSuffix}`, priority: shailaPriId,
         createdAt: baseTime + 1,
         blocked: false, completed: false, energy: null, pinned: false,
         parentTask: parentText, stepIndex: 2, totalSteps: 2,
@@ -1078,9 +1080,11 @@ function App({ user, onSignOut }) {
     const newTasks = [];
     items.forEach(item => {
       const parentText = item.shaila;
+      const snip = parentText.length > 38 ? parentText.slice(0, 38) + "…" : parentText;
+      const askerSuffix = item.askedBy?.trim() ? ` (${item.askedBy.trim()})` : "";
       const baseTime = Date.now();
       newTasks.push({
-        id: item.id, text: "Research answer", priority: shailaPriId,
+        id: item.id, text: `Research: ${snip}`, priority: shailaPriId,
         shailaAnswer: item.answer || "",
         askedBy: item.askedBy || "", answeredBy: item.answeredBy || "",
         createdAt: baseTime,
@@ -1088,7 +1092,7 @@ function App({ user, onSignOut }) {
         parentTask: parentText, stepIndex: 1, totalSteps: 2,
       });
       newTasks.push({
-        id: uid(), text: "Get back to asker with answer", priority: shailaPriId,
+        id: uid(), text: `Get back about: ${snip}${askerSuffix}`, priority: shailaPriId,
         createdAt: baseTime,
         blocked: false, completed: false, energy: null, pinned: false,
         parentTask: parentText, stepIndex: 2, totalSteps: 2,
@@ -1671,7 +1675,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onResult={t=>{addVT(t,selPri);setShowVoice(false);}}
           onClose={()=>setShowVoice(false)}
           onAddShailos={addShailas}
-          onAnswerExisting={(shailaTaskId, answer) => {
+          onExistingShailaAnswers={(shailaTaskId, answer) => {
             // Mark the research step answered, save the answer field
             saveShailaField(shailaTaskId, "shailaAnswer", answer);
             // Also auto-complete the research step
@@ -2345,6 +2349,12 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                               {task.shailaId && shailaNumberMap[task.shailaId] && <span style={{fontSize:10,color:"#C8A84C",fontWeight:700,fontFamily:"system-ui",marginRight:5}}>#{shailaNumberMap[task.shailaId]}</span>}
                               {task.parentTask}
                             </span>
+                            {task.shailaId && (() => {
+                              const hst = shailaStatusMap[task.shailaId];
+                              if (!hst || hst === "researching") return null;
+                              const gbStep = actT.find(t => t.shailaId === task.shailaId && t.isGetBackStep);
+                              return <ShailaMiniPill status={hst} shailaNum={shailaNumberMap[task.shailaId]} onToggle={e=>{e?.stopPropagation();if(gbStep)handleShailaGotBack(gbStep.id,hst!=="got_back");}}/>;
+                            })()}
                             <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.7}}/>
                             <div style={{display:"flex",gap:0,flexShrink:0}}>
                               <button onClick={e=>{e.stopPropagation();compTask(gSteps[0]?.id);}} title="Complete next step" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Check s={13} c={tp.color}/></button>
@@ -2377,8 +2387,8 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                                   // Determine status from sibling step (research step completion = have_answer)
                                   const siblings = actT.filter(t => t.shailaId === st.shailaId && !t.isGetBackStep);
                                   const researchDone = siblings.length === 0 || siblings.every(t => t.completed);
-                                  const pillStatus = researchDone ? "have_answer" : "researching";
-                                  return <ShailaMiniPill status={pillStatus} shailaNum={shailaNum} onToggle={()=>handleShailaGotBack(st.id, pillStatus === "have_answer")}/>;
+                                  const pillStatus = st.gotBackToAsker ? "got_back" : researchDone ? "have_answer" : "researching";
+                                  return <ShailaMiniPill status={pillStatus} shailaNum={shailaNum} onToggle={()=>handleShailaGotBack(st.id, !st.gotBackToAsker)}/>;
                                 })()}
                                 <button onClick={e=>{e.stopPropagation();delTask(st.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:2,opacity:.3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.3}><IC.Trash s={11} c={T.tFaint}/></button>
                               </div>

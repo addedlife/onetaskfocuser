@@ -561,6 +561,33 @@ Identify any shailos from the list above that are answered in the transcript. Fo
     </div>
   );
 
+  // ── Detected-answers banner (shown in reviewing + soferai_done) ────────────
+  const detectedAnswersBanner = (answerDetectLoading || detectedAnswers.some(x => x.approved !== false)) ? (
+    <div style={{ marginTop:6 }}>
+      {answerDetectLoading && (
+        <div style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", background:T.bgW, borderRadius:8, border:`1px solid ${T.brd}` }}>
+          <div style={{ width:10, height:10, border:`2px solid ${T.brd}`, borderTopColor:"#C8A84C", borderRadius:"50%", animation:"ot-spin 0.8s linear infinite", flexShrink:0 }}/>
+          <span style={{ fontSize:11, color:T.tFaint, fontFamily:"system-ui" }}>Checking for answers to existing shailos…</span>
+        </div>
+      )}
+      {detectedAnswers.filter(x => x.approved !== false).map((match, i) => (
+        <div key={match.id || i} style={{ background:"#C8A84C0E", borderRadius:8, padding:"8px 10px", borderLeft:"3px solid #C8A84C", marginTop:4 }}>
+          <div style={{ fontSize:10, fontWeight:700, color:"#C8A84C", fontFamily:"system-ui", marginBottom:2 }}>Answers existing shailo:</div>
+          <div style={{ fontSize:12, fontFamily:"Georgia,serif", color:T.text, marginBottom:3, lineHeight:1.4 }}>{match.shaila}</div>
+          <div style={{ fontSize:11, fontFamily:"Georgia,serif", color:T.tSoft, marginBottom:6, lineHeight:1.4 }}>{match.answer}</div>
+          <div style={{ display:"flex", gap:6 }}>
+            <button onClick={() => {
+              if (onExistingShailaAnswers) onExistingShailaAnswers(match.id, match.answer);
+              setDetectedAnswers(p => p.map((x, j) => j===i ? {...x, approved:false} : x));
+            }} style={{ flex:1, padding:"4px 8px", borderRadius:6, border:"none", background:"#C8A84C", color:"#fff", cursor:"pointer", fontSize:11, fontWeight:700, fontFamily:"system-ui" }}>✓ Save answer</button>
+            <button onClick={() => setDetectedAnswers(p => p.map((x, j) => j===i ? {...x, approved:false} : x))}
+              style={{ padding:"4px 8px", borderRadius:6, border:`1px solid ${T.brd}`, background:"none", color:T.tFaint, cursor:"pointer", fontSize:11, fontFamily:"system-ui" }}>Skip</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  ) : null;
+
   // ── REVIEWING ──────────────────────────────────────────────────────────────
   if (phase === "reviewing") return (
     <div style={shell(T.brd)} data-voice-panel="true">
@@ -583,6 +610,7 @@ Identify any shailos from the list above that are answered in the transcript. Fo
         </button>
       )}
       {shailaParseBtn}
+      {detectedAnswersBanner}
       {errLine}
     </div>
   );
@@ -643,6 +671,7 @@ Identify any shailos from the list above that are answered in the transcript. Fo
         }}>← Use browser result instead</button>
       )}
       {shailaParseBtn}
+      {detectedAnswersBanner}
     </div>
   );
 

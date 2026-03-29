@@ -1508,6 +1508,15 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                       <span style={{color:stColor,fontWeight:600}}>{stTip}</span>
                     </div>
                   )}
+                  {/* Got back pill — prominent, above Q/A */}
+                  {(st === "have_answer" || st === "got_back") && (
+                    <ShailaMiniPill
+                      size="full"
+                      status={st}
+                      shailaNum={shailaNum}
+                      onToggle={() => cycleGotBack(s)}
+                    />
+                  )}
                   {/* Q */}
                   <div style={labelSt}>Q</div>
                   <textarea value={getQ(s)} rows={2}
@@ -1522,15 +1531,6 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                     onBlur={e=>onSaveField(s.id,"shailaAnswer",e.target.value)}
                     style={inputSt({minHeight:40,marginBottom:6})}
                   />
-                  {/* Got back pill — uses shared ShailaMiniPill, full size */}
-                  {(st === "have_answer" || st === "got_back") && (
-                    <ShailaMiniPill
-                      size="full"
-                      status={st}
-                      shailaNum={shailaNum}
-                      onToggle={() => cycleGotBack(s)}
-                    />
-                  )}
                   {/* Asked by / Answered by */}
                   <div style={{display:"flex",gap:8}}>
                     <div style={{flex:1}}>
