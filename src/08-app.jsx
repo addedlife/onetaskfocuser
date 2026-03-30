@@ -1702,7 +1702,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
               <button onClick={()=>{setShowShailos(false);setShailosAction(null);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft,padding:4}}>✕</button>
             </div>
           </div>
-          <iframe src={shailosAction ? `/shailos/?action=${shailosAction}` : "/shailos/"} style={{flex:1,border:"none",width:"100%"}} title="Shaila Transcriber"/>
+          <iframe src={shailosAction ? `/shailos/?action=${shailosAction}` : "/shailos/"} style={{flex:1,border:"none",width:"100%"}} title="Shaila Transcriber" allow="popups popups-to-escape-sandbox"/>
         </div>
       )}
       {/* Shaila delete prompt — asks if user also wants to delete from transcriber record */}
