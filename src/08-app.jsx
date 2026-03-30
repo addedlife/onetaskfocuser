@@ -273,6 +273,13 @@ function App({ user, onSignOut }) {
     if (count > 0) showToast(`↑ ${count} task${count!==1?"s":""} nudged up — been sitting too long`, 8000);
   }, [loaded]); // eslint-disable-line
 
+  // ─── Listen for shailos iframe "close" message ───────────────────────────
+  useEffect(() => {
+    const handler = (e) => { if (e.data === 'shailos:close') { setShowShailos(false); setShailosAction(null); } };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
   // ─── Shaila ↔ Task real-time sync ───────────────────────────────────────
   // Uses setAS directly (not uT) so it can check ALL lists for existing shailaId links.
   // uT only sees active list, which caused duplicates when shaila tasks existed in other lists.
@@ -2734,16 +2741,22 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         const onL = e=>{e.currentTarget.style.opacity=".65";e.currentTarget.style.borderColor=outC+"40";e.currentTarget.style.transform="scale(1)";};
         const icS = {width:17,height:17,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
         return (
-          <div style={{position:"fixed",bottom:20,right:20,zIndex:9100,display:"flex",gap:8,alignItems:"center"}}>
-            <button onClick={()=>{setShailosAction("record-shaila");setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="Record a new shaila">
-              <svg {...icS} viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            </button>
-            <button onClick={()=>{setShailosAction("record-call");setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="Record a phone call">
-              <svg {...icS} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.86 19.86 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.68 2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.74-1.25a2 2 0 0 1 2.11-.45c.74.32 1.53.55 2.34.68A2 2 0 0 1 22 16.92z"/></svg>
-            </button>
-            <button onClick={()=>{setShailosAction(null);setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="View shaila records">
-              <svg {...icS} viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            </button>
+          <div style={{position:"fixed",bottom:20,right:20,zIndex:9100,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+            <span style={{fontSize:9,fontWeight:700,letterSpacing:1.5,color:outC,opacity:.5,fontFamily:"system-ui",textTransform:"uppercase",paddingRight:4}}>Shailos</span>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <button onClick={()=>{setShailosAction("record-shaila");setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="Record a new shaila">
+                <svg {...icS} viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              </button>
+              <button onClick={()=>{setShailosAction("record-call");setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="Record a phone call">
+                <svg {...icS} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.86 19.86 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.68 2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.74-1.25a2 2 0 0 1 2.11-.45c.74.32 1.53.55 2.34.68A2 2 0 0 1 22 16.92z"/></svg>
+              </button>
+              <button onClick={()=>{setShailosAction("add-manual");setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="Add shaila manually">
+                <svg {...icS} viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+              <button onClick={()=>{setShailosAction(null);setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="View shaila records">
+                <svg {...icS} viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              </button>
+            </div>
           </div>
         );
       })()}
