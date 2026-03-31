@@ -227,11 +227,8 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
                       const siblings = tasks.filter(t => t.shailaId === st.shailaId && !t.isGetBackStep);
                       const ans = (siblings.find(t => t.shailaAnswer)?.shailaAnswer || '').trim();
                       if (!ans) return null;
-                      const clause = ans.split(/[.,;!?]/)[0].trim();
-                      const cw = clause.split(/\s+/).filter(Boolean);
-                      if (cw.length >= 2) return cw.slice(0, 4).join(' ') + (cw.length > 4 ? '…' : '');
-                      const aw = ans.split(/\s+/).filter(Boolean);
-                      return aw.slice(0, 3).join(' ') + (aw.length > 3 ? '…' : '');
+                      const words = ans.split(/\s+/).filter(Boolean);
+                      return words.slice(0, 6).join(' ') + (words.length > 6 ? '…' : '');
                     })()}
                   />
                 )}

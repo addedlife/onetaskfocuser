@@ -1518,11 +1518,8 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                       answerSnippet={(() => {
                         const ans = getF(s, "shailaAnswer").trim();
                         if (!ans) return null;
-                        const clause = ans.split(/[.,;!?]/)[0].trim();
-                        const cw = clause.split(/\s+/).filter(Boolean);
-                        if (cw.length >= 2) return cw.slice(0, 4).join(' ') + (cw.length > 4 ? '…' : '');
-                        const aw = ans.split(/\s+/).filter(Boolean);
-                        return aw.slice(0, 3).join(' ') + (aw.length > 3 ? '…' : '');
+                        const words = ans.split(/\s+/).filter(Boolean);
+                        return words.slice(0, 6).join(' ') + (words.length > 6 ? '…' : '');
                       })()}
                     />
                   )}
