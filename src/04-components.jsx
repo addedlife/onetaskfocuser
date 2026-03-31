@@ -1515,6 +1515,12 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                       status={st}
                       shailaNum={shailaNum}
                       onToggle={() => cycleGotBack(s)}
+                      answerSnippet={(() => {
+                        const ans = getF(s, "shailaAnswer").trim();
+                        if (!ans) return null;
+                        const words = ans.split(/\s+/);
+                        return words.slice(0, 3).join(' ') + (words.length > 3 ? '…' : '');
+                      })()}
                     />
                   )}
                   {/* Q */}
@@ -1567,18 +1573,20 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
 //   size="full"            — full-width pill for ShailaManager rows
 // Props: status ("researching"|"have_answer"|"got_back"), shailaNum, onToggle, size
 // ─────────────────────────────────────────────────────────────────────────────
-function ShailaMiniPill({status, shailaNum, onToggle, size="mini"}) {
+function ShailaMiniPill({status, shailaNum, onToggle, size="mini", answerSnippet}) {
   const isGotBack = status === "got_back";
   const hasAnswer = status === "have_answer" || isGotBack;
   // Don't render anything for "researching" — no answer yet, pill doesn't apply
   if (!hasAnswer) return null;
+
+  const accentColor = isGotBack ? "#6AB87D" : "#C8A84C";
 
   if (size === "full") {
     return (
       <div style={{
         display:"flex", alignItems:"center", gap:8,
         background: isGotBack ? "#6AB87D18" : "#C8A84C18",
-        border: `1.5px solid ${isGotBack ? "#6AB87D" : "#C8A84C"}`,
+        border: `1.5px solid ${accentColor}`,
         borderRadius: 24,
         padding: "7px 14px 7px 16px",
         transition: "background 0.35s, border-color 0.35s",
@@ -1587,9 +1595,16 @@ function ShailaMiniPill({status, shailaNum, onToggle, size="mini"}) {
         {shailaNum && (
           <span style={{fontSize:11,fontWeight:700,fontFamily:"system-ui",color:"#C8A84C",flexShrink:0}}>#{shailaNum}</span>
         )}
-        <span style={{fontSize:13,fontFamily:"system-ui",fontWeight:600,color:isGotBack?"#6AB87D":"#C8A84C",flex:1}}>
-          {isGotBack ? "Got back to asker! ✓" : "Got back to asker?"}
-        </span>
+        <div style={{flex:1,minWidth:0}}>
+          <span style={{fontSize:13,fontFamily:"system-ui",fontWeight:600,color:accentColor}}>
+            {isGotBack ? "Got back to asker! ✓" : "Got back to asker?"}
+          </span>
+          {answerSnippet && (
+            <div style={{fontSize:10,fontFamily:"system-ui",color:accentColor,opacity:.75,fontStyle:"italic",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              {answerSnippet}
+            </div>
+          )}
+        </div>
         {!isGotBack && (
           <button onClick={e=>{e.stopPropagation();onToggle?.();}} title="Mark: got back to asker"
             style={{width:30,height:30,borderRadius:"50%",border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,fontWeight:700,flexShrink:0,transition:"background 0.2s"}}>
@@ -1614,7 +1629,7 @@ function ShailaMiniPill({status, shailaNum, onToggle, size="mini"}) {
       style={{
         display:"inline-flex", alignItems:"center", gap:4,
         background: isGotBack ? "#6AB87D18" : "#C8A84C18",
-        border: `1px solid ${isGotBack ? "#6AB87D" : "#C8A84C"}`,
+        border: `1px solid ${accentColor}`,
         borderRadius: 20,
         padding: "2px 8px 2px 6px",
         cursor: "pointer",
@@ -1625,9 +1640,14 @@ function ShailaMiniPill({status, shailaNum, onToggle, size="mini"}) {
       {shailaNum && (
         <span style={{fontSize:9,fontWeight:700,fontFamily:"system-ui",color:"#C8A84C",marginRight:1}}>#{shailaNum}</span>
       )}
-      <span style={{fontSize:10,fontWeight:600,fontFamily:"system-ui",color:isGotBack?"#6AB87D":"#C8A84C"}}>
+      <span style={{fontSize:10,fontWeight:600,fontFamily:"system-ui",color:accentColor}}>
         {isGotBack ? "Got back! ✓" : "Got back?"}
       </span>
+      {answerSnippet && (
+        <span style={{fontSize:9,fontFamily:"system-ui",color:accentColor,opacity:.7,fontStyle:"italic",maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          {answerSnippet}
+        </span>
+      )}
       {isGotBack
         ? <span style={{fontSize:9,color:"#6AB87D",opacity:.7}}>↩</span>
         : <span style={{fontSize:10,background:"#C8A84C",color:"#fff",borderRadius:"50%",width:14,height:14,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:700,flexShrink:0}}>✓</span>

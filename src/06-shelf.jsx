@@ -215,8 +215,6 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
                 {st.isGetBackStep && st.shailaId && shailaNumberMap && (
                   <ShailaMiniPill
                     status={(() => {
-                      // Derive status: if sibling research steps all done → have_answer, else researching
-                      // Also check if gotBackToAsker already set
                       const siblings = tasks.filter(t => t.shailaId === st.shailaId && !t.isGetBackStep);
                       const researchTask = siblings.find(t => !t.completed);
                       if (st.gotBackToAsker) return "got_back";
@@ -225,6 +223,13 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
                     })()}
                     shailaNum={shailaNumberMap[st.shailaId]}
                     onToggle={() => onShailaGotBack && onShailaGotBack(st.shailaId, !st.gotBackToAsker)}
+                    answerSnippet={(() => {
+                      const siblings = tasks.filter(t => t.shailaId === st.shailaId && !t.isGetBackStep);
+                      const ans = (siblings.find(t => t.shailaAnswer)?.shailaAnswer || '').trim();
+                      if (!ans) return null;
+                      const words = ans.split(/\s+/);
+                      return words.slice(0, 3).join(' ') + (words.length > 3 ? '…' : '');
+                    })()}
                   />
                 )}
                 <button onClick={e=>{e.stopPropagation();if(onChgPri)onChgPri(st.id);}} title="Change priority" style={{background:"none",border:"none",cursor:"pointer",padding:2,opacity:.5,flexShrink:0,display:"flex",alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.5}>
