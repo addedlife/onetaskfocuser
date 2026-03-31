@@ -1478,6 +1478,16 @@ async function aiDetectShailaAnswers(shailas, aiOpts) {
   catch(e) { return []; }
 }
 
+async function aiParseConversation(transcript, currentTasks, currentShailos, aiOpts) {
+  const taskSnap = currentTasks.slice(0,20).map((t,i)=>`${i+1}. [${t.priority}] ${t.text}`).join('\n') || '(none)';
+  const shailaSnap = currentShailos.slice(0,15).map((s,i)=>`${i+1}. ${s.synopsis||s.content||'shaila'}`).join('\n') || '(none)';
+  const r = await callAI(`You are parsing a Yeshivish English conversation to extract actionable items. Yeshivish mixes English with Hebrew/Yiddish: shaila, halacha, Shabbos, daven, bracha, etc.\n\nTRANSCRIPT:\n${transcript}\n\nCURRENT TASK QUEUE:\n${taskSnap}\n\nOPEN SHAILOS:\n${shailaSnap}\n\nExtract items in 6 categories. CRITICAL: NEVER copy raw transcript text — write clean concise summaries (5-15 words). Preserve key halachic/Jewish terms.\n\n1. tasks: New to-dos not in queue. priority: "now"|"today"|"eventually"|"shaila"\n2. completions: Things mentioned as done. matchedTask = queue number if matches.\n3. shailos: Halachic questions. synopsis=5-8 word core question.\n4. gotBacks: Answers delivered to askers. matchedShailaIndex if matches open shaila.\n5. scheduleItems: Appointments/meetings/events. Include when if mentioned.\n6. reminders: Notes/follow-ups (not immediate tasks).\n\nReturn ONLY valid JSON:\n{"tasks":[{"text":"concise task","priority":"now|today|eventually|shaila"}],"completions":[{"text":"what was completed","matchedTask":null}],"shailos":[{"synopsis":"core question 5-8 words","content":"fuller description","askerName":null,"answer":""}],"gotBacks":[{"synopsis":"which shaila got answered","matchedShailaIndex":null}],"scheduleItems":[{"text":"event description","when":null}],"reminders":[{"text":"what to remember"}]}\n\nReturn [] for empty categories.`, aiOpts);
+  if (!r) throw new Error('No AI response');
+  const m = r.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('Could not parse AI response');
+  return JSON.parse(m[0]);
+}
+
 async function aiParseBrainDump(text, pris, aiOpts) {
   const activePris = pris.filter(p => !p.deleted).sort((a,b) => b.weight-a.weight);
   const priOptions = activePris.map(p => `"${p.id}" = ${p.label}`).join(', ');
@@ -1496,4 +1506,4 @@ async function aiParseBrainDump(text, pris, aiOpts) {
 }
 
 
-export { firebaseConfig, db, Store, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, PALETTE, PROMPTS, TIPS, YC, cleanYT, uid, canonicalUid, gG, gP, pBg, _lum, textOnColor, _priTextMap, priText, textOnPastel, dayKey, tipOfDay, fmtMs, getMrsWPriority, getTaskAgeHours, isTaskAged, callAI, callGemini, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, suggestFirstStep, aiParseShailos, aiGenSchemes, aiDetectShailaAnswers, aiParseBrainDump };
+export { firebaseConfig, db, Store, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, PALETTE, PROMPTS, TIPS, YC, cleanYT, uid, canonicalUid, gG, gP, pBg, _lum, textOnColor, _priTextMap, priText, textOnPastel, dayKey, tipOfDay, fmtMs, getMrsWPriority, getTaskAgeHours, isTaskAged, callAI, callGemini, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, suggestFirstStep, aiParseShailos, aiGenSchemes, aiDetectShailaAnswers, aiParseBrainDump, aiParseConversation };

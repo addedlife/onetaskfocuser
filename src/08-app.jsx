@@ -1,9 +1,9 @@
 // === 08-app.js ===
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callGemini, callAI, suggestFirstStep, aiParseShailos, aiParseBrainDump, gG, fmtMs, db, _lum, priText, textOnPastel } from './01-core.js';
+import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callGemini, callAI, suggestFirstStep, aiParseShailos, aiParseBrainDump, aiParseConversation, gG, fmtMs, db, _lum, priText, textOnPastel } from './01-core.js';
 import { IC } from './02-icons.jsx';
-import { VoiceInput } from './03-voice.jsx';
+import { VoiceInput, webmToWavBase64 } from './03-voice.jsx';
 import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from './04-components.jsx';
 import { BulkAdd, TaskBD, BlockedModal, ContextTagPicker, ListManager } from './05-modals.jsx';
 import { ShelfView, SubtaskGroup } from './06-shelf.jsx';
@@ -108,6 +108,8 @@ function App({ user, onSignOut }) {
   const pendingShailaIds = useRef(new Set());              // shailaIds assigned but not yet in state (prevents listener dupes)
   const [sharedGeminiKey, setSharedGeminiKey] = useState(""); // app-level key from server
   const [fbOffline, setFbOffline] = useState(false);      // Firebase unreachable on load — warn user
+  // ─── Conversation Capture ────────────────────────────────────────────────
+  const [showConvCapture, setShowConvCapture] = useState(false);
 
   const inRef = useRef(null);
   const edRef = useRef(null);
@@ -1945,6 +1947,19 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         <ShailaManager AS={AS} T={T} aiOpts={aiOpts} onSaveField={saveShailaField} onGotBack={handleShailaGotBack} onAddManual={handleAddManualShaila} onClose={()=>setShowShailaManager(false)}/>
       )}
 
+      {/* ConvCapture — universal conversation recorder */}
+      {showConvCapture && (
+        <ConvCapture
+          onClose={()=>setShowConvCapture(false)}
+          onApply={addVT}
+          tasks={tasksRef.current}
+          shailos={shailosRef.current}
+          pris={pris}
+          aiOpts={aiOpts}
+          T={T}
+        />
+      )}
+
       {/* Noise texture */}
       <div style={{position:"fixed",inset:0,pointerEvents:"none",opacity:.025,backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`}}/>
 
@@ -2767,7 +2782,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
               <button onClick={()=>{setShailosAction("record-shaila");setShowShailos(true);}} style={bigS} onMouseEnter={onEB} onMouseLeave={onLB} title="Record a shaila">
                 <svg {...icS} viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
               </button>
-              <button onClick={()=>{setShailosAction("record-call");setShowShailos(true);}} style={bigS} onMouseEnter={onEB} onMouseLeave={onLB} title="Record a conversation — extracts tasks, shailos & more">
+              <button onClick={()=>setShowConvCapture(true)} style={bigS} onMouseEnter={onEB} onMouseLeave={onLB} title="Record a conversation — extracts tasks, shailos & more">
                 <svg {...icS} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.86 19.86 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.68 2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.74-1.25a2 2 0 0 1 2.11-.45c.74.32 1.53.55 2.34.68A2 2 0 0 1 22 16.92z"/></svg>
               </button>
             </div>
@@ -2790,5 +2805,294 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
   );
 }
 
+
+// ─── ConvCapture — Universal Conversation Recorder ───────────────────────────
+function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T }) {
+  const [phase, setPhase] = useState('recording'); // 'recording' | 'processing' | 'review'
+  const [liveText, setLiveText] = useState('');
+  const [items, setItems] = useState([]);
+  const [err, setErr] = useState('');
+  const [elapsed, setElapsed] = useState(0);
+  const phaseRef = useRef('recording');
+  const streamRef = useRef(null);
+  const mediaRecRef = useRef(null);
+  const chunksRef = useRef([]);
+  const mediaStopPRef = useRef(null);
+  const segBufRef = useRef('');
+  const liveRef = useRef('');
+  const recogRef = useRef(null);
+  const elapsedTmrRef = useRef(null);
+
+  function goPhase(p) { phaseRef.current = p; setPhase(p); }
+
+  useEffect(() => {
+    chunksRef.current = [];
+    segBufRef.current = '';
+    liveRef.current = '';
+
+    // Web Speech for live text preview
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SR) {
+      const r = new SR();
+      recogRef.current = r;
+      r.continuous = true; r.interimResults = true; r.lang = 'en-US';
+      r.onresult = e => {
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) segBufRef.current = (segBufRef.current + ' ' + e.results[i][0].transcript).trim();
+          else interim = e.results[i][0].transcript;
+        }
+        const full = (segBufRef.current + (interim ? ' ' + interim : '')).trim();
+        liveRef.current = full;
+        setLiveText(full);
+      };
+      r.onend = () => { if (phaseRef.current === 'recording') { try { r.start(); } catch(_) {} } };
+      try { r.start(); } catch(_) {}
+    }
+
+    // MediaRecorder starts 300ms later so Web Speech gets mic priority
+    const t = setTimeout(async () => {
+      if (phaseRef.current !== 'recording') return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (phaseRef.current !== 'recording') { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+        const mr = new MediaRecorder(stream, { mimeType });
+        mediaRecRef.current = mr;
+        mr.ondataavailable = e => { if (e.data?.size > 0) chunksRef.current.push(e.data); };
+        mr.start(200);
+      } catch(_) { setErr('Mic permission denied. Enable mic and try again.'); }
+    }, 300);
+
+    elapsedTmrRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
+
+    return () => {
+      clearTimeout(t);
+      clearInterval(elapsedTmrRef.current);
+      if (recogRef.current) { try { recogRef.current.onend = null; recogRef.current.abort(); } catch(_) {} }
+      if (mediaRecRef.current && mediaRecRef.current.state !== 'inactive') { try { mediaRecRef.current.stop(); } catch(_) {} }
+      if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); }
+    };
+  }, []); // eslint-disable-line
+
+  async function stopAndProcess() {
+    clearInterval(elapsedTmrRef.current);
+    const webSpeechText = liveRef.current || segBufRef.current || '';
+    if (recogRef.current) { try { recogRef.current.onend = null; recogRef.current.abort(); } catch(_) {} recogRef.current = null; }
+    if (mediaRecRef.current && mediaRecRef.current.state !== 'inactive') {
+      mediaStopPRef.current = new Promise(res => { mediaRecRef.current.onstop = res; });
+      try { mediaRecRef.current.stop(); } catch(_) { mediaStopPRef.current = null; }
+    }
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+    goPhase('processing');
+
+    try {
+      if (mediaStopPRef.current) { await mediaStopPRef.current; mediaStopPRef.current = null; }
+      const webmBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+      let transcript = webSpeechText;
+
+      if (webmBlob.size >= 500 && aiOpts?.geminiKey) {
+        const base64 = await webmToWavBase64(webmBlob);
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${aiOpts.geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [
+                { inline_data: { mime_type: 'audio/wav', data: base64 } },
+                { text: `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Use these standard spellings: shaila/shailos, halacha, gemara, Shabbos, davening, daven, bracha, mutar, assur, kashrus, Rashi, Rambam, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.\n\nReturn only the verbatim transcript. No summary, no rephrasing.` }
+              ]}],
+              generationConfig: { temperature: 0, maxOutputTokens: 8192 }
+            })
+          }
+        );
+        const d = await resp.json();
+        if (!d.error) transcript = (d.candidates?.[0]?.content?.parts?.[0]?.text || '').trim() || transcript;
+      }
+
+      if (!transcript.trim()) {
+        setErr('Nothing was captured. Check mic permissions and try again.');
+        setItems([]);
+        goPhase('review');
+        return;
+      }
+
+      const parsed = await aiParseConversation(transcript, tasks, shailos, aiOpts);
+      const allItems = [];
+      const add = (cat, arr) => (arr || []).forEach(item => allItems.push({ id: uid(), cat, approved: true, ...item }));
+      add('tasks', parsed.tasks);
+      add('shailos', parsed.shailos);
+      add('gotBacks', parsed.gotBacks);
+      add('completions', parsed.completions);
+      add('scheduleItems', parsed.scheduleItems);
+      add('reminders', parsed.reminders);
+      setItems(allItems);
+      goPhase('review');
+    } catch(e) {
+      setErr('Could not process conversation: ' + e.message);
+      setItems([]);
+      goPhase('review');
+    }
+  }
+
+  function toggleApproved(id) { setItems(prev => prev.map(it => it.id === id ? {...it, approved: !it.approved} : it)); }
+  function updateText(id, text) { setItems(prev => prev.map(it => it.id === id ? {...it, text} : it)); }
+  function updatePriority(id, priority) { setItems(prev => prev.map(it => it.id === id ? {...it, priority} : it)); }
+
+  function applyApproved() {
+    items.filter(it => it.approved).forEach(it => {
+      if (it.cat === 'tasks')         onApply(it.text, it.priority || 'eventually');
+      else if (it.cat === 'shailos') onApply(it.synopsis || it.content || it.text || 'Shaila', 'shaila');
+      else if (it.cat === 'scheduleItems') onApply(it.when ? `${it.text} (${it.when})` : it.text, 'today');
+      else if (it.cat === 'reminders') onApply(it.text, 'eventually');
+      // completions + gotBacks are info-only for now
+    });
+    onClose();
+  }
+
+  const approvedCount = items.filter(it => it.approved).length;
+  const mm = String(Math.floor(elapsed / 60)).padStart(1, '0');
+  const ss = String(elapsed % 60).padStart(2, '0');
+  const fmtElapsed = `${mm}:${ss}`;
+
+  const SECTIONS = [
+    { cat: 'tasks',        color: '#5B7BE8', emoji: '✓',  label: 'New Tasks' },
+    { cat: 'shailos',      color: '#C8A84C', emoji: '❓', label: 'Shailos' },
+    { cat: 'gotBacks',     color: '#2ECC71', emoji: '📬', label: 'Got Back to Asker' },
+    { cat: 'completions',  color: '#27AE60', emoji: '☑',  label: 'Mark Complete' },
+    { cat: 'scheduleItems',color: '#9B59B6', emoji: '📅', label: 'Schedule' },
+    { cat: 'reminders',    color: '#E67E22', emoji: '🔔', label: 'Reminders' },
+  ];
+
+  const overlayS = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 };
+  const cardS    = { background: T.card, borderRadius: 18, maxWidth: 560, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', fontFamily: 'Georgia, serif' };
+  const btnClose = { background: 'none', border: 'none', cursor: 'pointer', color: T.tFaint, fontSize: 22, lineHeight: 1, padding: 4, fontFamily: 'system-ui' };
+
+  if (phase === 'recording') return (
+    <div style={overlayS} onClick={onClose}>
+      <style>{`@keyframes conv-pulse{0%,100%{opacity:1}50%{opacity:.25}}`}</style>
+      <div style={cardS} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '22px 24px 18px', borderBottom: `1px solid ${T.brd}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: T.t }}>Recording Conversation</span>
+            <button style={btnClose} onClick={onClose}>×</button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#E74C3C', animation: 'conv-pulse 1.4s ease infinite' }}/>
+            <span style={{ fontSize: 13, color: T.tSoft, fontFamily: 'system-ui', fontVariantNumeric: 'tabular-nums' }}>{fmtElapsed}</span>
+            <span style={{ fontSize: 12, color: T.tFaint, fontFamily: 'system-ui' }}>Speak freely — AI will extract everything</span>
+          </div>
+          {liveText && (
+            <div style={{ fontSize: 12, color: T.tFaint, fontFamily: 'system-ui', lineHeight: 1.5, maxHeight: 72, overflowY: 'auto', background: T.bgW, borderRadius: 8, padding: '8px 12px', border: `1px solid ${T.brdS}` }}>
+              {liveText}
+            </div>
+          )}
+          {err && <div style={{ fontSize: 12, color: '#E74C3C', fontFamily: 'system-ui', marginTop: 8 }}>{err}</div>}
+        </div>
+        <div style={{ padding: '20px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
+          <button onClick={stopAndProcess} style={{ background: '#E74C3C', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 30px', fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'system-ui' }}>
+            Stop &amp; Process
+          </button>
+          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: 'system-ui' }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (phase === 'processing') return (
+    <div style={overlayS}>
+      <div style={{ ...cardS, alignItems: 'center', justifyContent: 'center', padding: '56px 32px', textAlign: 'center' }}>
+        <div style={{ fontSize: 38, marginBottom: 16 }}>🎙️</div>
+        <div style={{ fontSize: 16, fontWeight: 600, color: T.t, marginBottom: 8, fontFamily: 'system-ui' }}>Processing conversation…</div>
+        <div style={{ fontSize: 13, color: T.tFaint, fontFamily: 'system-ui' }}>Transcribing and extracting items</div>
+      </div>
+    </div>
+  );
+
+  // ── Review phase ──────────────────────────────────────────────────────────
+  return (
+    <div style={overlayS} onClick={onClose}>
+      <div style={cardS} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ padding: '20px 24px 14px', borderBottom: `1px solid ${T.brd}`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: T.t }}>Found in this conversation</div>
+              <div style={{ fontSize: 12, color: T.tFaint, fontFamily: 'system-ui', marginTop: 3 }}>
+                {items.length} item{items.length !== 1 ? 's' : ''} — check what to add
+              </div>
+            </div>
+            <button style={btnClose} onClick={onClose}>×</button>
+          </div>
+          {err && <div style={{ fontSize: 12, color: '#E74C3C', fontFamily: 'system-ui', marginTop: 8 }}>{err}</div>}
+        </div>
+
+        {/* Scrollable body */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '12px 24px 4px' }}>
+          {items.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '36px 0', color: T.tFaint, fontFamily: 'system-ui', fontSize: 14 }}>
+              No actionable items found in this conversation.
+            </div>
+          )}
+          {SECTIONS.map(({ cat, color, emoji, label }) => {
+            const sItems = items.filter(it => it.cat === cat);
+            if (!sItems.length) return null;
+            return (
+              <div key={cat} style={{ marginBottom: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                  <div style={{ width: 3, height: 18, background: color, borderRadius: 2, flexShrink: 0 }}/>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: T.t, fontFamily: 'system-ui', letterSpacing: '.3px' }}>{emoji} {label}</span>
+                  <span style={{ fontSize: 11, background: color + '22', color: color, borderRadius: 10, padding: '1px 7px', fontFamily: 'system-ui', fontWeight: 600 }}>{sItems.length}</span>
+                </div>
+                {sItems.map(it => (
+                  <div key={it.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '7px 0', borderBottom: `1px solid ${T.brdS}` }}>
+                    <input type="checkbox" checked={it.approved} onChange={() => toggleApproved(it.id)}
+                      style={{ marginTop: 5, accentColor: color, flexShrink: 0, cursor: 'pointer', width: 14, height: 14 }}/>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <input
+                        value={it.text || it.synopsis || ''}
+                        onChange={e => updateText(it.id, e.target.value)}
+                        style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${T.brdS}`, color: T.t, fontSize: 13, fontFamily: 'system-ui', padding: '2px 0', outline: 'none', boxSizing: 'border-box' }}
+                      />
+                      {cat === 'tasks' && (
+                        <select value={it.priority || 'eventually'} onChange={e => updatePriority(it.id, e.target.value)}
+                          style={{ marginTop: 5, fontSize: 11, background: T.bgW, border: `1px solid ${T.brd}`, borderRadius: 6, color: T.tSoft, padding: '2px 6px', cursor: 'pointer', fontFamily: 'system-ui' }}>
+                          {pris.filter(p => !p.deleted).map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                          <option value="shaila">Shaila</option>
+                        </select>
+                      )}
+                      {cat === 'scheduleItems' && it.when && (
+                        <div style={{ fontSize: 11, color: T.tFaint, fontFamily: 'system-ui', marginTop: 3 }}>When: {it.when}</div>
+                      )}
+                      {(cat === 'completions' || cat === 'gotBacks') && (
+                        <div style={{ fontSize: 11, color: T.tFaint, fontFamily: 'system-ui', marginTop: 2, fontStyle: 'italic' }}>Info only — no action taken</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '14px 24px 18px', borderTop: `1px solid ${T.brd}`, display: 'flex', gap: 10, flexShrink: 0 }}>
+          <button onClick={applyApproved} disabled={approvedCount === 0}
+            style={{ flex: 1, background: approvedCount > 0 ? '#5B7BE8' : T.brdS, color: approvedCount > 0 ? '#fff' : T.tFaint, border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, cursor: approvedCount > 0 ? 'pointer' : 'default', fontFamily: 'system-ui', transition: 'background 0.15s' }}>
+            Add {approvedCount > 0 ? approvedCount : 0} item{approvedCount !== 1 ? 's' : ''}
+          </button>
+          <button onClick={onClose}
+            style={{ padding: '12px 18px', background: 'none', border: `1px solid ${T.brd}`, borderRadius: 10, fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: 'system-ui' }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export { App };

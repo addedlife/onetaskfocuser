@@ -11,7 +11,7 @@ import { cleanYT, callGemini, aiParseShailos, callAI, uid, textOnColor } from '.
 let _activeMicId = null;
 
 // Convert a WebM/Opus blob → 16 kHz mono WAV base64 (universally accepted by transcription APIs)
-async function webmToWavBase64(webmBlob) {
+export async function webmToWavBase64(webmBlob) {
   const arrayBuf = await webmBlob.arrayBuffer();
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   let decoded;
