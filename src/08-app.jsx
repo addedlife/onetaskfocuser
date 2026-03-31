@@ -320,18 +320,19 @@ function App({ user, onSignOut }) {
           if (pendingShailaIds.current.has(s.id)) return;
           if (addedShailaIds.has(s.id)) return; // already adding in this batch
           if (!linkedTasks.length && s.status !== "answered" && s.status !== "got_back") {
-            // Use the formatted question (content) for task text, synopsis as fallback
-            const parentText = s.content || s.parsedShaila || s.synopsis || "New shaila";
+            // Use synopsis as concise title; fall back to content
+            const parentText = s.synopsis || s.content || s.parsedShaila || "New shaila";
             if (shailaTextSet.has(parentText.trim().toLowerCase())) return; // text dedup
             addedShailaIds.add(s.id);
             const baseTime = Date.now();
+            const shortDesc = parentText.substring(0, 40);
             toAdd.push({
-              id: uid(), text: "Research answer",
+              id: uid(), text: `Research – ${shortDesc}`,
               completed: false, priority: "shaila", createdAt: baseTime,
               shailaId: s.id, parentTask: parentText, stepIndex: 1, totalSteps: 2,
             });
             toAdd.push({
-              id: uid(), text: "Get back to asker with answer",
+              id: uid(), text: `Get back – ${shortDesc}`,
               completed: false, priority: "shaila", createdAt: baseTime,
               shailaId: s.id, isGetBackStep: true,
               parentTask: parentText, stepIndex: 2, totalSteps: 2,
@@ -869,13 +870,14 @@ function App({ user, onSignOut }) {
       if (shailaId) pendingShailaIds.current.add(shailaId);
       const parentText = text.trim();
       const baseTime = Date.now();
+      const shortDesc = parentText.substring(0, 40);
       const step1 = {
-        id: uid(), text: "Research answer", completed: false, priority: pri,
+        id: uid(), text: `Research – ${shortDesc}`, completed: false, priority: pri,
         createdAt: baseTime, shailaId: shailaId,
         parentTask: parentText, stepIndex: 1, totalSteps: 2,
       };
       const step2 = {
-        id: uid(), text: "Get back to asker with answer", completed: false, priority: pri,
+        id: uid(), text: `Get back – ${shortDesc}`, completed: false, priority: pri,
         createdAt: baseTime, shailaId: shailaId, isGetBackStep: true,
         parentTask: parentText, stepIndex: 2, totalSteps: 2,
       };
@@ -1743,11 +1745,12 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                   <p style={{fontSize:12,fontWeight:700,color:T.tSoft,margin:0,fontFamily:"system-ui"}}>In Transcriber, no task in queue ({shailaReconcile.missingTasks.length}):</p>
                   <button onClick={()=>{
                     const newTasks = shailaReconcile.missingTasks.flatMap(s => {
-                      const parentText = s.content||s.parsedShaila||s.synopsis||"New shaila";
+                      const parentText = s.synopsis||s.content||s.parsedShaila||"New shaila";
+                      const shortDesc = parentText.substring(0,40);
                       const baseTime = Date.now();
                       return [
-                        {id:uid(), text:"Research answer", completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, parentTask:parentText, stepIndex:1, totalSteps:2},
-                        {id:uid(), text:"Get back to asker with answer", completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, isGetBackStep:true, parentTask:parentText, stepIndex:2, totalSteps:2},
+                        {id:uid(), text:`Research – ${shortDesc}`, completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, parentTask:parentText, stepIndex:1, totalSteps:2},
+                        {id:uid(), text:`Get back – ${shortDesc}`, completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, isGetBackStep:true, parentTask:parentText, stepIndex:2, totalSteps:2},
                       ];
                     });
                     uT(ts=>[...ts, ...newTasks]);
@@ -1761,11 +1764,12 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                     <span style={{fontSize:13,color:T.text,fontFamily:"Georgia,serif",flex:1,marginRight:8}}>{s.synopsis || s.content?.substring(0,60) || "Shaila"}</span>
                     <div style={{display:"flex",gap:4,flexShrink:0}}>
                       <button onClick={()=>{
-                        const parentText = s.content||s.parsedShaila||s.synopsis||"New shaila";
+                        const parentText = s.synopsis||s.content||s.parsedShaila||"New shaila";
+                        const shortDesc = parentText.substring(0,40);
                         const baseTime = Date.now();
                         const newTasks = [
-                          {id:uid(), text:"Research answer", completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, parentTask:parentText, stepIndex:1, totalSteps:2},
-                          {id:uid(), text:"Get back to asker with answer", completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, isGetBackStep:true, parentTask:parentText, stepIndex:2, totalSteps:2},
+                          {id:uid(), text:`Research – ${shortDesc}`, completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, parentTask:parentText, stepIndex:1, totalSteps:2},
+                          {id:uid(), text:`Get back – ${shortDesc}`, completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, isGetBackStep:true, parentTask:parentText, stepIndex:2, totalSteps:2},
                         ];
                         uT(ts=>[...ts, ...newTasks]);
                         setShailaReconcile(prev=>({...prev, missingTasks:prev.missingTasks.filter(x=>x.id!==s.id)}));
@@ -2742,7 +2746,11 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         const icS = {width:17,height:17,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
         return (
           <div style={{position:"fixed",bottom:20,right:20,zIndex:9100,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
-            <span style={{fontSize:9,fontWeight:700,letterSpacing:1.5,color:outC,opacity:.5,fontFamily:"system-ui",textTransform:"uppercase",paddingRight:4}}>Shailos</span>
+            <div style={{display:"flex",alignItems:"center",gap:6,alignSelf:"stretch"}}>
+              <div style={{flex:1,height:1,background:outC,opacity:.25}}/>
+              <span style={{fontSize:8,fontWeight:700,letterSpacing:2,color:outC,opacity:.55,fontFamily:"system-ui",textTransform:"uppercase",whiteSpace:"nowrap"}}>Shailos</span>
+              <div style={{flex:1,height:1,background:outC,opacity:.25}}/>
+            </div>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
               <button onClick={()=>{setShailosAction("record-shaila");setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="Record a new shaila">
                 <svg {...icS} viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="21"/></svg>

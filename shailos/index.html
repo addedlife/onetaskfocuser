@@ -3,9 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
-    <script type="module" crossorigin src="/shailos/assets/index-DRv1vt_h.js"></script>
-    <link rel="stylesheet" crossorigin href="/shailos/assets/index-9s-y2Em-.css">
+    <title>Shaila Transcriber</title>
+    <script>
+      try {
+        var sc = JSON.parse(localStorage.getItem('onetask_theme') || 'null');
+        if (sc) {
+          var r = document.documentElement;
+          r.style.setProperty('--ot-bg',         sc.bg     || '#EDE5D8');
+          r.style.setProperty('--ot-card',        sc.card   || '#F5EFE5');
+          r.style.setProperty('--ot-text',        sc.text   || '#3D3633');
+          r.style.setProperty('--ot-text-soft',   sc.tSoft  || '#6E5848');
+          r.style.setProperty('--ot-text-faint',  sc.tFaint || '#7E6858');
+          r.style.setProperty('--ot-border',      sc.brd    || '#D8CEBC');
+          r.style.setProperty('--ot-border-s',    sc.brdS   || '#E4DBCE');
+        }
+      } catch(e) {}
+    </script>
+    <script type="module" crossorigin src="/shailos/assets/index-CTh1q5Bv.js"></script>
+    <link rel="stylesheet" crossorigin href="/shailos/assets/index-DvKYfM6C.css">
   </head>
   <body>
     <div id="root"></div>
