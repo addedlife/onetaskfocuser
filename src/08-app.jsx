@@ -110,6 +110,7 @@ function App({ user, onSignOut }) {
   const [fbOffline, setFbOffline] = useState(false);      // Firebase unreachable on load — warn user
   // ─── Conversation Capture ────────────────────────────────────────────────
   const [showConvCapture, setShowConvCapture] = useState(false);
+  const [convCallMode, setConvCallMode] = useState(false); // true = getDisplayMedia (phone call)
 
   const inRef = useRef(null);
   const edRef = useRef(null);
@@ -1950,13 +1951,14 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       {/* ConvCapture — universal conversation recorder */}
       {showConvCapture && (
         <ConvCapture
-          onClose={()=>setShowConvCapture(false)}
+          onClose={()=>{setShowConvCapture(false);setConvCallMode(false);}}
           onApply={addVT}
           tasks={tasksRef.current}
           shailos={shailosRef.current}
           pris={pris}
           aiOpts={aiOpts}
           T={T}
+          callMode={convCallMode}
         />
       )}
 
@@ -2779,10 +2781,10 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           <div style={{position:"fixed",bottom:20,right:20,zIndex:9100,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
             {/* Prominent: Record shaila + Record call (universal) */}
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
-              <button onClick={()=>{setShailosAction("record-shaila");setShowShailos(true);}} style={bigS} onMouseEnter={onEB} onMouseLeave={onLB} title="Record a shaila">
+              <button onClick={()=>{setConvCallMode(false);setShowConvCapture(true);}} style={bigS} onMouseEnter={onEB} onMouseLeave={onLB} title="Record — extracts tasks, shailos & more">
                 <svg {...icS} viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
               </button>
-              <button onClick={()=>setShowConvCapture(true)} style={bigS} onMouseEnter={onEB} onMouseLeave={onLB} title="Record a conversation — extracts tasks, shailos & more">
+              <button onClick={()=>{setConvCallMode(true);setShowConvCapture(true);}} style={bigS} onMouseEnter={onEB} onMouseLeave={onLB} title="Capture call audio — share tab/window to record a phone call">
                 <svg {...icS} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.86 19.86 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.68 2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.74-1.25a2 2 0 0 1 2.11-.45c.74.32 1.53.55 2.34.68A2 2 0 0 1 22 16.92z"/></svg>
               </button>
             </div>
@@ -2807,13 +2809,17 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
 
 
 // ─── ConvCapture — Universal Conversation Recorder ───────────────────────────
-function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T }) {
-  const [phase, setPhase] = useState('recording'); // 'recording' | 'processing' | 'review'
+// callMode=false (mic button): records your own voice via getUserMedia
+// callMode=true  (phone button): captures system audio via getDisplayMedia
+//   — user shares the tab/window playing the call; Web Speech is skipped
+function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMode=false }) {
+  // callMode starts in 'ready' phase (waiting for user to share screen)
+  const [phase, setPhase] = useState(callMode ? 'ready' : 'recording');
   const [liveText, setLiveText] = useState('');
   const [items, setItems] = useState([]);
   const [err, setErr] = useState('');
   const [elapsed, setElapsed] = useState(0);
-  const phaseRef = useRef('recording');
+  const phaseRef = useRef(callMode ? 'ready' : 'recording');
   const streamRef = useRef(null);
   const mediaRecRef = useRef(null);
   const chunksRef = useRef([]);
@@ -2825,12 +2831,23 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T }) {
 
   function goPhase(p) { phaseRef.current = p; setPhase(p); }
 
+  function startMediaRecorder(stream) {
+    streamRef.current = stream;
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+    const mr = new MediaRecorder(stream, { mimeType });
+    mediaRecRef.current = mr;
+    mr.ondataavailable = e => { if (e.data?.size > 0) chunksRef.current.push(e.data); };
+    mr.start(200);
+    elapsedTmrRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
+  }
+
+  // Mic mode: start recording immediately on mount
   useEffect(() => {
+    if (callMode) return; // call mode waits for user gesture (startCallCapture)
     chunksRef.current = [];
     segBufRef.current = '';
     liveRef.current = '';
 
-    // Web Speech for live text preview
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SR) {
       const r = new SR();
@@ -2850,22 +2867,14 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T }) {
       try { r.start(); } catch(_) {}
     }
 
-    // MediaRecorder starts 300ms later so Web Speech gets mic priority
     const t = setTimeout(async () => {
       if (phaseRef.current !== 'recording') return;
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         if (phaseRef.current !== 'recording') { stream.getTracks().forEach(t => t.stop()); return; }
-        streamRef.current = stream;
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
-        const mr = new MediaRecorder(stream, { mimeType });
-        mediaRecRef.current = mr;
-        mr.ondataavailable = e => { if (e.data?.size > 0) chunksRef.current.push(e.data); };
-        mr.start(200);
+        startMediaRecorder(stream);
       } catch(_) { setErr('Mic permission denied. Enable mic and try again.'); }
     }, 300);
-
-    elapsedTmrRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
 
     return () => {
       clearTimeout(t);
@@ -2875,6 +2884,31 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T }) {
       if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); }
     };
   }, []); // eslint-disable-line
+
+  // Call mode: triggered by user clicking "Start capturing"
+  async function startCallCapture() {
+    setErr('');
+    try {
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, sampleRate: 44100 },
+        video: { width: 1, height: 1 },
+      });
+      const audioTracks = displayStream.getAudioTracks();
+      if (!audioTracks.length) {
+        displayStream.getTracks().forEach(t => t.stop());
+        setErr('No audio captured. Make sure to check "Share tab audio" in the browser dialog.');
+        return;
+      }
+      // Stop the video track immediately — we only need audio
+      displayStream.getVideoTracks().forEach(t => t.stop());
+      const audioStream = new MediaStream(audioTracks);
+      chunksRef.current = [];
+      startMediaRecorder(audioStream);
+      goPhase('recording');
+    } catch(e) {
+      if (e.name !== 'NotAllowedError') setErr('Could not capture audio: ' + e.message);
+    }
+  }
 
   async function stopAndProcess() {
     clearInterval(elapsedTmrRef.current);
@@ -2913,7 +2947,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T }) {
       }
 
       if (!transcript.trim()) {
-        setErr('Nothing was captured. Check mic permissions and try again.');
+        setErr(callMode ? 'No audio was captured from the call. Make sure audio was playing and you checked "Share tab audio".' : 'Nothing was captured. Check mic permissions and try again.');
         setItems([]);
         goPhase('review');
         return;
@@ -2931,7 +2965,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T }) {
       setItems(allItems);
       goPhase('review');
     } catch(e) {
-      setErr('Could not process conversation: ' + e.message);
+      setErr('Could not process: ' + e.message);
       setItems([]);
       goPhase('review');
     }
@@ -2970,13 +3004,41 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T }) {
   const cardS    = { background: T.card, borderRadius: 18, maxWidth: 560, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', fontFamily: 'Georgia, serif' };
   const btnClose = { background: 'none', border: 'none', cursor: 'pointer', color: T.tFaint, fontSize: 22, lineHeight: 1, padding: 4, fontFamily: 'system-ui' };
 
+  // ── Call mode: waiting for user to share screen ───────────────────────────
+  if (phase === 'ready') return (
+    <div style={overlayS} onClick={onClose}>
+      <div style={cardS} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '22px 24px 18px', borderBottom: `1px solid ${T.brd}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: T.t }}>Capture Call Audio</span>
+            <button style={btnClose} onClick={onClose}>×</button>
+          </div>
+          <div style={{ fontSize: 13, color: T.tSoft, fontFamily: 'system-ui', lineHeight: 1.6, marginBottom: 14 }}>
+            Click <strong>Start capturing</strong>, then in the browser dialog:<br/>
+            1. Select the tab or window playing the call<br/>
+            2. Check <em>"Share tab audio"</em> before clicking Share
+          </div>
+          {err && <div style={{ fontSize: 12, color: '#E74C3C', fontFamily: 'system-ui', marginBottom: 8 }}>{err}</div>}
+        </div>
+        <div style={{ padding: '18px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
+          <button onClick={startCallCapture} style={{ background: '#5B7BE8', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 28px', fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'system-ui' }}>
+            Start capturing
+          </button>
+          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: 'system-ui' }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (phase === 'recording') return (
     <div style={overlayS} onClick={onClose}>
       <style>{`@keyframes conv-pulse{0%,100%{opacity:1}50%{opacity:.25}}`}</style>
       <div style={cardS} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '22px 24px 18px', borderBottom: `1px solid ${T.brd}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: T.t }}>Recording Conversation</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: T.t }}>{callMode ? 'Capturing Call Audio' : 'Recording Conversation'}</span>
             <button style={btnClose} onClick={onClose}>×</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
