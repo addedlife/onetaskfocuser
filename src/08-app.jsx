@@ -2129,6 +2129,16 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                   </div>
                 )}
               </div>
+
+              {/* Queue shortcut — direct access from launchpad */}
+              <div style={{textAlign:"center",paddingBottom:8}}>
+                <button onClick={()=>switchTab("queue")} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:20,padding:"5px 16px",cursor:"pointer",fontFamily:"system-ui",fontSize:12,fontWeight:600,color:T.tFaint,letterSpacing:.5,transition:"all 0.15s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.color=T.text;e.currentTarget.style.borderColor=T.tSoft;}}
+                  onMouseLeave={e=>{e.currentTarget.style.color=T.tFaint;e.currentTarget.style.borderColor=T.brd;}}>
+                  Queue · {effectiveCount}
+                </button>
+              </div>
+
             </div>{/* end spine */}
 
             {/* ── Clean categorized menu — replaces side icon columns ── */}
@@ -2737,32 +2747,40 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         {tab !== "focus" && <footer style={{textAlign:"center",padding:"20px 0 36px",borderTop:`1px solid ${T.brdS}`,marginTop:16,flexShrink:0}}><p style={{color:T.tFaint,fontSize:12,fontStyle:"italic",margin:0}}>One thing at a time.</p></footer>}
       </div>
 
-      {/* ── Floating Shaila buttons — muted outline icons, always visible except during Zen ── */}
+      {/* ── Floating capture buttons — always visible except during Zen ── */}
       {!zen && (()=>{
-        const outC = T.isDark ? T.tFaint : T.tSoft;  // outline/icon color
-        const fbS = {width:40,height:40,background:T.card+"88",border:`1.5px solid ${outC}40`,borderRadius:"50%",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s",opacity:.65};
-        const onE = e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.borderColor=outC;e.currentTarget.style.transform="scale(1.1)";};
-        const onL = e=>{e.currentTarget.style.opacity=".65";e.currentTarget.style.borderColor=outC+"40";e.currentTarget.style.transform="scale(1)";};
-        const icS = {width:17,height:17,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
+        const outC = T.isDark ? T.tFaint : T.tSoft;
+        const icS = {width:19,height:19,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
+        const icSm = {width:14,height:14,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
+        // Large prominent buttons (universal voice capture)
+        const bigS = {width:48,height:48,background:T.card+"cc",border:`1.5px solid ${outC}60`,borderRadius:"50%",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s",opacity:.8,boxShadow:T.shadow};
+        const onEB = e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.borderColor=outC;e.currentTarget.style.transform="scale(1.08)";e.currentTarget.style.boxShadow=T.shadowLg;};
+        const onLB = e=>{e.currentTarget.style.opacity=".8";e.currentTarget.style.borderColor=outC+"60";e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow=T.shadow;};
+        // Small secondary buttons (text-style)
+        const smS = {background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4,padding:"4px 6px",borderRadius:8,opacity:.5,transition:"opacity 0.15s",fontFamily:"system-ui",fontSize:11,color:outC,fontWeight:600};
+        const onEs = e=>e.currentTarget.style.opacity="1";
+        const onLs = e=>e.currentTarget.style.opacity=".5";
         return (
-          <div style={{position:"fixed",bottom:20,right:20,zIndex:9100,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,alignSelf:"stretch"}}>
-              <div style={{flex:1,height:1,background:outC,opacity:.25}}/>
-              <span style={{fontSize:8,fontWeight:700,letterSpacing:2,color:outC,opacity:.55,fontFamily:"system-ui",textTransform:"uppercase",whiteSpace:"nowrap"}}>Shailos</span>
-              <div style={{flex:1,height:1,background:outC,opacity:.25}}/>
-            </div>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <button onClick={()=>{setShailosAction("record-shaila");setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="Record a new shaila">
+          <div style={{position:"fixed",bottom:20,right:20,zIndex:9100,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+            {/* Prominent: Record shaila + Record call (universal) */}
+            <div style={{display:"flex",gap:10,alignItems:"center"}}>
+              <button onClick={()=>{setShailosAction("record-shaila");setShowShailos(true);}} style={bigS} onMouseEnter={onEB} onMouseLeave={onLB} title="Record a shaila">
                 <svg {...icS} viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
               </button>
-              <button onClick={()=>{setShailosAction("record-call");setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="Record a phone call">
+              <button onClick={()=>{setShailosAction("record-call");setShowShailos(true);}} style={bigS} onMouseEnter={onEB} onMouseLeave={onLB} title="Record a conversation — extracts tasks, shailos & more">
                 <svg {...icS} viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.86 19.86 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.68 2.34a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.74-1.25a2 2 0 0 1 2.11-.45c.74.32 1.53.55 2.34.68A2 2 0 0 1 22 16.92z"/></svg>
               </button>
-              <button onClick={()=>{setShailosAction("add-manual");setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="Add shaila manually">
-                <svg {...icS} viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </div>
+            {/* Secondary: Add manual + View records */}
+            <div style={{display:"flex",gap:2,alignItems:"center",justifyContent:"flex-end"}}>
+              <button onClick={()=>{setShailosAction("add-manual");setShowShailos(true);}} style={smS} onMouseEnter={onEs} onMouseLeave={onLs} title="Add shaila manually">
+                <svg {...icSm} viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add
               </button>
-              <button onClick={()=>{setShailosAction(null);setShowShailos(true);}} style={fbS} onMouseEnter={onE} onMouseLeave={onL} title="View shaila records">
-                <svg {...icS} viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <span style={{color:outC,opacity:.25,fontSize:11}}>|</span>
+              <button onClick={()=>{setShailosAction(null);setShowShailos(true);}} style={smS} onMouseEnter={onEs} onMouseLeave={onLs} title="View shaila records">
+                <svg {...icSm} viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                Records
               </button>
             </div>
           </div>
