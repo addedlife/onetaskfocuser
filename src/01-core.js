@@ -1080,13 +1080,13 @@ function isTaskAged(task, pris, thresholds) {
   return hours > limit;
 }
 
-async function callGemini(gk, prompt) {
+async function callGemini(gk, prompt, genConfig={}) {
   if (!gk) return null;
   try {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${gk}`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.7, maxOutputTokens:4096}})
+      body: JSON.stringify({contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.7, maxOutputTokens:4096, ...genConfig}})
     });
     const d = await r.json();
     if (d.error) { console.warn("[AI] Gemini error:", d.error); return null; }
@@ -1110,11 +1110,11 @@ async function callClaude(ck, prompt) {
 
 // Generic AI dispatcher — uses Claude or Gemini based on aiOpts
 // aiOpts = {provider:"gemini"|"claude", geminiKey, claudeKey} OR just a string (legacy gemini key)
-async function callAI(prompt, aiOpts) {
-  if (typeof aiOpts === 'string') return callGemini(aiOpts, prompt); // legacy: bare key = gemini
+async function callAI(prompt, aiOpts, genConfig={}) {
+  if (typeof aiOpts === 'string') return callGemini(aiOpts, prompt, genConfig); // legacy: bare key = gemini
   if (!aiOpts) return null;
   if (aiOpts.provider === 'claude' && aiOpts.claudeKey) return callClaude(aiOpts.claudeKey, prompt);
-  return callGemini(aiOpts.geminiKey, prompt);
+  return callGemini(aiOpts.geminiKey, prompt, genConfig);
 }
 
 function optTasks(tasks, pris) {
@@ -1481,7 +1481,7 @@ async function aiDetectShailaAnswers(shailas, aiOpts) {
 async function aiParseConversation(transcript, currentTasks, currentShailos, aiOpts) {
   const taskSnap = currentTasks.slice(0,20).map((t,i)=>`${i+1}. [${t.priority}] ${t.text}`).join('\n') || '(none)';
   const shailaSnap = currentShailos.slice(0,15).map((s,i)=>`${i+1}. ${s.synopsis||s.content||'shaila'}`).join('\n') || '(none)';
-  const r = await callAI(`You are parsing a Yeshivish English conversation to extract actionable items. Yeshivish mixes English with Hebrew/Yiddish: shaila, halacha, Shabbos, daven, bracha, etc.\n\nTRANSCRIPT:\n${transcript}\n\nCURRENT TASK QUEUE:\n${taskSnap}\n\nOPEN SHAILOS:\n${shailaSnap}\n\n=== CRITICAL SHAILA RULE ===\nIf the speaker says "shaila" or "shailos", OR describes a halachic question (asking a rabbi, checking if something is mutar/assur, kashrus, Shabbos, niddah, tefillin, bracha, etc.) — it MUST go in the "shailos" category. NEVER put a shaila in tasks, reminders, or any other category. When in doubt, put it in shailos.\n\nExtract items in 6 categories. CRITICAL: NEVER copy raw transcript text — write clean concise summaries (5-15 words). Preserve key halachic/Jewish terms.\n\n1. tasks: New to-dos NOT already in queue. Do NOT put shailos here — use shailos category.\n2. completions: Things mentioned as done. matchedTask = queue number if matches.\n3. shailos: ANY halachic question, any mention of "shaila". synopsis=5-8 word core question.\n4. gotBacks: Answers delivered to askers. matchedShailaIndex if matches open shaila.\n5. scheduleItems: Appointments/meetings/events. Include when if mentioned.\n6. reminders: Follow-up notes that are NOT tasks and NOT shailos.\n\nReturn ONLY valid JSON:\n{"tasks":[{"text":"concise task","priority":"now|today|eventually|shaila"}],"completions":[{"text":"what was completed","matchedTask":null}],"shailos":[{"synopsis":"core question 5-8 words","content":"fuller description","askerName":null,"answer":""}],"gotBacks":[{"synopsis":"which shaila got answered","matchedShailaIndex":null}],"scheduleItems":[{"text":"event description","when":null}],"reminders":[{"text":"what to remember"}]}\n\nReturn [] for empty categories.`, aiOpts);
+  const r = await callAI(`You are parsing a Yeshivish English conversation to extract actionable items. Yeshivish mixes English with Hebrew/Yiddish: shaila, halacha, Shabbos, daven, bracha, etc.\n\nTRANSCRIPT:\n${transcript}\n\nCURRENT TASK QUEUE:\n${taskSnap}\n\nOPEN SHAILOS:\n${shailaSnap}\n\n=== CRITICAL SHAILA RULE ===\nIf the speaker says "shaila" or "shailos", OR describes a halachic question (asking a rabbi, checking if something is mutar/assur, kashrus, Shabbos, niddah, tefillin, bracha, etc.) — it MUST go in the "shailos" category. NEVER put a shaila in tasks, reminders, or any other category. When in doubt, put it in shailos.\n\nExtract items in 6 categories. CRITICAL: NEVER copy raw transcript text — write clean concise summaries (5-15 words). Preserve key halachic/Jewish terms.\n\n1. tasks: New to-dos NOT already in queue. Do NOT put shailos here — use shailos category.\n2. completions: Things mentioned as done. matchedTask = queue number if matches.\n3. shailos: ANY halachic question, any mention of "shaila". synopsis=5-8 word core question.\n4. gotBacks: Answers delivered to askers. matchedShailaIndex if matches open shaila.\n5. scheduleItems: Appointments/meetings/events. Include when if mentioned.\n6. reminders: Follow-up notes that are NOT tasks and NOT shailos.\n\nReturn ONLY valid JSON:\n{"tasks":[{"text":"concise task","priority":"now|today|eventually|shaila"}],"completions":[{"text":"what was completed","matchedTask":null}],"shailos":[{"synopsis":"core question 5-8 words","content":"fuller description","askerName":null,"answer":""}],"gotBacks":[{"synopsis":"which shaila got answered","matchedShailaIndex":null}],"scheduleItems":[{"text":"event description","when":null}],"reminders":[{"text":"what to remember"}]}\n\nReturn [] for empty categories.`, aiOpts, { temperature: 0.1, maxOutputTokens: 8192 });
   if (!r) throw new Error('No AI response');
   const m = r.match(/\{[\s\S]*\}/);
   if (!m) throw new Error('Could not parse AI response');
