@@ -1,7 +1,7 @@
 // === 08-app.js ===
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callGemini, callAI, suggestFirstStep, aiParseShailos, aiParseBrainDump, aiParseConversation, gG, fmtMs, db, _lum, priText, textOnPastel } from './01-core.js';
+import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callGemini, callAI, suggestFirstStep, aiParseShailos, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer, gG, fmtMs, db, _lum, priText, textOnPastel } from './01-core.js';
 import { IC } from './02-icons.jsx';
 import { VoiceInput, webmToWavBase64 } from './03-voice.jsx';
 import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from './04-components.jsx';
@@ -1053,6 +1053,12 @@ function App({ user, onSignOut }) {
 
   function saveShailaField(id, field, value) {
     setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => t.id===id ? {...t, [field]: value} : t)}))}));
+    // When an answer is saved, generate a 6-word AI summary and store it alongside
+    if (field === "shailaAnswer" && value.trim() && aiOpts?.geminiKey) {
+      aiSummarizeAnswer(value, aiOpts).then(summary => {
+        if (summary) setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => t.id===id ? {...t, answerSummary: summary} : t)}))}));
+      }).catch(() => {});
+    }
   }
 
   function handleShailaGotBack(id, value) {

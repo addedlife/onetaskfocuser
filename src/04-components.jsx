@@ -1516,6 +1516,8 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                       shailaNum={shailaNum}
                       onToggle={() => cycleGotBack(s)}
                       answerSnippet={(() => {
+                        const summary = getF(s, "answerSummary") || s.answerSummary;
+                        if (summary?.trim()) return summary.trim();
                         const ans = getF(s, "shailaAnswer").trim();
                         if (!ans) return null;
                         const words = ans.split(/\s+/).filter(Boolean);

@@ -225,7 +225,10 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
                     onToggle={() => onShailaGotBack && onShailaGotBack(st.shailaId, !st.gotBackToAsker)}
                     answerSnippet={(() => {
                       const siblings = tasks.filter(t => t.shailaId === st.shailaId && !t.isGetBackStep);
-                      const ans = (siblings.find(t => t.shailaAnswer)?.shailaAnswer || '').trim();
+                      const sibling = siblings.find(t => t.shailaAnswer);
+                      const summary = sibling?.answerSummary;
+                      if (summary?.trim()) return summary.trim();
+                      const ans = (sibling?.shailaAnswer || '').trim();
                       if (!ans) return null;
                       const words = ans.split(/\s+/).filter(Boolean);
                       return words.slice(0, 6).join(' ') + (words.length > 6 ? '…' : '');

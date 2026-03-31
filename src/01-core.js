@@ -1506,4 +1506,12 @@ async function aiParseBrainDump(text, pris, aiOpts) {
 }
 
 
-export { firebaseConfig, db, Store, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, PALETTE, PROMPTS, TIPS, YC, cleanYT, uid, canonicalUid, gG, gP, pBg, _lum, textOnColor, _priTextMap, priText, textOnPastel, dayKey, tipOfDay, fmtMs, getMrsWPriority, getTaskAgeHours, isTaskAged, callAI, callGemini, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, suggestFirstStep, aiParseShailos, aiGenSchemes, aiDetectShailaAnswers, aiParseBrainDump, aiParseConversation };
+async function aiSummarizeAnswer(answerText, aiOpts) {
+  const r = await callAI(
+    `Summarize this halachic answer in 4-6 words. Output ONLY the summary — no quotes, no explanation. Start with the ruling. Preserve key Yeshivish terms (mutar, assur, bedieved, lechatchila, etc.).\n\nAnswer: ${answerText.substring(0, 600)}`,
+    aiOpts, { temperature: 0.1, maxOutputTokens: 24 }
+  );
+  return r?.trim().replace(/^["'`]+|["'`]+$/g, '') || '';
+}
+
+export { firebaseConfig, db, Store, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, PALETTE, PROMPTS, TIPS, YC, cleanYT, uid, canonicalUid, gG, gP, pBg, _lum, textOnColor, _priTextMap, priText, textOnPastel, dayKey, tipOfDay, fmtMs, getMrsWPriority, getTaskAgeHours, isTaskAged, callAI, callGemini, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, suggestFirstStep, aiParseShailos, aiGenSchemes, aiDetectShailaAnswers, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer };
