@@ -1,10 +1,5 @@
 // === 05-modals.js ===
 
-import React, { useState, useRef } from 'react';
-import { uid, callGemini, callAI, textOnColor, gP, pBg } from './01-core.js';
-import { IC } from './02-icons.jsx';
-import { CTX_TAG_COLORS } from './04-components.jsx';
-
 function BulkAdd({pris, T, onAddAll, onClose}) {
   const ap = pris.filter(p => !p.deleted);
   const defPri = pris.find(p => p.id === "today" && !p.deleted)?.id || ap[2]?.id || ap[0]?.id;
@@ -369,6 +364,3 @@ function ListManager({AS, setAS, T, onClose}) {
     </div>
   );
 }
-
-
-export { BulkAdd, TaskBD, BLOCKED_DURATIONS, BlockedModal, ALL_CTX_TAGS, ContextTagPicker, ListManager };

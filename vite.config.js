@@ -1,19 +1,29 @@
-import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shaila Transcriber</title>
+    <script>
+      try {
+        var sc = JSON.parse(localStorage.getItem('onetask_theme') || 'null');
+        if (sc) {
+          var r = document.documentElement;
+          r.style.setProperty('--ot-bg',         sc.bg     || '#EDE5D8');
+          r.style.setProperty('--ot-card',        sc.card   || '#F5EFE5');
+          r.style.setProperty('--ot-text',        sc.text   || '#3D3633');
+          r.style.setProperty('--ot-text-soft',   sc.tSoft  || '#6E5848');
+          r.style.setProperty('--ot-text-faint',  sc.tFaint || '#7E6858');
+          r.style.setProperty('--ot-border',      sc.brd    || '#D8CEBC');
+          r.style.setProperty('--ot-border-s',    sc.brdS   || '#E4DBCE');
+        }
+      } catch(e) {}
+    </script>
+    <script type="module" crossorigin src="/shailos/assets/index-DzmPGjAe.js"></script>
+    <link rel="stylesheet" crossorigin href="/shailos/assets/index-CESuoOAS.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
 
-export default defineConfig({
-  plugins: [react()],
-  build: {
-    outDir: 'dist',
-    rollupOptions: {
-      output: {
-        assetFileNames: 'assets/[name]-[hash][extname]',
-        chunkFileNames: 'assets/[name]-[hash].js',
-        entryFileNames: 'assets/[name]-[hash].js',
-      },
-    },
-  },
-  server: {
-    port: 3000,
-  },
-});
