@@ -62,6 +62,7 @@ function App({ user, onSignOut }) {
   const [tipViewIdx, setTipViewIdx] = useState(() => tipOfDay(dayKey())); // init to today's daily tip
   const [aiInsight, setAiInsight] = useState(null);       // AI-generated insight string
   const [aiInsightLoading, setAiInsightLoading] = useState(false);
+  const [chartRange, setChartRange] = useState('week'); // 'day'|'week'|'month'|'alltime'
   // AI Chat dialog state
   const [aiChatOpen, setAiChatOpen] = useState(false);
   const [aiChatHistory, setAiChatHistory] = useState([]);
@@ -1399,6 +1400,58 @@ function App({ user, onSignOut }) {
     return {total:c.length, avg:fmtMs(tot/c.length), pS, bD, pT, sk, cL:c.sort((a,b)=>b.completedAt-a.completedAt), goodEnoughCount};
   }, [allComp, pris]);
 
+  // Chart data derived from metrics.cL — used by the visual charts in the Insights tab
+  const chartData = useMemo(() => {
+    if (!metrics) return null;
+    const cL = metrics.cL;
+    const now = Date.now();
+    const DAY = 86400000;
+    const fmtH = h => h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h-12}p`;
+
+    // 24h: by hour-of-day, completions in the last 24 hours
+    const h24 = Array.from({length:24}, (_,i) => ({h:i, n:0, label:fmtH(i)}));
+    cL.filter(t => now - t.completedAt < DAY).forEach(t => { h24[new Date(t.completedAt).getHours()].n++; });
+
+    // 7d: by calendar date, last 7 days
+    const days7 = Array.from({length:7}, (_,i) => {
+      const d = new Date(now - (6-i)*DAY);
+      return {date:d.toDateString(), label:d.toLocaleDateString('en-US',{weekday:'short'}).slice(0,2), n:0};
+    });
+    cL.filter(t => now - t.completedAt < 7*DAY).forEach(t => {
+      const entry = days7.find(d => d.date === new Date(t.completedAt).toDateString());
+      if (entry) entry.n++;
+    });
+
+    // 30d: by calendar date, last 30 days
+    const days30 = Array.from({length:30}, (_,i) => {
+      const d = new Date(now - (29-i)*DAY);
+      return {date:d.toDateString(), label:i%5===0?String(d.getDate()):'', n:0, dow:d.getDay()};
+    });
+    cL.filter(t => now - t.completedAt < 30*DAY).forEach(t => {
+      const entry = days30.find(d => d.date === new Date(t.completedAt).toDateString());
+      if (entry) entry.n++;
+    });
+
+    // All-time: by hour-of-day across all completions
+    const allHours = Array.from({length:24}, (_,i) => ({h:i, n:0, label:fmtH(i)}));
+    cL.forEach(t => { allHours[new Date(t.completedAt).getHours()].n++; });
+
+    // Priority breakdown for donut (from metrics.pS, already computed)
+    const donut = metrics.pS.filter(p => p.n > 0);
+
+    // Active/inactive days streak heatmap (last 10 weeks = 70 days)
+    const heat70 = Array.from({length:70}, (_,i) => {
+      const d = new Date(now - (69-i)*DAY);
+      return {date:d.toDateString(), n:0, dow:d.getDay(), weekIdx:Math.floor(i/7)};
+    });
+    cL.filter(t => now - t.completedAt < 70*DAY).forEach(t => {
+      const entry = heat70.find(d => d.date === new Date(t.completedAt).toDateString());
+      if (entry) entry.n++;
+    });
+
+    return {h24, days7, days30, allHours, donut, heat70};
+  }, [metrics]);
+
   const advice = useMemo(() => {
     if (!metrics) return [];
     const a = [];
@@ -2685,6 +2738,177 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                 )}
               </div>
             )}
+
+            {/* ── Activity Charts ── */}
+            {chartData && (() => {
+              // ── Generic bar chart (pure SVG) ──
+              const BarChart = ({bars, accentColor, showCount=true}) => {
+                const max = Math.max(...bars.map(b => b.n), 1);
+                const W = 320, H = 80, bw = W / bars.length;
+                return (
+                  <svg viewBox={`0 0 ${W} ${H+20}`} style={{width:"100%",display:"block",overflow:"visible"}}>
+                    {bars.map((b, i) => {
+                      const bh = Math.max((b.n/max)*H, b.n>0?3:0);
+                      const highlight = b.n === max && b.n > 0;
+                      return (
+                        <g key={i}>
+                          <rect x={i*bw+1} y={H-bh} width={bw-2} height={bh}
+                            fill={highlight ? accentColor : accentColor+"88"} rx={2}/>
+                          {showCount && b.n > 0 && (
+                            <text x={i*bw+bw/2} y={H-bh-3} textAnchor="middle"
+                              fontSize={7} fill={T.tFaint} fontFamily="system-ui">{b.n}</text>
+                          )}
+                          {b.label && (
+                            <text x={i*bw+bw/2} y={H+14} textAnchor="middle"
+                              fontSize={7.5} fill={T.tFaint} fontFamily="system-ui">{b.label}</text>
+                          )}
+                        </g>
+                      );
+                    })}
+                    {/* zero baseline */}
+                    <line x1={0} y1={H} x2={W} y2={H} stroke={T.brd} strokeWidth={1}/>
+                  </svg>
+                );
+              };
+
+              // ── Priority donut (pure SVG) ──
+              const DonutChart = ({slices}) => {
+                const total = slices.reduce((s,p) => s+p.n, 0);
+                if (!total) return null;
+                const R = 44, r = 28, cx = 60, cy = 60;
+                let angle = -Math.PI/2;
+                const paths = slices.map(p => {
+                  const sweep = (p.n/total)*2*Math.PI;
+                  const x1 = cx + R*Math.cos(angle), y1 = cy + R*Math.sin(angle);
+                  const x2 = cx + R*Math.cos(angle+sweep), y2 = cy + R*Math.sin(angle+sweep);
+                  const xi1 = cx + r*Math.cos(angle+sweep), yi1 = cy + r*Math.sin(angle+sweep);
+                  const xi2 = cx + r*Math.cos(angle), yi2 = cy + r*Math.sin(angle);
+                  const largeArc = sweep > Math.PI ? 1 : 0;
+                  const d = `M ${x1} ${y1} A ${R} ${R} 0 ${largeArc} 1 ${x2} ${y2} L ${xi1} ${yi1} A ${r} ${r} 0 ${largeArc} 0 ${xi2} ${yi2} Z`;
+                  const result = {d, color: p.c, n: p.n, label: p.l};
+                  angle += sweep;
+                  return result;
+                });
+                return (
+                  <div style={{display:"flex",alignItems:"center",gap:16}}>
+                    <svg viewBox="0 0 120 120" style={{width:100,height:100,flexShrink:0}}>
+                      {paths.map((p,i) => <path key={i} d={p.d} fill={p.color}/>)}
+                      <text x={cx} y={cy+4} textAnchor="middle" fontSize={13} fontWeight={600}
+                        fill={T.text} fontFamily="system-ui">{total}</text>
+                      <text x={cx} y={cy+15} textAnchor="middle" fontSize={7}
+                        fill={T.tFaint} fontFamily="system-ui">total</text>
+                    </svg>
+                    <div style={{display:"flex",flexDirection:"column",gap:5,flex:1}}>
+                      {paths.map((p,i) => (
+                        <div key={i} style={{display:"flex",alignItems:"center",gap:7}}>
+                          <div style={{width:9,height:9,borderRadius:"50%",background:p.color,flexShrink:0}}/>
+                          <span style={{fontSize:11,fontFamily:"system-ui",flex:1,color:T.tSoft}}>{p.label}</span>
+                          <span style={{fontSize:11,fontWeight:600,fontFamily:"system-ui",color:T.text}}>{p.n}</span>
+                          <span style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui"}}>{Math.round(p.n/total*100)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              };
+
+              // ── Heatmap grid (10 weeks × 7 days) ──
+              const HeatGrid = ({cells}) => {
+                const maxN = Math.max(...cells.map(c => c.n), 1);
+                const DOW = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+                const weeks = 10;
+                const cellSize = 12, gap = 2;
+                const accentRgb = T.isDark ? '150,180,255' : '80,120,220';
+                return (
+                  <div style={{display:"flex",gap:4,alignItems:"flex-start"}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:gap,marginTop:14,flexShrink:0}}>
+                      {DOW.map((d,i) => (
+                        <div key={d} style={{height:cellSize,lineHeight:`${cellSize}px`,fontSize:7,color:T.tFaint,fontFamily:"system-ui",textAlign:"right",width:14}}>{i%2===0?d:''}</div>
+                      ))}
+                    </div>
+                    <div style={{overflowX:"auto",flex:1}}>
+                      <svg viewBox={`0 0 ${weeks*(cellSize+gap)} ${7*(cellSize+gap)+14}`}
+                        style={{width:"100%",minWidth:weeks*(cellSize+gap),display:"block"}}>
+                        {cells.map((c,idx) => {
+                          const col = c.weekIdx, row = c.dow;
+                          const x = col*(cellSize+gap), y = row*(cellSize+gap)+14;
+                          const alpha = c.n === 0 ? 0 : 0.2 + (c.n/maxN)*0.8;
+                          return (
+                            <g key={idx}>
+                              <rect x={x} y={y} width={cellSize} height={cellSize} rx={2}
+                                fill={c.n===0 ? T.brd : `rgba(${accentRgb},${alpha.toFixed(2)})`}/>
+                              {c.n > 0 && (
+                                <title>{`${c.date}: ${c.n} task${c.n!==1?'s':''}`}</title>
+                              )}
+                            </g>
+                          );
+                        })}
+                      </svg>
+                    </div>
+                  </div>
+                );
+              };
+
+              const accentColor = T.isDark ? '#7EB0DE' : '#5080CC';
+              const rangeData = {
+                day:     {bars: chartData.h24,    title: 'Last 24 hours', sub: 'completions by hour'},
+                week:    {bars: chartData.days7,   title: 'Last 7 days',   sub: 'completions by day'},
+                month:   {bars: chartData.days30,  title: 'Last 30 days',  sub: 'completions by day'},
+                alltime: {bars: chartData.allHours, title: 'All time',     sub: 'completions by hour of day'},
+              };
+              const rd = rangeData[chartRange];
+              const total = rd.bars.reduce((s,b) => s+b.n, 0);
+
+              return (
+                <div style={{background:T.card,borderRadius:18,border:`1px solid ${T.brd}`,padding:"18px 20px",marginBottom:18,boxShadow:T.shadow}}>
+                  <h3 style={{fontSize:10,fontWeight:700,color:T.tFaint,margin:"0 0 14px",fontFamily:"system-ui",textTransform:"uppercase",letterSpacing:1.5}}>Activity</h3>
+
+                  {/* Range tabs */}
+                  <div style={{display:"flex",gap:4,marginBottom:16}}>
+                    {[['day','24h'],['week','7 days'],['month','30 days'],['alltime','All time']].map(([k,lbl]) => (
+                      <button key={k} onClick={()=>setChartRange(k)}
+                        style={{padding:"4px 10px",borderRadius:8,border:`1px solid ${chartRange===k?T.text:T.brd}`,
+                          background:chartRange===k?T.text:"transparent",
+                          color:chartRange===k?(SCHEMES[AS?.colorScheme]?.bg||"#fff"):T.tSoft,
+                          fontSize:10,fontFamily:"system-ui",fontWeight:600,cursor:"pointer"}}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Bar chart */}
+                  <div style={{marginBottom:4}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+                      <span style={{fontSize:11,fontFamily:"system-ui",color:T.tSoft}}>{rd.sub}</span>
+                      <span style={{fontSize:18,fontWeight:700,color:T.text,fontFamily:"system-ui"}}>{total} <span style={{fontSize:11,fontWeight:400,color:T.tFaint}}>done</span></span>
+                    </div>
+                    <BarChart bars={rd.bars} accentColor={accentColor}/>
+                  </div>
+
+                  {/* Divider */}
+                  <div style={{borderTop:`1px solid ${T.brd}`,margin:"18px 0"}}/>
+
+                  {/* Priority donut */}
+                  <h3 style={{fontSize:10,fontWeight:700,color:T.tFaint,margin:"0 0 14px",fontFamily:"system-ui",textTransform:"uppercase",letterSpacing:1.5}}>By Priority</h3>
+                  <DonutChart slices={chartData.donut}/>
+
+                  {/* Divider */}
+                  <div style={{borderTop:`1px solid ${T.brd}`,margin:"18px 0"}}/>
+
+                  {/* Activity heatmap (last 10 weeks) */}
+                  <h3 style={{fontSize:10,fontWeight:700,color:T.tFaint,margin:"0 0 10px",fontFamily:"system-ui",textTransform:"uppercase",letterSpacing:1.5}}>10-Week Heatmap</h3>
+                  <HeatGrid cells={chartData.heat70}/>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,justifyContent:"flex-end"}}>
+                    <span style={{fontSize:9,color:T.tFaint,fontFamily:"system-ui"}}>less</span>
+                    {[0,0.25,0.5,0.75,1].map((a,i) => (
+                      <div key={i} style={{width:10,height:10,borderRadius:2,
+                        background:a===0?T.brd:`rgba(${T.isDark?'150,180,255':'80,120,220'},${a})`}}/>
+                    ))}
+                    <span style={{fontSize:9,color:T.tFaint,fontFamily:"system-ui"}}>more</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* ── Tip Carousel ── */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
