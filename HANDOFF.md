@@ -351,17 +351,19 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 - **Universal Conversation Recorder**: full in-app flow — record → transcribe (Yeshivish-aware) → AI extracts tasks/shailos/schedule/got-backs → review card → user approves → items added to queue
 - **FAB**: 2 large buttons (record shaila, record conversation), 2 compact links (Add | Records)
-- **Shailos transcriber**: all fields editable, AI-generated 6-word answer summary on minicards and shaila pills
+- **Shailos transcriber**: all fields editable, AI-generated answer summary on minicards and shaila pills (regenerates when answer changes)
+- **Shailos research**: background-capable — spinner stays on list card even when viewing a different shaila; result auto-scrolls into view when it arrives; `selectedShaila` syncs from Firestore so result appears without re-selecting
 - **Queue · N pill** on focus/launchpad view
 - **Theme sync**: Shailos inherits main app color scheme
-- **AI models**: `gemini-3.1-pro-preview` default; `gemini-2.0-flash` for shaila research
-- **Research tool format**: `google_search: {}` (not `googleSearch`)
+- **AI models**: `gemini-3.1-pro-preview` for all Shailos AI calls
+- **Research tool format**: `google_search: {}` (fixed from broken `googleSearch` camelCase)
 
 ---
 
 ## 15. Recent Git History
 
 ```
+(pending commit) fix: shailos research — google_search tool, background tracking, selectedShaila sync, auto-scroll, synopsis regeneration
 1da5ef8 feat: AI answer summary in shailos transcriber minicards
 1cbfc76 feat: AI-generated 6-word answer summary for shaila pills
 e56d25e fix: answer snippet first 6 words + whitespace-nowrap in transcriber minicards
