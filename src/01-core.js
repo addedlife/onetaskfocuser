@@ -1080,10 +1080,14 @@ function isTaskAged(task, pris, thresholds) {
   return hours > limit;
 }
 
+// Single source of truth for the Gemini model used across the entire app.
+// Change this one constant to switch models everywhere (main calls, audio transcription, proxy default).
+export const GEMINI_MODEL = "gemini-2.5-flash";
+
 async function callGemini(gk, prompt, genConfig={}) {
   if (!gk) return null;
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${gk}`, {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${gk}`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.7, maxOutputTokens:4096, ...genConfig}})
@@ -1092,6 +1096,28 @@ async function callGemini(gk, prompt, genConfig={}) {
     if (d.error) { console.warn("[AI] Gemini error:", d.error); return null; }
     return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
   } catch(e) { console.warn("[AI] Gemini call failed:", e); return null; }
+}
+
+// Unified audio transcription — use this for ALL inline audio calls instead of raw fetch.
+// gk: Gemini API key | base64: audio data | mimeType: "audio/wav" or "audio/webm" | textPrompt: instruction
+async function callGeminiAudio(gk, base64, mimeType, textPrompt, genConfig={}) {
+  if (!gk) return null;
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${gk}`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        contents: [{ parts: [
+          { inline_data: { mime_type: mimeType, data: base64 } },
+          { text: textPrompt }
+        ]}],
+        generationConfig: { temperature: 0, maxOutputTokens: 8192, ...genConfig }
+      })
+    });
+    const d = await r.json();
+    if (d.error) { console.warn("[AI] Gemini audio error:", d.error); return null; }
+    return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  } catch(e) { console.warn("[AI] Gemini audio call failed:", e); return null; }
 }
 
 async function callClaude(ck, prompt) {
@@ -1514,4 +1540,4 @@ async function aiSummarizeAnswer(answerText, aiOpts) {
   return r?.trim().replace(/^["'`]+|["'`]+$/g, '') || '';
 }
 
-export { firebaseConfig, db, Store, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, PALETTE, PROMPTS, TIPS, YC, cleanYT, uid, canonicalUid, gG, gP, pBg, _lum, textOnColor, _priTextMap, priText, textOnPastel, dayKey, tipOfDay, fmtMs, getMrsWPriority, getTaskAgeHours, isTaskAged, callAI, callGemini, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, suggestFirstStep, aiParseShailos, aiGenSchemes, aiDetectShailaAnswers, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer };
+export { firebaseConfig, db, Store, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, PALETTE, PROMPTS, TIPS, YC, cleanYT, uid, canonicalUid, gG, gP, pBg, _lum, textOnColor, _priTextMap, priText, textOnPastel, dayKey, tipOfDay, fmtMs, getMrsWPriority, getTaskAgeHours, isTaskAged, callAI, callGemini, callGeminiAudio, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, suggestFirstStep, aiParseShailos, aiGenSchemes, aiDetectShailaAnswers, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer };

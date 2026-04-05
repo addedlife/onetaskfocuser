@@ -1,7 +1,7 @@
 // === 05-modals.js ===
 
 import React, { useState, useRef } from 'react';
-import { uid, callGemini, callAI, textOnColor, gP, pBg } from './01-core.js';
+import { uid, callGemini, callGeminiAudio, callAI, textOnColor, gP, pBg } from './01-core.js';
 import { IC } from './02-icons.jsx';
 import { CTX_TAG_COLORS } from './04-components.jsx';
 
@@ -109,15 +109,11 @@ function TaskBD({task, pris, T, onConfirm, onClose, aiOpts}) {
         try {
           const buf = await blob.arrayBuffer();
           const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-          const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${aiOpts.geminiKey}`, {
-            method:"POST", headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({contents:[{parts:[
-              {inline_data:{mime_type:"audio/webm",data:b64}},
-              {text:"Transcribe this audio exactly verbatim. The speaker uses Yeshivish English. Return ONLY the transcript, nothing else."}
-            ]}], generationConfig:{temperature:0, maxOutputTokens:2048}})
-          });
-          const d = await r.json();
-          const txt = d.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          const txt = await callGeminiAudio(
+            aiOpts.geminiKey, b64, "audio/webm",
+            "Transcribe this audio exactly verbatim. The speaker uses Yeshivish English. Return ONLY the transcript, nothing else.",
+            { maxOutputTokens: 2048 }
+          );
           if (txt) setInp(prev => prev ? prev + " " + txt.trim() : txt.trim());
           else setErr("Couldn't transcribe.");
         } catch(e) { setErr("Mic transcribe failed."); }

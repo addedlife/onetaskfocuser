@@ -61,7 +61,7 @@ After every meaningful action (file read, edit, command), add 1–3 sentences of
 | Build | `npm run build` via Vite — Netlify runs this on every push |
 | AI (main app) | Gemini API — via user's personal key stored in app settings |
 | AI (shared fallback) | Gemini API — via `GEMINI_API_KEY` Netlify env var, proxied through `gemini-proxy` function |
-| AI model | `gemini-3.1-pro-preview` (default); `gemini-2.0-flash` for shaila research |
+| AI model | `gemini-2.5-flash` — single constant `GEMINI_MODEL` in `01-core.js` controls all calls |
 | Shailos sub-app | React 18 + Vite + TypeScript (separate build) |
 
 **Important**: This is a Vite app with a real build step — not the old CDN/Babel setup. `npm run build` compiles everything in `src/` into `dist/`. Netlify runs this automatically on push.
@@ -254,10 +254,14 @@ Firestore onSnapshot listener
 
 All AI functions are in `src/01-core.js`, exported and used throughout the app.
 
+### Key Constants
+- `GEMINI_MODEL` (exported from `01-core.js`) — single source of truth for the model name. Change here to update everywhere. Currently `"gemini-2.5-flash"` (free tier, GA, multimodal audio support).
+
 ### Key Functions
 | Function | Purpose |
 |---|---|
-| `callAI(prompt, aiOpts, config)` | Main AI call — uses user key or shared key automatically |
+| `callAI(prompt, aiOpts, config)` | Main text AI call — routes to Gemini or Claude based on aiOpts |
+| `callGeminiAudio(gk, base64, mimeType, prompt, config)` | All audio transcription calls — uses GEMINI_MODEL |
 | `aiOptTasks(tasks, pris, aiOpts)` | AI reprioritization |
 | `aiParseBrainDump(text, pris, aiOpts)` | Stream-of-consciousness → task list |
 | `aiParseConversation(transcript, tasks, shailos, aiOpts)` | Recorded conversation → tasks/shailos/completions |
@@ -356,7 +360,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 - **Shailos research**: background-capable — spinner stays on list card even when viewing a different shaila; result auto-scrolls into view when it arrives; `selectedShaila` syncs from Firestore so result appears without re-selecting
 - **Queue · N pill** on focus/launchpad view
 - **Theme sync**: Shailos inherits main app color scheme
-- **AI models**: `gemini-3.1-pro-preview` for all AI calls (main app + Shailos + research). This is the current top Google model as of April 2026 — replaces the deprecated `gemini-3-pro-preview` (shut down March 9, 2026).
+- **AI models**: `gemini-2.5-flash` for all AI calls — unified via `GEMINI_MODEL` constant in `01-core.js`. Free tier, GA/stable, multimodal (audio+text). All raw `fetch` calls to the Gemini API have been replaced with `callGemini` / `callGeminiAudio` — no more hardcoded model strings scattered across files.
 - **Research**: multi-step parallel search — (1) Gemini generates 3 different search queries (broad halachic, specific scenario, posek/agency angle), (2) all 3 run simultaneously via Serper.dev, (3) Gemini checks for gaps and fires 1-2 targeted follow-ups if needed, (4) Gemini reads all snippets → one line per relevant article (what THAT source says, no synthesis/psak) + seforim links. Output documents all search queries used. Requires `SERPER_API_KEY` Netlify env var.
 - **aiDetectShailaAnswers**: removed "copy verbatim" instruction — now writes clean halachic ruling preserving content.
 
@@ -365,7 +369,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 ## 15. Recent Git History
 
 ```
-(pending) fix: model → gemini-3.1-pro-preview (current), revert incorrect 2.5 downgrade
+(pending) fix: unified AI pipeline — GEMINI_MODEL constant, callGeminiAudio, fix gemini-2.5-pro broken calls
 7a148f4 feat: research via Serper.dev real Google search + Gemini summarization — no grounding tool
 32bb762 feat: research via gemini-3-flash-preview + google_search grounding — real source URLs
 5853720 fix: research — drop google_search tool (hangs on 3.1-pro), use model knowledge with strong citation prompt

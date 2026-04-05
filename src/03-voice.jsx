@@ -1,7 +1,7 @@
 // === 03-voice.js ===
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { cleanYT, callGemini, aiParseShailos, callAI, uid, textOnColor } from './01-core.js';
+import { cleanYT, callGemini, callGeminiAudio, aiParseShailos, callAI, uid, textOnColor } from './01-core.js';
 // VoiceInput: Web Speech (live preview) + MediaRecorder run together.
 // Web Speech starts first to get mic priority; MediaRecorder starts 300ms later.
 //
@@ -249,27 +249,12 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
       }
       setGeminiStatus("Transcribing…");
       const base64 = await webmToWavBase64(webmBlob);
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${geminiKey}`,
-        {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { inline_data: { mime_type: "audio/wav", data: base64 } },
-                { text: `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Use these standard spellings for Jewish terms: shaila / shailos (question / questions), halacha (Jewish law), gemara (Talmud), Shabbos (Sabbath), davening (praying), daven, bracha (blessing), mutar (permitted), assur (forbidden), kashrus, Rashi, Rambam, Ramban, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.
-
-Do not add punctuation beyond what is spoken. Do not summarize or rephrase. Return only the verbatim transcript.` }
-              ]
-            }],
-            generationConfig: { temperature: 0, maxOutputTokens: 8192 }
-          })
-        }
+      const transcriptRaw = await callGeminiAudio(
+        geminiKey, base64, "audio/wav",
+        `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Use these standard spellings for Jewish terms: shaila / shailos (question / questions), halacha (Jewish law), gemara (Talmud), Shabbos (Sabbath), davening (praying), daven, bracha (blessing), mutar (permitted), assur (forbidden), kashrus, Rashi, Rambam, Ramban, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.\n\nDo not add punctuation beyond what is spoken. Do not summarize or rephrase. Return only the verbatim transcript.`
       );
-      const d = await resp.json();
-      if (d.error) throw new Error(d.error.message || "Gemini API error");
-      const transcript = (d.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+      if (transcriptRaw === null) throw new Error("Gemini API error");
+      const transcript = transcriptRaw.trim();
       if (transcript) setEditText(cleanYT(transcript));
       goPhase("reviewing");
     } catch(e) {
@@ -433,15 +418,7 @@ Transcript:
 ${text}
 
 Identify any shailos from the list above that are answered in the transcript. For each match, return a JSON array of objects: {"id": "<exact ID>", "shaila": "<question text>", "answer": "<extracted answer>"}. If the answer is partial or implied, include it. Only return answers you are confident are present in the transcript. If none match, return []. Return only raw JSON, no markdown.`;
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${geminiKey}`,
-        { method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0,maxOutputTokens:2048} })
-        }
-      );
-      const d = await resp.json();
-      if (d.error) throw new Error(d.error.message);
-      const raw = (d.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+      const raw = (await callGemini(geminiKey, prompt, { temperature: 0, maxOutputTokens: 2048 }) || "").trim();
       const clean = raw.replace(/```json|```/g,"").trim();
       const parsed = JSON.parse(clean);
       if (Array.isArray(parsed) && parsed.length > 0) {
