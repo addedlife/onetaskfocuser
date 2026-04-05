@@ -357,7 +357,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 - **Queue · N pill** on focus/launchpad view
 - **Theme sync**: Shailos inherits main app color scheme
 - **AI models**: `gemini-3.1-pro-preview` for all Shailos AI calls including research
-- **Research**: three-step — (1) Gemini converts Yeshivish shaila → clean search query, (2) Serper.dev returns real article URLs, (3) Gemini summarizes + extracts seforim + picks highlight phrase per article. Article links use Text Fragment API (`#:~:text=phrase`) to scroll browser to relevant section. Requires `SERPER_API_KEY` Netlify env var.
+- **Research**: three-step — (1) Gemini converts shaila → clean query targeting known kosher sites (halachipedia, star-k, ou, crc, chabad) with fallback to open search, (2) Serper.dev returns real article URLs, (3) Gemini summarizes + extracts seforim + picks highlight phrase per article. Article links use Text Fragment API (`#:~:text=phrase`). Requires `SERPER_API_KEY` Netlify env var.
 
 ---
 
