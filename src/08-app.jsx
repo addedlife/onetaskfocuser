@@ -384,6 +384,11 @@ function App({ user, onSignOut }) {
         if (!toAdd.length && !toCompleteIds.size && !toDeleteIds.size) return prev;
 
         if (toAdd.length) {
+          // Register new shailaIds as pending BEFORE state update so the next
+          // _listenV5 snapshot (which fires right after save) doesn't re-create them.
+          const newIds = [...new Set(toAdd.map(t => t.shailaId).filter(Boolean))];
+          newIds.forEach(id => pendingShailaIds.current.add(id));
+          setTimeout(() => newIds.forEach(id => pendingShailaIds.current.delete(id)), 5000);
           const newShailaCount = Math.ceil(toAdd.length / 2);
           showToast(`📋 ${newShailaCount} new shaila${newShailaCount!==1?"s":""} from transcriber`, 5000);
         }
@@ -397,8 +402,8 @@ function App({ user, onSignOut }) {
           // Complete/delete in whichever list the task lives
           if (toCompleteIds.size) tasks = tasks.map(t => toCompleteIds.has(t.id) ? {...t, completed:true, completedAt:Date.now()} : t);
           if (toDeleteIds.size) tasks = tasks.filter(t => !toDeleteIds.has(t.id));
-          // Add new tasks to active list
-          if (toAdd.length && l.id === activeId) tasks = [...tasks, ...toAdd];
+          // Add new tasks to active list, then sort so shailas surface to top immediately
+          if (toAdd.length && l.id === activeId) tasks = optTasks([...tasks, ...toAdd], pris);
           return tasks !== l.tasks ? {...l, tasks} : l;
         });
         return {...prev, lists: newLists};
@@ -870,7 +875,7 @@ function App({ user, onSignOut }) {
         pendingShailaIds.current.add(newT.shailaId);
       }
     }
-    uT(ts => [...ts, newT]);
+    uT(ts => doOpt([...ts, newT]));
     setNewTask(""); setSelPri(null); setEntryEnergy(null); flashOpt();
     // Flow 2: shaila-priority task → create shaila doc with the pre-assigned ID
     if (newT.shailaId) {
@@ -907,7 +912,7 @@ function App({ user, onSignOut }) {
         createdAt: baseTime, shailaId: shailaId, isGetBackStep: true,
         parentTask: parentText, stepIndex: 2, totalSteps: 2,
       };
-      uT(ts => [...ts, step1, step2]);
+      uT(ts => doOpt([...ts, step1, step2]));
       if (shailaId) {
         Store.createShailaFromTask({...step1, text: parentText});
         setTimeout(() => pendingShailaIds.current.delete(shailaId), 3000);
@@ -916,7 +921,7 @@ function App({ user, onSignOut }) {
       return;
     }
     const newT = {id:uid(), text:text.trim(), completed:false, priority:pri, createdAt:Date.now()};
-    uT(ts => [...ts, newT]);
+    uT(ts => doOpt([...ts, newT]));
     flashOpt();
   }
 

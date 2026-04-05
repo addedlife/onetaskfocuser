@@ -99,8 +99,8 @@ const Store = {
   // If the user has set a backup folder: writes silently — no browser prompt at all.
   // If not (or permission lapsed): falls back to a standard browser download.
   // force=true skips the weekly-stamp check — use for logout/close backups
-  // shailos = array of shaila documents from Firebase (for combined backup)
-  async autoFileBackup(d, shailos = [], force = false) {
+  // Uses the same format as fullBackup (_backupVersion: 1) so parseBackup can restore it.
+  async autoFileBackup(d, _ignored = [], force = false) {
     if (!d || !d.lists || !d.lists.some(l => l.tasks?.length > 0)) return;
     try {
       const now = new Date();
@@ -114,13 +114,23 @@ const Store = {
         if (lastBk === weekStamp) return; // already backed up this week
       }
 
-      // Combined backup — both apps in one file
+      // Fetch shailos fresh from Firestore (same as fullBackup)
+      const col = this.shailosCol();
+      let shailos = [];
+      if (col) {
+        try {
+          const snap = await col.get();
+          snap.forEach(doc => shailos.push({ id: doc.id, ...doc.data() }));
+        } catch(e) { console.warn('[Backup] Could not fetch shailos:', e); }
+      }
+
+      // Same format as fullBackup so parseBackup can restore it
       const combined = {
-        _version: 2,
+        _backupVersion: 1,
         _backupDate: now.toISOString(),
         _uid: this.uid || "unknown",
-        appState: d,
-        shailos: Array.isArray(shailos) ? shailos : [],
+        appState: this._clean(d),
+        shailos: shailos.map(s => this._clean(s)),
       };
       const content = JSON.stringify(combined, null, 2);
       const fileName = `onetask_backup_${weekStamp}.json`;
