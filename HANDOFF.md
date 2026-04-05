@@ -342,6 +342,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 |---|---|---|
 | `app-config.js` | Returns `GEMINI_API_KEY` to client | default |
 | `gemini-proxy.js` | Proxies Gemini calls for users without personal key | 5 min |
+| `serper-proxy.js` | Proxies Serper.dev Google Search API for shaila research | default |
 | `claude-proxy.js` | Proxies Claude API calls | 60 sec |
 | `soferai-proxy.js` | Legacy — do not remove | default |
 
@@ -355,14 +356,15 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 - **Shailos research**: background-capable — spinner stays on list card even when viewing a different shaila; result auto-scrolls into view when it arrives; `selectedShaila` syncs from Firestore so result appears without re-selecting
 - **Queue · N pill** on focus/launchpad view
 - **Theme sync**: Shailos inherits main app color scheme
-- **AI models**: `gemini-3.1-pro-preview` for transcription/parsing; `gemini-3-flash-preview` for research
-- **Research**: uses `google_search: {}` grounding tool — returns real source URLs from grounding metadata (`groundingChunks`). Non-opinionated: reports what sources say, no conclusions drawn.
+- **AI models**: `gemini-3.1-pro-preview` for all Shailos AI calls including research
+- **Research**: two-step — (1) Serper.dev Google Search API returns real article URLs, (2) Gemini summarizes what those articles say. Non-opinionated: reports only what sources say. Requires `SERPER_API_KEY` Netlify env var.
 
 ---
 
 ## 15. Recent Git History
 
 ```
+(pending) feat: research via Serper.dev — real Google search results + Gemini summarization
 32bb762 feat: research via gemini-3-flash-preview + google_search grounding — real source URLs
 5853720 fix: research — drop google_search tool (hangs on 3.1-pro), use model knowledge with strong citation prompt
 1da5ef8 feat: AI answer summary in shailos transcriber minicards
