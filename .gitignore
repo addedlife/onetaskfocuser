@@ -36,7 +36,8 @@ pending_restore.json
 DEPLOY_LOG.json
 
 # Private admin/recovery tools — never serve publicly
-HANDOFF.md
+# Note: HANDOFF.md is tracked in git (for auto-update hook) but blocked publicly via netlify.toml redirect
+HANDOFF-*.md
 merge.html
 recover.html
 restore_data.html
