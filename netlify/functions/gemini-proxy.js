@@ -38,7 +38,16 @@ exports.handler = async (event) => {
 
   try {
     const { model, body } = JSON.parse(event.body);
-    const modelName = model || "gemini-2.5-flash";
+    // Allowlist of valid models — reject anything that no longer exists (e.g. gemini-3.1-pro-preview).
+    // Old shailos bundles send stale model names; force them to the current working model.
+    const ALLOWED_MODELS = new Set([
+      "gemini-2.5-flash",
+      "gemini-2.5-pro",
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+      "gemini-1.5-pro",
+    ]);
+    const modelName = (model && ALLOWED_MODELS.has(model)) ? model : "gemini-2.5-flash";
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
