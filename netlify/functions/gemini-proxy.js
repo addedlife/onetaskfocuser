@@ -38,7 +38,7 @@ exports.handler = async (event) => {
 
   try {
     const { model, body } = JSON.parse(event.body);
-    const modelName = model || "gemini-2.0-flash";
+    const modelName = model || "gemini-2.5-pro-preview-05-06";
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 

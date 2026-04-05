@@ -64,7 +64,7 @@ exports.handler = async (event) => {
 
     const body = {
       model: "claude-sonnet-4-5",
-      max_tokens: maxTokens || 3000,
+      max_tokens: maxTokens || 4096,
       system: YESHIVISH_SYSTEM,
       messages: [{ role: "user", content: prompt }],
       ...(isResearch && {

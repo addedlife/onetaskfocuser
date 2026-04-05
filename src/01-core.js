@@ -1083,7 +1083,7 @@ function isTaskAged(task, pris, thresholds) {
 async function callGemini(gk, prompt, genConfig={}) {
   if (!gk) return null;
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${gk}`, {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-05-06:generateContent?key=${gk}`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.7, maxOutputTokens:4096, ...genConfig}})
@@ -1100,7 +1100,7 @@ async function callClaude(ck, prompt) {
     const r = await fetch("/.netlify/functions/claude-proxy", {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-Claude-Key": ck},
-      body: JSON.stringify({prompt, maxTokens: 2048, temperature: 0.7})
+      body: JSON.stringify({prompt, maxTokens: 4096})
     });
     const d = await r.json();
     if (d.error) return null;
@@ -1395,11 +1395,11 @@ Set a 10-minute timer and write the ingredient list.`,
   return r.replace(/^["'`]|["'`]$/g, '').trim();
 }
 
-// Parse a transcript into individual shailos + answers + askedBy + answeredBy (verbatim)
+// Parse a transcript into individual shailos + answers + askedBy + answeredBy
 async function aiParseShailos(text, aiOpts) {
   const r = await callAI(
-    `This is a transcript of halachic questions (shailos). Extract each individual shaila and its answer if one is present.\n\nCRITICAL RULES:\n- Copy text EXACTLY verbatim — do not rephrase, summarize, or paraphrase anything at all\n- Answers often appear in parentheses immediately after the question, or as a direct spoken statement following it\n- If no answer is detectable for a shaila, use null for answer\n- Each shaila should be a single self-contained question\n\nFOR askedBy — infer from context even if no name is given:\n- "friend", "a friend", "my friend" → askedBy: "friend"\n- "shear", "שאר", "shear person" (Yiddish/Hebrew for relative) → askedBy: "relative"\n- "neighbor" → askedBy: "neighbor"\n- "wife", "my wife", "his wife" → askedBy: "wife"\n- "colleague", "coworker" → askedBy: "colleague"\n- Any explicit name mentioned as asking → use that name\n- If truly unidentifiable, use null\n\nFOR answeredBy — look for rabbi/posek title patterns:\n- "R' [Name]", "Rabbi [Name]", "Rav [Name]", "HaRav [Name]" → use that full title+name\n- "Chaim Cohen", "R' Chaim Cohen", "CC" → answeredBy: "R' Chaim Cohen"\n- If a rabbi's name appears in connection with a ruling or psak, that's the answeredBy\n- If no answerer is identifiable, use null\n\nTranscript:\n"${text}"\n\nReturn ONLY a JSON array:\n[{"shaila":"exact question text verbatim","answer":"exact answer verbatim or null","askedBy":"name or null","answeredBy":"name or null"},...]`,
-    aiOpts
+    `This is a transcript of halachic questions (shailos). Extract and cleanly formulate each individual shaila and its answer.\n\nSHAILA RULES:\n- Write the shaila as a clear, well-formed halachic question — clean up filler words, false starts, and Yeshivish colloquialisms\n- Preserve all halachic content and terminology (mutar, assur, b'dieved, l'chatchila, specific topics)\n- Each shaila should be a single self-contained question\n- Answers often appear in parentheses or as a direct statement following the question\n- If no answer is detectable, use null for answer\n- Write the answer as a clean ruling — preserve the halachic content and any reasons given\n\nFOR askedBy — infer from context:\n- "friend", "a friend", "my friend" → "friend"\n- "shear", "שאר" (Yiddish/Hebrew for relative) → "relative"\n- "neighbor" → "neighbor" | "wife"/"my wife" → "wife"\n- Any explicit name → use that name | If unidentifiable → null\n\nFOR answeredBy — look for rabbi/posek title patterns:\n- "R' [Name]", "Rabbi [Name]", "Rav [Name]" → use full title+name\n- "Chaim Cohen" / "CC" → "R' Chaim Cohen"\n- If no answerer identifiable → null\n\nTranscript:\n"${text}"\n\nReturn ONLY a JSON array:\n[{"shaila":"clean well-formed question","answer":"clean ruling or null","askedBy":"name or null","answeredBy":"name or null"},...]`,
+    aiOpts, { temperature: 0.1 }
   );
   if (!r) throw new Error('no response');
   const m = r.match(/\[[\s\S]*?\]/);
@@ -1468,8 +1468,8 @@ async function aiDetectShailaAnswers(shailas, aiOpts) {
   if (!shailas.length) return [];
   const list = shailas.map((s, i) => `${i+1}. [id:${s.id}] ${s.text}`).join('\n');
   const r = await callAI(
-    `These are halachic questions (shailos). Some have answers embedded in their text — in parentheses or as a following statement. Extract any embedded answer verbatim.\n\nCRITICAL: Copy text EXACTLY verbatim. Do not rephrase or summarize anything.\nOnly return entries where an answer was actually found.\n\nShailos:\n${list}\n\nReturn ONLY a JSON array:\n[{"id":"the_id_from_brackets","answer":"exact answer verbatim"},...]`,
-    aiOpts
+    `These are halachic questions (shailos). Some have answers embedded in their text — in parentheses or as a following statement.\n\nFor each entry where an answer is present:\n- Write the answer as a clean halachic ruling — preserve all halachic content and terminology (mutar, assur, b'dieved, l'chatchila, etc.)\n- Clean up filler words and false starts, but keep the full halachic meaning intact\n- Only return entries where an answer was actually found\n\nShailos:\n${list}\n\nReturn ONLY a JSON array:\n[{"id":"the_id_from_brackets","answer":"clean ruling text"},...]`,
+    aiOpts, { temperature: 0.1 }
   );
   if (!r) return [];
   const m = r.match(/\[[\s\S]*?\]/);
