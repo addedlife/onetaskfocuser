@@ -357,7 +357,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 - **Queue · N pill** on focus/launchpad view
 - **Theme sync**: Shailos inherits main app color scheme
 - **AI models**: `gemini-3.1-pro-preview` for all Shailos AI calls including research
-- **Research**: two-step — (1) Serper.dev Google Search API returns real article URLs, (2) Gemini summarizes what those articles say + extracts seforim mentioned. Output: summary + article links + Sefaria deep/search links for each sefer. Requires `SERPER_API_KEY` Netlify env var.
+- **Research**: three-step — (1) Gemini converts Yeshivish shaila → clean Google search query, (2) Serper.dev returns real article URLs, (3) Gemini summarizes what articles say + extracts seforim. Output: summary + article links + Sefaria links. Requires `SERPER_API_KEY` Netlify env var.
 
 ---
 
