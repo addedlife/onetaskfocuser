@@ -63,6 +63,7 @@ function App({ user, onSignOut }) {
   const [aiInsight, setAiInsight] = useState(null);       // AI-generated insight string
   const [aiInsightLoading, setAiInsightLoading] = useState(false);
   const [chartRange, setChartRange] = useState('week'); // 'day'|'week'|'month'|'alltime'
+  const [chartSecondary, setChartSecondary] = useState('dow'); // 'dow'|'speed'|'trend'|'cumulative'
   // AI Chat dialog state
   const [aiChatOpen, setAiChatOpen] = useState(false);
   const [aiChatHistory, setAiChatHistory] = useState([]);
@@ -1439,17 +1440,43 @@ function App({ user, onSignOut }) {
     // Priority breakdown for donut (from metrics.pS, already computed)
     const donut = metrics.pS.filter(p => p.n > 0);
 
-    // Active/inactive days streak heatmap (last 10 weeks = 70 days)
-    const heat70 = Array.from({length:70}, (_,i) => {
-      const d = new Date(now - (69-i)*DAY);
-      return {date:d.toDateString(), n:0, dow:d.getDay(), weekIdx:Math.floor(i/7)};
-    });
-    cL.filter(t => now - t.completedAt < 70*DAY).forEach(t => {
-      const entry = heat70.find(d => d.date === new Date(t.completedAt).toDateString());
-      if (entry) entry.n++;
+    // Day-of-week pattern (all-time)
+    const DOW_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const dow = Array.from({length:7}, (_,i) => ({h:i, n:0, label:DOW_NAMES[i]}));
+    cL.forEach(t => { dow[new Date(t.completedAt).getDay()].n++; });
+
+    // Completion speed buckets (creation → completion)
+    const speedBuckets = [
+      {label:'< 1h',  max:3600000,      n:0},
+      {label:'< 1d',  max:86400000,     n:0},
+      {label:'< 1w',  max:7*86400000,   n:0},
+      {label:'< 1mo', max:30*86400000,  n:0},
+      {label:'1mo+',  max:Infinity,     n:0},
+    ];
+    cL.filter(t => t.createdAt).forEach(t => {
+      const ms = t.completedAt - t.createdAt;
+      const b = speedBuckets.find(b => ms < b.max);
+      if (b) b.n++;
     });
 
-    return {h24, days7, days30, allHours, donut, heat70};
+    // 30-day trend (by day, same as days30 — used for line chart)
+    const trend30 = days30.map(d => ({...d})); // copy
+
+    // Cumulative completions over time (last 90 days)
+    const cum90raw = Array.from({length:90}, (_,i) => {
+      const d = new Date(now - (89-i)*DAY);
+      return {date:d.toDateString(), label: i%15===0 ? `${d.getMonth()+1}/${d.getDate()}` : '', n:0, cum:0};
+    });
+    cL.filter(t => now - t.completedAt < 90*DAY).forEach(t => {
+      const entry = cum90raw.find(d => d.date === new Date(t.completedAt).toDateString());
+      if (entry) entry.n++;
+    });
+    let running = 0;
+    cum90raw.forEach(d => { running += d.n; d.cum = running; });
+    // Normalise for chart: use cum as the bar height
+    const cum90 = cum90raw.map(d => ({...d, n: d.cum}));
+
+    return {h24, days7, days30, allHours, donut, dow, speedBuckets, trend30, cum90};
   }, [metrics]);
 
   const advice = useMemo(() => {
@@ -2812,40 +2839,35 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                 );
               };
 
-              // ── Heatmap grid (10 weeks × 7 days) ──
-              const HeatGrid = ({cells}) => {
-                const maxN = Math.max(...cells.map(c => c.n), 1);
-                const DOW = ['Su','Mo','Tu','We','Th','Fr','Sa'];
-                const weeks = 10;
-                const cellSize = 12, gap = 2;
-                const accentRgb = T.isDark ? '150,180,255' : '80,120,220';
+              // ── Line/area chart (for trend + cumulative) ──
+              const AreaChart = ({points, accentColor, showLabels=true}) => {
+                const max = Math.max(...points.map(p => p.n), 1);
+                const W = 320, H = 80, n = points.length;
+                const px = (i) => (i / (n-1)) * W;
+                const py = (v) => H - (v/max)*H;
+                const lineD = points.map((p,i) => `${i===0?'M':'L'}${px(i).toFixed(1)} ${py(p.n).toFixed(1)}`).join(' ');
+                const areaD = `${lineD} L${W} ${H} L0 ${H} Z`;
+                const rgb = T.isDark ? '126,176,222' : '80,120,204';
                 return (
-                  <div style={{display:"flex",gap:4,alignItems:"flex-start"}}>
-                    <div style={{display:"flex",flexDirection:"column",gap:gap,marginTop:14,flexShrink:0}}>
-                      {DOW.map((d,i) => (
-                        <div key={d} style={{height:cellSize,lineHeight:`${cellSize}px`,fontSize:7,color:T.tFaint,fontFamily:"system-ui",textAlign:"right",width:14}}>{i%2===0?d:''}</div>
-                      ))}
-                    </div>
-                    <div style={{overflowX:"auto",flex:1}}>
-                      <svg viewBox={`0 0 ${weeks*(cellSize+gap)} ${7*(cellSize+gap)+14}`}
-                        style={{width:"100%",minWidth:weeks*(cellSize+gap),display:"block"}}>
-                        {cells.map((c,idx) => {
-                          const col = c.weekIdx, row = c.dow;
-                          const x = col*(cellSize+gap), y = row*(cellSize+gap)+14;
-                          const alpha = c.n === 0 ? 0 : 0.2 + (c.n/maxN)*0.8;
-                          return (
-                            <g key={idx}>
-                              <rect x={x} y={y} width={cellSize} height={cellSize} rx={2}
-                                fill={c.n===0 ? T.brd : `rgba(${accentRgb},${alpha.toFixed(2)})`}/>
-                              {c.n > 0 && (
-                                <title>{`${c.date}: ${c.n} task${c.n!==1?'s':''}`}</title>
-                              )}
-                            </g>
-                          );
-                        })}
-                      </svg>
-                    </div>
-                  </div>
+                  <svg viewBox={`0 0 ${W} ${H+20}`} style={{width:"100%",display:"block",overflow:"visible"}}>
+                    <defs>
+                      <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={`rgba(${rgb},0.35)`}/>
+                        <stop offset="100%" stopColor={`rgba(${rgb},0.02)`}/>
+                      </linearGradient>
+                    </defs>
+                    <path d={areaD} fill="url(#areaGrad)"/>
+                    <path d={lineD} fill="none" stroke={accentColor} strokeWidth={2} strokeLinejoin="round"/>
+                    {/* dots for high points */}
+                    {points.map((p,i) => p.n===max && max>0 ? (
+                      <circle key={i} cx={px(i)} cy={py(p.n)} r={3} fill={accentColor}/>
+                    ) : null)}
+                    <line x1={0} y1={H} x2={W} y2={H} stroke={T.brd} strokeWidth={1}/>
+                    {showLabels && points.filter(p=>p.label).map((p,i) => (
+                      <text key={i} x={px(points.indexOf(p))} y={H+14} textAnchor="middle"
+                        fontSize={7.5} fill={T.tFaint} fontFamily="system-ui">{p.label}</text>
+                    ))}
+                  </svg>
                 );
               };
 
@@ -2895,17 +2917,63 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                   {/* Divider */}
                   <div style={{borderTop:`1px solid ${T.brd}`,margin:"18px 0"}}/>
 
-                  {/* Activity heatmap (last 10 weeks) */}
-                  <h3 style={{fontSize:10,fontWeight:700,color:T.tFaint,margin:"0 0 10px",fontFamily:"system-ui",textTransform:"uppercase",letterSpacing:1.5}}>10-Week Heatmap</h3>
-                  <HeatGrid cells={chartData.heat70}/>
-                  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,justifyContent:"flex-end"}}>
-                    <span style={{fontSize:9,color:T.tFaint,fontFamily:"system-ui"}}>less</span>
-                    {[0,0.25,0.5,0.75,1].map((a,i) => (
-                      <div key={i} style={{width:10,height:10,borderRadius:2,
-                        background:a===0?T.brd:`rgba(${T.isDark?'150,180,255':'80,120,220'},${a})`}}/>
+                  {/* Secondary chart — switchable */}
+                  <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:14}}>
+                    {[['dow','Day of week'],['speed','Speed'],['trend','Trend'],['cumulative','Cumulative']].map(([k,lbl]) => (
+                      <button key={k} onClick={()=>setChartSecondary(k)}
+                        style={{padding:"4px 10px",borderRadius:8,border:`1px solid ${chartSecondary===k?T.text:T.brd}`,
+                          background:chartSecondary===k?T.text:"transparent",
+                          color:chartSecondary===k?(SCHEMES[AS?.colorScheme]?.bg||"#fff"):T.tSoft,
+                          fontSize:10,fontFamily:"system-ui",fontWeight:600,cursor:"pointer"}}>
+                        {lbl}
+                      </button>
                     ))}
-                    <span style={{fontSize:9,color:T.tFaint,fontFamily:"system-ui"}}>more</span>
                   </div>
+
+                  {chartSecondary === 'dow' && (() => {
+                    const peak = chartData.dow.reduce((a,b) => b.n>a.n?b:a, chartData.dow[0]);
+                    return (
+                      <div>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+                          <span style={{fontSize:11,fontFamily:"system-ui",color:T.tSoft}}>all-time, by day of week</span>
+                          <span style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui"}}>peak: {peak.label} ({peak.n})</span>
+                        </div>
+                        <BarChart bars={chartData.dow} accentColor={accentColor}/>
+                      </div>
+                    );
+                  })()}
+
+                  {chartSecondary === 'speed' && (() => {
+                    const maxB = chartData.speedBuckets.reduce((a,b)=>b.n>a.n?b:a,chartData.speedBuckets[0]);
+                    return (
+                      <div>
+                        <div style={{marginBottom:8}}>
+                          <span style={{fontSize:11,fontFamily:"system-ui",color:T.tSoft}}>how quickly tasks get done (creation → completion)</span>
+                        </div>
+                        <BarChart bars={chartData.speedBuckets.map(b=>({...b,label:b.label}))} accentColor="#9BD4A0"/>
+                        {maxB.n>0 && <p style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",marginTop:8,marginBottom:0}}>Most tasks finish {maxB.label} after being created.</p>}
+                      </div>
+                    );
+                  })()}
+
+                  {chartSecondary === 'trend' && (
+                    <div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+                        <span style={{fontSize:11,fontFamily:"system-ui",color:T.tSoft}}>daily completions, last 30 days</span>
+                      </div>
+                      <AreaChart points={chartData.trend30} accentColor={accentColor}/>
+                    </div>
+                  )}
+
+                  {chartSecondary === 'cumulative' && (
+                    <div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+                        <span style={{fontSize:11,fontFamily:"system-ui",color:T.tSoft}}>total tasks completed, last 90 days</span>
+                        <span style={{fontSize:18,fontWeight:700,color:T.text,fontFamily:"system-ui"}}>{chartData.cum90[chartData.cum90.length-1]?.n} <span style={{fontSize:11,fontWeight:400,color:T.tFaint}}>total</span></span>
+                      </div>
+                      <AreaChart points={chartData.cum90} accentColor="#E09AB8" showLabels={true}/>
+                    </div>
+                  )}
                 </div>
               );
             })()}
