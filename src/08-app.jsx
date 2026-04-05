@@ -2941,7 +2941,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
       if (webmBlob.size >= 500 && aiOpts?.geminiKey) {
         const base64 = await webmToWavBase64(webmBlob);
         const resp = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-05-06:generateContent?key=${aiOpts.geminiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${aiOpts.geminiKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

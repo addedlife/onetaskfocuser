@@ -356,7 +356,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 - **Shailos research**: background-capable — spinner stays on list card even when viewing a different shaila; result auto-scrolls into view when it arrives; `selectedShaila` syncs from Firestore so result appears without re-selecting
 - **Queue · N pill** on focus/launchpad view
 - **Theme sync**: Shailos inherits main app color scheme
-- **AI models**: `gemini-2.5-pro-preview-05-06` for all AI calls (main app + Shailos + research). Previous model `gemini-3.1-pro-preview` was invalid — caused silent failures including wrong search queries.
+- **AI models**: `gemini-3.1-pro-preview` for all AI calls (main app + Shailos + research). This is the current top Google model as of April 2026 — replaces the deprecated `gemini-3-pro-preview` (shut down March 9, 2026).
 - **Research**: multi-step parallel search — (1) Gemini generates 3 different search queries (broad halachic, specific scenario, posek/agency angle), (2) all 3 run simultaneously via Serper.dev, (3) Gemini checks for gaps and fires 1-2 targeted follow-ups if needed, (4) Gemini reads all snippets → one line per relevant article (what THAT source says, no synthesis/psak) + seforim links. Output documents all search queries used. Requires `SERPER_API_KEY` Netlify env var.
 - **aiDetectShailaAnswers**: removed "copy verbatim" instruction — now writes clean halachic ruling preserving content.
 
@@ -365,7 +365,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 ## 15. Recent Git History
 
 ```
-(pending) fix: research — parallel multi-query search, no-psak output, correct Gemini model
+(pending) fix: model → gemini-3.1-pro-preview (current), revert incorrect 2.5 downgrade
 7a148f4 feat: research via Serper.dev real Google search + Gemini summarization — no grounding tool
 32bb762 feat: research via gemini-3-flash-preview + google_search grounding — real source URLs
 5853720 fix: research — drop google_search tool (hangs on 3.1-pro), use model knowledge with strong citation prompt
