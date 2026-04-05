@@ -357,14 +357,15 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 - **Queue · N pill** on focus/launchpad view
 - **Theme sync**: Shailos inherits main app color scheme
 - **AI models**: `gemini-3.1-pro-preview` for all Shailos AI calls including research
-- **Research**: two-step — (1) Serper.dev Google Search API returns real article URLs, (2) Gemini summarizes what those articles say. Non-opinionated: reports only what sources say. Requires `SERPER_API_KEY` Netlify env var.
+- **Research**: two-step — (1) Serper.dev Google Search API returns real article URLs, (2) Gemini summarizes what those articles say + extracts seforim mentioned. Output: summary + article links + Sefaria deep/search links for each sefer. Requires `SERPER_API_KEY` Netlify env var.
 
 ---
 
 ## 15. Recent Git History
 
 ```
-(pending) feat: research via Serper.dev — real Google search results + Gemini summarization
+(pending) feat: research — article links + Sefaria links for seforim mentioned
+7a148f4 feat: research via Serper.dev real Google search + Gemini summarization — no grounding tool
 32bb762 feat: research via gemini-3-flash-preview + google_search grounding — real source URLs
 5853720 fix: research — drop google_search tool (hangs on 3.1-pro), use model knowledge with strong citation prompt
 1da5ef8 feat: AI answer summary in shailos transcriber minicards
