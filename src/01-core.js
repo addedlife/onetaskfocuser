@@ -1134,13 +1134,38 @@ async function callClaude(ck, prompt) {
   } catch(e) { return null; }
 }
 
-// Generic AI dispatcher — uses Claude or Gemini based on aiOpts
-// aiOpts = {provider:"gemini"|"claude", geminiKey, claudeKey} OR just a string (legacy gemini key)
+// Routes through the Netlify gemini-proxy function — server key never leaves the server.
+// Used as fallback when the user has no personal Gemini key.
+async function callGeminiProxy(prompt, genConfig={}) {
+  try {
+    const r = await fetch("/.netlify/functions/gemini-proxy", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        model: GEMINI_MODEL,
+        body: {
+          contents: [{parts: [{text: prompt}]}],
+          generationConfig: {temperature: 0.7, maxOutputTokens: 4096, ...genConfig}
+        }
+      })
+    });
+    const d = await r.json();
+    if (d.error) { console.warn("[AI] Proxy error:", d.error); return null; }
+    return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  } catch(e) { console.warn("[AI] Proxy call failed:", e); return null; }
+}
+
+// Generic AI dispatcher — routes to the right backend based on what keys are available.
+// Personal Gemini key → direct Google API call (fast, uses user's quota)
+// No personal key → gemini-proxy Netlify function (server key stays server-side)
+// Claude key + claude provider → claude-proxy Netlify function
+// aiOpts = {provider:"gemini"|"claude", geminiKey, claudeKey} OR just a string (legacy)
 async function callAI(prompt, aiOpts, genConfig={}) {
   if (typeof aiOpts === 'string') return callGemini(aiOpts, prompt, genConfig); // legacy: bare key = gemini
   if (!aiOpts) return null;
   if (aiOpts.provider === 'claude' && aiOpts.claudeKey) return callClaude(aiOpts.claudeKey, prompt);
-  return callGemini(aiOpts.geminiKey, prompt, genConfig);
+  if (aiOpts.geminiKey) return callGemini(aiOpts.geminiKey, prompt, genConfig); // personal key → direct
+  return callGeminiProxy(prompt, genConfig); // no personal key → server proxy
 }
 
 function optTasks(tasks, pris) {

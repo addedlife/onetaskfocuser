@@ -106,7 +106,7 @@ function App({ user, onSignOut }) {
   const [minTick, setMinTick] = useState(0);              // ticks every 60s for snooze auto-wake
   const sessionCompCount = useRef(0);                     // session completions (no re-render needed)
   const pendingShailaIds = useRef(new Set());              // shailaIds assigned but not yet in state (prevents listener dupes)
-  const [sharedGeminiKey, setSharedGeminiKey] = useState(""); // app-level key from server
+  const [serverKeyAvailable, setServerKeyAvailable] = useState(false); // true = Netlify GEMINI_API_KEY is configured
   const [fbOffline, setFbOffline] = useState(false);      // Firebase unreachable on load — warn user
   // ─── Conversation Capture ────────────────────────────────────────────────
   const [showConvCapture, setShowConvCapture] = useState(false);
@@ -248,7 +248,7 @@ function App({ user, onSignOut }) {
   useEffect(() => {
     fetch("/.netlify/functions/app-config")
       .then(r => r.json())
-      .then(d => { if (d.geminiKey) setSharedGeminiKey(d.geminiKey); })
+      .then(d => { setServerKeyAvailable(!!d.geminiKey); })
       .catch(() => {});
   }, []);
 
@@ -504,9 +504,8 @@ function App({ user, onSignOut }) {
 
   // ─── Derived state ───────────────────────────────────────────────────────
   // Effective Gemini key: user's own key takes priority; falls back to shared app key
-  const effectiveGK = AS?.geminiKey || sharedGeminiKey;
-  const aiOpts = AS ? {provider: AS.aiProvider || 'gemini', geminiKey: effectiveGK, claudeKey: AS.claudeApiKey} : null;
-  const hasAI = aiOpts && (aiOpts.provider === 'claude' ? !!aiOpts.claudeKey : !!aiOpts.geminiKey);
+  const aiOpts = AS ? {provider: AS.aiProvider || 'gemini', geminiKey: AS.geminiKey || "", claudeKey: AS.claudeApiKey} : null;
+  const hasAI = aiOpts && (aiOpts.provider === 'claude' ? !!aiOpts.claudeKey : (!!aiOpts.geminiKey || serverKeyAvailable));
   const sc = SCHEMES[AS?.colorScheme] || AS?.customSchemes?.[AS?.colorScheme] || SCHEMES.claude;
   // Detect dark theme by checking bg luminance
   const isDark = (()=>{const h=sc.bg||"#EDE5D8";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000<128;})();
@@ -1054,7 +1053,7 @@ function App({ user, onSignOut }) {
   function saveShailaField(id, field, value) {
     setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => t.id===id ? {...t, [field]: value} : t)}))}));
     // When an answer is saved, generate a 6-word AI summary and store it alongside
-    if (field === "shailaAnswer" && value.trim() && aiOpts?.geminiKey) {
+    if (field === "shailaAnswer" && value.trim() && hasAI) {
       aiSummarizeAnswer(value, aiOpts).then(summary => {
         if (summary) setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => t.id===id ? {...t, answerSummary: summary} : t)}))}));
       }).catch(() => {});

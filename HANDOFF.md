@@ -274,7 +274,12 @@ All AI functions are in `src/01-core.js`, exported and used throughout the app.
 Shaila research must use `google_search: {}` — NOT `googleSearch`. Wrong format silently fails.
 
 ### Key Rule: AI Key Resolution
-`callAI` automatically uses the user's personal Gemini key if set, otherwise falls back to the shared server key via `gemini-proxy`. Always pass `aiOpts` (the object from `08-app.jsx`) — never hardcode keys.
+`callAI` routes by priority:
+1. Personal Gemini key set → direct call to Google API (fast, user's own quota)
+2. No personal key + `GEMINI_API_KEY` in Netlify → `gemini-proxy` Netlify function (server key stays server-side, never sent to browser)
+3. Claude provider + Claude key → `claude-proxy` Netlify function
+
+`serverKeyAvailable` (boolean) in `08-app.jsx` tracks whether the server key is configured — fetched from `app-config` on load. The actual key value is never stored in browser state. `hasAI` is true if the user has a personal key OR the server key is available. Audio transcription (`callGeminiAudio`) always requires a personal key — the proxy does not handle multimodal requests.
 
 ---
 
@@ -369,7 +374,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 ## 15. Recent Git History
 
 ```
-(pending) fix: unified AI pipeline — GEMINI_MODEL constant, callGeminiAudio, fix gemini-2.5-pro broken calls
+(pending) fix: route all text AI calls through gemini-proxy when no personal key — server key never leaves server
 7a148f4 feat: research via Serper.dev real Google search + Gemini summarization — no grounding tool
 32bb762 feat: research via gemini-3-flash-preview + google_search grounding — real source URLs
 5853720 fix: research — drop google_search tool (hangs on 3.1-pro), use model knowledge with strong citation prompt
