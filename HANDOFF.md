@@ -355,15 +355,16 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 - **Shailos research**: background-capable — spinner stays on list card even when viewing a different shaila; result auto-scrolls into view when it arrives; `selectedShaila` syncs from Firestore so result appears without re-selecting
 - **Queue · N pill** on focus/launchpad view
 - **Theme sync**: Shailos inherits main app color scheme
-- **AI models**: `gemini-3.1-pro-preview` for all Shailos AI calls
-- **Research tool format**: `google_search: {}` (fixed from broken `googleSearch` camelCase)
+- **AI models**: `gemini-3.1-pro-preview` for transcription/parsing; `gemini-3-flash-preview` for research
+- **Research**: uses `google_search: {}` grounding tool — returns real source URLs from grounding metadata (`groundingChunks`). Non-opinionated: reports what sources say, no conclusions drawn.
 
 ---
 
 ## 15. Recent Git History
 
 ```
-(pending commit) fix: shailos research — google_search tool, background tracking, selectedShaila sync, auto-scroll, synopsis regeneration
+32bb762 feat: research via gemini-3-flash-preview + google_search grounding — real source URLs
+5853720 fix: research — drop google_search tool (hangs on 3.1-pro), use model knowledge with strong citation prompt
 1da5ef8 feat: AI answer summary in shailos transcriber minicards
 1cbfc76 feat: AI-generated 6-word answer summary for shaila pills
 e56d25e fix: answer snippet first 6 words + whitespace-nowrap in transcriber minicards
