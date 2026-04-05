@@ -1,136 +1,365 @@
-# OneTaskFocuser — Handoff Document (2026-04-05)
+# OneTaskFocuser — Living Project Document
 
-> Give this entire file to a new Claude session. It replaces the need to read all the code.
-
----
-
-## 1. WHO YOU'RE WORKING WITH
-
-- **User**: Yosef Danziger (`rabbidanziger`) — intelligent and curious, not a programmer
-- **Coding Coach Mode is ALWAYS ON**: After every meaningful action, add 1–3 sentences of plain-English explanation. Define programming terms when they come up naturally. Warm, direct tone — never condescending. Never simplify the code itself, only the explanations.
-- **Work style**: He prefers autonomous work. Give status summaries, not step-by-step narration. Only confirm before risky/irreversible actions. Don't ask about small decisions.
+> This file is automatically rewritten by Claude before every commit. It is always current.
+> Start here. You should not need to read the source code to understand how to work on this app.
 
 ---
 
-## 2. THE APP
+## Table of Contents
+1. [What This App Is](#1-what-this-app-is)
+2. [Who You Are Working With](#2-who-you-are-working-with)
+3. [Tech Stack](#3-tech-stack)
+4. [Repository Structure](#4-repository-structure)
+5. [Local Development](#5-local-development)
+6. [Deploy Workflow](#6-deploy-workflow)
+7. [Architecture](#7-architecture)
+8. [Data Model](#8-data-model)
+9. [AI Integrations](#9-ai-integrations)
+10. [Coding Conventions](#10-coding-conventions)
+11. [Safety Rules — Read Before Touching Anything](#11-safety-rules--read-before-touching-anything)
+12. [Feature Inventory](#12-feature-inventory)
+13. [Subsystems](#13-subsystems)
+14. [What Is Currently Live](#14-what-is-currently-live)
+15. [Recent Git History](#15-recent-git-history)
 
-- **Name**: OneTaskFocuser (internal: OneTask)
-- **Purpose**: A focus task manager — shows one task at a time, AI-prioritized. ADHD-friendly. Features: zen mode, brain dump, multiple lists, energy filtering, queue, Shailos tracker, Universal Conversation Recorder.
+---
+
+## 1. What This App Is
+
+**OneTaskFocuser** is a personal focus task manager for a single user (Yosef Danziger, `rabbidanziger`).
+
+Core philosophy: show one task at a time, AI-prioritized, ADHD-friendly. The app surfaces what to do *right now* and gets out of the way. It is not a general-purpose to-do app.
+
 - **Live URL**: https://onetaskfocuser.netlify.app
 - **Shailos sub-app**: https://onetaskfocuser.netlify.app/shailos/
 - **GitHub**: https://github.com/addedlife/onetaskfocuser
 
 ---
 
-## 3. TECH STACK
+## 2. Who You Are Working With
 
-| Layer | Tech |
+**User**: Yosef Danziger — intelligent and curious, not a programmer.
+
+### Coding Coach Mode — Always On
+After every meaningful action (file read, edit, command), add 1–3 sentences of plain-English explanation. Define programming terms naturally in context. Warm and direct tone — never condescending. The code itself is never simplified — only the explanations.
+
+### Work Style
+- Prefers autonomous work — give status summaries, not step-by-step narration
+- Only confirm before risky or irreversible actions
+- Don't ask about small decisions — just make them and explain briefly
+
+---
+
+## 3. Tech Stack
+
+| Layer | Technology |
 |---|---|
-| Frontend (main app) | React 18 + Vite + JSX — full build step (no CDN Babel) |
-| Frontend (Shailos) | React 18 + Vite + TypeScript |
+| Frontend | React 18 + Vite + JSX |
 | Database | Firebase Firestore |
 | Auth | Firebase Auth (email/password + Google) |
-| Hosting | Netlify (static) |
-| AI (task app) | Gemini — user's key from settings, direct fetch |
-| AI (Shailos) | Gemini via `gemini-proxy` Netlify function (`GEMINI_API_KEY` env var) |
+| Hosting | Netlify (static + serverless functions) |
+| Build | `npm run build` via Vite — Netlify runs this on every push |
+| AI (main app) | Gemini API — via user's personal key stored in app settings |
+| AI (shared fallback) | Gemini API — via `GEMINI_API_KEY` Netlify env var, proxied through `gemini-proxy` function |
 | AI model | `gemini-3.1-pro-preview` (default); `gemini-2.0-flash` for shaila research |
+| Shailos sub-app | React 18 + Vite + TypeScript (separate build) |
 
-**Important**: The app uses Vite with a real build step. Netlify runs `npm run build && cp -r shailos dist/` automatically on push. Do NOT treat it as the old CDN/Babel setup described in the archived HANDOFF.md.
+**Important**: This is a Vite app with a real build step — not the old CDN/Babel setup. `npm run build` compiles everything in `src/` into `dist/`. Netlify runs this automatically on push.
 
 ---
 
-## 4. FILE STRUCTURE
+## 4. Repository Structure
 
 ```
-sandbox/                          ← GIT REPO ROOT — deploy from here ONLY
-├── src/                          ← main app source (Vite builds this)
-│   ├── main.jsx
-│   ├── 00-auth.jsx               — Firebase Auth gate, canonicalUid()
-│   ├── 01-core.js                — Store, Firebase init, constants, AI helpers ⚠️ SAFETY CRITICAL
-│   ├── 02-icons.jsx              — SVG icon components
-│   ├── 03-voice.jsx              — Voice input
-│   ├── 04-components.jsx         — ZenMode, BrainDump, ZenDumpReview, PostItStack, BlockedBadge, etc.
-│   ├── 05-modals.jsx             — Modal components
-│   ├── 06-shelf.jsx              — Completed tasks shelf
-│   ├── 07-settings.jsx           — Settings panel
-│   ├── 08-app.jsx                — Main App component, all state, all task actions
-│   └── 10-devmode.jsx            — Dev mode tools
-├── shailos/                      ← Shailos sub-app (built separately, static output)
+sandbox/                              ← Git repo root — ONLY deploy from here
+├── src/                              ← Main app source (Vite builds this → dist/)
+│   ├── main.jsx                      ← Entry point: renders <App> inside <AuthGate>
+│   ├── 00-auth.jsx                   ← Firebase Auth gate, Google sign-in, canonicalUid()
+│   ├── 01-core.js                    ← Store, Firebase init, all AI functions, constants ⚠️ CRITICAL
+│   ├── 02-icons.jsx                  ← SVG icon components (IC component)
+│   ├── 03-voice.jsx                  ← Voice recording, WebM→WAV conversion, VoiceInput component
+│   ├── 04-components.jsx             ← All shared UI components (ZenMode, BrainDump, ShailaManager, etc.)
+│   ├── 05-modals.jsx                 ← Modal dialogs (BulkAdd, TaskBD, BlockedModal, etc.)
+│   ├── 06-shelf.jsx                  ← Completed tasks shelf + SubtaskGroup
+│   ├── 07-settings.jsx               ← Settings modal (API key, MrsW schedule, color scheme, backup)
+│   ├── 08-app.jsx                    ← Main App component — all state, all task actions ⚠️ LARGEST FILE
+│   └── 10-devmode.jsx                ← Dev mode panel (debug tools, data inspector)
+├── shailos/                          ← Shailos sub-app (pre-built static output — do not edit directly)
 ├── netlify/functions/
-│   ├── app-config.js             — returns GEMINI_API_KEY to client
-│   ├── gemini-proxy.js           — proxies Gemini AI calls (5-min timeout)
-│   ├── claude-proxy.js           — proxies Claude AI calls (60-sec timeout)
-│   └── soferai-proxy.js          — legacy proxy
-├── dist/                         ← Vite build output (do not edit directly)
-├── index.html
-├── vite.config.js
-└── HANDOFF-2026-04-05.md         ← this file
+│   ├── app-config.js                 ← Returns GEMINI_API_KEY env var to client (never hardcode keys)
+│   ├── gemini-proxy.js               ← Proxies Gemini API calls — 5-minute timeout
+│   ├── claude-proxy.js               ← Proxies Claude API calls — 60-second timeout
+│   └── soferai-proxy.js              ← Legacy proxy (kept for safety)
+├── dist/                             ← Vite build output — do not edit, regenerated on every build
+├── index.html                        ← HTML shell — loads /src/main.jsx via Vite module
+├── vite.config.js                    ← Vite config (React plugin, port 3000, dist output)
+├── netlify.toml                      ← Build command, function timeouts, redirect rules, cache headers
+├── package.json                      ← Dependencies: react, react-dom, firebase, vite
+└── HANDOFF.md                        ← This file — auto-updated before every commit
 ```
 
-**Shailos source** lives at:
+**Shailos source** (separate folder, built independently):
 `C:\Users\ydanz\OneDrive\Documents\taskmanager app\backup\sto-src\Shaila-Trancriber-Organizer-main\`
 
-To update Shailos: build there → copy `dist/` contents → `sandbox/shailos/` → commit + push.
-Netlify then copies `shailos/` into `dist/` as part of its own build step (`cp -r shailos dist/`).
+To update Shailos: build there → copy `dist/` contents into `sandbox/shailos/` → commit + push.
+Netlify's build command (`npm run build && cp -r shailos dist/`) copies the pre-built Shailos into the main dist automatically.
 
 ---
 
-## 5. KEY ARCHITECTURE
+## 5. Local Development
 
-- **Firestore path**: `users/{canonicalUid}/appData/appState_v4`
-- **canonicalUid**: strips email to prefix — `rabbidanziger@anything` → `"rabbidanziger"`
-- **localStorage key**: `onetaskonly_v4_{uid}` (e.g. `onetaskonly_v4_rabbidanziger`)
-- **State object** (`AS`): `{ lists[], activeListId, colorScheme, mrsWWindows, geminiKey, ... }`
-- **`Store`** in `01-core.js` — all Firebase + localStorage read/write
-- **`uT(fn)`** — helper to mutate the active list's tasks array
-- **`curT`** = `displayedActT[0]` — the current focused task
-- **Firestore `onSnapshot`** listener in `08-app.jsx` keeps all open tabs in sync (2s echo buffer)
+```bash
+cd "C:\Users\ydanz\OneDrive\Documents\taskmanager app\sandbox"
+npm install       # first time only
+npm run dev       # starts dev server at http://localhost:3000
+```
+
+The dev server hot-reloads on file save. Firebase connects to the live production database — all writes in dev go to the real `rabbidanziger` account. There is no separate dev/staging environment.
 
 ---
 
-## 6. ⚠️ SAFETY RULES — NEVER VIOLATE THESE
+## 6. Deploy Workflow
 
-### 1. NEVER PUSH WITHOUT USER SAYING "GO"
-Always say: "Ready to push. Files changed: [list]. Want me to deploy?" — then wait.
+**One command:**
 
-### 2. DEPLOY = GIT PUSH FROM sandbox/ ONLY
 ```bash
 cd "C:\Users\ydanz\OneDrive\Documents\taskmanager app\sandbox"
 git add <specific files>
-git commit -m "description"
+git add HANDOFF.md
+git commit -m "description of change"
 git push
 ```
-GitHub → Netlify auto-deploys. **Do NOT use**: `safe-deploy.ps1`, `deploy.bat`, `deploy_api.ps1`, raw Netlify API calls — all deprecated.
 
-### 3. NEVER MODIFY FIREBASE SAFETY GUARDS
-In `01-core.js`:
-- `Store._fbLoadStatus` — tracks whether Firebase confirmed data exists before allowing saves
-- `Store.saveToFB()` guards — prevents blank/default state from overwriting real data in Firebase
+GitHub → Netlify webhook → Netlify runs `npm run build && cp -r shailos dist/` → live in ~60 seconds.
 
-**Why these exist**: The user's entire task history was once wiped because the app loaded with empty localStorage and saved blank state to Firebase within 50ms. These guards prevent that from ever happening again. Weakening them is a BLOCKER.
+### Rules
+- **NEVER push without user saying "yes", "deploy", or "push it"** — always ask first
+- **NEVER use**: `safe-deploy.ps1`, `deploy.bat`, `deploy_api.ps1`, raw Netlify API calls — all deprecated
+- **NEVER deploy from** `Claude Code OneTask Project\` — dead legacy folder, not connected to git
 
-### 4. NEVER CHANGE FIREBASE CONFIG
-`apiKey`, `projectId`, `appId` in `01-core.js` — never touch.
-
-### 5. READ THE FILE BEFORE EDITING
-Always read the current `sandbox/` version of a file before editing it. Never edit from memory. Run `git log --oneline` if something looks unexpected.
-
----
-
-## 7. WHAT'S CURRENTLY LIVE (as of 2026-04-05)
-
-- **FAB (floating action button)**: 2 large buttons (record shaila + record call/conversation), 2 compact links (Add | Records)
-- **Universal Conversation Recorder**: In-app audio recording → Gemini transcription (Yeshivish-aware) → AI extracts tasks/shailos/schedule/reminders/got-backs → classy review card → user approves → items added to queue
-- **Shailos transcriber**: Full transcriber with editable fields, "Shaila Question" box, synopsis textarea, AI answer summary on minicards (first 6 words), answer synopsis on shaila pills
-- **Queue · N pill**: directly on focus/launchpad view
-- **Theme sync**: shailos sub-app inherits main app color scheme
-- **Subtask descriptions**: "Research – [synopsis]" / "Get back – [synopsis]"
-- **Research tool**: `google_search: {}` format (not `googleSearch`)
-- **AI model**: `gemini-2.5-pro-preview` for conversation parsing; `gemini-2.0-flash` for shaila research
+### Netlify Config Highlights
+- `gemini-proxy` timeout: **300 seconds** (needed for long AI transcriptions)
+- `claude-proxy` timeout: **60 seconds**
+- `/assets/*`: immutable cache (Vite hashes filenames)
+- `/index.html`: no-cache (users always get latest deploy instantly)
+- Several admin files (including this one) are redirected to 404 — in the repo but blocked from public access
 
 ---
 
-## 8. RECENT GIT HISTORY (last 10 commits)
+## 7. Architecture
+
+### Auth Flow
+1. `<AuthGate>` (in `00-auth.jsx`) wraps the entire app — shows login screen until Firebase Auth resolves
+2. On sign-in, `canonicalUid(user)` strips the email to a prefix: `rabbidanziger@anything` → `"rabbidanziger"`
+3. Passes `user` to `<App>`, which immediately calls `Store.setUid(canonicalUid(user))`
+
+### State Management
+- Single large React component: `<App>` in `08-app.jsx`
+- All app state lives in `AS` via `useState(null)` — loaded async from Firebase on mount
+- No Redux, no Zustand — plain React state with ~60 state variables
+
+**Key state shortcuts:**
+```js
+AS          // full app state object
+setAS(fn)   // update state — always pass a function, never the object directly
+uT(fn)      // mutate the active list's tasks array
+curT        // = displayedActT[0] — the current focused task
+pris        // = AS.priorities.filter(p => !p.deleted) — active priorities
+T           // = SCHEMES[AS.colorScheme] — current theme object
+```
+
+### Data Flow
+```
+App mounts
+  → Store.load()
+    → Tries Firebase (server first, then offline cache)
+    → Sets _fbLoadStatus: 'ok' | 'empty' | 'error'
+    → Falls back to localStorage ONLY if Firebase is unreachable
+  → setAS(loadedState) + setLoaded(true)
+
+User action → setAS(newState)
+  → Save effect fires (debounced 1500ms)
+    → Store.ls(state)           — writes localStorage cache
+    → Store.saveToFB(state)     — writes Firebase (guarded — see Safety Rules)
+    → Store.autoFileBackup()    — weekly JSON backup
+
+Firestore onSnapshot listener
+  → Fires when another device saves
+  → Compares _lsModified timestamps — adopts remote if newer
+  → Sets adoptedRemote.current = true to skip echo-back save (prevents sync loop)
+```
+
+### Storage Layers
+| Layer | Purpose | Key/Path |
+|---|---|---|
+| Firebase Firestore | Source of truth | `users/{uid}/appData/appState_v4` |
+| localStorage | Offline cache only | `onetaskonly_v4_{uid}` |
+| IndexedDB | Backup folder handle | `onetask_fsa` DB, `kv` store |
+| File backup | Weekly JSON dump | `onetask_backup_{year}_W{week}.json` |
+
+---
+
+## 8. Data Model
+
+### App State (AS)
+```js
+{
+  lists: [{ id, name, tasks: [...] }],
+  activeListId: "default",
+  priorities: [
+    { id: "now",        label: "Now",        color: "#E09AB8", weight: 3 },
+    { id: "today",      label: "Today",      color: "#E0B472", weight: 2 },
+    { id: "eventually", label: "Eventually", color: "#7EB0DE", weight: 1 },
+    // + user-defined custom priorities
+    // "shaila" is a virtual priority — not stored here, used as task.priority value
+  ],
+  colorScheme: "claude",
+  zenEnabled: false,
+  geminiKey: "",
+  completionSound: true,
+  overwhelmThreshold: 7,
+  ageThresholds: { now: 1, today: 3, eventually: 7 },
+  mrsWWindows: { monThu: { start: "08:30", end: "13:00" }, fri: { start: "08:30", end: "10:00" } },
+  autoOptimize: false,
+  currentEnergy: null,     // "high" | "low" | null
+  _lsModified: 1234567890, // timestamp — cross-device sync key
+}
+```
+
+### Task Object
+```js
+{
+  id: "lx4k2abc9",       // uid() — base36 timestamp + random chars
+  text: "Call Dr. Smith",
+  priority: "now",        // "now" | "today" | "eventually" | "shaila" | custom id
+  completed: false,
+  createdAt: 1700000000000,
+  energy: null,           // "high" | "low" | null
+  context: [],            // context tag strings
+  blocked: false,
+  blockedAt: null,
+  blockedReason: "",
+  shailaId: null,         // links to a Shaila document in Firebase
+  parentTask: null,       // id of parent (subtasks only)
+  autoAged: false,        // was auto-promoted by aging system?
+  agedFromPriId: null,    // original priority before auto-aging
+  snoozedUntil: null,     // ms timestamp — hidden until then
+  firstStep: null,        // AI-suggested first step
+}
+```
+
+---
+
+## 9. AI Integrations
+
+All AI functions are in `src/01-core.js`, exported and used throughout the app.
+
+### Key Functions
+| Function | Purpose |
+|---|---|
+| `callAI(prompt, aiOpts, config)` | Main AI call — uses user key or shared key automatically |
+| `aiOptTasks(tasks, pris, aiOpts)` | AI reprioritization |
+| `aiParseBrainDump(text, pris, aiOpts)` | Stream-of-consciousness → task list |
+| `aiParseConversation(transcript, tasks, shailos, aiOpts)` | Recorded conversation → tasks/shailos/completions |
+| `aiParseShailos(text, aiOpts)` | Extracts shaila questions from text |
+| `aiSummarizeAnswer(answerText, aiOpts)` | 4-6 word answer summary for shaila pills |
+| `suggestFirstStep(taskText, aiOpts)` | Concrete first step suggestion |
+| `aiDetectShailaAnswers(shailas, aiOpts)` | Checks if shailas have been answered |
+
+### Key Rule: Research Tool Format
+Shaila research must use `google_search: {}` — NOT `googleSearch`. Wrong format silently fails.
+
+### Key Rule: AI Key Resolution
+`callAI` automatically uses the user's personal Gemini key if set, otherwise falls back to the shared server key via `gemini-proxy`. Always pass `aiOpts` (the object from `08-app.jsx`) — never hardcode keys.
+
+---
+
+## 10. Coding Conventions
+
+- **Inline styles only** — no CSS classes except `@keyframes` in `index.html`
+- **Theme**: `T = SCHEMES[AS.colorScheme]` — always use `T.bg`, `T.card`, `T.tFaint`, etc. for colors
+- **Fonts**: `system-ui` for UI; `Georgia, serif` for task text
+- **State**: always functional updates — `setAS(prev => ({ ...prev, key: val }))`
+- **Tasks**: mutate via `uT(fn)` — never mutate `AS.lists` directly
+- **Tone**: calm, passive styling — no harsh reds or alarming visuals
+- **IDs**: use `uid()` from `01-core.js` for new task/list IDs
+
+---
+
+## 11. Safety Rules — Read Before Touching Anything
+
+### 🔴 Never Push Without Confirmation
+Never run `git push` without the user saying "yes", "deploy", or "push it". Always confirm first.
+
+### 🔴 Never Touch Firebase Safety Guards
+`Store.saveToFB()` in `01-core.js` contains guards that prevent blank state from overwriting real Firebase data. `Store._fbLoadStatus` must be `'ok'` or `'empty'` before any save is allowed.
+
+**Why**: The user's entire task history was once wiped because empty localStorage triggered a blank save to Firebase in 50ms. These guards prevent that from ever happening again. Removing or weakening them is a hard blocker.
+
+### 🔴 Never Change Firebase Config
+`apiKey`, `projectId`, `appId`, `authDomain` in `01-core.js` — never change.
+
+### 🔴 Read the File Before Editing
+Always read the current `sandbox/` version of a file before editing. Never edit from memory.
+
+### 🔴 Update HANDOFF.md Before Every Commit
+Rewrite this file before every `git commit`. Update sections 14 and 15 at minimum. `git add HANDOFF.md` with the commit.
+
+### 🟡 Plan Before Non-Trivial Changes
+For any significant feature or architectural change: produce a structured plan (what, why, files affected, security, data layer, rollback) and get confirmation before implementing.
+
+---
+
+## 12. Feature Inventory
+
+All of these are built and working. Do not rebuild them.
+
+**Core**: Single-task focus view, three priority tiers, custom priorities, AI reprioritization, drag-and-drop queue, undo delete/park, multiple lists
+
+**Focus aids**: Zen Mode, Brain Dump → AI parse → review, Body Double Timer, Just Start Timer, Overwhelm Banner, Block Reflect Modal
+
+**Smart features**: Energy filter, context tags, age hints, auto-aging, BlockedBadge, MrsW schedule overlay, AI first step, AI Insights tab, AI Chat
+
+**Shailos**: Shaila tasks in queue, ShailaManager panel, ShailaMiniPills, shaila research, answer synopsis on pills, links to Shailos sub-app
+
+**Conversation Capture**: Universal Conversation Recorder — record → transcribe (Yeshivish-aware) → AI extract tasks/shailos/completions → review card → approve → add to queue. Two modes: regular mic and phone call (screen audio)
+
+**UI**: Board view (PostItStack), Queue view with search/filter, Shelf view, cross-window sync, color scheme picker with AI-generated schemes, Firebase offline banner
+
+**Data**: Weekly auto-backup to user folder (silent) or browser download, emergency restore via `?restoreLocal=1`, dev mode panel
+
+---
+
+## 13. Subsystems
+
+### Shailos Sub-App (`/shailos/`)
+Separate React + TypeScript + Vite app for transcribing halachic question sessions. Shares Firebase project and auth session with main app. Theme syncs via localStorage → CSS vars.
+
+To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailos/` → commit.
+
+### Netlify Functions
+| Function | Purpose | Timeout |
+|---|---|---|
+| `app-config.js` | Returns `GEMINI_API_KEY` to client | default |
+| `gemini-proxy.js` | Proxies Gemini calls for users without personal key | 5 min |
+| `claude-proxy.js` | Proxies Claude API calls | 60 sec |
+| `soferai-proxy.js` | Legacy — do not remove | default |
+
+---
+
+## 14. What Is Currently Live
+
+- **Universal Conversation Recorder**: full in-app flow — record → transcribe (Yeshivish-aware) → AI extracts tasks/shailos/schedule/got-backs → review card → user approves → items added to queue
+- **FAB**: 2 large buttons (record shaila, record conversation), 2 compact links (Add | Records)
+- **Shailos transcriber**: all fields editable, AI-generated 6-word answer summary on minicards and shaila pills
+- **Queue · N pill** on focus/launchpad view
+- **Theme sync**: Shailos inherits main app color scheme
+- **AI models**: `gemini-3.1-pro-preview` default; `gemini-2.0-flash` for shaila research
+- **Research tool format**: `google_search: {}` (not `googleSearch`)
+
+---
+
+## 15. Recent Git History
 
 ```
 1da5ef8 feat: AI answer summary in shailos transcriber minicards
@@ -143,53 +372,23 @@ cc27108 fix: shailos Record Call button → delegates to main app ConvCapture
 982d4d1 fix: research back to gemini-3.1-pro-preview + smarter answer snippet
 52a6aa9 fix: smarter answer snippet — first meaningful clause, not just first 3 words
 45e00c2 feat: answer snippet on shailos transcriber minicards
+61c92f8 fix: correct button wiring, callMode for phone capture, stronger shaila detection
+24c4eee fix: remove duplicate export of webmToWavBase64 (build was broken)
+99c2093 feat: answer synopsis on answered/got-back shaila pills
+370b08f feat: Universal Conversation Recorder + wire phone FAB
 ```
 
 ---
 
-## 9. CODING CONVENTIONS
-
-- **Styling**: Inline styles everywhere — no CSS classes except `@keyframes` in index.html
-- **Theme**: `T` = `SCHEMES[AS.colorScheme]` — use `T.tFaint`, `T.tSoft`, `T.card`, etc.
-- **Fonts**: `fontFamily:"system-ui"` for UI chrome; `Georgia,serif` for task text
-- **JSX**: Multiple siblings → wrap in `<>...</>` Fragment
-- **Tone**: Calm/passive styling for badges — never harsh red/alarming colors
-- **State shorthand**: `AS` = full app state; `uT(fn)` mutates active list's tasks
-
----
-
-## 10. COMPLETED FEATURES (don't rebuild these)
-
-- AI reprioritization on add/completion
-- Zen mode + brain dump → AI parse → ZenDumpReview
-- Energy filter wired to curT and queueT
-- Queue quick-add with toast + AI reprioritize
-- Undo delete (6s window)
-- Age hint on focus card ("since yesterday" / "N days waiting")
-- BlockedBadge ("⏸ blocked 3h")
-- Board view (PostItStack)
-- Cross-window sync via Firestore onSnapshot
-- MrsW schedule overlay
-- Body double mode
-- Firebase offline banner warning
-- Universal Conversation Recorder (record → transcribe → extract → review → approve)
-- Shailos: full transcriber, AI answer summaries, answer synopsis on pills
-
----
-
-## 11. PLANNING RULE
-
-Before writing code for any non-trivial feature, fix, or architectural change, produce a structured plan covering: what changes and why, files affected, security check, architecture fit, data layer impact, rollback plan, and step-by-step implementation. End with GO / HOLD / REDESIGN. Do NOT begin implementation until the user confirms.
-
----
-
-## 12. ACCESS
+## Access Reference
 
 | Resource | Value |
 |---|---|
+| Live site | https://onetaskfocuser.netlify.app |
+| GitHub | https://github.com/addedlife/onetaskfocuser |
 | Netlify site ID | `c603b156-f9ee-4b67-bcf4-d4b7f64fbccd` |
+| Netlify admin | https://app.netlify.com/projects/onetaskfocuser |
 | Firebase project | `onetaskonly-app` |
 | Firebase user UID | `rabbidanziger` |
-| Gemini key | Netlify env var `GEMINI_API_KEY` (never in code) |
-| Firebase API key | `AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA` (safe to expose — this is the public client key) |
-| GitHub | https://github.com/addedlife/onetaskfocuser |
+| Firebase API key | `AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA` *(public client key — safe to expose)* |
+| Gemini key | Netlify env var `GEMINI_API_KEY` — never hardcode, always use `app-config` function |
