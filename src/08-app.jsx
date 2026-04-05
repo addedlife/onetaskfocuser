@@ -161,13 +161,27 @@ function App({ user, onSignOut }) {
         if (!s.mrsWWindows) s.mrsWWindows = defS.mrsWWindows;
         if (s.completionSound === undefined) s.completionSound = true;
         if (!s.overwhelmThreshold) s.overwhelmThreshold = 7;
-        // Permanent: strip "home" custom priority from the array on every load — reassign any remaining tasks to "eventually"
-        // Uses filter (not deleted flag) so it survives even if old Firebase data comes back
+        // Permanent: strip "home" custom priority on every load AND directly patch Firestore settings doc.
+        // Direct patch bypasses the debounced save (which gets skipped when _listenV5 sets adoptedRemote=true),
+        // so the Firestore settings doc is fixed immediately and future snapshots arrive clean.
         const homeEntry = s.priorities?.find(p => !["now","today","eventually","shaila"].includes(p.id) && !p.isShaila && (p.label||"").toLowerCase() === "home");
         if (homeEntry) {
           s.priorities = s.priorities.filter(p => p.id !== homeEntry.id);
           s.lists = s.lists.map(l => ({...l, tasks: (l.tasks||[]).map(t => t.priority === homeEntry.id ? {...t, priority: "eventually"} : t)}));
-          console.log("[migration] Stripped 'home' priority from array, reassigned tasks to 'eventually'");
+          console.log("[migration] Stripped 'home' priority from array, patching Firestore settings doc");
+          // Directly patch the V5 settings doc in Firestore — fire and forget
+          if (Store._v5) {
+            const settRef = Store.settingsDoc();
+            if (settRef) {
+              settRef.get({ source: "server" })
+                .then(snap => {
+                  if (!snap.exists) return null;
+                  const newPriorities = (snap.data().priorities || []).filter(p => p.id !== homeEntry.id);
+                  return settRef.update({ priorities: newPriorities, _lastModified: Date.now() });
+                })
+                .catch(() => {});
+            }
+          }
         }
         // Auto-dedup shaila tasks on load (clean up any lingering duplicates)
         s.lists = s.lists.map(l => {
@@ -402,6 +416,11 @@ function App({ user, onSignOut }) {
     if (Store._v5) {
       // V5: per-task collection listener — each task change is surgical
       const unsub = Store._listenV5((newState) => {
+        // Strip home priority from any state arriving from Firestore — defense against stale settings doc
+        const he = newState.priorities?.find(p => !["now","today","eventually","shaila"].includes(p.id) && !p.isShaila && (p.label||"").toLowerCase() === "home");
+        if (he) {
+          newState = { ...newState, priorities: newState.priorities.filter(p => p.id !== he.id) };
+        }
         adoptedRemote.current = true;
         lastSavedModified.current = newState._lsModified || Date.now();
         Store.ls(newState);
