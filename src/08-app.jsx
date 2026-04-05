@@ -161,14 +161,13 @@ function App({ user, onSignOut }) {
         if (!s.mrsWWindows) s.mrsWWindows = defS.mrsWWindows;
         if (s.completionSound === undefined) s.completionSound = true;
         if (!s.overwhelmThreshold) s.overwhelmThreshold = 7;
-        // One-time: remove "home" custom priority — reassign tasks to "eventually" (or "now" if text sounds urgent)
-        if (s.priorities?.some(p => p.id !== "now" && p.id !== "today" && p.id !== "eventually" && p.id !== "shaila" && !p.isShaila && (p.label||"").toLowerCase() === "home" && !p.deleted)) {
-          const homeId = s.priorities.find(p => (p.label||"").toLowerCase() === "home" && !p.deleted)?.id;
-          if (homeId) {
-            s.priorities = s.priorities.map(p => p.id === homeId ? {...p, deleted: true} : p);
-            s.lists = s.lists.map(l => ({...l, tasks: (l.tasks||[]).map(t => t.priority === homeId ? {...t, priority: "eventually"} : t)}));
-            console.log("[migration] Removed 'home' priority, reassigned tasks to 'eventually'");
-          }
+        // Permanent: strip "home" custom priority from the array on every load — reassign any remaining tasks to "eventually"
+        // Uses filter (not deleted flag) so it survives even if old Firebase data comes back
+        const homeEntry = s.priorities?.find(p => !["now","today","eventually","shaila"].includes(p.id) && !p.isShaila && (p.label||"").toLowerCase() === "home");
+        if (homeEntry) {
+          s.priorities = s.priorities.filter(p => p.id !== homeEntry.id);
+          s.lists = s.lists.map(l => ({...l, tasks: (l.tasks||[]).map(t => t.priority === homeEntry.id ? {...t, priority: "eventually"} : t)}));
+          console.log("[migration] Stripped 'home' priority from array, reassigned tasks to 'eventually'");
         }
         // Auto-dedup shaila tasks on load (clean up any lingering duplicates)
         s.lists = s.lists.map(l => {
