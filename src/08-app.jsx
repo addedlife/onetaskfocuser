@@ -513,7 +513,7 @@ function App({ user, onSignOut }) {
   // Share theme with Shaila sub-app via localStorage
   try { localStorage.setItem('onetask_theme', JSON.stringify(sc)); } catch(e) {}
   const softBorderC = isDark ? "#7A78A8" : "#B8A88E";
-  const pris = AS?.priorities || DEF_PRI;
+  const pris = (AS?.priorities || DEF_PRI).filter(p => !p.deleted);
   const aList = AS ? AS.lists.find(l => l.id === AS.activeListId) || AS.lists[0] : null;
   const tasks = aList?.tasks || [];
   tasksRef.current = tasks; // keep ref fresh for async AI calls

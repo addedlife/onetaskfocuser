@@ -374,7 +374,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 ## 15. Recent Git History
 
 ```
-(pending) fix: route all text AI calls through gemini-proxy when no personal key — server key never leaves server
+(pending) fix: filter deleted priorities at pris source — home no longer appears in pickers or insights
 7a148f4 feat: research via Serper.dev real Google search + Gemini summarization — no grounding tool
 32bb762 feat: research via gemini-3-flash-preview + google_search grounding — real source URLs
 5853720 fix: research — drop google_search tool (hangs on 3.1-pro), use model knowledge with strong citation prompt
