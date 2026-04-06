@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yeshivish Shiur Transcriber</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #0f0f13;
+    --surface: #1a1a24;
+    --border:  #2e2e40;
+    --accent:  #7c6af7;
+    --accent2: #5d4ed4;
+    --text:    #e8e6f0;
+    --muted:   #888;
+    --green:   #4caf7d;
+    --red:     #e05c5c;
+    --radius:  10px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 16px 80px;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    margin-bottom: 4px;
+  }
+  .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 36px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    width: 100%;
+    max-width: 680px;
+    margin-bottom: 20px;
+  }
+
+  /* Drop zone */
+  #drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  #drop-zone.drag-over, #drop-zone:hover {
+    border-color: var(--accent);
+    background: rgba(124,106,247,0.06);
+  }
+  #drop-zone input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-icon { font-size: 2.4rem; margin-bottom: 12px; }
+  .drop-label { font-size: 1rem; font-weight: 500; margin-bottom: 6px; }
+  .drop-formats { font-size: 0.8rem; color: var(--muted); }
+  #selected-file { font-size: 0.85rem; color: var(--accent); margin-top: 10px; font-weight: 500; }
+
+  /* Options */
+  .options-row {
+    display: flex;
+    gap: 16px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  .option-group { flex: 1; min-width: 140px; }
+  label { font-size: 0.8rem; color: var(--muted); display: block; margin-bottom: 6px; }
+  select {
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 0.88rem;
+    appearance: none;
+  }
+  .toggle-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .toggle-row input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+  .toggle-row span { font-size: 0.88rem; }
+
+  /* Button */
+  button#transcribe-btn {
+    display: block;
+    width: 100%;
+    margin-top: 20px;
+    padding: 13px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  button#transcribe-btn:hover { background: var(--accent2); }
+  button#transcribe-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Progress */
+  #progress-card { display: none; }
+  .status-label { font-size: 0.9rem; color: var(--muted); margin-bottom: 10px; }
+  .progress-bar-wrap {
+    background: var(--bg);
+    border-radius: 99px;
+    height: 8px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--green));
+    border-radius: 99px;
+    transition: width 0.5s ease;
+    width: 0%;
+  }
+
+  /* Result */
+  #result-card { display: none; }
+  .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .result-header h2 { font-size: 1rem; font-weight: 600; }
+  .btn-small {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-copy { background: var(--border); color: var(--text); }
+  .btn-copy:hover { background: #3a3a55; }
+  .btn-download { background: var(--green); color: #fff; margin-left: 8px; }
+  .btn-download:hover { background: #3da368; }
+  .btn-new { background: var(--accent); color: #fff; margin-left: 8px; }
+  .btn-new:hover { background: var(--accent2); }
+
+  #transcript-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.82rem;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 500px;
+    overflow-y: auto;
+    color: #ccc;
+  }
+
+  /* Error */
+  #error-banner {
+    display: none;
+    background: rgba(224,92,92,0.12);
+    border: 1px solid var(--red);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 0.88rem;
+    color: var(--red);
+    margin-top: 12px;
+  }
+
+  /* Model note */
+  .model-note {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 12px;
+    line-height: 1.5;
+  }
+  .model-note strong { color: var(--text); }
+</style>
+</head>
+<body>
+
+<h1>Yeshivish Shiur Transcriber</h1>
+<p class="subtitle">Local — powered by Whisper AI &nbsp;·&nbsp; optimized for Torah lecture speech</p>
+
+<!-- Upload card -->
+<div class="card" id="upload-card">
+  <div id="drop-zone">
+    <input type="file" id="file-input" accept=".mp3,.wav,.aac,.3gp,.m4a,.ogg,.flac">
+    <div class="drop-icon">🎙️</div>
+    <div class="drop-label">Drop audio file here or click to browse</div>
+    <div class="drop-formats">MP3 · WAV · AAC · 3GP · M4A · OGG · FLAC</div>
+    <div id="selected-file"></div>
+  </div>
+
+  <div class="options-row">
+    <div class="option-group">
+      <label for="model-select">Whisper model</label>
+      <select id="model-select">
+        <option value="large-v3" selected>large-v3 (best accuracy)</option>
+        <option value="large-v3-turbo">large-v3-turbo (faster)</option>
+        <option value="medium">medium (quicker, good)</option>
+        <option value="small">small (fastest)</option>
+      </select>
+    </div>
+    <div class="option-group">
+      <label for="lang-select">Language hint</label>
+      <select id="lang-select">
+        <option value="en" selected>English (Yeshivish)</option>
+        <option value="">Auto-detect</option>
+        <option value="he">Hebrew</option>
+        <option value="yi">Yiddish</option>
+      </select>
+    </div>
+    <div class="option-group" style="display:flex;align-items:flex-end;padding-bottom:2px;">
+      <div class="toggle-row">
+        <input type="checkbox" id="timestamps-toggle">
+        <span>Include timestamps</span>
+      </div>
+    </div>
+  </div>
+
+  <p class="model-note">
+    <strong>Tip:</strong> <code>large-v3</code> gives the highest accuracy for Yeshivish.
+    First run downloads the model (~3 GB) once and caches it.
+    A 1-hour shiur takes roughly 10–20 min on CPU, 2–3 min on GPU.
+  </p>
+
+  <button id="transcribe-btn" disabled>Transcribe Shiur</button>
+  <div id="error-banner"></div>
+</div>
+
+<!-- Progress card -->
+<div class="card" id="progress-card">
+  <div class="status-label" id="status-label">Preparing...</div>
+  <div class="progress-bar-wrap">
+    <div class="progress-bar-fill" id="progress-fill"></div>
+  </div>
+</div>
+
+<!-- Result card -->
+<div class="card" id="result-card">
+  <div class="result-header">
+    <h2>Transcript</h2>
+    <div>
+      <button class="btn-small btn-copy" onclick="copyTranscript()">Copy</button>
+      <button class="btn-small btn-download" id="download-btn">Download .txt</button>
+      <button class="btn-small btn-new" onclick="resetApp()">New file</button>
+    </div>
+  </div>
+  <pre id="transcript-box"></pre>
+</div>
+
+<script>
+  let currentJobId = null;
+  let eventSource  = null;
+
+  const fileInput       = document.getElementById("file-input");
+  const dropZone        = document.getElementById("drop-zone");
+  const selectedFile    = document.getElementById("selected-file");
+  const transcribeBtn   = document.getElementById("transcribe-btn");
+  const progressCard    = document.getElementById("progress-card");
+  const statusLabel     = document.getElementById("status-label");
+  const progressFill    = document.getElementById("progress-fill");
+  const resultCard      = document.getElementById("result-card");
+  const transcriptBox   = document.getElementById("transcript-box");
+  const errorBanner     = document.getElementById("error-banner");
+  const uploadCard      = document.getElementById("upload-card");
+  const downloadBtn     = document.getElementById("download-btn");
+
+  // ── File selection ───────────────────────────────────────────────────────
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files[0]) onFileChosen(fileInput.files[0]);
+  });
+
+  dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+  dropZone.addEventListener("drop", e => {
+    e.preventDefault();
+    dropZone.classList.remove("drag-over");
+    const file = e.dataTransfer.files[0];
+    if (file) onFileChosen(file);
+  });
+
+  function onFileChosen(file) {
+    selectedFile.textContent = file.name + " (" + formatBytes(file.size) + ")";
+    transcribeBtn.disabled = false;
+    errorBanner.style.display = "none";
+  }
+
+  function formatBytes(b) {
+    if (b > 1e6) return (b / 1e6).toFixed(1) + " MB";
+    return (b / 1e3).toFixed(0) + " KB";
+  }
+
+  // ── Transcribe ───────────────────────────────────────────────────────────
+  transcribeBtn.addEventListener("click", async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    transcribeBtn.disabled = true;
+    errorBanner.style.display = "none";
+    progressCard.style.display = "block";
+    resultCard.style.display = "none";
+    setProgress(2, "Uploading...");
+
+    const form = new FormData();
+    form.append("audio", file);
+    form.append("model",      document.getElementById("model-select").value);
+    form.append("language",   document.getElementById("lang-select").value);
+    form.append("timestamps", document.getElementById("timestamps-toggle").checked ? "true" : "false");
+
+    let res;
+    try {
+      res = await fetch("/upload", { method: "POST", body: form });
+    } catch (e) {
+      showError("Upload failed: " + e.message);
+      return;
+    }
+
+    const data = await res.json();
+    if (!res.ok) { showError(data.error || "Upload failed"); return; }
+
+    currentJobId = data.job_id;
+    startStream(currentJobId);
+  });
+
+  function startStream(jobId) {
+    if (eventSource) eventSource.close();
+    eventSource = new EventSource(`/stream/${jobId}`);
+
+    eventSource.onmessage = (e) => {
+      const job = JSON.parse(e.data);
+      handleJobUpdate(job);
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+      // Fall back to polling
+      pollStatus(jobId);
+    };
+  }
+
+  function pollStatus(jobId) {
+    const iv = setInterval(async () => {
+      const r = await fetch(`/status/${jobId}`);
+      const job = await r.json();
+      handleJobUpdate(job);
+      if (job.status === "done" || job.status === "error") clearInterval(iv);
+    }, 1500);
+  }
+
+  function handleJobUpdate(job) {
+    const statusMap = {
+      "queued":        "Queued...",
+      "transcribing":  "Transcribing...",
+      "done":          "Done!",
+      "error":         "Error",
+    };
+
+    let label = statusMap[job.status] || job.status.replace(/_/g, " ");
+    if (job.status.startsWith("loading_model")) label = "Loading Whisper model...";
+
+    setProgress(job.progress || 0, label);
+
+    if (job.status === "done") {
+      eventSource && eventSource.close();
+      showResult(job.result, currentJobId);
+    } else if (job.status === "error") {
+      eventSource && eventSource.close();
+      showError(job.error || "Transcription failed");
+    }
+  }
+
+  function setProgress(pct, label) {
+    progressFill.style.width = pct + "%";
+    statusLabel.textContent = label + (pct > 0 && pct < 100 ? `  (${pct}%)` : "");
+  }
+
+  // ── Result ───────────────────────────────────────────────────────────────
+  function showResult(text, jobId) {
+    progressCard.style.display = "none";
+    resultCard.style.display = "block";
+    transcriptBox.textContent = text;
+    downloadBtn.onclick = () => { window.location = `/download/${jobId}`; };
+  }
+
+  function copyTranscript() {
+    navigator.clipboard.writeText(transcriptBox.textContent)
+      .then(() => {
+        const btn = document.querySelector(".btn-copy");
+        btn.textContent = "Copied!";
+        setTimeout(() => { btn.textContent = "Copy"; }, 1800);
+      });
+  }
+
+  function showError(msg) {
+    progressCard.style.display = "none";
+    transcribeBtn.disabled = false;
+    errorBanner.style.display = "block";
+    errorBanner.textContent = "Error: " + msg;
+  }
+
+  function resetApp() {
+    currentJobId = null;
+    if (eventSource) { eventSource.close(); eventSource = null; }
+    fileInput.value = "";
+    selectedFile.textContent = "";
+    transcribeBtn.disabled = true;
+    progressCard.style.display = "none";
+    resultCard.style.display = "none";
+    errorBanner.style.display = "none";
+    progressFill.style.width = "0%";
+  }
+</script>
+</body>
+</html>

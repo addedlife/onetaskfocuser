@@ -45,6 +45,11 @@ quick_restore.html
 safe-deploy.ps1
 sync-from-live.ps1
 tools/
+!tools/transcribe/
+!tools/transcribe/**
+# Ignore uploaded audio and saved transcripts (runtime data, not source)
+tools/transcribe/uploads/
+tools/transcribe/transcripts/
 
 # Old deploy scripts (deprecated, kept locally but not tracked)
 deploy.bat
