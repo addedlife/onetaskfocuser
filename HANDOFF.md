@@ -366,7 +366,13 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 - **Queue · N pill** on focus/launchpad view
 - **Theme sync**: Shailos inherits main app color scheme
 - **AI models**: `gemini-2.5-flash` for all AI calls — unified via `GEMINI_MODEL` constant in `01-core.js`. Free tier, GA/stable, multimodal (audio+text). All raw `fetch` calls to the Gemini API have been replaced with `callGemini` / `callGeminiAudio` — no more hardcoded model strings scattered across files.
+- **Gemini proxy model guard**: `gemini-proxy.js` now has an allowlist of valid models — any stale/invalid model name (e.g. `gemini-3.1-pro-preview` from old shailos bundles) is automatically remapped to `gemini-2.5-flash` instead of hitting a quota error.
 - **Research**: multi-step parallel search — (1) Gemini generates 3 different search queries (broad halachic, specific scenario, posek/agency angle), (2) all 3 run simultaneously via Serper.dev, (3) Gemini checks for gaps and fires 1-2 targeted follow-ups if needed, (4) Gemini reads all snippets → one line per relevant article (what THAT source says, no synthesis/psak) + seforim links. Output documents all search queries used. Requires `SERPER_API_KEY` Netlify env var.
+- **Insights tab — Activity Charts**: pure-SVG charts (no library). Top section: bar chart with 4 range tabs (24h by hour, 7 days, 30 days, all-time peak hours) + total done counter. Middle: priority donut chart with legend and percentages. Bottom: secondary chart panel with 4 switchable views — Day of Week (all-time bar by Su–Sa), Speed (histogram of how fast tasks complete: <1h/<1d/<1w/<1mo/1mo+), Trend (filled area/line chart, last 30 days), Cumulative (running total, last 90 days). All charts use app theme and priority colors.
+- **Shaila sort order**: new shaila tasks and Now tasks immediately surface to top of queue on add — `doOpt`/`optTasks` now applied in `addTask`, `addVT`, and the reconciliation listener.
+- **Shaila duplicate fix**: reconciliation listener registers new shailaIds in `pendingShailaIds.current` before returning state — prevents the next `_listenV5` snapshot from re-creating tasks that were just added.
+- **Auto-save format**: `autoFileBackup` now matches `fullBackup` format exactly (`_backupVersion: 1`, `_clean()`, fresh shailos fetched from Firestore). Old `_version: 2` format could not be restored via `parseBackup`.
+- **Home priority**: fully removed from Firestore settings doc, filtered out of all pickers, insights, and AI prompts. `_listenV5` strips it from any incoming Firestore state so it can never re-appear.
 - **aiDetectShailaAnswers**: removed "copy verbatim" instruction — now writes clean halachic ruling preserving content.
 
 ---
@@ -374,24 +380,16 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 ## 15. Recent Git History
 
 ```
-(pending) fix: strip home priority from array on every load (not just mark deleted) — survives Firebase round-trips
-7a148f4 feat: research via Serper.dev real Google search + Gemini summarization — no grounding tool
-32bb762 feat: research via gemini-3-flash-preview + google_search grounding — real source URLs
-5853720 fix: research — drop google_search tool (hangs on 3.1-pro), use model knowledge with strong citation prompt
-1da5ef8 feat: AI answer summary in shailos transcriber minicards
-1cbfc76 feat: AI-generated 6-word answer summary for shaila pills
-e56d25e fix: answer snippet first 6 words + whitespace-nowrap in transcriber minicards
-5d424d3 fix: answer snippet = first 6 words, single line enforced
-5818d13 fix: aiParseConversation uses temperature 0.1 + 8192 tokens
-9a8d177 fix: shailos Record Call delegates to parent ConvCapture via postMessage
-cc27108 fix: shailos Record Call button → delegates to main app ConvCapture
-982d4d1 fix: research back to gemini-3.1-pro-preview + smarter answer snippet
-52a6aa9 fix: smarter answer snippet — first meaningful clause, not just first 3 words
-45e00c2 feat: answer snippet on shailos transcriber minicards
-61c92f8 fix: correct button wiring, callMode for phone capture, stronger shaila detection
-24c4eee fix: remove duplicate export of webmToWavBase64 (build was broken)
-99c2093 feat: answer synopsis on answered/got-back shaila pills
-370b08f feat: Universal Conversation Recorder + wire phone FAB
+697dd6f Proxy: reject stale Gemini model names, fall back to gemini-2.5-flash
+a31a00c Replace heatmap with 4-option secondary chart panel in Insights
+a3d5a77 Add activity charts to Insights tab
+3286372 Fix shaila duplicates, auto-save format, and new-task sort order
+e57e330 fix: root out home priority — direct Firestore patch + block restoration via _listenV5
+c94d7eb fix: strip home priority from array on every load — survives Firebase round-trips
+82c6cc6 fix: filter deleted priorities at pris source — removes home from all pickers and insights
+3dc2693 fix: route text AI calls through gemini-proxy when no personal key — server key never leaves browser
+48ebad8 fix: unified AI pipeline — single GEMINI_MODEL constant, callGeminiAudio helper, eliminate scattered raw fetches
+6ccc2fb fix: revert model to gemini-3.1-pro-preview (current Google top model April 2026)
 ```
 
 ---
