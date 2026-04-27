@@ -1,21 +1,12 @@
 // === 05-modals.js ===
 
 import React, { useState, useRef } from 'react';
-import { uid, callGeminiAudio, callAI, textOnColor, gP, pBg } from './01-core.js';
+import { uid, callAI, textOnColor, gP, pBg } from './01-core.js';
 import { IC } from './02-icons.jsx';
 import { CTX_TAG_COLORS } from './04-components.jsx';
-import { webmToWavBase64 } from './03-voice.jsx';
+import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording } from './09-transcription-pen.js';
 
 const MIC_CONSTRAINTS = { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } };
-
-function blobToBase64(blob) {
-  return new Promise((res, rej) => {
-    const fr = new FileReader();
-    fr.onload = () => res(fr.result.split(",")[1]);
-    fr.onerror = rej;
-    fr.readAsDataURL(blob);
-  });
-}
 
 function BulkAdd({pris, T, onAddAll, onClose}) {
   const ap = pris.filter(p => !p.deleted);
@@ -118,23 +109,24 @@ function TaskBD({task, pris, T, onConfirm, onClose, aiOpts}) {
         const blob = new Blob(bdChunks.current, {type:"audio/webm"});
         if (!aiOpts) { setErr("AI is not configured for mic transcription."); return; }
         setLd(true);
+        let pending = null;
         try {
-          let b64, mimeType;
-          try {
-            b64 = await webmToWavBase64(blob);
-            mimeType = "audio/wav";
-          } catch(e) {
-            b64 = await blobToBase64(blob);
-            mimeType = "audio/webm";
-          }
-          const txt = await callGeminiAudio(
-            aiOpts, b64, mimeType,
+          pending = await savePendingRecording(blob, "task_breakdown_mic", {
+            source: "main",
+            label: "Task breakdown mic",
+          });
+          const txt = await transcribePendingRecording(
+            pending.id, aiOpts,
             "Transcribe this audio exactly verbatim. The speaker uses Yeshivish English. Return ONLY the transcript, nothing else.",
             { maxOutputTokens: 2048 }
           );
+          await deletePendingRecording(pending.id);
           if (txt) setInp(prev => prev ? prev + " " + txt.trim() : txt.trim());
           else setErr("Couldn't transcribe.");
-        } catch(e) { setErr("Mic transcribe failed."); }
+        } catch(e) {
+          if (pending?.id) updatePendingRecordingError(pending.id, e.message || String(e)).catch(() => {});
+          setErr("Mic transcribe failed. Audio is saved in the holding pen.");
+        }
         setLd(false);
       };
       mr.start();

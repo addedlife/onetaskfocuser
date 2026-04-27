@@ -1,13 +1,14 @@
 // === 08-app.js ===
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callGeminiAudio, callAI, suggestFirstStep, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer, gG, fmtMs, db, _lum, priText, textOnPastel } from './01-core.js';
+import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callAI, suggestFirstStep, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer, gG, fmtMs, db, _lum, priText, textOnPastel } from './01-core.js';
 import { IC } from './02-icons.jsx';
-import { VoiceInput, webmToWavBase64 } from './03-voice.jsx';
+import { VoiceInput } from './03-voice.jsx';
 import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from './04-components.jsx';
 import { BulkAdd, TaskBD, BlockedModal, ContextTagPicker, ListManager } from './05-modals.jsx';
 import { ShelfView, SubtaskGroup } from './06-shelf.jsx';
 import { SettingsModal } from './07-settings.jsx';
+import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, listPendingRecordings, PENDING_EVENT, formatPendingAge } from './09-transcription-pen.js';
 
 function App({ user, onSignOut }) {
   Store.setUid(canonicalUid(user));
@@ -109,6 +110,9 @@ function App({ user, onSignOut }) {
   const pendingShailaIds = useRef(new Set());              // shailaIds assigned but not yet in state (prevents listener dupes)
   const [serverKeyAvailable, setServerKeyAvailable] = useState(false); // true = Netlify AI is configured
   const [aiConfig, setAiConfig] = useState(null);
+  const [pendingRecordings, setPendingRecordings] = useState([]);
+  const [pendingRetryId, setPendingRetryId] = useState(null);
+  const [pendingTranscripts, setPendingTranscripts] = useState({});
   const [fbOffline, setFbOffline] = useState(false);      // Firebase unreachable on load — warn user
   // ─── Conversation Capture ────────────────────────────────────────────────
   const [showConvCapture, setShowConvCapture] = useState(false);
@@ -276,6 +280,18 @@ function App({ user, onSignOut }) {
       })
       .catch(() => {});
   }, []);
+
+  const refreshPendingRecordings = useCallback(() => {
+    listPendingRecordings()
+      .then(setPendingRecordings)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshPendingRecordings();
+    window.addEventListener(PENDING_EVENT, refreshPendingRecordings);
+    return () => window.removeEventListener(PENDING_EVENT, refreshPendingRecordings);
+  }, [refreshPendingRecordings]);
 
 
   // ─── Auto-aging: nudge stale tasks up one priority tier on load ─────────────
@@ -549,6 +565,37 @@ function App({ user, onSignOut }) {
   } : null;
   const hasAI = !!(rawAiOpts && selectedProviderAvailable);
   const aiOpts = hasAI ? rawAiOpts : null;
+  async function retryHeldTranscription(rec) {
+    if (!aiOpts || pendingRetryId) return;
+    setPendingRetryId(rec.id);
+    try {
+      const txt = await transcribePendingRecording(
+        rec.id,
+        aiOpts,
+        "Transcribe this audio exactly and faithfully. The speaker may use Yeshivish English, Hebrew, Yiddish, and halachic terms. Do not summarize or classify. Return only the transcript.",
+        { maxOutputTokens: 8192 }
+      );
+      setPendingTranscripts(p => ({ ...p, [rec.id]: txt }));
+      await updatePendingRecordingError(rec.id, "");
+    } catch(e) {
+      await updatePendingRecordingError(rec.id, e.message || String(e)).catch(() => {});
+    } finally {
+      setPendingRetryId(null);
+      refreshPendingRecordings();
+    }
+  }
+
+  async function deleteHeldTranscription(rec) {
+    if (pendingRetryId === rec.id) return;
+    await deletePendingRecording(rec.id);
+    setPendingTranscripts(p => {
+      const next = { ...p };
+      delete next[rec.id];
+      return next;
+    });
+    refreshPendingRecordings();
+  }
+
   const sc = SCHEMES[AS?.colorScheme] || AS?.customSchemes?.[AS?.colorScheme] || SCHEMES.claude;
   // Detect dark theme by checking bg luminance
   const isDark = (()=>{const h=sc.bg||"#EDE5D8";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000<128;})();
@@ -1978,6 +2025,46 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         effectiveCount={effectiveCount} overwhelmThreshold={overwhelmThreshold}
       />}
 
+      {pendingRecordings.length > 0 && (
+        <div style={{position:"fixed",right:16,bottom:16,zIndex:9400,width:"min(380px,calc(100vw - 32px))",background:T.card,border:`1.5px solid ${T.brd}`,borderRadius:14,boxShadow:T.shadowLg,padding:12,fontFamily:"system-ui",animation:"ot-fade 0.2s"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
+            <div>
+              <div style={{fontSize:12,fontWeight:800,color:T.text,letterSpacing:.2}}>Transcription Holding Pen</div>
+              <div style={{fontSize:10,color:T.tFaint,marginTop:2}}>Saved audio from any recorder in this app</div>
+            </div>
+            <span style={{fontSize:10,fontWeight:800,color:"#9A6A20",background:"#C8A84C22",border:"1px solid #C8A84C55",borderRadius:999,padding:"2px 7px",whiteSpace:"nowrap"}}>{pendingRecordings.length} saved</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:300,overflowY:"auto"}}>
+            {pendingRecordings.slice(0,5).map(rec => {
+              const busy = pendingRetryId === rec.id;
+              const transcript = pendingTranscripts[rec.id] || "";
+              const label = rec.label || String(rec.kind || "Recording").replace(/_/g, " ");
+              return (
+                <div key={rec.id} style={{background:T.bgW,border:`1px solid ${T.brdS}`,borderRadius:10,padding:9}}>
+                  <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:700,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
+                      <div style={{fontSize:10,color:T.tFaint,marginTop:1}}>{formatPendingAge(rec.createdAt)} · {(rec.size/1024/1024).toFixed(1)} MB</div>
+                    </div>
+                    <div style={{display:"flex",gap:5,flexShrink:0}}>
+                      <button onClick={()=>retryHeldTranscription(rec)} disabled={!hasAI || !!pendingRetryId} style={{fontSize:10,padding:"5px 8px",borderRadius:7,border:"none",background:hasAI&&!pendingRetryId?"#5B7BE8":T.brdS,color:hasAI&&!pendingRetryId?"#fff":T.tFaint,cursor:hasAI&&!pendingRetryId?"pointer":"default",fontWeight:700}}>{busy?"Retrying...":"Retry"}</button>
+                      <button onClick={()=>deleteHeldTranscription(rec)} disabled={busy} style={{fontSize:10,padding:"5px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:"none",color:T.tFaint,cursor:busy?"default":"pointer"}}>Delete</button>
+                    </div>
+                  </div>
+                  {rec.error && <div style={{fontSize:10,color:"#C94040",marginTop:6,lineHeight:1.35,maxHeight:38,overflow:"hidden"}}>{rec.error}</div>}
+                  {transcript && (
+                    <div style={{marginTop:7}}>
+                      <textarea value={transcript} readOnly rows={3} style={{width:"100%",boxSizing:"border-box",resize:"vertical",border:`1px solid ${T.brd}`,borderRadius:8,background:T.card,color:T.text,fontSize:11,lineHeight:1.45,padding:7,fontFamily:"Georgia,serif"}}/>
+                      <button onClick={()=>navigator.clipboard?.writeText(transcript)} style={{marginTop:5,width:"100%",fontSize:10,padding:"5px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.card,color:T.tSoft,cursor:"pointer",fontWeight:700}}>Copy transcript</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Blocked resume nudge */}
       {blockedResume && actT.find(t=>t.id===blockedResume) && (
         <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",background:T.card,border:`1.5px solid ${T.brd}`,borderRadius:14,padding:"12px 16px",boxShadow:T.shadowLg,zIndex:9500,maxWidth:340,width:"90%",animation:"ot-fade 0.3s"}}>
@@ -3265,6 +3352,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
     }
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     goPhase('processing');
+    let pending = null;
 
     try {
       if (mediaStopPRef.current) { await mediaStopPRef.current; mediaStopPRef.current = null; }
@@ -3272,9 +3360,12 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
       let transcript = webSpeechText;
 
       if (webmBlob.size >= 500 && aiOpts) {
-        const base64 = await webmToWavBase64(webmBlob);
-        const geminiTranscript = await callGeminiAudio(
-          aiOpts, base64, 'audio/wav',
+        pending = await savePendingRecording(webmBlob, callMode ? 'conversation_call' : 'conversation_mic', {
+          source: 'main',
+          label: callMode ? 'Conversation call capture' : 'Conversation mic capture',
+        });
+        const geminiTranscript = await transcribePendingRecording(
+          pending.id, aiOpts,
           `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Use these standard spellings: shaila/shailos, halacha, gemara, Shabbos, davening, daven, bracha, mutar, assur, kashrus, Rashi, Rambam, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.\n\nReturn only the verbatim transcript. No summary, no rephrasing.`
         );
         if (geminiTranscript) transcript = geminiTranscript.trim() || transcript;
@@ -3297,8 +3388,12 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
       add('scheduleItems', parsed.scheduleItems);
       add('reminders', parsed.reminders);
       setItems(allItems);
+      if (pending?.id) await deletePendingRecording(pending.id);
       goPhase('review');
     } catch(e) {
+      if (typeof pending !== 'undefined' && pending?.id) {
+        await updatePendingRecordingError(pending.id, e.message || String(e)).catch(() => {});
+      }
       setErr('Could not process: ' + e.message);
       setItems([]);
       goPhase('review');

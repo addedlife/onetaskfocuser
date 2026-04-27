@@ -1,7 +1,8 @@
 // === 03-voice.js ===
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { cleanYT, callGeminiAudio, aiParseShailos, callAI, uid, textOnColor } from './01-core.js';
+import { cleanYT, aiParseShailos, callAI, uid, textOnColor } from './01-core.js';
+import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, webmToWavBase64 } from './09-transcription-pen.js';
 // VoiceInput: Web Speech (live preview) + MediaRecorder run together.
 // Web Speech starts first to get mic priority; MediaRecorder starts 300ms later.
 //
@@ -9,45 +10,6 @@ import { cleanYT, callGeminiAudio, aiParseShailos, callAI, uid, textOnColor } fr
 
 let _activeMicId = null;
 const MIC_CONSTRAINTS = { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } };
-
-// Convert a WebM/Opus blob → 16 kHz mono WAV base64 (universally accepted by transcription APIs)
-async function webmToWavBase64(webmBlob) {
-  const arrayBuf = await webmBlob.arrayBuffer();
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  let decoded;
-  try { decoded = await audioCtx.decodeAudioData(arrayBuf); }
-  finally { audioCtx.close(); }
-
-  const SR = 16000;
-  const frameCount = Math.ceil(decoded.duration * SR);
-  const offline = new OfflineAudioContext(1, frameCount, SR);
-  const src = offline.createBufferSource();
-  src.buffer = decoded;
-  src.connect(offline.destination);
-  src.start(0);
-  const rendered = await offline.startRendering();
-  const pcm = rendered.getChannelData(0);
-
-  const dataLen = pcm.length * 2;
-  const buf = new ArrayBuffer(44 + dataLen);
-  const v = new DataView(buf);
-  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
-  str(0,  "RIFF"); v.setUint32(4,  36 + dataLen, true);
-  str(8,  "WAVE"); str(12, "fmt ");
-  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, SR, true); v.setUint32(28, SR * 2, true);
-  v.setUint16(32, 2,  true); v.setUint16(34, 16, true);
-  str(36, "data"); v.setUint32(40, dataLen, true);
-  for (let i = 0; i < pcm.length; i++)
-    v.setInt16(44 + i * 2, Math.max(-32768, Math.min(32767, pcm[i] * 32768 | 0)), true);
-
-  return new Promise((res, rej) => {
-    const fr = new FileReader();
-    fr.onload  = () => res(fr.result.split(",")[1]);
-    fr.onerror = rej;
-    fr.readAsDataURL(new Blob([buf], { type: "audio/wav" }));
-  });
-}
 
 function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, existingShailos, color, T, aiOpts }) {
   const [phase, setPhase]             = React.useState("recording");
@@ -218,6 +180,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
   // ── Gemini audio transcription ─────────────────────────────────────────────
   async function transcribeWithGemini(webSpeechFallback) {
     setGeminiStatus("Processing audio…");
+    let pending = null;
     try {
       if (mediaStopP.current) { await mediaStopP.current; mediaStopP.current = null; }
       const webmBlob = new Blob(chunksRef.current, { type: "audio/webm" });
@@ -227,16 +190,21 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
         return;
       }
       setGeminiStatus("Transcribing…");
-      const base64 = await webmToWavBase64(webmBlob);
-      const transcriptRaw = await callGeminiAudio(
-        aiOpts, base64, "audio/wav",
+      pending = await savePendingRecording(webmBlob, shailaMode ? 'main_shaila_voice' : 'main_voice', {
+        source: 'main',
+        label: shailaMode ? 'Main shaila voice' : 'Main voice input',
+      });
+      const transcriptRaw = await transcribePendingRecording(
+        pending.id, aiOpts,
         `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Use these standard spellings for Jewish terms: shaila / shailos (question / questions), halacha (Jewish law), gemara (Talmud), Shabbos (Sabbath), davening (praying), daven, bracha (blessing), mutar (permitted), assur (forbidden), kashrus, Rashi, Rambam, Ramban, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.\n\nDo not add punctuation beyond what is spoken. Do not summarize or rephrase. Return only the verbatim transcript.`
       );
+      await deletePendingRecording(pending.id);
       if (transcriptRaw === null) throw new Error("AI transcription error");
       const transcript = transcriptRaw.trim();
       if (transcript) setEditText(cleanYT(transcript));
       goPhase("reviewing");
     } catch(e) {
+      if (pending?.id) await updatePendingRecordingError(pending.id, e.message || String(e)).catch(() => {});
       setErr("AI transcription failed: " + e.message);
       goPhase("reviewing"); // fall back to Web Speech result already in editText
     }

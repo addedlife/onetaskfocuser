@@ -368,8 +368,9 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 - **Shailos research**: background-capable — spinner stays on list card even when viewing a different shaila; result auto-scrolls into view when it arrives; `selectedShaila` syncs from Firestore so result appears without re-selecting
 - **Queue · N pill** on focus/launchpad view
 - **Theme sync**: Shailos inherits main app color scheme
-- **AI gateway deep-clean (prepared locally, not live until commit/push)**: active app and Shailos source now route text, audio transcription, and research analysis through `/.netlify/functions/ai-proxy`; one Gemini model setting from `app-config`/Settings controls all jobs. Browser code no longer calls provider APIs directly.
-- **Voice/call transcription quality pass (prepared locally, not live until commit/push)**: main voice and Shailos recordings use cleaned microphone constraints; Shailos call recordings now transcribe audio first and parse the transcript second instead of asking one model call to do both jobs at once.
+- **AI gateway deep-clean**: active app and Shailos source route text, audio transcription, and research analysis through `/.netlify/functions/ai-proxy`; one Gemini model setting from `app-config`/Settings controls all jobs. Browser code no longer calls provider APIs directly.
+- **Voice/call transcription quality pass**: main voice and Shailos recordings use cleaned microphone constraints; Shailos call recordings transcribe audio first and parse the transcript second instead of asking one model call to do both jobs at once.
+- **Shared transcription holding pen**: Main voice input, conversation capture, task-breakdown mic, and Shailos audio save to the same IndexedDB store before AI processing. Failed quota/rate-limit calls remain in a visible holding pen with Retry/Delete controls instead of losing the recording. Shailos Retry resumes the Shailos processing path; main-app Retry currently returns a recoverable transcript/copy rather than fully replaying every original button action.
 - **Compatibility proxies**: `gemini-proxy.js` and the legacy `claude-proxy.js` name remain as wrappers around the central Gemini gateway so old bundles or cached clients do not break mid-deploy.
 - **Research**: multi-step parallel search still uses Serper.dev for search results, then routes all AI query generation, follow-up analysis, and source summarization through the shared AI gateway. Output documents all search queries used. Requires `SERPER_API_KEY` Netlify env var for search.
 - **Insights tab — Activity Charts**: pure-SVG charts (no library). Top section: bar chart with 4 range tabs (24h by hour, 7 days, 30 days, all-time peak hours) + total done counter. Middle: priority donut chart with legend and percentages. Bottom: secondary chart panel with 4 switchable views — Day of Week (all-time bar by Su–Sa), Speed (histogram of how fast tasks complete: <1h/<1d/<1w/<1mo/1mo+), Trend (filled area/line chart, last 30 days), Cumulative (running total, last 90 days). All charts use app theme and priority colors.
@@ -383,9 +384,10 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 ## 15. Recent Git History
 
-Pending local work before next commit: central AI gateway deep-clean across main app, Netlify functions, and Shailos generated assets.
+Latest deployed work: shared transcription holding pen across main voice input, conversation capture, task-breakdown mic, and Shailos generated assets.
 
 ```
+2a9d4af Simplify AI gateway and voice transcription
 8adf72a Update HANDOFF.md — catch up on missed updates from last 5 commits
 697dd6f Proxy: reject stale Gemini model names, fall back to gemini-2.5-flash
 a31a00c Replace heatmap with 4-option secondary chart panel in Insights
