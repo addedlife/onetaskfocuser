@@ -19,7 +19,7 @@
 11. [Safety Rules — Read Before Touching Anything](#11-safety-rules--read-before-touching-anything)
 12. [Feature Inventory](#12-feature-inventory)
 13. [Subsystems](#13-subsystems)
-14. [What Is Currently Live](#14-what-is-currently-live)
+14. [What Is Currently Live / Prepared](#14-what-is-currently-live--prepared)
 15. [Recent Git History](#15-recent-git-history)
 
 ---
@@ -59,9 +59,9 @@ After every meaningful action (file read, edit, command), add 1–3 sentences of
 | Auth | Firebase Auth (email/password + Google) |
 | Hosting | Netlify (static + serverless functions) |
 | Build | `npm run build` via Vite — Netlify runs this on every push |
-| AI (main app) | Gemini API — via user's personal key stored in app settings |
-| AI (shared fallback) | Gemini API — via `GEMINI_API_KEY` Netlify env var, proxied through `gemini-proxy` function |
-| AI model | `gemini-2.5-flash` — single constant `GEMINI_MODEL` in `01-core.js` controls all calls |
+| AI gateway | One Netlify endpoint: `ai-proxy` routes text, audio transcription, and research analysis |
+| AI provider | Gemini via server-side `GEMINI_API_KEY`; browser code never calls provider APIs directly |
+| AI model | One selected Gemini model controls text, voice transcription, and research analysis |
 | Shailos sub-app | React 18 + Vite + TypeScript (separate build) |
 
 **Important**: This is a Vite app with a real build step — not the old CDN/Babel setup. `npm run build` compiles everything in `src/` into `dist/`. Netlify runs this automatically on push.
@@ -81,15 +81,16 @@ sandbox/                              ← Git repo root — ONLY deploy from her
 │   ├── 04-components.jsx             ← All shared UI components (ZenMode, BrainDump, ShailaManager, etc.)
 │   ├── 05-modals.jsx                 ← Modal dialogs (BulkAdd, TaskBD, BlockedModal, etc.)
 │   ├── 06-shelf.jsx                  ← Completed tasks shelf + SubtaskGroup
-│   ├── 07-settings.jsx               ← Settings modal (API key, MrsW schedule, color scheme, backup)
+│   ├── 07-settings.jsx               ← Settings modal (single AI model, MrsW schedule, color scheme, backup)
 │   ├── 08-app.jsx                    ← Main App component — all state, all task actions ⚠️ LARGEST FILE
-│   └── 10-devmode.jsx                ← Dev mode panel (debug tools, data inspector)
 ├── shailos/                          ← Shailos sub-app (pre-built static output — do not edit directly)
 ├── netlify/functions/
-│   ├── app-config.js                 ← Returns GEMINI_API_KEY env var to client (never hardcode keys)
-│   ├── gemini-proxy.js               ← Proxies Gemini API calls — 5-minute timeout
-│   ├── claude-proxy.js               ← Proxies Claude API calls — 60-second timeout
-│   └── soferai-proxy.js              ← Legacy proxy (kept for safety)
+│   ├── _ai-core.cjs                  ← Shared AI gateway logic
+│   ├── ai-proxy.js                   ← Single active AI endpoint for text/audio/research
+│   ├── app-config.js                 ← Safe AI config/availability, no raw keys
+│   ├── gemini-proxy.js               ← Compatibility wrapper around ai-proxy
+│   ├── claude-proxy.js               ← Legacy endpoint name; routes old callers into ai-proxy/Gemini
+│   ├── serper-proxy.js               ← Search proxy for Shailos research source gathering
 ├── dist/                             ← Vite build output — do not edit, regenerated on every build
 ├── index.html                        ← HTML shell — loads /src/main.jsx via Vite module
 ├── vite.config.js                    ← Vite config (React plugin, port 3000, dist output)
@@ -138,8 +139,7 @@ GitHub → Netlify webhook → Netlify runs `npm run build && cp -r shailos dist
 - **NEVER deploy from** `Claude Code OneTask Project\` — dead legacy folder, not connected to git
 
 ### Netlify Config Highlights
-- `gemini-proxy` timeout: **300 seconds** (needed for long AI transcriptions)
-- `claude-proxy` timeout: **60 seconds**
+- `ai-proxy` and `gemini-proxy` timeout: **300 seconds** (needed for long AI transcriptions)
 - `/assets/*`: immutable cache (Vite hashes filenames)
 - `/index.html`: no-cache (users always get latest deploy instantly)
 - Several admin files (including this one) are redirected to 404 — in the repo but blocked from public access
@@ -215,7 +215,7 @@ Firestore onSnapshot listener
   ],
   colorScheme: "claude",
   zenEnabled: false,
-  geminiKey: "",
+  aiModel: "",            // empty = server default; otherwise selected Gemini model for all AI jobs
   completionSound: true,
   overwhelmThreshold: 7,
   ageThresholds: { now: 1, today: 3, eventually: 7 },
@@ -252,16 +252,23 @@ Firestore onSnapshot listener
 
 ## 9. AI Integrations
 
-All AI functions are in `src/01-core.js`, exported and used throughout the app.
+The active AI architecture is one server gateway and one selected Gemini model. Text, voice transcription, and research analysis all use that same model selection.
 
-### Key Constants
-- `GEMINI_MODEL` (exported from `01-core.js`) — single source of truth for the model name. Change here to update everywhere. Currently `"gemini-2.5-flash"` (free tier, GA, multimodal audio support).
+### Key Gateway Files
+| File | Purpose |
+|---|---|
+| `netlify/functions/_ai-core.cjs` | Central Gemini model selection, CORS, text/audio handling |
+| `netlify/functions/ai-proxy.js` | Main public AI endpoint for all app and Shailos AI calls |
+| `netlify/functions/app-config.js` | Publishes safe AI availability/model config; never sends raw keys to the browser |
+| `netlify/functions/gemini-proxy.js` | Compatibility wrapper for old bundles; forwards into `_ai-core.cjs` |
+| `netlify/functions/claude-proxy.js` | Legacy endpoint name for old bundles; forwards into Gemini through `_ai-core.cjs` |
+| `netlify/functions/serper-proxy.js` | Search data source for research; not the AI model |
 
-### Key Functions
+### Key Client Functions
 | Function | Purpose |
 |---|---|
-| `callAI(prompt, aiOpts, config)` | Main text AI call — routes to Gemini or Claude based on aiOpts |
-| `callGeminiAudio(gk, base64, mimeType, prompt, config)` | All audio transcription calls — uses GEMINI_MODEL |
+| `callAI(prompt, aiOpts, config)` | Main text AI call through `ai-proxy` |
+| `callGeminiAudio(aiOpts, base64, mimeType, prompt, config)` | Audio transcription call through `ai-proxy` |
 | `aiOptTasks(tasks, pris, aiOpts)` | AI reprioritization |
 | `aiParseBrainDump(text, pris, aiOpts)` | Stream-of-consciousness → task list |
 | `aiParseConversation(transcript, tasks, shailos, aiOpts)` | Recorded conversation → tasks/shailos/completions |
@@ -270,16 +277,11 @@ All AI functions are in `src/01-core.js`, exported and used throughout the app.
 | `suggestFirstStep(taskText, aiOpts)` | Concrete first step suggestion |
 | `aiDetectShailaAnswers(shailas, aiOpts)` | Checks if shailas have been answered |
 
-### Key Rule: Research Tool Format
-Shaila research must use `google_search: {}` — NOT `googleSearch`. Wrong format silently fails.
-
 ### Key Rule: AI Key Resolution
-`callAI` routes by priority:
-1. Personal Gemini key set → direct call to Google API (fast, user's own quota)
-2. No personal key + `GEMINI_API_KEY` in Netlify → `gemini-proxy` Netlify function (server key stays server-side, never sent to browser)
-3. Claude provider + Claude key → `claude-proxy` Netlify function
+All active app AI calls go browser → `/.netlify/functions/ai-proxy` → Gemini. The active model key lives only in the Netlify env var `GEMINI_API_KEY`; `SERPER_API_KEY` is optional for research search. `app-config` returns availability, defaults, and model lists, not secrets.
 
-`serverKeyAvailable` (boolean) in `08-app.jsx` tracks whether the server key is configured — fetched from `app-config` on load. The actual key value is never stored in browser state. `hasAI` is true if the user has a personal key OR the server key is available. Audio transcription (`callGeminiAudio`) always requires a personal key — the proxy does not handle multimodal requests.
+### Key Rule: AI Job Types
+Text, audio transcription, and research analysis use the same selected Gemini model. Voice is still a separate transcription request first, then normal text AI. Shailos call recordings also transcribe first and parse second for better accuracy. Shailos research still uses Serper for search snippets, then the AI analysis step goes through `ai-proxy`.
 
 ---
 
@@ -335,29 +337,30 @@ All of these are built and working. Do not rebuild them.
 
 **UI**: Board view (PostItStack), Queue view with search/filter, Shelf view, cross-window sync, color scheme picker with AI-generated schemes, Firebase offline banner
 
-**Data**: Weekly auto-backup to user folder (silent) or browser download, emergency restore via `?restoreLocal=1`, dev mode panel
+**Data**: Weekly auto-backup to user folder (silent) or browser download, emergency restore via `?restoreLocal=1`
 
 ---
 
 ## 13. Subsystems
 
 ### Shailos Sub-App (`/shailos/`)
-Separate React + TypeScript + Vite app for transcribing halachic question sessions. Shares Firebase project and auth session with main app. Theme syncs via localStorage → CSS vars.
+Separate React + TypeScript + Vite app for transcribing halachic question sessions. Shares Firebase project and auth session with main app. Theme syncs via localStorage → CSS vars. AI route/model config syncs via `onetask_ai_config` in localStorage and all Shailos AI calls route through `/.netlify/functions/ai-proxy`.
 
 To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailos/` → commit.
 
 ### Netlify Functions
 | Function | Purpose | Timeout |
 |---|---|---|
-| `app-config.js` | Returns `GEMINI_API_KEY` to client | default |
-| `gemini-proxy.js` | Proxies Gemini calls for users without personal key | 5 min |
+| `_ai-core.cjs` | Shared Gemini gateway logic for text/audio/research | n/a |
+| `ai-proxy.js` | Single active AI endpoint | 5 min |
+| `app-config.js` | Returns safe AI availability/defaults/model list, never raw keys | default |
+| `gemini-proxy.js` | Compatibility wrapper around `ai-proxy` | 5 min |
 | `serper-proxy.js` | Proxies Serper.dev Google Search API for shaila research | default |
-| `claude-proxy.js` | Proxies Claude API calls | 60 sec |
-| `soferai-proxy.js` | Legacy — do not remove | default |
+| `claude-proxy.js` | Legacy endpoint name; routes old callers into `ai-proxy`/Gemini | default |
 
 ---
 
-## 14. What Is Currently Live
+## 14. What Is Currently Live / Prepared
 
 - **Universal Conversation Recorder**: full in-app flow — record → transcribe (Yeshivish-aware) → AI extracts tasks/shailos/schedule/got-backs → review card → user approves → items added to queue
 - **FAB**: 2 large buttons (record shaila, record conversation), 2 compact links (Add | Records)
@@ -365,9 +368,10 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 - **Shailos research**: background-capable — spinner stays on list card even when viewing a different shaila; result auto-scrolls into view when it arrives; `selectedShaila` syncs from Firestore so result appears without re-selecting
 - **Queue · N pill** on focus/launchpad view
 - **Theme sync**: Shailos inherits main app color scheme
-- **AI models**: `gemini-2.5-flash` for all AI calls — unified via `GEMINI_MODEL` constant in `01-core.js`. Free tier, GA/stable, multimodal (audio+text). All raw `fetch` calls to the Gemini API have been replaced with `callGemini` / `callGeminiAudio` — no more hardcoded model strings scattered across files.
-- **Gemini proxy model guard**: `gemini-proxy.js` now has an allowlist of valid models — any stale/invalid model name (e.g. `gemini-3.1-pro-preview` from old shailos bundles) is automatically remapped to `gemini-2.5-flash` instead of hitting a quota error.
-- **Research**: multi-step parallel search — (1) Gemini generates 3 different search queries (broad halachic, specific scenario, posek/agency angle), (2) all 3 run simultaneously via Serper.dev, (3) Gemini checks for gaps and fires 1-2 targeted follow-ups if needed, (4) Gemini reads all snippets → one line per relevant article (what THAT source says, no synthesis/psak) + seforim links. Output documents all search queries used. Requires `SERPER_API_KEY` Netlify env var.
+- **AI gateway deep-clean (prepared locally, not live until commit/push)**: active app and Shailos source now route text, audio transcription, and research analysis through `/.netlify/functions/ai-proxy`; one Gemini model setting from `app-config`/Settings controls all jobs. Browser code no longer calls provider APIs directly.
+- **Voice/call transcription quality pass (prepared locally, not live until commit/push)**: main voice and Shailos recordings use cleaned microphone constraints; Shailos call recordings now transcribe audio first and parse the transcript second instead of asking one model call to do both jobs at once.
+- **Compatibility proxies**: `gemini-proxy.js` and the legacy `claude-proxy.js` name remain as wrappers around the central Gemini gateway so old bundles or cached clients do not break mid-deploy.
+- **Research**: multi-step parallel search still uses Serper.dev for search results, then routes all AI query generation, follow-up analysis, and source summarization through the shared AI gateway. Output documents all search queries used. Requires `SERPER_API_KEY` Netlify env var for search.
 - **Insights tab — Activity Charts**: pure-SVG charts (no library). Top section: bar chart with 4 range tabs (24h by hour, 7 days, 30 days, all-time peak hours) + total done counter. Middle: priority donut chart with legend and percentages. Bottom: secondary chart panel with 4 switchable views — Day of Week (all-time bar by Su–Sa), Speed (histogram of how fast tasks complete: <1h/<1d/<1w/<1mo/1mo+), Trend (filled area/line chart, last 30 days), Cumulative (running total, last 90 days). All charts use app theme and priority colors.
 - **Shaila sort order**: new shaila tasks and Now tasks immediately surface to top of queue on add — `doOpt`/`optTasks` now applied in `addTask`, `addVT`, and the reconciliation listener.
 - **Shaila duplicate fix**: reconciliation listener registers new shailaIds in `pendingShailaIds.current` before returning state — prevents the next `_listenV5` snapshot from re-creating tasks that were just added.
@@ -379,7 +383,10 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 ## 15. Recent Git History
 
+Pending local work before next commit: central AI gateway deep-clean across main app, Netlify functions, and Shailos generated assets.
+
 ```
+8adf72a Update HANDOFF.md — catch up on missed updates from last 5 commits
 697dd6f Proxy: reject stale Gemini model names, fall back to gemini-2.5-flash
 a31a00c Replace heatmap with 4-option secondary chart panel in Insights
 a3d5a77 Add activity charts to Insights tab

@@ -5,6 +5,7 @@
 
 const ALLOWED_ORIGINS = [
   "https://onetaskfocuser.netlify.app",
+  "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:4173",
 ];

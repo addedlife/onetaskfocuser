@@ -1090,92 +1090,72 @@ function isTaskAged(task, pris, thresholds) {
   return hours > limit;
 }
 
-// Single source of truth for the Gemini model used across the entire app.
-// Change this one constant to switch models everywhere (main calls, audio transcription, proxy default).
-export const GEMINI_MODEL = "gemini-2.5-flash";
+// The server gateway chooses the default Gemini model; Settings can override it once for every AI job.
+export const GEMINI_MODEL = "server-configured";
+export const AI_PROXY_ENDPOINT = "/.netlify/functions/ai-proxy";
 
-async function callGemini(gk, prompt, genConfig={}) {
-  if (!gk) return null;
+function normalizeAiOpts(aiOpts) {
+  if (!aiOpts || typeof aiOpts === "string") return {};
+  return aiOpts;
+}
+
+async function callAIProxy(payload) {
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${gk}`, {
+    const r = await fetch(AI_PROXY_ENDPOINT, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.7, maxOutputTokens:4096, ...genConfig}})
+      body: JSON.stringify(payload),
     });
-    const d = await r.json();
-    if (d.error) { console.warn("[AI] Gemini error:", d.error); return null; }
-    return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  } catch(e) { console.warn("[AI] Gemini call failed:", e); return null; }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.error) {
+      console.warn("[AI] Gateway error:", d.error || r.statusText);
+      return null;
+    }
+    return d;
+  } catch(e) {
+    console.warn("[AI] Gateway call failed:", e);
+    return null;
+  }
+}
+
+async function callGemini(gk, prompt, genConfig={}) {
+  const opts = normalizeAiOpts(gk);
+  return callAI(prompt, {...opts, provider: "gemini"}, genConfig);
 }
 
 // Unified audio transcription — use this for ALL inline audio calls instead of raw fetch.
-// gk: Gemini API key | base64: audio data | mimeType: "audio/wav" or "audio/webm" | textPrompt: instruction
 async function callGeminiAudio(gk, base64, mimeType, textPrompt, genConfig={}) {
-  if (!gk) return null;
-  try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${gk}`, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        contents: [{ parts: [
-          { inline_data: { mime_type: mimeType, data: base64 } },
-          { text: textPrompt }
-        ]}],
-        generationConfig: { temperature: 0, maxOutputTokens: 8192, ...genConfig }
-      })
-    });
-    const d = await r.json();
-    if (d.error) { console.warn("[AI] Gemini audio error:", d.error); return null; }
-    return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  } catch(e) { console.warn("[AI] Gemini audio call failed:", e); return null; }
+  const opts = normalizeAiOpts(gk);
+  const d = await callAIProxy({
+    kind: "audio",
+    task: opts.audioTask || "transcription",
+    provider: "gemini",
+    model: opts.model,
+    base64,
+    mimeType,
+    prompt: textPrompt,
+    genConfig,
+  });
+  return d?.text || null;
 }
 
-async function callClaude(ck, prompt) {
-  if (!ck) return null;
-  try {
-    const r = await fetch("/.netlify/functions/claude-proxy", {
-      method: "POST",
-      headers: {"Content-Type": "application/json", "X-Claude-Key": ck},
-      body: JSON.stringify({prompt, maxTokens: 4096})
-    });
-    const d = await r.json();
-    if (d.error) return null;
-    return d.text || "";
-  } catch(e) { return null; }
-}
-
-// Routes through the Netlify gemini-proxy function — server key never leaves the server.
-// Used as fallback when the user has no personal Gemini key.
+// Compatibility wrapper for older callers that explicitly ask for Gemini.
 async function callGeminiProxy(prompt, genConfig={}) {
-  try {
-    const r = await fetch("/.netlify/functions/gemini-proxy", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        model: GEMINI_MODEL,
-        body: {
-          contents: [{parts: [{text: prompt}]}],
-          generationConfig: {temperature: 0.7, maxOutputTokens: 4096, ...genConfig}
-        }
-      })
-    });
-    const d = await r.json();
-    if (d.error) { console.warn("[AI] Proxy error:", d.error); return null; }
-    return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  } catch(e) { console.warn("[AI] Proxy call failed:", e); return null; }
+  return callAI(prompt, {provider: "gemini"}, genConfig);
 }
 
-// Generic AI dispatcher — routes to the right backend based on what keys are available.
-// Personal Gemini key → direct Google API call (fast, uses user's quota)
-// No personal key → gemini-proxy Netlify function (server key stays server-side)
-// Claude key + claude provider → claude-proxy Netlify function
-// aiOpts = {provider:"gemini"|"claude", geminiKey, claudeKey} OR just a string (legacy)
+// Generic AI dispatcher. Every active app call goes through ai-proxy.
 async function callAI(prompt, aiOpts, genConfig={}) {
-  if (typeof aiOpts === 'string') return callGemini(aiOpts, prompt, genConfig); // legacy: bare key = gemini
-  if (!aiOpts) return null;
-  if (aiOpts.provider === 'claude' && aiOpts.claudeKey) return callClaude(aiOpts.claudeKey, prompt);
-  if (aiOpts.geminiKey) return callGemini(aiOpts.geminiKey, prompt, genConfig); // personal key → direct
-  return callGeminiProxy(prompt, genConfig); // no personal key → server proxy
+  const opts = normalizeAiOpts(aiOpts);
+  const d = await callAIProxy({
+    kind: "text",
+    task: opts.task || "general",
+    provider: opts.provider || "gemini",
+    model: opts.model,
+    prompt,
+    genConfig,
+  });
+  return d?.text || null;
 }
 
 function optTasks(tasks, pris) {

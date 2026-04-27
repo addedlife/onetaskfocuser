@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { IC } from './02-icons.jsx';
-import { isTaskAged, getTaskAgeHours, gP, pBg, textOnColor, _lum, priText, callGemini, callAI, uid, db, Store, DEF_PRI, PALETTE, cleanYT, aiDetectShailaAnswers } from './01-core.js';
+import { isTaskAged, getTaskAgeHours, gP, pBg, textOnColor, _lum, priText, callAI, uid, db, Store, DEF_PRI, PALETTE, cleanYT, aiDetectShailaAnswers } from './01-core.js';
 
 function Ripple({color}) {
   return <div style={{position:"absolute",inset:0,zIndex:0,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>

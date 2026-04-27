@@ -8,7 +8,7 @@ import { PriEditor } from './04-components.jsx';
 function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   onOptimize, optLoading, onBulkAdd, onShatter, onDedup,
   curEnergy, onSetEnergy, focusModeActive, onToggleFocusMode,
-  effectiveCount, overwhelmThreshold, hasAI}) {
+  effectiveCount, overwhelmThreshold, hasAI, aiConfig}) {
 
   const [sTab, setSTab] = useState("queue");
   const [backupFolderSet, setBackupFolderSet] = useState(false);
@@ -30,11 +30,17 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   const [schemeGenErr, setSchemeGenErr] = useState("");
   const pris = AS.priorities;
 
-  const settingsAiOpts = AS ? {provider: AS.aiProvider || 'gemini', geminiKey: AS.geminiKey, claudeKey: AS.claudeApiKey} : null;
-  const settingsHasAI = settingsAiOpts && (settingsAiOpts.provider === 'claude' ? !!settingsAiOpts.claudeKey : !!settingsAiOpts.geminiKey);
+  const selectedModel = AS.aiModel || aiConfig?.model || aiConfig?.textModel || "";
+  const settingsAiOpts = AS ? {
+    provider: "gemini",
+    model: selectedModel,
+    source: "server",
+  } : null;
+  const settingsHasAI = !!hasAI;
+  const geminiModels = aiConfig?.models?.gemini || ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite"];
 
   async function handleGenSchemes() {
-    if (!settingsHasAI) { setSchemeGenErr("Add an API key in the Account tab first."); return; }
+    if (!settingsHasAI) { setSchemeGenErr("AI server is not configured."); return; }
     setSchemeGenLoading(true); setSchemeGenErr("");
     try {
       const existing = [
@@ -287,34 +293,14 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
         {/* ── ACCOUNT TAB ── */}
         {sTab === "account" && (
           <div>
-            <h4 style={sh}>AI Provider</h4>
+            <h4 style={sh}>AI Model</h4>
             <div style={{marginBottom:16}}>
-              <div style={{display:"flex",gap:6,marginBottom:12}}>
-                {["gemini","claude"].map(prov => (
-                  <button key={prov} onClick={()=>setAS(p=>({...p,aiProvider:prov}))} style={{flex:1,padding:"8px 0",borderRadius:9,border:`1px solid ${(AS.aiProvider||"gemini")===prov?ap[0]?.color||T.text:T.brd}`,background:(AS.aiProvider||"gemini")===prov?(ap[0]?.color||T.text)+"18":"transparent",cursor:"pointer",fontSize:11,fontFamily:"system-ui",fontWeight:(AS.aiProvider||"gemini")===prov?700:400,color:(AS.aiProvider||"gemini")===prov?T.text:T.tSoft,transition:"all 0.15s"}}>
-                    {prov==="gemini"?"✦ Gemini":"◆ Claude"}
-                  </button>
-                ))}
-              </div>
-              <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",margin:0}}>All AI features (optimize, breakdown, insights, chat) use the selected provider.</p>
-            </div>
-
-            <div style={{height:1,background:T.brdS,margin:"0 0 16px"}}/>
-            <h4 style={sh}>API Keys</h4>
-            <div style={{marginBottom:12}}>
-              <label style={{fontSize:11,color:T.tSoft,fontFamily:"system-ui",fontWeight:600,display:"block",marginBottom:4}}>Gemini API Key</label>
-              <input value={AS.geminiKey||""} onChange={e=>setAS(p=>({...p,geminiKey:e.target.value}))} placeholder="AIza…" type="password" style={{width:"100%",padding:"8px 12px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:12,fontFamily:"system-ui",background:T.bgW,color:T.text,boxSizing:"border-box"}}/>
-              <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",marginTop:4}}>For AI task breakdown, smart optimize, and voice transcription. From Google AI Studio.</p>
-            </div>
-            <div style={{marginBottom:12}}>
-              <label style={{fontSize:11,color:T.tSoft,fontFamily:"system-ui",fontWeight:600,display:"block",marginBottom:4}}>Claude API Key</label>
-              <input value={AS.claudeApiKey||""} onChange={e=>setAS(p=>({...p,claudeApiKey:e.target.value}))} placeholder="sk-ant-…" type="password" style={{width:"100%",padding:"8px 12px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:12,fontFamily:"system-ui",background:T.bgW,color:T.text,boxSizing:"border-box"}}/>
-              <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",marginTop:4}}>Alternative AI provider. Calls are proxied through a serverless function. From console.anthropic.com.</p>
-            </div>
-            <div style={{marginBottom:20}}>
-              <label style={{fontSize:11,color:T.tSoft,fontFamily:"system-ui",fontWeight:600,display:"block",marginBottom:4}}>Soferai API Key</label>
-              <input value={AS.soferaiKey||""} onChange={e=>setAS(p=>({...p,soferaiKey:e.target.value}))} placeholder="sk-soferai-…" type="password" style={{width:"100%",padding:"8px 12px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:12,fontFamily:"system-ui",background:T.bgW,color:T.text,boxSizing:"border-box"}}/>
-              <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",marginTop:4}}>For Hebrew/Yiddish transcription via Soferai.</p>
+              <label style={{fontSize:11,color:T.tSoft,fontFamily:"system-ui",fontWeight:600,display:"block",marginBottom:4}}>Gemini model</label>
+              <select value={AS.aiModel||""} onChange={e=>setAS(p=>({...p,aiModel:e.target.value}))} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:12,fontFamily:"system-ui",background:T.bgW,color:T.text,boxSizing:"border-box"}}>
+                <option value="">Server default ({aiConfig?.model || aiConfig?.textModel || "auto"})</option>
+                {geminiModels.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",margin:"8px 0 0"}}>Gateway: {settingsHasAI ? "online" : "not configured"}</p>
             </div>
 
             <div style={{height:1,background:T.brdS,margin:"0 0 16px"}}/>

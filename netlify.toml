@@ -9,10 +9,10 @@
 [functions]
   node_bundler = "esbuild"
 
-[functions."claude-proxy"]
-  timeout = 60
-
 [functions."gemini-proxy"]
+  timeout = 300
+
+[functions."ai-proxy"]
   timeout = 300
 
 # Vite-hashed assets — cache forever (filename changes on every deploy)

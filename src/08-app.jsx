@@ -1,14 +1,13 @@
 // === 08-app.js ===
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callGemini, callGeminiAudio, callAI, suggestFirstStep, aiParseShailos, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer, gG, fmtMs, db, _lum, priText, textOnPastel } from './01-core.js';
+import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callGeminiAudio, callAI, suggestFirstStep, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer, gG, fmtMs, db, _lum, priText, textOnPastel } from './01-core.js';
 import { IC } from './02-icons.jsx';
 import { VoiceInput, webmToWavBase64 } from './03-voice.jsx';
 import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from './04-components.jsx';
 import { BulkAdd, TaskBD, BlockedModal, ContextTagPicker, ListManager } from './05-modals.jsx';
 import { ShelfView, SubtaskGroup } from './06-shelf.jsx';
 import { SettingsModal } from './07-settings.jsx';
-import { DevModePanel } from './10-devmode.jsx';
 
 function App({ user, onSignOut }) {
   Store.setUid(canonicalUid(user));
@@ -108,7 +107,8 @@ function App({ user, onSignOut }) {
   const [minTick, setMinTick] = useState(0);              // ticks every 60s for snooze auto-wake
   const sessionCompCount = useRef(0);                     // session completions (no re-render needed)
   const pendingShailaIds = useRef(new Set());              // shailaIds assigned but not yet in state (prevents listener dupes)
-  const [serverKeyAvailable, setServerKeyAvailable] = useState(false); // true = Netlify GEMINI_API_KEY is configured
+  const [serverKeyAvailable, setServerKeyAvailable] = useState(false); // true = Netlify AI is configured
+  const [aiConfig, setAiConfig] = useState(null);
   const [fbOffline, setFbOffline] = useState(false);      // Firebase unreachable on load — warn user
   // ─── Conversation Capture ────────────────────────────────────────────────
   const [showConvCapture, setShowConvCapture] = useState(false);
@@ -140,8 +140,7 @@ function App({ user, onSignOut }) {
     ],
     colorScheme: "claude",
     zenEnabled: false,
-    geminiKey: "",
-    soferaiKey: "",
+    aiModel: "",
     completionSound: true,
     overwhelmThreshold: 7,
     ageThresholds: {...DEF_AGE_THRESHOLDS},
@@ -157,8 +156,15 @@ function App({ user, onSignOut }) {
         if (!s.priorities) s.priorities = defS.priorities.map(p=>({...p}));
         if (!s.colorScheme) s.colorScheme = "claude";
         if (s.zenEnabled === undefined) s.zenEnabled = false;
-        if (!s.geminiKey) s.geminiKey = "";
-        if (!s.soferaiKey) s.soferaiKey = "";
+        if (s.aiModel === undefined) s.aiModel = s.aiTextModel || s.aiAudioModel || s.aiResearchModel || "";
+        delete s.geminiKey;
+        delete s.soferaiKey;
+        delete s.aiProvider;
+        delete s.aiTextModel;
+        delete s.aiAudioProvider;
+        delete s.aiAudioModel;
+        delete s.aiResearchProvider;
+        delete s.aiResearchModel;
         if (!s.ageThresholds) s.ageThresholds = {...DEF_AGE_THRESHOLDS};
         if (!s.mrsWWindows) s.mrsWWindows = defS.mrsWWindows;
         if (s.completionSound === undefined) s.completionSound = true;
@@ -259,11 +265,15 @@ function App({ user, onSignOut }) {
 
   // (beforeunload/pagehide flushing is consolidated in the effect below with the periodic sync)
 
-  // ─── Shared Gemini key (server-side, used when user has no personal key) ───
+  // ─── Shared Gemini gateway config ─────────────────────────────────────────
   useEffect(() => {
     fetch("/.netlify/functions/app-config")
       .then(r => r.json())
-      .then(d => { setServerKeyAvailable(!!d.geminiKey); })
+      .then(d => {
+        const cfg = d.ai || null;
+        setAiConfig(cfg);
+        setServerKeyAvailable(!!(cfg?.available?.gemini || d.geminiKey));
+      })
       .catch(() => {});
   }, []);
 
@@ -528,15 +538,25 @@ function App({ user, onSignOut }) {
   }, [loaded]);
 
   // ─── Derived state ───────────────────────────────────────────────────────
-  // Effective Gemini key: user's own key takes priority; falls back to shared app key
-  const aiOpts = AS ? {provider: AS.aiProvider || 'gemini', geminiKey: AS.geminiKey || "", claudeKey: AS.claudeApiKey} : null;
-  const hasAI = aiOpts && (aiOpts.provider === 'claude' ? !!aiOpts.claudeKey : (!!aiOpts.geminiKey || serverKeyAvailable));
+  // All app AI calls go through the central Netlify AI gateway.
+  const selectedProvider = "gemini";
+  const selectedProviderAvailable = aiConfig ? !!aiConfig?.available?.gemini : serverKeyAvailable;
+  const selectedModel = AS?.aiModel || aiConfig?.model || aiConfig?.textModel || "";
+  const rawAiOpts = AS ? {
+    provider: selectedProvider,
+    model: selectedModel,
+    source: "server",
+  } : null;
+  const hasAI = !!(rawAiOpts && selectedProviderAvailable);
+  const aiOpts = hasAI ? rawAiOpts : null;
   const sc = SCHEMES[AS?.colorScheme] || AS?.customSchemes?.[AS?.colorScheme] || SCHEMES.claude;
   // Detect dark theme by checking bg luminance
   const isDark = (()=>{const h=sc.bg||"#EDE5D8";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000<128;})();
   const T = {...sc, isDark, glow:!!sc.glow, shadow: isDark?"0 2px 12px rgba(0,0,0,0.3)":"0 2px 12px rgba(0,0,0,0.06)", shadowLg: isDark?"0 6px 24px rgba(0,0,0,0.4)":"0 6px 24px rgba(0,0,0,0.09)"};
   // Share theme with Shaila sub-app via localStorage
   try { localStorage.setItem('onetask_theme', JSON.stringify(sc)); } catch(e) {}
+  // Share the selected AI route with the Shaila sub-app; both still call the same server gateway.
+  try { if (aiOpts) localStorage.setItem('onetask_ai_config', JSON.stringify(aiOpts)); } catch(e) {}
   const softBorderC = isDark ? "#7A78A8" : "#B8A88E";
   const pris = (AS?.priorities || DEF_PRI).filter(p => !p.deleted);
   const aList = AS ? AS.lists.find(l => l.id === AS.activeListId) || AS.lists[0] : null;
@@ -1811,8 +1831,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           existingShailos={actT.filter(t => t.priority === "shaila" && !t.isGetBackStep)}
           color={gP(pris,selPri).color}
           T={T}
-          soferaiKey={AS.soferaiKey}
-          geminiKey={aiOpts?.geminiKey}
+          aiOpts={aiOpts}
         />
       )}
       {showBrainDump && <BrainDump T={T} pris={pris} onCapture={(text)=>{captureZenDump(text);setShowZenReview(true);setShowBrainDump(false);}} onClose={()=>setShowBrainDump(false)}/>}
@@ -1951,7 +1970,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       {blockedModal && <BlockedModal task={blockedModal} T={T} pris={pris} onBlock={blockTask} onClose={()=>setBlockedModal(null)}/>}
       {/* Context tags removed */}
       {showSet && <SettingsModal AS={AS} setAS={setAS} T={T} ap={ap} onClose={()=>setShowSet(false)} onSignOut={onSignOut}
-        onOptimize={launchpadOptimize} optLoading={optLoading} hasAI={hasAI}
+        onOptimize={launchpadOptimize} optLoading={optLoading} hasAI={hasAI} aiConfig={aiConfig}
         onBulkAdd={()=>{setShowSet(false);setShowBulk(true);}} onShatter={()=>{setShowSet(false);setShowBD(true);}}
         onDedup={()=>{deduplicateTasks();}}
         curEnergy={curEnergy} onSetEnergy={e=>setAS(p=>({...p,currentEnergy:e}))}
@@ -3252,10 +3271,10 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
       const webmBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
       let transcript = webSpeechText;
 
-      if (webmBlob.size >= 500 && aiOpts?.geminiKey) {
+      if (webmBlob.size >= 500 && aiOpts) {
         const base64 = await webmToWavBase64(webmBlob);
         const geminiTranscript = await callGeminiAudio(
-          aiOpts.geminiKey, base64, 'audio/wav',
+          aiOpts, base64, 'audio/wav',
           `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Use these standard spellings: shaila/shailos, halacha, gemara, Shabbos, davening, daven, bracha, mutar, assur, kashrus, Rashi, Rambam, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.\n\nReturn only the verbatim transcript. No summary, no rephrasing.`
         );
         if (geminiTranscript) transcript = geminiTranscript.trim() || transcript;

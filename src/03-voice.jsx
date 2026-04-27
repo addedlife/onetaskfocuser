@@ -1,14 +1,14 @@
 // === 03-voice.js ===
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { cleanYT, callGemini, callGeminiAudio, aiParseShailos, callAI, uid, textOnColor } from './01-core.js';
+import { cleanYT, callGeminiAudio, aiParseShailos, callAI, uid, textOnColor } from './01-core.js';
 // VoiceInput: Web Speech (live preview) + MediaRecorder run together.
 // Web Speech starts first to get mic priority; MediaRecorder starts 300ms later.
 //
-// Phases: recording → gemini_wait → reviewing      (when geminiKey set — fast Gemini transcription)
-//         recording → reviewing → soferai_wait → soferai_done  (fallback when no geminiKey)
+// Phases: recording -> gemini_wait -> reviewing.
 
 let _activeMicId = null;
+const MIC_CONSTRAINTS = { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } };
 
 // Convert a WebM/Opus blob → 16 kHz mono WAV base64 (universally accepted by transcription APIs)
 async function webmToWavBase64(webmBlob) {
@@ -49,15 +49,13 @@ async function webmToWavBase64(webmBlob) {
   });
 }
 
-function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, existingShailos, color, T, soferaiKey, geminiKey }) {
+function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, existingShailos, color, T, aiOpts }) {
   const [phase, setPhase]             = React.useState("recording");
   const [liveText, setLiveText]       = React.useState("");
   const [editText, setEditText]       = React.useState("");
   const [webText, setWebText]         = React.useState("");
-  const [soferStatus, setSoferStatus] = React.useState("");
   const [geminiStatus, setGeminiStatus] = React.useState("");
   const [err, setErr]                 = React.useState("");
-  const [minimized, setMinimized]     = React.useState(false);
   const [parsedShailas, setParsedShailas] = React.useState([]);
   const [shailaLoading, setShailaLoading] = React.useState(false);
   const [shailaMode, setShailaMode]       = React.useState(false);
@@ -72,12 +70,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
   const streamRef   = React.useRef(null);
   const mediaRecRef = React.useRef(null);
   const chunksRef   = React.useRef([]);
-  const pollRef     = React.useRef(null);
   const mediaStopP  = React.useRef(null); // resolves when MediaRecorder onstop fires
-  const bgJobRef    = React.useRef(null); // Promise<jobId> — background upload started on STOP
-  const bgStageRef  = React.useRef("idle"); // "converting" | "uploading" | "submitted" | "error"
-  const elapsedRef  = React.useRef(0);
-  const elapsedTmr  = React.useRef(null);
   const shailaAutoFiredRef = React.useRef(false);
 
   function goPhase(p) { phaseRef.current = p; setPhase(p); }
@@ -133,19 +126,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
     if (_activeMicId === myId.current) _activeMicId = null;
   }
 
-  function startElapsed() {
-    elapsedRef.current = 0;
-    clearInterval(elapsedTmr.current);
-    elapsedTmr.current = setInterval(() => {
-      elapsedRef.current += 1;
-      setSoferStatus(`Sofer.ai processing… ${elapsedRef.current}s`);
-    }, 1000);
-  }
-  function stopElapsed() { clearInterval(elapsedTmr.current); }
-
   const cleanup = React.useCallback(() => {
-    clearTimeout(pollRef.current);
-    clearInterval(elapsedTmr.current);
     stopSpeech();
     stopMedia();
   }, []); // eslint-disable-line
@@ -165,7 +146,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
     const t = setTimeout(async () => {
       if (phaseRef.current !== "recording") return;
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
         if (phaseRef.current !== "recording") { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
         const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
@@ -175,7 +156,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
         mr.ondataavailable = e => { if (e.data?.size > 0) chunksRef.current.push(e.data); };
         mr.start(200);
       } catch(e) {
-        // MediaRecorder unavailable — Sofer.ai button will show error if attempted
+        // MediaRecorder unavailable; browser transcript remains available.
       }
     }, 300);
 
@@ -186,7 +167,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
   React.useEffect(() => {
     if (phase === "recording") { shailaAutoFiredRef.current = false; return; }
     if (!shailaMode || shailaAutoFiredRef.current) return;
-    if ((phase === "reviewing" || phase === "soferai_done") && editText.trim()) {
+    if (phase === "reviewing" && editText.trim()) {
       shailaAutoFiredRef.current = true;
       parseAsShailos(editText);
     }
@@ -197,7 +178,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
   React.useEffect(() => {
     if (phase === "recording") { answerDetectFiredRef.current = false; return; }
     if (answerDetectFiredRef.current) return;
-    if ((phase === "reviewing" || phase === "soferai_done") && editText.trim() && existingShailos?.length) {
+    if (phase === "reviewing" && editText.trim() && existingShailos?.length) {
       if (true) {
         answerDetectFiredRef.current = true;
         detectAnswersInTranscript(editText);
@@ -225,14 +206,12 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
     setWebText(cleaned);
     setEditText(cleaned); // shown as fallback while Gemini runs
 
-    if (geminiKey) {
-      // Fast path: Gemini handles transcription + Yeshivish in one shot
+    if (aiOpts) {
+      // Central AI gateway handles transcription and Yeshivish wording in one shot.
       goPhase("gemini_wait");
       transcribeWithGemini(cleaned);
     } else {
-      // Fallback: Web Speech result, optional Sofer.ai improvement
       goPhase("reviewing");
-      if (soferaiKey) bgJobRef.current = kickBgUpload();
     }
   }
 
@@ -250,147 +229,27 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
       setGeminiStatus("Transcribing…");
       const base64 = await webmToWavBase64(webmBlob);
       const transcriptRaw = await callGeminiAudio(
-        geminiKey, base64, "audio/wav",
+        aiOpts, base64, "audio/wav",
         `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Use these standard spellings for Jewish terms: shaila / shailos (question / questions), halacha (Jewish law), gemara (Talmud), Shabbos (Sabbath), davening (praying), daven, bracha (blessing), mutar (permitted), assur (forbidden), kashrus, Rashi, Rambam, Ramban, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.\n\nDo not add punctuation beyond what is spoken. Do not summarize or rephrase. Return only the verbatim transcript.`
       );
-      if (transcriptRaw === null) throw new Error("Gemini API error");
+      if (transcriptRaw === null) throw new Error("AI transcription error");
       const transcript = transcriptRaw.trim();
       if (transcript) setEditText(cleanYT(transcript));
       goPhase("reviewing");
     } catch(e) {
-      setErr("Gemini transcription failed: " + e.message);
+      setErr("AI transcription failed: " + e.message);
       goPhase("reviewing"); // fall back to Web Speech result already in editText
-    }
-  }
-
-  // Runs in background after STOP — awaits final chunk, converts, uploads
-  async function kickBgUpload() {
-    bgStageRef.current = "converting";
-    if (mediaStopP.current) { await mediaStopP.current; mediaStopP.current = null; }
-    const webmBlob = new Blob(chunksRef.current, { type: "audio/webm" });
-    if (webmBlob.size < 500) { bgStageRef.current = "error"; throw new Error("Audio capture failed or recording too short. Check mic permissions."); }
-    const base64 = await webmToWavBase64(webmBlob);
-    bgStageRef.current = "uploading";
-    const postResp = await fetch("/.netlify/functions/soferai-proxy", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json", "X-Soferai-Key": soferaiKey },
-      body: JSON.stringify({
-        audio_file: base64,
-        info: { model: "v1", primary_language: "en", hebrew_word_format: ["en"] },
-      }),
-    });
-    if (!postResp.ok) {
-      bgStageRef.current = "error";
-      const d = await postResp.json().catch(() => ({}));
-      throw new Error(d.error || `HTTP ${postResp.status}`);
-    }
-    const jobId = await postResp.json();
-    if (!jobId || typeof jobId !== "string") { bgStageRef.current = "error"; throw new Error("Unexpected response from Sofer.ai."); }
-    bgStageRef.current = "submitted";
-    return jobId;
-  }
-
-  // ── Send captured audio to Sofer.ai — reuses background upload if ready ────
-  async function sendToSoferai() {
-    if (!soferaiKey) { setErr("Add your Sofer.ai key in Settings."); return; }
-    goPhase("soferai_wait");
-    setErr("");
-    try {
-      let jobId;
-      if (bgJobRef.current) {
-        // Background upload already started — show live stage while awaiting
-        const stageInterval = setInterval(() => {
-          const s = bgStageRef.current;
-          if (s === "converting") setSoferStatus("Converting audio to WAV…");
-          else if (s === "uploading") setSoferStatus("Uploading to Sofer.ai…");
-          else setSoferStatus("Sending to Sofer.ai…");
-        }, 150);
-        try { jobId = await bgJobRef.current; } finally { clearInterval(stageInterval); }
-        bgJobRef.current = null;
-      } else {
-        // Fallback: upload now
-        setSoferStatus("Converting audio to WAV…");
-        if (mediaStopP.current) { await mediaStopP.current; mediaStopP.current = null; }
-        const webmBlob = new Blob(chunksRef.current, { type: "audio/webm" });
-        if (webmBlob.size < 500) throw new Error("Audio capture failed or recording too short. Check mic permissions.");
-        const base64 = await webmToWavBase64(webmBlob);
-        setSoferStatus("Uploading to Sofer.ai…");
-        const postResp = await fetch("/.netlify/functions/soferai-proxy", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json", "X-Soferai-Key": soferaiKey },
-          body: JSON.stringify({
-            audio_file: base64,
-            info: { model: "v1", primary_language: "en", hebrew_word_format: ["en"] },
-          }),
-        });
-        if (!postResp.ok) {
-          const d = await postResp.json().catch(() => ({}));
-          throw new Error(d.error || `HTTP ${postResp.status}`);
-        }
-        jobId = await postResp.json();
-        if (!jobId || typeof jobId !== "string") throw new Error("Unexpected response from Sofer.ai.");
-      }
-      setSoferStatus("Sofer.ai processing… 0s");
-      startElapsed();
-      schedulePoll(jobId);
-    } catch(e) {
-      stopElapsed();
-      setErr(e.message);
-      goPhase("reviewing");
-    }
-  }
-
-  // ── Poll for Sofer.ai result ───────────────────────────────────────────────
-  function schedulePoll(jobId) {
-    clearTimeout(pollRef.current);
-    pollRef.current = setTimeout(() => doPoll(jobId), 1500);
-  }
-
-  async function doPoll(jobId) {
-    try {
-      const stResp = await fetch(
-        `/.netlify/functions/soferai-proxy?job_id=${encodeURIComponent(jobId)}&check=status`,
-        { headers: { "X-Soferai-Key": soferaiKey } }
-      );
-      const st = (await stResp.json()).status;
-      if (st === "COMPLETED") {
-        stopElapsed();
-        setSoferStatus("Receiving result…");
-        const resResp = await fetch(
-          `/.netlify/functions/soferai-proxy?job_id=${encodeURIComponent(jobId)}`,
-          { headers: { "X-Soferai-Key": soferaiKey } }
-        );
-        const raw = ((await resResp.json()).text || "")
-          .replace(/<i>(.*?)<\/i>/g, "$1")
-          .replace(/<[^>]+>/g, "")
-          .trim();
-        setEditText(cleanYT(raw));
-        setMinimized(false);
-        goPhase("soferai_done");
-      } else if (["FAILED","CANCELLED","INSUFFICIENT_FUNDS"].includes(st)) {
-        stopElapsed();
-        setErr(`Sofer.ai: ${st}`);
-        setMinimized(false);
-        goPhase("reviewing");
-      } else {
-        setSoferStatus(`Processing… (${st})`);
-        schedulePoll(jobId);
-      }
-    } catch(e) {
-      stopElapsed();
-      setErr("Poll error: " + e.message);
-      goPhase("reviewing");
     }
   }
 
   // ── Parse transcript as shailos ────────────────────────────────────────────
   async function parseAsShailos(textOverride) {
-    if (!geminiKey) { setErr("Add your Gemini key in Settings to parse shailos."); return; }
+    if (!aiOpts) { setErr("AI is not configured."); return; }
     const txt = (textOverride !== undefined ? textOverride : editText).trim();
     if (!txt) return;
     setShailaLoading(true); setErr("");
     try {
-      const items = await aiParseShailos(txt, geminiKey);
+      const items = await aiParseShailos(txt, aiOpts);
       setParsedShailas(items);
       goPhase("shaila_review");
     } catch(e) { setErr("Parse error: " + e.message); }
@@ -399,7 +258,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
 
   // ── Detect answers to existing shailos in transcript ──────────────────────
   async function detectAnswersInTranscript(text) {
-    if (!geminiKey || !existingShailos?.length || !text.trim()) return;
+    if (!aiOpts || !existingShailos?.length || !text.trim()) return;
     setAnswerDetectLoading(true);
     setDetectedAnswers([]);
     try {
@@ -418,7 +277,7 @@ Transcript:
 ${text}
 
 Identify any shailos from the list above that are answered in the transcript. For each match, return a JSON array of objects: {"id": "<exact ID>", "shaila": "<question text>", "answer": "<extracted answer>"}. If the answer is partial or implied, include it. Only return answers you are confident are present in the transcript. If none match, return []. Return only raw JSON, no markdown.`;
-      const raw = (await callGemini(geminiKey, prompt, { temperature: 0, maxOutputTokens: 2048 }) || "").trim();
+      const raw = (await callAI(prompt, aiOpts, { temperature: 0, maxOutputTokens: 2048 }) || "").trim();
       const clean = raw.replace(/```json|```/g,"").trim();
       const parsed = JSON.parse(clean);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -429,7 +288,7 @@ Identify any shailos from the list above that are answered in the transcript. Fo
   }
 
   const shailaParseBtn = (
-    geminiKey ? (
+    aiOpts ? (
       <button onClick={parseAsShailos} disabled={shailaLoading} style={{
         width:"100%", marginTop:6, padding:"8px",
         fontSize:12, fontWeight:600, background:"none",
@@ -493,7 +352,7 @@ Identify any shailos from the list above that are answered in the transcript. Fo
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
         <span style={{ fontSize:10, color:"#C94040", fontWeight:800, letterSpacing:1.2 }}>🔴 LISTENING</span>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          {geminiKey && (
+          {aiOpts && (
             <button onClick={() => { shailaAutoFiredRef.current = false; setShailaMode(true); stopRec(); }} title="Stop and parse as shailos" style={{
               background:"#C8A84C", color:"#fff",
               border: "1.5px solid #C8A84C80", borderRadius:7,
@@ -523,8 +382,8 @@ Identify any shailos from the list above that are answered in the transcript. Fo
     <div style={shell(color)} data-voice-panel="true">
       <div style={{ textAlign:"center", padding:"18px 0 20px" }}>
         <div style={{ width:28, height:28, border:`3px solid ${T.brd}`, borderTopColor:color, borderRadius:"50%", animation:"ot-spin 0.8s linear infinite", margin:"0 auto 14px" }} />
-        <p style={{ margin:0, fontSize:13, color:T.tSoft, fontWeight:600, fontFamily:"system-ui" }}>{geminiStatus || "Transcribing…"}</p>
-        <p style={{ margin:"6px 0 0", fontSize:11, color:T.tFaint, fontFamily:"system-ui" }}>Gemini · Yeshivish dialect</p>
+        <p style={{ margin:0, fontSize:13, color:T.tSoft, fontWeight:600, fontFamily:"system-ui" }}>{geminiStatus || "Transcribing..."}</p>
+        <p style={{ margin:"6px 0 0", fontSize:11, color:T.tFaint, fontFamily:"system-ui" }}>Central AI gateway</p>
       </div>
       {editText.trim() && (
         <div style={{ padding:"8px 12px", borderRadius:9, background:T.bgW, border:`1px solid ${T.brd}`, fontSize:12, color:T.tFaint, fontFamily:"Georgia,serif", lineHeight:1.5, marginBottom:8, maxHeight:60, overflow:"hidden", opacity:0.7 }}>
@@ -538,7 +397,7 @@ Identify any shailos from the list above that are answered in the transcript. Fo
     </div>
   );
 
-  // ── Detected-answers banner (shown in reviewing + soferai_done) ────────────
+  // ── Detected-answers banner ────────────────────────────────────────────────
   const detectedAnswersBanner = (answerDetectLoading || detectedAnswers.some(x => x.approved !== false)) ? (
     <div style={{ marginTop:6 }}>
       {answerDetectLoading && (
@@ -570,85 +429,15 @@ Identify any shailos from the list above that are answered in the transcript. Fo
     <div style={shell(T.brd)} data-voice-panel="true">
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
         <span style={{ fontSize:9, color:T.tFaint, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase" }}>
-          {geminiKey ? "Gemini transcript" : "Browser transcript"}
+          {aiOpts ? "AI transcript" : "Browser transcript"}
         </span>
         {closeBtn}
       </div>
       {editArea}
       {useBtn(color)}
-      {!geminiKey && soferaiKey && (
-        <button onClick={sendToSoferai} style={{
-          width:"100%", marginTop:6, padding:"8px",
-          fontSize:12, fontWeight:600, background:"none",
-          color:T.tSoft, border:`1px solid ${T.brd}`,
-          borderRadius:8, cursor:"pointer",
-        }}>
-          🎤 Improve with Sofer.ai
-        </button>
-      )}
       {shailaParseBtn}
       {detectedAnswersBanner}
       {errLine}
-    </div>
-  );
-
-  // ── SOFER.AI WAITING — minimized pill ─────────────────────────────────────
-  if (phase === "soferai_wait" && minimized) return (
-    <div
-      data-voice-panel="true"
-      onClick={() => setMinimized(false)}
-      style={{
-        position:"fixed", bottom:"clamp(60px,10vh,120px)",
-        left:"50%", transform:"translateX(-50%)",
-        background:T.card, border:`1.5px solid ${T.brd}`,
-        borderRadius:24, padding:"9px 18px",
-        boxShadow:"0 4px 20px rgba(0,0,0,0.18)",
-        display:"flex", alignItems:"center", gap:10,
-        cursor:"pointer", zIndex:9000, fontFamily:"system-ui",
-        animation:"ot-fade 0.2s",
-      }}
-    >
-      <div style={{ width:14, height:14, border:`2px solid ${T.brd}`, borderTopColor:color, borderRadius:"50%", animation:"ot-spin 0.8s linear infinite", flexShrink:0 }} />
-      <span style={{ fontSize:12, color:T.tSoft, whiteSpace:"nowrap" }}>Sofer.ai processing…</span>
-      <span style={{ fontSize:11, color:T.tFaint }}>↑</span>
-    </div>
-  );
-
-  // ── SOFER.AI WAITING — full panel ─────────────────────────────────────────
-  if (phase === "soferai_wait") return (
-    <div style={shell(T.brd)} data-voice-panel="true">
-      <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:2 }}>
-        <button onClick={() => setMinimized(true)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:11, color:T.tFaint, padding:"2px 4px", fontFamily:"system-ui" }}>— minimize</button>
-      </div>
-      <div style={{ textAlign:"center", padding:"10px 0 14px" }}>
-        <div style={{ width:28, height:28, border:`3px solid ${T.brd}`, borderTopColor:color, borderRadius:"50%", animation:"ot-spin 0.8s linear infinite", margin:"0 auto 12px" }} />
-        <p style={{ margin:0, fontSize:13, color:T.tSoft, fontWeight:600 }}>{soferStatus}</p>
-      </div>
-      <button
-        onClick={() => { clearTimeout(pollRef.current); stopElapsed(); goPhase("reviewing"); setErr(""); setMinimized(false); }}
-        style={{ width:"100%", padding:"7px", fontSize:11, background:"none", color:T.tFaint, border:`1px solid ${T.brd}`, borderRadius:8, cursor:"pointer" }}
-      >Cancel — use browser result</button>
-      {errLine}
-    </div>
-  );
-
-  // ── SOFER.AI DONE ──────────────────────────────────────────────────────────
-  if (phase === "soferai_done") return (
-    <div style={shell("#5A9E7C")} data-voice-panel="true">
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-        <span style={{ fontSize:9, color:"#5A9E7C", fontWeight:700, letterSpacing:1.2, textTransform:"uppercase" }}>✦ Sofer.ai result</span>
-        {closeBtn}
-      </div>
-      {editArea}
-      {useBtn("#5A9E7C")}
-      {webText && (
-        <button onClick={() => setEditText(webText)} style={{
-          width:"100%", marginTop:6, padding:"7px", fontSize:11, background:"none",
-          color:T.tFaint, border:`1px solid ${T.brd}`, borderRadius:8, cursor:"pointer",
-        }}>← Use browser result instead</button>
-      )}
-      {shailaParseBtn}
-      {detectedAnswersBanner}
     </div>
   );
 

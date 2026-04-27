@@ -1,9 +1,21 @@
 // === 05-modals.js ===
 
 import React, { useState, useRef } from 'react';
-import { uid, callGemini, callGeminiAudio, callAI, textOnColor, gP, pBg } from './01-core.js';
+import { uid, callGeminiAudio, callAI, textOnColor, gP, pBg } from './01-core.js';
 import { IC } from './02-icons.jsx';
 import { CTX_TAG_COLORS } from './04-components.jsx';
+import { webmToWavBase64 } from './03-voice.jsx';
+
+const MIC_CONSTRAINTS = { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } };
+
+function blobToBase64(blob) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(fr.result.split(",")[1]);
+    fr.onerror = rej;
+    fr.readAsDataURL(blob);
+  });
+}
 
 function BulkAdd({pris, T, onAddAll, onClose}) {
   const ap = pris.filter(p => !p.deleted);
@@ -97,20 +109,26 @@ function TaskBD({task, pris, T, onConfirm, onClose, aiOpts}) {
 
   const startBdMic = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      const stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
       const mr = new MediaRecorder(stream);
       bdChunks.current = [];
       mr.ondataavailable = e => bdChunks.current.push(e.data);
       mr.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         const blob = new Blob(bdChunks.current, {type:"audio/webm"});
-        if (!aiOpts?.geminiKey) { setErr("Set a Gemini key in Settings for mic."); return; }
+        if (!aiOpts) { setErr("AI is not configured for mic transcription."); return; }
         setLd(true);
         try {
-          const buf = await blob.arrayBuffer();
-          const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+          let b64, mimeType;
+          try {
+            b64 = await webmToWavBase64(blob);
+            mimeType = "audio/wav";
+          } catch(e) {
+            b64 = await blobToBase64(blob);
+            mimeType = "audio/webm";
+          }
           const txt = await callGeminiAudio(
-            aiOpts.geminiKey, b64, "audio/webm",
+            aiOpts, b64, mimeType,
             "Transcribe this audio exactly verbatim. The speaker uses Yeshivish English. Return ONLY the transcript, nothing else.",
             { maxOutputTokens: 2048 }
           );
@@ -132,7 +150,7 @@ function TaskBD({task, pris, T, onConfirm, onClose, aiOpts}) {
   };
 
   const callG = async (pr) => {
-    if (!aiOpts) { setErr("Set an API key in Settings."); return null; }
+    if (!aiOpts) { setErr("AI server is not configured."); return null; }
     setLd(true); setErr("");
     const r = await callAI(pr, aiOpts);
     setLd(false);
