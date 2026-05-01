@@ -10,6 +10,650 @@ import { ShelfView, SubtaskGroup } from './06-shelf.jsx';
 import { SettingsModal } from './07-settings.jsx';
 import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, listPendingRecordings, PENDING_EVENT, formatPendingAge } from './09-transcription-pen.js';
 
+const suiteIcon = (name, size = 20) => (
+  <span className="material-symbols-rounded" style={{ fontSize: size }}>{name}</span>
+);
+
+function buildDeskPhoneThemeQuery(palette, theme = {}) {
+  const qs = new URLSearchParams({ palette });
+  const keys = ["bg", "bgW", "card", "text", "tSoft", "tFaint", "brd", "brdS", "primary", "onPrimary", "tonal", "onTonal"];
+  keys.forEach(key => {
+    const value = theme?.[key];
+    if (typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim())) {
+      qs.set(key, value.trim());
+    }
+  });
+  return qs.toString();
+}
+
+function AppSuiteChrome({ T, active, onSelect, taskCount = 0, shailaCount = 0, phoneOnline = false }) {
+  const apps = [
+    { id: "switchboard", label: "Switchboard", icon: "dashboard_customize", meta: "today" },
+    { id: "focus", label: "Tasks", icon: "task_alt", meta: taskCount ? `${taskCount} open` : "focus" },
+    { id: "shailos", label: "Questions", icon: "rule", meta: shailaCount ? `${shailaCount} open` : "answers" },
+    { id: "deskphone", label: "Phone", icon: "smartphone", meta: phoneOnline ? "ready" : "open" },
+  ];
+  return (
+    <div style={{position:"fixed",top:0,left:0,right:0,height:64,zIndex:8600,display:"flex",alignItems:"center",justifyContent:"center",padding:"8px clamp(10px,2vw,18px)",boxSizing:"border-box",background:`color-mix(in srgb, ${T.card} 94%, transparent)`,borderBottom:`1px solid ${T.brd}`,boxShadow:T.shadow || "0 2px 14px rgba(0,0,0,0.10)",backdropFilter:"blur(18px)"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:4,width:"min(780px,100%)",padding:3,borderRadius:16,background:T.bgW,border:`1px solid ${T.brdS || T.brd}`}}>
+        {apps.map(app => {
+          const isActive = active === app.id;
+          return (
+            <button key={app.id} onClick={() => onSelect(app.id)} title={app.label}
+              style={{minWidth:0,height:42,border:"none",borderRadius:12,cursor:"pointer",background:isActive?(T.tonal || T.primary || T.bgW):"transparent",color:isActive?(T.onTonal || T.onPrimary || T.text):T.tSoft,fontFamily:"system-ui",display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"0 8px",fontWeight:800,boxShadow:isActive?"inset 0 0 0 1px rgba(255,255,255,0.18)":"none"}}>
+              {suiteIcon(app.icon, 20)}
+              <span style={{display:"flex",flexDirection:"column",alignItems:"flex-start",minWidth:0,lineHeight:1.05}}>
+                <span style={{fontSize:13,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%"}}>{app.label}</span>
+                <span style={{fontSize:9,fontWeight:700,opacity:.68,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%"}}>{app.meta}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SwitchboardPhoneSurface({ T, onOnlineChange, compact = false, onOpenPhone }) {
+  const api = "http://127.0.0.1:8765";
+  const [status, setStatus] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [calls, setCalls] = useState([]);
+  const [number, setNumber] = useState("");
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+
+  const refresh = useCallback(async () => {
+    try {
+      setError("");
+      const [statusRes, messagesRes] = await Promise.all([
+        fetch(`${api}/status`, { cache: "no-store" }),
+        fetch(`${api}/messages`, { cache: "no-store" }),
+      ]);
+      const nextStatus = await statusRes.json();
+      const parsed = await messagesRes.json().catch(() => []);
+      const nextMessages = Array.isArray(parsed) ? parsed : (parsed?.messages || []);
+      const nextCalls = Array.isArray(nextStatus?.recentCalls) ? nextStatus.recentCalls : [];
+      setStatus(nextStatus);
+      setMessages(nextMessages);
+      setCalls(nextCalls);
+      onOnlineChange?.(true);
+    } catch {
+      setStatus(null);
+      setMessages([]);
+      setCalls([]);
+      setError("Open DeskPhone to use calls and texts.");
+      onOnlineChange?.(false);
+    }
+  }, [onOnlineChange]);
+
+  useEffect(() => {
+    refresh();
+    const id = setInterval(refresh, 6500);
+    return () => clearInterval(id);
+  }, [refresh]);
+
+  const post = async (path, label) => {
+    setBusy(label);
+    try {
+      await fetch(`${api}${path}`, { method: "POST" });
+      await refresh();
+    } catch {
+      setError("DeskPhone did not answer.");
+      onOnlineChange?.(false);
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const cleanNumber = number.trim();
+  const sendSms = async () => {
+    if (!cleanNumber || !body.trim()) return;
+    await post(`/send?to=${encodeURIComponent(cleanNumber)}&body=${encodeURIComponent(body.trim())}`, "send");
+    setBody("");
+  };
+  const dial = async () => {
+    if (!cleanNumber) return;
+    await post(`/dial?n=${encodeURIComponent(cleanNumber)}`, "dial");
+  };
+
+  const recentMessages = messages.slice(0, compact ? 3 : 6);
+  const recentCalls = calls.slice(0, compact ? 3 : 6);
+  const suggestedNumbers = Array.from(new Set([
+    ...messages.map(m => m.from || m.sender || m.address || m.phoneNumber || m.number),
+    ...calls.map(c => c.number || c.phoneNumber || c.from || c.name || c.displayName),
+  ].filter(Boolean))).slice(0, 5);
+  const callState = status?.CallState || status?.callState || status?.CurrentCallState || status?.currentCallState || "";
+  const statusLine = status ? (callState || "Ready") : "Offline";
+
+  return (
+    <div style={{display:"grid",gap:12,minWidth:0}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,color:T.tSoft,fontSize:12,fontWeight:850}}>
+          <span style={{color:status ? "#0B8043" : T.tFaint,display:"flex",alignItems:"center"}}>{suiteIcon(status ? "signal_cellular_alt" : "signal_cellular_off", 17)}</span>
+          <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{statusLine}</span>
+        </div>
+        {onOpenPhone && (
+          <button onClick={onOpenPhone} title="Open DeskPhone" style={{height:30,borderRadius:11,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,fontSize:11,display:"flex",alignItems:"center",gap:5,padding:"0 9px"}}>
+            {suiteIcon("open_in_new", 15)} Open
+          </button>
+        )}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr auto auto",gap:8,alignItems:"center"}}>
+        <input value={number} onChange={e=>setNumber(e.target.value)} placeholder="Name or number" style={{minWidth:0,height:42,boxSizing:"border-box",padding:"0 12px",borderRadius:14,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontFamily:"system-ui",fontWeight:700}}/>
+        <button onClick={dial} disabled={!cleanNumber || !!busy} title="Call" style={{width:42,height:42,borderRadius:14,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",opacity:!cleanNumber ? .45 : 1,display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("call",19)}</button>
+        <button onClick={()=>post("/answer","answer")} disabled={!!busy} title="Answer" style={{width:42,height:42,borderRadius:14,border:"none",background:"#0B8043",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("phone_callback",19)}</button>
+      </div>
+      {!!suggestedNumbers.length && (
+        <div style={{display:"flex",gap:6,overflow:"hidden",flexWrap:"wrap"}}>
+          {suggestedNumbers.map(n => (
+            <button key={n} onClick={()=>setNumber(n)} style={{maxWidth:150,height:28,borderRadius:999,border:`1px solid ${T.brdS || T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",padding:"0 9px",fontSize:11,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{n}</button>
+          ))}
+        </div>
+      )}
+      <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Text message" rows={compact ? 2 : 3} style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:14,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontFamily:"system-ui",resize:"vertical",minHeight:compact?68:88}}/>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+        <button onClick={sendSms} disabled={!cleanNumber || !body.trim() || !!busy} style={{height:38,borderRadius:13,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:900,opacity:(!cleanNumber || !body.trim()) ? .45 : 1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("send",17)} Send</button>
+        <button onClick={()=>post("/hangup","hangup")} disabled={!!busy} style={{height:38,borderRadius:13,border:"none",background:"#BA2A2A",color:"#fff",cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("call_end",17)} End</button>
+        <button onClick={refresh} disabled={!!busy} style={{height:38,borderRadius:13,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("refresh",17)} Sync</button>
+      </div>
+      {error && <div style={{fontSize:12,lineHeight:1.35,color:T.tSoft,background:T.bgW,border:`1px solid ${T.brd}`,borderRadius:12,padding:"8px 10px"}}>{error}</div>}
+      <div style={{display:"grid",gridTemplateColumns:compact ? "1fr" : "1fr 1fr",gap:10,minWidth:0}}>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:10,fontWeight:900,color:T.tFaint,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Texts</div>
+          {recentMessages.length ? recentMessages.map((m, idx) => {
+            const from = m.from || m.sender || m.address || m.phoneNumber || m.number || "Message";
+            const text = m.body || m.text || m.message || m.content || "";
+            return (
+              <button key={m.id || m.handle || idx} onClick={()=>setNumber(from)} style={{width:"100%",textAlign:"left",border:"none",borderBottom:idx===recentMessages.length-1?"none":`1px solid ${T.brdS || T.brd}`,background:"transparent",padding:"7px 0",cursor:"pointer",color:T.text}}>
+                <div style={{fontSize:12,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{from}</div>
+                <div style={{fontSize:11,color:T.tSoft,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{text || "Open thread"}</div>
+              </button>
+            );
+          }) : <div style={{fontSize:12,color:T.tFaint}}>No recent texts loaded.</div>}
+        </div>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:10,fontWeight:900,color:T.tFaint,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Calls</div>
+          {recentCalls.length ? recentCalls.map((c, idx) => {
+            const n = c.number || c.phoneNumber || c.name || c.displayName || "Call";
+            return (
+              <button key={c.id || idx} onClick={()=>setNumber(n)} style={{width:"100%",textAlign:"left",border:"none",borderBottom:idx===recentCalls.length-1?"none":`1px solid ${T.brdS || T.brd}`,background:"transparent",padding:"7px 0",cursor:"pointer",color:T.text}}>
+                <div style={{fontSize:12,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{n}</div>
+                <div style={{fontSize:11,color:T.tSoft,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{c.type || c.when || "Recent call"}</div>
+              </button>
+            );
+          }) : <div style={{fontSize:12,color:T.tFaint}}>{status ? "No recent calls loaded." : "Waiting for DeskPhone."}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SwitchboardPanel({ T, sections = [], stats = {}, tasks = [], shailos = [], priorities = [], onAddTask, onOpenTasks, onOpenQueue, onOpenZen, onOpenBrainDump, onOpenBulkAdd, onOpenShatter, onOpenShailos, onOpenShailaAdd, onOpenShailaFollowup, onRecordConversation, onRecordCall, onRecordShaila, onOpenPhone, onOnlineChange, onClose }) {
+  const [taskDraft, setTaskDraft] = useState("");
+  const [taskPriority, setTaskPriority] = useState(priorities.find(p=>p.id==="now")?.id || priorities[0]?.id || "now");
+  const visiblePriorities = priorities.filter(p => !p.deleted).slice(0, 6);
+  const addDraft = () => {
+    const text = taskDraft.trim();
+    if (!text) return;
+    onAddTask?.(text, taskPriority);
+    setTaskDraft("");
+  };
+  const actionCard = (label, icon, run, tone) => (
+    <button onClick={run} style={{height:42,borderRadius:14,border:`1px solid ${tone || T.brd}`,background:tone ? `${tone}18` : T.bgW,color:tone ? (priText?.(tone) || T.text) : T.text,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7,fontWeight:900,fontFamily:"system-ui",fontSize:12,minWidth:0}}>
+      {suiteIcon(icon, 17)} <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</span>
+    </button>
+  );
+  return (
+    <div style={{position:"fixed",inset:"64px 0 0",zIndex:7600,background:T.bg,overflow:"auto",borderTop:`1px solid ${T.brdS || T.brd}`}}>
+      <div style={{maxWidth:1260,margin:"0 auto",padding:"clamp(16px,2.6vw,28px)",boxSizing:"border-box"}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,marginBottom:18}}>
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:10,color:T.text,fontFamily:"system-ui",fontWeight:900,fontSize:22}}>
+              {suiteIcon("dashboard_customize", 25)}
+              Switchboard
+            </div>
+            <div style={{marginTop:5,color:T.tSoft,fontFamily:"system-ui",fontSize:13,lineHeight:1.45}}>
+              Tasks, questions, calls, and texts in one work surface.
+            </div>
+          </div>
+          <button onClick={onClose} title="Back to tasks" style={{height:38,padding:"0 13px",borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",display:"flex",alignItems:"center",gap:7,fontFamily:"system-ui",fontWeight:800}}>
+            {suiteIcon("task_alt", 18)} Tasks
+          </button>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:18}}>
+          {[
+            ["Open tasks", stats.tasks ?? 0, "task_alt"],
+            ["Active shailos", stats.shailos ?? 0, "rule"],
+            ["Phone", stats.phoneOnline ? "Ready" : "Open", "smartphone"],
+          ].map(([label, value, icon]) => (
+            <div key={label} style={{background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+              <span style={{width:34,height:34,borderRadius:12,background:T.tonal || T.bgW,color:T.onTonal || T.text,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{suiteIcon(icon, 19)}</span>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",fontWeight:800,textTransform:"uppercase",letterSpacing:.6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
+                <div style={{fontSize:16,color:T.text,fontFamily:"system-ui",fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{value}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,300px),1fr))",gap:14,alignItems:"start"}}>
+          <section style={{background:T.card,border:`1px solid ${T.brd}`,borderRadius:18,padding:15,minWidth:0,boxShadow:T.shadow || "none"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+                <span style={{width:34,height:34,borderRadius:13,background:T.tonal || T.bgW,color:T.onTonal || T.text,display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("task_alt",19)}</span>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:15,fontWeight:950,color:T.text,fontFamily:"system-ui"}}>Tasks</div>
+                  <div style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui"}}>{stats.tasks || 0} open</div>
+                </div>
+              </div>
+              <button onClick={onOpenQueue} style={{height:32,borderRadius:11,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,fontSize:11}}>More</button>
+            </div>
+            <div style={{display:"grid",gap:8,marginBottom:12}}>
+              {tasks.length ? tasks.slice(0,3).map(t => {
+                const pri = gP(priorities, t.priority);
+                return (
+                  <button key={t.id} onClick={onOpenTasks} style={{width:"100%",minHeight:54,textAlign:"left",borderRadius:14,border:`1px solid ${T.brdS || T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",display:"grid",gridTemplateColumns:"5px minmax(0,1fr)",gap:10,padding:"9px 10px",overflow:"hidden"}}>
+                    <span style={{width:5,borderRadius:8,background:pri.color,height:"100%"}}/>
+                    <span style={{minWidth:0}}>
+                      <span style={{display:"block",fontSize:13,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.text}</span>
+                      <span style={{display:"block",fontSize:10.5,color:T.tSoft,fontWeight:800,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pri.label || t.priority}</span>
+                    </span>
+                  </button>
+                );
+              }) : <div style={{fontSize:13,color:T.tFaint,background:T.bgW,border:`1px solid ${T.brd}`,borderRadius:14,padding:12}}>No open tasks in this list.</div>}
+            </div>
+            <div style={{display:"grid",gap:8}}>
+              <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                {visiblePriorities.map(p => (
+                  <button key={p.id} onClick={()=>setTaskPriority(p.id)} title={p.label} style={{height:30,borderRadius:999,border:`1px solid ${p.id===taskPriority?p.color:T.brd}`,background:p.id===taskPriority?`${p.color}24`:T.bgW,color:p.id===taskPriority?(priText?.(p.color) || T.text):T.tSoft,cursor:"pointer",fontSize:11,fontWeight:950,padding:"0 10px",display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{width:8,height:8,borderRadius:99,background:p.color}}/> {p.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 42px",gap:8}}>
+                <input value={taskDraft} onChange={e=>setTaskDraft(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addDraft();}}} placeholder="Add a task" style={{height:42,minWidth:0,boxSizing:"border-box",borderRadius:14,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,padding:"0 12px",fontWeight:800,fontFamily:"system-ui"}}/>
+                <button onClick={addDraft} disabled={!taskDraft.trim()} style={{height:42,border:"none",borderRadius:14,background:gP(priorities, taskPriority).color,color:textOnColor(gP(priorities, taskPriority).color),cursor:"pointer",opacity:taskDraft.trim()?1:.45,display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("add",21)}</button>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:12}}>
+              {actionCard("Zen", "self_improvement", onOpenZen)}
+              {actionCard("Brain dump", "psychology", onOpenBrainDump)}
+              {actionCard("Shatter", "account_tree", onOpenShatter)}
+              {actionCard("Paste list", "playlist_add", onOpenBulkAdd)}
+            </div>
+          </section>
+
+          <section style={{background:T.card,border:`1px solid ${T.brd}`,borderRadius:18,padding:15,minWidth:0,boxShadow:T.shadow || "none"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+                <span style={{width:34,height:34,borderRadius:13,background:T.tonal || T.bgW,color:T.onTonal || T.text,display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("rule",19)}</span>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:15,fontWeight:950,color:T.text,fontFamily:"system-ui"}}>Shailos</div>
+                  <div style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui"}}>{stats.shailos || 0} open</div>
+                </div>
+              </div>
+              <button onClick={onOpenShailos} style={{height:32,borderRadius:11,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,fontSize:11}}>More</button>
+            </div>
+            <div style={{display:"grid",gap:8,marginBottom:12}}>
+              {shailos.length ? shailos.slice(0,3).map(s => (
+                <button key={s.id} onClick={onOpenShailos} style={{width:"100%",minHeight:54,textAlign:"left",borderRadius:14,border:`1px solid ${T.brdS || T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",padding:"9px 10px",overflow:"hidden"}}>
+                  <div style={{fontSize:13,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.text || s.shaila || "Open shaila"}</div>
+                  <div style={{fontSize:10.5,color:T.tSoft,fontWeight:800,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.isGetBackStep ? "Follow up" : "Pending answer"}</div>
+                </button>
+              )) : <div style={{fontSize:13,color:T.tFaint,background:T.bgW,border:`1px solid ${T.brd}`,borderRadius:14,padding:12}}>No pending shailos on the main list.</div>}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {actionCard("Add shaila", "add_circle", onOpenShailaAdd)}
+              {actionCard("Follow up", "fact_check", onOpenShailaFollowup)}
+              {actionCard("Record", "record_voice_over", onRecordShaila)}
+              {actionCard("Check sync", "sync", sections.find(s=>s.id==="shaila")?.actions?.find(a=>a.id==="reconcile")?.run)}
+            </div>
+          </section>
+
+          <section style={{background:T.card,border:`1px solid ${T.brd}`,borderRadius:18,padding:15,minWidth:0,boxShadow:T.shadow || "none"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+                <span style={{width:34,height:34,borderRadius:13,background:T.tonal || T.bgW,color:T.onTonal || T.text,display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("phone_in_talk",19)}</span>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:15,fontWeight:950,color:T.text,fontFamily:"system-ui"}}>Calls and texts</div>
+                  <div style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui"}}>{stats.phoneOnline ? "Ready" : "Waiting for DeskPhone"}</div>
+                </div>
+              </div>
+              <button onClick={onOpenPhone} style={{height:32,borderRadius:11,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,fontSize:11}}>Open</button>
+            </div>
+            <SwitchboardPhoneSurface T={T} onOnlineChange={onOnlineChange} onOpenPhone={onOpenPhone} compact />
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:12}}>
+              {actionCard("Record call", "phone_in_talk", onRecordCall)}
+              {actionCard("Record note", "mic", onRecordConversation)}
+            </div>
+          </section>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10,marginTop:14}}>
+          {sections.map(section => (
+            <section key={section.id || section.title} style={{background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,padding:12,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
+                <span style={{width:34,height:34,borderRadius:12,background:T.bgW,color:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{suiteIcon(section.icon, 19)}</span>
+                <div style={{minWidth:0}}>
+                  <div style={{fontFamily:"system-ui",fontSize:14,fontWeight:900,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{section.title}</div>
+                  <div style={{fontFamily:"system-ui",fontSize:11,color:T.tFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{section.meta}</div>
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8}}>
+                {section.actions.map(action => (
+                  <button key={action.id || action.label} onClick={action.run} disabled={action.disabled}
+                    style={{minHeight:40,textAlign:"left",borderRadius:12,border:`1px solid ${T.brdS || T.brd}`,background:action.primary?(T.primary || T.text):T.bgW,color:action.primary?(T.onPrimary || T.bg):T.text,cursor:action.disabled?"default":"pointer",opacity:action.disabled ? .55 : 1,padding:"7px 9px",display:"grid",gridTemplateColumns:"24px minmax(0,1fr)",gap:7,alignItems:"center",fontFamily:"system-ui"}}>
+                    <span style={{width:24,height:24,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",background:action.primary?"rgba(255,255,255,0.18)":(T.tonal || T.card),color:action.primary?(T.onPrimary || "#fff"):(T.onTonal || T.tSoft),flexShrink:0}}>{suiteIcon(action.icon, 16)}</span>
+                    <span style={{minWidth:0}}>
+                      <span style={{display:"block",fontSize:12,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{action.label}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SuiteShailosPanel({ T, action, onClose }) {
+  return (
+    <div style={{position:"fixed",inset:"64px 0 0",zIndex:7600,overflow:"hidden",background:T.card,borderTop:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"flex",flexDirection:"column"}}>
+      <div style={{height:52,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 16px",borderBottom:`1px solid ${T.brd}`,background:T.card,flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+          {suiteIcon("rule", 21)}
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:14,fontWeight:800,color:T.text,fontFamily:"system-ui"}}>Shailos Tracker</div>
+            <div style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui"}}>Questions, answers, and follow-up</div>
+          </div>
+        </div>
+        <button onClick={onClose} title="Back to tasks" style={{width:36,height:36,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("close", 19)}</button>
+      </div>
+      <iframe src={action ? `/shailos/?action=${action}` : "/shailos/"} title="Shailos Tracker" style={{flex:1,border:"none",width:"100%",background:T.bg}}/>
+    </div>
+  );
+}
+
+function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch }) {
+  const api = "http://127.0.0.1:8765";
+  const stageRef = useRef(null);
+  const lastThemeRef = useRef("");
+  const dockTokenRef = useRef(`dock-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState("");
+  const [docked, setDocked] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      setError("");
+      const statusRes = await fetch(`${api}/status`, { cache: "no-store" });
+      const nextStatus = await statusRes.json();
+      setStatus(nextStatus);
+      onOnlineChange?.(true);
+    } catch {
+      setStatus(null);
+      setError("DeskPhone is not ready yet.");
+      onOnlineChange?.(false);
+    }
+  }, [onOnlineChange]);
+
+  const post = useCallback(async (path, label) => {
+    if (label) setBusy(label);
+    try {
+      await fetch(`${api}${path}`, { method: "POST" });
+      await refresh();
+    } catch {
+      setError("DeskPhone did not accept the command.");
+      onOnlineChange?.(false);
+    } finally {
+      setBusy("");
+    }
+  }, [refresh, onOnlineChange]);
+
+  const themePalette = schemeId === "navyGold" || schemeId === "materialDark" ? "navyGold" : schemeId === "material" ? "material" : "claude";
+  const themeQuery = useMemo(() => buildDeskPhoneThemeQuery(themePalette, T), [themePalette, T]);
+  const releaseStage = useCallback((updateState = true) => {
+    const token = encodeURIComponent(dockTokenRef.current);
+    fetch(`${api}/stage-exit?token=${token}`, { method: "POST" }).catch(()=>{});
+    if (updateState) setDocked(false);
+  }, []);
+
+  const syncStage = useCallback(async () => {
+    const availLeft = window.screen.availLeft ?? 0;
+    const availTop = window.screen.availTop ?? 0;
+    const availRight = availLeft + window.screen.availWidth;
+    const availBottom = availTop + window.screen.availHeight;
+    const gap = 16;
+    const dockW = Math.round(Math.min(580, Math.max(480, window.screen.availWidth * 0.32)));
+    const dockH = Math.round(Math.max(560, window.screen.availHeight - 96));
+    const x = Math.round(Math.max(availLeft + gap, availRight - dockW - gap));
+    const y = Math.round(Math.max(availTop + gap, Math.min(availTop + 64, availBottom - dockH - gap)));
+    const qs = new URLSearchParams({
+      x: String(x),
+      y: String(y),
+      w: String(dockW),
+      h: String(dockH),
+      chrome: "1",
+      token: dockTokenRef.current,
+    });
+    setBusy("dock");
+    try {
+      await fetch(`${api}/stage?${qs}`, { method: "POST" });
+      if (lastThemeRef.current !== themeQuery) {
+        lastThemeRef.current = themeQuery;
+        await fetch(`${api}/theme?${themeQuery}`, { method: "POST" }).catch(()=>{});
+      }
+      setDocked(true);
+      await refresh();
+    } catch {
+      setError("DeskPhone did not dock.");
+      onOnlineChange?.(false);
+    } finally {
+      setBusy("");
+    }
+  }, [refresh, themeQuery, onOnlineChange]);
+
+  const pulseStage = useCallback(() => {
+    const token = encodeURIComponent(dockTokenRef.current);
+    fetch(`${api}/stage-pulse?token=${token}`, { method: "POST" }).catch(()=>{});
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const id = setInterval(refresh, 7000);
+    return () => {
+      clearInterval(id);
+    };
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!docked) return;
+    const id = setInterval(pulseStage, 10000);
+    const onPageExit = () => releaseStage(false);
+    window.addEventListener("pagehide", onPageExit);
+    window.addEventListener("beforeunload", onPageExit);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("pagehide", onPageExit);
+      window.removeEventListener("beforeunload", onPageExit);
+      releaseStage(false);
+    };
+  }, [docked, pulseStage, releaseStage]);
+
+  return (
+    <div style={{position:"fixed",inset:"64px 0 0",zIndex:7600,overflow:"hidden",background:`linear-gradient(160deg, ${T.bg} 0%, ${T.bgW} 100%)`,borderTop:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"grid",gridTemplateRows:"auto 1fr",padding:"clamp(12px,2vw,18px)",boxSizing:"border-box",gap:12}}>
+      <div style={{height:52,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"0 14px",border:`1px solid ${T.brd}`,borderRadius:16,background:T.card}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+          {suiteIcon("smartphone", 22)}
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:14,fontWeight:900,color:T.text,fontFamily:"system-ui"}}>Phone</div>
+            <div style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui"}}>{status ? `${status.build || "DeskPhone"} - ${status.hfp || "Phone"} - ${status.map || "Messages"}` : "Waiting for DeskPhone"}</div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <button onClick={()=>{if (!status) onLaunch?.(); syncStage(); setTimeout(syncStage, 900);}} title={status ? "Dock DeskPhone" : "Open DeskPhone"} style={{height:36,padding:"0 12px",borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",gap:6}}>{suiteIcon("open_in_new",17)} {status ? "Dock" : "Open"}</button>
+          <button onClick={syncStage} disabled={!!busy} title="Move DeskPhone to the dock position" style={{height:36,padding:"0 12px",borderRadius:12,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",gap:6}}>{suiteIcon("fit_screen",17)} Position</button>
+          <button onClick={()=>releaseStage()} disabled={!!busy} title="Release DeskPhone sizing" style={{width:36,height:36,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("close_fullscreen", 18)}</button>
+          <button onClick={refresh} title="Refresh status" style={{width:36,height:36,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("refresh", 18)}</button>
+        </div>
+      </div>
+      <div ref={stageRef} style={{position:"relative",minHeight:0,border:`1px solid ${T.brd}`,borderRadius:18,background:T.card,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.18)",overflow:"auto",padding:"clamp(16px,2.4vw,28px)",boxSizing:"border-box",display:"grid",gridTemplateColumns:"minmax(280px,420px) minmax(320px,1fr)",gap:18,alignItems:"start"}}>
+        <div style={{display:"grid",gap:12}}>
+          <div style={{fontSize:22,fontWeight:950,color:T.text,fontFamily:"system-ui",display:"flex",alignItems:"center",gap:10}}>{suiteIcon("phone_in_talk",28)} Phone</div>
+          {error && <div style={{fontSize:12,lineHeight:1.4,color:"#BA2A2A",background:"#FFE1E1",border:"1px solid #F0B5B5",borderRadius:12,padding:10}}>{error}</div>}
+          <div style={{display:"grid",gap:8}}>
+            <button onClick={()=>{if (!status) onLaunch?.(); syncStage(); setTimeout(syncStage, 900);}} style={{height:44,borderRadius:14,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:950,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>{suiteIcon("desktop_windows",19)} Dock DeskPhone</button>
+            <button onClick={()=>releaseStage()} style={{height:40,borderRadius:13,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>{suiteIcon("open_in_full",18)} Release</button>
+          </div>
+        </div>
+        <SwitchboardPhoneSurface T={T} onOnlineChange={onOnlineChange} />
+      </div>
+    </div>
+  );
+}
+
+function DeskPhoneMiniDock({ T, onOnlineChange, onOpenDeskPhone }) {
+  const api = "http://127.0.0.1:8765";
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [number, setNumber] = useState("");
+  const [body, setBody] = useState("");
+
+  const refresh = useCallback(async () => {
+    try {
+      const [statusRes, messagesRes] = await Promise.all([
+        fetch(`${api}/status`, { cache: "no-store" }),
+        fetch(`${api}/messages`, { cache: "no-store" }),
+      ]);
+      const nextStatus = await statusRes.json();
+      let nextMessages = [];
+      try {
+        const parsed = await messagesRes.json();
+        nextMessages = Array.isArray(parsed) ? parsed : (parsed?.messages || []);
+      } catch { nextMessages = []; }
+      setStatus(nextStatus);
+      setMessages(nextMessages);
+      setError("");
+      onOnlineChange?.(true);
+    } catch {
+      setStatus(null);
+      setMessages([]);
+      setError("Open DeskPhone to use phone controls.");
+      onOnlineChange?.(false);
+    }
+  }, [onOnlineChange]);
+
+  useEffect(() => {
+    refresh();
+    const id = setInterval(refresh, 7000);
+    return () => clearInterval(id);
+  }, [refresh]);
+
+  const post = async (path, label) => {
+    setBusy(label);
+    try {
+      await fetch(`${api}${path}`, { method: "POST" });
+      await refresh();
+    } catch {
+      setError("DeskPhone did not answer.");
+      onOnlineChange?.(false);
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const sendSms = async () => {
+    if (!number.trim() || !body.trim()) return;
+    await post(`/send?to=${encodeURIComponent(number.trim())}&body=${encodeURIComponent(body.trim())}`, "send");
+    setBody("");
+  };
+
+  const dial = async () => {
+    if (!number.trim()) return;
+    await post(`/dial?n=${encodeURIComponent(number.trim())}`, "dial");
+  };
+
+  const callState = status?.CallState || status?.callState || status?.CurrentCallState || status?.currentCallState || status?.Call || status?.call || "";
+  const recentCalls = status?.RecentCalls || status?.recentCalls || status?.Calls || status?.calls || [];
+  const threadMap = new Map();
+  messages.forEach((m, idx) => {
+    const who = m.from || m.sender || m.address || m.phoneNumber || m.number || m.to || "Unknown";
+    if (!threadMap.has(who)) threadMap.set(who, {...m, _who: who, _idx: idx});
+  });
+  const threads = Array.from(threadMap.values()).slice(0, 4);
+
+  return (
+    <div style={{position:"fixed",right:"clamp(10px,2vw,18px)",bottom:"clamp(12px,2vh,18px)",zIndex:8550,fontFamily:"system-ui",pointerEvents:"none"}}>
+      {!open && (
+        <button onClick={()=>setOpen(true)} title="Calls and texts" style={{pointerEvents:"auto",height:54,minWidth:54,borderRadius:16,border:`1px solid ${T.brd}`,background:T.primary || T.text,color:T.onPrimary || T.bg,boxShadow:T.shadowLg || "0 10px 32px rgba(0,0,0,0.22)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"0 14px",fontWeight:900}}>
+          {suiteIcon("phone_in_talk", 22)}
+          <span style={{display:"flex",flexDirection:"column",alignItems:"flex-start",lineHeight:1.05}}>
+            <span style={{fontSize:12}}>Calls/Text</span>
+            <span style={{fontSize:9,opacity:.72}}>{status ? (callState || "ready") : "open"}</span>
+          </span>
+        </button>
+      )}
+      {open && (
+        <div style={{pointerEvents:"auto",width:"min(360px,calc(100vw - 20px))",maxHeight:"calc(100vh - 86px)",overflow:"auto",background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.28)"}}>
+          <div style={{height:48,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 12px",borderBottom:`1px solid ${T.brd}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+              {suiteIcon("phone_in_talk", 20)}
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:900,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Calls and texts</div>
+                <div style={{fontSize:10,fontWeight:750,color:status ? "#0B8043" : T.tFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{status ? (callState || "Ready") : "Open DeskPhone"}</div>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:4}}>
+              <button onClick={onOpenDeskPhone} title="Open full DeskPhone" style={{width:32,height:32,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("open_in_full", 17)}</button>
+              <button onClick={()=>setOpen(false)} title="Minimize" style={{width:32,height:32,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("close", 17)}</button>
+            </div>
+          </div>
+          <div style={{padding:12,display:"grid",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <button onClick={()=>post("/answer","answer")} disabled={!!busy} style={{height:38,borderRadius:12,border:"none",background:"#0B8043",color:"#fff",cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("phone_callback",17)} Answer</button>
+              <button onClick={()=>post("/hangup","hangup")} disabled={!!busy} style={{height:38,borderRadius:12,border:"none",background:"#BA2A2A",color:"#fff",cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("call_end",17)} Hang up</button>
+            </div>
+            <input value={number} onChange={e=>setNumber(e.target.value)} placeholder="Number" style={{height:38,boxSizing:"border-box",borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,padding:"0 11px",fontSize:13}}/>
+            <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Text message" rows={3} style={{boxSizing:"border-box",borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,padding:"9px 11px",fontSize:13,resize:"vertical"}}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <button onClick={dial} disabled={!number.trim() || !!busy} style={{height:38,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,opacity:!number.trim() ? .5 : 1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("call",17)} Call</button>
+              <button onClick={sendSms} disabled={!number.trim() || !body.trim() || !!busy} style={{height:38,borderRadius:12,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:900,opacity:(!number.trim() || !body.trim()) ? .5 : 1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("send",17)} Send</button>
+            </div>
+            <div style={{display:"grid",gap:6}}>
+              <div style={{fontSize:10,fontWeight:900,color:T.tFaint,textTransform:"uppercase",letterSpacing:.7}}>Recent text threads</div>
+              {threads.length ? threads.map((m, idx) => (
+                <button key={`${m._who}-${idx}`} onClick={()=>{setNumber(m._who); setOpen(true);}} style={{textAlign:"left",borderRadius:12,border:`1px solid ${T.brdS || T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",padding:"8px 9px"}}>
+                  <div style={{fontSize:12,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m._who}</div>
+                  <div style={{fontSize:11,color:T.tSoft,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{m.body || m.text || m.message || m.content || "Message"}</div>
+                </button>
+              )) : <div style={{fontSize:12,color:T.tFaint,border:`1px solid ${T.brdS || T.brd}`,borderRadius:12,padding:9,background:T.bgW}}>No message threads loaded.</div>}
+            </div>
+            <div style={{display:"grid",gap:6}}>
+              <div style={{fontSize:10,fontWeight:900,color:T.tFaint,textTransform:"uppercase",letterSpacing:.7}}>Recent calls</div>
+              {Array.isArray(recentCalls) && recentCalls.length ? recentCalls.slice(0,3).map((c, idx) => (
+                <button key={idx} onClick={()=>setNumber(c.number || c.phoneNumber || c.from || "")} style={{textAlign:"left",borderRadius:12,border:`1px solid ${T.brdS || T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",padding:"8px 9px"}}>
+                  <div style={{fontSize:12,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.name || c.number || c.phoneNumber || c.from || "Call"}</div>
+                  <div style={{fontSize:11,color:T.tSoft,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{c.direction || c.status || c.time || "Recent call"}</div>
+                </button>
+              )) : <div style={{fontSize:12,color:T.tFaint,border:`1px solid ${T.brdS || T.brd}`,borderRadius:12,padding:9,background:T.bgW}}>Recent calls will appear here when DeskPhone provides them.</div>}
+            </div>
+            {error && <div style={{fontSize:12,lineHeight:1.35,color:"#BA2A2A",background:"#FFE1E1",border:"1px solid #F0B5B5",borderRadius:12,padding:9}}>{error}</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App({ user, onSignOut }) {
   Store.setUid(canonicalUid(user));
   // ─── State ───────────────────────────────────────────────────────────────
@@ -18,6 +662,11 @@ function App({ user, onSignOut }) {
   const [newTask, setNewTask] = useState("");
   const [selPri, setSelPri] = useState(null);
   const [tab, setTab] = useState("focus");
+  const [suiteView, setSuiteView] = useState("focus");
+  const [deskPhoneOnline, setDeskPhoneOnline] = useState(false);
+  const deskPhoneLaunchAtRef = useRef(0);
+  const lastDeskPhoneThemeRef = useRef("");
+  const [legacyPrompt, setLegacyPrompt] = useState(null);
   const [justComp, setJustComp] = useState(false);
   const [showRip, setShowRip] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -600,6 +1249,13 @@ function App({ user, onSignOut }) {
   // Detect dark theme by checking bg luminance
   const isDark = (()=>{const h=sc.bg||"#EDE5D8";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000<128;})();
   const T = {...sc, isDark, glow:!!sc.glow, shadow: isDark?"0 2px 12px rgba(0,0,0,0.3)":"0 2px 12px rgba(0,0,0,0.06)", shadowLg: isDark?"0 6px 24px rgba(0,0,0,0.4)":"0 6px 24px rgba(0,0,0,0.09)"};
+  const deskPhoneThemePalette = AS?.colorScheme === "material"
+    ? "material"
+    : isDark
+      ? "navyGold"
+      : "claude";
+  const deskPhoneThemeSyncEnabled = AS?.deskPhoneThemeSync !== false;
+  const deskPhoneThemeQuery = useMemo(() => buildDeskPhoneThemeQuery(deskPhoneThemePalette, T), [deskPhoneThemePalette, T]);
   // Share theme with Shaila sub-app via localStorage
   try { localStorage.setItem('onetask_theme', JSON.stringify(sc)); } catch(e) {}
   // Share the selected AI route with the Shaila sub-app; both still call the same server gateway.
@@ -1669,18 +2325,232 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
   // Helper: change tab and close any open menus
   const switchTab = (t) => { setTab(t); setShowLM(false); setNavExp(false); setShowAides(false); setShowEntryTools(false); };
 
+  const syncDeskPhoneTheme = useCallback(async (force = false) => {
+    if (!deskPhoneThemeSyncEnabled) return false;
+    if (!force && lastDeskPhoneThemeRef.current === deskPhoneThemeQuery) return true;
+    try {
+      const res = await fetch(`http://127.0.0.1:8765/theme?${deskPhoneThemeQuery}`, {
+        method: "POST",
+        cache: "no-store"
+      });
+      if (!res.ok) throw new Error("theme sync failed");
+      lastDeskPhoneThemeRef.current = deskPhoneThemeQuery;
+      setDeskPhoneOnline(true);
+      return true;
+    } catch {
+      // DeskPhone may be closed; the next Open Phone action will launch it.
+      setDeskPhoneOnline(false);
+      return false;
+    }
+  }, [deskPhoneThemeQuery, deskPhoneThemeSyncEnabled]);
+  useEffect(() => {
+    syncDeskPhoneTheme();
+  }, [syncDeskPhoneTheme]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("deskphoneThemeRefresh")) return;
+    syncDeskPhoneTheme(true);
+    params.delete("deskphoneThemeRefresh");
+    const query = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash || ""}`);
+  }, [syncDeskPhoneTheme]);
+
+  useEffect(() => {
+    if (!deskPhoneThemeSyncEnabled) return;
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const res = await fetch("http://127.0.0.1:8765/status", { cache: "no-store" });
+        if (!res.ok) throw new Error("DeskPhone status failed");
+        if (stopped) return;
+        if (!deskPhoneOnline) {
+          await syncDeskPhoneTheme(true);
+        } else {
+          setDeskPhoneOnline(true);
+        }
+      } catch {
+        if (!stopped) setDeskPhoneOnline(false);
+      }
+    };
+    poll();
+    const id = window.setInterval(poll, 2500);
+    return () => {
+      stopped = true;
+      window.clearInterval(id);
+    };
+  }, [deskPhoneOnline, deskPhoneThemeSyncEnabled, syncDeskPhoneTheme]);
+
   if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui",color:"#999"}}>Loading...</div>;
+
+  const isShailaPriority = (id) => id === "shaila" || !!pris.find(p => p.id === id && p.isShaila);
+  const switchboardTaskList = actT.filter(t => !isShailaPriority(t.priority) && !t.isGetBackStep).slice(0, 6);
+  const switchboardShailaList = actT.filter(t => isShailaPriority(t.priority) && !t.isGetBackStep && !t.completed).slice(0, 6);
+  const shailaOpenCount = switchboardShailaList.length;
+  const shellHidden = !!(zen && curT);
+  const launchDeskPhone = (force = false) => {
+    if (!force && deskPhoneOnline) return;
+    const now = Date.now();
+    if (now - deskPhoneLaunchAtRef.current < 15000) return;
+    deskPhoneLaunchAtRef.current = now;
+    try {
+      const link = document.createElement("a");
+      link.href = "deskphone://open";
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch {
+      try { window.location.href = "deskphone://open"; } catch {}
+    }
+  };
+  const bringDeskPhoneForward = async () => {
+    if (!deskPhoneOnline) {
+      launchDeskPhone(true);
+      return;
+    }
+    try {
+      const res = await fetch("http://127.0.0.1:8765/show", { method: "POST", cache: "no-store" });
+      if (!res.ok) throw new Error("show failed");
+      await syncDeskPhoneTheme(true);
+      setDeskPhoneOnline(true);
+    } catch {
+      launchDeskPhone(true);
+    }
+  };
+  const sendDeskPhoneCommand = async (path) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8765${path}`, { method: "POST", cache: "no-store" });
+      if (!res.ok) throw new Error("phone command failed");
+      setDeskPhoneOnline(true);
+    } catch {
+      launchDeskPhone(true);
+    }
+  };
+  const openCommandView = (view) => {
+    if (view === "deskphone") {
+      bringDeskPhoneForward();
+      return;
+    }
+    setSuiteView(view);
+    if (view !== "shailos") setShailosAction(null);
+    if (view === "focus") setShowShailos(false);
+  };
+  const askLegacyOpen = (target) => setLegacyPrompt(target);
+  const openLegacyTarget = () => {
+    const target = legacyPrompt;
+    setLegacyPrompt(null);
+    if (!target) return;
+    if (target.id === "shailos") {
+      setShailosAction(target.action || null);
+      setShowShailos(true);
+    } else if (target.id === "tasks") {
+      openCommandView("focus");
+    } else if (target.id === "deskphone") {
+      openCommandView("deskphone");
+    }
+  };
+  const openLegacyInCommandCenter = () => {
+    const target = legacyPrompt;
+    setLegacyPrompt(null);
+    if (!target) return;
+    if (target.id === "shailos") {
+      setShailosAction(target.action || null);
+      openCommandView("shailos");
+    } else if (target.id === "tasks") {
+      openCommandView("switchboard");
+    } else if (target.id === "deskphone") {
+      openCommandView("deskphone");
+    }
+  };
+  const switchboardSections = [
+    {
+      id: "priority",
+      title: "Priority",
+      icon: "low_priority",
+      meta: "Tasks, queue, and next action",
+      actions: [
+        {id:"current-task", label:"Current task", note:"Return to the main task card", icon:"task_alt", primary:true, run:()=>{openCommandView("focus"); switchTab("focus");}},
+        {id:"new-task", label:"New task", note:"Pick priority and add one item", icon:"add_circle", run:()=>{openCommandView("focus"); switchTab("focus");}},
+        {id:"queue", label:"Open queue", note:`${effectiveCount} item${effectiveCount===1?"":"s"} waiting`, icon:"view_list", run:()=>{openCommandView("focus"); switchTab("queue");}},
+        {id:"prioritize", label:optLoading ? "Sorting..." : "Choose next", note:"Put the best next item first", icon:"auto_awesome", disabled:optLoading, run:launchpadOptimize},
+        {id:"shatter", label:"Break into steps", note:"Make a big item smaller", icon:"account_tree", run:()=>setShowBD(true)},
+        {id:"brain-dump", label:"Brain dump", note:"Drop in everything on your mind", icon:"psychology", run:()=>setShowBrainDump(true)},
+        {id:"bulk-add", label:"Paste a list", note:"Add many items at once", icon:"playlist_add", run:()=>setShowBulk(true)},
+      ],
+    },
+    {
+      id: "shaila",
+      title: "Shaila",
+      icon: "rule",
+      meta: "Questions, answers, and follow-up",
+      actions: [
+        {id:"questions", label:"Questions", note:`${shailaOpenCount} open`, icon:"rule", primary:true, run:()=>{setShailosAction(null); openCommandView("shailos");}},
+        {id:"add-shaila", label:"Add shaila", note:"Create a question manually", icon:"add_circle", run:()=>{setShailosAction("add-manual"); openCommandView("shailos");}},
+        {id:"question-followup", label:"Follow-up", note:"Review answers and got-back status", icon:"fact_check", run:()=>setShowShailaManager(true)},
+        {id:"reconcile", label:reconcileLoading ? "Checking..." : "Check sync", note:"Make sure questions and tasks match", icon:"sync", disabled:reconcileLoading, run:runShailaReconcile},
+        {id:"classic-shailos", label:"Classic question screen", note:"Open the older view", icon:"history", run:()=>askLegacyOpen({id:"shailos", label:"Classic question screen"})},
+      ],
+    },
+    {
+      id: "record",
+      title: "Record",
+      icon: "mic",
+      meta: "Voice, call capture, and extraction",
+      actions: [
+        {id:"record-anything", label:"Record conversation", note:"Pull out tasks and questions", icon:"mic", primary:true, run:()=>{setConvCallMode(false); setShowConvCapture(true);}},
+        {id:"record-call", label:"Call capture", note:"Record a call and extract follow-up", icon:"phone_in_talk", run:()=>{setConvCallMode(true); setShowConvCapture(true);}},
+        {id:"voice-task", label:"Voice task", note:"Add by speaking through priority circles", icon:"keyboard_voice", run:()=>{openCommandView("focus"); switchTab("focus");}},
+        {id:"record-shaila", label:"Record shaila", note:"Capture a question by voice", icon:"record_voice_over", run:()=>{setShailosAction("record-shaila"); openCommandView("shailos");}},
+      ],
+    },
+    {
+      id: "phone",
+      title: "Phone",
+      icon: "phone_in_talk",
+      meta: "Calls, texts, and call notes",
+      actions: [
+        {id:"launch-phone", label:"Open phone", note:deskPhoneOnline ? "Ready" : "Start DeskPhone", icon:"smartphone", primary:true, run:bringDeskPhoneForward},
+        {id:"answer-phone", label:"Answer", note:"Incoming call", icon:"phone_callback", run:()=>sendDeskPhoneCommand("/answer")},
+        {id:"end-phone", label:"Hang up", note:"End active call", icon:"call_end", run:()=>sendDeskPhoneCommand("/hangup")},
+        {id:"sync-phone", label:"Sync", note:"Refresh calls and texts", icon:"sync", run:()=>sendDeskPhoneCommand("/refresh")},
+        {id:"record-phone-call", label:"Record phone call", note:"Capture call audio", icon:"phone_in_talk", run:()=>{setConvCallMode(true); setShowConvCapture(true);}},
+      ],
+    },
+    {
+      id: "focus",
+      title: "Focus",
+      icon: "self_improvement",
+      meta: "Stay with one thing",
+      actions: [
+        {id:"zen", label:"Zen mode", note:"Fullscreen calm task view", icon:"self_improvement", primary:true, disabled:!curT, run:()=>{if(curT)setZen(true);}},
+        {id:"body-double", label:"Body double", note:"Keep a work session going", icon:"person", run:()=>setShowBodyDouble(true)},
+        {id:"insights", label:"Insights", note:"Progress and patterns", icon:"insights", run:()=>{openCommandView("focus"); switchTab("insights");}},
+      ],
+    },
+    {
+      id: "system",
+      title: "System",
+      icon: "settings",
+      meta: "Preferences and backups",
+      actions: [
+        {id:"settings", label:"Preferences", note:"Theme, lists, and options", icon:"settings", primary:true, run:()=>setShowSet(true)},
+        {id:"backup", label:backupLoading ? "Saving..." : "Save backup", note:"Download a copy", icon:"download", disabled:backupLoading, run:doFullBackup},
+        {id:"restore", label:"Restore backup", note:"Load a saved copy", icon:"upload_file", run:doLoadBackup},
+      ],
+    },
+  ];
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div ref={appRef} style={{height:"100vh",overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:"Georgia,'Palatino Linotype','Book Antiqua',serif",color:T.text,display:"flex",flexDirection:"column",alignItems:"center"}}>
+    <div ref={appRef} style={{height:"100vh",overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:"'Google Sans','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif",color:T.text,display:"flex",flexDirection:"column",alignItems:"center"}}>
 
       {/* Overlays */}
       {zen && curT && <ZenMode task={curT} pris={pris} T={T} onExit={exitZen} onDone={(isl)=>isl?legacyCompTask(curT.id):compTask(curT.id)}
         justStartId={justStartId} curTaskId={curT?.id} onDoneJustStart={()=>setJustStartId(null)} jsMinimized={jsMinimized} onRestoreJs={()=>setJsMinimized(false)}
         showBodyDouble={showBodyDouble} bdMinimized={bdMinimized} onRestoreBd={()=>setBdMinimized(false)} onCloseBd={()=>{setShowBodyDouble(false);setBdMinimized(false);}}
         onCapture={captureZenDump} zenDumpParsing={zenDumpParsing}
-        onOpenShailos={()=>setShowShailos(true)}
+        onOpenShailos={()=>setSuiteView("shailos")}
       />}
       {showZenReview && (
         <ZenDumpReview
@@ -1744,7 +2614,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:22,padding:"28px 28px 24px",maxWidth:380,width:"90%",boxShadow:"0 14px 56px rgba(0,0,0,0.28)",animation:"ot-fade 0.2s"}}>
             <div style={{fontSize:22,marginBottom:6,lineHeight:1}}>✦</div>
             <p style={{fontSize:13,fontWeight:700,color:T.text,margin:"0 0 4px",fontFamily:"system-ui",letterSpacing:.2}}>First step</p>
-            <p style={{fontSize:12,color:T.tFaint,margin:"0 0 16px",fontFamily:"Georgia,serif",fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{firstStepModal.task.text}</p>
+            <p style={{fontSize:12,color:T.tFaint,margin:"0 0 16px",fontFamily:"inherit",fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{firstStepModal.task.text}</p>
             {firstStepModal.loading ? (
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"12px 0 20px",color:T.tFaint,fontSize:12,fontFamily:"system-ui"}}>
                 <div style={{width:14,height:14,borderRadius:"50%",border:`2px solid ${T.tFaint}`,borderTopColor:"transparent",animation:"ot-spin 0.7s linear infinite"}}/>
@@ -1758,7 +2628,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                   onChange={e=>setFirstStepModal(m=>({...m,edited:e.target.value}))}
                   onKeyDown={e=>{if(e.key==="Enter")confirmFirstStep();if(e.key==="Escape")setFirstStepModal(null);}}
                   placeholder="Describe the first step…"
-                  style={{width:"100%",fontSize:13,fontFamily:"Georgia,serif",border:`1px solid ${T.brd}`,borderRadius:10,padding:"9px 12px",outline:"none",color:T.text,background:T.bgW,boxSizing:"border-box",marginBottom:16}}
+                  style={{width:"100%",fontSize:13,fontFamily:"inherit",border:`1px solid ${T.brd}`,borderRadius:12,padding:"9px 12px",outline:"none",color:T.text,background:T.bgW,boxSizing:"border-box",marginBottom:16}}
                 />
                 <div style={{display:"flex",gap:10,justifyContent:"center"}}>
                   <button onClick={()=>setFirstStepModal(null)}
@@ -1888,9 +2758,9 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",borderBottom:`1px solid ${T.brd}`,background:T.card,flexShrink:0}}>
             <span style={{fontSize:14,fontWeight:600,color:T.text,fontFamily:"system-ui"}}>Shaila Transcriber</span>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <button onClick={doFullBackup} disabled={backupLoading} title="Download full backup (tasks + shailos)" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500,opacity:backupLoading?.5:1}}>{backupLoading?"⏳":"💾"} Backup</button>
+              <button onClick={doFullBackup} disabled={backupLoading} title="Download full backup (tasks + shailos)" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500,opacity:backupLoading ? .5 : 1}}>{backupLoading?"⏳":"💾"} Backup</button>
               <button onClick={doLoadBackup} title="Restore from backup file" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500}}>📂 Restore</button>
-              <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500,opacity:reconcileLoading?.5:1}}>{reconcileLoading?"⏳":"🔄"}</button>
+              <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500,opacity:reconcileLoading ? .5 : 1}}>{reconcileLoading?"⏳":"🔄"}</button>
               <button onClick={()=>{setShowShailos(false);setShailosAction(null);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft,padding:4}}>✕</button>
             </div>
           </div>
@@ -2023,6 +2893,17 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         curEnergy={curEnergy} onSetEnergy={e=>setAS(p=>({...p,currentEnergy:e}))}
         focusModeActive={focusModeActive} onToggleFocusMode={()=>setFocusModeActive(f=>!f)}
         effectiveCount={effectiveCount} overwhelmThreshold={overwhelmThreshold}
+        deskPhoneThemeSync={deskPhoneThemeSyncEnabled}
+        deskPhoneOnline={deskPhoneOnline}
+        onToggleDeskPhoneThemeSync={() => {
+          const next = !deskPhoneThemeSyncEnabled;
+          setAS(p => ({...p, deskPhoneThemeSync: next}));
+        }}
+        onRefreshDeskPhoneTheme={async () => {
+          const ok = await syncDeskPhoneTheme(true);
+          showToast(ok ? "DeskPhone theme sync refreshed" : "DeskPhone is not answering", 3000, ok ? undefined : "#C06060");
+          return ok;
+        }}
       />}
 
       {pendingRecordings.length > 0 && (
@@ -2185,11 +3066,75 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       {/* Noise texture */}
       <div style={{position:"fixed",inset:0,pointerEvents:"none",opacity:.025,backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`}}/>
 
-      <div style={{width:"100%",maxWidth:"min(800px, 95vw)",padding:"0 clamp(16px,3vw,32px)",position:"relative",zIndex:1,height:"100vh",overflowY:tab==="focus"?"hidden":"auto",display:"flex",flexDirection:"column"}}>
+      {!shellHidden && legacyPrompt && (
+        <div style={{position:"fixed",top:76,left:"50%",transform:"translateX(-50%)",zIndex:9100,width:"min(520px,calc(100vw - 24px))",background:T.card,border:`1px solid ${T.brd}`,borderRadius:18,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.24)",padding:12,fontFamily:"system-ui",display:"grid",gridTemplateColumns:"32px minmax(0,1fr) auto",gap:10,alignItems:"center"}}>
+          <span style={{width:32,height:32,borderRadius:12,background:T.tonal || T.bgW,color:T.onTonal || T.text,display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("dashboard_customize", 18)}</span>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:13,fontWeight:900,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Open this in Command Center?</div>
+            <div style={{fontSize:11,fontWeight:700,color:T.tFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{legacyPrompt.label || "Legacy app"} is still available if you want the old environment.</div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={openLegacyInCommandCenter} style={{height:34,padding:"0 11px",borderRadius:11,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:900}}>Yes</button>
+            <button onClick={openLegacyTarget} style={{height:34,padding:"0 11px",borderRadius:11,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900}}>No</button>
+          </div>
+        </div>
+      )}
+
+      {!shellHidden && (
+        <AppSuiteChrome
+          T={T}
+          active={suiteView}
+          onSelect={openCommandView}
+          taskCount={effectiveCount}
+          shailaCount={shailaOpenCount}
+          phoneOnline={deskPhoneOnline}
+        />
+      )}
+
+      {!shellHidden && suiteView === "switchboard" && (
+        <SwitchboardPanel
+          T={T}
+          sections={switchboardSections}
+          stats={{tasks: effectiveCount, shailos: shailaOpenCount, phoneOnline: deskPhoneOnline}}
+          tasks={switchboardTaskList}
+          shailos={switchboardShailaList}
+          priorities={ap}
+          onAddTask={addVT}
+          onOpenTasks={()=>{openCommandView("focus"); switchTab("focus");}}
+          onOpenQueue={()=>{openCommandView("focus"); switchTab("queue");}}
+          onOpenZen={()=>{if(curT)setZen(true); else {openCommandView("focus"); switchTab("focus");}}}
+          onOpenBrainDump={()=>setShowBrainDump(true)}
+          onOpenBulkAdd={()=>setShowBulk(true)}
+          onOpenShatter={()=>setShowBD(true)}
+          onOpenShailos={()=>{setShailosAction(null); openCommandView("shailos");}}
+          onOpenShailaAdd={()=>{setShailosAction("add-manual"); openCommandView("shailos");}}
+          onOpenShailaFollowup={()=>setShowShailaManager(true)}
+          onRecordConversation={()=>{setConvCallMode(false); setShowConvCapture(true);}}
+          onRecordCall={()=>{setConvCallMode(true); setShowConvCapture(true);}}
+          onRecordShaila={()=>{setShailosAction("record-shaila"); openCommandView("shailos");}}
+          onOpenPhone={bringDeskPhoneForward}
+          onOnlineChange={setDeskPhoneOnline}
+          onClose={()=>openCommandView("focus")}
+        />
+      )}
+
+      {!shellHidden && suiteView === "shailos" && (
+        <SuiteShailosPanel T={T} action={shailosAction} onClose={()=>setSuiteView("focus")}/>
+      )}
+
+      {!shellHidden && (
+        <DeskPhoneMiniDock
+          T={T}
+          onOnlineChange={setDeskPhoneOnline}
+          onOpenDeskPhone={bringDeskPhoneForward}
+        />
+      )}
+
+      <div style={{width:"100%",maxWidth:"min(800px, 95vw)",padding:"0 clamp(16px,3vw,32px)",position:"relative",zIndex:1,height:shellHidden?"100vh":"calc(100vh - 64px)",marginTop:shellHidden?0:64,overflowY:tab==="focus"?"hidden":"auto",display:"flex",flexDirection:"column"}}>
 
         {/* ===== FOCUS TAB ===== */}
         {tab === "focus" && (
-          <div style={{animation:"ot-fade 0.3s",display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",overflow:"hidden"}}>
+          <div style={{animation:"ot-fade 0.3s",display:"flex",alignItems:"center",justifyContent:"center",height:"100%",overflow:"hidden"}}>
 
             {/* ── Center spine ── */}
             <div style={{display:"flex",flexDirection:"column",alignItems:"stretch",gap:"clamp(18px,3.5vh,36px)",width:"min(88vw,500px)"}}>
@@ -2463,8 +3408,8 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
               <p style={{color:T.tFaint,fontSize:13,margin:"4px 0 0",fontStyle:"italic"}}>{gG()} — {dateStr}</p>
               <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
                 <span style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui"}}>@{user?.displayName || user?.email?.split("@")[0] || ""}</span>
-                <button onClick={()=>setShowShailos(true)} style={{fontSize:11,color:T.accent||"#C8A84C",fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>Shailos</button>
-                <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check — reconcile shailos between transcriber and tasks" style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",background:"none",border:`1px solid ${T.brd}`,borderRadius:8,cursor:"pointer",padding:"2px 6px",opacity:reconcileLoading?.5:1}}>{reconcileLoading?"⏳":"🔄"}</button>
+                <button onClick={()=>setSuiteView("shailos")} style={{fontSize:11,color:T.accent||"#C8A84C",fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>Shailos</button>
+                <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check — reconcile shailos between transcriber and tasks" style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",background:"none",border:`1px solid ${T.brd}`,borderRadius:8,cursor:"pointer",padding:"2px 6px",opacity:reconcileLoading ? .5 : 1}}>{reconcileLoading?"⏳":"🔄"}</button>
                 <button onClick={async ()=>{
                   if(AS) await Store.autoFileBackup(AS, shailosRef.current, true).catch(()=>{});
                   if(onSignOut) onSignOut();
@@ -2774,7 +3719,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                   <button
                     onClick={genAiInsight}
                     disabled={aiInsightLoading || !metrics}
-                    style={{fontSize:10,fontFamily:"system-ui",fontWeight:600,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,cursor:metrics?("pointer"):"default",color:T.tSoft,opacity:aiInsightLoading?.5:1}}
+                    style={{fontSize:10,fontFamily:"system-ui",fontWeight:600,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,cursor:metrics?("pointer"):"default",color:T.tSoft,opacity:aiInsightLoading ? .5 : 1}}
                   >
                     {aiInsightLoading ? "Thinking..." : aiInsight ? "↻ Refresh" : "Generate"}
                   </button>
@@ -3197,7 +4142,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       </div>
 
       {/* ── Floating capture buttons — always visible except during Zen ── */}
-      {!zen && (()=>{
+      {!zen && !["switchboard","deskphone"].includes(suiteView) && (()=>{
         const outC = T.isDark ? T.tFaint : T.tSoft;
         const icS = {width:19,height:19,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
         const icSm = {width:14,height:14,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
@@ -3210,7 +4155,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         const onEs = e=>e.currentTarget.style.opacity="1";
         const onLs = e=>e.currentTarget.style.opacity=".5";
         return (
-          <div style={{position:"fixed",bottom:20,right:20,zIndex:9100,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+          <div style={{position:"fixed",bottom:86,right:20,zIndex:8400,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
             {/* Prominent: Record shaila + Record call (universal) */}
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
               <button onClick={()=>{setConvCallMode(false);setShowConvCapture(true);}} style={bigS} onMouseEnter={onEB} onMouseLeave={onLB} title="Record — extracts tasks, shailos & more">
@@ -3222,12 +4167,12 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
             </div>
             {/* Secondary: Add manual + View records */}
             <div style={{display:"flex",gap:2,alignItems:"center",justifyContent:"flex-end"}}>
-              <button onClick={()=>{setShailosAction("add-manual");setShowShailos(true);}} style={smS} onMouseEnter={onEs} onMouseLeave={onLs} title="Add shaila manually">
+              <button onClick={()=>{setShailosAction("add-manual");setSuiteView("shailos");}} style={smS} onMouseEnter={onEs} onMouseLeave={onLs} title="Add shaila manually">
                 <svg {...icSm} viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Add
               </button>
               <span style={{color:outC,opacity:.25,fontSize:11}}>|</span>
-              <button onClick={()=>{setShailosAction(null);setShowShailos(true);}} style={smS} onMouseEnter={onEs} onMouseLeave={onLs} title="View shaila records">
+              <button onClick={()=>{setShailosAction(null);setSuiteView("shailos");}} style={smS} onMouseEnter={onEs} onMouseLeave={onLs} title="View shaila records">
                 <svg {...icSm} viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                 Records
               </button>
@@ -3430,7 +4375,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
   ];
 
   const overlayS = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 };
-  const cardS    = { background: T.card, borderRadius: 18, maxWidth: 560, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', fontFamily: 'Georgia, serif' };
+  const cardS    = { background: T.card, borderRadius: 16, maxWidth: 560, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', fontFamily: 'inherit' };
   const btnClose = { background: 'none', border: 'none', cursor: 'pointer', color: T.tFaint, fontSize: 22, lineHeight: 1, padding: 4, fontFamily: 'system-ui' };
 
   // ── Call mode: waiting for user to share screen ───────────────────────────

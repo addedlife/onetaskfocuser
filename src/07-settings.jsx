@@ -8,7 +8,9 @@ import { PriEditor } from './04-components.jsx';
 function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   onOptimize, optLoading, onBulkAdd, onShatter, onDedup,
   curEnergy, onSetEnergy, focusModeActive, onToggleFocusMode,
-  effectiveCount, overwhelmThreshold, hasAI, aiConfig}) {
+  effectiveCount, overwhelmThreshold, hasAI, aiConfig,
+  deskPhoneThemeSync = true, deskPhoneOnline = false,
+  onToggleDeskPhoneThemeSync, onRefreshDeskPhoneTheme}) {
 
   const [sTab, setSTab] = useState("queue");
   const [backupFolderSet, setBackupFolderSet] = useState(false);
@@ -28,6 +30,8 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   const [showPE, setShowPE] = useState(false);
   const [schemeGenLoading, setSchemeGenLoading] = useState(false);
   const [schemeGenErr, setSchemeGenErr] = useState("");
+  const [deskPhoneSyncBusy, setDeskPhoneSyncBusy] = useState(false);
+  const [deskPhoneSyncNote, setDeskPhoneSyncNote] = useState("");
   const pris = AS.priorities;
 
   const selectedModel = AS.aiModel || aiConfig?.model || aiConfig?.textModel || "";
@@ -56,6 +60,18 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
       setSchemeGenErr("Generation failed: " + e.message);
     } finally {
       setSchemeGenLoading(false);
+    }
+  }
+
+  async function handleDeskPhoneThemeRefresh() {
+    if (!onRefreshDeskPhoneTheme || deskPhoneSyncBusy) return;
+    setDeskPhoneSyncBusy(true);
+    setDeskPhoneSyncNote("");
+    try {
+      const ok = await onRefreshDeskPhoneTheme();
+      setDeskPhoneSyncNote(ok ? "DeskPhone theme refreshed." : "DeskPhone is not answering.");
+    } finally {
+      setDeskPhoneSyncBusy(false);
     }
   }
 
@@ -179,6 +195,23 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 {schemeGenLoading ? "Generating…" : "✦ Generate more themes"}
               </button>
               {schemeGenErr && <span style={{fontSize:10,color:"#C94040",fontFamily:"system-ui"}}>{schemeGenErr}</span>}
+            </div>
+            <div style={{height:1,background:T.brdS,margin:"18px 0 14px"}}/>
+            <h4 style={sh}>DeskPhone Link</h4>
+            <div style={{...rowSB,alignItems:"flex-start",marginBottom:10}}>
+              <div style={{paddingRight:12}}>
+                <span style={{fontSize:12,fontFamily:"system-ui",color:T.text,fontWeight:700}}>Link DeskPhone to this app's theme</span>
+                <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",margin:"3px 0 0",lineHeight:1.45}}>When on, OneTask/Shamash pushes its active color scheme to DeskPhone. DeskPhone must also allow this in its Appearance settings.</p>
+              </div>
+              <button onClick={onToggleDeskPhoneThemeSync} style={tog(deskPhoneThemeSync)} title={deskPhoneThemeSync ? "DeskPhone theme sync is on" : "DeskPhone theme sync is off"}><div style={knob(deskPhoneThemeSync)}/></button>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <button onClick={handleDeskPhoneThemeRefresh} disabled={!deskPhoneThemeSync || deskPhoneSyncBusy} style={{fontSize:11,color:T.tSoft,background:T.bgW,border:`1px solid ${T.brd}`,borderRadius:8,padding:"7px 12px",cursor:(!deskPhoneThemeSync || deskPhoneSyncBusy)?"default":"pointer",fontFamily:"system-ui",opacity:(!deskPhoneThemeSync || deskPhoneSyncBusy)?0.55:1}}>
+                {deskPhoneSyncBusy ? "Refreshing..." : "Refresh sync"}
+              </button>
+              <span style={{fontSize:10,color:deskPhoneOnline?"#2E7D32":T.tFaint,fontFamily:"system-ui"}}>
+                {deskPhoneSyncNote || (deskPhoneOnline ? "DeskPhone linked." : "DeskPhone not confirmed.")}
+              </span>
             </div>
           </div>
         )}
