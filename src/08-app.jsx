@@ -67,7 +67,7 @@ function AppSuiteChrome({ T, active, onSelect }) {
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 
-function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
+function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordConversation, onRecordCall }) {
   const api = "http://127.0.0.1:8765";
   const [status, setStatus] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -160,6 +160,10 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
   const isOnCall = !!callState && !isIncoming && /active|connected|call/i.test(callState);
   const statusOnline = !!status;
   const statusText = status ? (callState || "Ready") : "Offline";
+  const callerName = status?.callerName || status?.CallerName || status?.callerDisplay || status?.CallerDisplay || status?.callerID || status?.CallerID || "";
+  const callerNumber = status?.callerNumber || status?.CallerNumber || status?.incomingNumber || status?.IncomingNumber || "";
+  const callerDisplay = callerName || (callerNumber ? (lookupName(callerNumber) || callerNumber) : "");
+  const vmCount = parseInt(status?.voicemailCount || status?.VoicemailCount || status?.voicemail?.count || 0, 10) || 0;
 
   const threadMap = new Map();
   messages.forEach(m => {
@@ -202,26 +206,59 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
 
-      {/* Status bar */}
+      {/* Status bar — shows caller ID when ringing or on call */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, paddingBottom: 8, borderBottom: `1px solid ${T.brdS || T.brd}` }}>
-        <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: statusOnline ? "#2E7D32" : T.tFaint }} />
-        <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: statusOnline ? T.tSoft : T.tFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{statusText}</span>
+        <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: isIncoming ? "#2E7D32" : statusOnline ? (isOnCall ? "#E0A030" : "#2E7D32") : T.tFaint }} />
+        <span style={{ flex: 1, minWidth: 0 }}>
+          {callerDisplay && (isIncoming || isOnCall) ? (
+            <span>
+              <span style={{ display: "block", fontSize: 13, fontWeight: 800, color: isIncoming ? "#2E7D32" : T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{callerDisplay}</span>
+              <span style={{ display: "block", fontSize: 10, color: T.tFaint, fontWeight: 600 }}>{isIncoming ? "Incoming call" : "On call"}</span>
+            </span>
+          ) : (
+            <span style={{ fontSize: 12, fontWeight: 700, color: statusOnline ? T.tSoft : T.tFaint }}>{statusText}</span>
+          )}
+        </span>
+        {vmCount > 0 && (
+          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 800, color: "#fff", background: "#BA2A2A", borderRadius: 99, padding: "2px 7px", flexShrink: 0 }} title="Voicemail">
+            {suiteIcon("voicemail", 13)} {vmCount}
+          </span>
+        )}
         <button onClick={refresh} disabled={!!busy} title="Refresh" style={{ width: 26, height: 26, borderRadius: 99, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("refresh", 15)}</button>
       </div>
 
       {/* Dial row + suggestions dropdown */}
       <div style={{ position: "relative" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 36px 36px 30px", gap: 5, alignItems: "center" }}>
-          <input value={number} onChange={e => setNumber(e.target.value)}
-            onFocus={() => setInputFocused(true)}
-            onBlur={() => setTimeout(() => setInputFocused(false), 160)}
-            onKeyDown={e => e.key === "Enter" && dial()}
-            placeholder="Name or number"
-            style={{ height: 36, boxSizing: "border-box", padding: "0 13px", borderRadius: 18, border: `1.5px solid ${T.brd}`, background: T.bgW, color: T.text, fontFamily: "system-ui", fontSize: 13, fontWeight: 700, outline: "none", minWidth: 0 }} />
+        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+          {/* Input with search icon */}
+          <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
+            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.tFaint, pointerEvents: "none", lineHeight: 1, display: "flex" }}>{suiteIcon("search", 15)}</span>
+            <input value={number} onChange={e => setNumber(e.target.value)}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setTimeout(() => setInputFocused(false), 160)}
+              onKeyDown={e => e.key === "Enter" && dial()}
+              placeholder="Name or number"
+              style={{ width: "100%", height: 36, boxSizing: "border-box", padding: "0 12px 0 30px", borderRadius: 18, border: `1.5px solid ${T.brd}`, background: T.bgW, color: T.text, fontFamily: "system-ui", fontSize: 13, fontWeight: 700, outline: "none" }} />
+          </div>
+          {/* SMS button — only when something is typed */}
+          {number.trim() && (
+            <button onClick={() => openCompose(selected?.name || number, number)} title="Text" disabled={!!busy}
+              style={{ width: 36, height: 36, borderRadius: 99, border: "none", background: T.tonal || T.bgW, color: T.onTonal || T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("sms", 17)}</button>
+          )}
+          {/* Call button */}
           <button onClick={dial} disabled={!number.trim() || !!busy} title="Call"
-            style={{ width: 36, height: 36, borderRadius: 99, border: "none", background: number.trim() ? "#2E7D32" : T.bgW, color: number.trim() ? "#fff" : T.tFaint, cursor: number.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0, boxShadow: number.trim() ? "0 2px 6px rgba(46,125,50,0.3)" : "none" }}>{suiteIcon("call", 17)}</button>
-          <button onClick={() => post("/answer", "answer")} disabled={!!busy} title="Answer incoming"
-            style={{ width: 36, height: 36, borderRadius: 99, border: "none", background: isIncoming ? "#2E7D32" : T.bgW, color: isIncoming ? "#fff" : T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s, color 0.15s", boxShadow: isIncoming ? "0 2px 8px rgba(46,125,50,0.45)" : "none", flexShrink: 0 }}>{suiteIcon("phone_callback", 17)}</button>
+            style={{ width: 36, height: 36, borderRadius: 99, border: "none", background: number.trim() ? "#2E7D32" : T.bgW, color: number.trim() ? "#fff" : T.tFaint, cursor: number.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: number.trim() ? "0 2px 6px rgba(46,125,50,0.3)" : "none" }}>{suiteIcon("call", 17)}</button>
+          {/* Smart answer/hangup — green answer when ringing, red hangup when on call */}
+          {isIncoming ? (
+            <button onClick={() => post("/answer", "answer")} disabled={!!busy} title="Answer"
+              style={{ width: 36, height: 36, borderRadius: 99, border: "none", background: "#2E7D32", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 2px 10px rgba(46,125,50,0.55)" }}>{suiteIcon("phone_callback", 17)}</button>
+          ) : isOnCall ? (
+            <button onClick={() => post("/hangup", "hangup")} disabled={!!busy} title="Hang up"
+              style={{ width: 36, height: 36, borderRadius: 99, border: "none", background: "#BA2A2A", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("call_end", 17)}</button>
+          ) : (
+            <button disabled style={{ width: 36, height: 36, borderRadius: 99, border: `1px solid ${T.brdS || T.brd}`, background: T.bgW, color: T.tFaint, cursor: "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("call_end", 17)}</button>
+          )}
+          {/* Keypad toggle */}
           <button onClick={() => setShowDialer(v => !v)} title="Keypad"
             style={{ width: 28, height: 28, borderRadius: 8, border: `1px solid ${T.brd}`, background: showDialer ? (T.tonal || T.bgW) : "transparent", color: showDialer ? (T.onTonal || T.text) : T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("dialpad", 15)}</button>
         </div>
@@ -255,6 +292,20 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
           ))}
         </div>
       )}
+
+      {/* Record buttons — general capture + call capture when on call */}
+      <div style={{ display: "flex", gap: 6 }}>
+        <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
+          style={{ flex: 1, height: 32, borderRadius: 16, border: `1px solid ${T.brd}`, background: T.bgW, color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontFamily: "system-ui", fontSize: 12, fontWeight: 700 }}>
+          {suiteIcon("mic", 15)} Record
+        </button>
+        {isOnCall && (
+          <button onClick={onRecordCall} title="Record this call and extract tasks/shailos"
+            style={{ flex: 1, height: 32, borderRadius: 16, border: "none", background: "#BA2A2A", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, fontFamily: "system-ui", fontSize: 12, fontWeight: 700 }}>
+            {suiteIcon("fiber_manual_record", 14)} Record call
+          </button>
+        )}
+      </div>
 
       {/* Messages */}
       <div style={{ marginTop: 2 }}>
@@ -329,7 +380,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
   );
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall }) {
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -381,9 +432,15 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], prioriti
             {suiteIcon("hub", 24)}
             NerveCenter
           </div>
-          <button onClick={() => setActionsOpen(true)} style={{ height: 38, padding: "0 16px", borderRadius: 19, border: "none", background: T.primary || T.text, color: T.onPrimary || T.bg, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, fontFamily: "system-ui", fontWeight: 900, fontSize: 13 }}>
-            {suiteIcon("apps", 18)} Actions
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
+              style={{ width: 38, height: 38, borderRadius: 99, border: `1px solid ${T.brd}`, background: T.bgW, color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {suiteIcon("mic", 20)}
+            </button>
+            <button onClick={() => setActionsOpen(true)} style={{ height: 38, padding: "0 16px", borderRadius: 19, border: "none", background: T.primary || T.text, color: T.onPrimary || T.bg, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, fontFamily: "system-ui", fontWeight: 900, fontSize: 13 }}>
+              {suiteIcon("apps", 18)} Actions
+            </button>
+          </div>
         </div>
 
         {/* Three-panel grid */}
@@ -503,7 +560,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], prioriti
               </button>
             </div>
             <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0, padding: "10px 14px" }}>
-              <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} compact />
+              <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} />
             </div>
           </section>
         </div>
