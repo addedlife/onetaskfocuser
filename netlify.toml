@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build && cp -r shailos dist/"
+  command = "npm run build && node scripts/copy-shailos-to-dist.cjs"
   publish = "dist"
   functions = "netlify/functions"
 
@@ -24,6 +24,17 @@
 # index.html — always re-check so users get latest deploy instantly
 [[headers]]
   for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
+  for = "/manifest.webmanifest"
   [headers.values]
     Cache-Control = "no-cache, must-revalidate"
 

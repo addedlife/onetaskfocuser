@@ -324,6 +324,7 @@ const Store = {
       this._lastSavedFbModified = localTs;
       this._fbLoadedTs = localTs;
       this._fbLoadStatus = 'ok';
+      this._fbSaveError = null;
     } catch(e) {
       console.warn("[Store] Firebase save failed", e);
       this._fbSaveError = e;
@@ -807,12 +808,14 @@ const Store = {
       this._lastSavedState = JSON.parse(JSON.stringify(s)); // update snapshot
       this._lastSavedToFB = Date.now();
       this._fbLoadStatus = 'ok';
+      this._fbSaveError = null;
       console.log("[Store] V5 saved:", ops, "document(s) written");
 
       // Also keep the old blob updated as backup during transition period
       try { await this.docRef()?.set({ state: this._clean(s), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }); } catch(e) {}
     } catch(e) {
       console.warn("[Store] V5 save failed:", e);
+      this._fbSaveError = e;
     }
   },
 
