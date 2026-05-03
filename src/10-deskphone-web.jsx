@@ -194,6 +194,26 @@ function contactInitial(name) {
   return letter.toUpperCase();
 }
 
+const DIAL_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"];
+const CONVERSATION_FILTERS = ["All", "Unread", "Pinned", "Muted", "Blocked"];
+const CALL_FILTERS = ["All", "Missed", "Incoming", "Outgoing", "Blocked"];
+const SETTINGS_SECTIONS = [
+  ["connection", "Connection", "settings_ethernet"],
+  ["appearance", "Appearance", "palette"],
+  ["contacts", "Contact Sync", "sync_alt"],
+  ["audio", "Audio", "volume_up"],
+];
+const DESKPHONE_NAV = [
+  ["messages", "Phone", "forum"],
+  ["new-message", "New Message", "edit_square"],
+  ["dialer", "Make Call", "dialpad"],
+  ["calls", "Calls", "call"],
+  ["contacts", "Contacts", "contacts"],
+  ["settings", "Settings", "settings"],
+  ["developer", "Developer Tools", "developer_mode"],
+  ["log", "Live Log", "article"],
+];
+
 function buildConversations(messages) {
   const byNumber = new Map();
   messages.forEach((message) => {
@@ -206,6 +226,9 @@ function buildConversations(messages) {
       unreadCount: 0,
       lastTimestamp: "",
       lastPreview: "",
+      pinned: false,
+      muted: false,
+      blocked: false,
     };
     existing.messages.push(message);
     existing.displayName = existing.displayName || message.displayName;
@@ -235,6 +258,14 @@ function buildConversations(messages) {
     });
 }
 
+function NativeOnlyButton({ className = "dp-button", children, onUnavailable, title = "Native DeskPhone action" }) {
+  return (
+    <button className={`${className} is-native-only`} onClick={onUnavailable} title={`${title} - available in native DeskPhone until the host exposes it`}>
+      {children}
+    </button>
+  );
+}
+
 export function DeskPhoneWebPanel({
   T = {},
   onOnlineChange,
@@ -253,6 +284,15 @@ export function DeskPhoneWebPanel({
   const [dialNumber, setDialNumber] = useState("");
   const [messageBody, setMessageBody] = useState("");
   const [search, setSearch] = useState("");
+  const [conversationFilter, setConversationFilter] = useState("All");
+  const [conversationSortNewest, setConversationSortNewest] = useState(true);
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [callFilter, setCallFilter] = useState("All");
+  const [settingsSection, setSettingsSection] = useState("connection");
+  const [showMessagesListPane, setShowMessagesListPane] = useState(true);
+  const [showConversationCallsPane, setShowConversationCallsPane] = useState(true);
+  const [showConversationDialerPane, setShowConversationDialerPane] = useState(true);
+  const [showDialPad, setShowDialPad] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState("");
@@ -325,16 +365,37 @@ export function DeskPhoneWebPanel({
 
   const filteredConversations = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return conversations;
-    return conversations.filter((conversation) =>
-      `${conversation.displayName} ${conversation.number} ${conversation.lastPreview}`.toLowerCase().includes(q)
-    );
-  }, [conversations, search]);
+    const byFilter = conversations.filter((conversation) => {
+      if (conversationFilter === "Unread") return conversation.unreadCount > 0;
+      if (conversationFilter === "Pinned") return conversation.pinned;
+      if (conversationFilter === "Muted") return conversation.muted;
+      if (conversationFilter === "Blocked") return conversation.blocked;
+      return true;
+    });
+    const bySearch = q
+      ? byFilter.filter((conversation) =>
+          `${conversation.displayName} ${conversation.number} ${conversation.lastPreview}`.toLowerCase().includes(q)
+        )
+      : byFilter;
+    return [...bySearch].sort((a, b) => {
+      const left = parseDate(a.lastTimestamp)?.getTime() || 0;
+      const right = parseDate(b.lastTimestamp)?.getTime() || 0;
+      return conversationSortNewest ? right - left : left - right;
+    });
+  }, [conversations, conversationFilter, conversationSortNewest, search]);
 
   const filteredCalls = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return calls.filter((call) => !q || `${call.displayName} ${call.number} ${call.direction}`.toLowerCase().includes(q));
-  }, [calls, search]);
+    return calls.filter((call) => {
+      const lower = `${call.displayName} ${call.number} ${call.direction} ${call.subtitle}`.toLowerCase();
+      if (q && !lower.includes(q)) return false;
+      if (callFilter === "Missed") return call.isMissed;
+      if (callFilter === "Incoming") return /in|receiv/i.test(call.direction);
+      if (callFilter === "Outgoing") return /out|dial/i.test(call.direction);
+      if (callFilter === "Blocked") return false;
+      return true;
+    });
+  }, [calls, callFilter, search]);
 
   const filteredContacts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -413,8 +474,53 @@ export function DeskPhoneWebPanel({
     } catch {}
   }
 
+  function showNativeOnly(action) {
+    setError(`${action} is visible here for DeskPhone parity, but the current web host does not expose that command yet.`);
+  }
+
+  function chooseView(id) {
+    if (id === "new-message") {
+      setActiveView("messages");
+      setSelectedKey("");
+      setDialNumber("");
+      setMessageBody("");
+      setShowMessagesListPane(true);
+      return;
+    }
+    setActiveView(id);
+  }
+
+  function appendDialKey(key) {
+    setDialNumber((prev) => `${prev}${key}`);
+  }
+
+  async function copyMessage(message) {
+    try {
+      await navigator.clipboard?.writeText(message.body || "");
+      setError("");
+    } catch {
+      showNativeOnly("Copy message");
+    }
+  }
+
   const selectedName = selectedContact?.displayName || selectedConversation?.displayName || dialNumber || "No contact selected";
   const selectedNumbers = selectedContact?.phoneNumbers?.length ? selectedContact.phoneNumbers : (dialNumber ? [dialNumber] : []);
+  const selectedConversationCalls = selectedConversation
+    ? calls.filter((call) => numberKey(call.number) === numberKey(selectedConversation.number)).slice(0, 8)
+    : [];
+  const currentViewTitle = activeView === "dialer"
+    ? "Make Call"
+    : activeView === "calls"
+      ? "Calls"
+      : activeView === "contacts"
+        ? "Contacts"
+        : activeView === "settings"
+          ? "Settings"
+          : activeView === "developer"
+            ? "Developer Tools"
+            : activeView === "log"
+              ? "Live Log"
+              : "Phone";
 
   const themeVars = {
     "--dp-bg": T.bg || "#f7f5ef",
@@ -539,6 +645,17 @@ export function DeskPhoneWebPanel({
           background: #b3261e;
           color: #fff;
         }
+        .dp-button.success,
+        .dp-icon-button.success {
+          border-color: #137333;
+          background: #137333;
+          color: #fff;
+        }
+        .dp-button.is-native-only,
+        .dp-icon-button.is-native-only {
+          border-style: dashed;
+          opacity: 0.72;
+        }
         .dp-icon-button {
           width: 36px;
           height: 36px;
@@ -560,8 +677,62 @@ export function DeskPhoneWebPanel({
         .dp-shell {
           min-height: 0;
           display: grid;
-          grid-template-columns: minmax(260px, 330px) minmax(0, 1fr) minmax(260px, 330px);
+          grid-template-columns: 232px minmax(250px, 340px) minmax(0, 1fr) minmax(270px, 340px);
           overflow: hidden;
+        }
+        .dp-rail {
+          min-width: 0;
+          min-height: 0;
+          border-right: 1px solid var(--dp-border);
+          background: color-mix(in srgb, var(--dp-panel) 88%, var(--dp-soft));
+          display: grid;
+          grid-template-rows: 1fr auto;
+          overflow: hidden;
+        }
+        .dp-rail-nav {
+          min-height: 0;
+          overflow: auto;
+          padding: 12px 10px;
+          display: grid;
+          align-content: start;
+          gap: 6px;
+        }
+        .dp-rail-button {
+          width: 100%;
+          min-width: 0;
+          height: 42px;
+          border: 0;
+          border-radius: 8px;
+          background: transparent;
+          color: var(--dp-muted);
+          cursor: pointer;
+          display: grid;
+          grid-template-columns: 30px minmax(0,1fr);
+          gap: 8px;
+          align-items: center;
+          padding: 0 10px;
+          text-align: left;
+          font-size: 13px;
+          font-weight: 850;
+          font-family: inherit;
+        }
+        .dp-rail-button.is-active {
+          background: var(--dp-tonal);
+          color: var(--dp-on-tonal);
+        }
+        .dp-rail-foot {
+          border-top: 1px solid var(--dp-border-soft);
+          padding: 12px 10px;
+          display: grid;
+          gap: 8px;
+        }
+        .dp-rail-card {
+          border: 1px solid var(--dp-border-soft);
+          border-radius: 8px;
+          background: var(--dp-panel);
+          padding: 10px;
+          display: grid;
+          gap: 8px;
         }
         .dp-left,
         .dp-main,
@@ -579,6 +750,9 @@ export function DeskPhoneWebPanel({
         .dp-main {
           display: grid;
           grid-template-rows: auto 1fr auto;
+        }
+        .dp-main.no-composer {
+          grid-template-rows: auto 1fr;
         }
         .dp-detail {
           border-left: 1px solid var(--dp-border);
@@ -615,6 +789,8 @@ export function DeskPhoneWebPanel({
         .dp-search {
           padding: 10px;
           border-bottom: 1px solid var(--dp-border-soft);
+          display: grid;
+          gap: 8px;
         }
         .dp-input,
         .dp-textarea {
@@ -663,6 +839,7 @@ export function DeskPhoneWebPanel({
         }
         .dp-row-title,
         .dp-line {
+          display: block;
           min-width: 0;
           white-space: nowrap;
           overflow: hidden;
@@ -673,6 +850,7 @@ export function DeskPhoneWebPanel({
           font-weight: 900;
         }
         .dp-row-sub {
+          display: block;
           margin-top: 2px;
           color: var(--dp-muted);
           font-size: 12px;
@@ -822,6 +1000,81 @@ export function DeskPhoneWebPanel({
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 8px;
         }
+        .dp-filter-row,
+        .dp-toolbar-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+        .dp-filter-button {
+          height: 30px;
+          border: 1px solid var(--dp-border);
+          border-radius: 8px;
+          background: transparent;
+          color: var(--dp-muted);
+          padding: 0 9px;
+          cursor: pointer;
+          font: inherit;
+          font-size: 11px;
+          font-weight: 850;
+        }
+        .dp-filter-button.is-active {
+          background: var(--dp-tonal);
+          color: var(--dp-on-tonal);
+          border-color: transparent;
+        }
+        .dp-pane-grid {
+          min-height: 0;
+          overflow: auto;
+          background: var(--dp-bg);
+          padding: 14px;
+          display: grid;
+          gap: 12px;
+          align-content: start;
+        }
+        .dp-panel-block {
+          border: 1px solid var(--dp-border-soft);
+          border-radius: 8px;
+          background: var(--dp-panel);
+          padding: 14px;
+          display: grid;
+          gap: 10px;
+        }
+        .dp-dialpad {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+        }
+        .dp-dial-key {
+          height: 54px;
+          border-radius: 8px;
+          border: 1px solid var(--dp-border);
+          background: var(--dp-soft);
+          color: var(--dp-text);
+          font: inherit;
+          font-size: 20px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+        .dp-message-tools {
+          margin-top: 7px;
+          display: flex;
+          gap: 5px;
+          flex-wrap: wrap;
+        }
+        .dp-mini-action {
+          height: 24px;
+          border-radius: 7px;
+          border: 1px solid currentColor;
+          background: transparent;
+          color: inherit;
+          opacity: 0.72;
+          padding: 0 7px;
+          font-size: 10px;
+          font-weight: 850;
+          cursor: pointer;
+        }
         .dp-empty,
         .dp-alert {
           margin: 14px;
@@ -865,10 +1118,23 @@ export function DeskPhoneWebPanel({
         .dp-status-dot.warn { background: #b3261e; }
         @media (max-width: 1060px) {
           .dp-shell {
-            grid-template-columns: minmax(240px, 310px) minmax(0, 1fr);
+            grid-template-columns: 74px minmax(240px, 310px) minmax(0, 1fr);
+          }
+          .dp-rail {
+            grid-row: 1 / span 2;
+          }
+          .dp-rail-button {
+            grid-template-columns: 1fr;
+            justify-items: center;
+            padding: 0;
+          }
+          .dp-rail-button span:last-child,
+          .dp-rail-foot .dp-rail-card > div:not(:first-child),
+          .dp-rail-foot .dp-button span {
+            display: none;
           }
           .dp-detail {
-            grid-column: 1 / -1;
+            grid-column: 2 / -1;
             border-left: 0;
             border-top: 1px solid var(--dp-border);
             grid-template-rows: auto;
@@ -897,9 +1163,35 @@ export function DeskPhoneWebPanel({
             grid-template-columns: 1fr;
             overflow: auto;
           }
+          .dp-rail {
+            grid-template-rows: auto;
+            grid-row: auto;
+            width: 100%;
+            border-right: 0;
+            border-bottom: 1px solid var(--dp-border);
+          }
+          .dp-rail-nav {
+            display: flex;
+            overflow-x: auto;
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px;
+          }
+          .dp-rail-button {
+            width: auto;
+            min-width: 74px;
+            grid-template-columns: 1fr;
+            justify-items: center;
+            padding: 0 8px;
+          }
+          .dp-rail-foot {
+            display: none;
+          }
+          .dp-rail,
           .dp-left,
           .dp-main,
           .dp-detail {
+            grid-column: 1 / -1;
             overflow: visible;
             min-height: auto;
             border-left: 0;
@@ -962,167 +1254,252 @@ export function DeskPhoneWebPanel({
       </header>
 
       <div className="dp-shell">
-        <aside className="dp-left">
-          <nav className="dp-tabs" aria-label="Phone views">
-            {[
-              ["messages", "Messages", "chat"],
-              ["calls", "Calls", "call"],
-              ["contacts", "Contacts", "contacts"],
-              ["settings", "Host", "settings_ethernet"],
-            ].map(([id, label, iconName]) => (
+        <aside className="dp-rail">
+          <nav className="dp-rail-nav" aria-label="DeskPhone sections">
+            {DESKPHONE_NAV.map(([id, label, iconName]) => (
               <button
                 key={id}
-                className={`dp-tab ${activeView === id ? "is-active" : ""}`}
-                onClick={() => setActiveView(id)}
+                className={`dp-rail-button ${activeView === id || (id === "new-message" && !selectedConversation && activeView === "messages") ? "is-active" : ""}`}
+                onClick={() => chooseView(id)}
                 title={label}
               >
-                {icon(iconName, 17)} <span>{label}</span>
+                {icon(iconName, 19)}
+                <span className="dp-line">{label}</span>
               </button>
             ))}
           </nav>
-          <div className="dp-search">
-            <input
-              className="dp-input"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={activeView === "calls" ? "Search calls" : activeView === "contacts" ? "Search contacts" : "Search messages"}
-            />
-          </div>
-          <div className="dp-list">
-            {activeView === "messages" && (
-              filteredConversations.length ? filteredConversations.map((conversation) => (
-                <button
-                  key={conversation.key}
-                  className={`dp-row ${selectedConversation?.key === conversation.key ? "is-active" : ""}`}
-                  onClick={() => {
-                    setSelectedKey(conversation.key);
-                    selectNumber(conversation.number, "messages");
-                  }}
-                >
-                  <span className="dp-avatar">{contactInitial(conversation.displayName)}</span>
-                  <span style={{ minWidth: 0 }}>
-                    <span className="dp-row-title dp-line">{conversation.displayName}</span>
-                    <span className="dp-row-sub">{conversation.lastPreview || conversation.number}</span>
-                  </span>
-                  <span className="dp-row-meta">
-                    <span>{timeLabel(conversation.lastTimestamp)}</span>
-                    {conversation.unreadCount > 0 && <span className="dp-unread">{conversation.unreadCount}</span>}
-                  </span>
+          <div className="dp-rail-foot">
+            <div className="dp-rail-card">
+              <div className="dp-section-title">Connection</div>
+              <div className="dp-section-note">{connected ? "Phone connected" : bridgeOnline ? "Host online" : "Host offline"}</div>
+              <div className="dp-command-grid">
+                <button className="dp-button" onClick={() => runPost("/connect", "connect")} disabled={!!busy} title="Clean reconnect to saved device">
+                  {icon("link", 17)} <span>Connect</span>
                 </button>
-              )) : <div className="dp-empty">No message threads loaded.</div>
-            )}
-
-            {activeView === "calls" && (
-              filteredCalls.length ? filteredCalls.map((call) => (
-                <button
-                  key={call.id}
-                  className="dp-row"
-                  onClick={() => selectNumber(call.number, "calls")}
-                >
-                  <span className="dp-avatar">{icon(callIconName(call.direction), 18)}</span>
-                  <span style={{ minWidth: 0 }}>
-                    <span className="dp-row-title dp-line">{call.displayName}</span>
-                    <span className="dp-row-sub">{call.number}</span>
-                  </span>
-                  <span className="dp-row-meta">
-                    <span>{timeLabel(call.timestamp)}</span>
-                    {call.isMissed && <span style={{ color: "#b3261e" }}>Missed</span>}
-                  </span>
+                <button className="dp-button" onClick={() => chooseView("settings")} title="Connection settings">
+                  {icon("settings", 17)} <span>Settings</span>
                 </button>
-              )) : <div className="dp-empty">No recent calls loaded.</div>
-            )}
-
-            {activeView === "contacts" && (
-              filteredContacts.length ? filteredContacts.map((contact) => (
-                <button
-                  key={contact.id}
-                  className="dp-row"
-                  onClick={() => selectNumber(contact.primaryPhone || contact.phoneNumbers[0], "contacts")}
-                >
-                  <span className="dp-avatar">{contactInitial(contact.displayName)}</span>
-                  <span style={{ minWidth: 0 }}>
-                    <span className="dp-row-title dp-line">{contact.displayName}</span>
-                    <span className="dp-row-sub">{contact.phoneNumbers[0] || "No number"}</span>
-                  </span>
-                  <span className="dp-row-meta">{contact.phoneNumbers.length > 1 ? `${contact.phoneNumbers.length} nums` : ""}</span>
-                </button>
-              )) : <div className="dp-empty">No contacts loaded.</div>
-            )}
-
-            {activeView === "settings" && (
-              <div className="dp-settings">
-                <div className="dp-settings-row">
-                  <label style={{ fontSize: 12, fontWeight: 900, color: "var(--dp-muted)" }}>Host control address</label>
-                  <input className="dp-input" value={draftBridge} onChange={(event) => setDraftBridge(event.target.value)} />
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button className="dp-button primary" onClick={saveBridge}>{icon("check", 17)} Save</button>
-                    <button className="dp-button" onClick={resetBridge}>{icon("restart_alt", 17)} Reset</button>
-                    <button className="dp-button" onClick={refresh}>{icon("sync", 17)} Test</button>
-                  </div>
-                </div>
-                <div className="dp-settings-row">
-                  <div style={{ fontSize: 12, fontWeight: 900, color: "var(--dp-muted)" }}>Current host</div>
-                  <div style={{ fontSize: 13, overflowWrap: "anywhere" }}>{bridgeBase}</div>
-                </div>
               </div>
-            )}
+            </div>
           </div>
         </aside>
 
-        <main className="dp-main">
+        <aside className="dp-left">
           <div className="dp-section-head">
             <div style={{ minWidth: 0 }}>
               <div className="dp-section-title">
-                {activeView === "calls" ? "Call History" : activeView === "contacts" ? "Contacts" : "Messages"}
+                {activeView === "settings" ? "Settings" : activeView === "contacts" ? "Contacts" : activeView === "calls" ? "Call History" : "Messages"}
               </div>
               <div className="dp-section-note">
                 {activeView === "messages"
-                  ? `${conversations.length} threads - ${messages.length} messages`
+                  ? `${filteredConversations.length} of ${conversations.length} threads`
                   : activeView === "calls"
-                    ? `${calls.length} calls`
+                    ? `${filteredCalls.length} of ${calls.length} calls`
                     : activeView === "contacts"
-                      ? `${contacts.length} contacts`
-                      : bridgeBase}
+                      ? `${filteredContacts.length} of ${contacts.length} contacts`
+                      : hostConnectorName}
               </div>
             </div>
-            <button className="dp-icon-button" onClick={refresh} disabled={!!busy} title="Refresh">
-              {icon("refresh", 18)}
-            </button>
+            {activeView === "messages" && (
+              <button className="dp-icon-button" onClick={() => setShowMessagesListPane((value) => !value)} title={showMessagesListPane ? "Hide threads" : "Show threads"}>
+                {icon(showMessagesListPane ? "close" : "menu_open", 18)}
+              </button>
+            )}
+          </div>
+
+          {activeView === "settings" ? (
+            <div className="dp-list">
+              {SETTINGS_SECTIONS.map(([id, label, iconName]) => (
+                <button key={id} className={`dp-row ${settingsSection === id ? "is-active" : ""}`} onClick={() => setSettingsSection(id)}>
+                  <span className="dp-avatar">{icon(iconName, 18)}</span>
+                  <span style={{ minWidth: 0 }}>
+                    <span className="dp-row-title dp-line">{label}</span>
+                    <span className="dp-row-sub">DeskPhone settings section</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : activeView === "messages" && !showMessagesListPane ? (
+            <div className="dp-pane-grid">
+              <div className="dp-panel-block">
+                <div className="dp-section-title">Threads hidden</div>
+                <div className="dp-section-note">Matches the native hide-threads control.</div>
+                <button className="dp-button primary" onClick={() => setShowMessagesListPane(true)}>{icon("menu_open", 17)} Show threads</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="dp-search">
+                <input
+                  className="dp-input"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={activeView === "calls" ? "Search calls" : activeView === "contacts" ? "Search contacts" : "Search messages"}
+                />
+                {activeView === "messages" && (
+                  <>
+                    <div className="dp-filter-row">
+                      {CONVERSATION_FILTERS.map((filter) => (
+                        <button key={filter} className={`dp-filter-button ${conversationFilter === filter ? "is-active" : ""}`} onClick={() => setConversationFilter(filter)}>
+                          {filter}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="dp-toolbar-row">
+                      <button className="dp-button" onClick={() => chooseView("new-message")}>{icon("add", 17)} New</button>
+                      <button className="dp-button" onClick={() => setConversationSortNewest((value) => !value)}>{icon("sort", 17)} {conversationSortNewest ? "Newest" : "Oldest"}</button>
+                    </div>
+                  </>
+                )}
+                {activeView === "calls" && (
+                  <div className="dp-filter-row">
+                    {CALL_FILTERS.map((filter) => (
+                      <button key={filter} className={`dp-filter-button ${callFilter === filter ? "is-active" : ""}`} onClick={() => setCallFilter(filter)}>
+                        {filter}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="dp-list">
+                {activeView === "messages" && (
+                  filteredConversations.length ? filteredConversations.map((conversation) => (
+                    <button
+                      key={conversation.key}
+                      className={`dp-row ${selectedConversation?.key === conversation.key ? "is-active" : ""}`}
+                      onClick={() => {
+                        setSelectedKey(conversation.key);
+                        selectNumber(conversation.number, "messages");
+                      }}
+                    >
+                      <span className="dp-avatar">{contactInitial(conversation.displayName)}</span>
+                      <span style={{ minWidth: 0 }}>
+                        <span className="dp-row-title dp-line">{conversation.displayName}</span>
+                        <span className="dp-row-sub">{conversation.lastPreview || conversation.number}</span>
+                      </span>
+                      <span className="dp-row-meta">
+                        <span>{timeLabel(conversation.lastTimestamp)}</span>
+                        {conversation.unreadCount > 0 && <span className="dp-unread">{conversation.unreadCount}</span>}
+                      </span>
+                    </button>
+                  )) : <div className="dp-empty">No message threads loaded.</div>
+                )}
+
+                {activeView === "calls" && (
+                  filteredCalls.length ? filteredCalls.map((call) => (
+                    <button key={call.id} className="dp-row" onClick={() => selectNumber(call.number, "calls")}>
+                      <span className="dp-avatar">{icon(callIconName(call.direction), 18)}</span>
+                      <span style={{ minWidth: 0 }}>
+                        <span className="dp-row-title dp-line">{call.displayName}</span>
+                        <span className="dp-row-sub">{call.number}</span>
+                      </span>
+                      <span className="dp-row-meta">
+                        <span>{timeLabel(call.timestamp)}</span>
+                        {call.isMissed && <span style={{ color: "#b3261e" }}>Missed</span>}
+                      </span>
+                    </button>
+                  )) : <div className="dp-empty">No recent calls loaded.</div>
+                )}
+
+                {activeView === "contacts" && (
+                  filteredContacts.length ? filteredContacts.map((contact) => (
+                    <button key={contact.id} className="dp-row" onClick={() => selectNumber(contact.primaryPhone || contact.phoneNumbers[0], "contacts")}>
+                      <span className="dp-avatar">{contactInitial(contact.displayName)}</span>
+                      <span style={{ minWidth: 0 }}>
+                        <span className="dp-row-title dp-line">{contact.displayName}</span>
+                        <span className="dp-row-sub">{contact.phoneNumbers[0] || "No number"}</span>
+                      </span>
+                      <span className="dp-row-meta">{contact.phoneNumbers.length > 1 ? `${contact.phoneNumbers.length} nums` : ""}</span>
+                    </button>
+                  )) : <div className="dp-empty">No contacts loaded.</div>
+                )}
+              </div>
+            </>
+          )}
+        </aside>
+
+        <main className={`dp-main ${activeView !== "messages" ? "no-composer" : ""}`}>
+          <div className="dp-section-head">
+            <div style={{ minWidth: 0 }}>
+              <div className="dp-section-title">{currentViewTitle}</div>
+              <div className="dp-section-note">
+                {activeView === "messages"
+                  ? selectedConversation ? `${selectedConversation.displayName} - ${selectedConversation.messages.length} messages` : "Start a new conversation"
+                  : activeView === "dialer"
+                    ? callState || "Ready"
+                    : activeView === "calls"
+                      ? `${filteredCalls.length} visible records`
+                      : activeView === "contacts"
+                        ? "Call, text, edit, or add contacts"
+                        : activeView === "developer"
+                          ? "Build history, logs, and diagnostic tools"
+                          : activeView === "log"
+                            ? "Native live log bridge"
+                            : `${hostPlatform} - ${hostScope}`}
+              </div>
+            </div>
+            <div className="dp-actions">
+              {activeView === "messages" && (
+                <>
+                  <button className="dp-icon-button" onClick={() => setShowConversationCallsPane((value) => !value)} title="Show or hide conversation calls">{icon("call_log", 18)}</button>
+                  <button className="dp-icon-button" onClick={() => setShowConversationDialerPane((value) => !value)} title="Show or hide dialer">{icon("dialpad", 18)}</button>
+                  <NativeOnlyButton className="dp-icon-button" onUnavailable={() => showNativeOnly("Block or unblock conversation")} title="Block conversation">{icon("block", 18)}</NativeOnlyButton>
+                  <NativeOnlyButton className="dp-icon-button" onUnavailable={() => showNativeOnly("Pin or unpin conversation")} title="Pin conversation">{icon("push_pin", 18)}</NativeOnlyButton>
+                  <NativeOnlyButton className="dp-icon-button" onUnavailable={() => showNativeOnly("Mute or unmute alerts")} title="Mute alerts">{icon("notifications_off", 18)}</NativeOnlyButton>
+                </>
+              )}
+              <button className="dp-icon-button" onClick={refresh} disabled={!!busy} title="Refresh">{icon("refresh", 18)}</button>
+            </div>
           </div>
 
           {error && <div className="dp-alert">{error}</div>}
 
           {activeView === "messages" && (
             <>
+              {selectedConversation && (
+                <div className="dp-search" style={{ borderBottom: "1px solid var(--dp-border-soft)" }}>
+                  <div className="dp-toolbar-row">
+                    <input className="dp-input" value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Search in conversation" />
+                    <NativeOnlyButton className="dp-icon-button" onUnavailable={() => showNativeOnly("Previous search match")} title="Previous match">{icon("keyboard_arrow_up", 18)}</NativeOnlyButton>
+                    <NativeOnlyButton className="dp-icon-button" onUnavailable={() => showNativeOnly("Next search match")} title="Next match">{icon("keyboard_arrow_down", 18)}</NativeOnlyButton>
+                    <button className="dp-icon-button" onClick={() => setConversationSearch("")} title="Clear search">{icon("close", 18)}</button>
+                  </div>
+                </div>
+              )}
               <div className="dp-thread">
-                {selectedConversation ? selectedConversation.messages.map((message) => (
-                  <div key={message.id} className={`dp-bubble-row ${message.isSent ? "is-sent" : ""}`}>
-                    <div className="dp-bubble">
-                      <div className="dp-bubble-text">{message.body || (message.attachments.length ? "Attachment" : "Message")}</div>
-                      {message.attachments.length > 0 && (
-                        <div style={{ marginTop: 7, display: "grid", gap: 5 }}>
-                          {message.attachments.slice(0, 4).map((attachment, index) => (
-                            <div key={`${message.id}-att-${index}`} style={{ fontSize: 11, opacity: 0.82 }}>
-                              {attachment.isImage ? "Image" : attachment.isContactCard ? "Contact card" : "File"} - {attachment.fileName || attachment.contentType || "attachment"}
-                            </div>
-                          ))}
+                {selectedConversation ? selectedConversation.messages
+                  .filter((message) => !conversationSearch.trim() || `${message.body} ${message.preview}`.toLowerCase().includes(conversationSearch.trim().toLowerCase()))
+                  .map((message) => (
+                    <div key={message.id} className={`dp-bubble-row ${message.isSent ? "is-sent" : ""}`}>
+                      <div className="dp-bubble">
+                        <div className="dp-bubble-text">{message.body || (message.attachments.length ? "Attachment" : "Message")}</div>
+                        {message.attachments.length > 0 && (
+                          <div style={{ marginTop: 7, display: "grid", gap: 5 }}>
+                            {message.attachments.slice(0, 4).map((attachment, index) => (
+                              <div key={`${message.id}-att-${index}`} style={{ fontSize: 11, opacity: 0.82 }}>
+                                {attachment.isImage ? "Image" : attachment.isContactCard ? "Contact card" : "File"} - {attachment.fileName || attachment.contentType || "attachment"}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="dp-bubble-meta">
+                          <span>{fullTimeLabel(message.timestamp)}</span>
+                          {message.isSent && <span>{message.isRead ? "Read" : "Sent"}</span>}
                         </div>
-                      )}
-                      <div className="dp-bubble-meta">
-                        <span>{fullTimeLabel(message.timestamp)}</span>
-                        {message.isSent && <span>{message.isRead ? "Read" : "Sent"}</span>}
+                        <div className="dp-message-tools">
+                          <button className="dp-mini-action" onClick={() => copyMessage(message)}>Copy</button>
+                          {message.isSent && <NativeOnlyButton className="dp-mini-action" onUnavailable={() => showNativeOnly("Retry message")} title="Retry failed message">Retry</NativeOnlyButton>}
+                          {message.attachments.length > 0 && <NativeOnlyButton className="dp-mini-action" onUnavailable={() => showNativeOnly("Save attachment")} title="Save attachment">Save</NativeOnlyButton>}
+                          <NativeOnlyButton className="dp-mini-action" onUnavailable={() => showNativeOnly("Delete message")} title="Delete message">Delete</NativeOnlyButton>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )) : <div className="dp-empty">Select a message thread.</div>}
+                  )) : (
+                    <div className="dp-empty">Choose a thread or type a number below to start a new message.</div>
+                  )}
               </div>
               <div className="dp-composer">
-                <input
-                  className="dp-input"
-                  value={dialNumber}
-                  onChange={(event) => setDialNumber(event.target.value)}
-                  placeholder="Number"
-                />
+                <input className="dp-input" value={dialNumber} onChange={(event) => setDialNumber(event.target.value)} placeholder="Name or number" />
                 <textarea
                   className="dp-textarea"
                   value={messageBody}
@@ -1135,15 +1512,38 @@ export function DeskPhoneWebPanel({
                   }}
                   placeholder="Message"
                 />
-                <button className="dp-icon-button" onClick={sendMessage} disabled={!normalizePhone(dialNumber) || !messageBody.trim() || !!busy} title="Send message">
-                  {icon("send", 19)}
-                </button>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <NativeOnlyButton className="dp-icon-button" onUnavailable={() => showNativeOnly("Add attachment")} title="Add attachment">{icon("attach_file", 19)}</NativeOnlyButton>
+                  <button className="dp-icon-button success" onClick={sendMessage} disabled={!normalizePhone(dialNumber) || !messageBody.trim() || !!busy} title="Send message">
+                    {icon("send", 19)}
+                  </button>
+                </div>
               </div>
             </>
           )}
 
+          {activeView === "dialer" && (
+            <div className="dp-pane-grid">
+              <div className="dp-panel-block">
+                <div className="dp-section-title">Make Call</div>
+                <input className="dp-input" value={dialNumber} onChange={(event) => setDialNumber(event.target.value)} placeholder="Name or number" />
+                <div className="dp-dialpad">
+                  {DIAL_KEYS.map((key) => <button key={key} className="dp-dial-key" onClick={() => appendDialKey(key)}>{key}</button>)}
+                </div>
+                <div className="dp-command-grid">
+                  <button className="dp-button success" onClick={dial} disabled={!normalizePhone(dialNumber) || !!busy}>{icon("call", 17)} Call</button>
+                  <NativeOnlyButton onUnavailable={() => showNativeOnly("Dial voicemail")} title="Voicemail">{icon("voicemail", 17)} Voicemail</NativeOnlyButton>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeView === "calls" && (
             <div className="dp-call-list">
+              <div className="dp-toolbar-row" style={{ padding: 12, borderBottom: "1px solid var(--dp-border-soft)", background: "var(--dp-panel)" }}>
+                <NativeOnlyButton onUnavailable={() => showNativeOnly("Delete all call history")} title="Delete all call history">{icon("delete_sweep", 17)} Delete all</NativeOnlyButton>
+                <NativeOnlyButton onUnavailable={() => showNativeOnly("Undo call-history delete")} title="Undo call-history delete">{icon("undo", 17)} Undo</NativeOnlyButton>
+              </div>
               {filteredCalls.length ? filteredCalls.map((call) => (
                 <div className="dp-call-row" key={`main-${call.id}`}>
                   <span className="dp-avatar">{icon(callIconName(call.direction), 18)}</span>
@@ -1154,7 +1554,9 @@ export function DeskPhoneWebPanel({
                   <div className="dp-actions">
                     <span style={{ fontSize: 11, color: "var(--dp-muted)", fontWeight: 800 }}>{call.timeDisplay || timeLabel(call.timestamp)}</span>
                     <button className="dp-icon-button" onClick={() => selectNumber(call.number, "messages")} title="Message">{icon("chat", 17)}</button>
-                    <button className="dp-icon-button" onClick={() => { selectNumber(call.number, "calls"); dial(call.number); }} title="Call">{icon("call", 17)}</button>
+                    <button className="dp-icon-button success" onClick={() => { selectNumber(call.number, "calls"); dial(call.number); }} title="Call">{icon("call", 17)}</button>
+                    <NativeOnlyButton className="dp-icon-button" onUnavailable={() => showNativeOnly("Block call record")} title="Block caller">{icon("block", 17)}</NativeOnlyButton>
+                    <NativeOnlyButton className="dp-icon-button" onUnavailable={() => showNativeOnly("Delete call record")} title="Delete call record">{icon("delete", 17)}</NativeOnlyButton>
                   </div>
                 </div>
               )) : <div className="dp-empty">No call history loaded.</div>}
@@ -1162,7 +1564,16 @@ export function DeskPhoneWebPanel({
           )}
 
           {activeView === "contacts" && (
-            <div className="dp-call-list">
+            <div className="dp-pane-grid">
+              <div className="dp-panel-block">
+                <div className="dp-toolbar-row" style={{ justifyContent: "space-between" }}>
+                  <div>
+                    <div className="dp-section-title">Contacts</div>
+                    <div className="dp-section-note">Search saved contacts, then call, text, edit, or add.</div>
+                  </div>
+                  <NativeOnlyButton onUnavailable={() => showNativeOnly("New contact")} title="New contact">{icon("person_add", 17)} New Contact</NativeOnlyButton>
+                </div>
+              </div>
               {filteredContacts.length ? filteredContacts.map((contact) => (
                 <div className="dp-call-row" key={`main-${contact.id}`}>
                   <span className="dp-avatar">{contactInitial(contact.displayName)}</span>
@@ -1171,32 +1582,128 @@ export function DeskPhoneWebPanel({
                     <div className="dp-row-sub">{contact.phoneNumbers.join(" - ")}</div>
                   </div>
                   <div className="dp-actions">
-                    <button className="dp-icon-button" onClick={() => selectNumber(contact.primaryPhone, "messages")} title="Message">{icon("chat", 17)}</button>
-                    <button className="dp-icon-button" onClick={() => { selectNumber(contact.primaryPhone, "contacts"); dial(contact.primaryPhone); }} title="Call">{icon("call", 17)}</button>
+                    <button className="dp-icon-button" onClick={() => selectNumber(contact.primaryPhone || contact.phoneNumbers[0], "messages")} title="Text">{icon("chat", 17)}</button>
+                    <button className="dp-icon-button success" onClick={() => { selectNumber(contact.primaryPhone || contact.phoneNumbers[0], "contacts"); dial(contact.primaryPhone || contact.phoneNumbers[0]); }} title="Call">{icon("call", 17)}</button>
+                    <NativeOnlyButton className="dp-icon-button" onUnavailable={() => showNativeOnly("Edit contact")} title="Edit details">{icon("edit", 17)}</NativeOnlyButton>
                   </div>
                 </div>
               )) : <div className="dp-empty">No contacts loaded.</div>}
+              <div className="dp-panel-block">
+                <div className="dp-section-title">Editor</div>
+                <input className="dp-input" value={selectedContact?.displayName || ""} readOnly placeholder="Name" />
+                <input className="dp-input" value={selectedContact?.primaryPhone || ""} readOnly placeholder="Phone" />
+                <div className="dp-command-grid">
+                  <NativeOnlyButton onUnavailable={() => showNativeOnly("Start new contact")} title="New contact">New</NativeOnlyButton>
+                  <NativeOnlyButton onUnavailable={() => showNativeOnly("Delete contact")} title="Delete contact">Delete</NativeOnlyButton>
+                  <NativeOnlyButton className="dp-button primary" onUnavailable={() => showNativeOnly("Save contact")} title="Save contact">Save Contact</NativeOnlyButton>
+                </div>
+              </div>
             </div>
           )}
 
           {activeView === "settings" && (
-            <div className="dp-settings">
-              <div className="dp-settings-row">
-                <div style={{ fontSize: 13, fontWeight: 900 }}>Host status</div>
-                <div style={{ fontSize: 12, color: "var(--dp-muted)" }}>{bridgeOnline ? "Online" : "Offline"}</div>
+            <div className="dp-pane-grid">
+              {settingsSection === "connection" && (
+                <>
+                  <div className="dp-panel-block">
+                    <div className="dp-section-title">Primary Device</div>
+                    <div className="dp-section-note">{connected ? "Connected through the host app" : "Use the host app to connect to the saved phone"}</div>
+                    <div className="dp-command-grid">
+                      <button className="dp-button primary" onClick={() => runPost("/connect", "connect")} disabled={!!busy}>Connect</button>
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Scan for new device")} title="Scan for new device">Scan for new device</NativeOnlyButton>
+                    </div>
+                  </div>
+                  <div className="dp-panel-block">
+                    <div className="dp-section-title">Scan and Pair</div>
+                    <div className="dp-toolbar-row">
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Scan for devices")} title="Scan for devices">Scan for devices</NativeOnlyButton>
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Open Bluetooth Settings")} title="Open Bluetooth Settings">Open Bluetooth Settings</NativeOnlyButton>
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Connect selected device")} title="Connect selected device">Connect to selected device</NativeOnlyButton>
+                    </div>
+                  </div>
+                  <div className="dp-panel-block">
+                    <label style={{ fontSize: 12, fontWeight: 900, color: "var(--dp-muted)" }}>Host control address</label>
+                    <input className="dp-input" value={draftBridge} onChange={(event) => setDraftBridge(event.target.value)} />
+                    <div className="dp-toolbar-row">
+                      <button className="dp-button primary" onClick={saveBridge}>{icon("check", 17)} Save</button>
+                      <button className="dp-button" onClick={resetBridge}>{icon("restart_alt", 17)} Reset</button>
+                      <button className="dp-button" onClick={refresh}>{icon("sync", 17)} Test</button>
+                    </div>
+                  </div>
+                </>
+              )}
+              {settingsSection === "appearance" && (
+                <>
+                  <div className="dp-panel-block">
+                    <div className="dp-section-title">Appearance</div>
+                    <div className="dp-section-note">Text size, dark mode, theme sync, and auditor controls from native DeskPhone.</div>
+                    <div className="dp-toolbar-row">
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Reset text size")} title="Reset text size">Reset</NativeOnlyButton>
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Toggle dark mode")} title="Dark mode">Dark mode</NativeOnlyButton>
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Sync theme with Shamash app")} title="Theme sync">Sync theme</NativeOnlyButton>
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Refresh theme sync")} title="Refresh sync">Refresh sync</NativeOnlyButton>
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Open UI auditor")} title="Open Auditor">Open Auditor</NativeOnlyButton>
+                    </div>
+                  </div>
+                </>
+              )}
+              {settingsSection === "contacts" && (
+                <>
+                  <div className="dp-panel-block">
+                    <div className="dp-section-title">Contact Sync</div>
+                    <div className="dp-section-note">PBAP is read-heavy; phone-side writes still require a helper contract.</div>
+                    <div className="dp-toolbar-row">
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Import starter VCF")} title="Import starter VCF">Import starter VCF</NativeOnlyButton>
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Import synced contacts")} title="Import synced contacts">Import synced contacts</NativeOnlyButton>
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Ignore pending contacts")} title="Ignore pending contacts">Ignore pending</NativeOnlyButton>
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Open contact sync folder")} title="Open contact sync folder">Open contact sync folder</NativeOnlyButton>
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Save messages backup")} title="Save messages backup">Save messages backup</NativeOnlyButton>
+                      <NativeOnlyButton onUnavailable={() => showNativeOnly("Open Bluetooth Settings")} title="Open Bluetooth Settings">Open Bluetooth Settings</NativeOnlyButton>
+                    </div>
+                  </div>
+                </>
+              )}
+              {settingsSection === "audio" && (
+                <div className="dp-panel-block">
+                  <div className="dp-section-title">Audio</div>
+                  <div className="dp-section-note">Playback, microphone, and call-audio routing controls.</div>
+                  <div className="dp-toolbar-row">
+                    <NativeOnlyButton onUnavailable={() => showNativeOnly("Refresh audio devices")} title="Refresh audio">Refresh</NativeOnlyButton>
+                    <NativeOnlyButton onUnavailable={() => showNativeOnly("Open Sound Settings")} title="Open Sound Settings">Open Sound Settings</NativeOnlyButton>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeView === "developer" && (
+            <div className="dp-pane-grid">
+              <div className="dp-panel-block">
+                <div className="dp-section-title">Developer Tools</div>
+                <div className="dp-section-note">Build history, logs, and diagnostic tools.</div>
+                <div className="dp-toolbar-row">
+                  <NativeOnlyButton onUnavailable={() => showNativeOnly("Open builds folder")} title="Open builds folder">Open builds folder</NativeOnlyButton>
+                  <button className="dp-button" onClick={() => chooseView("log")}>Open event log</button>
+                  <NativeOnlyButton onUnavailable={() => showNativeOnly("Run UI auditor")} title="Run UI auditor">Run UI auditor</NativeOnlyButton>
+                </div>
               </div>
-              <div className="dp-settings-row">
-                <div style={{ fontSize: 13, fontWeight: 900 }}>Host connector</div>
-                <div style={{ fontSize: 12, color: "var(--dp-muted)" }}>{hostConnectorName}</div>
-                <div style={{ fontSize: 12, color: "var(--dp-muted)" }}>Platform: {hostPlatform}</div>
-                <div style={{ fontSize: 12, color: "var(--dp-muted)" }}>Scope: {hostScope}</div>
-                <div style={{ fontSize: 12, color: "var(--dp-muted)" }}>Contract: {hostContract}</div>
+              <div className="dp-panel-block">
+                <div className="dp-section-title">Current host</div>
+                <div className="dp-section-note">{hostConnectorName}</div>
+                <div style={{ fontSize: 12, color: "var(--dp-muted)", overflowWrap: "anywhere" }}>Platform: {hostPlatform} - Scope: {hostScope} - Contract: {hostContract}</div>
               </div>
-              <div className="dp-settings-row">
-                <div style={{ fontSize: 13, fontWeight: 900 }}>Phone profiles</div>
-                <div style={{ fontSize: 12, color: "var(--dp-muted)" }}>Calls: {firstText(phoneTransport.calls, "HFP")} - {status?.hfp || "unknown"}</div>
-                <div style={{ fontSize: 12, color: "var(--dp-muted)" }}>Messages: {firstText(phoneTransport.messages, "MAP")} - {status?.map || "unknown"}</div>
-                <div style={{ fontSize: 12, color: "var(--dp-muted)" }}>Contacts: {firstText(phoneTransport.contacts, "PBAP")}</div>
+            </div>
+          )}
+
+          {activeView === "log" && (
+            <div className="dp-pane-grid">
+              <div className="dp-panel-block">
+                <div className="dp-section-title">Live Log</div>
+                <div className="dp-section-note">The browser can show the native app, but the log stream is still a native DeskPhone surface.</div>
+                <div className="dp-toolbar-row">
+                  {onLaunchNative && <button className="dp-button primary" onClick={onLaunchNative}>{icon("open_in_new", 17)} Open native DeskPhone</button>}
+                  <button className="dp-button" onClick={() => runPost("/show", "show")} disabled={!!busy}>{icon("visibility", 17)} Focus host</button>
+                </div>
               </div>
             </div>
           )}
@@ -1218,42 +1725,56 @@ export function DeskPhoneWebPanel({
               </div>
             </div>
 
-            <div style={{ display: "grid", gap: 8 }}>
-              <input
-                className="dp-input"
-                value={dialNumber}
-                onChange={(event) => setDialNumber(event.target.value)}
-                placeholder="Number"
-              />
+            {showConversationDialerPane && (
+              <div className="dp-panel-block">
+                <div className="dp-section-title">Dialer</div>
+                <input className="dp-input" value={dialNumber} onChange={(event) => setDialNumber(event.target.value)} placeholder="Name or number" />
+                {showDialPad && (
+                  <div className="dp-dialpad">
+                    {DIAL_KEYS.map((key) => <button key={`side-${key}`} className="dp-dial-key" onClick={() => appendDialKey(key)}>{key}</button>)}
+                  </div>
+                )}
+                <div className="dp-command-grid">
+                  <button className="dp-button success" onClick={dial} disabled={!normalizePhone(dialNumber) || !!busy}>{icon("call", 17)} Call</button>
+                  <button className="dp-button" onClick={() => setActiveView("messages")} disabled={!dialNumber}>{icon("chat", 17)} Text</button>
+                  <button className="dp-button" onClick={() => setShowDialPad((value) => !value)}>{icon("dialpad", 17)} Keypad</button>
+                  <NativeOnlyButton onUnavailable={() => showNativeOnly("Dial voicemail")} title="Voicemail">{icon("voicemail", 17)} Voicemail</NativeOnlyButton>
+                </div>
+              </div>
+            )}
+
+            <div className="dp-panel-block">
+              <div className="dp-section-title">Message</div>
+              <textarea className="dp-textarea" value={messageBody} onChange={(event) => setMessageBody(event.target.value)} placeholder="Message" />
               <div className="dp-command-grid">
-                <button className="dp-button primary" onClick={dial} disabled={!normalizePhone(dialNumber) || !!busy}>
-                  {icon("call", 17)} Call
-                </button>
-                <button className="dp-button" onClick={() => setActiveView("messages")} disabled={!dialNumber}>
-                  {icon("chat", 17)} Text
-                </button>
+                <NativeOnlyButton onUnavailable={() => showNativeOnly("Add attachment")} title="Add attachment">{icon("attach_file", 17)} Attach</NativeOnlyButton>
+                <button className="dp-button primary" onClick={sendMessage} disabled={!normalizePhone(dialNumber) || !messageBody.trim() || !!busy}>{icon("send", 17)} Send</button>
               </div>
             </div>
 
-            <div style={{ display: "grid", gap: 8 }}>
-              <textarea
-                className="dp-textarea"
-                value={messageBody}
-                onChange={(event) => setMessageBody(event.target.value)}
-                placeholder="Message"
-              />
-              <button className="dp-button primary" onClick={sendMessage} disabled={!normalizePhone(dialNumber) || !messageBody.trim() || !!busy}>
-                {icon("send", 17)} Send message
-              </button>
-            </div>
+            {showConversationCallsPane && (
+              <div className="dp-panel-block">
+                <div className="dp-section-title">Recent calls</div>
+                {(selectedConversationCalls.length ? selectedConversationCalls : calls.slice(0, 5)).map((call) => (
+                  <div key={`detail-${call.id}`} className="dp-toolbar-row" style={{ justifyContent: "space-between", borderTop: "1px solid var(--dp-border-soft)", paddingTop: 8 }}>
+                    <span style={{ minWidth: 0 }}>
+                      <span className="dp-row-title dp-line">{call.displayName}</span>
+                      <span className="dp-row-sub">{call.timeDisplay || timeLabel(call.timestamp)}</span>
+                    </span>
+                    <button className="dp-icon-button success" onClick={() => dial(call.number)} title="Call back">{icon("call", 17)}</button>
+                  </div>
+                ))}
+                {!calls.length && <div className="dp-section-note">No recent calls loaded.</div>}
+              </div>
+            )}
 
             <div className="dp-command-grid">
-              <button className="dp-button" onClick={() => runPost("/refresh", "refresh")} disabled={!!busy}>
-                {icon("sync", 17)} Sync
-              </button>
-              <button className="dp-button" onClick={() => runPost("/connect", "connect")} disabled={!!busy}>
-                {icon("link", 17)} Connect
-              </button>
+              <button className="dp-button" onClick={() => runPost("/refresh", "refresh")} disabled={!!busy}>{icon("sync", 17)} Sync</button>
+              <button className="dp-button" onClick={() => runPost("/connect", "connect")} disabled={!!busy}>{icon("link", 17)} Connect</button>
+              <button className="dp-button primary" onClick={() => runPost("/answer", "answer")} disabled={!isRinging || !!busy}>{icon("phone_callback", 17)} Answer</button>
+              <button className="dp-button danger" onClick={() => runPost("/hangup", "hangup")} disabled={(!isCallActive && !isRinging) || !!busy}>{icon("call_end", 17)} End</button>
+              <NativeOnlyButton onUnavailable={() => showNativeOnly("Mute microphone")} title="Mute microphone">{icon("mic_off", 17)} Mute</NativeOnlyButton>
+              <NativeOnlyButton onUnavailable={() => showNativeOnly("Undo last delete")} title="Undo last delete">{icon("undo", 17)} Undo</NativeOnlyButton>
             </div>
           </div>
         </aside>
