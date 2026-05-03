@@ -159,7 +159,9 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   const isIncoming = /ring|incoming/i.test(callState);
   const isOnCall = !!callState && !isIncoming && /active|connected|call/i.test(callState);
   const statusOnline = !!status;
-  const statusText = status ? (callState || "Ready") : "Offline";
+  const deviceName = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
+  const idleLabel = deviceName ? `Connected · ${deviceName}` : "Connected";
+  const statusText = status ? (callState || idleLabel) : "DeskPhone offline";
   const callerName = status?.callerName || status?.CallerName || status?.callerDisplay || status?.CallerDisplay || status?.callerID || status?.CallerID || "";
   const callerNumber = status?.callerNumber || status?.CallerNumber || status?.incomingNumber || status?.IncomingNumber || "";
   const callerDisplay = callerName || (callerNumber ? (lookupName(callerNumber) || callerNumber) : "");
@@ -172,6 +174,8 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   });
   const threads = Array.from(threadMap.values()).slice(0, compact ? 3 : 6);
   const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, compact ? 3 : 6);
+  const hasMessages = threads.length > 0;
+  const hasCalls = recentCalls.length > 0;
 
   const fmtTime = val => {
     if (!val) return "";
@@ -307,8 +311,8 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
         )}
       </div>
 
-      {/* Messages */}
-      <div style={{ marginTop: 2 }}>
+      {/* Messages + Calls — only rendered when DeskPhone is connected */}
+      {statusOnline && <div style={{ marginTop: 2 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.tFaint, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 4, paddingLeft: 2 }}>Messages</div>
         {threads.length ? threads.map((m, idx) => {
           const isSelected = selected?.number === m._who;
@@ -329,10 +333,9 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
             </div>
           );
         }) : <div style={{ fontSize: 12, color: T.tFaint, padding: "6px 2px" }}>No recent messages.</div>}
-      </div>
+      </div>}
 
-      {/* Recent calls */}
-      <div style={{ marginTop: 2 }}>
+      {statusOnline && <div style={{ marginTop: 2 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.tFaint, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 4, paddingLeft: 2 }}>Recent calls</div>
         {recentCalls.length ? recentCalls.map((c, idx) => {
           const num = c.number || c.phoneNumber || c.from || c.Number || c.PhoneNumber || "";
@@ -354,8 +357,8 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
               <AB icon="sms" title="Text back" onClick={() => openCompose(name, num)} />
             </div>
           );
-        }) : <div style={{ fontSize: 12, color: T.tFaint, padding: "6px 2px" }}>{statusOnline ? "No recent calls." : "Open DeskPhone to connect."}</div>}
-      </div>
+        }) : <div style={{ fontSize: 12, color: T.tFaint, padding: "6px 2px" }}>No recent calls.</div>}
+      </div>}
 
       {/* Compose bar — appears when contact selected */}
       {selected && (
@@ -380,7 +383,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall }) {
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -534,17 +537,44 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], prioriti
               </div>
             </div>
             <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0 }}>
+              {/* Active shailos — open + pending get-back */}
               {visibleShailos.length ? visibleShailos.map((s, idx) => {
                 const text = s.parentTask || s.text || s.shaila || s.question || "Open shaila";
+                const isGetBack = !!s.isGetBackStep;
+                const chipLabel = isGetBack ? "Get back" : "Open";
+                const chipBg = isGetBack ? "rgba(201,146,60,0.22)" : "rgba(201,146,60,0.10)";
                 return (
                   <button key={s.id} onClick={onOpenShailos}
-                    style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap: 10, padding: "11px 12px 11px 0", border: "none", borderBottom: idx < visibleShailos.length - 1 ? `1px solid ${GOLD_BRD}` : "none", background: GOLD_BG, color: T.text, cursor: "pointer", alignItems: "center" }}>
-                    <span style={{ width: 3, minHeight: 32, borderRadius: 2, background: GOLD, flexShrink: 0 }} />
-                    <span style={{ paddingLeft: 5, fontSize: 13, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{text}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, background: "rgba(201,146,60,0.10)", border: `1px solid ${GOLD_BRD}`, borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4 }}>Open</span>
+                    style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap: 10, padding: "11px 12px 11px 0", border: "none", borderBottom: `1px solid ${GOLD_BRD}`, background: GOLD_BG, color: T.text, cursor: "pointer", alignItems: "start" }}>
+                    <span style={{ width: 3, alignSelf: "stretch", minHeight: 28, borderRadius: 2, background: GOLD, flexShrink: 0 }} />
+                    <span style={{ paddingLeft: 5, paddingTop: 1 }}>
+                      <span style={{ display: "block", fontSize: 13, fontWeight: 700, lineHeight: 1.4, color: T.text, wordBreak: "break-word" }}>{text}</span>
+                      {isGetBack && <span style={{ display: "block", fontSize: 11, color: GOLD, fontWeight: 600, marginTop: 2 }}>{suiteIcon("schedule", 11)} waiting to reply</span>}
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, background: chipBg, border: `1px solid ${GOLD_BRD}`, borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 2 }}>{chipLabel}</span>
                   </button>
                 );
               }) : <div style={{ padding: "16px 14px", fontSize: 13, color: T.tFaint }}>No pending shailos.</div>}
+
+              {/* Recently completed shailos */}
+              {shailosCompleted.length > 0 && (
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px 6px", borderTop: `1px solid ${T.brdS || T.brd}` }}>
+                    <span style={{ color: "#2E7D32" }}>{suiteIcon("check_circle", 13)}</span>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: T.tFaint, letterSpacing: 0.5, textTransform: "uppercase" }}>Recently resolved</span>
+                  </div>
+                  {shailosCompleted.map(s => {
+                    const text = s.parentTask || s.text || s.shaila || s.question || "Resolved shaila";
+                    return (
+                      <div key={s.id} style={{ display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap: 10, padding: "9px 12px 9px 0", borderBottom: `1px solid ${T.brdS || T.brd}`, alignItems: "start", opacity: 0.72 }}>
+                        <span style={{ width: 3, alignSelf: "stretch", minHeight: 24, borderRadius: 2, background: "#2E7D32", flexShrink: 0 }} />
+                        <span style={{ paddingLeft: 5, paddingTop: 1, fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: T.tSoft, wordBreak: "break-word", textDecoration: "line-through" }}>{text}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#2E7D32", background: "rgba(46,125,50,0.10)", border: "1px solid rgba(46,125,50,0.22)", borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 2 }}>Done</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </section>
 
@@ -2657,9 +2687,13 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
 
   const isShailaPriority = (id) => id === "shaila" || !!pris.find(p => p.id === id && p.isShaila);
   const switchboardTaskList = actT.filter(t => !t.completed);
-  const switchboardShailaAll = actT.filter(t => isShailaPriority(t.priority) && !t.isGetBackStep && !t.completed);
+  const switchboardShailaAll = actT.filter(t => isShailaPriority(t.priority) && !t.completed);
   const switchboardShailaList = switchboardShailaAll.slice(0, 12);
   const shailaOpenCount = switchboardShailaAll.length;
+  const switchboardShailaCompleted = actT
+    .filter(t => isShailaPriority(t.priority) && t.completed)
+    .sort((a, b) => (b.completedAt || b.createdAt || 0) - (a.completedAt || a.createdAt || 0))
+    .slice(0, 5);
   const shellHidden = !!(zen && curT);
   const launchDeskPhone = (force = false) => {
     if (!force && deskPhoneOnline) return;
@@ -3377,6 +3411,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           sections={switchboardSections}
           tasks={switchboardTaskList}
           shailos={switchboardShailaList}
+          shailosCompleted={switchboardShailaCompleted}
           priorities={ap}
           onAddTask={addVT}
           onOpenTasks={()=>{openCommandView("focus"); switchTab("focus");}}
