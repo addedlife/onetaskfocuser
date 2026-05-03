@@ -4,11 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>OneTaskOnly</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400..700,0..1,0&display=swap" rel="stylesheet">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>◎</text></svg>">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body,#root{height:100%;overflow:hidden}
-body{font-family:Georgia,'Palatino Linotype','Book Antiqua',serif;-webkit-font-smoothing:antialiased}
+body{font-family:'Google Sans','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+:root{
+  color-scheme:light dark;
+  --pure-radius-sm:8px;
+  --pure-radius-md:12px;
+  --pure-radius-lg:16px;
+  --pure-radius-xl:20px;
+  --pure-md3-ease:cubic-bezier(.2,0,0,1);
+  --pure-focus:#0B57D0;
+}
 @keyframes ot-glow{0%{opacity:.3;transform:scale(1)}50%{opacity:.6;transform:scale(1.03)}100%{opacity:.3;transform:scale(1)}}
 @keyframes ot-fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes ot-zen{from{opacity:0}to{opacity:1}}
@@ -28,6 +40,47 @@ body{font-family:Georgia,'Palatino Linotype','Book Antiqua',serif;-webkit-font-s
 @keyframes ot-comp-flash{0%{opacity:0}15%{opacity:1}70%{opacity:1}100%{opacity:0}}
 @keyframes ot-streak{0%{opacity:0;transform:translate(-50%,-50%) scale(.7)}20%{opacity:1;transform:translate(-50%,-50%) scale(1)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(1.05)}}
 input,button,select,textarea{font-family:inherit}
+button{
+  min-height:36px;
+  border-radius:var(--pure-radius-md);
+  font-weight:650;
+  letter-spacing:0;
+  background-clip:padding-box;
+  transition:background-color .18s var(--pure-md3-ease),border-color .18s var(--pure-md3-ease),box-shadow .18s var(--pure-md3-ease),transform .12s var(--pure-md3-ease),opacity .18s var(--pure-md3-ease);
+  touch-action:manipulation;
+}
+button:not(:disabled){cursor:pointer}
+button:active:not(:disabled){transform:translateY(1px)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
+  outline:3px solid color-mix(in srgb,var(--pure-focus) 36%,transparent);
+  outline-offset:2px;
+}
+.material-symbols-rounded{
+  font-family:'Material Symbols Rounded';
+  font-weight:500;
+  font-style:normal;
+  font-size:20px;
+  line-height:1;
+  letter-spacing:0;
+  text-transform:none;
+  display:inline-flex;
+  white-space:nowrap;
+  direction:ltr;
+  font-feature-settings:'liga';
+  -webkit-font-feature-settings:'liga';
+  -webkit-font-smoothing:antialiased;
+}
+svg{shape-rendering:geometricPrecision}
+button svg,[role="button"] svg{
+  flex-shrink:0;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  stroke-width:2.25;
+}
+input,select,textarea{
+  border-radius:var(--pure-radius-md);
+  letter-spacing:0;
+}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
 textarea{resize:vertical}
 </style>

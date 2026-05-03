@@ -9,6 +9,7 @@ import { BulkAdd, TaskBD, BlockedModal, ContextTagPicker, ListManager } from './
 import { ShelfView, SubtaskGroup } from './06-shelf.jsx';
 import { SettingsModal } from './07-settings.jsx';
 import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, listPendingRecordings, PENDING_EVENT, formatPendingAge } from './09-transcription-pen.js';
+import { DeskPhoneWebPanel } from './10-deskphone-web.jsx';
 
 const suiteIcon = (name, size = 20) => (
   <span className="material-symbols-rounded" style={{ fontSize: size }}>{name}</span>
@@ -30,32 +31,31 @@ function getInitialSuiteView() {
   try {
     const params = new URLSearchParams(window.location.search);
     const view = (params.get("suite") || params.get("view") || "").toLowerCase();
-    return ["switchboard", "focus", "shailos"].includes(view) ? view : "focus";
+    if (view === "switchboard" || view === "nervecenter") return "nervecenter";
+    if (view === "focus" || view === "shailos" || view === "deskphone" || view === "phone") return view === "phone" ? "deskphone" : view;
+    return "focus";
   } catch {
     return "focus";
   }
 }
 
-function AppSuiteChrome({ T, active, onSelect, taskCount = 0, shailaCount = 0, phoneOnline = false }) {
+function AppSuiteChrome({ T, active, onSelect }) {
   const apps = [
-    { id: "switchboard", label: "Switchboard", icon: "dashboard_customize", meta: "today" },
-    { id: "focus", label: "Tasks", icon: "task_alt", meta: taskCount ? `${taskCount} open` : "focus" },
-    { id: "shailos", label: "Questions", icon: "rule", meta: shailaCount ? `${shailaCount} open` : "answers" },
-    { id: "deskphone", label: "Phone", icon: "smartphone", meta: phoneOnline ? "ready" : "open" },
+    { id: "nervecenter", label: "NerveCenter", icon: "hub" },
+    { id: "focus", label: "Tasks", icon: "task_alt" },
+    { id: "shailos", label: "Shailos", icon: "rule" },
+    { id: "deskphone", label: "Phone", icon: "smartphone" },
   ];
   return (
-    <div style={{position:"fixed",top:0,left:0,right:0,height:64,zIndex:8600,display:"flex",alignItems:"center",justifyContent:"center",padding:"8px clamp(10px,2vw,18px)",boxSizing:"border-box",background:`color-mix(in srgb, ${T.card} 94%, transparent)`,borderBottom:`1px solid ${T.brd}`,boxShadow:T.shadow || "0 2px 14px rgba(0,0,0,0.10)",backdropFilter:"blur(18px)"}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:4,width:"min(780px,100%)",padding:3,borderRadius:16,background:T.bgW,border:`1px solid ${T.brdS || T.brd}`}}>
+    <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 64, zIndex: 8600, display: "flex", alignItems: "center", justifyContent: "center", padding: "8px clamp(10px,2vw,18px)", boxSizing: "border-box", background: `color-mix(in srgb, ${T.card} 94%, transparent)`, borderBottom: `1px solid ${T.brd}`, boxShadow: T.shadow || "0 2px 14px rgba(0,0,0,0.10)", backdropFilter: "blur(18px)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 4, width: "min(780px,100%)", padding: 3, borderRadius: 16, background: T.bgW, border: `1px solid ${T.brdS || T.brd}` }}>
         {apps.map(app => {
           const isActive = active === app.id;
           return (
             <button key={app.id} onClick={() => onSelect(app.id)} title={app.label}
-              style={{minWidth:0,height:42,border:"none",borderRadius:12,cursor:"pointer",background:isActive?(T.tonal || T.primary || T.bgW):"transparent",color:isActive?(T.onTonal || T.onPrimary || T.text):T.tSoft,fontFamily:"system-ui",display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"0 8px",fontWeight:800,boxShadow:isActive?"inset 0 0 0 1px rgba(255,255,255,0.18)":"none"}}>
+              style={{ minWidth: 0, height: 42, border: "none", borderRadius: 12, cursor: "pointer", background: isActive ? (T.tonal || T.bgW) : "transparent", color: isActive ? (T.onTonal || T.text) : T.tSoft, fontFamily: "system-ui", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "0 8px", fontWeight: 800, boxShadow: isActive ? "inset 0 0 0 1px rgba(255,255,255,0.18)" : "none" }}>
               {suiteIcon(app.icon, 20)}
-              <span style={{display:"flex",flexDirection:"column",alignItems:"flex-start",minWidth:0,lineHeight:1.05}}>
-                <span style={{fontSize:13,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%"}}>{app.label}</span>
-                <span style={{fontSize:9,fontWeight:700,opacity:.68,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%"}}>{app.meta}</span>
-              </span>
+              <span style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{app.label}</span>
             </button>
           );
         })}
@@ -64,30 +64,36 @@ function AppSuiteChrome({ T, active, onSelect, taskCount = 0, shailaCount = 0, p
   );
 }
 
-function SwitchboardPhoneSurface({ T, onOnlineChange, compact = false, onOpenPhone }) {
+function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
   const api = "http://127.0.0.1:8765";
   const [status, setStatus] = useState(null);
   const [messages, setMessages] = useState([]);
   const [calls, setCalls] = useState([]);
+  const [contacts, setContacts] = useState([]);
   const [number, setNumber] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [selected, setSelected] = useState(null);
 
   const refresh = useCallback(async () => {
     try {
       setError("");
-      const [statusRes, messagesRes] = await Promise.all([
+      const [statusRes, messagesRes, contactsRes] = await Promise.all([
         fetch(`${api}/status`, { cache: "no-store" }),
         fetch(`${api}/messages`, { cache: "no-store" }),
+        fetch(`${api}/contacts`, { cache: "no-store" }).catch(() => null),
       ]);
       const nextStatus = await statusRes.json();
       const parsed = await messagesRes.json().catch(() => []);
       const nextMessages = Array.isArray(parsed) ? parsed : (parsed?.messages || []);
       const nextCalls = Array.isArray(nextStatus?.recentCalls) ? nextStatus.recentCalls : [];
+      const contactsParsed = contactsRes ? await contactsRes.json().catch(() => []) : [];
+      const nextContacts = Array.isArray(contactsParsed) ? contactsParsed : (contactsParsed?.contacts || []);
       setStatus(nextStatus);
       setMessages(nextMessages);
       setCalls(nextCalls);
+      setContacts(nextContacts);
       onOnlineChange?.(true);
     } catch {
       setStatus(null);
@@ -97,6 +103,25 @@ function SwitchboardPhoneSurface({ T, onOnlineChange, compact = false, onOpenPho
       onOnlineChange?.(false);
     }
   }, [onOnlineChange]);
+
+  // Build a phone-number → contact name lookup map
+  const contactMap = useMemo(() => {
+    const map = new Map();
+    contacts.forEach(c => {
+      const name = c.name || c.Name || c.displayName || c.DisplayName || c.fullName || c.FullName || "";
+      if (!name) return;
+      [c.phone, c.phoneNumber, c.number, c.Phone, c.PhoneNumber, c.mobilePhone, c.MobilePhone, c.mobile].filter(Boolean).forEach(p => {
+        const digits = String(p).replace(/\D/g, "");
+        if (digits) { map.set(digits, name); if (digits.length > 10) map.set(digits.slice(-10), name); }
+      });
+    });
+    return map;
+  }, [contacts]);
+  const lookupName = num => {
+    if (!num) return null;
+    const digits = String(num).replace(/\D/g, "");
+    return contactMap.get(digits) || contactMap.get(digits.slice(-10)) || null;
+  };
 
   useEffect(() => {
     refresh();
@@ -117,255 +142,354 @@ function SwitchboardPhoneSurface({ T, onOnlineChange, compact = false, onOpenPho
     }
   };
 
-  const cleanNumber = number.trim();
+  const dial = async () => {
+    if (!number.trim()) return;
+    await post(`/dial?n=${encodeURIComponent(number.trim())}`, "dial");
+  };
+
   const sendSms = async () => {
-    if (!cleanNumber || !body.trim()) return;
-    await post(`/send?to=${encodeURIComponent(cleanNumber)}&body=${encodeURIComponent(body.trim())}`, "send");
+    if (!number.trim() || !body.trim()) return;
+    await post(`/send?to=${encodeURIComponent(number.trim())}&body=${encodeURIComponent(body.trim())}`, "send");
     setBody("");
   };
-  const dial = async () => {
-    if (!cleanNumber) return;
-    await post(`/dial?n=${encodeURIComponent(cleanNumber)}`, "dial");
+
+  const callState = status?.CallState || status?.callState || status?.CurrentCallState || status?.currentCallState || "";
+  const isIncoming = /ring|incoming/i.test(callState);
+  const isOnCall = !!callState && !isIncoming && /active|connected|call/i.test(callState);
+  const statusOnline = !!status;
+  const statusText = status ? (callState || "Ready") : "Offline";
+
+  const threadMap = new Map();
+  messages.forEach(m => {
+    const who = m.from || m.sender || m.address || m.phoneNumber || m.number || m.to || "Unknown";
+    if (!threadMap.has(who)) threadMap.set(who, { ...m, _who: who, _name: lookupName(who) || who });
+  });
+  const threads = Array.from(threadMap.values()).slice(0, compact ? 3 : 5);
+  const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, compact ? 3 : 5);
+
+  const fmtTime = (val) => {
+    if (!val) return "";
+    const d = new Date(typeof val === "number" ? val : val);
+    if (isNaN(d.getTime())) return typeof val === "string" ? val.slice(0, 8) : "";
+    const diff = Date.now() - d.getTime();
+    if (diff < 3600000) return `${Math.round(diff / 60000)}m`;
+    if (diff < 86400000) return `${Math.round(diff / 3600000)}h`;
+    return d.toLocaleDateString(undefined, { weekday: "short" });
   };
 
-  const recentMessages = messages.slice(0, compact ? 3 : 6);
-  const recentCalls = calls.slice(0, compact ? 3 : 6);
-  const suggestedNumbers = Array.from(new Set([
-    ...messages.map(m => m.from || m.sender || m.address || m.phoneNumber || m.number),
-    ...calls.map(c => c.number || c.phoneNumber || c.from || c.name || c.displayName),
-  ].filter(Boolean))).slice(0, 5);
-  const callState = status?.CallState || status?.callState || status?.CurrentCallState || status?.currentCallState || "";
-  const statusLine = status ? (callState || "Ready") : "Offline";
+  const callDirIcon = (c) => {
+    const dir = (c.direction || c.type || c.callType || c.Direction || "").toLowerCase();
+    if (dir.includes("miss") || c.missed || c.Missed) return { icon: "call_missed", color: "#BA2A2A" };
+    if (dir.includes("in") || dir.includes("receiv")) return { icon: "call_received", color: T.tSoft };
+    if (dir.includes("out") || dir.includes("dial")) return { icon: "call_made", color: T.tSoft };
+    return { icon: "call", color: T.tSoft };
+  };
+
+  const selectContact = (name, num) => {
+    setSelected({ name, number: num });
+    setNumber(num);
+  };
 
   return (
-    <div style={{display:"grid",gap:12,minWidth:0}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,minWidth:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,color:T.tSoft,fontSize:12,fontWeight:850}}>
-          <span style={{color:status ? "#0B8043" : T.tFaint,display:"flex",alignItems:"center"}}>{suiteIcon(status ? "signal_cellular_alt" : "signal_cellular_off", 17)}</span>
-          <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{statusLine}</span>
-        </div>
-        {onOpenPhone && (
-          <button onClick={onOpenPhone} title="Open DeskPhone" style={{height:30,borderRadius:11,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,fontSize:11,display:"flex",alignItems:"center",gap:5,padding:"0 9px"}}>
-            {suiteIcon("open_in_new", 15)} Open
-          </button>
-        )}
+    <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+      {/* Status bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, paddingBottom: 8, borderBottom: `1px solid ${T.brdS || T.brd}` }}>
+        <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: statusOnline ? "#2E7D32" : T.tFaint }} />
+        <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: statusOnline ? T.tSoft : T.tFaint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{statusText}</span>
+        <button onClick={refresh} disabled={!!busy} title="Refresh" style={{ width: 26, height: 26, borderRadius: 99, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("refresh", 15)}</button>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr auto auto",gap:8,alignItems:"center"}}>
-        <input value={number} onChange={e=>setNumber(e.target.value)} placeholder="Name or number" style={{minWidth:0,height:42,boxSizing:"border-box",padding:"0 12px",borderRadius:14,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontFamily:"system-ui",fontWeight:700}}/>
-        <button onClick={dial} disabled={!cleanNumber || !!busy} title="Call" style={{width:42,height:42,borderRadius:14,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",opacity:!cleanNumber ? .45 : 1,display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("call",19)}</button>
-        <button onClick={()=>post("/answer","answer")} disabled={!!busy} title="Answer" style={{width:42,height:42,borderRadius:14,border:"none",background:"#0B8043",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("phone_callback",19)}</button>
+
+      {/* Dial row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 38px 38px", gap: 6, alignItems: "center" }}>
+        <input value={number} onChange={e => setNumber(e.target.value)} onKeyDown={e => e.key === "Enter" && dial()} placeholder="Name or number" style={{ height: 38, boxSizing: "border-box", padding: "0 14px", borderRadius: 19, border: `1.5px solid ${T.brd}`, background: T.bgW, color: T.text, fontFamily: "system-ui", fontSize: 13, fontWeight: 700, outline: "none", minWidth: 0 }} />
+        <button onClick={dial} disabled={!number.trim() || !!busy} title="Call" style={{ width: 38, height: 38, borderRadius: 99, border: "none", background: number.trim() ? (T.tonal || T.bgW) : T.bgW, color: number.trim() ? (T.onTonal || T.text) : T.tFaint, cursor: number.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0 }}>{suiteIcon("call", 18)}</button>
+        <button onClick={() => post("/answer", "answer")} disabled={!!busy} title="Answer" style={{ width: 38, height: 38, borderRadius: 99, border: "none", background: isIncoming ? "#2E7D32" : T.bgW, color: isIncoming ? "#fff" : T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s, color 0.15s", boxShadow: isIncoming ? "0 2px 8px rgba(46,125,50,0.4)" : "none", flexShrink: 0 }}>{suiteIcon("phone_callback", 18)}</button>
       </div>
-      {!!suggestedNumbers.length && (
-        <div style={{display:"flex",gap:6,overflow:"hidden",flexWrap:"wrap"}}>
-          {suggestedNumbers.map(n => (
-            <button key={n} onClick={()=>setNumber(n)} style={{maxWidth:150,height:28,borderRadius:999,border:`1px solid ${T.brdS || T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",padding:"0 9px",fontSize:11,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{n}</button>
-          ))}
+
+      {/* Messages */}
+      <div style={{ marginTop: 4 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.tFaint, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 4, paddingLeft: 2 }}>Messages</div>
+        {threads.length ? threads.map((m, idx) => {
+          const isSelected = selected?.number === m._who;
+          const preview = m.body || m.text || m.message || m.content || "";
+          const time = fmtTime(m.timestamp || m.date || m.time);
+          return (
+            <button key={`${m._who}-${idx}`} onClick={() => selectContact(m._name, m._who)}
+              style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "32px minmax(0,1fr) auto", gap: 8, alignItems: "start", padding: "7px 4px", border: "none", borderBottom: idx < threads.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none", background: isSelected ? (T.tonal || T.bgW) : "transparent", color: T.text, cursor: "pointer", borderRadius: 10 }}>
+              <span style={{ width: 30, height: 30, borderRadius: 99, background: T.bgW, border: `1px solid ${T.brd}`, display: "flex", alignItems: "center", justifyContent: "center", color: T.tSoft, flexShrink: 0, marginTop: 1 }}>{suiteIcon("person", 16)}</span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 13, fontWeight: 800, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m._name}</span>
+                {preview && <span style={{ display: "block", fontSize: 11, color: T.tSoft, marginTop: 1, ...(isSelected ? { whiteSpace: "normal", wordBreak: "break-word" } : { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }) }}>{preview}</span>}
+              </span>
+              {time && <span style={{ fontSize: 11, color: T.tFaint, flexShrink: 0, fontWeight: 600, marginTop: 2 }}>{time}</span>}
+            </button>
+          );
+        }) : <div style={{ fontSize: 12, color: T.tFaint, padding: "6px 2px" }}>No recent messages.</div>}
+      </div>
+
+      {/* Recent calls */}
+      <div style={{ marginTop: 4 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.tFaint, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 4, paddingLeft: 2 }}>Recent calls</div>
+        {recentCalls.length ? recentCalls.map((c, idx) => {
+          const num = c.number || c.phoneNumber || c.from || c.Number || c.PhoneNumber || "";
+          const name = lookupName(num) || c.name || c.displayName || c.Name || c.DisplayName || c.from || num || "Unknown";
+          const { icon, color } = callDirIcon(c);
+          const time = fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime);
+          const isSelected = selected?.number === num;
+          const showNum = num && num !== name;
+          return (
+            <button key={`call-${idx}`} onClick={() => selectContact(name, num)}
+              style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "32px minmax(0,1fr) auto", gap: 8, alignItems: "start", padding: "7px 4px", border: "none", borderBottom: idx < recentCalls.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none", background: isSelected ? (T.tonal || T.bgW) : "transparent", color: T.text, cursor: "pointer", borderRadius: 10 }}>
+              <span style={{ width: 30, height: 30, borderRadius: 99, background: T.bgW, border: `1px solid ${T.brd}`, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0, marginTop: 1 }}>{suiteIcon(icon, 15)}</span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 13, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
+                {showNum && <span style={{ display: "block", fontSize: 11, color: T.tSoft, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{num}</span>}
+              </span>
+              {time && <span style={{ fontSize: 11, color: T.tFaint, flexShrink: 0, fontWeight: 600, marginTop: 2 }}>{time}</span>}
+            </button>
+          );
+        }) : <div style={{ fontSize: 12, color: T.tFaint, padding: "6px 2px" }}>{statusOnline ? "No recent calls." : "Open DeskPhone to connect."}</div>}
+      </div>
+
+      {/* Compose — slides in when contact selected */}
+      {selected && (
+        <div style={{ marginTop: 4, paddingTop: 10, borderTop: `1px solid ${T.brdS || T.brd}`, display: "grid", gap: 7 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            {suiteIcon("reply", 14)}
+            <span style={{ fontSize: 12, color: T.tSoft, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{selected.name}</span>
+            <button onClick={() => { setSelected(null); setBody(""); }} style={{ width: 22, height: 22, borderRadius: 99, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("close", 13)}</button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 38px", gap: 6, alignItems: "flex-end" }}>
+            <textarea value={body} onChange={e => setBody(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendSms(); } }} placeholder="Message…" rows={2} style={{ boxSizing: "border-box", borderRadius: 14, border: `1.5px solid ${T.brd}`, background: T.bgW, color: T.text, padding: "8px 12px", fontSize: 13, fontFamily: "system-ui", resize: "none", outline: "none", width: "100%" }} />
+            <button onClick={sendSms} disabled={!body.trim() || !!busy} style={{ width: 38, height: 38, borderRadius: 99, border: "none", background: body.trim() ? (T.primary || T.text) : T.bgW, color: body.trim() ? (T.onPrimary || T.bg) : T.tFaint, cursor: body.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0 }}>{suiteIcon("send", 17)}</button>
+          </div>
+          {(isOnCall || isIncoming) && (
+            <button onClick={() => post("/hangup", "hangup")} style={{ height: 34, borderRadius: 17, border: "none", background: "#BA2A2A", color: "#fff", cursor: "pointer", fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 12, fontFamily: "system-ui" }}>{suiteIcon("call_end", 15)} End call</button>
+          )}
         </div>
       )}
-      <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Text message" rows={compact ? 2 : 3} style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:14,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontFamily:"system-ui",resize:"vertical",minHeight:compact?68:88}}/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-        <button onClick={sendSms} disabled={!cleanNumber || !body.trim() || !!busy} style={{height:38,borderRadius:13,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:900,opacity:(!cleanNumber || !body.trim()) ? .45 : 1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("send",17)} Send</button>
-        <button onClick={()=>post("/hangup","hangup")} disabled={!!busy} style={{height:38,borderRadius:13,border:"none",background:"#BA2A2A",color:"#fff",cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("call_end",17)} End</button>
-        <button onClick={refresh} disabled={!!busy} style={{height:38,borderRadius:13,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("refresh",17)} Sync</button>
-      </div>
-      {error && <div style={{fontSize:12,lineHeight:1.35,color:T.tSoft,background:T.bgW,border:`1px solid ${T.brd}`,borderRadius:12,padding:"8px 10px"}}>{error}</div>}
-      <div style={{display:"grid",gridTemplateColumns:compact ? "1fr" : "1fr 1fr",gap:10,minWidth:0}}>
-        <div style={{minWidth:0}}>
-          <div style={{fontSize:10,fontWeight:900,color:T.tFaint,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Texts</div>
-          {recentMessages.length ? recentMessages.map((m, idx) => {
-            const from = m.from || m.sender || m.address || m.phoneNumber || m.number || "Message";
-            const text = m.body || m.text || m.message || m.content || "";
-            return (
-              <button key={m.id || m.handle || idx} onClick={()=>setNumber(from)} style={{width:"100%",textAlign:"left",border:"none",borderBottom:idx===recentMessages.length-1?"none":`1px solid ${T.brdS || T.brd}`,background:"transparent",padding:"7px 0",cursor:"pointer",color:T.text}}>
-                <div style={{fontSize:12,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{from}</div>
-                <div style={{fontSize:11,color:T.tSoft,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{text || "Open thread"}</div>
-              </button>
-            );
-          }) : <div style={{fontSize:12,color:T.tFaint}}>No recent texts loaded.</div>}
-        </div>
-        <div style={{minWidth:0}}>
-          <div style={{fontSize:10,fontWeight:900,color:T.tFaint,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Calls</div>
-          {recentCalls.length ? recentCalls.map((c, idx) => {
-            const n = c.number || c.phoneNumber || c.name || c.displayName || "Call";
-            return (
-              <button key={c.id || idx} onClick={()=>setNumber(n)} style={{width:"100%",textAlign:"left",border:"none",borderBottom:idx===recentCalls.length-1?"none":`1px solid ${T.brdS || T.brd}`,background:"transparent",padding:"7px 0",cursor:"pointer",color:T.text}}>
-                <div style={{fontSize:12,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{n}</div>
-                <div style={{fontSize:11,color:T.tSoft,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{c.type || c.when || "Recent call"}</div>
-              </button>
-            );
-          }) : <div style={{fontSize:12,color:T.tFaint}}>{status ? "No recent calls loaded." : "Waiting for DeskPhone."}</div>}
-        </div>
-      </div>
+
+      {error && <div style={{ fontSize: 12, color: T.tSoft, background: T.bgW, borderRadius: 10, padding: "7px 10px", marginTop: 4 }}>{error}</div>}
     </div>
   );
 }
 
-function SwitchboardPanel({ T, sections = [], stats = {}, tasks = [], shailos = [], priorities = [], onAddTask, onOpenTasks, onOpenQueue, onOpenZen, onOpenBrainDump, onOpenBulkAdd, onOpenShatter, onOpenShailos, onOpenShailaAdd, onOpenShailaFollowup, onRecordConversation, onRecordCall, onRecordShaila, onOpenPhone, onOnlineChange, onClose }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange }) {
   const [taskDraft, setTaskDraft] = useState("");
-  const [taskPriority, setTaskPriority] = useState(priorities.find(p=>p.id==="now")?.id || priorities[0]?.id || "now");
-  const visiblePriorities = priorities.filter(p => !p.deleted).slice(0, 6);
+  const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const taskInputRef = useRef(null);
+  const [actionCategoryId, setActionCategoryId] = useState("tasks");
+
+  const GOLD = "#C9923C";
+  const GOLD_BG = "rgba(201,146,60,0.07)";
+  const GOLD_BRD = "rgba(201,146,60,0.18)";
+
+  const shailaPriorityIds = new Set(priorities.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
+  const isShailaWork = t => t?.type === "shailo-research" || t?.type === "shaila-research" || !!t?.shailaId || !!t?.isGetBackStep || shailaPriorityIds.has(t?.priority);
+  const primaryTasks = tasks.filter(t => !isShailaWork(t)).slice(0, 8);
+  const shailaWorkTasks = tasks.filter(isShailaWork).slice(0, 8);
+  const visibleShailos = shailos.slice(0, 10);
+
+  const NC_LABEL = { now: "Now", today: "Soon", eventually: "Long" };
+  const ncCorePills = ["now", "today", "eventually"]
+    .map(id => { const p = priorities.find(x => x.id === id && !x.deleted); return p ? { ...p, ncLabel: NC_LABEL[id] || p.label } : null; })
+    .filter(Boolean);
+  const activePri = gP(priorities, taskPriority);
+  const activePriColor = activePri?.color || T.primary || "#7EB0DE";
+
+  const bySection = Object.fromEntries(sections.map(s => [s.id, s]));
+  const collectActions = (...ids) => ids.flatMap(id => bySection[id]?.actions || []);
+  const actionCategories = [
+    { id: "tasks",   title: "Tasks",   icon: "task_alt",     actions: collectActions("priority", "focus") },
+    { id: "shailos", title: "Shailos", icon: "rule",         actions: [...collectActions("shaila"), ...(bySection.record?.actions || []).filter(a => a.id === "record-shaila")] },
+    { id: "phone",   title: "Phone",   icon: "phone_in_talk",actions: [...collectActions("phone"), ...(bySection.record?.actions || []).filter(a => a.id === "record-call")] },
+    { id: "setup",   title: "Setup",   icon: "settings",     actions: [...(bySection.record?.actions || []).filter(a => !["record-shaila","record-call"].includes(a.id)), ...collectActions("system")] },
+  ].filter(c => c.actions.length);
+  const activeActionCategory = actionCategories.find(c => c.id === actionCategoryId) || actionCategories[0];
+
   const addDraft = () => {
     const text = taskDraft.trim();
     if (!text) return;
     onAddTask?.(text, taskPriority);
     setTaskDraft("");
+    if (taskInputRef.current) { taskInputRef.current.style.height = "36px"; }
   };
-  const actionCard = (label, icon, run, tone) => (
-    <button onClick={run} style={{height:42,borderRadius:14,border:`1px solid ${tone || T.brd}`,background:tone ? `${tone}18` : T.bgW,color:tone ? (priText?.(tone) || T.text) : T.text,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7,fontWeight:900,fontFamily:"system-ui",fontSize:12,minWidth:0}}>
-      {suiteIcon(icon, 17)} <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</span>
-    </button>
-  );
+
   return (
-    <div style={{position:"fixed",inset:"64px 0 0",zIndex:7600,background:T.bg,overflow:"auto",borderTop:`1px solid ${T.brdS || T.brd}`}}>
-      <div style={{maxWidth:1260,margin:"0 auto",padding:"clamp(16px,2.6vw,28px)",boxSizing:"border-box"}}>
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,marginBottom:18}}>
-          <div>
-            <div style={{display:"flex",alignItems:"center",gap:10,color:T.text,fontFamily:"system-ui",fontWeight:900,fontSize:22}}>
-              {suiteIcon("dashboard_customize", 25)}
-              Switchboard
-            </div>
-            <div style={{marginTop:5,color:T.tSoft,fontFamily:"system-ui",fontSize:13,lineHeight:1.45}}>
-              Tasks, questions, calls, and texts in one work surface.
-            </div>
+    <div style={{ position: "fixed", inset: "64px 0 0", zIndex: 7600, background: T.bg, overflow: "hidden", borderTop: `1px solid ${T.brdS || T.brd}` }}>
+      <div style={{ maxWidth: 1400, height: "100%", margin: "0 auto", padding: "clamp(12px,2vw,20px)", boxSizing: "border-box", display: "flex", flexDirection: "column", minHeight: 0 }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 14, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, color: T.text, fontFamily: "system-ui", fontWeight: 900, fontSize: 20 }}>
+            {suiteIcon("hub", 24)}
+            NerveCenter
           </div>
-          <button onClick={onClose} title="Back to tasks" style={{height:38,padding:"0 13px",borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",display:"flex",alignItems:"center",gap:7,fontFamily:"system-ui",fontWeight:800}}>
-            {suiteIcon("task_alt", 18)} Tasks
+          <button onClick={() => setActionsOpen(true)} style={{ height: 38, padding: "0 16px", borderRadius: 19, border: "none", background: T.primary || T.text, color: T.onPrimary || T.bg, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, fontFamily: "system-ui", fontWeight: 900, fontSize: 13 }}>
+            {suiteIcon("apps", 18)} Actions
           </button>
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:18}}>
-          {[
-            ["Open tasks", stats.tasks ?? 0, "task_alt"],
-            ["Active shailos", stats.shailos ?? 0, "rule"],
-            ["Phone", stats.phoneOnline ? "Ready" : "Open", "smartphone"],
-          ].map(([label, value, icon]) => (
-            <div key={label} style={{background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-              <span style={{width:34,height:34,borderRadius:12,background:T.tonal || T.bgW,color:T.onTonal || T.text,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{suiteIcon(icon, 19)}</span>
-              <div style={{minWidth:0}}>
-                <div style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",fontWeight:800,textTransform:"uppercase",letterSpacing:.6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
-                <div style={{fontSize:16,color:T.text,fontFamily:"system-ui",fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{value}</div>
-              </div>
-            </div>
-          ))}
-        </div>
+        {/* Three-panel grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14, flex: 1, minHeight: 0, alignItems: "stretch" }}>
 
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,300px),1fr))",gap:14,alignItems:"start"}}>
-          <section style={{background:T.card,border:`1px solid ${T.brd}`,borderRadius:18,padding:15,minWidth:0,boxShadow:T.shadow || "none"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:12}}>
-              <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
-                <span style={{width:34,height:34,borderRadius:13,background:T.tonal || T.bgW,color:T.onTonal || T.text,display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("task_alt",19)}</span>
-                <div style={{minWidth:0}}>
-                  <div style={{fontSize:15,fontWeight:950,color:T.text,fontFamily:"system-ui"}}>Tasks</div>
-                  <div style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui"}}>{stats.tasks || 0} open</div>
+          {/* ── Tasks ── */}
+          <section style={{ background: T.card, border: `1px solid ${T.brd}`, borderRadius: 20, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", boxShadow: T.shadow || "none" }}>
+            <div style={{ padding: "13px 14px 10px", borderBottom: `1px solid ${T.brdS || T.brd}`, flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 32, height: 32, borderRadius: 10, background: T.tonal || T.bgW, color: T.onTonal || T.text, display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("task_alt", 17)}</span>
+                  <span style={{ fontSize: 15, fontWeight: 950, color: T.text, fontFamily: "system-ui" }}>Tasks</span>
                 </div>
+                <button onClick={onOpenQueue} style={{ height: 28, padding: "0 10px", borderRadius: 14, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+                  {suiteIcon("list_alt", 13)} Queue
+                </button>
               </div>
-              <button onClick={onOpenQueue} style={{height:32,borderRadius:11,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,fontSize:11}}>More</button>
+              {/* Quick add — input + equal-width priority pills + add FAB, all inline */}
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <textarea ref={taskInputRef} value={taskDraft} rows={1}
+                  onChange={e => { setTaskDraft(e.target.value); e.target.style.height = "36px"; e.target.style.height = Math.min(e.target.scrollHeight, 108) + "px"; }}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(); } }}
+                  placeholder="Add a task…"
+                  style={{ flex: 1, minWidth: 0, height: 36, maxHeight: 108, boxSizing: "border-box", borderRadius: 18, border: `1.5px solid ${T.brd}`, background: T.bgW, color: T.text, padding: "8px 13px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui", outline: "none", resize: "none", overflowY: "hidden", lineHeight: 1.45 }} />
+                {ncCorePills.map(p => {
+                  const active = taskPriority === p.id;
+                  return (
+                    <button key={p.id} onClick={() => setTaskPriority(p.id)}
+                      style={{ width: 46, height: 32, flexShrink: 0, borderRadius: 16, border: `1.5px solid ${p.color}`, background: active ? p.color : "transparent", color: active ? textOnColor(p.color) : p.color, cursor: "pointer", fontSize: 12, fontWeight: 800, fontFamily: "system-ui", transition: "background 0.12s, color 0.12s" }}>
+                      {p.ncLabel}
+                    </button>
+                  );
+                })}
+                <button onClick={addDraft} disabled={!taskDraft.trim()} style={{ width: 36, height: 36, borderRadius: 99, border: "none", background: activePriColor, color: textOnColor(activePriColor), cursor: "pointer", opacity: taskDraft.trim() ? 1 : 0.38, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {suiteIcon("add", 19)}
+                </button>
+              </div>
             </div>
-            <div style={{display:"grid",gap:8,marginBottom:12}}>
-              {tasks.length ? tasks.slice(0,3).map(t => {
+            <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0 }}>
+              {primaryTasks.length ? primaryTasks.map(t => {
                 const pri = gP(priorities, t.priority);
+                const priColor = pri?.color || T.primary || "#7EB0DE";
                 return (
-                  <button key={t.id} onClick={onOpenTasks} style={{width:"100%",minHeight:54,textAlign:"left",borderRadius:14,border:`1px solid ${T.brdS || T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",display:"grid",gridTemplateColumns:"5px minmax(0,1fr)",gap:10,padding:"9px 10px",overflow:"hidden"}}>
-                    <span style={{width:5,borderRadius:8,background:pri.color,height:"100%"}}/>
-                    <span style={{minWidth:0}}>
-                      <span style={{display:"block",fontSize:13,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.text}</span>
-                      <span style={{display:"block",fontSize:10.5,color:T.tSoft,fontWeight:800,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pri.label || t.priority}</span>
+                  <div key={t.id} style={{ display: "grid", gridTemplateColumns: "8px minmax(0,1fr) auto", gap: 10, padding: "10px 12px 10px 0", borderBottom: `1px solid ${T.brdS || T.brd}`, alignItems: "start" }}>
+                    <span style={{ width: 8, alignSelf: "stretch", minHeight: 22, borderRadius: "0 4px 4px 0", background: priColor, flexShrink: 0 }} />
+                    <span style={{ minWidth: 0, paddingLeft: 4, paddingTop: 1 }}>
+                      <span style={{ display: "block", fontSize: 14, fontWeight: 700, lineHeight: 1.45, color: T.text, wordBreak: "break-word" }}>{t.text}</span>
                     </span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: textOnColor(priColor), background: priColor, borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 2, opacity: 0.9 }}>{pri?.label || pri?.id || ""}</span>
+                  </div>
+                );
+              }) : <div style={{ padding: "16px 14px", fontSize: 13, color: T.tFaint }}>No open tasks.</div>}
+
+              {shailaWorkTasks.length > 0 && (
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px 6px", borderTop: `1px solid ${T.brdS || T.brd}` }}>
+                    <span style={{ color: GOLD }}>{suiteIcon("rule", 13)}</span>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: GOLD, letterSpacing: 0.5, textTransform: "uppercase" }}>Shaila tasks</span>
+                  </div>
+                  {shailaWorkTasks.map(t => {
+                    const isGetBack = !!t.isGetBackStep;
+                    const isResearch = t.type === "shaila-research" || t.type === "shailo-research";
+                    const label = isGetBack ? "Get back" : isResearch ? "Research" : "Open";
+                    return (
+                      <div key={t.id} style={{ display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap: 10, padding: "10px 12px 10px 0", borderBottom: `1px solid ${GOLD_BRD}`, background: GOLD_BG, alignItems: "center" }}>
+                        <span style={{ width: 3, minHeight: 32, borderRadius: 2, background: GOLD, flexShrink: 0 }} />
+                        <span style={{ paddingLeft: 5, fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.text}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, background: "rgba(201,146,60,0.12)", border: `1px solid ${GOLD_BRD}`, borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4 }}>{label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ── Shailos ── */}
+          <section style={{ background: T.card, border: `1px solid ${T.brd}`, borderRadius: 20, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", boxShadow: T.shadow || "none" }}>
+            <div style={{ padding: "13px 14px 12px", borderBottom: `1px solid ${T.brdS || T.brd}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(201,146,60,0.14)", color: GOLD, display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("rule", 17)}</span>
+                <span style={{ fontSize: 15, fontWeight: 950, color: T.text, fontFamily: "system-ui" }}>Shailos</span>
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={onOpenShailaAdd} style={{ height: 28, padding: "0 10px", borderRadius: 14, border: "none", background: GOLD, color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 800, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+                  {suiteIcon("add", 13)} Add
+                </button>
+                <button onClick={onOpenShailos} style={{ height: 28, padding: "0 10px", borderRadius: 14, border: `1px solid ${GOLD_BRD}`, background: "transparent", color: GOLD, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+                  {suiteIcon("open_in_full", 13)} Open
+                </button>
+              </div>
+            </div>
+            <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0 }}>
+              {visibleShailos.length ? visibleShailos.map((s, idx) => {
+                const text = s.parentTask || s.text || s.shaila || s.question || "Open shaila";
+                return (
+                  <button key={s.id} onClick={onOpenShailos}
+                    style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap: 10, padding: "11px 12px 11px 0", border: "none", borderBottom: idx < visibleShailos.length - 1 ? `1px solid ${GOLD_BRD}` : "none", background: GOLD_BG, color: T.text, cursor: "pointer", alignItems: "center" }}>
+                    <span style={{ width: 3, minHeight: 32, borderRadius: 2, background: GOLD, flexShrink: 0 }} />
+                    <span style={{ paddingLeft: 5, fontSize: 13, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{text}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, background: "rgba(201,146,60,0.10)", border: `1px solid ${GOLD_BRD}`, borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4 }}>Open</span>
                   </button>
                 );
-              }) : <div style={{fontSize:13,color:T.tFaint,background:T.bgW,border:`1px solid ${T.brd}`,borderRadius:14,padding:12}}>No open tasks in this list.</div>}
-            </div>
-            <div style={{display:"grid",gap:8}}>
-              <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-                {visiblePriorities.map(p => (
-                  <button key={p.id} onClick={()=>setTaskPriority(p.id)} title={p.label} style={{height:30,borderRadius:999,border:`1px solid ${p.id===taskPriority?p.color:T.brd}`,background:p.id===taskPriority?`${p.color}24`:T.bgW,color:p.id===taskPriority?(priText?.(p.color) || T.text):T.tSoft,cursor:"pointer",fontSize:11,fontWeight:950,padding:"0 10px",display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{width:8,height:8,borderRadius:99,background:p.color}}/> {p.label}
-                  </button>
-                ))}
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 42px",gap:8}}>
-                <input value={taskDraft} onChange={e=>setTaskDraft(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addDraft();}}} placeholder="Add a task" style={{height:42,minWidth:0,boxSizing:"border-box",borderRadius:14,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,padding:"0 12px",fontWeight:800,fontFamily:"system-ui"}}/>
-                <button onClick={addDraft} disabled={!taskDraft.trim()} style={{height:42,border:"none",borderRadius:14,background:gP(priorities, taskPriority).color,color:textOnColor(gP(priorities, taskPriority).color),cursor:"pointer",opacity:taskDraft.trim()?1:.45,display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("add",21)}</button>
-              </div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:12}}>
-              {actionCard("Zen", "self_improvement", onOpenZen)}
-              {actionCard("Brain dump", "psychology", onOpenBrainDump)}
-              {actionCard("Shatter", "account_tree", onOpenShatter)}
-              {actionCard("Paste list", "playlist_add", onOpenBulkAdd)}
+              }) : <div style={{ padding: "16px 14px", fontSize: 13, color: T.tFaint }}>No pending shailos.</div>}
             </div>
           </section>
 
-          <section style={{background:T.card,border:`1px solid ${T.brd}`,borderRadius:18,padding:15,minWidth:0,boxShadow:T.shadow || "none"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:12}}>
-              <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
-                <span style={{width:34,height:34,borderRadius:13,background:T.tonal || T.bgW,color:T.onTonal || T.text,display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("rule",19)}</span>
-                <div style={{minWidth:0}}>
-                  <div style={{fontSize:15,fontWeight:950,color:T.text,fontFamily:"system-ui"}}>Shailos</div>
-                  <div style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui"}}>{stats.shailos || 0} open</div>
-                </div>
+          {/* ── Phone ── */}
+          <section style={{ background: T.card, border: `1px solid ${T.brd}`, borderRadius: 20, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", boxShadow: T.shadow || "none" }}>
+            <div style={{ padding: "13px 14px 12px", borderBottom: `1px solid ${T.brdS || T.brd}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 32, height: 32, borderRadius: 10, background: T.tonal || T.bgW, color: T.onTonal || T.text, display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("phone_in_talk", 17)}</span>
+                <span style={{ fontSize: 15, fontWeight: 950, color: T.text, fontFamily: "system-ui" }}>Phone</span>
               </div>
-              <button onClick={onOpenShailos} style={{height:32,borderRadius:11,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,fontSize:11}}>More</button>
+              <button onClick={onOpenPhone} style={{ height: 28, padding: "0 10px", borderRadius: 14, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+                {suiteIcon("open_in_full", 13)} Open
+              </button>
             </div>
-            <div style={{display:"grid",gap:8,marginBottom:12}}>
-              {shailos.length ? shailos.slice(0,3).map(s => (
-                <button key={s.id} onClick={onOpenShailos} style={{width:"100%",minHeight:54,textAlign:"left",borderRadius:14,border:`1px solid ${T.brdS || T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",padding:"9px 10px",overflow:"hidden"}}>
-                  <div style={{fontSize:13,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.text || s.shaila || "Open shaila"}</div>
-                  <div style={{fontSize:10.5,color:T.tSoft,fontWeight:800,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.isGetBackStep ? "Follow up" : "Pending answer"}</div>
+            <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0, padding: "10px 14px" }}>
+              <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} compact />
+            </div>
+          </section>
+        </div>
+
+        {/* Actions drawer */}
+        {actionsOpen && (
+          <div style={{ position: "fixed", inset: "64px 0 0", zIndex: 7800, display: "flex", justifyContent: "flex-end", background: "rgba(0,0,0,0.28)" }} onClick={() => setActionsOpen(false)}>
+            <aside onClick={e => e.stopPropagation()} style={{ width: "min(540px,94vw)", height: "100%", background: T.card, borderLeft: `1px solid ${T.brd}`, boxShadow: "-18px 0 44px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column" }}>
+              <div style={{ height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", borderBottom: `1px solid ${T.brdS || T.brd}`, flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 17, fontWeight: 950, fontFamily: "system-ui", color: T.text }}>
+                  {suiteIcon("apps", 20)} Actions
+                </div>
+                <button onClick={() => setActionsOpen(false)} style={{ width: 34, height: 34, borderRadius: 99, border: `1px solid ${T.brd}`, background: T.bgW, color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {suiteIcon("close", 17)}
                 </button>
-              )) : <div style={{fontSize:13,color:T.tFaint,background:T.bgW,border:`1px solid ${T.brd}`,borderRadius:14,padding:12}}>No pending shailos on the main list.</div>}
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              {actionCard("Add shaila", "add_circle", onOpenShailaAdd)}
-              {actionCard("Follow up", "fact_check", onOpenShailaFollowup)}
-              {actionCard("Record", "record_voice_over", onRecordShaila)}
-              {actionCard("Check sync", "sync", sections.find(s=>s.id==="shaila")?.actions?.find(a=>a.id==="reconcile")?.run)}
-            </div>
-          </section>
-
-          <section style={{background:T.card,border:`1px solid ${T.brd}`,borderRadius:18,padding:15,minWidth:0,boxShadow:T.shadow || "none"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:12}}>
-              <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
-                <span style={{width:34,height:34,borderRadius:13,background:T.tonal || T.bgW,color:T.onTonal || T.text,display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("phone_in_talk",19)}</span>
-                <div style={{minWidth:0}}>
-                  <div style={{fontSize:15,fontWeight:950,color:T.text,fontFamily:"system-ui"}}>Calls and texts</div>
-                  <div style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui"}}>{stats.phoneOnline ? "Ready" : "Waiting for DeskPhone"}</div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "130px minmax(0,1fr)", minHeight: 0, flex: 1 }}>
+                <div style={{ borderRight: `1px solid ${T.brdS || T.brd}`, padding: 8, display: "grid", alignContent: "start", gap: 4, background: T.bgW, overflow: "auto" }}>
+                  {actionCategories.map(cat => {
+                    const isActive = activeActionCategory?.id === cat.id;
+                    return (
+                      <button key={cat.id} onClick={() => setActionCategoryId(cat.id)}
+                        style={{ height: 40, borderRadius: 12, border: isActive ? `1px solid ${T.primary || T.brd}` : "1px solid transparent", background: isActive ? (T.tonal || T.card) : "transparent", color: T.text, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, padding: "0 10px", fontWeight: 800, fontFamily: "system-ui", fontSize: 13, textAlign: "left" }}>
+                        {suiteIcon(cat.icon, 17)} {cat.title}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ padding: 10, overflow: "auto", display: "grid", alignContent: "start", gap: 6 }}>
+                  {(activeActionCategory?.actions || []).map(action => (
+                    <button key={action.id || action.label} onClick={() => { if (action.disabled) return; setActionsOpen(false); action.run?.(); }} disabled={action.disabled}
+                      style={{ minHeight: 46, borderRadius: 14, border: `1px solid ${T.brdS || T.brd}`, background: action.primary ? (T.primary || T.text) : T.bgW, color: action.primary ? (T.onPrimary || T.bg) : T.text, cursor: action.disabled ? "default" : "pointer", opacity: action.disabled ? 0.5 : 1, padding: "0 12px", display: "grid", gridTemplateColumns: "28px minmax(0,1fr)", gap: 9, alignItems: "center", fontFamily: "system-ui", textAlign: "left" }}>
+                      <span style={{ width: 28, height: 28, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", background: action.primary ? "rgba(255,255,255,0.15)" : (T.tonal || T.bgW), color: action.primary ? (T.onPrimary || "#fff") : (T.onTonal || T.tSoft), flexShrink: 0 }}>{suiteIcon(action.icon, 16)}</span>
+                      <span style={{ fontSize: 13, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{action.label}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
-              <button onClick={onOpenPhone} style={{height:32,borderRadius:11,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,fontSize:11}}>Open</button>
-            </div>
-            <SwitchboardPhoneSurface T={T} onOnlineChange={onOnlineChange} onOpenPhone={onOpenPhone} compact />
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:12}}>
-              {actionCard("Record call", "phone_in_talk", onRecordCall)}
-              {actionCard("Record note", "mic", onRecordConversation)}
-            </div>
-          </section>
-        </div>
-
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10,marginTop:14}}>
-          {sections.map(section => (
-            <section key={section.id || section.title} style={{background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,padding:12,minWidth:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
-                <span style={{width:34,height:34,borderRadius:12,background:T.bgW,color:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{suiteIcon(section.icon, 19)}</span>
-                <div style={{minWidth:0}}>
-                  <div style={{fontFamily:"system-ui",fontSize:14,fontWeight:900,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{section.title}</div>
-                  <div style={{fontFamily:"system-ui",fontSize:11,color:T.tFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{section.meta}</div>
-                </div>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8}}>
-                {section.actions.map(action => (
-                  <button key={action.id || action.label} onClick={action.run} disabled={action.disabled}
-                    style={{minHeight:40,textAlign:"left",borderRadius:12,border:`1px solid ${T.brdS || T.brd}`,background:action.primary?(T.primary || T.text):T.bgW,color:action.primary?(T.onPrimary || T.bg):T.text,cursor:action.disabled?"default":"pointer",opacity:action.disabled ? .55 : 1,padding:"7px 9px",display:"grid",gridTemplateColumns:"24px minmax(0,1fr)",gap:7,alignItems:"center",fontFamily:"system-ui"}}>
-                    <span style={{width:24,height:24,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",background:action.primary?"rgba(255,255,255,0.18)":(T.tonal || T.card),color:action.primary?(T.onPrimary || "#fff"):(T.onTonal || T.tSoft),flexShrink:0}}>{suiteIcon(action.icon, 16)}</span>
-                    <span style={{minWidth:0}}>
-                      <span style={{display:"block",fontSize:12,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{action.label}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+            </aside>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -522,7 +646,7 @@ function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch 
             <button onClick={()=>releaseStage()} style={{height:40,borderRadius:13,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>{suiteIcon("open_in_full",18)} Release</button>
           </div>
         </div>
-        <SwitchboardPhoneSurface T={T} onOnlineChange={onOnlineChange} />
+        <DeskPhoneWebPanel T={T} onOnlineChange={onOnlineChange} onLaunchNative={onLaunch} embedded />
       </div>
     </div>
   );
@@ -1038,11 +1162,13 @@ function App({ user, onSignOut }) {
             toAdd.push({
               id: uid(), text: `Research – ${shortDesc}`,
               completed: false, priority: "shaila", createdAt: baseTime,
+              type: "shailo-research",
               shailaId: s.id, parentTask: parentText, stepIndex: 1, totalSteps: 2,
             });
             toAdd.push({
               id: uid(), text: `Get back – ${shortDesc}`,
               completed: false, priority: "shaila", createdAt: baseTime,
+              type: "shailo-research",
               shailaId: s.id, isGetBackStep: true,
               parentTask: parentText, stepIndex: 2, totalSteps: 2,
             });
@@ -1640,11 +1766,13 @@ function App({ user, onSignOut }) {
       const step1 = {
         id: uid(), text: `Research – ${shortDesc}`, completed: false, priority: pri,
         createdAt: baseTime, shailaId: shailaId,
+        type: "shailo-research",
         parentTask: parentText, stepIndex: 1, totalSteps: 2,
       };
       const step2 = {
         id: uid(), text: `Get back – ${shortDesc}`, completed: false, priority: pri,
         createdAt: baseTime, shailaId: shailaId, isGetBackStep: true,
+        type: "shailo-research",
         parentTask: parentText, stepIndex: 2, totalSteps: 2,
       };
       uT(ts => doOpt([...ts, step1, step2]));
@@ -2394,9 +2522,10 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
   if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui",color:"#999"}}>Loading...</div>;
 
   const isShailaPriority = (id) => id === "shaila" || !!pris.find(p => p.id === id && p.isShaila);
-  const switchboardTaskList = actT.filter(t => !isShailaPriority(t.priority) && !t.isGetBackStep).slice(0, 6);
-  const switchboardShailaList = actT.filter(t => isShailaPriority(t.priority) && !t.isGetBackStep && !t.completed).slice(0, 6);
-  const shailaOpenCount = switchboardShailaList.length;
+  const switchboardTaskList = actT.filter(t => !t.completed);
+  const switchboardShailaAll = actT.filter(t => isShailaPriority(t.priority) && !t.isGetBackStep && !t.completed);
+  const switchboardShailaList = switchboardShailaAll.slice(0, 12);
+  const shailaOpenCount = switchboardShailaAll.length;
   const shellHidden = !!(zen && curT);
   const launchDeskPhone = (force = false) => {
     if (!force && deskPhoneOnline) return;
@@ -2439,7 +2568,10 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
   };
   const openCommandView = (view) => {
     if (view === "deskphone") {
-      bringDeskPhoneForward();
+      setSuiteView("deskphone");
+      setShailosAction(null);
+      setShowShailos(false);
+      syncDeskPhoneTheme(true);
       return;
     }
     setSuiteView(view);
@@ -2468,7 +2600,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       setShailosAction(target.action || null);
       openCommandView("shailos");
     } else if (target.id === "tasks") {
-      openCommandView("switchboard");
+      openCommandView("nervecenter");
     } else if (target.id === "deskphone") {
       openCommandView("deskphone");
     }
@@ -2520,7 +2652,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       icon: "phone_in_talk",
       meta: "Calls, texts, and call notes",
       actions: [
-        {id:"launch-phone", label:"Open phone", note:deskPhoneOnline ? "Ready" : "Start DeskPhone", icon:"smartphone", primary:true, run:bringDeskPhoneForward},
+        {id:"launch-phone", label:"Open phone", note:deskPhoneOnline ? "Web ready" : "Open web phone", icon:"smartphone", primary:true, run:()=>openCommandView("deskphone")},
         {id:"answer-phone", label:"Answer", note:"Incoming call", icon:"phone_callback", run:()=>sendDeskPhoneCommand("/answer")},
         {id:"end-phone", label:"Hang up", note:"End active call", icon:"call_end", run:()=>sendDeskPhoneCommand("/hangup")},
         {id:"sync-phone", label:"Sync", note:"Refresh calls and texts", icon:"sync", run:()=>sendDeskPhoneCommand("/refresh")},
@@ -3095,17 +3227,13 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           T={T}
           active={suiteView}
           onSelect={openCommandView}
-          taskCount={effectiveCount}
-          shailaCount={shailaOpenCount}
-          phoneOnline={deskPhoneOnline}
         />
       )}
 
-      {!shellHidden && suiteView === "switchboard" && (
-        <SwitchboardPanel
+      {!shellHidden && suiteView === "nervecenter" && (
+        <NerveCenterPanel
           T={T}
           sections={switchboardSections}
-          stats={{tasks: effectiveCount, shailos: shailaOpenCount, phoneOnline: deskPhoneOnline}}
           tasks={switchboardTaskList}
           shailos={switchboardShailaList}
           priorities={ap}
@@ -3122,9 +3250,8 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onRecordConversation={()=>{setConvCallMode(false); setShowConvCapture(true);}}
           onRecordCall={()=>{setConvCallMode(true); setShowConvCapture(true);}}
           onRecordShaila={()=>{setShailosAction("record-shaila"); openCommandView("shailos");}}
-          onOpenPhone={bringDeskPhoneForward}
+          onOpenPhone={()=>openCommandView("deskphone")}
           onOnlineChange={setDeskPhoneOnline}
-          onClose={()=>openCommandView("focus")}
         />
       )}
 
@@ -3132,13 +3259,15 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         <SuiteShailosPanel T={T} action={shailosAction} onClose={()=>setSuiteView("focus")}/>
       )}
 
-      {!shellHidden && (
-        <DeskPhoneMiniDock
+      {!shellHidden && suiteView === "deskphone" && (
+        <DeskPhoneWebPanel
           T={T}
           onOnlineChange={setDeskPhoneOnline}
-          onOpenDeskPhone={bringDeskPhoneForward}
+          onClose={()=>openCommandView("focus")}
+          onLaunchNative={bringDeskPhoneForward}
         />
       )}
+
 
       <div style={{width:"100%",maxWidth:"min(800px, 95vw)",padding:"0 clamp(16px,3vw,32px)",position:"relative",zIndex:1,height:shellHidden?"100vh":"calc(100vh - 64px)",marginTop:shellHidden?0:64,overflowY:tab==="focus"?"hidden":"auto",display:"flex",flexDirection:"column"}}>
 
@@ -4152,7 +4281,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       </div>
 
       {/* ── Floating capture buttons — always visible except during Zen ── */}
-      {!zen && !["switchboard","deskphone"].includes(suiteView) && (()=>{
+      {!zen && !["nervecenter","deskphone"].includes(suiteView) && (()=>{
         const outC = T.isDark ? T.tFaint : T.tSoft;
         const icS = {width:19,height:19,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
         const icSm = {width:14,height:14,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};

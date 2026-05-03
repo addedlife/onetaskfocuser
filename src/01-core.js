@@ -892,7 +892,10 @@ const DEF_PRI = [
 const DEF_AGE_THRESHOLDS = {shaila: 24, now: 48, today: 120, eventually: 336};
 
 const SCHEMES = {
-  claude:    {name:"Claude Cream",    bg:"#EDE5D8",bgW:"#E4DACB",card:"#F5EFE5",text:"#3D3633",tSoft:"#6E5848",tFaint:"#7E6858",brd:"#D8CEBC",brdS:"#E4DBCE",grad:["#EDE5D8","#E2D8C8","#D9CEBD"]},
+  material:  {name:"Material Light",  bg:"#F8FAFD",bgW:"#EEF3FA",card:"#FFFFFF",text:"#182230",tSoft:"#465568",tFaint:"#66758A",brd:"#D6DDE8",brdS:"#E8EDF5",grad:["#F8FAFD","#EEF3FA","#E3EAF5"],primary:"#0B57D0",onPrimary:"#FFFFFF",tonal:"#D3E3FD",onTonal:"#041E49"},
+  materialDark:{name:"Material Dark", bg:"#0F141B",bgW:"#18202B",card:"#1E2733",text:"#EEF3FA",tSoft:"#C4CCD8",tFaint:"#98A4B3",brd:"#3B4756",brdS:"#293441",grad:["#0F141B","#141B24","#1E2733"],primary:"#A8C7FA",onPrimary:"#062E6F",tonal:"#1F3B63",onTonal:"#D3E3FD",glow:true},
+  claude:    {name:"Claude Cream",    bg:"#FAF9F6",bgW:"#F0EDE6",card:"#FFFFFF",text:"#1F1A15",tSoft:"#51443A",tFaint:"#73665B",brd:"#DCD6CB",brdS:"#EEE9E1",grad:["#FAF9F6","#F2EFE8","#E8E1D7"],primary:"#C96442",onPrimary:"#FFFFFF",tonal:"#F7E4DA",onTonal:"#71331F"},
+  navyGold:  {name:"Navy Gold",       bg:"#07111F",bgW:"#0D1B2E",card:"#122235",text:"#F7FAFF",tSoft:"#D6DEE9",tFaint:"#A5B3C4",brd:"#304258",brdS:"#1F3147",grad:["#07111F","#0B1728","#122235"],primary:"#F2C14E",onPrimary:"#1F1600",tonal:"#3A321B",onTonal:"#FFE7A3",glow:true},
   midnight:  {name:"Midnight Focus",  bg:"#1A1B2E",bgW:"#222340",card:"#252748",text:"#E0DCF0",tSoft:"#9994B8",tFaint:"#807B99",brd:"#3A3860",brdS:"#2E2D50",grad:["#1A1B2E","#1E1F38","#222340"]},
   forest:    {name:"Forest Calm",     bg:"#E4EBE0",bgW:"#D4DDD0",card:"#EEF2EB",text:"#344030",tSoft:"#50624A",tFaint:"#667860",brd:"#C4D0BC",brdS:"#D8E0D4",grad:["#E4EBE0","#D8E2D2","#CCD6C4"]},
   sunset:    {name:"Warm Sunset",     bg:"#F0E0D0",bgW:"#E8D4C0",card:"#F8EEE2",text:"#4A3428",tSoft:"#705040",tFaint:"#886050",brd:"#DCC8B4",brdS:"#E8D8C8",grad:["#F0E0D0","#E8D0BC","#E0C4B0"]},

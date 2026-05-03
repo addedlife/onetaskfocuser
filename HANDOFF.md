@@ -362,6 +362,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 ## 14. What Is Currently Live / Prepared
 
+- **NerveCenter** (formerly Switchboard): unified 3-column command dashboard — Tasks | Shailos | Phone. Reached via `?suite=nervecenter` (or legacy `?suite=switchboard` still works). Material 3 design throughout: priority color bars + named priority chips per row, gold (#C9923C) visual identity for all shailos/shaila-work, M3 contact list in phone column with compose-on-select. `DeskPhoneMiniDock` floating pill removed — redundant. "Tasks" back button removed from panel header. Nav bar renamed hub icon + "NerveCenter" label.
 - **Universal Conversation Recorder**: full in-app flow — record → transcribe (Yeshivish-aware) → AI extracts tasks/shailos/schedule/got-backs → review card → user approves → items added to queue
 - **FAB**: 2 large buttons (record shaila, record conversation), 2 compact links (Add | Records)
 - **Shailos transcriber**: all fields editable, AI-generated answer summary on minicards and shaila pills (regenerates when answer changes)
@@ -384,7 +385,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 ## 15. Recent Git History
 
-Latest deployed work: shared transcription holding pen across main voice input, conversation capture, task-breakdown mic, and Shailos generated assets.
+Latest deployed work: NerveCenter full launch — M3 redesign of unified command dashboard, auto-resizing task entry, wrapping task rows, contact-name lookup from DeskPhone API, message text expansion on tap, Now/Soon/Long priority pills, DeskPhoneMiniDock removed, Material Symbols font + M3 CSS vars wired in, new Material/NavyGold color schemes added.
 
 ```
 2a9d4af Simplify AI gateway and voice transcription

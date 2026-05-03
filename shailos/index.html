@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Shaila Transcriber</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400..700,0..1,0&display=swap" rel="stylesheet">
     <script>
       try {
         var sc = JSON.parse(localStorage.getItem('onetask_theme') || 'null');
@@ -16,14 +19,17 @@
           r.style.setProperty('--ot-text-faint',  sc.tFaint || '#7E6858');
           r.style.setProperty('--ot-border',      sc.brd    || '#D8CEBC');
           r.style.setProperty('--ot-border-s',    sc.brdS   || '#E4DBCE');
+          r.style.setProperty('--ot-primary',     sc.primary || sc.text || '#C96442');
+          r.style.setProperty('--ot-on-primary',  sc.onPrimary || sc.bg || '#FFFFFF');
+          r.style.setProperty('--ot-tonal',       sc.tonal || sc.brdS || '#F7E4DA');
+          r.style.setProperty('--ot-on-tonal',    sc.onTonal || sc.text || '#71331F');
         }
       } catch(e) {}
     </script>
-    <script type="module" crossorigin src="/shailos/assets/index-CL5LQEyF.js"></script>
-    <link rel="stylesheet" crossorigin href="/shailos/assets/index-D_X37Ln-.css">
+    <script type="module" crossorigin src="/shailos/assets/index-DpaKDQsu.js"></script>
+    <link rel="stylesheet" crossorigin href="/shailos/assets/index-DVukGPNA.css">
   </head>
   <body>
     <div id="root"></div>
   </body>
 </html>
-
