@@ -10,6 +10,7 @@ import { ShelfView, SubtaskGroup } from './06-shelf.jsx';
 import { SettingsModal } from './07-settings.jsx';
 import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, listPendingRecordings, PENDING_EVENT, formatPendingAge } from './09-transcription-pen.js';
 import { DeskPhoneWebPanel } from './10-deskphone-web.jsx';
+import { isOfflineShellReady } from './offline-support.js';
 
 const suiteIcon = (name, size = 20) => (
   <span className="material-symbols-rounded" style={{ fontSize: size }}>{name}</span>
@@ -64,6 +65,8 @@ function AppSuiteChrome({ T, active, onSelect }) {
   );
 }
 
+const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
+
 function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
   const api = "http://127.0.0.1:8765";
   const [status, setStatus] = useState(null);
@@ -75,6 +78,8 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
+  const [showDialer, setShowDialer] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -90,21 +95,15 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
       const nextCalls = Array.isArray(nextStatus?.recentCalls) ? nextStatus.recentCalls : [];
       const contactsParsed = contactsRes ? await contactsRes.json().catch(() => []) : [];
       const nextContacts = Array.isArray(contactsParsed) ? contactsParsed : (contactsParsed?.contacts || []);
-      setStatus(nextStatus);
-      setMessages(nextMessages);
-      setCalls(nextCalls);
-      setContacts(nextContacts);
+      setStatus(nextStatus); setMessages(nextMessages); setCalls(nextCalls); setContacts(nextContacts);
       onOnlineChange?.(true);
     } catch {
-      setStatus(null);
-      setMessages([]);
-      setCalls([]);
+      setStatus(null); setMessages([]); setCalls([]);
       setError("Open DeskPhone to use calls and texts.");
       onOnlineChange?.(false);
     }
   }, [onOnlineChange]);
 
-  // Build a phone-number → contact name lookup map
   const contactMap = useMemo(() => {
     const map = new Map();
     contacts.forEach(c => {
@@ -117,36 +116,39 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
     });
     return map;
   }, [contacts]);
-  const lookupName = num => {
+
+  const lookupName = useCallback(num => {
     if (!num) return null;
     const digits = String(num).replace(/\D/g, "");
     return contactMap.get(digits) || contactMap.get(digits.slice(-10)) || null;
-  };
+  }, [contactMap]);
 
-  useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, 6500);
-    return () => clearInterval(id);
-  }, [refresh]);
+  // Live contact search — filters by name or number as user types
+  const suggestions = useMemo(() => {
+    const q = number.trim().toLowerCase();
+    if (!q || contacts.length === 0) return [];
+    const qDigits = q.replace(/\D/g, "");
+    return contacts.filter(c => {
+      const name = (c.name || c.Name || c.displayName || c.DisplayName || "").toLowerCase();
+      const nums = [c.phone, c.phoneNumber, c.number, c.Phone, c.PhoneNumber, c.mobilePhone, c.MobilePhone].filter(Boolean).map(String);
+      return name.includes(q) || (qDigits.length >= 2 && nums.some(p => p.replace(/\D/g, "").includes(qDigits)));
+    }).slice(0, 6).map(c => ({
+      name: c.name || c.Name || c.displayName || c.DisplayName || "",
+      num: String(c.phone || c.phoneNumber || c.number || c.Phone || c.PhoneNumber || c.mobilePhone || ""),
+    }));
+  }, [contacts, number]);
+
+  useEffect(() => { refresh(); const id = setInterval(refresh, 6500); return () => clearInterval(id); }, [refresh]);
 
   const post = async (path, label) => {
     setBusy(label);
-    try {
-      await fetch(`${api}${path}`, { method: "POST" });
-      await refresh();
-    } catch {
-      setError("DeskPhone did not answer.");
-      onOnlineChange?.(false);
-    } finally {
-      setBusy("");
-    }
+    try { await fetch(`${api}${path}`, { method: "POST" }); await refresh(); }
+    catch { setError("DeskPhone did not answer."); onOnlineChange?.(false); }
+    finally { setBusy(""); }
   };
 
-  const dial = async () => {
-    if (!number.trim()) return;
-    await post(`/dial?n=${encodeURIComponent(number.trim())}`, "dial");
-  };
-
+  const dialNum = async (n) => { if (n?.trim()) await post(`/dial?n=${encodeURIComponent(n.trim())}`, "dial"); };
+  const dial = () => dialNum(number);
   const sendSms = async () => {
     if (!number.trim() || !body.trim()) return;
     await post(`/send?to=${encodeURIComponent(number.trim())}&body=${encodeURIComponent(body.trim())}`, "send");
@@ -164,10 +166,10 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
     const who = m.from || m.sender || m.address || m.phoneNumber || m.number || m.to || "Unknown";
     if (!threadMap.has(who)) threadMap.set(who, { ...m, _who: who, _name: lookupName(who) || who });
   });
-  const threads = Array.from(threadMap.values()).slice(0, compact ? 3 : 5);
-  const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, compact ? 3 : 5);
+  const threads = Array.from(threadMap.values()).slice(0, compact ? 3 : 6);
+  const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, compact ? 3 : 6);
 
-  const fmtTime = (val) => {
+  const fmtTime = val => {
     if (!val) return "";
     const d = new Date(typeof val === "number" ? val : val);
     if (isNaN(d.getTime())) return typeof val === "string" ? val.slice(0, 8) : "";
@@ -177,7 +179,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
     return d.toLocaleDateString(undefined, { weekday: "short" });
   };
 
-  const callDirIcon = (c) => {
+  const callDirIcon = c => {
     const dir = (c.direction || c.type || c.callType || c.Direction || "").toLowerCase();
     if (dir.includes("miss") || c.missed || c.Missed) return { icon: "call_missed", color: "#BA2A2A" };
     if (dir.includes("in") || dir.includes("receiv")) return { icon: "call_received", color: T.tSoft };
@@ -185,13 +187,21 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
     return { icon: "call", color: T.tSoft };
   };
 
-  const selectContact = (name, num) => {
-    setSelected({ name, number: num });
-    setNumber(num);
-  };
+  const openCompose = (name, num) => { setSelected({ name, number: num }); setNumber(num); setBody(""); };
+
+  // Small inline action button — call or text icon on each row
+  const AB = ({ icon, title, color, onClick }) => (
+    <button onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); onClick(); }} title={title}
+      style={{ width: 28, height: 28, borderRadius: 99, border: `1px solid ${T.brdS || T.brd}`, background: T.bgW, color: color || T.tSoft, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      {suiteIcon(icon, 14)}
+    </button>
+  );
+
+  const showDrop = inputFocused && suggestions.length > 0;
 
   return (
-    <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+
       {/* Status bar */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, paddingBottom: 8, borderBottom: `1px solid ${T.brdS || T.brd}` }}>
         <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: statusOnline ? "#2E7D32" : T.tFaint }} />
@@ -199,36 +209,79 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
         <button onClick={refresh} disabled={!!busy} title="Refresh" style={{ width: 26, height: 26, borderRadius: 99, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("refresh", 15)}</button>
       </div>
 
-      {/* Dial row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 38px 38px", gap: 6, alignItems: "center" }}>
-        <input value={number} onChange={e => setNumber(e.target.value)} onKeyDown={e => e.key === "Enter" && dial()} placeholder="Name or number" style={{ height: 38, boxSizing: "border-box", padding: "0 14px", borderRadius: 19, border: `1.5px solid ${T.brd}`, background: T.bgW, color: T.text, fontFamily: "system-ui", fontSize: 13, fontWeight: 700, outline: "none", minWidth: 0 }} />
-        <button onClick={dial} disabled={!number.trim() || !!busy} title="Call" style={{ width: 38, height: 38, borderRadius: 99, border: "none", background: number.trim() ? (T.tonal || T.bgW) : T.bgW, color: number.trim() ? (T.onTonal || T.text) : T.tFaint, cursor: number.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0 }}>{suiteIcon("call", 18)}</button>
-        <button onClick={() => post("/answer", "answer")} disabled={!!busy} title="Answer" style={{ width: 38, height: 38, borderRadius: 99, border: "none", background: isIncoming ? "#2E7D32" : T.bgW, color: isIncoming ? "#fff" : T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s, color 0.15s", boxShadow: isIncoming ? "0 2px 8px rgba(46,125,50,0.4)" : "none", flexShrink: 0 }}>{suiteIcon("phone_callback", 18)}</button>
+      {/* Dial row + suggestions dropdown */}
+      <div style={{ position: "relative" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 36px 36px 30px", gap: 5, alignItems: "center" }}>
+          <input value={number} onChange={e => setNumber(e.target.value)}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setTimeout(() => setInputFocused(false), 160)}
+            onKeyDown={e => e.key === "Enter" && dial()}
+            placeholder="Name or number"
+            style={{ height: 36, boxSizing: "border-box", padding: "0 13px", borderRadius: 18, border: `1.5px solid ${T.brd}`, background: T.bgW, color: T.text, fontFamily: "system-ui", fontSize: 13, fontWeight: 700, outline: "none", minWidth: 0 }} />
+          <button onClick={dial} disabled={!number.trim() || !!busy} title="Call"
+            style={{ width: 36, height: 36, borderRadius: 99, border: "none", background: number.trim() ? "#2E7D32" : T.bgW, color: number.trim() ? "#fff" : T.tFaint, cursor: number.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0, boxShadow: number.trim() ? "0 2px 6px rgba(46,125,50,0.3)" : "none" }}>{suiteIcon("call", 17)}</button>
+          <button onClick={() => post("/answer", "answer")} disabled={!!busy} title="Answer incoming"
+            style={{ width: 36, height: 36, borderRadius: 99, border: "none", background: isIncoming ? "#2E7D32" : T.bgW, color: isIncoming ? "#fff" : T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s, color 0.15s", boxShadow: isIncoming ? "0 2px 8px rgba(46,125,50,0.45)" : "none", flexShrink: 0 }}>{suiteIcon("phone_callback", 17)}</button>
+          <button onClick={() => setShowDialer(v => !v)} title="Keypad"
+            style={{ width: 28, height: 28, borderRadius: 8, border: `1px solid ${T.brd}`, background: showDialer ? (T.tonal || T.bgW) : "transparent", color: showDialer ? (T.onTonal || T.text) : T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("dialpad", 15)}</button>
+        </div>
+
+        {/* Live contact suggestions */}
+        {showDrop && (
+          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 200, background: T.card, border: `1px solid ${T.brd}`, borderRadius: 14, overflow: "hidden", boxShadow: "0 6px 20px rgba(0,0,0,0.14)" }}>
+            {suggestions.map((s, i) => (
+              <button key={i} onMouseDown={e => e.preventDefault()}
+                onClick={() => { setNumber(s.num); setSelected({ name: s.name, number: s.num }); setInputFocused(false); }}
+                style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: "none", borderBottom: i < suggestions.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none", background: "transparent", cursor: "pointer" }}>
+                <span style={{ width: 28, height: 28, borderRadius: 99, background: T.bgW, border: `1px solid ${T.brd}`, display: "flex", alignItems: "center", justifyContent: "center", color: T.tSoft, flexShrink: 0 }}>{suiteIcon("person", 14)}</span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                  <span style={{ display: "block", fontSize: 11, color: T.tSoft }}>{s.num}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
+      {/* Numeric dialer keypad */}
+      {showDialer && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 4 }}>
+          {DIALER_KEYS.map(k => (
+            <button key={k} onClick={() => setNumber(prev => prev + k)}
+              style={{ height: 36, borderRadius: 10, border: `1px solid ${T.brd}`, background: T.bgW, color: T.text, cursor: "pointer", fontSize: 15, fontWeight: 700, fontFamily: "system-ui" }}>
+              {k}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Messages */}
-      <div style={{ marginTop: 4 }}>
+      <div style={{ marginTop: 2 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.tFaint, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 4, paddingLeft: 2 }}>Messages</div>
         {threads.length ? threads.map((m, idx) => {
           const isSelected = selected?.number === m._who;
           const preview = m.body || m.text || m.message || m.content || "";
           const time = fmtTime(m.timestamp || m.date || m.time);
           return (
-            <button key={`${m._who}-${idx}`} onClick={() => selectContact(m._name, m._who)}
-              style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "32px minmax(0,1fr) auto", gap: 8, alignItems: "start", padding: "7px 4px", border: "none", borderBottom: idx < threads.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none", background: isSelected ? (T.tonal || T.bgW) : "transparent", color: T.text, cursor: "pointer", borderRadius: 10 }}>
-              <span style={{ width: 30, height: 30, borderRadius: 99, background: T.bgW, border: `1px solid ${T.brd}`, display: "flex", alignItems: "center", justifyContent: "center", color: T.tSoft, flexShrink: 0, marginTop: 1 }}>{suiteIcon("person", 16)}</span>
-              <span style={{ minWidth: 0 }}>
-                <span style={{ display: "block", fontSize: 13, fontWeight: 800, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m._name}</span>
-                {preview && <span style={{ display: "block", fontSize: 11, color: T.tSoft, marginTop: 1, ...(isSelected ? { whiteSpace: "normal", wordBreak: "break-word" } : { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }) }}>{preview}</span>}
-              </span>
-              {time && <span style={{ fontSize: 11, color: T.tFaint, flexShrink: 0, fontWeight: 600, marginTop: 2 }}>{time}</span>}
-            </button>
+            <div key={`${m._who}-${idx}`} style={{ display: "grid", gridTemplateColumns: "30px minmax(0,1fr) 28px 28px", gap: 6, alignItems: "start", padding: "7px 2px", borderBottom: idx < threads.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none", background: isSelected ? (T.tonal || T.bgW) : "transparent", borderRadius: 10 }}>
+              <span style={{ width: 28, height: 28, borderRadius: 99, background: T.bgW, border: `1px solid ${T.brd}`, display: "flex", alignItems: "center", justifyContent: "center", color: T.tSoft, flexShrink: 0, marginTop: 2 }}>{suiteIcon("person", 15)}</span>
+              <button onClick={() => openCompose(m._name, m._who)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: T.text }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 800, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m._name}</span>
+                  {time && <span style={{ fontSize: 10, color: T.tFaint, flexShrink: 0, fontWeight: 600 }}>{time}</span>}
+                </div>
+                {preview && <span style={{ display: "block", fontSize: 11, color: T.tSoft, marginTop: 1, ...(isSelected ? { whiteSpace: "normal", wordBreak: "break-word" } : { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }}>{preview}</span>}
+              </button>
+              <AB icon="call" title="Call" color="#2E7D32" onClick={() => dialNum(m._who)} />
+              <AB icon="sms" title="Text" onClick={() => openCompose(m._name, m._who)} />
+            </div>
           );
         }) : <div style={{ fontSize: 12, color: T.tFaint, padding: "6px 2px" }}>No recent messages.</div>}
       </div>
 
       {/* Recent calls */}
-      <div style={{ marginTop: 4 }}>
+      <div style={{ marginTop: 2 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: T.tFaint, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 4, paddingLeft: 2 }}>Recent calls</div>
         {recentCalls.length ? recentCalls.map((c, idx) => {
           const num = c.number || c.phoneNumber || c.from || c.Number || c.PhoneNumber || "";
@@ -236,32 +289,34 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false }) {
           const { icon, color } = callDirIcon(c);
           const time = fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime);
           const isSelected = selected?.number === num;
-          const showNum = num && num !== name;
           return (
-            <button key={`call-${idx}`} onClick={() => selectContact(name, num)}
-              style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "32px minmax(0,1fr) auto", gap: 8, alignItems: "start", padding: "7px 4px", border: "none", borderBottom: idx < recentCalls.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none", background: isSelected ? (T.tonal || T.bgW) : "transparent", color: T.text, cursor: "pointer", borderRadius: 10 }}>
-              <span style={{ width: 30, height: 30, borderRadius: 99, background: T.bgW, border: `1px solid ${T.brd}`, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0, marginTop: 1 }}>{suiteIcon(icon, 15)}</span>
-              <span style={{ minWidth: 0 }}>
-                <span style={{ display: "block", fontSize: 13, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
-                {showNum && <span style={{ display: "block", fontSize: 11, color: T.tSoft, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{num}</span>}
-              </span>
-              {time && <span style={{ fontSize: 11, color: T.tFaint, flexShrink: 0, fontWeight: 600, marginTop: 2 }}>{time}</span>}
-            </button>
+            <div key={`call-${idx}`} style={{ display: "grid", gridTemplateColumns: "30px minmax(0,1fr) 28px 28px", gap: 6, alignItems: "start", padding: "7px 2px", borderBottom: idx < recentCalls.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none", background: isSelected ? (T.tonal || T.bgW) : "transparent", borderRadius: 10 }}>
+              <span style={{ width: 28, height: 28, borderRadius: 99, background: T.bgW, border: `1px solid ${T.brd}`, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0, marginTop: 2 }}>{suiteIcon(icon, 14)}</span>
+              <button onClick={() => openCompose(name, num)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 800, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                  {time && <span style={{ fontSize: 10, color: T.tFaint, flexShrink: 0, fontWeight: 600 }}>{time}</span>}
+                </div>
+                {num && num !== name && <span style={{ display: "block", fontSize: 11, color: T.tSoft, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{num}</span>}
+              </button>
+              <AB icon="call" title="Call back" color="#2E7D32" onClick={() => dialNum(num)} />
+              <AB icon="sms" title="Text back" onClick={() => openCompose(name, num)} />
+            </div>
           );
         }) : <div style={{ fontSize: 12, color: T.tFaint, padding: "6px 2px" }}>{statusOnline ? "No recent calls." : "Open DeskPhone to connect."}</div>}
       </div>
 
-      {/* Compose — slides in when contact selected */}
+      {/* Compose bar — appears when contact selected */}
       {selected && (
-        <div style={{ marginTop: 4, paddingTop: 10, borderTop: `1px solid ${T.brdS || T.brd}`, display: "grid", gap: 7 }}>
+        <div style={{ marginTop: 4, paddingTop: 10, borderTop: `1px solid ${T.brdS || T.brd}`, display: "flex", flexDirection: "column", gap: 7 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-            {suiteIcon("reply", 14)}
-            <span style={{ fontSize: 12, color: T.tSoft, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{selected.name}</span>
+            {suiteIcon("sms", 14)}
+            <span style={{ fontSize: 12, color: T.tSoft, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{selected.name || selected.number}</span>
             <button onClick={() => { setSelected(null); setBody(""); }} style={{ width: 22, height: 22, borderRadius: 99, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("close", 13)}</button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 38px", gap: 6, alignItems: "flex-end" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 36px", gap: 6, alignItems: "flex-end" }}>
             <textarea value={body} onChange={e => setBody(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendSms(); } }} placeholder="Message…" rows={2} style={{ boxSizing: "border-box", borderRadius: 14, border: `1.5px solid ${T.brd}`, background: T.bgW, color: T.text, padding: "8px 12px", fontSize: 13, fontFamily: "system-ui", resize: "none", outline: "none", width: "100%" }} />
-            <button onClick={sendSms} disabled={!body.trim() || !!busy} style={{ width: 38, height: 38, borderRadius: 99, border: "none", background: body.trim() ? (T.primary || T.text) : T.bgW, color: body.trim() ? (T.onPrimary || T.bg) : T.tFaint, cursor: body.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0 }}>{suiteIcon("send", 17)}</button>
+            <button onClick={sendSms} disabled={!body.trim() || !!busy} style={{ width: 36, height: 36, borderRadius: 99, border: "none", background: body.trim() ? (T.primary || "#0B57D0") : T.bgW, color: body.trim() ? (T.onPrimary || "#fff") : T.tFaint, cursor: body.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0 }}>{suiteIcon("send", 16)}</button>
           </div>
           {(isOnCall || isIncoming) && (
             <button onClick={() => post("/hangup", "hangup")} style={{ height: 34, borderRadius: 17, border: "none", background: "#BA2A2A", color: "#fff", cursor: "pointer", fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 12, fontFamily: "system-ui" }}>{suiteIcon("call_end", 15)} End call</button>
@@ -896,6 +951,9 @@ function App({ user, onSignOut }) {
   const [pendingRecordings, setPendingRecordings] = useState([]);
   const [pendingRetryId, setPendingRetryId] = useState(null);
   const [pendingTranscripts, setPendingTranscripts] = useState({});
+  const [networkOffline, setNetworkOffline] = useState(() => typeof navigator !== "undefined" ? !navigator.onLine : false);
+  const [offlineShellReady, setOfflineShellReady] = useState(isOfflineShellReady);
+  const [offlineNoticeDismissed, setOfflineNoticeDismissed] = useState(false);
   const [fbOffline, setFbOffline] = useState(false);      // Firebase unreachable on load — warn user
   // ─── Conversation Capture ────────────────────────────────────────────────
   const [showConvCapture, setShowConvCapture] = useState(false);
@@ -916,6 +974,22 @@ function App({ user, onSignOut }) {
   const chatEndRef = useRef(null);
 
   const [ph] = useState(() => PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
+
+  useEffect(() => {
+    const updateNetworkState = () => {
+      setNetworkOffline(!navigator.onLine);
+      if (navigator.onLine) setOfflineNoticeDismissed(false);
+    };
+    const markOfflineReady = () => setOfflineShellReady(true);
+    window.addEventListener("online", updateNetworkState);
+    window.addEventListener("offline", updateNetworkState);
+    window.addEventListener("onetask-offline-ready", markOfflineReady);
+    return () => {
+      window.removeEventListener("online", updateNetworkState);
+      window.removeEventListener("offline", updateNetworkState);
+      window.removeEventListener("onetask-offline-ready", markOfflineReady);
+    };
+  }, []);
 
   const defS = {
     lists: [{id:"default", name:"My Tasks", tasks:[]}],
@@ -1046,7 +1120,10 @@ function App({ user, onSignOut }) {
     Store.ls(toSave);                          // Refresh optional offline cache
     Store.autoFileBackup(toSave, shailosRef.current); // Weekly combined backup
     clearTimeout(saveTmr.current);
-    saveTmr.current = setTimeout(() => Store.saveToFB(toSave), 1500); // debounced Firebase write
+    saveTmr.current = setTimeout(async () => {
+      await Store.saveToFB(toSave);
+      if (Store._fbSaveError) setFbOffline(true);
+    }, 1500); // debounced Firebase write
     return () => clearTimeout(saveTmr.current);
   }, [AS, loaded]);
 
@@ -2853,10 +2930,17 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         </div>
       )}
 
+      {networkOffline && !offlineNoticeDismissed && (
+        <div style={{position:"fixed",top:0,left:0,right:0,zIndex:10001,background:"#245E73",color:"#fff",padding:"12px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",fontFamily:"system-ui",fontSize:13,gap:12}}>
+          <span>{offlineShellReady ? "Offline mode: the app is open from this device. Changes save here and sync to Firebase when internet returns." : "Offline mode: changes save on this device. Open the app once online to finish offline startup setup."}</span>
+          <button onClick={()=>setOfflineNoticeDismissed(true)} style={{padding:"6px 14px",borderRadius:8,background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12,color:"#fff",flexShrink:0}}>Dismiss</button>
+        </div>
+      )}
+
       {/* Firebase offline warning — shown when Firebase was unreachable on load */}
       {fbOffline && (
-        <div style={{position:"fixed",top:0,left:0,right:0,zIndex:10000,background:"#C94040",color:"#fff",padding:"12px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",fontFamily:"system-ui",fontSize:13,gap:12}}>
-          <span>⚠️ Could not reach cloud storage — your tasks may still be safe in Firebase. Refresh to retry, or check your connection.</span>
+        <div style={{position:"fixed",top:networkOffline && !offlineNoticeDismissed ? 48 : 0,left:0,right:0,zIndex:10000,background:"#C94040",color:"#fff",padding:"12px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",fontFamily:"system-ui",fontSize:13,gap:12}}>
+          <span>Could not reach Firebase. Your latest changes are saved on this device and will try again when the connection returns.</span>
           <button onClick={()=>setFbOffline(false)} style={{padding:"6px 14px",borderRadius:8,background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12,color:"#fff",flexShrink:0}}>Dismiss</button>
         </div>
       )}
