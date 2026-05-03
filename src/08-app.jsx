@@ -26,6 +26,16 @@ function buildDeskPhoneThemeQuery(palette, theme = {}) {
   return qs.toString();
 }
 
+function getInitialSuiteView() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const view = (params.get("suite") || params.get("view") || "").toLowerCase();
+    return ["switchboard", "focus", "shailos"].includes(view) ? view : "focus";
+  } catch {
+    return "focus";
+  }
+}
+
 function AppSuiteChrome({ T, active, onSelect, taskCount = 0, shailaCount = 0, phoneOnline = false }) {
   const apps = [
     { id: "switchboard", label: "Switchboard", icon: "dashboard_customize", meta: "today" },
@@ -662,7 +672,7 @@ function App({ user, onSignOut }) {
   const [newTask, setNewTask] = useState("");
   const [selPri, setSelPri] = useState(null);
   const [tab, setTab] = useState("focus");
-  const [suiteView, setSuiteView] = useState("focus");
+  const [suiteView, setSuiteView] = useState(getInitialSuiteView);
   const [deskPhoneOnline, setDeskPhoneOnline] = useState(false);
   const deskPhoneLaunchAtRef = useRef(0);
   const lastDeskPhoneThemeRef = useRef("");

@@ -18,6 +18,7 @@ deploy_temp.zip
 
 # Netlify local state
 .netlify/
+.launcher/
 
 # Claude Code project files
 .claude/
