@@ -397,7 +397,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 ## 15. Recent Git History
 
-Latest: NerveCenter phone UX restructure (compose to top, idle fix, contact lookup, white buttons, SMS icons, shailos filter) + AI conversation capture improvements (transcription failure no longer kills the flow — falls back to Web Speech; extraction prompt rewritten to pull ALL items from a recording, not just the first few).
+Latest: NerveCenter layout — centered M3 pill header (title + mic + Actions as floating pill buttons, no full-width banner); phone column shows up to 10 messages and 10 calls (scrolls within column); "More history" pill at bottom of each list opens DeskPhone full screen.
 
 ```
 2a9d4af Simplify AI gateway and voice transcription

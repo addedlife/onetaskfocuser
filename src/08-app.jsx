@@ -67,7 +67,7 @@ function AppSuiteChrome({ T, active, onSelect }) {
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 
-function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordConversation, onRecordCall }) {
+function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
   const api = "http://127.0.0.1:8765";
   const [status, setStatus] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -204,8 +204,8 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
     const who = m.from || m.sender || m.address || m.phoneNumber || m.number || m.to || "Unknown";
     if (!threadMap.has(who)) threadMap.set(who, { ...m, _who: who, _name: lookupName(who) || who });
   });
-  const threads = Array.from(threadMap.values()).slice(0, compact ? 3 : 6);
-  const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, compact ? 3 : 6);
+  const threads = Array.from(threadMap.values()).slice(0, 10);
+  const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, 10);
   const hasMessages = threads.length > 0;
   const hasCalls = recentCalls.length > 0;
 
@@ -431,6 +431,13 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
               </div>
             );
           })}
+          {onMoreHistory && (
+            <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
+              <button onClick={onMoreHistory} style={{ height: 26, padding: "0 14px", borderRadius: 13, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+                {suiteIcon("history", 13)} More history
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -458,6 +465,13 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
               </div>
             );
           })}
+          {onMoreHistory && (
+            <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
+              <button onClick={onMoreHistory} style={{ height: 26, padding: "0 14px", borderRadius: 13, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+                {suiteIcon("history", 13)} More history
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -514,21 +528,23 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     <div style={{ position: "fixed", inset: "64px 0 0", zIndex: 7600, background: T.bg, overflow: "hidden", borderTop: `1px solid ${T.brdS || T.brd}` }}>
       <div style={{ maxWidth: 1400, height: "100%", margin: "0 auto", padding: "clamp(12px,2vw,20px)", boxSizing: "border-box", display: "flex", flexDirection: "column", minHeight: 0 }}>
 
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 14, flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, color: T.text, fontFamily: "system-ui", fontWeight: 900, fontSize: 20 }}>
-            {suiteIcon("hub", 24)}
+        {/* Header — centered M3-style floating pill cluster */}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, marginBottom: 16, flexShrink: 0 }}>
+          {/* Title pill */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, height: 40, padding: "0 18px 0 12px", borderRadius: 99, background: T.card, border: `1px solid ${T.brd}`, boxShadow: T.shadow || "0 2px 10px rgba(0,0,0,0.07)", color: T.text, fontFamily: "system-ui", fontWeight: 900, fontSize: 16 }}>
+            {suiteIcon("hub", 20)}
             NerveCenter
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
-              style={{ width: 38, height: 38, borderRadius: 99, border: `1px solid ${T.brd}`, background: T.bgW, color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              {suiteIcon("mic", 20)}
-            </button>
-            <button onClick={() => setActionsOpen(true)} style={{ height: 38, padding: "0 16px", borderRadius: 19, border: "none", background: T.primary || T.text, color: T.onPrimary || T.bg, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, fontFamily: "system-ui", fontWeight: 900, fontSize: 13 }}>
-              {suiteIcon("apps", 18)} Actions
-            </button>
-          </div>
+          {/* Record mic — floating pill icon button */}
+          <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
+            style={{ width: 40, height: 40, borderRadius: 99, border: `1px solid ${T.brd}`, background: T.card, color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: T.shadow || "0 2px 10px rgba(0,0,0,0.07)" }}>
+            {suiteIcon("mic", 20)}
+          </button>
+          {/* Actions — filled pill button */}
+          <button onClick={() => setActionsOpen(true)}
+            style={{ height: 40, padding: "0 18px", borderRadius: 99, border: "none", background: T.primary || T.text, color: T.onPrimary || T.bg, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, fontFamily: "system-ui", fontWeight: 900, fontSize: 13, boxShadow: T.shadow || "0 2px 10px rgba(0,0,0,0.07)" }}>
+            {suiteIcon("apps", 18)} Actions
+          </button>
         </div>
 
         {/* Three-panel grid */}
@@ -675,7 +691,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               </button>
             </div>
             <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0, padding: "10px 14px" }}>
-              <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} />
+              <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </section>
         </div>
