@@ -333,7 +333,7 @@ All of these are built and working. Do not rebuild them.
 
 **Shailos**: Shaila tasks in queue, ShailaManager panel, ShailaMiniPills, shaila research, answer synopsis on pills, links to Shailos sub-app
 
-**Conversation Capture**: Universal Conversation Recorder — record → transcribe (Yeshivish-aware) → AI extract tasks/shailos/completions → review card → approve → add to queue. Two modes: regular mic and phone call (screen audio)
+**Conversation Capture**: Universal Conversation Recorder — record → transcribe (Yeshivish-aware) → AI extract tasks/shailos/completions → review card → approve → add to queue. Two modes: regular mic and phone call (screen audio). Transcription failures fall back to Web Speech text instead of crashing. Extraction prompt explicitly pulls all items — a single recording may yield 10+ tasks/shailos.
 
 **UI**: Board view (PostItStack), Queue view with search/filter, Shelf view, cross-window sync, color scheme picker with AI-generated schemes, Firebase offline banner
 
@@ -397,7 +397,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 ## 15. Recent Git History
 
-Prepared but not yet pushed: NerveCenter phone UX restructure — compose moved to top, idle status fixed, contact name lookup extended (messages now resolve names like calls), digit search threshold lowered to 1, white AB buttons, SMS direction icons, unread bold, shailos research-task filter. DeskPhone web screen (`10-deskphone-web.jsx`) by second coder — committed, safe.
+Latest: NerveCenter phone UX restructure (compose to top, idle fix, contact lookup, white buttons, SMS icons, shailos filter) + AI conversation capture improvements (transcription failure no longer kills the flow — falls back to Web Speech; extraction prompt rewritten to pull ALL items from a recording, not just the first few).
 
 ```
 2a9d4af Simplify AI gateway and voice transcription

@@ -1528,7 +1528,42 @@ async function aiDetectShailaAnswers(shailas, aiOpts) {
 async function aiParseConversation(transcript, currentTasks, currentShailos, aiOpts) {
   const taskSnap = currentTasks.slice(0,20).map((t,i)=>`${i+1}. [${t.priority}] ${t.text}`).join('\n') || '(none)';
   const shailaSnap = currentShailos.slice(0,15).map((s,i)=>`${i+1}. ${s.synopsis||s.content||'shaila'}`).join('\n') || '(none)';
-  const r = await callAI(`You are parsing a Yeshivish English conversation to extract actionable items. Yeshivish mixes English with Hebrew/Yiddish: shaila, halacha, Shabbos, daven, bracha, etc.\n\nTRANSCRIPT:\n${transcript}\n\nCURRENT TASK QUEUE:\n${taskSnap}\n\nOPEN SHAILOS:\n${shailaSnap}\n\n=== CRITICAL SHAILA RULE ===\nIf the speaker says "shaila" or "shailos", OR describes a halachic question (asking a rabbi, checking if something is mutar/assur, kashrus, Shabbos, niddah, tefillin, bracha, etc.) — it MUST go in the "shailos" category. NEVER put a shaila in tasks, reminders, or any other category. When in doubt, put it in shailos.\n\nExtract items in 6 categories. CRITICAL: NEVER copy raw transcript text — write clean concise summaries (5-15 words). Preserve key halachic/Jewish terms.\n\n1. tasks: New to-dos NOT already in queue. Do NOT put shailos here — use shailos category.\n2. completions: Things mentioned as done. matchedTask = queue number if matches.\n3. shailos: ANY halachic question, any mention of "shaila". synopsis=5-8 word core question.\n4. gotBacks: Answers delivered to askers. matchedShailaIndex if matches open shaila.\n5. scheduleItems: Appointments/meetings/events. Include when if mentioned.\n6. reminders: Follow-up notes that are NOT tasks and NOT shailos.\n\nReturn ONLY valid JSON:\n{"tasks":[{"text":"concise task","priority":"now|today|eventually|shaila"}],"completions":[{"text":"what was completed","matchedTask":null}],"shailos":[{"synopsis":"core question 5-8 words","content":"fuller description","askerName":null,"answer":""}],"gotBacks":[{"synopsis":"which shaila got answered","matchedShailaIndex":null}],"scheduleItems":[{"text":"event description","when":null}],"reminders":[{"text":"what to remember"}]}\n\nReturn [] for empty categories.`, aiOpts, { temperature: 0.1, maxOutputTokens: 8192 });
+  const r = await callAI(
+    `You are extracting EVERY actionable item from a Yeshivish English recording. Yeshivish mixes English with Hebrew/Yiddish: shaila, halacha, Shabbos, daven, bracha, etc.
+
+TRANSCRIPT:
+${transcript}
+
+CURRENT TASK QUEUE:
+${taskSnap}
+
+OPEN SHAILOS:
+${shailaSnap}
+
+=== EXTRACTION RULES — READ CAREFULLY ===
+
+COMPLETENESS: Extract EVERY item mentioned — a single recording may contain 10, 15, or more distinct tasks and shailos. Do not stop after the first few. Go through the entire transcript systematically.
+
+GRANULARITY: One entry per distinct action or question. Never merge two things into one entry. "Call Yankel and email Moshe" = two tasks.
+
+NEVER copy raw transcript text — write clean concise summaries (5-15 words). Preserve key halachic/Jewish terms.
+
+=== SHAILA RULE (HIGHEST PRIORITY) ===
+If ANYTHING sounds like a halachic question — "shaila", "shailos", "is it mutar/assur", "can I", "is there a problem with", kashrus, Shabbos, niddah, tefillin, bracha, eruv, kitniyos, borer, bishul, etc. — it MUST go in "shailos". NEVER put a halacha question in tasks.
+
+=== CATEGORIES ===
+1. tasks — Action items NOT in the queue already. NOT shailos. Priority: "now" (urgent/today), "today" (this week), "eventually" (someday), "shaila" (halachic task — rare, only if it's a task around a shaila, not the shaila itself).
+2. completions — Things mentioned as already done. matchedTask = queue number if it matches.
+3. shailos — ANY halachic question. synopsis = 5-8 word core question.
+4. gotBacks — Answers the speaker delivered to people who asked shailos. matchedShailaIndex if matches open shaila.
+5. scheduleItems — Appointments/meetings/fixed-time events. Include "when" if mentioned.
+6. reminders — Notes to remember that are NOT tasks and NOT shailos.
+
+Return ONLY valid JSON (no markdown, no explanation):
+{"tasks":[{"text":"concise task","priority":"now|today|eventually"}],"completions":[{"text":"what was completed","matchedTask":null}],"shailos":[{"synopsis":"core question 5-8 words","content":"fuller description","askerName":null,"answer":""}],"gotBacks":[{"synopsis":"which shaila got answered","matchedShailaIndex":null}],"scheduleItems":[{"text":"event description","when":null}],"reminders":[{"text":"what to remember"}]}
+
+Use [] for empty categories. Output nothing except the JSON object.`,
+    aiOpts, { temperature: 0.1, maxOutputTokens: 8192 });
   if (!r) throw new Error('No AI response');
   const m = r.match(/\{[\s\S]*\}/);
   if (!m) throw new Error('Could not parse AI response');

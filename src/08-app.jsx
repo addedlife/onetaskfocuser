@@ -4709,11 +4709,17 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
           source: 'main',
           label: callMode ? 'Conversation call capture' : 'Conversation mic capture',
         });
-        const geminiTranscript = await transcribePendingRecording(
-          pending.id, aiOpts,
-          `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Use these standard spellings: shaila/shailos, halacha, gemara, Shabbos, davening, daven, bracha, mutar, assur, kashrus, Rashi, Rambam, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.\n\nReturn only the verbatim transcript. No summary, no rephrasing.`
-        );
-        if (geminiTranscript) transcript = geminiTranscript.trim() || transcript;
+        // If Gemini transcription fails, fall back to Web Speech text — never kill the whole flow
+        try {
+          const geminiTranscript = await transcribePendingRecording(
+            pending.id, aiOpts,
+            `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Common words: shaila/shailos, halacha, gemara, Shabbos, davening, daven, bracha, mutar, assur, kashrus, Rashi, Rambam, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.\n\nReturn only the verbatim transcript. No summary, no rephrasing, no meta-commentary.`
+          );
+          if (geminiTranscript?.trim()) transcript = geminiTranscript.trim();
+        } catch(transcriptErr) {
+          // Transcription failed — keep Web Speech fallback if available, otherwise continue with empty
+          console.warn('[ConvCapture] Gemini transcription failed, using Web Speech fallback:', transcriptErr.message);
+        }
       }
 
       if (!transcript.trim()) {
