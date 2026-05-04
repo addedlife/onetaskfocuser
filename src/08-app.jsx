@@ -628,8 +628,6 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       style={{ width: 22, height: 22, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
                       {suiteIcon("check", 16)}
                     </button>}
-                    {/* Priority — color dot only, no text */}
-                    {!isEditing && <span style={{ width: 10, height: 10, borderRadius: 99, background: priColor, flexShrink: 0, marginTop: 5 }} title={pri?.label || ""} />}
                     {/* Delete */}
                     <button onClick={() => onDeleteTask?.(t.id)} title="Delete task"
                       style={{ width: 22, height: 22, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
