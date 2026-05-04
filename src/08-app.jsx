@@ -40,18 +40,18 @@ function getInitialSuiteView() {
   }
 }
 
-function AppSuiteChrome({ T, active, onSelect, open, onToggle }) {
+function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreActions }) {
   const screenApps = [
     { id: "focus",     label: "Tasks",   icon: "task_alt"   },
     { id: "shailos",   label: "Shailos", icon: "rule"       },
     { id: "deskphone", label: "Phone",   icon: "smartphone" },
   ];
-  const W = open ? 152 : 40;
+  const W = open ? 168 : 46;
   return (
     <div style={{
       position: "fixed", left: 0, top: 0, bottom: 0, width: W, zIndex: 8600,
       display: "flex", flexDirection: "column", alignItems: open ? "stretch" : "center",
-      boxSizing: "border-box", padding: open ? "14px 8px 12px" : "14px 4px 12px",
+      boxSizing: "border-box", padding: open ? "16px 10px 14px" : "16px 5px 14px",
       gap: 2,
       background: "transparent",
       backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
@@ -63,17 +63,17 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle }) {
       {/* NerveCenter identity button */}
       <button onClick={() => onSelect("nervecenter")} title="NerveCenter"
         style={{
-          display: "flex", alignItems: "center", gap: open ? 7 : 0,
+          display: "flex", alignItems: "center", gap: open ? 8 : 0,
           justifyContent: open ? "flex-start" : "center",
           border: "none",
           background: active === "nervecenter" ? (T.tonal || "rgba(127,127,127,0.13)") : "transparent",
           cursor: "pointer", color: active === "nervecenter" ? T.text : T.tSoft,
-          fontFamily: "system-ui", fontWeight: 900, fontSize: 13,
-          padding: open ? "7px 9px" : "7px 0",
-          borderRadius: 10, width: "100%", overflow: "hidden", whiteSpace: "nowrap",
-          marginBottom: 6, flexShrink: 0,
+          fontFamily: "system-ui", fontWeight: 900, fontSize: 15,
+          padding: open ? "8px 10px" : "8px 0",
+          borderRadius: 11, width: "100%", overflow: "hidden", whiteSpace: "nowrap",
+          marginBottom: 8, flexShrink: 0,
         }}>
-        {suiteIcon("hub", 17)}
+        {suiteIcon("hub", 20)}
         {open && "NerveCenter"}
       </button>
 
@@ -83,22 +83,57 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle }) {
         return (
           <button key={app.id} onClick={() => onSelect(app.id)} title={app.label}
             style={{
-              height: 34, padding: open ? "0 9px" : "0",
-              borderRadius: 10, cursor: "pointer", border: "none",
+              height: 38, padding: open ? "0 10px" : "0",
+              borderRadius: 11, cursor: "pointer", border: "none",
               background: isActive ? (T.tonal || T.card) : "transparent",
               color: isActive ? (T.onTonal || T.text) : T.tSoft,
-              fontFamily: "system-ui", fontWeight: 800, fontSize: 12,
+              fontFamily: "system-ui", fontWeight: 800, fontSize: 13,
               display: "flex", alignItems: "center",
-              gap: open ? 8 : 0, justifyContent: open ? "flex-start" : "center",
+              gap: open ? 9 : 0, justifyContent: open ? "flex-start" : "center",
               width: "100%", overflow: "hidden", whiteSpace: "nowrap",
               boxShadow: isActive ? (T.shadow || "0 1px 5px rgba(0,0,0,0.10)") : "none",
-              marginBottom: 2, flexShrink: 0,
+              marginBottom: 3, flexShrink: 0,
             }}>
-            {suiteIcon(app.icon, 15)}
+            {suiteIcon(app.icon, 17)}
             {open && app.label}
           </button>
         );
       })}
+
+      {/* Divider */}
+      <div style={{ height: 1, background: T.brdS || T.brd, margin: open ? "10px 4px" : "10px 0", flexShrink: 0 }} />
+
+      {/* Record anything — mic */}
+      <button onClick={onRecord} title="Record anything — tasks, shailos, notes, got-backs"
+        style={{
+          height: 38, padding: open ? "0 10px" : "0",
+          borderRadius: 11, cursor: "pointer", border: "none",
+          background: "transparent", color: T.tSoft,
+          fontFamily: "system-ui", fontWeight: 800, fontSize: 13,
+          display: "flex", alignItems: "center",
+          gap: open ? 9 : 0, justifyContent: open ? "flex-start" : "center",
+          width: "100%", overflow: "hidden", whiteSpace: "nowrap",
+          marginBottom: 3, flexShrink: 0,
+        }}>
+        {suiteIcon("mic", 18)}
+        {open && "Record"}
+      </button>
+
+      {/* More Actions */}
+      <button onClick={onMoreActions} title="More Actions"
+        style={{
+          height: 38, padding: open ? "0 10px" : "0",
+          borderRadius: 11, cursor: "pointer", border: "none",
+          background: T.primary || T.text, color: T.onPrimary || T.bg,
+          fontFamily: "system-ui", fontWeight: 900, fontSize: 13,
+          display: "flex", alignItems: "center",
+          gap: open ? 9 : 0, justifyContent: open ? "flex-start" : "center",
+          width: "100%", overflow: "hidden", whiteSpace: "nowrap",
+          marginBottom: 2, flexShrink: 0,
+        }}>
+        {suiteIcon("apps", 18)}
+        {open && "More Actions"}
+      </button>
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />
@@ -106,14 +141,14 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle }) {
       {/* Collapse / expand toggle */}
       <button onClick={onToggle} title={open ? "Collapse sidebar" : "Expand sidebar"}
         style={{
-          width: open ? "100%" : 28, height: 28, borderRadius: 9,
+          width: open ? "100%" : 32, height: 30, borderRadius: 10,
           border: `1px solid ${T.brdS || T.brd}`,
           background: "transparent", color: T.tFaint, cursor: "pointer",
           display: "flex", alignItems: "center",
           justifyContent: open ? "flex-end" : "center",
           padding: open ? "0 8px" : "0", flexShrink: 0,
         }}>
-        {suiteIcon(open ? "chevron_left" : "chevron_right", 14)}
+        {suiteIcon(open ? "chevron_left" : "chevron_right", 15)}
       </button>
     </div>
   );
@@ -580,14 +615,12 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, sidebarW = 0 }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, sidebarW = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId }) {
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
-  const [actionsOpen, setActionsOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editText, setEditText] = useState("");
   const taskInputRef = useRef(null);
-  const [actionCategoryId, setActionCategoryId] = useState("tasks");
 
   const GOLD = "#C9923C";
   const GOLD_BG = "rgba(201,146,60,0.07)";
@@ -628,18 +661,6 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   return (
     <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7600, background: T.bg, overflow: "hidden", borderLeft: `1px solid ${T.brdS || T.brd}` }}>
       <div style={{ maxWidth: 1400, height: "100%", margin: "0 auto", padding: "clamp(12px,2vw,20px)", boxSizing: "border-box", display: "flex", flexDirection: "column", minHeight: 0 }}>
-
-        {/* Panel action bar — mic + global Actions, centered */}
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, marginBottom: 14, flexShrink: 0 }}>
-          <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
-            style={{ width: 38, height: 38, borderRadius: 99, border: `1px solid ${T.brd}`, background: T.bgW, color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            {suiteIcon("mic", 20)}
-          </button>
-          <button onClick={() => setActionsOpen(true)}
-            style={{ height: 38, padding: "0 16px", borderRadius: 99, border: "none", background: T.primary || T.text, color: T.onPrimary || T.bg, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, fontFamily: "system-ui", fontWeight: 900, fontSize: 13 }}>
-            {suiteIcon("apps", 18)} Actions
-          </button>
-        </div>
 
         {/* Three-panel grid */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14, flex: 1, minHeight: 0, alignItems: "stretch" }}>
@@ -829,7 +850,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
             <aside onClick={e => e.stopPropagation()} style={{ width: "min(540px,94vw)", height: "100%", background: T.card, borderLeft: `1px solid ${T.brd}`, boxShadow: "-18px 0 44px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column" }}>
               <div style={{ height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", borderBottom: `1px solid ${T.brdS || T.brd}`, flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 17, fontWeight: 950, fontFamily: "system-ui", color: T.text }}>
-                  {suiteIcon("apps", 20)} Actions
+                  {suiteIcon("apps", 20)} More Actions
                 </div>
                 <button onClick={() => setActionsOpen(false)} style={{ width: 34, height: 34, borderRadius: 99, border: `1px solid ${T.brd}`, background: T.bgW, color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {suiteIcon("close", 17)}
@@ -1168,6 +1189,8 @@ function App({ user, onSignOut }) {
   const [tab, setTab] = useState("focus");
   const [suiteView, setSuiteView] = useState(getInitialSuiteView);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [ncActionsOpen, setNcActionsOpen] = useState(false);
+  const [ncActionCatId, setNcActionCatId] = useState("tasks");
   const [deskPhoneOnline, setDeskPhoneOnline] = useState(false);
   const deskPhoneLaunchAtRef = useRef(0);
   const lastDeskPhoneThemeRef = useRef("");
@@ -2924,7 +2947,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
     .sort((a, b) => (b.completedAt || b.createdAt || 0) - (a.completedAt || a.createdAt || 0))
     .slice(0, 5);
   const shellHidden = !!(zen && curT);
-  const sidebarW = shellHidden ? 0 : (sidebarOpen ? 152 : 40);
+  const sidebarW = shellHidden ? 0 : (sidebarOpen ? 168 : 46);
   const launchDeskPhone = (force = false) => {
     if (!force && deskPhoneOnline) return;
     const now = Date.now();
@@ -3634,6 +3657,8 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onSelect={openCommandView}
           open={sidebarOpen}
           onToggle={() => setSidebarOpen(v => !v)}
+          onRecord={() => { setConvCallMode(false); setShowConvCapture(true); }}
+          onMoreActions={() => setNcActionsOpen(true)}
         />
       )}
 
@@ -3664,6 +3689,10 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onOpenPhone={()=>openCommandView("deskphone")}
           onOnlineChange={setDeskPhoneOnline}
           sidebarW={sidebarW}
+          actionsOpen={ncActionsOpen}
+          setActionsOpen={setNcActionsOpen}
+          actionCategoryId={ncActionCatId}
+          setActionCategoryId={setNcActionCatId}
         />
       )}
 
