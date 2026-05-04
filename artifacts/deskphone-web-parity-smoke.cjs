@@ -72,7 +72,7 @@ const calls = [
     durationDisplay: "2 min",
   },
 ];
-const handoffTargets = [];
+const handoffRequests = [];
 
 const server = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -97,10 +97,14 @@ const server = http.createServer((req, res) => {
   } else if (requestPath === "/calls") {
     send(calls);
   } else if (requestPath === "/handoff") {
-    handoffTargets.push(new URL(req.url, `http://127.0.0.1:${hostPort}`).searchParams.get("target") || "");
+    const searchParams = new URL(req.url, `http://127.0.0.1:${hostPort}`).searchParams;
+    handoffRequests.push({
+      target: searchParams.get("target") || "",
+      value: searchParams.get("value") || "",
+    });
     send({ ok: true });
   } else if (requestPath === "/handoff-log") {
-    send(handoffTargets);
+    send(handoffRequests);
   } else {
     send({ ok: true });
   }
@@ -209,7 +213,13 @@ async function runCdp() {
     mobile: false,
   });
   await call("Page.addScriptToEvaluateOnNewDocument", {
-    source: `localStorage.setItem('deskphone_web_host_url','http://127.0.0.1:${hostPort}'); localStorage.setItem('deskphone_web_bridge_url','http://127.0.0.1:${hostPort}');`,
+    source: `
+      localStorage.setItem('deskphone_web_host_url','http://127.0.0.1:${hostPort}');
+      localStorage.setItem('deskphone_web_bridge_url','http://127.0.0.1:${hostPort}');
+      localStorage.removeItem('deskphone_web_rail_width');
+      localStorage.removeItem('deskphone_web_message_list_width');
+      localStorage.removeItem('deskphone_web_call_history_width');
+    `,
   });
 
   const loaded = waitEvent("Page.loadEventFired");
@@ -243,7 +253,9 @@ async function runCdp() {
     const placeholderShown = Array.from(document.querySelectorAll('.dp-muted-body')).some((el) => el.textContent.includes('MMS message'));
     document.querySelector('[data-native-source="MainWindow.xaml:1078"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
-    const handoffTargets = await fetch('http://127.0.0.1:${hostPort}/handoff-log').then((response) => response.json());
+    document.querySelector('[data-native-source="MainWindow.xaml:1763"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const handoffRequests = await fetch('http://127.0.0.1:${hostPort}/handoff-log').then((response) => response.json());
     const image = document.querySelector('.dp-mms-image');
     image.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -259,7 +271,7 @@ async function runCdp() {
       callHistory,
       webVersionText,
       hostBuildText,
-      handoffTargets,
+      handoffRequests,
       scrollable,
       scrolledToBottom: scrollBox.scrollTop >= maxTop - 8,
       imageLoaded: image.naturalWidth > 0,
@@ -314,7 +326,8 @@ async function main() {
     if (!(result.desktop.messageList.after > result.desktop.messageList.before)) failures.push("message splitter did not expand");
     if (!(result.desktop.callHistory.after > result.desktop.callHistory.before)) failures.push("call-history splitter did not expand");
     if (result.desktop.webVersionText !== "DeskPhone Web Version 001" || result.desktop.hostBuildText !== "Windows Host: b242") failures.push("web version or Windows host label is wrong");
-    if (!result.desktop.handoffTargets.includes("new-message")) failures.push("new-message handoff did not target desktop compose");
+    if (!result.desktop.handoffRequests.some((request) => request.target === "new-message")) failures.push("new-message handoff did not target desktop compose");
+    if (!result.desktop.handoffRequests.some((request) => request.target === "new-contact" && request.value.includes("15551234567"))) failures.push("add-contact handoff did not carry the conversation number");
     if (!result.desktop.scrollable || !result.desktop.scrolledToBottom) failures.push("message history did not scroll to latest");
     if (!result.desktop.imageLoaded || result.desktop.placeholderShown) failures.push("MMS image did not replace placeholder");
     if (!result.desktop.viewerOpened || !result.desktop.viewerRotated || !result.desktop.viewerClosed) failures.push("image viewer open/rotate/close failed");

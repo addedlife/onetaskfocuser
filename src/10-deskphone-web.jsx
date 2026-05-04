@@ -881,11 +881,11 @@ function ConversationRow({ conversation, selected, onSelect, onNativeHandoff }) 
       <details className="dp-conversation-menu" onClick={(event) => event.stopPropagation()}>
         <summary aria-label="Conversation actions">{icon("more_vert", 18)}</summary>
         <div className="dp-floating-menu" data-native-source="MainWindow.xaml:1299">
-          <button type="button" onClick={() => onNativeHandoff("Mark read", "MainWindow.xaml:1301")}>Mark read</button>
-          <button type="button" onClick={() => onNativeHandoff("Mark unread", "MainWindow.xaml:1304")}>Mark unread</button>
-          <button type="button" onClick={() => onNativeHandoff("Pin / unpin", "MainWindow.xaml:1308")}>Pin / unpin</button>
-          <button type="button" onClick={() => onNativeHandoff("Mute / unmute alerts", "MainWindow.xaml:1311")}>Mute / unmute alerts</button>
-          <button type="button" onClick={() => onNativeHandoff("Block / unblock locally", "MainWindow.xaml:1314")}>Block / unblock locally</button>
+          <button type="button" onClick={() => onNativeHandoff("Mark read", "MainWindow.xaml:1301", conversation.number)}>Mark read</button>
+          <button type="button" onClick={() => onNativeHandoff("Mark unread", "MainWindow.xaml:1304", conversation.number)}>Mark unread</button>
+          <button type="button" onClick={() => onNativeHandoff("Pin / unpin", "MainWindow.xaml:1308", conversation.number)}>Pin / unpin</button>
+          <button type="button" onClick={() => onNativeHandoff("Mute / unmute alerts", "MainWindow.xaml:1311", conversation.number)}>Mute / unmute alerts</button>
+          <button type="button" onClick={() => onNativeHandoff("Block / unblock locally", "MainWindow.xaml:1314", conversation.number)}>Block / unblock locally</button>
         </div>
       </details>
     </div>
@@ -1010,10 +1010,10 @@ function MessageBubble({ message, previousMessage, open, onToggleOpen, onCopy, o
         {open ? (
           <div className="dp-bubble-actions" data-native-source={message.isSent ? "MainWindow.xaml:2248" : "MainWindow.xaml:2032"}>
             <button type="button" title="Copy" onClick={(event) => { event.stopPropagation(); onCopy(message); }}>{icon("content_copy", 17)}</button>
-            <button type="button" title="Forward" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Forward message", "MainWindow.xaml:2037"); }}>{icon("forward", 17)}</button>
+            <button type="button" title="Forward" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Forward message", "MainWindow.xaml:2037", message.number); }}>{icon("forward", 17)}</button>
             <button type="button" title="Call" onClick={(event) => { event.stopPropagation(); onCall(message.number); }}>{icon("call", 17)}</button>
-            <button type="button" title="Delete" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Delete message", "MainWindow.xaml:2043"); }}>{icon("delete", 17)}</button>
-            <button type="button" title="Pin" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Pin message", "MainWindow.xaml:2047"); }}>{icon("push_pin", 17)}</button>
+            <button type="button" title="Delete" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Delete message", "MainWindow.xaml:2043", message.number); }}>{icon("delete", 17)}</button>
+            <button type="button" title="Pin" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Pin message", "MainWindow.xaml:2047", message.number); }}>{icon("push_pin", 17)}</button>
           </div>
         ) : null}
       </div>
@@ -1112,7 +1112,7 @@ function MessagesSlice({
   const callNumber = useCallback((number) => {
     const normalized = normalizePhoneKey(number);
     if (!normalized) {
-      onNativeHandoff("Call", "MainWindow.xaml:1776");
+      onNativeHandoff("Call", "MainWindow.xaml:1776", number);
       return;
     }
     onCommand(`/dial?n=${encodeURIComponent(normalized)}`, "call");
@@ -1124,7 +1124,7 @@ function MessagesSlice({
       await navigator.clipboard.writeText(text);
       onNotice("Copied message text.");
     } catch {
-      onNativeHandoff("Copy message", "MainWindow.xaml:2032");
+      onNativeHandoff("Copy message", "MainWindow.xaml:2032", message.number);
     }
   }, [onNativeHandoff, onNotice]);
 
@@ -1292,13 +1292,13 @@ function MessagesSlice({
                     Show threads
                   </ShellButton>
                 ) : null}
-                <DeskPhoneIconButton iconName="block" label="Block / unblock locally" nativeSource="MainWindow.xaml:1738" nativeGlyph="E14B" onClick={() => onNativeHandoff("Block / unblock locally", "MainWindow.xaml:1738")} />
-                <DeskPhoneIconButton iconName="push_pin" label="Pin / unpin conversation" nativeSource="MainWindow.xaml:1743" nativeGlyph="F10D" onClick={() => onNativeHandoff("Pin / unpin conversation", "MainWindow.xaml:1743")} />
-                <DeskPhoneIconButton iconName="notifications_off" label="Mute / unmute alerts" nativeSource="MainWindow.xaml:1748" nativeGlyph="E7F6" onClick={() => onNativeHandoff("Mute / unmute alerts", "MainWindow.xaml:1748")} />
-                <DeskPhoneIconButton iconName="mark_email_read" label="Mark read" nativeSource="MainWindow.xaml:1753" nativeGlyph="E151" onClick={() => onNativeHandoff("Mark read", "MainWindow.xaml:1753")} />
-                <DeskPhoneIconButton iconName="mark_email_unread" label="Mark unread" nativeSource="MainWindow.xaml:1758" nativeGlyph="F18A" onClick={() => onNativeHandoff("Mark unread", "MainWindow.xaml:1758")} />
-                <DeskPhoneIconButton iconName="person_add" label="Add contact" nativeSource="MainWindow.xaml:1763" nativeGlyph="E7FE" onClick={() => onNativeHandoff("Add contact", "MainWindow.xaml:1763")} />
-                <DeskPhoneIconButton iconName="edit" label="Edit contact" nativeSource="MainWindow.xaml:1768" nativeGlyph="E3C9" onClick={() => onNativeHandoff("Edit contact", "MainWindow.xaml:1768")} />
+                <DeskPhoneIconButton iconName="block" label="Block / unblock locally" nativeSource="MainWindow.xaml:1738" nativeGlyph="E14B" onClick={() => onNativeHandoff("Block / unblock locally", "MainWindow.xaml:1738", selectedConversation.number)} />
+                <DeskPhoneIconButton iconName="push_pin" label="Pin / unpin conversation" nativeSource="MainWindow.xaml:1743" nativeGlyph="F10D" onClick={() => onNativeHandoff("Pin / unpin conversation", "MainWindow.xaml:1743", selectedConversation.number)} />
+                <DeskPhoneIconButton iconName="notifications_off" label="Mute / unmute alerts" nativeSource="MainWindow.xaml:1748" nativeGlyph="E7F6" onClick={() => onNativeHandoff("Mute / unmute alerts", "MainWindow.xaml:1748", selectedConversation.number)} />
+                <DeskPhoneIconButton iconName="mark_email_read" label="Mark read" nativeSource="MainWindow.xaml:1753" nativeGlyph="E151" onClick={() => onNativeHandoff("Mark read", "MainWindow.xaml:1753", selectedConversation.number)} />
+                <DeskPhoneIconButton iconName="mark_email_unread" label="Mark unread" nativeSource="MainWindow.xaml:1758" nativeGlyph="F18A" onClick={() => onNativeHandoff("Mark unread", "MainWindow.xaml:1758", selectedConversation.number)} />
+                <DeskPhoneIconButton iconName="person_add" label="Add contact" nativeSource="MainWindow.xaml:1763" nativeGlyph="E7FE" onClick={() => onNativeHandoff("Add contact", "MainWindow.xaml:1763", selectedConversation.number)} />
+                <DeskPhoneIconButton iconName="edit" label="Edit contact" nativeSource="MainWindow.xaml:1768" nativeGlyph="E3C9" onClick={() => onNativeHandoff("Edit contact", "MainWindow.xaml:1768", selectedConversation.number)} />
                 <DeskPhoneIconButton iconName="call" label="Call" nativeSource="MainWindow.xaml:1776" nativeGlyph="E0B0" onClick={() => callNumber(selectedConversation.number)} />
               </div>
             </header>
@@ -3175,12 +3175,12 @@ export function DeskPhoneWebPanel({
     runCommand("/show", "show");
   }, [onLaunchNative, runCommand]);
 
-  const nativeHandoff = useCallback(async (label, source) => {
+  const nativeHandoff = useCallback(async (label, source, value = "") => {
     setBusy(source ? `${label} (${source})` : label);
     const target = nativeHandoffTarget(label, source);
     try {
       try {
-        await postJson(host, handoffPath(target));
+        await postJson(host, handoffPath(target, value));
       } catch (handoffError) {
         await postJson(host, "/show");
       }
