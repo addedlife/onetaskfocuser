@@ -50,6 +50,24 @@ const SHELL_PARITY_ROWS = [
   ["MainWindow.xaml:921", "Active call banner", "Ringing or active call band with mute, accept, hang up"],
 ];
 
+const MESSAGE_FILTERS = ["All", "Unread", "Pinned", "Muted", "Blocked"];
+
+const MESSAGE_PARITY_ROWS = [
+  ["MainWindow.xaml:1036", "MessagesRootGrid", "300px conversation list, splitter, thread pane"],
+  ["MainWindow.xaml:1061", "Messages header", "Title, history badge, new message, sort, hide threads"],
+  ["MainWindow.xaml:1106", "ConversationSearchBox", "Search field with icon and placeholder"],
+  ["MainWindow.xaml:1138", "Conversation filters", "All, Unread, Pinned, Muted, Blocked"],
+  ["MainWindow.xaml:1267", "Conversation list row", "Avatar, display name, badges, timestamp, preview"],
+  ["MainWindow.xaml:1299", "Conversation context menu", "Mark read/unread, pin, mute, block handoff controls"],
+  ["MainWindow.xaml:1438", "No conversation placeholder", "Select a conversation / start a new one"],
+  ["MainWindow.xaml:1623", "Conversation header", "Avatar, display name, number, search, action buttons"],
+  ["MainWindow.xaml:1845", "Message list", "Date dividers, inbound/outbound bubbles, attachments, action tray"],
+  ["MainWindow.xaml:2285", "ScrollToBottomButton", "Floating scroll-to-latest button"],
+  ["MainWindow.xaml:2315", "Undo delete bar", "Copied as dormant handoff until web delete exists"],
+  ["MainWindow.xaml:2342", "Compose bar", "Attach, reply box, attachment chips, send button"],
+  ["MainWindow.xaml:2459", "Conversation call history", "Thread-side call history with call-back action"],
+];
+
 const NAV_ITEMS = [
   {
     id: "messages",
@@ -273,6 +291,164 @@ function callBannerText(status) {
   if (status.isCallActive || callState === "Active") return `${number || "Active call"}`;
   if (callState === "Ending") return "Ending call...";
   return "";
+}
+
+function getApiList(value) {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.value)) return value.value;
+  return [];
+}
+
+function digitsOnly(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function normalizePhoneKey(value) {
+  const digits = digitsOnly(value);
+  if (!digits) return String(value || "").trim().toLowerCase();
+  return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+}
+
+function formatPhone(value) {
+  const digits = normalizePhoneKey(value);
+  if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return String(value || digits || "Unknown").trim();
+}
+
+function parseDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatConversationTime(value) {
+  const date = parseDate(value);
+  if (!date) return "";
+  const today = new Date();
+  const sameDay = date.toDateString() === today.toDateString();
+  if (sameDay) return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function formatBubbleTime(value) {
+  const date = parseDate(value);
+  if (!date) return "";
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function formatDateDivider(value) {
+  const date = parseDate(value);
+  if (!date) return "";
+  return date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+}
+
+function avatarInitial(label) {
+  const cleaned = String(label || "").trim();
+  if (!cleaned) return "?";
+  const firstLetter = cleaned.match(/[A-Za-z0-9]/)?.[0] || cleaned[0];
+  return firstLetter.toUpperCase();
+}
+
+function messagePreview(message) {
+  const body = String(message?.preview || message?.body || "").trim();
+  if (body) return body;
+  if (message?.isMms) return "Photo";
+  if (message?.attachments?.length) return "Attachment";
+  return "No preview";
+}
+
+function normalizeMessage(raw, index) {
+  const number = raw?.number || raw?.to || raw?.from || "";
+  const key = normalizePhoneKey(number) || `unknown-${index}`;
+  const timestamp = raw?.timestamp || raw?.time || "";
+  return {
+    id: raw?.id || raw?.handle || `${key}-${timestamp}-${index}`,
+    handle: raw?.handle || "",
+    key,
+    number,
+    formattedPhone: formatPhone(number),
+    from: raw?.from || "",
+    to: raw?.to || "",
+    body: raw?.body || raw?.preview || "",
+    preview: messagePreview(raw),
+    timestamp,
+    timestampMs: parseDate(timestamp)?.getTime() || 0,
+    isSent: !!raw?.isSent,
+    isRead: raw?.isSent ? true : raw?.isRead !== false,
+    isMms: !!raw?.isMms,
+    sourceDeviceAddress: raw?.sourceDeviceAddress || "",
+    attachments: getApiList(raw?.attachments),
+  };
+}
+
+function attachmentLabel(attachment) {
+  if (attachment?.isImage) return "Image";
+  if (attachment?.isContactCard) return "Contact card";
+  return attachment?.contentType || "Attachment";
+}
+
+function buildConversations(messages) {
+  const grouped = new Map();
+  messages.map(normalizeMessage).forEach((message) => {
+    const existing = grouped.get(message.key) || {
+      key: message.key,
+      number: message.number,
+      formattedPhone: message.formattedPhone,
+      displayName: message.formattedPhone,
+      avatarInitial: avatarInitial(message.formattedPhone),
+      messages: [],
+      isPinned: false,
+      areAlertsMuted: false,
+      isBlocked: false,
+    };
+    existing.messages.push(message);
+    grouped.set(message.key, existing);
+  });
+
+  return Array.from(grouped.values()).map((conversation) => {
+    const newestFirst = [...conversation.messages].sort((a, b) => b.timestampMs - a.timestampMs);
+    const chronological = [...conversation.messages].sort((a, b) => a.timestampMs - b.timestampMs);
+    const latest = newestFirst[0];
+    const unreadCount = newestFirst.filter((message) => !message.isSent && !message.isRead).length;
+    return {
+      ...conversation,
+      messages: chronological,
+      latest,
+      displayName: conversation.displayName,
+      avatarInitial: avatarInitial(conversation.displayName),
+      preview: latest?.preview || "No preview",
+      timestampMs: latest?.timestampMs || 0,
+      timestampDisplay: formatConversationTime(latest?.timestamp),
+      unreadCount,
+      isUnread: unreadCount > 0,
+    };
+  });
+}
+
+function filterConversations(conversations, search, filter, unreadFirst) {
+  const query = String(search || "").trim().toLowerCase();
+  return conversations
+    .filter((conversation) => {
+      if (filter === "Unread" && !conversation.isUnread) return false;
+      if (filter === "Pinned" && !conversation.isPinned) return false;
+      if (filter === "Muted" && !conversation.areAlertsMuted) return false;
+      if (filter === "Blocked" && !conversation.isBlocked) return false;
+      if (!query) return true;
+      return (
+        conversation.displayName.toLowerCase().includes(query) ||
+        conversation.formattedPhone.toLowerCase().includes(query) ||
+        conversation.preview.toLowerCase().includes(query)
+      );
+    })
+    .sort((a, b) => {
+      if (unreadFirst && a.isUnread !== b.isUnread) return a.isUnread ? -1 : 1;
+      return b.timestampMs - a.timestampMs;
+    });
+}
+
+function groupCallsByNumber(calls, selectedKey) {
+  return getApiList(calls)
+    .filter((call) => normalizePhoneKey(call?.number) === selectedKey)
+    .slice(0, 12);
 }
 
 function SourceTag({ children }) {
@@ -534,30 +710,504 @@ function CallBanner({ status, muted, onMute, onAnswer, onHangup }) {
   );
 }
 
-function MessagesSlicePlaceholder({ status }) {
+function DeskPhoneIconButton({
+  iconName,
+  label,
+  nativeSource,
+  nativeGlyph,
+  className = "",
+  ...props
+}) {
   return (
-    <div className="dp-tab-placeholder" data-native-source="MainWindow.xaml:1026">
-      <div>
-        <SourceTag>MainWindow.xaml:1026</SourceTag>
-        <h2>Messages root grid</h2>
-        <p>This first slice copies the frame around the message area. The next slice copies the message list, filters, context menus, conversation header, bubbles, attachments, and compose bar from the inventory.</p>
+    <button
+      {...props}
+      type="button"
+      className={`dp-compact-icon-button ${className}`}
+      aria-label={label}
+      title={label}
+      data-native-source={nativeSource || ""}
+      data-native-glyph={nativeGlyph || ""}
+    >
+      {icon(iconName, 20)}
+    </button>
+  );
+}
+
+function ConversationRow({ conversation, selected, onSelect, onNativeHandoff }) {
+  const rowClass = [
+    "dp-conversation-row",
+    selected ? "is-selected" : "",
+    conversation.isUnread ? "is-unread" : "",
+  ].join(" ");
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className={rowClass}
+      data-native-source="MainWindow.xaml:1267"
+      onClick={() => onSelect(conversation.key)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") onSelect(conversation.key);
+      }}
+    >
+      <div className="dp-conversation-avatar" data-native-source="MainWindow.xaml:1334">
+        {conversation.avatarInitial}
       </div>
-      <div className="dp-placeholder-stats">
-        <div>
-          <span>{status?.conversationCount ?? "-"}</span>
-          <label>Conversations</label>
+      <div className="dp-conversation-copy">
+        <div className="dp-conversation-topline">
+          <span className="dp-conversation-name">{conversation.displayName}</span>
+          <span className="dp-conversation-badges">
+            {conversation.isPinned ? <span>Pinned</span> : null}
+            {conversation.areAlertsMuted ? <span>Alerts off</span> : null}
+            {conversation.isBlocked ? <span className="is-danger">Blocked</span> : null}
+          </span>
+          <span className="dp-conversation-time">{conversation.timestampDisplay}</span>
         </div>
-        <div>
-          <span>{status?.messageCount ?? "-"}</span>
-          <label>Messages</label>
+        <div className="dp-conversation-preview">{conversation.preview}</div>
+      </div>
+      <details className="dp-conversation-menu" onClick={(event) => event.stopPropagation()}>
+        <summary aria-label="Conversation actions">{icon("more_vert", 18)}</summary>
+        <div className="dp-floating-menu" data-native-source="MainWindow.xaml:1299">
+          <button type="button" onClick={() => onNativeHandoff("Mark read", "MainWindow.xaml:1301")}>Mark read</button>
+          <button type="button" onClick={() => onNativeHandoff("Mark unread", "MainWindow.xaml:1304")}>Mark unread</button>
+          <button type="button" onClick={() => onNativeHandoff("Pin / unpin", "MainWindow.xaml:1308")}>Pin / unpin</button>
+          <button type="button" onClick={() => onNativeHandoff("Mute / unmute alerts", "MainWindow.xaml:1311")}>Mute / unmute alerts</button>
+          <button type="button" onClick={() => onNativeHandoff("Block / unblock locally", "MainWindow.xaml:1314")}>Block / unblock locally</button>
         </div>
+      </details>
+    </div>
+  );
+}
+
+function ThreadSearchBar({ value, onChange, matchCount, onNativeHandoff }) {
+  const status = value ? (matchCount ? `${matchCount} matches` : "No matches") : "";
+  return (
+    <div className="dp-thread-search" data-native-source="MainWindow.xaml:1688">
+      {icon("search", 15)}
+      <input
+        aria-label="Search this conversation"
+        data-automation-id="ThreadSearchBox"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Search this conversation"
+      />
+      <span>{status}</span>
+      <button type="button" title="Previous match" aria-label="Previous match" onClick={() => onNativeHandoff("Previous thread search match", "MainWindow.xaml:1693")}>{icon("keyboard_arrow_up", 18)}</button>
+      <button type="button" title="Next match" aria-label="Next match" onClick={() => onNativeHandoff("Next thread search match", "MainWindow.xaml:1697")}>{icon("keyboard_arrow_down", 18)}</button>
+      <button type="button" title="Clear search" aria-label="Clear search" onClick={() => onChange("")}>{icon("close", 18)}</button>
+    </div>
+  );
+}
+
+function MessageAttachments({ message, onNativeHandoff }) {
+  if (!message.attachments.length) return null;
+  return (
+    <div className="dp-attachment-stack">
+      {message.attachments.map((attachment, index) => (
+        <div className={`dp-attachment-row ${message.isSent ? "is-outgoing" : ""}`} key={`${message.id}-attachment-${index}`}>
+          {icon(attachment.isImage ? "image" : attachment.isContactCard ? "contact_page" : "attach_file", 18)}
+          <div>
+            <strong>{attachment.fileName || "Attachment"}</strong>
+            <span>{attachmentLabel(attachment)}{attachment.size ? ` - ${Math.round(attachment.size / 1024)} KB` : ""}</span>
+          </div>
+          <button type="button" onClick={() => onNativeHandoff("Save attachment", "MainWindow.xaml:2006")}>Save</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MessageBubble({ message, previousMessage, open, onToggleOpen, onCopy, onCall, onNativeHandoff }) {
+  const currentDivider = formatDateDivider(message.timestamp);
+  const previousDivider = previousMessage ? formatDateDivider(previousMessage.timestamp) : "";
+  const showDateDivider = currentDivider && currentDivider !== previousDivider;
+  const bubbleClass = ["dp-message-bubble", message.isSent ? "is-outgoing" : "is-incoming"].join(" ");
+
+  return (
+    <div className={`dp-message-item ${message.isSent ? "is-outgoing" : "is-incoming"}`} data-native-source="MainWindow.xaml:1845">
+      {showDateDivider ? <div className="dp-date-divider" data-native-source="MainWindow.xaml:1872">{currentDivider}</div> : null}
+      <div
+        role="button"
+        tabIndex={0}
+        className={bubbleClass}
+        data-native-source={message.isSent ? "MainWindow.xaml:2163" : "MainWindow.xaml:1889"}
+        onClick={() => onToggleOpen(message.id)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") onToggleOpen(message.id);
+        }}
+      >
+        {message.body ? <div className="dp-message-body">{message.body}</div> : null}
+        {!message.body && message.isMms ? <div className="dp-message-body dp-muted-body">MMS message</div> : null}
+        <MessageAttachments message={message} onNativeHandoff={onNativeHandoff} />
+        <div className="dp-message-meta">
+          {message.isSent ? <span className="dp-message-status">{icon("done_all", 13)}</span> : null}
+          <span>{formatBubbleTime(message.timestamp)}</span>
+        </div>
+        {open ? (
+          <div className="dp-bubble-actions" data-native-source={message.isSent ? "MainWindow.xaml:2248" : "MainWindow.xaml:2032"}>
+            <button type="button" title="Copy" onClick={(event) => { event.stopPropagation(); onCopy(message); }}>{icon("content_copy", 17)}</button>
+            <button type="button" title="Forward" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Forward message", "MainWindow.xaml:2037"); }}>{icon("forward", 17)}</button>
+            <button type="button" title="Call" onClick={(event) => { event.stopPropagation(); onCall(message.number); }}>{icon("call", 17)}</button>
+            <button type="button" title="Delete" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Delete message", "MainWindow.xaml:2043"); }}>{icon("delete", 17)}</button>
+            <button type="button" title="Pin" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Pin message", "MainWindow.xaml:2047"); }}>{icon("push_pin", 17)}</button>
+          </div>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function SimpleTabContent({ activeTab, status, host, hostInput, setHostInput, onSaveHost, onRefresh, onShowNative }) {
-  if (activeTab === "messages") return <MessagesSlicePlaceholder status={status} />;
+function ConversationCallHistory({ calls, selectedConversation, onCall, onNativeHandoff }) {
+  const selectedCalls = selectedConversation ? groupCallsByNumber(calls, selectedConversation.key) : [];
+  return (
+    <aside className="dp-thread-calls" data-native-source="MainWindow.xaml:2459">
+      <div className="dp-thread-calls-header">
+        <div>
+          <strong>Call history</strong>
+          <span>{selectedCalls.length ? `${selectedCalls.length} with this number` : "No recent calls"}</span>
+        </div>
+        <button type="button" onClick={() => onNativeHandoff("Open full call history", "MainWindow.xaml:2459")}>{icon("open_in_new", 18)}</button>
+      </div>
+      <div className="dp-thread-call-list">
+        {selectedCalls.map((call) => (
+          <div className={`dp-thread-call-row ${call.isMissed ? "is-missed" : ""}`} key={call.id || `${call.number}-${call.timestamp}`}>
+            <div>{icon(call.isMissed ? "phone_missed" : call.direction === "Outgoing" ? "call_made" : "call_received", 18)}</div>
+            <div>
+              <strong>{call.directionLabel || call.direction || "Call"}</strong>
+              <span>{call.timeDisplay || formatConversationTime(call.timestamp)}{call.durationDisplay ? ` - ${call.durationDisplay}` : ""}</span>
+            </div>
+            <button type="button" title="Call back" aria-label="Call back" onClick={() => onCall(call.number)}>{icon("call", 17)}</button>
+          </div>
+        ))}
+        {!selectedCalls.length ? (
+          <div className="dp-thread-call-empty">Calls for this conversation will appear here when DeskPhone reports them.</div>
+        ) : null}
+      </div>
+    </aside>
+  );
+}
+
+function MessagesSlice({
+  status,
+  messages,
+  calls,
+  selectedConversationKey,
+  setSelectedConversationKey,
+  conversationSearch,
+  setConversationSearch,
+  conversationFilter,
+  setConversationFilter,
+  unreadFirst,
+  setUnreadFirst,
+  showMessagesList,
+  setShowMessagesList,
+  draft,
+  setDraft,
+  onCommand,
+  onNativeHandoff,
+  onNotice,
+}) {
+  const [threadSearch, setThreadSearch] = useState("");
+  const [openActionMessageId, setOpenActionMessageId] = useState("");
+
+  const conversations = useMemo(() => buildConversations(messages), [messages]);
+  const visibleConversations = useMemo(
+    () => filterConversations(conversations, conversationSearch, conversationFilter, unreadFirst),
+    [conversations, conversationSearch, conversationFilter, unreadFirst]
+  );
+
+  useEffect(() => {
+    if (!conversations.length) {
+      if (selectedConversationKey) setSelectedConversationKey("");
+      return;
+    }
+    if (!conversations.some((conversation) => conversation.key === selectedConversationKey)) {
+      setSelectedConversationKey(conversations[0].key);
+    }
+  }, [conversations, selectedConversationKey, setSelectedConversationKey]);
+
+  const selectedConversation =
+    conversations.find((conversation) => conversation.key === selectedConversationKey) ||
+    visibleConversations[0] ||
+    null;
+  const threadSearchLower = threadSearch.trim().toLowerCase();
+  const threadMatchCount = threadSearchLower
+    ? selectedConversation?.messages.filter((message) => (
+        message.body.toLowerCase().includes(threadSearchLower) ||
+        message.preview.toLowerCase().includes(threadSearchLower)
+      )).length || 0
+    : 0;
+
+  const callNumber = useCallback((number) => {
+    const normalized = normalizePhoneKey(number);
+    if (!normalized) {
+      onNativeHandoff("Call", "MainWindow.xaml:1776");
+      return;
+    }
+    onCommand(`/dial?n=${encodeURIComponent(normalized)}`, "call");
+  }, [onCommand, onNativeHandoff]);
+
+  const copyMessage = useCallback(async (message) => {
+    const text = message.body || message.preview || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      onNotice("Copied message text.");
+    } catch {
+      onNativeHandoff("Copy message", "MainWindow.xaml:2032");
+    }
+  }, [onNativeHandoff, onNotice]);
+
+  const sendMessage = useCallback(async () => {
+    const body = draft.trim();
+    if (!body || !selectedConversation?.number) return;
+    await onCommand(`/send?to=${encodeURIComponent(selectedConversation.number)}&body=${encodeURIComponent(body)}`, "send message");
+    setDraft("");
+  }, [draft, selectedConversation, onCommand, setDraft]);
+
+  const messageShellClass = [
+    "dp-message-shell",
+    showMessagesList ? "" : "is-list-hidden",
+  ].join(" ");
+  const emptyText = conversationSearch ? "No conversations match this search" : "No conversations yet";
+
+  return (
+    <div className={messageShellClass} data-native-source="MainWindow.xaml:1036">
+      <section className="dp-conversation-pane" data-native-source="MainWindow.xaml:1050">
+        <header className="dp-message-list-header" data-native-source="MainWindow.xaml:1061">
+          <div className="dp-message-header-top">
+            <h2>Messages</h2>
+            {status?.fullHistoryStatus ? <span className="dp-history-status">{status.fullHistoryStatus}</span> : null}
+            <div className="dp-message-header-actions">
+              <DeskPhoneIconButton iconName="add" label="New message" nativeSource="MainWindow.xaml:1078" nativeGlyph="E145" onClick={() => onNativeHandoff("New message", "MainWindow.xaml:1078")} />
+              <DeskPhoneIconButton
+                iconName={unreadFirst ? "mark_email_unread" : "sort"}
+                label={unreadFirst ? "Sort: Unread first - click for Recent first" : "Sort: Recent first - click for Unread first"}
+                nativeSource="MainWindow.xaml:1083"
+                nativeGlyph="E164"
+                className={unreadFirst ? "is-active" : ""}
+                onClick={() => setUnreadFirst((value) => !value)}
+              />
+              <DeskPhoneIconButton iconName="close" label="Hide threads" nativeSource="MainWindow.xaml:1098" nativeGlyph="E5CD" onClick={() => setShowMessagesList(false)} />
+            </div>
+          </div>
+
+          <label className="dp-message-search" data-native-source="MainWindow.xaml:1106">
+            {icon("search", 18)}
+            <input
+              value={conversationSearch}
+              onChange={(event) => setConversationSearch(event.target.value)}
+              placeholder="Search..."
+              aria-label="Search conversations"
+              data-automation-id="ConversationSearchBox"
+            />
+          </label>
+
+          <div className="dp-filter-grid" data-native-source="MainWindow.xaml:1138">
+            {MESSAGE_FILTERS.map((filter) => (
+              <button
+                type="button"
+                key={filter}
+                className={conversationFilter === filter ? "is-active" : ""}
+                onClick={() => setConversationFilter(filter)}
+                data-automation-id={`ConversationFilter${filter}`}
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
+        </header>
+
+        <div className="dp-conversation-list" data-native-source="MainWindow.xaml:1267">
+          {!visibleConversations.length ? (
+            <div className="dp-empty-conversations" data-native-source="MainWindow.xaml:1247">
+              {icon("forum", 48)}
+              <span>{emptyText}</span>
+            </div>
+          ) : null}
+          {visibleConversations.map((conversation) => (
+            <ConversationRow
+              key={conversation.key}
+              conversation={conversation}
+              selected={selectedConversation?.key === conversation.key}
+              onSelect={setSelectedConversationKey}
+              onNativeHandoff={onNativeHandoff}
+            />
+          ))}
+        </div>
+      </section>
+
+      <div className="dp-message-splitter" data-native-source="MainWindow.xaml:1433" />
+
+      <section className="dp-thread-pane" data-native-source="MainWindow.xaml:1438">
+        {!selectedConversation ? (
+          <div className="dp-no-conversation" data-native-source="MainWindow.xaml:1438">
+            <div>{icon("forum", 36)}</div>
+            <strong>Select a conversation</strong>
+            <span>or start a new one</span>
+          </div>
+        ) : (
+          <div className="dp-thread-layout" data-native-source="MainWindow.xaml:1623">
+            <header className="dp-thread-header" data-native-source="MainWindow.xaml:1623">
+              <div className="dp-thread-avatar">{selectedConversation.avatarInitial}</div>
+              <div className="dp-thread-identity">
+                <strong>{selectedConversation.displayName}</strong>
+                <span>{selectedConversation.formattedPhone}</span>
+              </div>
+              <ThreadSearchBar
+                value={threadSearch}
+                onChange={setThreadSearch}
+                matchCount={threadMatchCount}
+                onNativeHandoff={onNativeHandoff}
+              />
+              <div className="dp-thread-actions" data-native-source="MainWindow.xaml:1738">
+                {!showMessagesList ? (
+                  <ShellButton className="dp-tonal dp-show-threads-button" iconName="menu_open" nativeSource="MainWindow.xaml:1831" onClick={() => setShowMessagesList(true)}>
+                    Show threads
+                  </ShellButton>
+                ) : null}
+                <DeskPhoneIconButton iconName="block" label="Block / unblock locally" nativeSource="MainWindow.xaml:1738" nativeGlyph="E14B" onClick={() => onNativeHandoff("Block / unblock locally", "MainWindow.xaml:1738")} />
+                <DeskPhoneIconButton iconName="push_pin" label="Pin / unpin conversation" nativeSource="MainWindow.xaml:1743" nativeGlyph="F10D" onClick={() => onNativeHandoff("Pin / unpin conversation", "MainWindow.xaml:1743")} />
+                <DeskPhoneIconButton iconName="notifications_off" label="Mute / unmute alerts" nativeSource="MainWindow.xaml:1748" nativeGlyph="E7F6" onClick={() => onNativeHandoff("Mute / unmute alerts", "MainWindow.xaml:1748")} />
+                <DeskPhoneIconButton iconName="mark_email_read" label="Mark read" nativeSource="MainWindow.xaml:1753" nativeGlyph="E151" onClick={() => onNativeHandoff("Mark read", "MainWindow.xaml:1753")} />
+                <DeskPhoneIconButton iconName="mark_email_unread" label="Mark unread" nativeSource="MainWindow.xaml:1758" nativeGlyph="F18A" onClick={() => onNativeHandoff("Mark unread", "MainWindow.xaml:1758")} />
+                <DeskPhoneIconButton iconName="person_add" label="Add contact" nativeSource="MainWindow.xaml:1763" nativeGlyph="E7FE" onClick={() => onNativeHandoff("Add contact", "MainWindow.xaml:1763")} />
+                <DeskPhoneIconButton iconName="edit" label="Edit contact" nativeSource="MainWindow.xaml:1768" nativeGlyph="E3C9" onClick={() => onNativeHandoff("Edit contact", "MainWindow.xaml:1768")} />
+                <DeskPhoneIconButton iconName="call" label="Call" nativeSource="MainWindow.xaml:1776" nativeGlyph="E0B0" onClick={() => callNumber(selectedConversation.number)} />
+              </div>
+            </header>
+
+            <div className="dp-thread-detail-grid" data-native-source="MainWindow.xaml:1611">
+              <main className="dp-thread-messages" data-native-source="MainWindow.xaml:1845">
+                <div className="dp-message-scroll">
+                  {selectedConversation.messages.map((message, index) => (
+                    <MessageBubble
+                      key={message.id}
+                      message={message}
+                      previousMessage={selectedConversation.messages[index - 1]}
+                      open={openActionMessageId === message.id}
+                      onToggleOpen={(id) => setOpenActionMessageId((current) => current === id ? "" : id)}
+                      onCopy={copyMessage}
+                      onCall={callNumber}
+                      onNativeHandoff={onNativeHandoff}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="dp-scroll-bottom"
+                  data-native-source="MainWindow.xaml:2285"
+                  aria-label="Scroll to latest message"
+                  data-automation-id="ScrollToBottomButton"
+                  onClick={() => onNativeHandoff("Scroll to latest message", "MainWindow.xaml:2285")}
+                >
+                  {icon("keyboard_arrow_down", 24)}
+                </button>
+                <div className="dp-undo-delete-bar" data-native-source="MainWindow.xaml:2315" aria-hidden="true">
+                  <span>Message deleted</span>
+                  <button type="button" onClick={() => onNativeHandoff("Undo message delete", "MainWindow.xaml:2334")}>Undo</button>
+                </div>
+                <footer className="dp-compose-bar" data-native-source="MainWindow.xaml:2342">
+                  <button
+                    type="button"
+                    className="dp-compose-attach"
+                    title="Attach pictures, files, or contact cards"
+                    aria-label="Attach pictures, files, or contact cards"
+                    data-native-source="MainWindow.xaml:2354"
+                    onClick={() => onNativeHandoff("Attach pictures, files, or contact cards", "MainWindow.xaml:2354")}
+                  >
+                    {icon("attach_file", 22)}
+                  </button>
+                  <textarea
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") sendMessage();
+                    }}
+                    minLength={0}
+                    placeholder="Message text"
+                    aria-label="Message text"
+                    data-automation-id="ReplyComposeBox"
+                  />
+                  <button
+                    type="button"
+                    className="dp-send-button"
+                    aria-label="Send message"
+                    data-automation-id="ReplySendButton"
+                    data-native-source="MainWindow.xaml:2402"
+                    disabled={!draft.trim()}
+                    onClick={sendMessage}
+                  >
+                    {icon("send", 21)}
+                  </button>
+                </footer>
+              </main>
+              <div className="dp-thread-inner-splitter" data-native-source="MainWindow.xaml:2424" />
+              <ConversationCallHistory
+                calls={calls}
+                selectedConversation={selectedConversation}
+                onCall={callNumber}
+                onNativeHandoff={onNativeHandoff}
+              />
+            </div>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function SimpleTabContent({
+  activeTab,
+  status,
+  messages,
+  calls,
+  selectedConversationKey,
+  setSelectedConversationKey,
+  conversationSearch,
+  setConversationSearch,
+  conversationFilter,
+  setConversationFilter,
+  unreadFirst,
+  setUnreadFirst,
+  showMessagesList,
+  setShowMessagesList,
+  draft,
+  setDraft,
+  host,
+  hostInput,
+  setHostInput,
+  onSaveHost,
+  onRefresh,
+  onShowNative,
+  onCommand,
+  onNativeHandoff,
+  onNotice,
+}) {
+  if (activeTab === "messages") {
+    return (
+      <MessagesSlice
+        status={status}
+        messages={messages}
+        calls={calls}
+        selectedConversationKey={selectedConversationKey}
+        setSelectedConversationKey={setSelectedConversationKey}
+        conversationSearch={conversationSearch}
+        setConversationSearch={setConversationSearch}
+        conversationFilter={conversationFilter}
+        setConversationFilter={setConversationFilter}
+        unreadFirst={unreadFirst}
+        setUnreadFirst={setUnreadFirst}
+        showMessagesList={showMessagesList}
+        setShowMessagesList={setShowMessagesList}
+        draft={draft}
+        setDraft={setDraft}
+        onCommand={onCommand}
+        onNativeHandoff={onNativeHandoff}
+        onNotice={onNotice}
+      />
+    );
+  }
   if (activeTab === "contacts") {
     return (
       <div className="dp-tab-placeholder" data-native-source="MainWindow.xaml:3368">
@@ -597,7 +1247,7 @@ function SimpleTabContent({ activeTab, status, host, hostInput, setHostInput, on
 function ParityLedgerPanel({ rows }) {
   return (
     <details className="dp-ledger-panel">
-      <summary>First shell slice parity ledger</summary>
+      <summary>DeskPhone web parity ledger</summary>
       <div className="dp-ledger-grid">
         {rows.map(([source, name, note]) => (
           <div className="dp-ledger-row" key={`${source}-${name}`}>
@@ -1103,6 +1753,679 @@ const css = `
   overflow: auto;
   padding: 24px;
 }
+.dp-tab-area.is-messages {
+  padding: 0;
+  overflow: hidden;
+}
+.dp-message-shell {
+  height: 100%;
+  min-height: 620px;
+  display: grid;
+  grid-template-columns: minmax(210px, 300px) 7px minmax(0, 1fr);
+  background: var(--dp-bg-main);
+  border-top: 1px solid var(--dp-border);
+  overflow: hidden;
+}
+.dp-message-shell.is-list-hidden {
+  grid-template-columns: 0 0 minmax(0, 1fr);
+}
+.dp-message-shell.is-list-hidden .dp-conversation-pane,
+.dp-message-shell.is-list-hidden .dp-message-splitter {
+  display: none;
+}
+.dp-conversation-pane {
+  min-width: 0;
+  background: var(--dp-bg-sidebar);
+  border-right: 1px solid var(--dp-border);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+.dp-message-list-header {
+  padding: 16px 16px 10px;
+}
+.dp-message-header-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px 4px;
+}
+.dp-message-header-top h2 {
+  margin: 0;
+  color: var(--dp-text);
+  font-size: 22px;
+  font-weight: 600;
+}
+.dp-history-status {
+  border-radius: 10px;
+  padding: 3px 8px;
+  background: var(--dp-blue-light);
+  color: var(--dp-blue);
+  font-size: 11px;
+  font-weight: 600;
+}
+.dp-message-header-actions {
+  display: flex;
+  gap: 4px;
+}
+.dp-compact-icon-button.is-active {
+  color: var(--dp-blue);
+}
+.dp-message-search {
+  height: 46px;
+  box-sizing: border-box;
+  border: 1px solid var(--dp-border);
+  border-radius: 10px;
+  background: var(--dp-bg-input);
+  padding: 6px 10px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  color: var(--dp-muted);
+}
+.dp-message-search input,
+.dp-thread-search input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--dp-text);
+  font: inherit;
+}
+.dp-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+.dp-filter-grid button {
+  height: 32px;
+  min-width: 0;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 6px;
+  background: var(--dp-bg-input);
+  color: var(--dp-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dp-filter-grid button.is-active {
+  background: var(--dp-blue-light);
+  color: var(--dp-blue);
+}
+.dp-conversation-list {
+  min-height: 0;
+  overflow: auto;
+}
+.dp-empty-conversations {
+  height: 100%;
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  color: var(--dp-muted);
+  font-size: 15px;
+  font-weight: 600;
+}
+.dp-empty-conversations .dp-material-icon {
+  color: var(--dp-border);
+}
+.dp-conversation-row {
+  position: relative;
+  min-width: 0;
+  border: 0;
+  border-bottom: 1px solid var(--dp-border);
+  padding: 14px 12px 14px 16px;
+  background: transparent;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  cursor: pointer;
+}
+.dp-conversation-row:hover {
+  background: var(--dp-bg-hover);
+}
+.dp-conversation-row.is-selected {
+  background: var(--dp-bg-selected);
+}
+.dp-conversation-avatar,
+.dp-thread-avatar {
+  background: var(--dp-blue-light);
+  color: var(--dp-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+.dp-conversation-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  font-size: 15px;
+}
+.dp-conversation-copy {
+  min-width: 0;
+}
+.dp-conversation-topline {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.dp-conversation-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dp-text);
+  font-size: 18px;
+  font-weight: 600;
+}
+.dp-conversation-row.is-unread .dp-conversation-name,
+.dp-conversation-row.is-unread .dp-conversation-preview,
+.dp-conversation-row.is-unread .dp-conversation-time {
+  font-weight: 700;
+}
+.dp-conversation-badges {
+  display: none;
+  gap: 8px;
+  color: var(--dp-blue);
+  font-size: 11px;
+  font-weight: 700;
+}
+.dp-conversation-badges .is-danger {
+  color: var(--dp-red);
+}
+.dp-conversation-time {
+  color: var(--dp-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.dp-conversation-row.is-unread .dp-conversation-time {
+  color: var(--dp-blue);
+}
+.dp-conversation-preview {
+  margin-top: 4px;
+  color: var(--dp-muted);
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dp-conversation-menu {
+  position: relative;
+  margin-left: 6px;
+}
+.dp-conversation-menu summary {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dp-muted);
+  list-style: none;
+}
+.dp-conversation-menu summary::-webkit-details-marker {
+  display: none;
+}
+.dp-conversation-menu[open] summary {
+  background: var(--dp-blue-light);
+  color: var(--dp-blue);
+}
+.dp-floating-menu {
+  position: absolute;
+  z-index: 40;
+  top: 34px;
+  right: 0;
+  min-width: 190px;
+  border: 1px solid var(--dp-border);
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+  padding: 6px;
+}
+.dp-floating-menu button {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: transparent;
+  color: var(--dp-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.dp-floating-menu button:hover {
+  background: var(--dp-bg-hover);
+}
+.dp-message-splitter,
+.dp-thread-inner-splitter {
+  position: relative;
+  background: transparent;
+}
+.dp-message-splitter::after,
+.dp-thread-inner-splitter::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: var(--dp-border);
+}
+.dp-thread-pane {
+  min-width: 0;
+  min-height: 0;
+  background: var(--dp-bg-main);
+  overflow: hidden;
+}
+.dp-no-conversation {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  color: var(--dp-muted);
+}
+.dp-no-conversation div {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background: var(--dp-bg-hover);
+  color: var(--dp-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.dp-no-conversation strong {
+  font-size: 16px;
+  font-weight: 600;
+}
+.dp-no-conversation span {
+  color: var(--dp-disabled);
+  font-size: 13px;
+}
+.dp-thread-layout {
+  height: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+.dp-thread-header {
+  min-width: 0;
+  border-bottom: 1px solid var(--dp-border);
+  padding: 8px 14px;
+  display: grid;
+  grid-template-columns: auto minmax(150px, auto) minmax(220px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.dp-thread-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.dp-thread-identity {
+  min-width: 0;
+  display: grid;
+}
+.dp-thread-identity strong {
+  color: var(--dp-text);
+  font-size: 16px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dp-thread-identity span {
+  margin-top: 1px;
+  color: var(--dp-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dp-thread-search {
+  min-width: 0;
+  min-height: 32px;
+  border: 1px solid var(--dp-border);
+  border-radius: 10px;
+  background: var(--dp-bg-input);
+  color: var(--dp-muted);
+  padding: 4px 6px;
+  display: grid;
+  grid-template-columns: auto minmax(80px, 1fr) auto auto auto auto;
+  align-items: center;
+  gap: 4px;
+}
+.dp-thread-search span {
+  color: var(--dp-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.dp-thread-search button,
+.dp-bubble-actions button,
+.dp-thread-call-row button,
+.dp-thread-calls-header button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.dp-thread-search button:hover,
+.dp-bubble-actions button:hover,
+.dp-thread-call-row button:hover,
+.dp-thread-calls-header button:hover {
+  background: rgba(26, 115, 232, 0.12);
+}
+.dp-thread-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.dp-show-threads-button {
+  height: 34px;
+  padding: 0 12px;
+}
+.dp-thread-detail-grid {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) 7px minmax(260px, 360px);
+  overflow: hidden;
+}
+.dp-thread-messages {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  position: relative;
+  background: var(--dp-bg-sidebar);
+}
+.dp-message-scroll {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 24px 84px;
+}
+.dp-message-item {
+  display: grid;
+}
+.dp-message-item.is-outgoing {
+  justify-items: end;
+}
+.dp-message-item.is-incoming {
+  justify-items: start;
+}
+.dp-date-divider {
+  justify-self: center;
+  margin: 16px 0;
+  color: var(--dp-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.dp-message-bubble {
+  max-width: min(68ch, 76%);
+  margin: 3px 0;
+  border-radius: 18px;
+  padding: 8px 12px;
+  cursor: pointer;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+}
+.dp-message-bubble.is-incoming {
+  border: 1px solid #E0E0E0;
+  background: white;
+  color: var(--dp-text);
+  border-bottom-left-radius: 6px;
+}
+.dp-message-bubble.is-outgoing {
+  background: var(--dp-blue);
+  color: white;
+  border-bottom-right-radius: 6px;
+}
+.dp-message-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: clamp(14px, 1rem, 17px);
+  line-height: 1.45;
+}
+.dp-muted-body {
+  color: var(--dp-muted);
+  font-style: italic;
+}
+.dp-message-bubble.is-outgoing .dp-muted-body {
+  color: rgba(255, 255, 255, 0.8);
+}
+.dp-message-meta {
+  margin-top: 5px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  color: var(--dp-muted);
+  font-size: 11px;
+}
+.dp-message-bubble.is-outgoing .dp-message-meta {
+  color: rgba(255, 255, 255, 0.78);
+}
+.dp-message-status {
+  display: inline-flex;
+}
+.dp-attachment-stack {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+.dp-attachment-row {
+  min-width: 0;
+  border: 1px solid var(--dp-border);
+  border-radius: 10px;
+  background: var(--dp-bg-input);
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.dp-attachment-row.is-outgoing {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.12);
+}
+.dp-attachment-row strong,
+.dp-attachment-row span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.dp-attachment-row span {
+  color: var(--dp-muted);
+  font-size: 11px;
+}
+.dp-attachment-row.is-outgoing span {
+  color: rgba(255, 255, 255, 0.78);
+}
+.dp-attachment-row button {
+  min-width: 56px;
+  height: 28px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--dp-blue-light);
+  color: var(--dp-blue);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dp-bubble-actions {
+  margin-top: 8px;
+  border-radius: 10px;
+  padding: 6px 8px;
+  background: var(--dp-bg-input);
+  color: var(--dp-blue);
+  display: grid;
+  grid-template-columns: repeat(5, 28px);
+  justify-content: space-between;
+  gap: 4px;
+}
+.dp-message-bubble.is-outgoing .dp-bubble-actions {
+  background: rgba(255, 255, 255, 0.14);
+  color: white;
+}
+.dp-scroll-bottom {
+  position: absolute;
+  right: 20px;
+  bottom: 88px;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--dp-blue);
+  color: white;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dp-undo-delete-bar {
+  display: none;
+}
+.dp-compose-bar {
+  min-width: 0;
+  border-top: 1px solid var(--dp-border);
+  background: var(--dp-bg-main);
+  padding: 14px 20px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+.dp-compose-attach,
+.dp-send-button {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dp-compose-attach {
+  background: var(--dp-blue-light);
+  color: var(--dp-blue);
+}
+.dp-send-button {
+  background: var(--dp-blue);
+  color: white;
+}
+.dp-send-button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.dp-compose-bar textarea {
+  min-width: 0;
+  min-height: 52px;
+  max-height: 140px;
+  resize: vertical;
+  border: 1px solid var(--dp-border);
+  border-radius: 12px;
+  background: white;
+  color: var(--dp-text);
+  padding: 12px;
+  font: 18px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  line-height: 1.35;
+}
+.dp-thread-calls {
+  min-width: 0;
+  min-height: 0;
+  background: var(--dp-bg-main);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+.dp-thread-calls-header {
+  border-bottom: 1px solid var(--dp-border);
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.dp-thread-calls-header strong,
+.dp-thread-calls-header span {
+  display: block;
+}
+.dp-thread-calls-header strong {
+  color: var(--dp-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+.dp-thread-calls-header span {
+  margin-top: 2px;
+  color: var(--dp-muted);
+  font-size: 12px;
+}
+.dp-thread-call-list {
+  min-height: 0;
+  overflow: auto;
+}
+.dp-thread-call-row {
+  border-bottom: 1px solid var(--dp-border);
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+.dp-thread-call-row > div:first-child {
+  color: var(--dp-blue);
+}
+.dp-thread-call-row.is-missed > div:first-child,
+.dp-thread-call-row.is-missed strong {
+  color: var(--dp-red);
+}
+.dp-thread-call-row strong,
+.dp-thread-call-row span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dp-thread-call-row strong {
+  color: var(--dp-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.dp-thread-call-row span {
+  margin-top: 2px;
+  color: var(--dp-muted);
+  font-size: 12px;
+}
+.dp-thread-call-empty {
+  padding: 18px 16px;
+  color: var(--dp-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
 .dp-tab-placeholder,
 .dp-settings-shell {
   min-height: 360px;
@@ -1235,6 +2558,23 @@ const css = `
   font-size: 12px;
   font-weight: 700;
 }
+.dp-action-toast {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 20px;
+  z-index: 545;
+  border: 1px solid var(--dp-blue);
+  border-radius: 12px;
+  background: var(--dp-blue-light);
+  color: var(--dp-blue);
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.dp-action-toast + .dp-error-toast {
+  bottom: 66px;
+}
 @media (max-width: 980px) {
   .dp-shell,
   .dp-shell.is-collapsed {
@@ -1272,6 +2612,45 @@ const css = `
   }
   .dp-tab-area {
     padding: 14px 12px;
+  }
+  .dp-tab-area.is-messages {
+    padding: 0;
+  }
+  .dp-message-shell,
+  .dp-message-shell.is-list-hidden {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(220px, 320px) minmax(0, 1fr);
+  }
+  .dp-message-shell.is-list-hidden {
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .dp-message-shell.is-list-hidden .dp-thread-pane {
+    grid-row: 1;
+  }
+  .dp-message-splitter {
+    display: none;
+  }
+  .dp-conversation-pane {
+    border-right: 0;
+    border-bottom: 1px solid var(--dp-border);
+  }
+  .dp-thread-header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .dp-thread-search,
+  .dp-thread-actions {
+    grid-column: 1 / -1;
+  }
+  .dp-thread-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .dp-thread-inner-splitter {
+    display: none;
+  }
+  .dp-thread-calls {
+    max-height: 240px;
+    border-top: 1px solid var(--dp-border);
   }
   .dp-prompt,
   .dp-call-banner {
@@ -1311,6 +2690,39 @@ const css = `
   .dp-placeholder-stats {
     grid-template-columns: 1fr;
   }
+  .dp-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dp-filter-grid button:last-child {
+    grid-column: 1 / -1;
+  }
+  .dp-conversation-row {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    padding-left: 12px;
+  }
+  .dp-conversation-avatar {
+    width: 34px;
+    height: 34px;
+  }
+  .dp-thread-search {
+    grid-template-columns: auto minmax(0, 1fr) repeat(3, 28px);
+  }
+  .dp-thread-search span {
+    display: none;
+  }
+  .dp-message-scroll {
+    padding: 10px 12px 92px;
+  }
+  .dp-message-bubble {
+    max-width: 88%;
+  }
+  .dp-compose-bar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 12px;
+  }
+  .dp-compose-bar textarea {
+    font-size: 16px;
+  }
 }
 `;
 
@@ -1323,25 +2735,47 @@ export function DeskPhoneWebPanel({
   const [hostInput, setHostInput] = useState(() => readSavedHost());
   const [host, setHost] = useState(() => readSavedHost());
   const [status, setStatus] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [calls, setCalls] = useState([]);
   const [online, setOnline] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [activeTab, setActiveTab] = useState("messages");
   const [railCollapsed, setRailCollapsed] = useState(() => readSavedRailState());
   const [reconnectDismissed, setReconnectDismissed] = useState(false);
   const [muted, setMuted] = useState(false);
   const [showBuildPrompt, setShowBuildPrompt] = useState(false);
   const [showBuildIndicator, setShowBuildIndicator] = useState(false);
+  const [selectedConversationKey, setSelectedConversationKey] = useState("");
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [conversationFilter, setConversationFilter] = useState("All");
+  const [unreadFirst, setUnreadFirst] = useState(false);
+  const [showMessagesList, setShowMessagesList] = useState(true);
+  const [draft, setDraft] = useState("");
+
+  const showNotice = useCallback((message) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 3200);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
-      const nextStatus = await readJson(host, "/status");
+      const [nextStatus, nextMessages, nextCalls] = await Promise.all([
+        readJson(host, "/status"),
+        readJson(host, "/messages"),
+        readJson(host, "/calls"),
+      ]);
       setStatus(nextStatus);
+      setMessages(getApiList(nextMessages));
+      setCalls(getApiList(nextCalls));
       setOnline(true);
       setError("");
       onOnlineChange?.(true);
     } catch (err) {
       setStatus(null);
+      setMessages([]);
+      setCalls([]);
       setOnline(false);
       setError(err?.message || "DeskPhone host was not reached.");
       onOnlineChange?.(false);
@@ -1380,6 +2814,24 @@ export function DeskPhoneWebPanel({
     }
     runCommand("/show", "show");
   }, [onLaunchNative, runCommand]);
+
+  const nativeHandoff = useCallback(async (label, source) => {
+    setBusy(source ? `${label} (${source})` : label);
+    try {
+      await postJson(host, "/show");
+      setError("");
+      showNotice(`${label} is opening in desktop DeskPhone for now.`);
+    } catch (err) {
+      if (onLaunchNative) {
+        onLaunchNative();
+        showNotice(`${label} is opening in desktop DeskPhone for now.`);
+      } else {
+        setError(`${label} needs desktop DeskPhone until the web action is fully built. ${err?.message || ""}`.trim());
+      }
+    } finally {
+      setBusy("");
+    }
+  }, [host, onLaunchNative, showNotice]);
 
   const toggleRail = useCallback(() => {
     setRailCollapsed((current) => {
@@ -1509,7 +2961,7 @@ export function DeskPhoneWebPanel({
               setShowBuildPrompt(true);
               setShowBuildIndicator(false);
             }}
-            onAccept={() => setError("Use New Build needs a host API endpoint before the web page can trigger it.")}
+            onAccept={() => nativeHandoff("Use New Build", "MainWindow.xaml:882")}
             onSnooze={() => {
               setShowBuildPrompt(false);
               setShowBuildIndicator(true);
@@ -1521,27 +2973,45 @@ export function DeskPhoneWebPanel({
             muted={muted}
             onMute={() => {
               setMuted((value) => !value);
-              setError("Mute is copied into the shell, but host control is still needed before web can toggle microphone mute.");
+              nativeHandoff(muted ? "Unmute call" : "Mute call", "MainWindow.xaml:973");
             }}
             onAnswer={() => runCommand("/answer", "answer")}
             onHangup={() => runCommand("/hangup", "hangup")}
           />
 
-          <div className="dp-tab-area">
+          <div className={`dp-tab-area ${activeTab === "messages" ? "is-messages" : ""}`}>
             <SimpleTabContent
               activeTab={activeTab}
               status={status}
+              messages={messages}
+              calls={calls}
+              selectedConversationKey={selectedConversationKey}
+              setSelectedConversationKey={setSelectedConversationKey}
+              conversationSearch={conversationSearch}
+              setConversationSearch={setConversationSearch}
+              conversationFilter={conversationFilter}
+              setConversationFilter={setConversationFilter}
+              unreadFirst={unreadFirst}
+              setUnreadFirst={setUnreadFirst}
+              showMessagesList={showMessagesList}
+              setShowMessagesList={setShowMessagesList}
+              draft={draft}
+              setDraft={setDraft}
               host={host}
               hostInput={hostInput}
               setHostInput={setHostInput}
               onSaveHost={handleSaveHost}
               onRefresh={refresh}
               onShowNative={showNativeApp}
+              onCommand={runCommand}
+              onNativeHandoff={nativeHandoff}
+              onNotice={showNotice}
             />
           </div>
 
-          <ParityLedgerPanel rows={SHELL_PARITY_ROWS} />
+          <ParityLedgerPanel rows={[...SHELL_PARITY_ROWS, ...MESSAGE_PARITY_ROWS]} />
 
+          {notice ? <div className="dp-action-toast">{notice}</div> : null}
           {error ? <div className="dp-error-toast">{error}</div> : null}
           {busy ? <div className="dp-native-hidden" aria-hidden="true">Working: {busy}</div> : null}
           {onClose ? <button className="dp-native-hidden" onClick={onClose} aria-hidden="true">Close</button> : null}
