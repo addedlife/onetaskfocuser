@@ -2852,14 +2852,25 @@ export function DeskPhoneWebPanel({
   const handleNavSelect = useCallback((id) => {
     if (id === "make-call") {
       setActiveTab("messages");
+      nativeHandoff("Make Call", "MainWindow.xaml:525");
       return;
     }
     if (id === "live-log") {
       runCommand("/show", "show log");
       return;
     }
+    if (id === "contacts") {
+      setActiveTab("contacts");
+      nativeHandoff("Contacts", "MainWindow.xaml:562");
+      return;
+    }
+    if (id === "developer") {
+      setActiveTab("developer");
+      nativeHandoff("Developer Tools", "MainWindow.xaml:603");
+      return;
+    }
     setActiveTab(id);
-  }, [runCommand]);
+  }, [nativeHandoff, runCommand]);
 
   const rootClasses = [
     "dp-web-root",
