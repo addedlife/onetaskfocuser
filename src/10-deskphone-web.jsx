@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const DEFAULT_HOST = "http://127.0.0.1:8765";
 const HOST_CONNECTOR_KEY = "deskphone_web_host_url";
 const LEGACY_BRIDGE_KEY = "deskphone_web_bridge_url";
 const RAIL_COLLAPSED_KEY = "deskphone_web_rail_collapsed";
+const RAIL_WIDTH_KEY = "deskphone_web_rail_width";
+const MESSAGE_LIST_WIDTH_KEY = "deskphone_web_message_list_width";
+const CALL_HISTORY_WIDTH_KEY = "deskphone_web_call_history_width";
 
 const COLORS = {
   bgMain: "#FAFAFA",
@@ -183,6 +186,27 @@ function readSavedRailState() {
   }
 }
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function readSavedNumber(key, fallback, min, max) {
+  try {
+    const parsed = Number(localStorage.getItem(key));
+    return Number.isFinite(parsed) ? clamp(parsed, min, max) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveNumber(key, value) {
+  try {
+    localStorage.setItem(key, String(Math.round(value)));
+  } catch {
+    // Locked-down browser modes may block localStorage. The live page still keeps the size in memory.
+  }
+}
+
 function saveHost(value) {
   const normalized = normalizeHost(value);
   try {
@@ -356,10 +380,31 @@ function messagePreview(message) {
   return "No preview";
 }
 
+function normalizeAttachment(raw, index) {
+  const contentType = raw?.contentType || raw?.type || "";
+  const fileName = raw?.fileName || raw?.name || `Attachment ${index + 1}`;
+  const dataUrl = raw?.dataUrl || raw?.imageDataUrl || raw?.url || "";
+  const isImage =
+    !!raw?.isImage ||
+    /^image\//i.test(contentType) ||
+    /\.(png|jpe?g|gif|webp|bmp|heic|heif)$/i.test(fileName);
+
+  return {
+    ...raw,
+    fileName,
+    contentType,
+    dataUrl,
+    isImage,
+    isContactCard: !!raw?.isContactCard,
+    size: Number(raw?.size || raw?.length || 0),
+  };
+}
+
 function normalizeMessage(raw, index) {
   const number = raw?.number || raw?.to || raw?.from || "";
   const key = normalizePhoneKey(number) || `unknown-${index}`;
   const timestamp = raw?.timestamp || raw?.time || "";
+  const attachments = getApiList(raw?.attachments).map(normalizeAttachment);
   return {
     id: raw?.id || raw?.handle || `${key}-${timestamp}-${index}`,
     handle: raw?.handle || "",
@@ -376,7 +421,7 @@ function normalizeMessage(raw, index) {
     isRead: raw?.isSent ? true : raw?.isRead !== false,
     isMms: !!raw?.isMms,
     sourceDeviceAddress: raw?.sourceDeviceAddress || "",
-    attachments: getApiList(raw?.attachments),
+    attachments,
   };
 }
 
@@ -384,6 +429,20 @@ function attachmentLabel(attachment) {
   if (attachment?.isImage) return "Image";
   if (attachment?.isContactCard) return "Contact card";
   return attachment?.contentType || "Attachment";
+}
+
+function saveDataUrlAttachment(attachment, onNativeHandoff) {
+  if (!attachment?.dataUrl) {
+    onNativeHandoff("Save attachment", "MainWindow.xaml:2006");
+    return;
+  }
+
+  const link = document.createElement("a");
+  link.href = attachment.dataUrl;
+  link.download = attachment.fileName || "DeskPhone attachment";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function buildConversations(messages) {
@@ -449,6 +508,33 @@ function groupCallsByNumber(calls, selectedKey) {
   return getApiList(calls)
     .filter((call) => normalizePhoneKey(call?.number) === selectedKey)
     .slice(0, 12);
+}
+
+function startHorizontalDrag(event, { startValue, min, max, onChange, invert = false }) {
+  event.preventDefault();
+  const startX = event.clientX;
+  const pointerId = event.pointerId;
+  try {
+    event.currentTarget.setPointerCapture?.(pointerId);
+  } catch {
+    // Some automated and embedded browser surfaces do not expose a capturable pointer.
+  }
+
+  const handleMove = (moveEvent) => {
+    const delta = moveEvent.clientX - startX;
+    const next = clamp(startValue + (invert ? -delta : delta), min, max);
+    onChange(next);
+  };
+
+  const stop = () => {
+    window.removeEventListener("pointermove", handleMove);
+    window.removeEventListener("pointerup", stop);
+    window.removeEventListener("pointercancel", stop);
+  };
+
+  window.addEventListener("pointermove", handleMove);
+  window.addEventListener("pointerup", stop);
+  window.addEventListener("pointercancel", stop);
 }
 
 function SourceTag({ children }) {
@@ -800,29 +886,80 @@ function ThreadSearchBar({ value, onChange, matchCount, onNativeHandoff }) {
   );
 }
 
-function MessageAttachments({ message, onNativeHandoff }) {
+function ImageLightbox({ image, rotation, onClose, onRotate }) {
+  if (!image) return null;
+  return (
+    <div className="dp-image-viewer" role="dialog" aria-modal="true" aria-label={image.fileName || "MMS image"}>
+      <button type="button" className="dp-image-viewer-close" aria-label="Close image" title="Close" onClick={onClose}>
+        {icon("close", 26)}
+      </button>
+      <div className="dp-image-viewer-stage" onDoubleClick={onClose}>
+        <img
+          src={image.dataUrl}
+          alt={image.fileName || "MMS image"}
+          style={{ transform: `rotate(${rotation}deg)` }}
+        />
+      </div>
+      <div className="dp-image-viewer-tools" aria-label="Image tools">
+        <button type="button" aria-label="Rotate left" title="Rotate left" onClick={() => onRotate(-90)}>
+          {icon("rotate_left", 24)}
+        </button>
+        <button type="button" aria-label="Rotate right" title="Rotate right" onClick={() => onRotate(90)}>
+          {icon("rotate_right", 24)}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MessageAttachments({ message, onNativeHandoff, onOpenImage }) {
   if (!message.attachments.length) return null;
   return (
     <div className="dp-attachment-stack">
       {message.attachments.map((attachment, index) => (
-        <div className={`dp-attachment-row ${message.isSent ? "is-outgoing" : ""}`} key={`${message.id}-attachment-${index}`}>
-          {icon(attachment.isImage ? "image" : attachment.isContactCard ? "contact_page" : "attach_file", 18)}
-          <div>
-            <strong>{attachment.fileName || "Attachment"}</strong>
-            <span>{attachmentLabel(attachment)}{attachment.size ? ` - ${Math.round(attachment.size / 1024)} KB` : ""}</span>
+        <React.Fragment key={`${message.id}-attachment-${index}`}>
+          {attachment.isImage && attachment.dataUrl ? (
+            <img
+              className="dp-mms-image"
+              src={attachment.dataUrl}
+              alt={attachment.fileName || "MMS image"}
+              loading="lazy"
+              role="button"
+              tabIndex={0}
+              title="Double-click to open full screen"
+              onClick={(event) => event.stopPropagation()}
+              onDoubleClick={(event) => {
+                event.stopPropagation();
+                onOpenImage(attachment);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.stopPropagation();
+                  onOpenImage(attachment);
+                }
+              }}
+            />
+          ) : null}
+          <div className={`dp-attachment-row ${message.isSent ? "is-outgoing" : ""}`}>
+            {icon(attachment.isImage ? "image" : attachment.isContactCard ? "contact_page" : "attach_file", 18)}
+            <div>
+              <strong>{attachment.fileName || "Attachment"}</strong>
+              <span>{attachmentLabel(attachment)}{attachment.size ? ` - ${Math.round(attachment.size / 1024)} KB` : ""}</span>
+            </div>
+            <button type="button" onClick={() => saveDataUrlAttachment(attachment, onNativeHandoff)}>Save</button>
           </div>
-          <button type="button" onClick={() => onNativeHandoff("Save attachment", "MainWindow.xaml:2006")}>Save</button>
-        </div>
+        </React.Fragment>
       ))}
     </div>
   );
 }
 
-function MessageBubble({ message, previousMessage, open, onToggleOpen, onCopy, onCall, onNativeHandoff }) {
+function MessageBubble({ message, previousMessage, open, onToggleOpen, onCopy, onCall, onNativeHandoff, onOpenImage }) {
   const currentDivider = formatDateDivider(message.timestamp);
   const previousDivider = previousMessage ? formatDateDivider(previousMessage.timestamp) : "";
   const showDateDivider = currentDivider && currentDivider !== previousDivider;
   const bubbleClass = ["dp-message-bubble", message.isSent ? "is-outgoing" : "is-incoming"].join(" ");
+  const hasVisibleImage = message.attachments.some((attachment) => attachment.isImage && attachment.dataUrl);
 
   return (
     <div className={`dp-message-item ${message.isSent ? "is-outgoing" : "is-incoming"}`} data-native-source="MainWindow.xaml:1845">
@@ -838,8 +975,8 @@ function MessageBubble({ message, previousMessage, open, onToggleOpen, onCopy, o
         }}
       >
         {message.body ? <div className="dp-message-body">{message.body}</div> : null}
-        {!message.body && message.isMms ? <div className="dp-message-body dp-muted-body">MMS message</div> : null}
-        <MessageAttachments message={message} onNativeHandoff={onNativeHandoff} />
+        {!message.body && message.isMms && !hasVisibleImage ? <div className="dp-message-body dp-muted-body">MMS message</div> : null}
+        <MessageAttachments message={message} onNativeHandoff={onNativeHandoff} onOpenImage={onOpenImage} />
         <div className="dp-message-meta">
           {message.isSent ? <span className="dp-message-status">{icon("done_all", 13)}</span> : null}
           <span>{formatBubbleTime(message.timestamp)}</span>
@@ -902,6 +1039,10 @@ function MessagesSlice({
   setUnreadFirst,
   showMessagesList,
   setShowMessagesList,
+  messageListWidth,
+  setMessageListWidth,
+  callHistoryWidth,
+  setCallHistoryWidth,
   draft,
   setDraft,
   onCommand,
@@ -910,6 +1051,9 @@ function MessagesSlice({
 }) {
   const [threadSearch, setThreadSearch] = useState("");
   const [openActionMessageId, setOpenActionMessageId] = useState("");
+  const [activeImage, setActiveImage] = useState(null);
+  const [imageRotation, setImageRotation] = useState(0);
+  const messageScrollRef = useRef(null);
 
   const conversations = useMemo(() => buildConversations(messages), [messages]);
   const visibleConversations = useMemo(
@@ -965,6 +1109,43 @@ function MessagesSlice({
     setDraft("");
   }, [draft, selectedConversation, onCommand, setDraft]);
 
+  const scrollToLatestMessage = useCallback(() => {
+    const scrollBox = messageScrollRef.current;
+    if (!scrollBox) return;
+    scrollBox.scrollTop = scrollBox.scrollHeight;
+  }, []);
+
+  const openImageViewer = useCallback((attachment) => {
+    setActiveImage(attachment);
+    setImageRotation(0);
+  }, []);
+
+  const closeImageViewer = useCallback(() => {
+    setActiveImage(null);
+    setImageRotation(0);
+  }, []);
+
+  const rotateImageViewer = useCallback((delta) => {
+    setImageRotation((current) => (current + delta + 360) % 360);
+  }, []);
+
+  useEffect(() => {
+    const scrollBox = messageScrollRef.current;
+    if (!scrollBox || !selectedConversation) return;
+    scrollBox.scrollTop = scrollBox.scrollHeight;
+  }, [selectedConversation?.key, selectedConversation?.messages.length]);
+
+  useEffect(() => {
+    if (!activeImage) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") closeImageViewer();
+      if (event.key === "ArrowLeft") rotateImageViewer(-90);
+      if (event.key === "ArrowRight") rotateImageViewer(90);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeImage, closeImageViewer, rotateImageViewer]);
+
   const messageShellClass = [
     "dp-message-shell",
     showMessagesList ? "" : "is-list-hidden",
@@ -972,7 +1153,14 @@ function MessagesSlice({
   const emptyText = conversationSearch ? "No conversations match this search" : "No conversations yet";
 
   return (
-    <div className={messageShellClass} data-native-source="MainWindow.xaml:1036">
+    <div
+      className={messageShellClass}
+      data-native-source="MainWindow.xaml:1036"
+      style={{
+        "--dp-message-list-width": `${messageListWidth}px`,
+        "--dp-call-history-width": `${callHistoryWidth}px`,
+      }}
+    >
       <section className="dp-conversation-pane" data-native-source="MainWindow.xaml:1050">
         <header className="dp-message-list-header" data-native-source="MainWindow.xaml:1061">
           <div className="dp-message-header-top">
@@ -1037,7 +1225,19 @@ function MessagesSlice({
         </div>
       </section>
 
-      <div className="dp-message-splitter" data-native-source="MainWindow.xaml:1433" />
+      <div
+        className="dp-message-splitter dp-draggable-splitter"
+        data-native-source="MainWindow.xaml:1433"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize message list"
+        onPointerDown={(event) => startHorizontalDrag(event, {
+          startValue: messageListWidth,
+          min: 210,
+          max: 420,
+          onChange: setMessageListWidth,
+        })}
+      />
 
       <section className="dp-thread-pane" data-native-source="MainWindow.xaml:1438">
         {!selectedConversation ? (
@@ -1079,7 +1279,7 @@ function MessagesSlice({
 
             <div className="dp-thread-detail-grid" data-native-source="MainWindow.xaml:1611">
               <main className="dp-thread-messages" data-native-source="MainWindow.xaml:1845">
-                <div className="dp-message-scroll">
+                <div className="dp-message-scroll" ref={messageScrollRef}>
                   {selectedConversation.messages.map((message, index) => (
                     <MessageBubble
                       key={message.id}
@@ -1090,6 +1290,7 @@ function MessagesSlice({
                       onCopy={copyMessage}
                       onCall={callNumber}
                       onNativeHandoff={onNativeHandoff}
+                      onOpenImage={openImageViewer}
                     />
                   ))}
                 </div>
@@ -1099,7 +1300,7 @@ function MessagesSlice({
                   data-native-source="MainWindow.xaml:2285"
                   aria-label="Scroll to latest message"
                   data-automation-id="ScrollToBottomButton"
-                  onClick={() => onNativeHandoff("Scroll to latest message", "MainWindow.xaml:2285")}
+                  onClick={scrollToLatestMessage}
                 >
                   {icon("keyboard_arrow_down", 24)}
                 </button>
@@ -1142,7 +1343,20 @@ function MessagesSlice({
                   </button>
                 </footer>
               </main>
-              <div className="dp-thread-inner-splitter" data-native-source="MainWindow.xaml:2424" />
+              <div
+                className="dp-thread-inner-splitter dp-draggable-splitter"
+                data-native-source="MainWindow.xaml:2424"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize call history"
+                onPointerDown={(event) => startHorizontalDrag(event, {
+                  startValue: callHistoryWidth,
+                  min: 260,
+                  max: 480,
+                  onChange: setCallHistoryWidth,
+                  invert: true,
+                })}
+              />
               <ConversationCallHistory
                 calls={calls}
                 selectedConversation={selectedConversation}
@@ -1153,6 +1367,12 @@ function MessagesSlice({
           </div>
         )}
       </section>
+      <ImageLightbox
+        image={activeImage}
+        rotation={imageRotation}
+        onClose={closeImageViewer}
+        onRotate={rotateImageViewer}
+      />
     </div>
   );
 }
@@ -1172,6 +1392,10 @@ function SimpleTabContent({
   setUnreadFirst,
   showMessagesList,
   setShowMessagesList,
+  messageListWidth,
+  setMessageListWidth,
+  callHistoryWidth,
+  setCallHistoryWidth,
   draft,
   setDraft,
   host,
@@ -1200,6 +1424,10 @@ function SimpleTabContent({
         setUnreadFirst={setUnreadFirst}
         showMessagesList={showMessagesList}
         setShowMessagesList={setShowMessagesList}
+        messageListWidth={messageListWidth}
+        setMessageListWidth={setMessageListWidth}
+        callHistoryWidth={callHistoryWidth}
+        setCallHistoryWidth={setCallHistoryWidth}
         draft={draft}
         setDraft={setDraft}
         onCommand={onCommand}
@@ -1296,13 +1524,15 @@ const css = `
 }
 .dp-shell {
   width: 100%;
-  min-height: calc(100vh - 64px);
+  height: calc(100vh - 64px);
+  min-height: 620px;
   display: grid;
-  grid-template-columns: 268px 7px minmax(0, 1fr);
+  grid-template-columns: minmax(224px, var(--dp-rail-width, 268px)) 7px minmax(0, 1fr);
   background: var(--dp-bg-main);
   overflow: hidden;
 }
 .dp-web-root.is-embedded .dp-shell {
+  height: 620px;
   min-height: 620px;
 }
 .dp-shell.is-collapsed {
@@ -1320,6 +1550,23 @@ const css = `
   width: 7px;
   position: relative;
   background: transparent;
+}
+.dp-draggable-splitter {
+  cursor: col-resize;
+  touch-action: none;
+}
+.dp-draggable-splitter::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  right: -5px;
+}
+.dp-draggable-splitter:hover::after {
+  background: var(--dp-blue);
+  opacity: 1;
 }
 .dp-splitter::after {
   content: "";
@@ -1759,9 +2006,9 @@ const css = `
 }
 .dp-message-shell {
   height: 100%;
-  min-height: 620px;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(210px, 300px) 7px minmax(0, 1fr);
+  grid-template-columns: minmax(210px, var(--dp-message-list-width, 300px)) 7px minmax(0, 1fr);
   background: var(--dp-bg-main);
   border-top: 1px solid var(--dp-border);
   overflow: hidden;
@@ -2148,7 +2395,7 @@ const css = `
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(340px, 1fr) 7px minmax(260px, 360px);
+  grid-template-columns: minmax(340px, 1fr) 7px minmax(260px, var(--dp-call-history-width, 360px));
   overflow: hidden;
 }
 .dp-thread-messages {
@@ -2161,7 +2408,10 @@ const css = `
 }
 .dp-message-scroll {
   min-height: 0;
-  overflow: auto;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 12px 24px 84px;
 }
 .dp-message-item {
@@ -2231,6 +2481,20 @@ const css = `
   display: grid;
   gap: 6px;
   margin-top: 6px;
+}
+.dp-mms-image {
+  display: block;
+  max-width: min(320px, 100%);
+  max-height: 320px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.04);
+}
+.dp-message-bubble.is-outgoing .dp-mms-image {
+  background: rgba(255, 255, 255, 0.16);
+}
+.dp-mms-image[role="button"] {
+  cursor: zoom-in;
 }
 .dp-attachment-row {
   min-width: 0;
@@ -2575,6 +2839,69 @@ const css = `
 .dp-action-toast + .dp-error-toast {
   bottom: 66px;
 }
+.dp-image-viewer {
+  position: fixed;
+  z-index: 9000;
+  inset: 0;
+  background: rgba(14, 18, 24, 0.92);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  color: white;
+}
+.dp-image-viewer-stage {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 22px;
+}
+.dp-image-viewer-stage img {
+  max-width: min(94vw, 1200px);
+  max-height: calc(100vh - 160px);
+  object-fit: contain;
+  transform-origin: center;
+  transition: transform 160ms ease;
+}
+.dp-image-viewer-close {
+  justify-self: end;
+  width: 46px;
+  height: 46px;
+  margin: 18px 20px 0 0;
+  border: 0;
+  border-radius: 23px;
+  background: rgba(255, 255, 255, 0.16);
+  color: white;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.dp-image-viewer-tools {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 20px 20px;
+}
+.dp-image-viewer-tools button {
+  width: 46px;
+  height: 46px;
+  border: 0;
+  border-radius: 23px;
+  background: rgba(255, 255, 255, 0.16);
+  color: white;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.dp-image-viewer-close:hover,
+.dp-image-viewer-tools button:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
 @media (max-width: 980px) {
   .dp-shell,
   .dp-shell.is-collapsed {
@@ -2752,6 +3079,9 @@ export function DeskPhoneWebPanel({
   const [conversationFilter, setConversationFilter] = useState("All");
   const [unreadFirst, setUnreadFirst] = useState(false);
   const [showMessagesList, setShowMessagesList] = useState(true);
+  const [railWidth, setRailWidth] = useState(() => readSavedNumber(RAIL_WIDTH_KEY, 268, 224, 360));
+  const [messageListWidth, setMessageListWidth] = useState(() => readSavedNumber(MESSAGE_LIST_WIDTH_KEY, 300, 210, 420));
+  const [callHistoryWidth, setCallHistoryWidth] = useState(() => readSavedNumber(CALL_HISTORY_WIDTH_KEY, 360, 260, 480));
   const [draft, setDraft] = useState("");
 
   const showNotice = useCallback((message) => {
@@ -2787,6 +3117,10 @@ export function DeskPhoneWebPanel({
     const timer = window.setInterval(refresh, 5000);
     return () => window.clearInterval(timer);
   }, [refresh]);
+
+  useEffect(() => saveNumber(RAIL_WIDTH_KEY, railWidth), [railWidth]);
+  useEffect(() => saveNumber(MESSAGE_LIST_WIDTH_KEY, messageListWidth), [messageListWidth]);
+  useEffect(() => saveNumber(CALL_HISTORY_WIDTH_KEY, callHistoryWidth), [callHistoryWidth]);
 
   const connectionStatus = useMemo(() => connectionStatusFromStatus(status), [status]);
   const callsConnectionLabel = useMemo(() => channelLabel(status?.hfp || status?.Hfp, "Calls"), [status]);
@@ -2884,7 +3218,11 @@ export function DeskPhoneWebPanel({
   return (
     <main className={rootClasses}>
       <style>{css}</style>
-      <div className={shellClasses} data-native-source="MainWindow.xaml:359">
+      <div
+        className={shellClasses}
+        data-native-source="MainWindow.xaml:359"
+        style={{ "--dp-rail-width": `${railWidth}px` }}
+      >
         <aside className="dp-rail" data-native-source="MainWindow.xaml:382">
           <div className="dp-app-identity" data-native-source="MainWindow.xaml:396">
             <div className="dp-app-title-block">
@@ -2951,7 +3289,19 @@ export function DeskPhoneWebPanel({
           />
         </aside>
 
-        <div className="dp-splitter" data-native-source="MainWindow.xaml:770" />
+        <div
+          className="dp-splitter dp-draggable-splitter"
+          data-native-source="MainWindow.xaml:770"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize navigation rail"
+          onPointerDown={(event) => startHorizontalDrag(event, {
+            startValue: railWidth,
+            min: 224,
+            max: 360,
+            onChange: setRailWidth,
+          })}
+        />
 
         <section className="dp-content" data-native-source="MainWindow.xaml:775">
           <div className="dp-prompts">
@@ -3006,6 +3356,10 @@ export function DeskPhoneWebPanel({
               setUnreadFirst={setUnreadFirst}
               showMessagesList={showMessagesList}
               setShowMessagesList={setShowMessagesList}
+              messageListWidth={messageListWidth}
+              setMessageListWidth={setMessageListWidth}
+              callHistoryWidth={callHistoryWidth}
+              setCallHistoryWidth={setCallHistoryWidth}
               draft={draft}
               setDraft={setDraft}
               host={host}
