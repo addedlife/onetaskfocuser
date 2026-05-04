@@ -239,6 +239,24 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
     return map;
   }, [calls]);
 
+  // Third name source: names embedded directly on message objects (DeskPhone often puts them there)
+  const msgNameMap = useMemo(() => {
+    const map = new Map();
+    (Array.isArray(messages) ? messages : []).forEach(m => {
+      const name = m.name || m.displayName || m.contactName || m.fromName || m.senderName || m.contact ||
+        m.Name || m.DisplayName || m.ContactName || m.FromName || m.SenderName || m.Contact || "";
+      if (!name) return;
+      const num = m.from || m.sender || m.address || m.phoneNumber || m.number || m.to || "";
+      if (!num || num === "Unknown") return;
+      const digits = String(num).replace(/\D/g, "");
+      if (digits.length < 4) return;
+      map.set(digits, name);
+      if (digits.length > 10) map.set(digits.slice(-10), name);
+      if (digits.length > 7)  map.set(digits.slice(-7),  name);
+    });
+    return map;
+  }, [messages]);
+
   const lookupName = useCallback(num => {
     if (!num) return null;
     const digits = String(num).replace(/\D/g, "");
@@ -250,9 +268,12 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
       callNameMap.get(digits) ||
       (digits.length > 10 ? callNameMap.get(digits.slice(-10)) : null) ||
       (digits.length > 7  ? callNameMap.get(digits.slice(-7))  : null) ||
+      msgNameMap.get(digits) ||
+      (digits.length > 10 ? msgNameMap.get(digits.slice(-10)) : null) ||
+      (digits.length > 7  ? msgNameMap.get(digits.slice(-7))  : null) ||
       null
     );
-  }, [contactMap, callNameMap]);
+  }, [contactMap, callNameMap, msgNameMap]);
 
   // Live contact suggestions — used for both dialer and new-compose contact search
   const suggestions = useMemo(() => {
@@ -326,7 +347,11 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   const threadMap = new Map();
   messages.forEach(m => {
     const who = m.from || m.sender || m.address || m.phoneNumber || m.number || m.to || "Unknown";
-    if (!threadMap.has(who)) threadMap.set(who, { ...m, _who: who, _name: lookupName(who) || who });
+    // directName: name embedded right on the message object by DeskPhone
+    const directName = m.name || m.displayName || m.contactName || m.fromName || m.senderName || m.contact ||
+      m.Name || m.DisplayName || m.ContactName || m.FromName || m.SenderName || m.Contact || "";
+    const resolvedName = directName || lookupName(who) || who;
+    if (!threadMap.has(who)) threadMap.set(who, { ...m, _who: who, _name: resolvedName });
   });
   const threads = Array.from(threadMap.values()).slice(0, 10);
   const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, 10);
