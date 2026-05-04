@@ -398,6 +398,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 - **Shaila duplicate fix**: reconciliation listener registers new shailaIds in `pendingShailaIds.current` before returning state — prevents the next `_listenV5` snapshot from re-creating tasks that were just added.
 - **Auto-save format**: `autoFileBackup` now matches `fullBackup` format exactly (`_backupVersion: 1`, `_clean()`, fresh shailos fetched from Firestore). Old `_version: 2` format could not be restored via `parseBackup`.
 - **Home priority**: fully removed from Firestore settings doc, filtered out of all pickers, insights, and AI prompts. `_listenV5` strips it from any incoming Firestore state so it can never re-appear.
+- **Google Nervecenter** (Calendar + Gmail on launchpad): Settings → Google tab → paste OAuth 2.0 Client ID → launchpad shows "Connect Google" button → GIS popup → Calendar card (today's events with live "now" indicator) + Gmail card (important & unread, sender/subject/snippet). Auto-refreshes every 15 min. Focus tab becomes scrollable when Client ID is set. `AS.googleClientId` stored in Firebase settings; OAuth token lives only in component state (never persisted). Requires Google Cloud project with Calendar API + Gmail API enabled and an OAuth 2.0 Web Client ID with `https://onetaskfocuser.netlify.app` as an authorized origin.
 - **aiDetectShailaAnswers**: removed "copy verbatim" instruction — now writes clean halachic ruling preserving content.
 
 ---
@@ -407,6 +408,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 Latest: Left sidebar nav (AppSuiteChrome) — replaces fixed top bar; collapsible 152px/40px icon-strip, chevron toggle, NerveCenter + 3 app buttons vertical. All panel insets updated from "80px 0 0" to "0 0 0 ${sidebarW}px". Five phone panel fixes: post() checks res.ok + parses API errors; callDirIcon handles numeric type codes + fixes outgoing/incoming mis-match; msgDirIcon handles Android SMS numeric codes; message preview no longer truncated (full text wraps); callNameMap fallback from call history for name resolution.
 
 ```
+3242693 feat: Google Calendar + Gmail nervecenter cards on launchpad
 2a9d4af Simplify AI gateway and voice transcription
 8adf72a Update HANDOFF.md — catch up on missed updates from last 5 commits
 697dd6f Proxy: reject stale Gemini model names, fall back to gemini-2.5-flash
