@@ -609,11 +609,6 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                   <div key={t.id} style={{ display: "flex", alignItems: "start", padding: "8px 10px 8px 0", borderBottom: `1px solid ${T.brdS || T.brd}`, gap: 6 }}>
                     {/* Priority color bar */}
                     <span style={{ width: 8, alignSelf: "stretch", minHeight: 20, borderRadius: "0 4px 4px 0", background: priColor, flexShrink: 0 }} />
-                    {/* Checkmark — circle button styled with priority color */}
-                    <button onClick={() => onCompleteTask?.(t.id)} title="Mark done"
-                      style={{ width: 24, height: 24, borderRadius: 99, border: `1.5px solid ${priColor}`, background: "transparent", color: priColor, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
-                      {suiteIcon("check", 13)}
-                    </button>
                     {/* Text — click to edit inline */}
                     <div style={{ flex: 1, minWidth: 0, paddingTop: 1 }}>
                       {isEditing ? (
@@ -628,11 +623,16 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                           style={{ display: "block", fontSize: 13, fontWeight: 700, lineHeight: 1.45, color: T.text, wordBreak: "break-word", cursor: "text" }}>{t.text}</span>
                       )}
                     </div>
-                    {/* Priority chip — hidden while editing */}
-                    {!isEditing && <span style={{ fontSize: 11, fontWeight: 700, color: textOnColor(priColor), background: priColor, borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap", flexShrink: 0, marginTop: 2, opacity: 0.9 }}>{pri?.label || pri?.id || ""}</span>}
+                    {/* Checkmark — plain icon, no pill */}
+                    {!isEditing && <button onClick={() => onCompleteTask?.(t.id)} title="Mark done"
+                      style={{ width: 22, height: 22, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                      {suiteIcon("check", 16)}
+                    </button>}
+                    {/* Priority — color dot only, no text */}
+                    {!isEditing && <span style={{ width: 10, height: 10, borderRadius: 99, background: priColor, flexShrink: 0, marginTop: 5 }} title={pri?.label || ""} />}
                     {/* Delete */}
                     <button onClick={() => onDeleteTask?.(t.id)} title="Delete task"
-                      style={{ width: 22, height: 22, borderRadius: 99, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                      style={{ width: 22, height: 22, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
                       {suiteIcon("close", 13)}
                     </button>
                   </div>
