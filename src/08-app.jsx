@@ -53,7 +53,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       display: "flex", flexDirection: "column", alignItems: open ? "stretch" : "center",
       boxSizing: "border-box", padding: open ? "16px 10px 14px" : "16px 5px 14px",
       gap: 2,
-      background: "transparent",
+      background: T.bg || T.card,
       backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
       borderRight: `1px solid ${T.brdS || T.brd}`,
       transition: "width 0.20s cubic-bezier(0.4,0,0.2,1)",
@@ -3726,16 +3726,18 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       )}
 
       {!shellHidden && suiteView === "deskphone" && (
-        <DeskPhoneWebPanel
-          T={T}
-          onOnlineChange={setDeskPhoneOnline}
-          onClose={()=>openCommandView("focus")}
-          onLaunchNative={bringDeskPhoneForward}
-        />
+        <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7600, overflow: "hidden", background: T.bg, borderLeft: `1px solid ${T.brdS || T.brd}` }}>
+          <DeskPhoneWebPanel
+            T={T}
+            onOnlineChange={setDeskPhoneOnline}
+            onClose={()=>openCommandView("focus")}
+            onLaunchNative={bringDeskPhoneForward}
+          />
+        </div>
       )}
 
 
-      <div style={{width:"100%",maxWidth:"min(800px, 95vw)",padding:"0 clamp(16px,3vw,32px)",position:"relative",zIndex:1,height:"100vh",marginLeft:sidebarW,transition:"margin-left 0.20s cubic-bezier(0.4,0,0.2,1)",overflowY:tab==="focus"?"hidden":"auto",display:"flex",flexDirection:"column"}}>
+      <div style={{position:"fixed",top:0,bottom:0,left:sidebarW,right:0,width:"auto",maxWidth:"none",padding:"0 clamp(16px,3vw,32px)",boxSizing:"border-box",zIndex:1,height:"100vh",transition:"left 0.20s cubic-bezier(0.4,0,0.2,1)",overflowY:tab==="focus"?"hidden":"auto",display:"flex",flexDirection:"column",alignItems:"center"}}>
 
         {/* ===== FOCUS TAB ===== */}
         {tab === "focus" && (
