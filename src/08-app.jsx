@@ -34,9 +34,9 @@ function getInitialSuiteView() {
     const view = (params.get("suite") || params.get("view") || "").toLowerCase();
     if (view === "switchboard" || view === "nervecenter") return "nervecenter";
     if (view === "focus" || view === "shailos" || view === "deskphone" || view === "phone") return view === "phone" ? "deskphone" : view;
-    return "focus";
+    return "nervecenter";
   } catch {
-    return "focus";
+    return "nervecenter";
   }
 }
 
@@ -640,7 +640,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, sidebarW = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, sidebarW = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle }) {
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [editingTaskId, setEditingTaskId] = useState(null);
@@ -684,11 +684,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   };
 
   return (
-    <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7600, background: T.bg, overflow: "hidden", borderLeft: `1px solid ${T.brdS || T.brd}` }}>
-      <div style={{ maxWidth: 1400, height: "100%", margin: "0 auto", padding: "clamp(12px,2vw,20px)", boxSizing: "border-box", display: "flex", flexDirection: "column", minHeight: 0 }}>
+    <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7600, background: T.bg, overflow: "auto", borderLeft: `1px solid ${T.brdS || T.brd}` }}>
+      <div style={{ maxWidth: 1400, minHeight: "100%", margin: "0 auto", padding: "clamp(12px,2vw,20px)", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
 
         {/* Three-panel grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14, flex: 1, minHeight: 0, alignItems: "stretch" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14, flex: 1, minHeight: "clamp(300px, 60vh, 680px)", alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
           <section style={{ background: T.card, border: `1px solid ${T.brd}`, borderRadius: 20, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", boxShadow: T.shadow || "none" }}>
@@ -868,6 +868,136 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
             </div>
           </section>
         </div>
+
+        {/* ── Google Calendar + Gmail row ── */}
+        {googleClientId && (() => {
+          const accentBlue = T.isDark ? '#7EB0DE' : '#4A80CC';
+          const notConnected = !googleToken && !googleLoading;
+          const cardS = { background: T.card, borderRadius: 16, border: `1px solid ${T.brd}`, padding: "14px 16px", boxSizing: "border-box", flex: 1, minWidth: 0 };
+          const secH = { fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, color: T.tFaint, fontFamily: "system-ui", margin: "0 0 10px", display: "flex", justifyContent: "space-between", alignItems: "center" };
+
+          const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || '';
+          const fmtFrom = (raw) => { const m = raw.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : raw.split('@')[0]; };
+          const fmtTime = (raw) => {
+            try {
+              const d = new Date(raw); const now = new Date();
+              if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+              return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            } catch { return ''; }
+          };
+          const fmtEvtTime = (evt) => {
+            if (evt.start?.date) return 'All day';
+            const s = new Date(evt.start?.dateTime);
+            const e = new Date(evt.end?.dateTime);
+            return `${s.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} – ${e.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+          };
+          const isNow = (evt) => {
+            if (!evt.start?.dateTime) return false;
+            const now = Date.now();
+            return new Date(evt.start.dateTime).getTime() <= now && new Date(evt.end.dateTime).getTime() >= now;
+          };
+
+          return (
+            <div style={{ display: "flex", gap: 14, marginTop: 14, flexShrink: 0, minHeight: 0 }}>
+
+              {/* Not connected — single wide prompt */}
+              {notConnected && !googleError && (
+                <button onClick={onConnectGoogle}
+                  style={{ flex: 1, padding: "13px 16px", borderRadius: 16, border: `1px dashed ${T.brd}`, background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tSoft, fontFamily: "system-ui", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = accentBlue; e.currentTarget.style.color = accentBlue; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = T.brd; e.currentTarget.style.color = T.tSoft; }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  Connect Google Calendar &amp; Gmail
+                </button>
+              )}
+
+              {googleError && (
+                <div style={{ ...cardS, borderColor: "#E07040", display: "flex", gap: 8, alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#E07040", fontFamily: "system-ui", flex: 1 }}>{googleError}</span>
+                  <button onClick={onConnectGoogle} style={{ fontSize: 11, fontFamily: "system-ui", fontWeight: 600, color: accentBlue, background: "none", border: `1px solid ${accentBlue}`, borderRadius: 8, padding: "4px 10px", cursor: "pointer" }}>Retry</button>
+                  <button onClick={onDisconnectGoogle} style={{ fontSize: 11, fontFamily: "system-ui", color: T.tFaint, background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                </div>
+              )}
+
+              {googleLoading && !calendarEvents && !googleError && (
+                <div style={{ ...cardS, display: "flex", alignItems: "center", gap: 8, justifyContent: "center", padding: 16 }}>
+                  <div style={{ width: 14, height: 14, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                  <span style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui" }}>Loading Google data…</span>
+                </div>
+              )}
+
+              {/* Calendar card */}
+              {calendarEvents !== null && (
+                <div style={cardS}>
+                  <div style={secH}>
+                    <span>📅 Today</span>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      {googleLoading && <div style={{ width: 10, height: 10, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+                      <button onClick={onConnectGoogle} title="Refresh" style={{ fontSize: 10, fontFamily: "system-ui", color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .6 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .6}>↺</button>
+                      <button onClick={onDisconnectGoogle} title="Disconnect" style={{ fontSize: 10, fontFamily: "system-ui", color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .4 }} onMouseEnter={e => e.currentTarget.style.opacity = .9} onMouseLeave={e => e.currentTarget.style.opacity = .4}>✕</button>
+                    </div>
+                  </div>
+                  {calendarEvents.length === 0 ? (
+                    <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: 0, textAlign: "center", padding: "8px 0" }}>Nothing on the calendar today</p>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      {calendarEvents.map((evt, i) => {
+                        const now = isNow(evt);
+                        return (
+                          <div key={evt.id || i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "7px 0", borderBottom: i < calendarEvents.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
+                            <div style={{ flexShrink: 0, width: 56, textAlign: "right" }}>
+                              <span style={{ fontSize: 10, fontFamily: "system-ui", color: now ? accentBlue : T.tFaint, fontWeight: now ? 700 : 400 }}>{fmtEvtTime(evt)}</span>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                {now && <span style={{ width: 6, height: 6, borderRadius: "50%", background: accentBlue, flexShrink: 0, display: "inline-block" }} />}
+                                <span style={{ fontSize: 13, color: now ? T.text : T.tSoft, fontWeight: now ? 600 : 400, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evt.summary || "(no title)"}</span>
+                              </div>
+                              {evt.location && <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evt.location}</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Gmail card */}
+              {gmailMessages !== null && (
+                <div style={cardS}>
+                  <div style={secH}>
+                    <span>✉️ Important &amp; Unread</span>
+                    {googleLoading && <div style={{ width: 10, height: 10, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+                  </div>
+                  {gmailMessages.length === 0 ? (
+                    <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: 0, textAlign: "center", padding: "8px 0" }}>Inbox zero 🎉</p>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      {gmailMessages.map((msg, i) => {
+                        const subject = gmailHeader(msg, 'Subject') || '(no subject)';
+                        const from = fmtFrom(gmailHeader(msg, 'From'));
+                        const date = fmtTime(gmailHeader(msg, 'Date'));
+                        return (
+                          <div key={msg.id || i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "7px 0", borderBottom: i < gmailMessages.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: T.tSoft, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
+                                <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui", flexShrink: 0 }}>{date}</span>
+                              </div>
+                              <span style={{ fontSize: 12, color: T.text, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{subject}</span>
+                              {msg.snippet && <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{msg.snippet}</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Actions drawer */}
         {actionsOpen && (
@@ -3811,6 +3941,14 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           setActionsOpen={setNcActionsOpen}
           actionCategoryId={ncActionCatId}
           setActionCategoryId={setNcActionCatId}
+          calendarEvents={calendarEvents}
+          gmailMessages={gmailMessages}
+          googleLoading={googleLoading}
+          googleError={googleError}
+          googleToken={googleToken}
+          googleClientId={AS?.googleClientId || null}
+          onConnectGoogle={connectGoogle}
+          onDisconnectGoogle={disconnectGoogle}
         />
       )}
 
@@ -3832,7 +3970,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
 
         {/* ===== FOCUS TAB ===== */}
         {tab === "focus" && (
-          <div style={{animation:"ot-fade 0.3s",display:"flex",alignItems:AS?.googleClientId?"flex-start":"center",justifyContent:"center",minHeight:"100%",overflowY:AS?.googleClientId?"auto":"hidden",paddingTop:AS?.googleClientId?"clamp(20px,5vh,48px)":0,paddingBottom:AS?.googleClientId?32:0}}>
+          <div style={{animation:"ot-fade 0.3s",display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100%",overflow:"hidden"}}>
 
             {/* ── Center spine ── */}
             <div style={{display:"flex",flexDirection:"column",alignItems:"stretch",gap:"clamp(18px,3.5vh,36px)",width:"min(88vw,500px)"}}>
@@ -4019,139 +4157,6 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                 </button>
               </div>
 
-              {/* ── Google Nervecenter Cards ── */}
-              {AS?.googleClientId && (() => {
-                // helpers for parsing gmail metadata
-                const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || '';
-                const fmtFrom = (raw) => { const m = raw.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : raw.split('@')[0]; };
-                const fmtTime = (raw) => {
-                  try {
-                    const d = new Date(raw);
-                    const now = new Date();
-                    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
-                    return d.toLocaleDateString([],{month:'short',day:'numeric'});
-                  } catch { return ''; }
-                };
-                const fmtEvtTime = (evt) => {
-                  if (evt.start?.date) return 'All day';
-                  const s = new Date(evt.start?.dateTime);
-                  const e = new Date(evt.end?.dateTime);
-                  return `${s.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})} – ${e.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}`;
-                };
-                const isNow = (evt) => {
-                  if (!evt.start?.dateTime) return false;
-                  const now = Date.now();
-                  return new Date(evt.start.dateTime).getTime() <= now && new Date(evt.end.dateTime).getTime() >= now;
-                };
-                const cardS = {background:T.card,borderRadius:16,border:`1px solid ${T.brd}`,padding:"14px 16px",width:"100%",boxSizing:"border-box"};
-                const secH = {fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 10px",display:"flex",justifyContent:"space-between",alignItems:"center"};
-
-                const notConnected = !googleToken && !googleLoading;
-                const accentBlue = T.isDark ? '#7EB0DE' : '#4A80CC';
-
-                return (
-                  <div style={{display:"flex",flexDirection:"column",gap:10,paddingBottom:24,width:"100%"}}>
-
-                    {/* Not yet authorized */}
-                    {notConnected && !googleError && (
-                      <button onClick={connectGoogle}
-                        style={{width:"100%",padding:"12px",borderRadius:14,border:`1px dashed ${T.brd}`,background:"none",cursor:"pointer",
-                          display:"flex",alignItems:"center",justifyContent:"center",gap:8,color:T.tSoft,fontFamily:"system-ui",fontSize:12,fontWeight:600,transition:"all 0.15s"}}
-                        onMouseEnter={e=>{e.currentTarget.style.borderColor=accentBlue;e.currentTarget.style.color=accentBlue;}}
-                        onMouseLeave={e=>{e.currentTarget.style.borderColor=T.brd;e.currentTarget.style.color=T.tSoft;}}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                        Connect Google Calendar &amp; Gmail
-                      </button>
-                    )}
-
-                    {googleError && (
-                      <div style={{...cardS,borderColor:"#E07040",display:"flex",gap:8,alignItems:"center"}}>
-                        <span style={{fontSize:12,color:"#E07040",fontFamily:"system-ui",flex:1}}>{googleError}</span>
-                        <button onClick={connectGoogle} style={{fontSize:11,fontFamily:"system-ui",fontWeight:600,color:accentBlue,background:"none",border:`1px solid ${accentBlue}`,borderRadius:8,padding:"4px 10px",cursor:"pointer"}}>Retry</button>
-                        <button onClick={disconnectGoogle} style={{fontSize:11,fontFamily:"system-ui",color:T.tFaint,background:"none",border:"none",cursor:"pointer"}}>✕</button>
-                      </div>
-                    )}
-
-                    {googleLoading && !calendarEvents && (
-                      <div style={{...cardS,display:"flex",alignItems:"center",gap:8,justifyContent:"center",padding:16}}>
-                        <div style={{width:14,height:14,borderRadius:"50%",border:`2px solid ${T.tSoft}`,borderTopColor:"transparent",animation:"ot-spin 0.8s linear infinite"}}/>
-                        <span style={{fontSize:12,color:T.tFaint,fontFamily:"system-ui"}}>Loading Google data…</span>
-                      </div>
-                    )}
-
-                    {/* Calendar card */}
-                    {calendarEvents !== null && (
-                      <div style={cardS}>
-                        <div style={secH}>
-                          <span>📅 Today</span>
-                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                            {googleLoading && <div style={{width:10,height:10,borderRadius:"50%",border:`1.5px solid ${T.tFaint}`,borderTopColor:"transparent",animation:"ot-spin 0.8s linear infinite"}}/>}
-                            <button onClick={connectGoogle} title="Refresh" style={{fontSize:10,fontFamily:"system-ui",color:T.tFaint,background:"none",border:"none",cursor:"pointer",padding:0,opacity:.6}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.6}>↺</button>
-                            <button onClick={disconnectGoogle} title="Disconnect" style={{fontSize:10,fontFamily:"system-ui",color:T.tFaint,background:"none",border:"none",cursor:"pointer",padding:0,opacity:.4}} onMouseEnter={e=>e.currentTarget.style.opacity=.9} onMouseLeave={e=>e.currentTarget.style.opacity=.4}>✕</button>
-                          </div>
-                        </div>
-                        {calendarEvents.length === 0 ? (
-                          <p style={{fontSize:12,color:T.tFaint,fontFamily:"system-ui",margin:0,textAlign:"center",padding:"8px 0"}}>Nothing on the calendar today</p>
-                        ) : (
-                          <div style={{display:"flex",flexDirection:"column",gap:1}}>
-                            {calendarEvents.map((evt,i) => {
-                              const now = isNow(evt);
-                              return (
-                                <div key={evt.id||i} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"7px 0",borderBottom:i<calendarEvents.length-1?`1px solid ${T.brdS}`:"none"}}>
-                                  <div style={{flexShrink:0,width:56,textAlign:"right"}}>
-                                    <span style={{fontSize:10,fontFamily:"system-ui",color:now?accentBlue:T.tFaint,fontWeight:now?700:400}}>{fmtEvtTime(evt)}</span>
-                                  </div>
-                                  <div style={{flex:1,minWidth:0}}>
-                                    <div style={{display:"flex",alignItems:"center",gap:5}}>
-                                      {now && <span style={{width:6,height:6,borderRadius:"50%",background:accentBlue,flexShrink:0,display:"inline-block"}}/>}
-                                      <span style={{fontSize:13,color:now?T.text:T.tSoft,fontWeight:now?600:400,fontFamily:"system-ui",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{evt.summary||"(no title)"}</span>
-                                    </div>
-                                    {evt.location && <span style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{evt.location}</span>}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Gmail card */}
-                    {gmailMessages !== null && (
-                      <div style={cardS}>
-                        <div style={secH}>
-                          <span>✉️ Important &amp; Unread</span>
-                          {googleLoading && <div style={{width:10,height:10,borderRadius:"50%",border:`1.5px solid ${T.tFaint}`,borderTopColor:"transparent",animation:"ot-spin 0.8s linear infinite"}}/>}
-                        </div>
-                        {gmailMessages.length === 0 ? (
-                          <p style={{fontSize:12,color:T.tFaint,fontFamily:"system-ui",margin:0,textAlign:"center",padding:"8px 0"}}>Inbox zero 🎉</p>
-                        ) : (
-                          <div style={{display:"flex",flexDirection:"column",gap:1}}>
-                            {gmailMessages.map((msg,i) => {
-                              const subject = gmailHeader(msg,'Subject') || '(no subject)';
-                              const from    = fmtFrom(gmailHeader(msg,'From'));
-                              const date    = fmtTime(gmailHeader(msg,'Date'));
-                              return (
-                                <div key={msg.id||i} style={{display:"flex",gap:8,alignItems:"flex-start",padding:"7px 0",borderBottom:i<gmailMessages.length-1?`1px solid ${T.brdS}`:"none"}}>
-                                  <div style={{flex:1,minWidth:0}}>
-                                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:2}}>
-                                      <span style={{fontSize:11,fontWeight:700,color:T.tSoft,fontFamily:"system-ui",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{from}</span>
-                                      <span style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",flexShrink:0}}>{date}</span>
-                                    </div>
-                                    <span style={{fontSize:12,color:T.text,fontFamily:"system-ui",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{subject}</span>
-                                    {msg.snippet && <span style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{msg.snippet}</span>}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                  </div>
-                );
-              })()}
 
             </div>{/* end spine */}
 
