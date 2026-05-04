@@ -397,7 +397,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 ## 15. Recent Git History
 
-Latest: NerveCenter layout — centered M3 pill header (title + mic + Actions as floating pill buttons, no full-width banner); phone column shows up to 10 messages and 10 calls (scrolls within column); "More history" pill at bottom of each list opens DeskPhone full screen.
+Latest: Nav redesign (AppSuiteChrome) — 2-row transparent/blur header: "NerveCenter" title centered on top row, three app-screen pills (Tasks/Shailos/Phone) on second row; nav height now 80px (all panel offsets updated). NerveCenterPanel: inline task complete (checkmark), delete (×), click-to-edit text; Zen mode button in Tasks header; per-card apps icon on each card opens Actions drawer pre-filtered to that card. onCompleteTask/onDeleteTask/onEditTask wired to compTask/delTask/uT in App.
 
 ```
 2a9d4af Simplify AI gateway and voice transcription

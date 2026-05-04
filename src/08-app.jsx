@@ -41,22 +41,42 @@ function getInitialSuiteView() {
 }
 
 function AppSuiteChrome({ T, active, onSelect }) {
-  const apps = [
-    { id: "nervecenter", label: "NerveCenter", icon: "hub" },
-    { id: "focus", label: "Tasks", icon: "task_alt" },
-    { id: "shailos", label: "Shailos", icon: "rule" },
-    { id: "deskphone", label: "Phone", icon: "smartphone" },
+  const screenApps = [
+    { id: "focus",     label: "Tasks",   icon: "task_alt"   },
+    { id: "shailos",   label: "Shailos", icon: "rule"       },
+    { id: "deskphone", label: "Phone",   icon: "smartphone" },
   ];
   return (
-    <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 64, zIndex: 8600, display: "flex", alignItems: "center", justifyContent: "center", padding: "8px clamp(10px,2vw,18px)", boxSizing: "border-box", background: `color-mix(in srgb, ${T.card} 94%, transparent)`, borderBottom: `1px solid ${T.brd}`, boxShadow: T.shadow || "0 2px 14px rgba(0,0,0,0.10)", backdropFilter: "blur(18px)" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 4, width: "min(780px,100%)", padding: 3, borderRadius: 16, background: T.bgW, border: `1px solid ${T.brdS || T.brd}` }}>
-        {apps.map(app => {
+    <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 80, zIndex: 8600,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      gap: 5, boxSizing: "border-box", padding: "6px 0",
+      background: "transparent", backdropFilter: "blur(22px)", WebkitBackdropFilter: "blur(22px)" }}>
+
+      {/* Row 1 — NerveCenter identity */}
+      <button onClick={() => onSelect("nervecenter")}
+        style={{ display: "flex", alignItems: "center", gap: 7, border: "none", background: "transparent",
+          cursor: "pointer", color: active === "nervecenter" ? T.text : T.tSoft,
+          fontFamily: "system-ui", fontWeight: 900, fontSize: 15, padding: "2px 10px", borderRadius: 99,
+          opacity: active === "nervecenter" ? 1 : 0.72 }}>
+        {suiteIcon("hub", 18)}
+        NerveCenter
+      </button>
+
+      {/* Row 2 — three app-screen pill buttons */}
+      <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+        {screenApps.map(app => {
           const isActive = active === app.id;
           return (
             <button key={app.id} onClick={() => onSelect(app.id)} title={app.label}
-              style={{ minWidth: 0, height: 42, border: "none", borderRadius: 12, cursor: "pointer", background: isActive ? (T.tonal || T.bgW) : "transparent", color: isActive ? (T.onTonal || T.text) : T.tSoft, fontFamily: "system-ui", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "0 8px", fontWeight: 800, boxShadow: isActive ? "inset 0 0 0 1px rgba(255,255,255,0.18)" : "none" }}>
-              {suiteIcon(app.icon, 20)}
-              <span style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{app.label}</span>
+              style={{ height: 28, padding: "0 13px", borderRadius: 14, cursor: "pointer",
+                border: isActive ? "none" : `1px solid ${T.brdS || T.brd}`,
+                background: isActive ? (T.tonal || T.card) : "transparent",
+                color: isActive ? (T.onTonal || T.text) : T.tSoft,
+                fontFamily: "system-ui", fontWeight: 800, fontSize: 12,
+                display: "flex", alignItems: "center", gap: 6,
+                boxShadow: isActive ? (T.shadow || "0 1px 6px rgba(0,0,0,0.10)") : "none" }}>
+              {suiteIcon(app.icon, 14)}
+              {app.label}
             </button>
           );
         })}
@@ -481,10 +501,12 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen }) {
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editText, setEditText] = useState("");
   const taskInputRef = useRef(null);
   const [actionCategoryId, setActionCategoryId] = useState("tasks");
 
@@ -525,24 +547,17 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   };
 
   return (
-    <div style={{ position: "fixed", inset: "64px 0 0", zIndex: 7600, background: T.bg, overflow: "hidden", borderTop: `1px solid ${T.brdS || T.brd}` }}>
+    <div style={{ position: "fixed", inset: "80px 0 0", zIndex: 7600, background: T.bg, overflow: "hidden", borderTop: `1px solid ${T.brdS || T.brd}` }}>
       <div style={{ maxWidth: 1400, height: "100%", margin: "0 auto", padding: "clamp(12px,2vw,20px)", boxSizing: "border-box", display: "flex", flexDirection: "column", minHeight: 0 }}>
 
-        {/* Header — centered M3-style floating pill cluster */}
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, marginBottom: 16, flexShrink: 0 }}>
-          {/* Title pill */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, height: 40, padding: "0 18px 0 12px", borderRadius: 99, background: T.card, border: `1px solid ${T.brd}`, boxShadow: T.shadow || "0 2px 10px rgba(0,0,0,0.07)", color: T.text, fontFamily: "system-ui", fontWeight: 900, fontSize: 16 }}>
-            {suiteIcon("hub", 20)}
-            NerveCenter
-          </div>
-          {/* Record mic — floating pill icon button */}
+        {/* Panel action bar — mic + global Actions, centered */}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, marginBottom: 14, flexShrink: 0 }}>
           <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
-            style={{ width: 40, height: 40, borderRadius: 99, border: `1px solid ${T.brd}`, background: T.card, color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: T.shadow || "0 2px 10px rgba(0,0,0,0.07)" }}>
+            style={{ width: 38, height: 38, borderRadius: 99, border: `1px solid ${T.brd}`, background: T.bgW, color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
             {suiteIcon("mic", 20)}
           </button>
-          {/* Actions — filled pill button */}
           <button onClick={() => setActionsOpen(true)}
-            style={{ height: 40, padding: "0 18px", borderRadius: 99, border: "none", background: T.primary || T.text, color: T.onPrimary || T.bg, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, fontFamily: "system-ui", fontWeight: 900, fontSize: 13, boxShadow: T.shadow || "0 2px 10px rgba(0,0,0,0.07)" }}>
+            style={{ height: 38, padding: "0 16px", borderRadius: 99, border: "none", background: T.primary || T.text, color: T.onPrimary || T.bg, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, fontFamily: "system-ui", fontWeight: 900, fontSize: 13 }}>
             {suiteIcon("apps", 18)} Actions
           </button>
         </div>
@@ -558,9 +573,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                   <span style={{ width: 32, height: 32, borderRadius: 10, background: T.tonal || T.bgW, color: T.onTonal || T.text, display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("task_alt", 17)}</span>
                   <span style={{ fontSize: 15, fontWeight: 950, color: T.text, fontFamily: "system-ui" }}>Tasks</span>
                 </div>
-                <button onClick={onOpenQueue} style={{ height: 28, padding: "0 10px", borderRadius: 14, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
-                  {suiteIcon("list_alt", 13)} Queue
-                </button>
+                <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                  {onOpenZen && <button onClick={onOpenZen} title="Enter Zen mode" style={{ height: 28, padding: "0 10px", borderRadius: 14, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>{suiteIcon("self_improvement", 13)} Zen</button>}
+                  <button onClick={onOpenQueue} style={{ height: 28, padding: "0 10px", borderRadius: 14, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>{suiteIcon("list_alt", 13)} Queue</button>
+                  <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="Task actions" style={{ width: 28, height: 28, borderRadius: 99, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("apps", 14)}</button>
+                </div>
               </div>
               {/* Quick add — input + equal-width priority pills + add FAB, all inline */}
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -587,13 +604,37 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               {primaryTasks.length ? primaryTasks.map(t => {
                 const pri = gP(priorities, t.priority);
                 const priColor = pri?.color || T.primary || "#7EB0DE";
+                const isEditing = editingTaskId === t.id;
                 return (
-                  <div key={t.id} style={{ display: "grid", gridTemplateColumns: "8px minmax(0,1fr) auto", gap: 10, padding: "10px 12px 10px 0", borderBottom: `1px solid ${T.brdS || T.brd}`, alignItems: "start" }}>
-                    <span style={{ width: 8, alignSelf: "stretch", minHeight: 22, borderRadius: "0 4px 4px 0", background: priColor, flexShrink: 0 }} />
-                    <span style={{ minWidth: 0, paddingLeft: 4, paddingTop: 1 }}>
-                      <span style={{ display: "block", fontSize: 14, fontWeight: 700, lineHeight: 1.45, color: T.text, wordBreak: "break-word" }}>{t.text}</span>
-                    </span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: textOnColor(priColor), background: priColor, borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 2, opacity: 0.9 }}>{pri?.label || pri?.id || ""}</span>
+                  <div key={t.id} style={{ display: "flex", alignItems: "start", padding: "8px 10px 8px 0", borderBottom: `1px solid ${T.brdS || T.brd}`, gap: 6 }}>
+                    {/* Priority color bar */}
+                    <span style={{ width: 8, alignSelf: "stretch", minHeight: 20, borderRadius: "0 4px 4px 0", background: priColor, flexShrink: 0 }} />
+                    {/* Checkmark — circle button styled with priority color */}
+                    <button onClick={() => onCompleteTask?.(t.id)} title="Mark done"
+                      style={{ width: 24, height: 24, borderRadius: 99, border: `1.5px solid ${priColor}`, background: "transparent", color: priColor, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                      {suiteIcon("check", 13)}
+                    </button>
+                    {/* Text — click to edit inline */}
+                    <div style={{ flex: 1, minWidth: 0, paddingTop: 1 }}>
+                      {isEditing ? (
+                        <textarea value={editText} autoFocus rows={2}
+                          onChange={e => setEditText(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (editText.trim()) onEditTask?.(t.id, editText.trim()); setEditingTaskId(null); } if (e.key === "Escape") setEditingTaskId(null); }}
+                          onBlur={() => { if (editText.trim() && editText !== t.text) onEditTask?.(t.id, editText.trim()); setEditingTaskId(null); }}
+                          style={{ width: "100%", boxSizing: "border-box", borderRadius: 10, border: `1.5px solid ${priColor}`, background: T.bgW, color: T.text, padding: "5px 8px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui", resize: "none", outline: "none" }} />
+                      ) : (
+                        <span onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }}
+                          title="Click to edit"
+                          style={{ display: "block", fontSize: 13, fontWeight: 700, lineHeight: 1.45, color: T.text, wordBreak: "break-word", cursor: "text" }}>{t.text}</span>
+                      )}
+                    </div>
+                    {/* Priority chip — hidden while editing */}
+                    {!isEditing && <span style={{ fontSize: 11, fontWeight: 700, color: textOnColor(priColor), background: priColor, borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap", flexShrink: 0, marginTop: 2, opacity: 0.9 }}>{pri?.label || pri?.id || ""}</span>}
+                    {/* Delete */}
+                    <button onClick={() => onDeleteTask?.(t.id)} title="Delete task"
+                      style={{ width: 22, height: 22, borderRadius: 99, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                      {suiteIcon("close", 13)}
+                    </button>
                   </div>
                 );
               }) : <div style={{ padding: "16px 14px", fontSize: 13, color: T.tFaint }}>No open tasks.</div>}
@@ -609,10 +650,15 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     const isResearch = t.type === "shaila-research" || t.type === "shailo-research";
                     const label = isGetBack ? "Get back" : isResearch ? "Research" : "Open";
                     return (
-                      <div key={t.id} style={{ display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap: 10, padding: "10px 12px 10px 0", borderBottom: `1px solid ${GOLD_BRD}`, background: GOLD_BG, alignItems: "center" }}>
-                        <span style={{ width: 3, minHeight: 32, borderRadius: 2, background: GOLD, flexShrink: 0 }} />
-                        <span style={{ paddingLeft: 5, fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.text}</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, background: "rgba(201,146,60,0.12)", border: `1px solid ${GOLD_BRD}`, borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4 }}>{label}</span>
+                      <div key={t.id} style={{ display: "flex", alignItems: "center", padding: "8px 10px 8px 0", borderBottom: `1px solid ${GOLD_BRD}`, background: GOLD_BG, gap: 6 }}>
+                        <span style={{ width: 3, alignSelf: "stretch", minHeight: 24, borderRadius: 2, background: GOLD, flexShrink: 0 }} />
+                        <button onClick={() => onCompleteTask?.(t.id)} title="Mark done"
+                          style={{ width: 22, height: 22, borderRadius: 99, border: `1.5px solid ${GOLD}`, background: "transparent", color: GOLD, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {suiteIcon("check", 12)}
+                        </button>
+                        <span style={{ flex: 1, minWidth: 0, paddingLeft: 3, fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.text}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, background: "rgba(201,146,60,0.12)", border: `1px solid ${GOLD_BRD}`, borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>{label}</span>
+                        <button onClick={() => onDeleteTask?.(t.id)} title="Delete" style={{ width: 20, height: 20, borderRadius: 99, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("close", 12)}</button>
                       </div>
                     );
                   })}
@@ -628,13 +674,14 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 <span style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(201,146,60,0.14)", color: GOLD, display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("rule", 17)}</span>
                 <span style={{ fontSize: 15, fontWeight: 950, color: T.text, fontFamily: "system-ui" }}>Shailos</span>
               </div>
-              <div style={{ display: "flex", gap: 6 }}>
+              <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
                 <button onClick={onOpenShailaAdd} style={{ height: 28, padding: "0 10px", borderRadius: 14, border: "none", background: GOLD, color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 800, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
                   {suiteIcon("add", 13)} Add
                 </button>
                 <button onClick={onOpenShailos} style={{ height: 28, padding: "0 10px", borderRadius: 14, border: `1px solid ${GOLD_BRD}`, background: "transparent", color: GOLD, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
                   {suiteIcon("open_in_full", 13)} Open
                 </button>
+                <button onClick={() => { setActionCategoryId("shailos"); setActionsOpen(true); }} title="Shailos actions" style={{ width: 28, height: 28, borderRadius: 99, border: `1px solid ${GOLD_BRD}`, background: "transparent", color: GOLD, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("apps", 14)}</button>
               </div>
             </div>
             <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0 }}>
@@ -686,9 +733,12 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 <span style={{ width: 32, height: 32, borderRadius: 10, background: T.tonal || T.bgW, color: T.onTonal || T.text, display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("phone_in_talk", 17)}</span>
                 <span style={{ fontSize: 15, fontWeight: 950, color: T.text, fontFamily: "system-ui" }}>Phone</span>
               </div>
-              <button onClick={onOpenPhone} style={{ height: 28, padding: "0 10px", borderRadius: 14, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
-                {suiteIcon("open_in_full", 13)} Open
-              </button>
+              <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                <button onClick={onOpenPhone} style={{ height: 28, padding: "0 10px", borderRadius: 14, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+                  {suiteIcon("open_in_full", 13)} Open
+                </button>
+                <button onClick={() => { setActionCategoryId("phone"); setActionsOpen(true); }} title="Phone actions" style={{ width: 28, height: 28, borderRadius: 99, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("apps", 14)}</button>
+              </div>
             </div>
             <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0, padding: "10px 14px" }}>
               <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
@@ -698,7 +748,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
         {/* Actions drawer */}
         {actionsOpen && (
-          <div style={{ position: "fixed", inset: "64px 0 0", zIndex: 7800, display: "flex", justifyContent: "flex-end", background: "rgba(0,0,0,0.28)" }} onClick={() => setActionsOpen(false)}>
+          <div style={{ position: "fixed", inset: "80px 0 0", zIndex: 7800, display: "flex", justifyContent: "flex-end", background: "rgba(0,0,0,0.28)" }} onClick={() => setActionsOpen(false)}>
             <aside onClick={e => e.stopPropagation()} style={{ width: "min(540px,94vw)", height: "100%", background: T.card, borderLeft: `1px solid ${T.brd}`, boxShadow: "-18px 0 44px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column" }}>
               <div style={{ height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", borderBottom: `1px solid ${T.brdS || T.brd}`, flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 17, fontWeight: 950, fontFamily: "system-ui", color: T.text }}>
@@ -740,7 +790,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
 function SuiteShailosPanel({ T, action, onClose }) {
   return (
-    <div style={{position:"fixed",inset:"64px 0 0",zIndex:7600,overflow:"hidden",background:T.card,borderTop:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"flex",flexDirection:"column"}}>
+    <div style={{position:"fixed",inset:"80px 0 0",zIndex:7600,overflow:"hidden",background:T.card,borderTop:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"flex",flexDirection:"column"}}>
       <div style={{height:52,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 16px",borderBottom:`1px solid ${T.brd}`,background:T.card,flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
           {suiteIcon("rule", 21)}
@@ -864,7 +914,7 @@ function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch 
   }, [docked, pulseStage, releaseStage]);
 
   return (
-    <div style={{position:"fixed",inset:"64px 0 0",zIndex:7600,overflow:"hidden",background:`linear-gradient(160deg, ${T.bg} 0%, ${T.bgW} 100%)`,borderTop:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"grid",gridTemplateRows:"auto 1fr",padding:"clamp(12px,2vw,18px)",boxSizing:"border-box",gap:12}}>
+    <div style={{position:"fixed",inset:"80px 0 0",zIndex:7600,overflow:"hidden",background:`linear-gradient(160deg, ${T.bg} 0%, ${T.bgW} 100%)`,borderTop:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"grid",gridTemplateRows:"auto 1fr",padding:"clamp(12px,2vw,18px)",boxSizing:"border-box",gap:12}}>
       <div style={{height:52,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"0 14px",border:`1px solid ${T.brd}`,borderRadius:16,background:T.card}}>
         <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
           {suiteIcon("smartphone", 22)}
@@ -3515,6 +3565,9 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           shailosCompleted={switchboardShailaCompleted}
           priorities={ap}
           onAddTask={addVT}
+          onCompleteTask={id => compTask(id)}
+          onDeleteTask={id => delTask(id)}
+          onEditTask={(id, text) => uT(ts => ts.map(t => t.id === id ? {...t, text: text.trim()} : t))}
           onOpenTasks={()=>{openCommandView("focus"); switchTab("focus");}}
           onOpenQueue={()=>{openCommandView("focus"); switchTab("queue");}}
           onOpenZen={()=>{if(curT)setZen(true); else {openCommandView("focus"); switchTab("focus");}}}
@@ -3546,7 +3599,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       )}
 
 
-      <div style={{width:"100%",maxWidth:"min(800px, 95vw)",padding:"0 clamp(16px,3vw,32px)",position:"relative",zIndex:1,height:shellHidden?"100vh":"calc(100vh - 64px)",marginTop:shellHidden?0:64,overflowY:tab==="focus"?"hidden":"auto",display:"flex",flexDirection:"column"}}>
+      <div style={{width:"100%",maxWidth:"min(800px, 95vw)",padding:"0 clamp(16px,3vw,32px)",position:"relative",zIndex:1,height:shellHidden?"100vh":"calc(100vh - 80px)",marginTop:shellHidden?0:80,overflowY:tab==="focus"?"hidden":"auto",display:"flex",flexDirection:"column"}}>
 
         {/* ===== FOCUS TAB ===== */}
         {tab === "focus" && (
@@ -3803,8 +3856,8 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
               );
             })()}
 
-            {/* PostIt stack — bottom left, high z so expanded cards float above icon columns */}
-            {compT.length > 0 && (
+            {/* PostIt stack — Tasks screen only */}
+            {suiteView === "focus" && tab === "focus" && compT.length > 0 && (
               <div style={{position:"fixed",bottom:"clamp(24px,4vh,48px)",left:"clamp(16px,3vw,32px)",zIndex:9000}}>
                 <PostItStack tasks={compT} pris={pris} T={T} open={postItOpen} onToggle={()=>setPostItOpen(p=>!p)} onUncomp={uncompTask} onClone={cloneTask}/>
               </div>
