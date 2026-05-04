@@ -1694,7 +1694,11 @@ function App({ user, onSignOut }) {
           'https://www.googleapis.com/auth/gmail.readonly',
         ].join(' '),
         callback: (resp) => {
-          if (resp.error) { setGoogleError(resp.error_description || resp.error); return; }
+          if (resp.error) {
+            if (resp.error === 'popup_closed_by_user' || resp.error === 'access_denied') return; // user dismissed — no error shown
+            setGoogleError(resp.error_description || resp.error);
+            return;
+          }
           setGoogleToken(resp.access_token);
           setGoogleError(null);
         },
@@ -1719,19 +1723,27 @@ function App({ user, onSignOut }) {
     const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
     const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=10`;
     const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (r.status === 401) { setGoogleToken(null); throw new Error('token_expired'); }
-    if (!r.ok) throw new Error('Calendar API error');
+    if (r.status === 401) { setGoogleToken(null); throw Object.assign(new Error('token_expired'), { service: 'calendar' }); }
+    if (!r.ok) {
+      const detail = await r.json().catch(() => ({}));
+      const msg = detail?.error?.message || `HTTP ${r.status}`;
+      throw Object.assign(new Error(`Calendar: ${msg}`), { service: 'calendar' });
+    }
     const d = await r.json();
     return d.items || [];
   }
 
   async function fetchGmailData(token) {
     const listR = await fetch(
-      'https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=7&q=is:unread+is:important+in:inbox',
+      'https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=7&q=is%3Aunread+is%3Aimportant+in%3Ainbox',
       { headers: { Authorization: `Bearer ${token}` } }
     );
-    if (listR.status === 401) { setGoogleToken(null); throw new Error('token_expired'); }
-    if (!listR.ok) throw new Error('Gmail API error');
+    if (listR.status === 401) { setGoogleToken(null); throw Object.assign(new Error('token_expired'), { service: 'gmail' }); }
+    if (!listR.ok) {
+      const detail = await listR.json().catch(() => ({}));
+      const msg = detail?.error?.message || `HTTP ${listR.status}`;
+      throw Object.assign(new Error(`Gmail: ${msg}`), { service: 'gmail' });
+    }
     const list = await listR.json();
     if (!list.messages?.length) return [];
     const msgs = await Promise.all(
@@ -1745,15 +1757,23 @@ function App({ user, onSignOut }) {
   }
 
   // Auto-fetch when token is obtained; refresh every 15 minutes
+  // Calendar and Gmail run independently — one failure doesn't block the other
   useEffect(() => {
     if (!googleToken) return;
     let cancelled = false;
     const load = () => {
       if (cancelled) return;
       setGoogleLoading(true);
-      Promise.all([fetchCalendarData(googleToken), fetchGmailData(googleToken)])
-        .then(([cal, mail]) => { if (!cancelled) { setCalendarEvents(cal); setGmailMessages(mail); }})
-        .catch(e => { if (!cancelled && e.message !== 'token_expired') setGoogleError('Could not load Google data — try reconnecting.'); })
+      const errors = [];
+      Promise.allSettled([fetchCalendarData(googleToken), fetchGmailData(googleToken)])
+        .then(([calR, mailR]) => {
+          if (cancelled) return;
+          if (calR.status === 'fulfilled') setCalendarEvents(calR.value);
+          else if (calR.reason?.message !== 'token_expired') errors.push(calR.reason?.message || 'Calendar error');
+          if (mailR.status === 'fulfilled') setGmailMessages(mailR.value);
+          else if (mailR.reason?.message !== 'token_expired') errors.push(mailR.reason?.message || 'Gmail error');
+          if (errors.length) setGoogleError(errors.join(' · '));
+        })
         .finally(() => { if (!cancelled) setGoogleLoading(false); });
     };
     load();
@@ -1761,7 +1781,14 @@ function App({ user, onSignOut }) {
     return () => { cancelled = true; clearInterval(t); };
   }, [googleToken]); // eslint-disable-line
 
-  function connectGoogle() { gTokenClientRef.current?.requestAccessToken(); }
+  function connectGoogle() {
+    if (!gTokenClientRef.current) {
+      setGoogleError('Google sign-in not ready yet — wait a moment and try again.');
+      return;
+    }
+    setGoogleError(null);
+    gTokenClientRef.current.requestAccessToken();
+  }
   function disconnectGoogle() { setGoogleToken(null); setCalendarEvents(null); setGmailMessages(null); setGoogleError(null); }
 
   // ─── Listen for shailos iframe "close" message ───────────────────────────
