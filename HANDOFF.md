@@ -362,6 +362,13 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 ## 14. What Is Currently Live / Prepared
 
+- **NerveCenter left sidebar nav** (`AppSuiteChrome` in `08-app.jsx`): Top banner removed. Navigation now lives in a fixed left sidebar. Open = 152px with NerveCenter hub + labels for Tasks/Shailos/Phone. Collapsed = 40px icon-strip. Toggle chevron at the bottom. Content area shifts with `marginLeft` CSS transition. All fixed-position panels (NerveCenterPanel, SuiteShailosPanel, DeskPhoneSuitePanel) now use `inset: 0 0 0 ${sidebarW}px` instead of `80px 0 0`. `sidebarOpen` state in main App; `sidebarW` computed as `sidebarOpen ? 152 : 40`, zero when zen mode hides the shell.
+- **NerveCenter phone column fixes** (`NerveCenterPhoneSurface` in `08-app.jsx`):
+  - `post()` now checks `res.ok` and parses `data.success === false` / `data.error` — send failure from DeskPhone is surfaced as an error instead of silently succeeding
+  - `callDirIcon`: numeric type codes supported (2=outgoing before 1=incoming); outgoing checked BEFORE incoming to prevent "outgoing" string matching `.includes("in")` wrongly
+  - `msgDirIcon`: Android SMS numeric type codes (1=inbox, 2=sent, 4=outbox, 5=failed); outgoing checked with many string variants (`fromMe`, `isSent`, folder names)
+  - Message preview: full text shown with wrap (`whiteSpace: normal, wordBreak: break-word`) — no more truncation
+  - `callNameMap` useMemo built from call history objects (calls carry name directly); used as fallback in `lookupName` when contacts API doesn't resolve a number
 - **NerveCenter phone column — full UX restructure** (in `08-app.jsx`, `NerveCenterPhoneSurface`):
   - Compose area moves to **TOP** of the column (above messages/calls lists), not bottom
   - **New-message flow**: pencil (edit) button next to keypad toggle opens a contact-search input at top; pick a contact → textarea appears → send. Row SMS icon also opens compose at top. Row call icon dials directly (no compose).
@@ -397,7 +404,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 ## 15. Recent Git History
 
-Latest: Nav redesign (AppSuiteChrome) — 2-row transparent/blur header: "NerveCenter" title centered on top row, three app-screen pills (Tasks/Shailos/Phone) on second row; nav height now 80px (all panel offsets updated). NerveCenterPanel: inline task complete (checkmark), delete (×), click-to-edit text; Zen mode button in Tasks header; per-card apps icon on each card opens Actions drawer pre-filtered to that card. onCompleteTask/onDeleteTask/onEditTask wired to compTask/delTask/uT in App.
+Latest: Left sidebar nav (AppSuiteChrome) — replaces fixed top bar; collapsible 152px/40px icon-strip, chevron toggle, NerveCenter + 3 app buttons vertical. All panel insets updated from "80px 0 0" to "0 0 0 ${sidebarW}px". Five phone panel fixes: post() checks res.ok + parses API errors; callDirIcon handles numeric type codes + fixes outgoing/incoming mis-match; msgDirIcon handles Android SMS numeric codes; message preview no longer truncated (full text wraps); callNameMap fallback from call history for name resolution.
 
 ```
 2a9d4af Simplify AI gateway and voice transcription

@@ -40,47 +40,81 @@ function getInitialSuiteView() {
   }
 }
 
-function AppSuiteChrome({ T, active, onSelect }) {
+function AppSuiteChrome({ T, active, onSelect, open, onToggle }) {
   const screenApps = [
     { id: "focus",     label: "Tasks",   icon: "task_alt"   },
     { id: "shailos",   label: "Shailos", icon: "rule"       },
     { id: "deskphone", label: "Phone",   icon: "smartphone" },
   ];
+  const W = open ? 152 : 40;
   return (
-    <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 80, zIndex: 8600,
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      gap: 5, boxSizing: "border-box", padding: "6px 0",
-      background: "transparent", backdropFilter: "blur(22px)", WebkitBackdropFilter: "blur(22px)" }}>
+    <div style={{
+      position: "fixed", left: 0, top: 0, bottom: 0, width: W, zIndex: 8600,
+      display: "flex", flexDirection: "column", alignItems: open ? "stretch" : "center",
+      boxSizing: "border-box", padding: open ? "14px 8px 12px" : "14px 4px 12px",
+      gap: 2,
+      background: "transparent",
+      backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
+      borderRight: `1px solid ${T.brdS || T.brd}`,
+      transition: "width 0.20s cubic-bezier(0.4,0,0.2,1)",
+      overflow: "hidden",
+    }}>
 
-      {/* Row 1 — NerveCenter identity */}
-      <button onClick={() => onSelect("nervecenter")}
-        style={{ display: "flex", alignItems: "center", gap: 7, border: "none", background: "transparent",
+      {/* NerveCenter identity button */}
+      <button onClick={() => onSelect("nervecenter")} title="NerveCenter"
+        style={{
+          display: "flex", alignItems: "center", gap: open ? 7 : 0,
+          justifyContent: open ? "flex-start" : "center",
+          border: "none",
+          background: active === "nervecenter" ? (T.tonal || "rgba(127,127,127,0.13)") : "transparent",
           cursor: "pointer", color: active === "nervecenter" ? T.text : T.tSoft,
-          fontFamily: "system-ui", fontWeight: 900, fontSize: 15, padding: "2px 10px", borderRadius: 99,
-          opacity: active === "nervecenter" ? 1 : 0.72 }}>
-        {suiteIcon("hub", 18)}
-        NerveCenter
+          fontFamily: "system-ui", fontWeight: 900, fontSize: 13,
+          padding: open ? "7px 9px" : "7px 0",
+          borderRadius: 10, width: "100%", overflow: "hidden", whiteSpace: "nowrap",
+          marginBottom: 6, flexShrink: 0,
+        }}>
+        {suiteIcon("hub", 17)}
+        {open && "NerveCenter"}
       </button>
 
-      {/* Row 2 — three app-screen pill buttons */}
-      <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-        {screenApps.map(app => {
-          const isActive = active === app.id;
-          return (
-            <button key={app.id} onClick={() => onSelect(app.id)} title={app.label}
-              style={{ height: 28, padding: "0 13px", borderRadius: 14, cursor: "pointer",
-                border: isActive ? "none" : `1px solid ${T.brdS || T.brd}`,
-                background: isActive ? (T.tonal || T.card) : "transparent",
-                color: isActive ? (T.onTonal || T.text) : T.tSoft,
-                fontFamily: "system-ui", fontWeight: 800, fontSize: 12,
-                display: "flex", alignItems: "center", gap: 6,
-                boxShadow: isActive ? (T.shadow || "0 1px 6px rgba(0,0,0,0.10)") : "none" }}>
-              {suiteIcon(app.icon, 14)}
-              {app.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Three app-screen buttons */}
+      {screenApps.map(app => {
+        const isActive = active === app.id;
+        return (
+          <button key={app.id} onClick={() => onSelect(app.id)} title={app.label}
+            style={{
+              height: 34, padding: open ? "0 9px" : "0",
+              borderRadius: 10, cursor: "pointer", border: "none",
+              background: isActive ? (T.tonal || T.card) : "transparent",
+              color: isActive ? (T.onTonal || T.text) : T.tSoft,
+              fontFamily: "system-ui", fontWeight: 800, fontSize: 12,
+              display: "flex", alignItems: "center",
+              gap: open ? 8 : 0, justifyContent: open ? "flex-start" : "center",
+              width: "100%", overflow: "hidden", whiteSpace: "nowrap",
+              boxShadow: isActive ? (T.shadow || "0 1px 5px rgba(0,0,0,0.10)") : "none",
+              marginBottom: 2, flexShrink: 0,
+            }}>
+            {suiteIcon(app.icon, 15)}
+            {open && app.label}
+          </button>
+        );
+      })}
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
+
+      {/* Collapse / expand toggle */}
+      <button onClick={onToggle} title={open ? "Collapse sidebar" : "Expand sidebar"}
+        style={{
+          width: open ? "100%" : 28, height: 28, borderRadius: 9,
+          border: `1px solid ${T.brdS || T.brd}`,
+          background: "transparent", color: T.tFaint, cursor: "pointer",
+          display: "flex", alignItems: "center",
+          justifyContent: open ? "flex-end" : "center",
+          padding: open ? "0 8px" : "0", flexShrink: 0,
+        }}>
+        {suiteIcon(open ? "chevron_left" : "chevron_right", 14)}
+      </button>
     </div>
   );
 }
@@ -153,6 +187,23 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
     return map;
   }, [contacts]);
 
+  // Secondary name map built from call history — calls often carry name directly on the object
+  const callNameMap = useMemo(() => {
+    const map = new Map();
+    (Array.isArray(calls) ? calls : []).forEach(c => {
+      const name = c.name || c.Name || c.displayName || c.DisplayName || c.callerName || c.CallerName || "";
+      if (!name) return;
+      const num = c.number || c.phoneNumber || c.from || c.Number || c.PhoneNumber || "";
+      if (!num) return;
+      const digits = String(num).replace(/\D/g, "");
+      if (!digits) return;
+      map.set(digits, name);
+      if (digits.length > 10) map.set(digits.slice(-10), name);
+      if (digits.length > 7)  map.set(digits.slice(-7),  name);
+    });
+    return map;
+  }, [calls]);
+
   const lookupName = useCallback(num => {
     if (!num) return null;
     const digits = String(num).replace(/\D/g, "");
@@ -161,9 +212,12 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
       contactMap.get(digits) ||
       (digits.length > 10 ? contactMap.get(digits.slice(-10)) : null) ||
       (digits.length > 7  ? contactMap.get(digits.slice(-7))  : null) ||
+      callNameMap.get(digits) ||
+      (digits.length > 10 ? callNameMap.get(digits.slice(-10)) : null) ||
+      (digits.length > 7  ? callNameMap.get(digits.slice(-7))  : null) ||
       null
     );
-  }, [contactMap]);
+  }, [contactMap, callNameMap]);
 
   // Live contact suggestions — used for both dialer and new-compose contact search
   const suggestions = useMemo(() => {
@@ -191,7 +245,22 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
 
   const post = async (path, label) => {
     setBusy(label);
-    try { await fetch(`${api}${path}`, { method: "POST" }); await refresh(); }
+    try {
+      const res = await fetch(`${api}${path}`, { method: "POST" });
+      if (!res.ok) {
+        let msg = `DeskPhone error (${res.status})`;
+        try { const d = await res.json(); if (d?.error || d?.message) msg = d.error || d.message; } catch {}
+        setError(msg);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        if (data?.success === false || data?.ok === false) {
+          setError(data?.error || data?.message || data?.reason || "DeskPhone reported failure.");
+        } else {
+          setError("");
+        }
+      }
+      await refresh();
+    }
     catch { setError("DeskPhone did not answer."); onOnlineChange?.(false); }
     finally { setBusy(""); }
   };
@@ -240,17 +309,27 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   };
 
   const callDirIcon = c => {
-    const dir = (c.direction || c.type || c.callType || c.Direction || "").toLowerCase();
-    if (dir.includes("miss") || c.missed || c.Missed) return { icon: "call_missed", color: "#BA2A2A" };
-    if (dir.includes("in") || dir.includes("receiv")) return { icon: "call_received", color: T.tSoft };
-    if (dir.includes("out") || dir.includes("dial")) return { icon: "call_made", color: T.tSoft };
+    // Numeric type codes: 1=incoming, 2=outgoing/dialed, 3=missed, 4=unknown
+    const typeNum = typeof (c.type || c.callType || c.Type || c.CallType) === "number"
+      ? (c.type || c.callType || c.Type || c.CallType)
+      : null;
+    if (c.missed || c.Missed || typeNum === 3) return { icon: "call_missed", color: "#BA2A2A" };
+    const dir = (c.direction || c.Direction || (typeof c.type === "string" ? c.type : "") || (typeof c.callType === "string" ? c.callType : "") || "").toLowerCase();
+    if (dir.includes("miss")) return { icon: "call_missed", color: "#BA2A2A" };
+    // Check outgoing BEFORE checking incoming so "outgoing" (contains "in") doesn't misfire
+    if (typeNum === 2 || dir.includes("out") || dir.includes("dial") || dir.includes("egress")) return { icon: "call_made", color: T.tSoft };
+    if (typeNum === 1 || dir.includes("incoming") || dir.includes("inbound") || dir.includes("receiv") || dir === "in") return { icon: "call_received", color: T.tSoft };
     return { icon: "call", color: T.tSoft };
   };
 
   // Incoming SMS = sms icon; outgoing = outgoing_mail icon
+  // Android SMS type codes: 1=inbox/received, 2=sent, 4=outbox/pending, 5=failed, 6=queued
   const msgDirIcon = m => {
-    const dir = (m.type || m.direction || m.messageType || m.Direction || m.Type || "").toLowerCase();
-    if (dir.includes("sent") || dir.includes("out")) return { icon: "outgoing_mail", color: T.tSoft };
+    const typeNum = typeof (m.type || m.Type) === "number" ? (m.type || m.Type) : null;
+    const dir = (typeof m.type === "string" ? m.type : "") || m.direction || m.messageType || m.folder || m.Direction || m.Type || "";
+    const dirL = String(dir).toLowerCase();
+    if (typeNum === 2 || typeNum === 4 || typeNum === 5 || typeNum === 6) return { icon: "outgoing_mail", color: T.tSoft };
+    if (dirL.includes("sent") || dirL.includes("out") || dirL === "send" || dirL === "egress" || m.fromMe || m.from_me || m.isSent) return { icon: "outgoing_mail", color: T.tSoft };
     return { icon: "sms", color: T.tSoft };
   };
 
@@ -444,7 +523,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
                     <span style={{ flex: 1, fontSize: 13, fontWeight: isUnread ? 900 : 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m._name}</span>
                     {time && <span style={{ fontSize: 10, color: T.tFaint, flexShrink: 0, fontWeight: 600 }}>{time}</span>}
                   </div>
-                  {preview && <span style={{ display: "block", fontSize: 11, color: T.tSoft, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preview}</span>}
+                  {preview && <span style={{ display: "block", fontSize: 11, color: T.tSoft, marginTop: 1, whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4 }}>{preview}</span>}
                 </button>
                 <AB icon="call" title="Call" onClick={() => dialNum(m._who)} />
                 <AB icon="sms" title="Text" onClick={() => openCompose(m._name, m._who)} />
@@ -501,7 +580,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, sidebarW = 0 }) {
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -547,7 +626,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   };
 
   return (
-    <div style={{ position: "fixed", inset: "80px 0 0", zIndex: 7600, background: T.bg, overflow: "hidden", borderTop: `1px solid ${T.brdS || T.brd}` }}>
+    <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7600, background: T.bg, overflow: "hidden", borderLeft: `1px solid ${T.brdS || T.brd}` }}>
       <div style={{ maxWidth: 1400, height: "100%", margin: "0 auto", padding: "clamp(12px,2vw,20px)", boxSizing: "border-box", display: "flex", flexDirection: "column", minHeight: 0 }}>
 
         {/* Panel action bar — mic + global Actions, centered */}
@@ -746,7 +825,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
         {/* Actions drawer */}
         {actionsOpen && (
-          <div style={{ position: "fixed", inset: "80px 0 0", zIndex: 7800, display: "flex", justifyContent: "flex-end", background: "rgba(0,0,0,0.28)" }} onClick={() => setActionsOpen(false)}>
+          <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7800, display: "flex", justifyContent: "flex-end", background: "rgba(0,0,0,0.28)" }} onClick={() => setActionsOpen(false)}>
             <aside onClick={e => e.stopPropagation()} style={{ width: "min(540px,94vw)", height: "100%", background: T.card, borderLeft: `1px solid ${T.brd}`, boxShadow: "-18px 0 44px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column" }}>
               <div style={{ height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", borderBottom: `1px solid ${T.brdS || T.brd}`, flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 17, fontWeight: 950, fontFamily: "system-ui", color: T.text }}>
@@ -786,9 +865,9 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   );
 }
 
-function SuiteShailosPanel({ T, action, onClose }) {
+function SuiteShailosPanel({ T, action, onClose, sidebarW = 0 }) {
   return (
-    <div style={{position:"fixed",inset:"80px 0 0",zIndex:7600,overflow:"hidden",background:T.card,borderTop:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"flex",flexDirection:"column"}}>
+    <div style={{position:"fixed",inset:`0 0 0 ${sidebarW}px`,zIndex:7600,overflow:"hidden",background:T.card,borderLeft:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"flex",flexDirection:"column"}}>
       <div style={{height:52,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 16px",borderBottom:`1px solid ${T.brd}`,background:T.card,flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
           {suiteIcon("rule", 21)}
@@ -804,7 +883,7 @@ function SuiteShailosPanel({ T, action, onClose }) {
   );
 }
 
-function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch }) {
+function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch, sidebarW = 0 }) {
   const api = "http://127.0.0.1:8765";
   const stageRef = useRef(null);
   const lastThemeRef = useRef("");
@@ -912,7 +991,7 @@ function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch 
   }, [docked, pulseStage, releaseStage]);
 
   return (
-    <div style={{position:"fixed",inset:"80px 0 0",zIndex:7600,overflow:"hidden",background:`linear-gradient(160deg, ${T.bg} 0%, ${T.bgW} 100%)`,borderTop:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"grid",gridTemplateRows:"auto 1fr",padding:"clamp(12px,2vw,18px)",boxSizing:"border-box",gap:12}}>
+    <div style={{position:"fixed",inset:`0 0 0 ${sidebarW}px`,zIndex:7600,overflow:"hidden",background:`linear-gradient(160deg, ${T.bg} 0%, ${T.bgW} 100%)`,borderLeft:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"grid",gridTemplateRows:"auto 1fr",padding:"clamp(12px,2vw,18px)",boxSizing:"border-box",gap:12}}>
       <div style={{height:52,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"0 14px",border:`1px solid ${T.brd}`,borderRadius:16,background:T.card}}>
         <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
           {suiteIcon("smartphone", 22)}
@@ -1088,6 +1167,7 @@ function App({ user, onSignOut }) {
   const [selPri, setSelPri] = useState(null);
   const [tab, setTab] = useState("focus");
   const [suiteView, setSuiteView] = useState(getInitialSuiteView);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [deskPhoneOnline, setDeskPhoneOnline] = useState(false);
   const deskPhoneLaunchAtRef = useRef(0);
   const lastDeskPhoneThemeRef = useRef("");
@@ -2844,6 +2924,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
     .sort((a, b) => (b.completedAt || b.createdAt || 0) - (a.completedAt || a.createdAt || 0))
     .slice(0, 5);
   const shellHidden = !!(zen && curT);
+  const sidebarW = shellHidden ? 0 : (sidebarOpen ? 152 : 40);
   const launchDeskPhone = (force = false) => {
     if (!force && deskPhoneOnline) return;
     const now = Date.now();
@@ -3551,6 +3632,8 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           T={T}
           active={suiteView}
           onSelect={openCommandView}
+          open={sidebarOpen}
+          onToggle={() => setSidebarOpen(v => !v)}
         />
       )}
 
@@ -3580,11 +3663,12 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onRecordShaila={()=>{setShailosAction("record-shaila"); openCommandView("shailos");}}
           onOpenPhone={()=>openCommandView("deskphone")}
           onOnlineChange={setDeskPhoneOnline}
+          sidebarW={sidebarW}
         />
       )}
 
       {!shellHidden && suiteView === "shailos" && (
-        <SuiteShailosPanel T={T} action={shailosAction} onClose={()=>setSuiteView("focus")}/>
+        <SuiteShailosPanel T={T} action={shailosAction} onClose={()=>setSuiteView("focus")} sidebarW={sidebarW}/>
       )}
 
       {!shellHidden && suiteView === "deskphone" && (
@@ -3597,7 +3681,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       )}
 
 
-      <div style={{width:"100%",maxWidth:"min(800px, 95vw)",padding:"0 clamp(16px,3vw,32px)",position:"relative",zIndex:1,height:shellHidden?"100vh":"calc(100vh - 80px)",marginTop:shellHidden?0:80,overflowY:tab==="focus"?"hidden":"auto",display:"flex",flexDirection:"column"}}>
+      <div style={{width:"100%",maxWidth:"min(800px, 95vw)",padding:"0 clamp(16px,3vw,32px)",position:"relative",zIndex:1,height:"100vh",marginLeft:sidebarW,transition:"margin-left 0.20s cubic-bezier(0.4,0,0.2,1)",overflowY:tab==="focus"?"hidden":"auto",display:"flex",flexDirection:"column"}}>
 
         {/* ===== FOCUS TAB ===== */}
         {tab === "focus" && (
