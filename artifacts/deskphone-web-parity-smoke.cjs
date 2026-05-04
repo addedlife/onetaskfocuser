@@ -253,6 +253,16 @@ async function runCdp() {
     const placeholderShown = Array.from(document.querySelectorAll('.dp-muted-body')).some((el) => el.textContent.includes('MMS message'));
     document.querySelector('[data-native-source="MainWindow.xaml:1078"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('[data-native-source="MainWindow.xaml:1753"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('[data-native-source="MainWindow.xaml:1758"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('[data-native-source="MainWindow.xaml:1743"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('[data-native-source="MainWindow.xaml:1748"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('button[data-native-source="MainWindow.xaml:1738"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-native-source="MainWindow.xaml:1763"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-native-source="MainWindow.xaml:1768"]').click();
@@ -329,6 +339,9 @@ async function main() {
     if (!(result.desktop.callHistory.after > result.desktop.callHistory.before)) failures.push("call-history splitter did not expand");
     if (result.desktop.webVersionText !== "DeskPhone Web Version 001" || result.desktop.hostBuildText !== "Windows Host: b242") failures.push("web version or Windows host label is wrong");
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-message")) failures.push("new-message handoff did not target desktop compose");
+    for (const target of ["mark-read", "mark-unread", "toggle-pin", "toggle-mute", "toggle-block"]) {
+      if (!result.desktop.handoffRequests.some((request) => request.target === target && request.value.includes("15551234567"))) failures.push(`${target} handoff did not carry the conversation number`);
+    }
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-contact" && request.value.includes("15551234567"))) failures.push("add-contact handoff did not carry the conversation number");
     if (!result.desktop.handoffRequests.some((request) => request.target === "edit-contact" && request.value.includes("15551234567"))) failures.push("edit-contact handoff did not carry the conversation number");
     if (!result.desktop.scrollable || !result.desktop.scrolledToBottom) failures.push("message history did not scroll to latest");
