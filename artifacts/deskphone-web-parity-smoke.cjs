@@ -255,6 +255,8 @@ async function runCdp() {
     await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-native-source="MainWindow.xaml:1763"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('[data-native-source="MainWindow.xaml:1768"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
     const handoffRequests = await fetch('http://127.0.0.1:${hostPort}/handoff-log').then((response) => response.json());
     const image = document.querySelector('.dp-mms-image');
     image.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
@@ -328,6 +330,7 @@ async function main() {
     if (result.desktop.webVersionText !== "DeskPhone Web Version 001" || result.desktop.hostBuildText !== "Windows Host: b242") failures.push("web version or Windows host label is wrong");
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-message")) failures.push("new-message handoff did not target desktop compose");
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-contact" && request.value.includes("15551234567"))) failures.push("add-contact handoff did not carry the conversation number");
+    if (!result.desktop.handoffRequests.some((request) => request.target === "edit-contact" && request.value.includes("15551234567"))) failures.push("edit-contact handoff did not carry the conversation number");
     if (!result.desktop.scrollable || !result.desktop.scrolledToBottom) failures.push("message history did not scroll to latest");
     if (!result.desktop.imageLoaded || result.desktop.placeholderShown) failures.push("MMS image did not replace placeholder");
     if (!result.desktop.viewerOpened || !result.desktop.viewerRotated || !result.desktop.viewerClosed) failures.push("image viewer open/rotate/close failed");

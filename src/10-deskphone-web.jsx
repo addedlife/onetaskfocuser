@@ -253,6 +253,7 @@ function nativeHandoffTarget(label, source = "") {
   if (text.includes("developer") || source.includes("MainWindow.xaml:603")) return "developer-tools";
   if (text.includes("connection settings") || text.includes("choose device") || source.includes("MainWindow.xaml:701") || source.includes("MainWindow.xaml:745") || source.includes("MainWindow.xaml:812")) return "settings-connection";
   if (text.includes("build")) return "build-update";
+  if (text.includes("edit contact")) return "edit-contact";
   if (text.includes("new contact") || text.includes("add contact") || text.includes("save as contact")) return "new-contact";
   if (text.includes("contact") || source.includes("MainWindow.xaml:562")) return "contacts";
   if (text.includes("call") || source.includes("MainWindow.xaml:544")) return "calls";
