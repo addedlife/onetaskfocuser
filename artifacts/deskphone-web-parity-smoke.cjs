@@ -90,7 +90,7 @@ const server = http.createServer((req, res) => {
   };
 
   if (requestPath === "/status") {
-    send({ hfp: "Connected", map: "Connected", fullHistoryStatus: "Full history ready", build: "mock" });
+    send({ hfp: "Connected", map: "Connected", fullHistoryStatus: "Full history ready", build: "b242  2026-05-04 10:00" });
   } else if (requestPath === "/messages") {
     send(messages);
   } else if (requestPath === "/calls") {
@@ -226,6 +226,8 @@ async function runCdp() {
     const rail = await drag('.dp-splitter', '.dp-rail', 58);
     const messageList = await drag('.dp-message-splitter', '.dp-conversation-pane', 64);
     const callHistory = await drag('.dp-thread-inner-splitter', '.dp-thread-calls', -72);
+    const webVersionText = document.querySelector('.dp-app-build')?.textContent.trim() || '';
+    const hostBuildText = document.querySelector('.dp-app-time')?.textContent.trim() || '';
     const scrollBox = document.querySelector('.dp-message-scroll');
     const scrollable = scrollBox.scrollHeight > scrollBox.clientHeight + 30;
     scrollBox.scrollTop = 0;
@@ -246,6 +248,8 @@ async function runCdp() {
       rail,
       messageList,
       callHistory,
+      webVersionText,
+      hostBuildText,
       scrollable,
       scrolledToBottom: scrollBox.scrollTop >= maxTop - 8,
       imageLoaded: image.naturalWidth > 0,
@@ -299,6 +303,7 @@ async function main() {
     if (!(result.desktop.rail.after > result.desktop.rail.before)) failures.push("rail splitter did not expand");
     if (!(result.desktop.messageList.after > result.desktop.messageList.before)) failures.push("message splitter did not expand");
     if (!(result.desktop.callHistory.after > result.desktop.callHistory.before)) failures.push("call-history splitter did not expand");
+    if (result.desktop.webVersionText !== "DeskPhone Web Version 001" || result.desktop.hostBuildText !== "Windows Host: b242") failures.push("web version or Windows host label is wrong");
     if (!result.desktop.scrollable || !result.desktop.scrolledToBottom) failures.push("message history did not scroll to latest");
     if (!result.desktop.imageLoaded || result.desktop.placeholderShown) failures.push("MMS image did not replace placeholder");
     if (!result.desktop.viewerOpened || !result.desktop.viewerRotated || !result.desktop.viewerClosed) failures.push("image viewer open/rotate/close failed");

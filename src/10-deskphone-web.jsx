@@ -7,6 +7,7 @@ const RAIL_COLLAPSED_KEY = "deskphone_web_rail_collapsed";
 const RAIL_WIDTH_KEY = "deskphone_web_rail_width";
 const MESSAGE_LIST_WIDTH_KEY = "deskphone_web_message_list_width";
 const CALL_HISTORY_WIDTH_KEY = "deskphone_web_call_history_width";
+const DESKPHONE_WEB_VERSION = "001";
 
 const COLORS = {
   bgMain: "#FAFAFA",
@@ -35,7 +36,7 @@ const SHELL_PARITY_ROWS = [
   ["MainWindow.xaml:359", "RootShellGrid", "Root frame, rounded text rendering, scaled shell"],
   ["MainWindow.xaml:373", "RootNavigationColumn", "Navigation rail width 292, runtime 268, min 224, max 360"],
   ["MainWindow.xaml:382", "Left rail border", "Sidebar background and right divider"],
-  ["MainWindow.xaml:396", "App identity", "36 by 36 app icon, DeskPhone title, build number, build time"],
+  ["MainWindow.xaml:396", "App identity", "36 by 36 app icon, DeskPhone title, web version, Windows host build"],
   ["MainWindow.xaml:442", "NavigationRailToggleButton", "Collapse or expand sidebar"],
   ["MainWindow.xaml:455", "NewMessageButton", "Native element exists but is collapsed in this shell slice"],
   ["MainWindow.xaml:508", "NavMessages", "Phone tab"],
@@ -269,23 +270,27 @@ function connectionStatusFromStatus(status) {
   return "Not connected";
 }
 
-function buildLabel(status) {
+function webVersionLabel() {
+  return `DeskPhone Web Version ${DESKPHONE_WEB_VERSION}`;
+}
+
+function hostBuildNumber(status) {
   const build = status?.build || status?.Build || status?.buildNumber || status?.BuildNumber || "";
-  if (!build) return "Build Number: unknown";
-  const numberOnly = String(build).split(/\s+/)[0] || build;
-  return `Build Number: ${numberOnly}`;
+  return String(build).split(/\s+/)[0] || "";
 }
 
-function buildTimeLabel(status) {
-  const build = status?.build || status?.Build || "";
-  const parts = String(build).split(/\s{2,}/).filter(Boolean);
-  if (parts.length > 1) return `Build Time: ${parts.slice(1).join(" ")}`;
-  return "Build Time: host reported";
+function hostBuildLabel(status) {
+  const numberOnly = hostBuildNumber(status);
+  return numberOnly ? `Windows Host: ${numberOnly}` : "Windows Host: unknown";
 }
 
-function buildBadge(status) {
-  const build = status?.build || status?.Build || "";
-  return String(build).split(/\s+/)[0] || "b---";
+function hostBuildDetailLabel(status) {
+  const build = status?.build || status?.Build || status?.buildNumber || status?.BuildNumber || "";
+  return build ? `Windows Host: ${build}` : "Windows Host: not reporting build details";
+}
+
+function webVersionBadge() {
+  return `Web ${DESKPHONE_WEB_VERSION}`;
 }
 
 function hostDeviceName(status) {
@@ -619,8 +624,8 @@ function ConnectionRail({
         >
           {icon("settings", 20)}
         </button>
-        <div className="dp-build-badge" title={status?.build || "Build badge"}>
-          {buildBadge(status)}
+        <div className="dp-build-badge" title={`${webVersionLabel()} / ${hostBuildDetailLabel(status)}`}>
+          {webVersionBadge()}
         </div>
       </div>
     );
@@ -3232,8 +3237,8 @@ export function DeskPhoneWebPanel({
               {!railCollapsed ? (
                 <div className="dp-app-copy">
                   <div className="dp-app-name">DeskPhone</div>
-                  <div className="dp-app-build" title={buildLabel(status)}>{buildLabel(status)}</div>
-                  <div className="dp-app-time" title={buildTimeLabel(status)}>{buildTimeLabel(status)}</div>
+                  <div className="dp-app-build" title={webVersionLabel()}>{webVersionLabel()}</div>
+                  <div className="dp-app-time" title={hostBuildDetailLabel(status)}>{hostBuildLabel(status)}</div>
                 </div>
               ) : null}
             </div>
