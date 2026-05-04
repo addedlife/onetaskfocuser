@@ -239,6 +239,27 @@ async function postJson(host, path) {
   }
 }
 
+function handoffPath(target, value = "") {
+  const params = new URLSearchParams({ target });
+  if (value) params.set("value", value);
+  return `/handoff?${params.toString()}`;
+}
+
+function nativeHandoffTarget(label, source = "") {
+  const text = `${label || ""} ${source || ""}`.toLowerCase();
+  if (text.includes("new message") || source.includes("MainWindow.xaml:455") || source.includes("MainWindow.xaml:1078")) return "new-message";
+  if (text.includes("make call") || source.includes("MainWindow.xaml:525")) return "make-call";
+  if (text.includes("live log") || source.includes("MainWindow.xaml:620")) return "live-log";
+  if (text.includes("developer") || source.includes("MainWindow.xaml:603")) return "developer-tools";
+  if (text.includes("connection settings") || text.includes("choose device") || source.includes("MainWindow.xaml:701") || source.includes("MainWindow.xaml:745") || source.includes("MainWindow.xaml:812")) return "settings-connection";
+  if (text.includes("build")) return "build-update";
+  if (text.includes("new contact") || text.includes("add contact") || text.includes("save as contact")) return "new-contact";
+  if (text.includes("contact") || source.includes("MainWindow.xaml:562")) return "contacts";
+  if (text.includes("call") || source.includes("MainWindow.xaml:544")) return "calls";
+  if (source.includes("MainWindow.xaml:")) return "messages";
+  return "show";
+}
+
 function includesConnected(value) {
   return String(value || "").toLowerCase().includes("connected");
 }
@@ -3156,8 +3177,13 @@ export function DeskPhoneWebPanel({
 
   const nativeHandoff = useCallback(async (label, source) => {
     setBusy(source ? `${label} (${source})` : label);
+    const target = nativeHandoffTarget(label, source);
     try {
-      await postJson(host, "/show");
+      try {
+        await postJson(host, handoffPath(target));
+      } catch (handoffError) {
+        await postJson(host, "/show");
+      }
       setError("");
       showNotice(`${label} is opening in desktop DeskPhone for now.`);
     } catch (err) {

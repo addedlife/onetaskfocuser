@@ -1,6 +1,6 @@
 # DeskPhone Exact Parity Inventory
 
-Generated: 2026-05-03T23:56:14.951Z
+Generated: 2026-05-04T03:51:25.031Z
 
 Source root: `C:\Users\ydanz\OneDrive\Documents\PC as Bluetooth call - text interface\DeskPhone`
 
@@ -26,9 +26,9 @@ No further DeskPhone Web clone work should proceed from visual guesswork. Each n
 | Style/template elements | 1097 |
 | Elements with bindings | 360 |
 | Command declarations and wiring entries | 135 |
-| C# methods/functions | 501 |
+| C# methods/functions | 506 |
 | C# types | 84 |
-| Host API endpoints | 18 |
+| Host API endpoints | 19 |
 
 ## Files Written
 
@@ -63,24 +63,25 @@ No further DeskPhone Web clone work should proceed from visual guesswork. Each n
 
 | File:line | Method | Path |
 | --- | --- | --- |
-| Services/ControlApiService.cs:131 | GET/implicit | `/log` |
-| Services/ControlApiService.cs:139 | GET/implicit | `/messages` |
-| Services/ControlApiService.cs:143 | GET/implicit | `/calls` |
-| Services/ControlApiService.cs:147 | GET/implicit | `/contacts` |
-| Services/ControlApiService.cs:151 | POST | `/connect` |
-| Services/ControlApiService.cs:156 | POST | `/answer` |
-| Services/ControlApiService.cs:161 | POST | `/hangup` |
-| Services/ControlApiService.cs:166 | POST | `/refresh` |
-| Services/ControlApiService.cs:171 | POST | `/shutdown` |
-| Services/ControlApiService.cs:182 | POST | `/offer-update` |
-| Services/ControlApiService.cs:189 | POST | `/show` |
-| Services/ControlApiService.cs:194 | POST | `/stage` |
-| Services/ControlApiService.cs:210 | POST | `/stage-pulse` |
-| Services/ControlApiService.cs:216 | POST | `/stage-exit` |
-| Services/ControlApiService.cs:223 | POST | `/theme` |
-| Services/ControlApiService.cs:230 | POST | `/test-reg` |
-| Services/ControlApiService.cs:236 | POST | `/dial` |
-| Services/ControlApiService.cs:246 | POST | `/send` |
+| Services/ControlApiService.cs:133 | GET/implicit | `/log` |
+| Services/ControlApiService.cs:141 | GET/implicit | `/messages` |
+| Services/ControlApiService.cs:145 | GET/implicit | `/calls` |
+| Services/ControlApiService.cs:149 | GET/implicit | `/contacts` |
+| Services/ControlApiService.cs:153 | POST | `/connect` |
+| Services/ControlApiService.cs:158 | POST | `/answer` |
+| Services/ControlApiService.cs:163 | POST | `/hangup` |
+| Services/ControlApiService.cs:168 | POST | `/refresh` |
+| Services/ControlApiService.cs:173 | POST | `/shutdown` |
+| Services/ControlApiService.cs:184 | POST | `/offer-update` |
+| Services/ControlApiService.cs:191 | POST | `/show` |
+| Services/ControlApiService.cs:196 | POST | `/handoff` |
+| Services/ControlApiService.cs:211 | POST | `/stage` |
+| Services/ControlApiService.cs:227 | POST | `/stage-pulse` |
+| Services/ControlApiService.cs:233 | POST | `/stage-exit` |
+| Services/ControlApiService.cs:240 | POST | `/theme` |
+| Services/ControlApiService.cs:247 | POST | `/test-reg` |
+| Services/ControlApiService.cs:253 | POST | `/dial` |
+| Services/ControlApiService.cs:263 | POST | `/send` |
 
 ## First 160 Action Elements
 
@@ -155,99 +156,99 @@ This is a preview only. The JSON file contains the full list.
 | MainWindow.xaml:1899 | MenuItem | Call |  |  |
 | MainWindow.xaml:1900 | MenuItem | {Binding PinActionLabel} |  |  |
 | MainWindow.xaml:1902 | MenuItem | Delete |  |  |
-| MainWindow.xaml:1981 | Button | Save | {Binding DataContext.SaveAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}} |  |
-| MainWindow.xaml:2032 | Button | &#xF08A; |  | Copy |
-| MainWindow.xaml:2036 | Button | &#xE154; |  | Forward |
-| MainWindow.xaml:2040 | Button | &#xE0B0; |  | Call |
-| MainWindow.xaml:2044 | Button | &#xE872; |  | Delete |
-| MainWindow.xaml:2048 | Button | &#xF10D; |  | {Binding PinActionLabel} |
-| MainWindow.xaml:2066 | MenuItem | Copy |  |  |
-| MainWindow.xaml:2067 | MenuItem | Forward… |  |  |
-| MainWindow.xaml:2068 | MenuItem | Call |  |  |
-| MainWindow.xaml:2069 | MenuItem | {Binding PinActionLabel} |  |  |
-| MainWindow.xaml:2071 | MenuItem | Delete |  |  |
-| MainWindow.xaml:2149 | Button | Save | {Binding DataContext.SaveAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}} |  |
-| MainWindow.xaml:2248 | Button | &#xF08A; |  | Copy |
-| MainWindow.xaml:2252 | Button | &#xE154; |  | Forward |
-| MainWindow.xaml:2256 | Button | &#xE0B0; |  | Call |
-| MainWindow.xaml:2260 | Button | &#xE872; |  | Delete |
-| MainWindow.xaml:2264 | Button | &#xF10D; |  | {Binding PinActionLabel} |
-| MainWindow.xaml:2285 | Button | &#xE313; |  | Scroll to latest |
-| MainWindow.xaml:2332 | Button | Undo | {Binding UndoLastDeletedMessageCommand} |  |
-| MainWindow.xaml:2354 | Button | &#xE226; | {Binding AddComposeAttachmentCommand} | Attach pictures, files, or contact cards. DeskPhone will send them as MMS when the phone accepts Bluetooth MAP media sending. |
-| MainWindow.xaml:2391 | Button | &#xE5CD; | {Binding DataContext.RemoveComposeAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}} |  |
-| MainWindow.xaml:2402 | Button | &#xE163; | {Binding SendMessageCommand} |  |
-| MainWindow.xaml:2475 | Button | All | {Binding SetCallHistoryFilterCommand} |  |
-| MainWindow.xaml:2491 | Button | Missed | {Binding SetCallHistoryFilterCommand} |  |
-| MainWindow.xaml:2529 | Button | In | {Binding SetCallHistoryFilterCommand} |  |
-| MainWindow.xaml:2545 | Button | Out | {Binding SetCallHistoryFilterCommand} |  |
-| MainWindow.xaml:2565 | Button | &#xE0BC; | Keypad | {Binding ToggleConversationDialerPaneCommand} | Show keypad |
-| MainWindow.xaml:2584 | Button | &#xE872; | {Binding DeleteAllCallHistoryCommand} | Delete all call history |
-| MainWindow.xaml:2619 | Button | Undo | {Binding UndoCallHistoryDeleteCommand} |  |
-| MainWindow.xaml:2662 | Button | &#xF10D; | {Binding PreviewBody} | {Binding TimestampDisplay} | You |  |  |
-| MainWindow.xaml:2818 | Button | &#xE625; |  | Message this number |
-| MainWindow.xaml:2823 | Button | &#xE0B0; |  | Call this number |
-| MainWindow.xaml:2828 | Button | &#xE14B; | {Binding DataContext.ToggleCallRecordBlockedCommand, RelativeSource={RelativeSource AncestorType=Window}} | Block / unblock locally |
-| MainWindow.xaml:2833 | Button | &#xE872; | {Binding DataContext.DeleteCallRecordCommand, RelativeSource={RelativeSource AncestorType=Window}} | Delete call entry |
-| MainWindow.xaml:2863 | Button | &#xE5CD; | {Binding CloseConversationDialerPaneCommand} | Hide keypad |
-| MainWindow.xaml:2885 | Button | &#xE14A; |  |  |
-| MainWindow.xaml:2923 | Button | Text |  |  |
-| MainWindow.xaml:2930 | Button | Call |  |  |
-| MainWindow.xaml:2944 | Button | 1 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:2945 | Button | 2 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:2946 | Button | 3 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:2947 | Button | 4 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:2948 | Button | 5 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:2949 | Button | 6 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:2950 | Button | 7 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:2951 | Button | 8 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:2952 | Button | 9 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:2953 | Button | * | {Binding DialPadCommand} |  |
-| MainWindow.xaml:2954 | Button | 0 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:2955 | Button | # | {Binding DialPadCommand} |  |
-| MainWindow.xaml:2958 | Button | &#xE0D2; | Voicemail | {Binding DialVoicemailCommand} |  |
-| MainWindow.xaml:2984 | Button | &#xE0B0; | Call | {Binding DialCommand} |  |
-| MainWindow.xaml:3028 | Button | Cancel |  |  |
-| MainWindow.xaml:3061 | Button | {Binding DisplayName} | {Binding FormattedPhone} | {Binding DataContext.PickComposeContactCommand, RelativeSource={RelativeSource AncestorType=Window}} |  |
-| MainWindow.xaml:3084 | Button | Save as contact | {Binding SaveAsContactCommand} |  |
-| MainWindow.xaml:3090 | Button | Edit contact | {Binding EditContactCommand} |  |
-| MainWindow.xaml:3116 | Button | &#xE226; | {Binding AddComposeAttachmentCommand} | Attach pictures, files, or contact cards. DeskPhone will send them as MMS when the phone accepts Bluetooth MAP media sending. |
-| MainWindow.xaml:3128 | Button | Send Message | {Binding SendMessageCommand} |  |
-| MainWindow.xaml:3145 | Button | &#xE5CD; | {Binding DataContext.RemoveComposeAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}} |  |
-| MainWindow.xaml:3196 | Button | Show recents | {Binding OpenRecentCallsPaneCommand} |  |
-| MainWindow.xaml:3203 | Button | Show dialer | {Binding OpenDialerPaneCommand} |  |
-| MainWindow.xaml:3235 | Button | &#xE872; | {Binding DeleteAllCallHistoryCommand} | Delete all call history |
-| MainWindow.xaml:3251 | Button | &#xE5CD; | {Binding CloseRecentCallsPaneCommand} | Hide recents |
-| MainWindow.xaml:3265 | Button | All | {Binding SetCallHistoryFilterCommand} |  |
-| MainWindow.xaml:3281 | Button | Missed | {Binding SetCallHistoryFilterCommand} |  |
-| MainWindow.xaml:3319 | Button | Incoming | {Binding SetCallHistoryFilterCommand} |  |
-| MainWindow.xaml:3335 | Button | Outgoing | {Binding SetCallHistoryFilterCommand} |  |
-| MainWindow.xaml:3370 | Button | Undo | {Binding UndoCallHistoryDeleteCommand} |  |
-| MainWindow.xaml:3476 | Button | &#xE625; |  | Message this number |
-| MainWindow.xaml:3481 | Button | &#xE0B0; |  | Call this number |
-| MainWindow.xaml:3486 | Button | &#xE14B; | {Binding DataContext.ToggleCallRecordBlockedCommand, RelativeSource={RelativeSource AncestorType=Window}} | Block / unblock locally |
-| MainWindow.xaml:3491 | Button | &#xE872; | {Binding DataContext.DeleteCallRecordCommand, RelativeSource={RelativeSource AncestorType=Window}} | Delete call entry |
-| MainWindow.xaml:3539 | Button | &#xE5CD; | {Binding CloseDialerPaneCommand} | Hide dialer |
-| MainWindow.xaml:3561 | Button | &#xE14A; |  |  |
-| MainWindow.xaml:3585 | Button | Save as contact | {Binding SaveAsContactCommand} |  |
-| MainWindow.xaml:3591 | Button | Edit contact | {Binding EditContactCommand} |  |
-| MainWindow.xaml:3620 | Button | Text |  |  |
-| MainWindow.xaml:3627 | Button | Call |  |  |
-| MainWindow.xaml:3642 | Button | 1 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:3643 | Button | 2 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:3644 | Button | 3 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:3645 | Button | 4 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:3646 | Button | 5 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:3647 | Button | 6 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:3648 | Button | 7 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:3649 | Button | 8 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:3650 | Button | 9 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:3651 | Button | * | {Binding DialPadCommand} |  |
-| MainWindow.xaml:3652 | Button | 0 | {Binding DialPadCommand} |  |
-| MainWindow.xaml:3653 | Button | # | {Binding DialPadCommand} |  |
-| MainWindow.xaml:3656 | Button | &#xE0D2; | Voicemail | {Binding DialVoicemailCommand} |  |
-| MainWindow.xaml:3683 | Button | &#xE0B0; | {Binding DialCommand} |  |
-| MainWindow.xaml:3758 | Button | New Contact | {Binding NewContactCommand} |  |
+| MainWindow.xaml:1985 | Button | Save | {Binding DataContext.SaveAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}} |  |
+| MainWindow.xaml:2036 | Button | &#xF08A; |  | Copy |
+| MainWindow.xaml:2040 | Button | &#xE154; |  | Forward |
+| MainWindow.xaml:2044 | Button | &#xE0B0; |  | Call |
+| MainWindow.xaml:2048 | Button | &#xE872; |  | Delete |
+| MainWindow.xaml:2052 | Button | &#xF10D; |  | {Binding PinActionLabel} |
+| MainWindow.xaml:2070 | MenuItem | Copy |  |  |
+| MainWindow.xaml:2071 | MenuItem | Forward… |  |  |
+| MainWindow.xaml:2072 | MenuItem | Call |  |  |
+| MainWindow.xaml:2073 | MenuItem | {Binding PinActionLabel} |  |  |
+| MainWindow.xaml:2075 | MenuItem | Delete |  |  |
+| MainWindow.xaml:2157 | Button | Save | {Binding DataContext.SaveAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}} |  |
+| MainWindow.xaml:2256 | Button | &#xF08A; |  | Copy |
+| MainWindow.xaml:2260 | Button | &#xE154; |  | Forward |
+| MainWindow.xaml:2264 | Button | &#xE0B0; |  | Call |
+| MainWindow.xaml:2268 | Button | &#xE872; |  | Delete |
+| MainWindow.xaml:2272 | Button | &#xF10D; |  | {Binding PinActionLabel} |
+| MainWindow.xaml:2293 | Button | &#xE313; |  | Scroll to latest |
+| MainWindow.xaml:2340 | Button | Undo | {Binding UndoLastDeletedMessageCommand} |  |
+| MainWindow.xaml:2362 | Button | &#xE226; | {Binding AddComposeAttachmentCommand} | Attach pictures, files, or contact cards. DeskPhone will send them as MMS when the phone accepts Bluetooth MAP media sending. |
+| MainWindow.xaml:2399 | Button | &#xE5CD; | {Binding DataContext.RemoveComposeAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}} |  |
+| MainWindow.xaml:2410 | Button | &#xE163; | {Binding SendMessageCommand} |  |
+| MainWindow.xaml:2483 | Button | All | {Binding SetCallHistoryFilterCommand} |  |
+| MainWindow.xaml:2499 | Button | Missed | {Binding SetCallHistoryFilterCommand} |  |
+| MainWindow.xaml:2537 | Button | In | {Binding SetCallHistoryFilterCommand} |  |
+| MainWindow.xaml:2553 | Button | Out | {Binding SetCallHistoryFilterCommand} |  |
+| MainWindow.xaml:2573 | Button | &#xE0BC; | Keypad | {Binding ToggleConversationDialerPaneCommand} | Show keypad |
+| MainWindow.xaml:2592 | Button | &#xE872; | {Binding DeleteAllCallHistoryCommand} | Delete all call history |
+| MainWindow.xaml:2627 | Button | Undo | {Binding UndoCallHistoryDeleteCommand} |  |
+| MainWindow.xaml:2670 | Button | &#xF10D; | {Binding PreviewBody} | {Binding TimestampDisplay} | You |  |  |
+| MainWindow.xaml:2826 | Button | &#xE625; |  | Message this number |
+| MainWindow.xaml:2831 | Button | &#xE0B0; |  | Call this number |
+| MainWindow.xaml:2836 | Button | &#xE14B; | {Binding DataContext.ToggleCallRecordBlockedCommand, RelativeSource={RelativeSource AncestorType=Window}} | Block / unblock locally |
+| MainWindow.xaml:2841 | Button | &#xE872; | {Binding DataContext.DeleteCallRecordCommand, RelativeSource={RelativeSource AncestorType=Window}} | Delete call entry |
+| MainWindow.xaml:2871 | Button | &#xE5CD; | {Binding CloseConversationDialerPaneCommand} | Hide keypad |
+| MainWindow.xaml:2893 | Button | &#xE14A; |  |  |
+| MainWindow.xaml:2931 | Button | Text |  |  |
+| MainWindow.xaml:2938 | Button | Call |  |  |
+| MainWindow.xaml:2952 | Button | 1 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:2953 | Button | 2 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:2954 | Button | 3 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:2955 | Button | 4 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:2956 | Button | 5 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:2957 | Button | 6 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:2958 | Button | 7 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:2959 | Button | 8 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:2960 | Button | 9 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:2961 | Button | * | {Binding DialPadCommand} |  |
+| MainWindow.xaml:2962 | Button | 0 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:2963 | Button | # | {Binding DialPadCommand} |  |
+| MainWindow.xaml:2966 | Button | &#xE0D2; | Voicemail | {Binding DialVoicemailCommand} |  |
+| MainWindow.xaml:2992 | Button | &#xE0B0; | Call | {Binding DialCommand} |  |
+| MainWindow.xaml:3036 | Button | Cancel |  |  |
+| MainWindow.xaml:3069 | Button | {Binding DisplayName} | {Binding FormattedPhone} | {Binding DataContext.PickComposeContactCommand, RelativeSource={RelativeSource AncestorType=Window}} |  |
+| MainWindow.xaml:3092 | Button | Save as contact | {Binding SaveAsContactCommand} |  |
+| MainWindow.xaml:3098 | Button | Edit contact | {Binding EditContactCommand} |  |
+| MainWindow.xaml:3124 | Button | &#xE226; | {Binding AddComposeAttachmentCommand} | Attach pictures, files, or contact cards. DeskPhone will send them as MMS when the phone accepts Bluetooth MAP media sending. |
+| MainWindow.xaml:3136 | Button | Send Message | {Binding SendMessageCommand} |  |
+| MainWindow.xaml:3153 | Button | &#xE5CD; | {Binding DataContext.RemoveComposeAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}} |  |
+| MainWindow.xaml:3204 | Button | Show recents | {Binding OpenRecentCallsPaneCommand} |  |
+| MainWindow.xaml:3211 | Button | Show dialer | {Binding OpenDialerPaneCommand} |  |
+| MainWindow.xaml:3243 | Button | &#xE872; | {Binding DeleteAllCallHistoryCommand} | Delete all call history |
+| MainWindow.xaml:3259 | Button | &#xE5CD; | {Binding CloseRecentCallsPaneCommand} | Hide recents |
+| MainWindow.xaml:3273 | Button | All | {Binding SetCallHistoryFilterCommand} |  |
+| MainWindow.xaml:3289 | Button | Missed | {Binding SetCallHistoryFilterCommand} |  |
+| MainWindow.xaml:3327 | Button | Incoming | {Binding SetCallHistoryFilterCommand} |  |
+| MainWindow.xaml:3343 | Button | Outgoing | {Binding SetCallHistoryFilterCommand} |  |
+| MainWindow.xaml:3378 | Button | Undo | {Binding UndoCallHistoryDeleteCommand} |  |
+| MainWindow.xaml:3484 | Button | &#xE625; |  | Message this number |
+| MainWindow.xaml:3489 | Button | &#xE0B0; |  | Call this number |
+| MainWindow.xaml:3494 | Button | &#xE14B; | {Binding DataContext.ToggleCallRecordBlockedCommand, RelativeSource={RelativeSource AncestorType=Window}} | Block / unblock locally |
+| MainWindow.xaml:3499 | Button | &#xE872; | {Binding DataContext.DeleteCallRecordCommand, RelativeSource={RelativeSource AncestorType=Window}} | Delete call entry |
+| MainWindow.xaml:3547 | Button | &#xE5CD; | {Binding CloseDialerPaneCommand} | Hide dialer |
+| MainWindow.xaml:3569 | Button | &#xE14A; |  |  |
+| MainWindow.xaml:3593 | Button | Save as contact | {Binding SaveAsContactCommand} |  |
+| MainWindow.xaml:3599 | Button | Edit contact | {Binding EditContactCommand} |  |
+| MainWindow.xaml:3628 | Button | Text |  |  |
+| MainWindow.xaml:3635 | Button | Call |  |  |
+| MainWindow.xaml:3650 | Button | 1 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:3651 | Button | 2 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:3652 | Button | 3 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:3653 | Button | 4 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:3654 | Button | 5 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:3655 | Button | 6 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:3656 | Button | 7 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:3657 | Button | 8 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:3658 | Button | 9 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:3659 | Button | * | {Binding DialPadCommand} |  |
+| MainWindow.xaml:3660 | Button | 0 | {Binding DialPadCommand} |  |
+| MainWindow.xaml:3661 | Button | # | {Binding DialPadCommand} |  |
+| MainWindow.xaml:3664 | Button | &#xE0D2; | Voicemail | {Binding DialVoicemailCommand} |  |
+| MainWindow.xaml:3691 | Button | &#xE0B0; | {Binding DialCommand} |  |
+| MainWindow.xaml:3766 | Button | New Contact | {Binding NewContactCommand} |  |
 
 ## Web Parity Rule
 

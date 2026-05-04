@@ -72,6 +72,7 @@ const calls = [
     durationDisplay: "2 min",
   },
 ];
+const handoffTargets = [];
 
 const server = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -95,6 +96,11 @@ const server = http.createServer((req, res) => {
     send(messages);
   } else if (requestPath === "/calls") {
     send(calls);
+  } else if (requestPath === "/handoff") {
+    handoffTargets.push(new URL(req.url, `http://127.0.0.1:${hostPort}`).searchParams.get("target") || "");
+    send({ ok: true });
+  } else if (requestPath === "/handoff-log") {
+    send(handoffTargets);
   } else {
     send({ ok: true });
   }
@@ -235,6 +241,9 @@ async function runCdp() {
     await new Promise((resolve) => setTimeout(resolve, 600));
     const maxTop = scrollBox.scrollHeight - scrollBox.clientHeight;
     const placeholderShown = Array.from(document.querySelectorAll('.dp-muted-body')).some((el) => el.textContent.includes('MMS message'));
+    document.querySelector('[data-native-source="MainWindow.xaml:1078"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const handoffTargets = await fetch('http://127.0.0.1:${hostPort}/handoff-log').then((response) => response.json());
     const image = document.querySelector('.dp-mms-image');
     image.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -250,6 +259,7 @@ async function runCdp() {
       callHistory,
       webVersionText,
       hostBuildText,
+      handoffTargets,
       scrollable,
       scrolledToBottom: scrollBox.scrollTop >= maxTop - 8,
       imageLoaded: image.naturalWidth > 0,
@@ -304,6 +314,7 @@ async function main() {
     if (!(result.desktop.messageList.after > result.desktop.messageList.before)) failures.push("message splitter did not expand");
     if (!(result.desktop.callHistory.after > result.desktop.callHistory.before)) failures.push("call-history splitter did not expand");
     if (result.desktop.webVersionText !== "DeskPhone Web Version 001" || result.desktop.hostBuildText !== "Windows Host: b242") failures.push("web version or Windows host label is wrong");
+    if (!result.desktop.handoffTargets.includes("new-message")) failures.push("new-message handoff did not target desktop compose");
     if (!result.desktop.scrollable || !result.desktop.scrolledToBottom) failures.push("message history did not scroll to latest");
     if (!result.desktop.imageLoaded || result.desktop.placeholderShown) failures.push("MMS image did not replace placeholder");
     if (!result.desktop.viewerOpened || !result.desktop.viewerRotated || !result.desktop.viewerClosed) failures.push("image viewer open/rotate/close failed");
