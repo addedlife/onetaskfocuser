@@ -398,7 +398,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 - **Shaila duplicate fix**: reconciliation listener registers new shailaIds in `pendingShailaIds.current` before returning state — prevents the next `_listenV5` snapshot from re-creating tasks that were just added.
 - **Auto-save format**: `autoFileBackup` now matches `fullBackup` format exactly (`_backupVersion: 1`, `_clean()`, fresh shailos fetched from Firestore). Old `_version: 2` format could not be restored via `parseBackup`.
 - **Home priority**: fully removed from Firestore settings doc, filtered out of all pickers, insights, and AI prompts. `_listenV5` strips it from any incoming Firestore state so it can never re-appear.
-- **Google Nervecenter** (Calendar + Gmail on NerveCenter): Settings → Google tab → paste OAuth 2.0 Client ID → NerveCenter bottom row shows "Connect Google" button → GIS popup → Calendar card (today's events with live "now" indicator) + Gmail card (important & unread, sender/subject/snippet). Auto-refreshes every 15 min. `AS.googleClientId` stored in Firebase settings; OAuth token lives only in component state (never persisted). Requires Google Cloud project with Calendar API + Gmail API enabled and an OAuth 2.0 Web Client ID with `https://onetaskfocuser.netlify.app` as an authorized origin. Cards are **not** on the Focus tab — they live only in NerveCenter.
+- **Google Nervecenter** (Calendar + Gmail on NerveCenter): Settings → Google tab → paste OAuth 2.0 Client ID → NerveCenter bottom row shows "Connect Google" button → GIS popup → Calendar card (today's events with live "now" indicator) + Gmail card (important & unread, sender/subject/snippet). Auto-refreshes every 15 min. `AS.googleClientId` stored in Firebase settings; OAuth token lives only in component state (never persisted). Requires Google Cloud project with Calendar API + Gmail API enabled and an OAuth 2.0 Web Client ID with `https://onetaskfocuser.netlify.app` as an authorized origin. Cards are **not** on the Focus tab — they live only in NerveCenter. Each card has internal scroll, no page scroll. Calendar+Gmail run independently via `Promise.allSettled` — one failure doesn't block the other. Error surfaces the actual API error message for easy debugging.
 - **Default home = NerveCenter**: `getInitialSuiteView()` now returns `"nervecenter"` — app opens to the three-column command dashboard instead of the focus tab.
 - **CHANGELOG.md created**: `CHANGELOG.md` in repo root documents all recent feature additions and fixes, intended for multiple developers working on the codebase.
 - **aiDetectShailaAnswers**: removed "copy verbatim" instruction — now writes clean halachic ruling preserving content.
@@ -407,12 +407,12 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 ## 15. Recent Git History
 
-Latest: Move Google Calendar + Gmail cards to NerveCenter bottom row; default app to NerveCenter on open; create CHANGELOG.md.
+Latest: NerveCenter fixed viewport layout (no page scroll) + Google Calendar/Gmail as fixed-height bottom strip; each card scrolls internally.
 
 ```
-(pending push) feat: Google cards on NerveCenter, default to NerveCenter, CHANGELOG
-3242693 feat: Google Calendar + Gmail nervecenter cards on launchpad
-2a9d4af Simplify AI gateway and voice transcription
+(pending push) fix: NerveCenter single-screen layout + Google strip with internal scroll
+becb7df fix: Google Calendar + Gmail data not loading after connect
+04849e3 feat: Google cards on NerveCenter, default home to NerveCenter, CHANGELOG
 8adf72a Update HANDOFF.md — catch up on missed updates from last 5 commits
 697dd6f Proxy: reject stale Gemini model names, fall back to gemini-2.5-flash
 a31a00c Replace heatmap with 4-option secondary chart panel in Insights

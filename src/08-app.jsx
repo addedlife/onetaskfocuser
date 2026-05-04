@@ -684,11 +684,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   };
 
   return (
-    <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7600, background: T.bg, overflow: "auto", borderLeft: `1px solid ${T.brdS || T.brd}` }}>
-      <div style={{ maxWidth: 1400, minHeight: "100%", margin: "0 auto", padding: "clamp(12px,2vw,20px)", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
+    <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7600, background: T.bg, overflow: "hidden", borderLeft: `1px solid ${T.brdS || T.brd}` }}>
+      <div style={{ height: "100%", maxWidth: 1400, margin: "0 auto", padding: "clamp(10px,1.6vw,18px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 10 }}>
 
-        {/* Three-panel grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14, flex: 1, minHeight: "clamp(300px, 60vh, 680px)", alignItems: "stretch" }}>
+        {/* Three-panel grid — fills all remaining height */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 10, flex: 1, minHeight: 0, alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
           <section style={{ background: T.card, border: `1px solid ${T.brd}`, borderRadius: 20, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", boxShadow: T.shadow || "none" }}>
@@ -869,12 +869,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           </section>
         </div>
 
-        {/* ── Google Calendar + Gmail row ── */}
+        {/* ── Google Calendar + Gmail strip ── fixed height, cards scroll internally */}
         {googleClientId && (() => {
           const accentBlue = T.isDark ? '#7EB0DE' : '#4A80CC';
           const notConnected = !googleToken && !googleLoading;
-          const cardS = { background: T.card, borderRadius: 16, border: `1px solid ${T.brd}`, padding: "14px 16px", boxSizing: "border-box", flex: 1, minWidth: 0 };
-          const secH = { fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, color: T.tFaint, fontFamily: "system-ui", margin: "0 0 10px", display: "flex", justifyContent: "space-between", alignItems: "center" };
 
           const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || '';
           const fmtFrom = (raw) => { const m = raw.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : raw.split('@')[0]; };
@@ -897,102 +895,110 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
             return new Date(evt.start.dateTime).getTime() <= now && new Date(evt.end.dateTime).getTime() >= now;
           };
 
-          return (
-            <div style={{ display: "flex", gap: 14, marginTop: 14, flexShrink: 0, minHeight: 0 }}>
+          // Each card: header (fixed) + content (scrollable)
+          const cardWrap = { background: T.card, borderRadius: 16, border: `1px solid ${T.brd}`, flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" };
+          const cardHead = { padding: "8px 12px 6px", borderBottom: `1px solid ${T.brdS || T.brd}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 };
+          const cardBody = { flex: 1, overflow: "auto", padding: "0 12px" };
+          const headLabel = { fontSize: 11, fontWeight: 800, color: T.tSoft, fontFamily: "system-ui", letterSpacing: 0.3 };
 
-              {/* Not connected — single wide prompt */}
+          return (
+            <div style={{ display: "flex", gap: 10, flex: "0 0 172px", minHeight: 0 }}>
+
+              {/* Not connected — wide connect button */}
               {notConnected && !googleError && (
                 <button onClick={onConnectGoogle}
-                  style={{ flex: 1, padding: "13px 16px", borderRadius: 16, border: `1px dashed ${T.brd}`, background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tSoft, fontFamily: "system-ui", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
+                  style={{ flex: 1, borderRadius: 16, border: `1px dashed ${T.brd}`, background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tSoft, fontFamily: "system-ui", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = accentBlue; e.currentTarget.style.color = accentBlue; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = T.brd; e.currentTarget.style.color = T.tSoft; }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                   Connect Google Calendar &amp; Gmail
                 </button>
               )}
 
+              {/* Error banner */}
               {googleError && (
-                <div style={{ ...cardS, borderColor: "#E07040", display: "flex", gap: 8, alignItems: "center" }}>
+                <div style={{ ...cardWrap, borderColor: "#E07040", flexDirection: "row", alignItems: "center", padding: "0 14px", gap: 10 }}>
                   <span style={{ fontSize: 12, color: "#E07040", fontFamily: "system-ui", flex: 1 }}>{googleError}</span>
-                  <button onClick={onConnectGoogle} style={{ fontSize: 11, fontFamily: "system-ui", fontWeight: 600, color: accentBlue, background: "none", border: `1px solid ${accentBlue}`, borderRadius: 8, padding: "4px 10px", cursor: "pointer" }}>Retry</button>
-                  <button onClick={onDisconnectGoogle} style={{ fontSize: 11, fontFamily: "system-ui", color: T.tFaint, background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                  <button onClick={onConnectGoogle} style={{ fontSize: 11, fontFamily: "system-ui", fontWeight: 700, color: accentBlue, background: "none", border: `1px solid ${accentBlue}`, borderRadius: 8, padding: "5px 12px", cursor: "pointer", flexShrink: 0 }}>Retry</button>
+                  <button onClick={onDisconnectGoogle} style={{ fontSize: 12, fontFamily: "system-ui", color: T.tFaint, background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: 0 }}>✕</button>
                 </div>
               )}
 
-              {googleLoading && !calendarEvents && !googleError && (
-                <div style={{ ...cardS, display: "flex", alignItems: "center", gap: 8, justifyContent: "center", padding: 16 }}>
-                  <div style={{ width: 14, height: 14, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
-                  <span style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui" }}>Loading Google data…</span>
+              {/* Loading (before any data) */}
+              {googleLoading && !calendarEvents && !gmailMessages && !googleError && (
+                <div style={{ ...cardWrap, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <div style={{ width: 13, height: 13, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                  <span style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui" }}>Loading…</span>
                 </div>
               )}
 
-              {/* Calendar card */}
-              {calendarEvents !== null && (
-                <div style={cardS}>
-                  <div style={secH}>
-                    <span>📅 Today</span>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      {googleLoading && <div style={{ width: 10, height: 10, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
-                      <button onClick={onConnectGoogle} title="Refresh" style={{ fontSize: 10, fontFamily: "system-ui", color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .6 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .6}>↺</button>
-                      <button onClick={onDisconnectGoogle} title="Disconnect" style={{ fontSize: 10, fontFamily: "system-ui", color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .4 }} onMouseEnter={e => e.currentTarget.style.opacity = .9} onMouseLeave={e => e.currentTarget.style.opacity = .4}>✕</button>
+              {/* ── Calendar card ── */}
+              {(calendarEvents !== null || (googleLoading && googleToken)) && (
+                <div style={cardWrap}>
+                  <div style={cardHead}>
+                    <span style={headLabel}>📅 Today</span>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+                      <button onClick={onConnectGoogle} title="Refresh" style={{ fontSize: 11, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .5, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↺</button>
+                      <button onClick={onDisconnectGoogle} title="Disconnect" style={{ fontSize: 11, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .35, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = .85} onMouseLeave={e => e.currentTarget.style.opacity = .35}>✕</button>
                     </div>
                   </div>
-                  {calendarEvents.length === 0 ? (
-                    <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: 0, textAlign: "center", padding: "8px 0" }}>Nothing on the calendar today</p>
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                      {calendarEvents.map((evt, i) => {
-                        const now = isNow(evt);
-                        return (
-                          <div key={evt.id || i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "7px 0", borderBottom: i < calendarEvents.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
-                            <div style={{ flexShrink: 0, width: 56, textAlign: "right" }}>
-                              <span style={{ fontSize: 10, fontFamily: "system-ui", color: now ? accentBlue : T.tFaint, fontWeight: now ? 700 : 400 }}>{fmtEvtTime(evt)}</span>
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                {now && <span style={{ width: 6, height: 6, borderRadius: "50%", background: accentBlue, flexShrink: 0, display: "inline-block" }} />}
-                                <span style={{ fontSize: 13, color: now ? T.text : T.tSoft, fontWeight: now ? 600 : 400, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evt.summary || "(no title)"}</span>
-                              </div>
-                              {evt.location && <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evt.location}</span>}
+                  <div style={cardBody}>
+                    {!calendarEvents ? (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: 7 }}>
+                        <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                        <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui" }}>Loading calendar…</span>
+                      </div>
+                    ) : calendarEvents.length === 0 ? (
+                      <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: "12px 0", textAlign: "center" }}>Nothing today</p>
+                    ) : calendarEvents.map((evt, i) => {
+                      const now = isNow(evt);
+                      return (
+                        <div key={evt.id || i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 0", borderBottom: i < calendarEvents.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
+                          <span style={{ fontSize: 10, fontFamily: "system-ui", color: now ? accentBlue : T.tFaint, fontWeight: now ? 700 : 400, flexShrink: 0, width: 52, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              {now && <span style={{ width: 5, height: 5, borderRadius: "50%", background: accentBlue, flexShrink: 0 }} />}
+                              <span style={{ fontSize: 12, color: now ? T.text : T.tSoft, fontWeight: now ? 700 : 400, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evt.summary || "(no title)"}</span>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
-              {/* Gmail card */}
-              {gmailMessages !== null && (
-                <div style={cardS}>
-                  <div style={secH}>
-                    <span>✉️ Important &amp; Unread</span>
-                    {googleLoading && <div style={{ width: 10, height: 10, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+              {/* ── Gmail card ── */}
+              {(gmailMessages !== null || (googleLoading && googleToken)) && (
+                <div style={cardWrap}>
+                  <div style={cardHead}>
+                    <span style={headLabel}>✉️ Important &amp; Unread</span>
+                    {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
                   </div>
-                  {gmailMessages.length === 0 ? (
-                    <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: 0, textAlign: "center", padding: "8px 0" }}>Inbox zero 🎉</p>
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                      {gmailMessages.map((msg, i) => {
-                        const subject = gmailHeader(msg, 'Subject') || '(no subject)';
-                        const from = fmtFrom(gmailHeader(msg, 'From'));
-                        const date = fmtTime(gmailHeader(msg, 'Date'));
-                        return (
-                          <div key={msg.id || i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "7px 0", borderBottom: i < gmailMessages.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: T.tSoft, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
-                                <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui", flexShrink: 0 }}>{date}</span>
-                              </div>
-                              <span style={{ fontSize: 12, color: T.text, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{subject}</span>
-                              {msg.snippet && <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{msg.snippet}</span>}
-                            </div>
+                  <div style={cardBody}>
+                    {!gmailMessages ? (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: 7 }}>
+                        <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                        <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui" }}>Loading mail…</span>
+                      </div>
+                    ) : gmailMessages.length === 0 ? (
+                      <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: "12px 0", textAlign: "center" }}>Inbox zero 🎉</p>
+                    ) : gmailMessages.map((msg, i) => {
+                      const subject = gmailHeader(msg, 'Subject') || '(no subject)';
+                      const from = fmtFrom(gmailHeader(msg, 'From'));
+                      const date = fmtTime(gmailHeader(msg, 'Date'));
+                      return (
+                        <div key={msg.id || i} style={{ padding: "6px 0", borderBottom: i < gmailMessages.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginBottom: 1 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: T.tSoft, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
+                            <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui", flexShrink: 0 }}>{date}</span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                          <span style={{ fontSize: 12, color: T.text, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{subject}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
