@@ -269,6 +269,8 @@ async function runCdp() {
     await new Promise((resolve) => setTimeout(resolve, 100));
     const handoffRequests = await fetch('http://127.0.0.1:${hostPort}/handoff-log').then((response) => response.json());
     const image = document.querySelector('.dp-mms-image');
+    const imageBubble = image.closest('.dp-message-bubble');
+    const imageAttachmentRows = imageBubble.querySelectorAll('.dp-attachment-row').length;
     image.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 50));
     const opened = !!document.querySelector('.dp-image-viewer');
@@ -287,6 +289,8 @@ async function runCdp() {
       scrollable,
       scrolledToBottom: scrollBox.scrollTop >= maxTop - 8,
       imageLoaded: image.naturalWidth > 0,
+      imageBubbleIsMediaOnly: imageBubble.classList.contains('is-media-only'),
+      imageAttachmentRows,
       placeholderShown,
       viewerOpened: opened,
       viewerRotated: transform.includes('90deg'),
@@ -346,6 +350,7 @@ async function main() {
     if (!result.desktop.handoffRequests.some((request) => request.target === "edit-contact" && request.value.includes("15551234567"))) failures.push("edit-contact handoff did not carry the conversation number");
     if (!result.desktop.scrollable || !result.desktop.scrolledToBottom) failures.push("message history did not scroll to latest");
     if (!result.desktop.imageLoaded || result.desktop.placeholderShown) failures.push("MMS image did not replace placeholder");
+    if (!result.desktop.imageBubbleIsMediaOnly || result.desktop.imageAttachmentRows !== 0) failures.push("MMS image still renders as a bordered attachment card instead of the message item");
     if (!result.desktop.viewerOpened || !result.desktop.viewerRotated || !result.desktop.viewerClosed) failures.push("image viewer open/rotate/close failed");
     if (!result.desktop.noHorizontalOverflow || !result.mobile.noHorizontalOverflow || !result.mobile.splittersHidden) failures.push("responsive layout overflow or mobile splitters visible");
 

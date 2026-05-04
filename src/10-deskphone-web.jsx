@@ -948,9 +948,11 @@ function MessageAttachments({ message, onNativeHandoff, onOpenImage }) {
   if (!message.attachments.length) return null;
   return (
     <div className="dp-attachment-stack">
-      {message.attachments.map((attachment, index) => (
-        <React.Fragment key={`${message.id}-attachment-${index}`}>
-          {attachment.isImage && attachment.dataUrl ? (
+      {message.attachments.map((attachment, index) => {
+        const isInlineImage = attachment.isImage && attachment.dataUrl;
+        return (
+          <React.Fragment key={`${message.id}-attachment-${index}`}>
+          {isInlineImage ? (
             <img
               className="dp-mms-image"
               src={attachment.dataUrl}
@@ -972,16 +974,19 @@ function MessageAttachments({ message, onNativeHandoff, onOpenImage }) {
               }}
             />
           ) : null}
-          <div className={`dp-attachment-row ${message.isSent ? "is-outgoing" : ""}`}>
+          {!isInlineImage ? (
+            <div className={`dp-attachment-row ${message.isSent ? "is-outgoing" : ""}`}>
             {icon(attachment.isImage ? "image" : attachment.isContactCard ? "contact_page" : "attach_file", 18)}
             <div>
               <strong>{attachment.fileName || "Attachment"}</strong>
               <span>{attachmentLabel(attachment)}{attachment.size ? ` - ${Math.round(attachment.size / 1024)} KB` : ""}</span>
             </div>
             <button type="button" onClick={() => saveDataUrlAttachment(attachment, onNativeHandoff)}>Save</button>
-          </div>
-        </React.Fragment>
-      ))}
+            </div>
+          ) : null}
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 }
@@ -990,8 +995,14 @@ function MessageBubble({ message, previousMessage, open, onToggleOpen, onCopy, o
   const currentDivider = formatDateDivider(message.timestamp);
   const previousDivider = previousMessage ? formatDateDivider(previousMessage.timestamp) : "";
   const showDateDivider = currentDivider && currentDivider !== previousDivider;
-  const bubbleClass = ["dp-message-bubble", message.isSent ? "is-outgoing" : "is-incoming"].join(" ");
   const hasVisibleImage = message.attachments.some((attachment) => attachment.isImage && attachment.dataUrl);
+  const hasNonImageAttachment = message.attachments.some((attachment) => !(attachment.isImage && attachment.dataUrl));
+  const isMediaOnly = hasVisibleImage && !hasNonImageAttachment && !message.body;
+  const bubbleClass = [
+    "dp-message-bubble",
+    message.isSent ? "is-outgoing" : "is-incoming",
+    isMediaOnly ? "is-media-only" : "",
+  ].filter(Boolean).join(" ");
 
   return (
     <div className={`dp-message-item ${message.isSent ? "is-outgoing" : "is-incoming"}`} data-native-source="MainWindow.xaml:1845">
@@ -2481,6 +2492,19 @@ const css = `
   color: white;
   border-bottom-right-radius: 6px;
 }
+.dp-message-bubble.is-media-only {
+  max-width: min(340px, 76%);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.dp-message-bubble.is-media-only.is-incoming,
+.dp-message-bubble.is-media-only.is-outgoing {
+  border: 0;
+  background: transparent;
+}
 .dp-message-body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -2506,6 +2530,10 @@ const css = `
 .dp-message-bubble.is-outgoing .dp-message-meta {
   color: rgba(255, 255, 255, 0.78);
 }
+.dp-message-bubble.is-media-only .dp-message-meta {
+  margin: 4px 6px 0;
+  color: var(--dp-muted);
+}
 .dp-message-status {
   display: inline-flex;
 }
@@ -2516,14 +2544,13 @@ const css = `
 }
 .dp-mms-image {
   display: block;
-  max-width: min(320px, 100%);
-  max-height: 320px;
+  width: auto;
+  max-width: min(340px, 100%);
+  max-height: 360px;
   object-fit: contain;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.04);
-}
-.dp-message-bubble.is-outgoing .dp-mms-image {
-  background: rgba(255, 255, 255, 0.16);
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
 }
 .dp-mms-image[role="button"] {
   cursor: zoom-in;
@@ -2875,32 +2902,34 @@ const css = `
   position: fixed;
   z-index: 9000;
   inset: 0;
-  background: rgba(14, 18, 24, 0.92);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: #050608;
+  display: block;
   color: white;
 }
 .dp-image-viewer-stage {
-  min-width: 0;
-  min-height: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  padding: 22px;
+  padding: 0;
 }
 .dp-image-viewer-stage img {
-  max-width: min(94vw, 1200px);
-  max-height: calc(100vh - 160px);
+  max-width: 100vw;
+  max-height: 100vh;
   object-fit: contain;
   transform-origin: center;
   transition: transform 160ms ease;
 }
 .dp-image-viewer-close {
-  justify-self: end;
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  z-index: 2;
   width: 46px;
   height: 46px;
-  margin: 18px 20px 0 0;
+  margin: 0;
   border: 0;
   border-radius: 23px;
   background: rgba(255, 255, 255, 0.16);
@@ -2911,12 +2940,17 @@ const css = `
   justify-content: center;
 }
 .dp-image-viewer-tools {
-  min-height: 72px;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 0 20px 20px;
+  padding: 0 20px;
+  pointer-events: none;
 }
 .dp-image-viewer-tools button {
   width: 46px;
@@ -2929,6 +2963,7 @@ const css = `
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  pointer-events: auto;
 }
 .dp-image-viewer-close:hover,
 .dp-image-viewer-tools button:hover {
