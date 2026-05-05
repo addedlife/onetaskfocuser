@@ -11,7 +11,7 @@ Last updated: 2026-05-05
 
 Latest verified deploy:
 
-- Netlify production deploy `69fa71c23d6b2c0008bfb4a0`
+- Netlify production deploy: automatic deploy from latest pushed `main`
 - Served asset `index-BoHqrUDj.js`
 - App config reports `googleAvailable: false` because no production `GOOGLE_CLIENT_ID` is configured.
 
