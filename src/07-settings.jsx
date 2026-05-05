@@ -10,9 +10,9 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   curEnergy, onSetEnergy, focusModeActive, onToggleFocusMode,
   effectiveCount, overwhelmThreshold, hasAI, aiConfig,
   deskPhoneThemeSync = true, deskPhoneOnline = false,
-  onToggleDeskPhoneThemeSync, onRefreshDeskPhoneTheme}) {
+  onToggleDeskPhoneThemeSync, onRefreshDeskPhoneTheme, initialTab = "queue"}) {
 
-  const [sTab, setSTab] = useState("queue");
+  const [sTab, setSTab] = useState(initialTab || "queue");
   const [backupFolderSet, setBackupFolderSet] = useState(false);
   const [backupFolderSetting, setBackupFolderSetting] = useState(false);
 

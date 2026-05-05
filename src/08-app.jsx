@@ -640,7 +640,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, sidebarW = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle }) {
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [editingTaskId, setEditingTaskId] = useState(null);
@@ -870,8 +870,23 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
         </div>
 
         {/* ── Google Calendar + Gmail strip ── fixed height, cards scroll internally */}
-        {googleClientId && (() => {
+        {(() => {
           const accentBlue = T.isDark ? '#7EB0DE' : '#4A80CC';
+
+          if (!googleClientId) {
+            return (
+              <div style={{ display: "flex", flex: "0 0 58px", minHeight: 0 }}>
+                <button onClick={onOpenGoogleSettings}
+                  style={{ width: "100%", borderRadius: 16, border: `1px dashed ${T.brd}`, background: T.card, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tSoft, fontFamily: "system-ui", fontSize: 13, fontWeight: 700 }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = accentBlue; e.currentTarget.style.color = accentBlue; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = T.brd; e.currentTarget.style.color = T.tSoft; }}>
+                  {suiteIcon("add_link", 16)}
+                  Set up Google Calendar &amp; Gmail
+                </button>
+              </div>
+            );
+          }
+
           const notConnected = !googleToken && !googleLoading;
           const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || '';
           const fmtFrom = (raw) => { const m = raw.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : raw.split('@')[0]; };
@@ -1364,6 +1379,7 @@ function App({ user, onSignOut }) {
   const [zen, setZen] = useState(false);
   const [justOpt, setJustOpt] = useState(false);
   const [showSet, setShowSet] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState("queue");
   const [showLM, setShowLM] = useState(false);
   const [showListMgr, setShowListMgr] = useState(false);
   // tipIdx/dailyTip removed — replaced by carousel (tipViewIdx)
@@ -3403,7 +3419,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       icon: "settings",
       meta: "Preferences and backups",
       actions: [
-        {id:"settings", label:"Preferences", note:"Theme, lists, and options", icon:"settings", primary:true, run:()=>setShowSet(true)},
+        {id:"settings", label:"Preferences", note:"Theme, lists, and options", icon:"settings", primary:true, run:()=>{setSettingsInitialTab("queue"); setShowSet(true);}},
         {id:"backup", label:backupLoading ? "Saving..." : "Save backup", note:"Download a copy", icon:"download", disabled:backupLoading, run:doFullBackup},
         {id:"restore", label:"Restore backup", note:"Load a saved copy", icon:"upload_file", run:doLoadBackup},
       ],
@@ -3762,7 +3778,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       )}
       {blockedModal && <BlockedModal task={blockedModal} T={T} pris={pris} onBlock={blockTask} onClose={()=>setBlockedModal(null)}/>}
       {/* Context tags removed */}
-      {showSet && <SettingsModal AS={AS} setAS={setAS} T={T} ap={ap} onClose={()=>setShowSet(false)} onSignOut={onSignOut}
+      {showSet && <SettingsModal AS={AS} setAS={setAS} T={T} ap={ap} initialTab={settingsInitialTab} onClose={()=>setShowSet(false)} onSignOut={onSignOut}
         onOptimize={launchpadOptimize} optLoading={optLoading} hasAI={hasAI} aiConfig={aiConfig}
         onBulkAdd={()=>{setShowSet(false);setShowBulk(true);}} onShatter={()=>{setShowSet(false);setShowBD(true);}}
         onDedup={()=>{deduplicateTasks();}}
@@ -3993,6 +4009,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onRecordCall={()=>{setConvCallMode(true); setShowConvCapture(true);}}
           onRecordShaila={()=>{setShailosAction("record-shaila"); openCommandView("shailos");}}
           onOpenPhone={()=>openCommandView("deskphone")}
+          onOpenGoogleSettings={()=>{setSettingsInitialTab("google"); setShowSet(true);}}
           onOnlineChange={setDeskPhoneOnline}
           sidebarW={sidebarW}
           actionsOpen={ncActionsOpen}
@@ -4234,7 +4251,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                 { cat: "Navigate", items: [
                   {icon:<IC.List s={14} c={T.tSoft}/>, label:`Queue (${effectiveCount})`, action:()=>switchTab("queue")},
                   {icon:<IC.Bulb s={14} c={T.tSoft}/>, label:"Insights", action:()=>switchTab("insights")},
-                  {icon:<IC.Gear s={14} c={T.tSoft}/>, label:"Settings", action:()=>setShowSet(true)},
+                  {icon:<IC.Gear s={14} c={T.tSoft}/>, label:"Settings", action:()=>{setSettingsInitialTab("queue"); setShowSet(true);}},
                 ]},
                 { cat: "Focus", items: [
                   {icon:<IC.Moon s={14} c={T.tSoft}/>, label:"Enter zen", action:()=>setZen(true)},
@@ -4300,7 +4317,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
             <header style={{textAlign:"center",paddingTop:40,paddingBottom:4,flexShrink:0}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                 <h1 style={{fontSize:24,fontWeight:600,margin:0}}>OneTaskOnly</h1>
-                <button onClick={()=>setShowSet(true)} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:.4}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.4}><IC.Gear s={15} c={T.tSoft}/></button>
+                <button onClick={()=>{setSettingsInitialTab("queue"); setShowSet(true);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:.4}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.4}><IC.Gear s={15} c={T.tSoft}/></button>
               </div>
               <p style={{color:T.tFaint,fontSize:13,margin:"4px 0 0",fontStyle:"italic"}}>{gG()} — {dateStr}</p>
               <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
@@ -4359,7 +4376,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                   : <IC.Sparkle s={14} c={T.tSoft}/>}
               </button>
               {/* ⚙ Settings — consolidated gear */}
-              <button onClick={()=>setShowSet(true)} style={{width:32,height:32,borderRadius:10,border:`1px solid ${T.brd}`,background:T.bgW,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} title="Settings">
+              <button onClick={()=>{setSettingsInitialTab("queue"); setShowSet(true);}} style={{width:32,height:32,borderRadius:10,border:`1px solid ${T.brd}`,background:T.bgW,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} title="Settings">
                 <IC.Gear s={15} c={T.tSoft}/>
               </button>
               </div>{/* end right-side flex row */}
