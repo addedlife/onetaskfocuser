@@ -873,6 +873,8 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
         {googleClientId && (() => {
           const accentBlue = T.isDark ? '#7EB0DE' : '#4A80CC';
           const notConnected = !googleToken && !googleLoading;
+          // Debug status line — remove once Google integration is confirmed working
+          const dbgStatus = `clientId:${googleClientId ? '✓' : '✗'} token:${googleToken ? '✓' : '✗'} loading:${googleLoading} cal:${calendarEvents === null ? 'null' : calendarEvents.length} mail:${gmailMessages === null ? 'null' : gmailMessages.length} err:${googleError || 'none'}`;
 
           const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || '';
           const fmtFrom = (raw) => { const m = raw.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : raw.split('@')[0]; };
@@ -902,7 +904,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           const headLabel = { fontSize: 11, fontWeight: 800, color: T.tSoft, fontFamily: "system-ui", letterSpacing: 0.3 };
 
           return (
-            <div style={{ display: "flex", gap: 10, flex: "0 0 172px", minHeight: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", gap: 4, minHeight: 0 }}>
+              {/* Temporary debug status — remove once confirmed working */}
+              <div style={{ fontSize: 9, fontFamily: "monospace", color: T.tFaint, paddingLeft: 4, userSelect: "text" }}>{dbgStatus}</div>
+              <div style={{ display: "flex", gap: 10, flex: "0 0 168px", minHeight: 0 }}>
 
               {/* Not connected — wide connect button */}
               {notConnected && !googleError && (
@@ -1001,6 +1006,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                   </div>
                 </div>
               )}
+              </div>{/* end cards row */}
             </div>
           );
         })()}
@@ -1686,99 +1692,112 @@ function App({ user, onSignOut }) {
   }, [loaded]); // eslint-disable-line
 
   // ─── Google Calendar + Gmail via GIS OAuth ───────────────────────────────
-  // Loads Google Identity Services script when a Client ID is configured,
-  // then requests read-only Calendar + Gmail tokens on demand.
   useEffect(() => {
     const clientId = AS?.googleClientId;
     if (!clientId) return;
     function initClient() {
-      if (!window.google?.accounts?.oauth2) return;
+      if (!window.google?.accounts?.oauth2) { console.warn('[Google] GIS loaded but oauth2 not ready'); return; }
+      console.log('[Google] initTokenClient');
       gTokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        scope: [
-          'https://www.googleapis.com/auth/calendar.readonly',
-          'https://www.googleapis.com/auth/gmail.readonly',
-        ].join(' '),
+        scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly',
         callback: (resp) => {
+          console.log('[Google] OAuth callback error:', resp.error || 'none', '| has token:', !!resp.access_token);
           if (resp.error) {
-            if (resp.error === 'popup_closed_by_user' || resp.error === 'access_denied') return; // user dismissed — no error shown
+            if (resp.error === 'popup_closed_by_user') return;
+            if (resp.error === 'access_denied') { setGoogleError('Access denied — please approve Calendar and Gmail access in the Google popup.'); return; }
             setGoogleError(resp.error_description || resp.error);
             return;
           }
+          console.log('[Google] Token received, length:', resp.access_token?.length);
           setGoogleToken(resp.access_token);
           setGoogleError(null);
         },
       });
+      console.log('[Google] Token client ready:', !!gTokenClientRef.current);
     }
     if (window.google?.accounts?.oauth2) { initClient(); return; }
     if (document.querySelector('script[src*="accounts.google.com/gsi"]')) {
-      // Script already loading — wait for it
       const t = setInterval(() => { if (window.google?.accounts?.oauth2) { clearInterval(t); initClient(); } }, 200);
       return () => clearInterval(t);
     }
     const s = document.createElement('script');
     s.src = 'https://accounts.google.com/gsi/client';
     s.async = true;
-    s.onload = initClient;
+    s.onload = () => { console.log('[Google] GIS script loaded'); initClient(); };
+    s.onerror = () => { console.error('[Google] GIS script failed to load'); setGoogleError('Could not load Google sign-in script.'); };
     document.head.appendChild(s);
+    console.log('[Google] Loading GIS script…');
   }, [AS?.googleClientId]); // eslint-disable-line
 
+  // These throw 'token_expired' on 401 but do NOT call setGoogleToken themselves —
+  // the effect handles token clearing to avoid cancelling its own load mid-flight.
   async function fetchCalendarData(token) {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
     const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=10`;
+    console.log('[Google] Fetching calendar…');
     const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (r.status === 401) { setGoogleToken(null); throw Object.assign(new Error('token_expired'), { service: 'calendar' }); }
-    if (!r.ok) {
-      const detail = await r.json().catch(() => ({}));
-      const msg = detail?.error?.message || `HTTP ${r.status}`;
-      throw Object.assign(new Error(`Calendar: ${msg}`), { service: 'calendar' });
-    }
+    console.log('[Google] Calendar status:', r.status);
+    if (r.status === 401) throw new Error('token_expired');
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + r.status}`); }
     const d = await r.json();
+    console.log('[Google] Calendar items:', d.items?.length ?? 0);
     return d.items || [];
   }
 
   async function fetchGmailData(token) {
+    console.log('[Google] Fetching Gmail…');
     const listR = await fetch(
       'https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=7&q=is%3Aunread+is%3Aimportant+in%3Ainbox',
       { headers: { Authorization: `Bearer ${token}` } }
     );
-    if (listR.status === 401) { setGoogleToken(null); throw Object.assign(new Error('token_expired'), { service: 'gmail' }); }
-    if (!listR.ok) {
-      const detail = await listR.json().catch(() => ({}));
-      const msg = detail?.error?.message || `HTTP ${listR.status}`;
-      throw Object.assign(new Error(`Gmail: ${msg}`), { service: 'gmail' });
-    }
+    console.log('[Google] Gmail list status:', listR.status);
+    if (listR.status === 401) throw new Error('token_expired');
+    if (!listR.ok) { const d = await listR.json().catch(() => ({})); throw new Error(`Gmail: ${d?.error?.message || 'HTTP ' + listR.status}`); }
     const list = await listR.json();
+    console.log('[Google] Gmail message count:', list.messages?.length ?? 0);
     if (!list.messages?.length) return [];
     const msgs = await Promise.all(
       list.messages.slice(0, 5).map(m =>
-        fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }).then(r => r.json())
+        fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
+          { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
       )
     );
     return msgs;
   }
 
-  // Auto-fetch when token is obtained; refresh every 15 minutes
-  // Calendar and Gmail run independently — one failure doesn't block the other
+  // Auto-fetch when token arrives; re-fetch every 15 min
   useEffect(() => {
     if (!googleToken) return;
     let cancelled = false;
     const load = () => {
       if (cancelled) return;
+      console.log('[Google] Starting load, token length:', googleToken?.length);
       setGoogleLoading(true);
-      const errors = [];
       Promise.allSettled([fetchCalendarData(googleToken), fetchGmailData(googleToken)])
         .then(([calR, mailR]) => {
-          if (cancelled) return;
-          if (calR.status === 'fulfilled') setCalendarEvents(calR.value);
-          else if (calR.reason?.message !== 'token_expired') errors.push(calR.reason?.message || 'Calendar error');
-          if (mailR.status === 'fulfilled') setGmailMessages(mailR.value);
-          else if (mailR.reason?.message !== 'token_expired') errors.push(mailR.reason?.message || 'Gmail error');
-          if (errors.length) setGoogleError(errors.join(' · '));
+          console.log('[Google] Results: cal=', calR.status, 'mail=', mailR.status);
+          if (cancelled) { console.log('[Google] cancelled — skipping state update'); return; }
+          const errs = [];
+          if (calR.status === 'fulfilled') {
+            setCalendarEvents(calR.value);
+          } else if (calR.reason?.message === 'token_expired') {
+            setGoogleToken(null); return;
+          } else {
+            console.error('[Google] cal error:', calR.reason?.message);
+            errs.push(calR.reason?.message || 'Calendar error');
+          }
+          if (mailR.status === 'fulfilled') {
+            setGmailMessages(mailR.value);
+          } else if (mailR.reason?.message === 'token_expired') {
+            setGoogleToken(null); return;
+          } else {
+            console.error('[Google] mail error:', mailR.reason?.message);
+            errs.push(mailR.reason?.message || 'Gmail error');
+          }
+          if (errs.length) setGoogleError(errs.join(' · '));
         })
         .finally(() => { if (!cancelled) setGoogleLoading(false); });
     };
@@ -1789,9 +1808,11 @@ function App({ user, onSignOut }) {
 
   function connectGoogle() {
     if (!gTokenClientRef.current) {
-      setGoogleError('Google sign-in not ready yet — wait a moment and try again.');
+      console.warn('[Google] connectGoogle: token client not ready');
+      setGoogleError('Google sign-in not ready — wait a moment and try again.');
       return;
     }
+    console.log('[Google] Requesting access token…');
     setGoogleError(null);
     gTokenClientRef.current.requestAccessToken();
   }
