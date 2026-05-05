@@ -951,9 +951,14 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               {(calendarEvents !== null || (googleLoading && googleToken)) && (
                 <div style={cardWrap}>
                   <div style={cardHead}>
-                    <span style={headLabel}>📅 Today</span>
+                    <a href="https://calendar.google.com" target="_blank" rel="noreferrer" style={{ ...headLabel, textDecoration: "none", display: "flex", alignItems: "center", gap: 5 }}>
+                      📅 Today {suiteIcon("open_in_new", 10)}
+                    </a>
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                       {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+                      <a href="https://calendar.google.com/calendar/r/eventedit" target="_blank" rel="noreferrer" title="Add event" style={{ fontSize: 10, color: accentBlue, background: "none", border: `1px solid ${accentBlue}`, borderRadius: 6, padding: "2px 7px", textDecoration: "none", fontFamily: "system-ui", fontWeight: 700, display: "flex", alignItems: "center", gap: 3, lineHeight: 1.6 }}>
+                        {suiteIcon("add", 11)} Add
+                      </a>
                       <button onClick={onConnectGoogle} title="Refresh" style={{ fontSize: 11, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .5, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↺</button>
                       <button onClick={onDisconnectGoogle} title="Disconnect" style={{ fontSize: 11, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .35, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = .85} onMouseLeave={e => e.currentTarget.style.opacity = .35}>✕</button>
                     </div>
@@ -969,7 +974,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     ) : calendarEvents.map((evt, i) => {
                       const now = isNow(evt);
                       return (
-                        <div key={evt.id || i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 0", borderBottom: i < calendarEvents.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
+                        <a key={evt.id || i} href={evt.htmlLink || "https://calendar.google.com"} target="_blank" rel="noreferrer"
+                          style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 0", borderBottom: i < calendarEvents.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none", textDecoration: "none", borderRadius: 4, cursor: "pointer" }}
+                          onMouseEnter={e => e.currentTarget.style.background = T.bgW}
+                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                           <span style={{ fontSize: 10, fontFamily: "system-ui", color: now ? accentBlue : T.tFaint, fontWeight: now ? 700 : 400, flexShrink: 0, width: 52, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -977,7 +985,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                               <span style={{ fontSize: 12, color: now ? T.text : T.tSoft, fontWeight: now ? 700 : 400, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evt.summary || "(no title)"}</span>
                             </div>
                           </div>
-                        </div>
+                        </a>
                       );
                     })}
                   </div>
@@ -988,7 +996,9 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               {(gmailMessages !== null || (googleLoading && googleToken)) && (
                 <div style={cardWrap}>
                   <div style={cardHead}>
-                    <span style={headLabel}>✉️ Important &amp; Unread</span>
+                    <a href="https://mail.google.com" target="_blank" rel="noreferrer" style={{ ...headLabel, textDecoration: "none", display: "flex", alignItems: "center", gap: 5 }}>
+                      ✉️ Important &amp; Unread {suiteIcon("open_in_new", 10)}
+                    </a>
                     {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
                   </div>
                   <div style={cardBody}>
@@ -1003,14 +1013,18 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       const subject = gmailHeader(msg, 'Subject') || '(no subject)';
                       const from = fmtFrom(gmailHeader(msg, 'From'));
                       const date = fmtTime(gmailHeader(msg, 'Date'));
+                      const threadUrl = `https://mail.google.com/mail/u/0/#inbox/${msg.threadId || msg.id}`;
                       return (
-                        <div key={msg.id || i} style={{ padding: "6px 0", borderBottom: i < gmailMessages.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
+                        <a key={msg.id || i} href={threadUrl} target="_blank" rel="noreferrer"
+                          style={{ display: "block", padding: "6px 0", borderBottom: i < gmailMessages.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none", textDecoration: "none", borderRadius: 4, cursor: "pointer" }}
+                          onMouseEnter={e => e.currentTarget.style.background = T.bgW}
+                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                           <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginBottom: 1 }}>
                             <span style={{ fontSize: 11, fontWeight: 700, color: T.tSoft, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
                             <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui", flexShrink: 0 }}>{date}</span>
                           </div>
                           <span style={{ fontSize: 12, color: T.text, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{subject}</span>
-                        </div>
+                        </a>
                       );
                     })}
                   </div>

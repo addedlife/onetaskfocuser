@@ -407,7 +407,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 ## 15. Recent Git History
 
-Latest: NerveCenter fixed viewport layout (no page scroll) + Google Calendar/Gmail as fixed-height bottom strip; each card scrolls internally.
+Latest: Google Calendar and Gmail cards are now interactive — click any event to open it in Google Calendar, click any email to open that thread in Gmail, calendar header links to calendar.google.com, Gmail header links to mail.google.com, "Add event" button opens Google Calendar new-event form.
 
 ```
 (pending push) fix: NerveCenter single-screen layout + Google strip with internal scroll
