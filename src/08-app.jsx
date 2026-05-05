@@ -873,9 +873,6 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
         {googleClientId && (() => {
           const accentBlue = T.isDark ? '#7EB0DE' : '#4A80CC';
           const notConnected = !googleToken && !googleLoading;
-          // Debug status line — remove once Google integration is confirmed working
-          const dbgStatus = `clientId:${googleClientId ? '✓' : '✗'} token:${googleToken ? '✓' : '✗'} loading:${googleLoading} cal:${calendarEvents === null ? 'null' : calendarEvents.length} mail:${gmailMessages === null ? 'null' : gmailMessages.length} err:${googleError || 'none'}`;
-
           const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || '';
           const fmtFrom = (raw) => { const m = raw.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : raw.split('@')[0]; };
           const fmtTime = (raw) => {
@@ -905,8 +902,6 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
           return (
             <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", gap: 4, minHeight: 0 }}>
-              {/* Temporary debug status — remove once confirmed working */}
-              <div style={{ fontSize: 9, fontFamily: "monospace", color: T.tFaint, paddingLeft: 4, userSelect: "text" }}>{dbgStatus}</div>
               <div style={{ display: "flex", gap: 10, flex: "0 0 168px", minHeight: 0 }}>
 
               {/* Not connected — wide connect button */}
@@ -1462,6 +1457,7 @@ function App({ user, onSignOut }) {
   const pendingShailaIds = useRef(new Set());              // shailaIds assigned but not yet in state (prevents listener dupes)
   const [serverKeyAvailable, setServerKeyAvailable] = useState(false); // true = Netlify AI is configured
   const [aiConfig, setAiConfig] = useState(null);
+  const [serverGoogleClientId, setServerGoogleClientId] = useState("");
   const [pendingRecordings, setPendingRecordings] = useState([]);
   const [pendingRetryId, setPendingRetryId] = useState(null);
   const [pendingTranscripts, setPendingTranscripts] = useState({});
@@ -1649,8 +1645,10 @@ function App({ user, onSignOut }) {
       .then(r => r.json())
       .then(d => {
         const cfg = d.ai || null;
+        const googleId = d?.integrations?.googleClientId || d?.googleClientId || "";
         setAiConfig(cfg);
         setServerKeyAvailable(!!(cfg?.available?.gemini || d.geminiKey));
+        setServerGoogleClientId(typeof googleId === "string" ? googleId.trim() : "");
       })
       .catch(() => {});
   }, []);
@@ -1692,9 +1690,11 @@ function App({ user, onSignOut }) {
   }, [loaded]); // eslint-disable-line
 
   // ─── Google Calendar + Gmail via GIS OAuth ───────────────────────────────
+  const effectiveGoogleClientId = (AS?.googleClientId || serverGoogleClientId || "").trim();
+
   useEffect(() => {
-    const clientId = AS?.googleClientId;
-    if (!clientId) return;
+    const clientId = effectiveGoogleClientId;
+    if (!clientId) { gTokenClientRef.current = null; return; }
     function initClient() {
       if (!window.google?.accounts?.oauth2) { console.warn('[Google] GIS loaded but oauth2 not ready'); return; }
       console.log('[Google] initTokenClient');
@@ -1728,7 +1728,7 @@ function App({ user, onSignOut }) {
     s.onerror = () => { console.error('[Google] GIS script failed to load'); setGoogleError('Could not load Google sign-in script.'); };
     document.head.appendChild(s);
     console.log('[Google] Loading GIS script…');
-  }, [AS?.googleClientId]); // eslint-disable-line
+  }, [effectiveGoogleClientId]); // eslint-disable-line
 
   // These throw 'token_expired' on 401 but do NOT call setGoogleToken themselves —
   // the effect handles token clearing to avoid cancelling its own load mid-flight.
@@ -1807,6 +1807,10 @@ function App({ user, onSignOut }) {
   }, [googleToken]); // eslint-disable-line
 
   function connectGoogle() {
+    if (!effectiveGoogleClientId) {
+      setGoogleError('Google connector needs a Google OAuth Client ID in Settings > Google.');
+      return;
+    }
     if (!gTokenClientRef.current) {
       console.warn('[Google] connectGoogle: token client not ready');
       setGoogleError('Google sign-in not ready — wait a moment and try again.');
@@ -4000,7 +4004,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           googleLoading={googleLoading}
           googleError={googleError}
           googleToken={googleToken}
-          googleClientId={AS?.googleClientId || null}
+          googleClientId={effectiveGoogleClientId || null}
           onConnectGoogle={connectGoogle}
           onDisconnectGoogle={disconnectGoogle}
         />

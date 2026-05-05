@@ -213,6 +213,12 @@ async function processAiPayload(payload = {}) {
 
 function publicAiConfig() {
   const model = modelFor("gemini", "text", "general");
+  const googleClientId = String(
+    process.env.GOOGLE_CLIENT_ID ||
+    process.env.GOOGLE_OAUTH_CLIENT_ID ||
+    process.env.VITE_GOOGLE_CLIENT_ID ||
+    ""
+  ).trim();
   return {
     ai: {
       defaultProvider: "gemini",
@@ -229,6 +235,11 @@ function publicAiConfig() {
         gemini: GEMINI_MODELS,
       },
     },
+    integrations: {
+      googleClientId,
+      googleAvailable: !!googleClientId,
+    },
+    googleClientId,
     geminiKey: !!process.env.GEMINI_API_KEY,
   };
 }
