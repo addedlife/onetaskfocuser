@@ -9,7 +9,6 @@ Immediate connector action:
 
 Active product queue:
 
-- If the local DeskPhone Web send-state slice is approved for shipping, coordinate it with a native DeskPhone b249 release because the live web page needs updated host API fields from desktop DeskPhone.
 - Continue DeskPhone Web parity from the existing DeskPhone native inventory.
 - Preserve every native DeskPhone button, function, layout behavior, and expected phone-app behavior unless intentionally replaced.
 - Keep native shortcut handoffs for web buttons until each function is implemented natively in the web version.

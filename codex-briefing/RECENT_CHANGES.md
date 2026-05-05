@@ -2,7 +2,7 @@
 
 Last updated: 2026-05-05
 
-- Local uncommitted: DeskPhone Web now reads native outgoing message send-state fields and shows `Confirming on phone`; the parity smoke harness verifies that state.
+- `8674b16`: DeskPhone Web now reads native outgoing message send-state fields and shows `Confirming on phone`; the parity smoke harness verifies that state.
 - `da44212`: Google connector setup path is visible when no Google Client ID exists.
 - `ff7afed`: Google connector config handoff added through Netlify app config.
 - `856c162`: local work merged with the other coder's Google connector commits from `origin/main`.
@@ -11,8 +11,8 @@ Last updated: 2026-05-05
 
 Latest verified deploy:
 
-- Netlify production deploy `69f9762b7125746e2fda4752`
-- Served asset `index-MGsy6boT.js`
+- Netlify production deploy `69fa717c6e16da946a206d1c`
+- Served asset `index-B8B6r7jC.js`
 - App config reports `googleAvailable: false` because no production `GOOGLE_CLIENT_ID` is configured.
 
 Operational lesson from 2026-05-05:
