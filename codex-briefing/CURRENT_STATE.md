@@ -7,10 +7,10 @@ This is the active OneTask / Switchboard / NerveCenter repo and Netlify deploy r
 Live app:
 
 - Production URL: `https://onetaskfocuser.netlify.app`
-- Latest verified production deploy: `69fa717c6e16da946a206d1c`
-- Latest served asset after deploy: `assets/index-B8B6r7jC.js`
+- Latest verified production deploy: `69fa71c23d6b2c0008bfb4a0`
+- Latest served asset after deploy: `assets/index-BoHqrUDj.js`
 - Git branch: `main`
-- Latest deployed source commit: `8674b16`
+- Latest deployed source commit: `a32d765`
 
 Current product truth:
 
