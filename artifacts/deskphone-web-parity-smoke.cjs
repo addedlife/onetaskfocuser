@@ -39,6 +39,24 @@ const messages = Array.from({ length: 180 }, (_, i) => ({
 }));
 
 messages.push({
+  id: "pending-confirming",
+  handle: "",
+  from: "Me",
+  to: "+15551234567",
+  number: "+15551234567",
+  body: "Awaiting phone confirmation",
+  preview: "Awaiting phone confirmation",
+  timestamp: new Date(Date.UTC(2026, 4, 3, 15, 45)).toISOString(),
+  isSent: true,
+  isRead: true,
+  sendStatus: "Confirming",
+  sendStatusLabel: "Confirming",
+  outgoingStatusLabel: "Confirming on phone",
+  isMms: false,
+  attachments: [],
+});
+
+messages.push({
   id: "mms-photo",
   handle: "mms-photo",
   from: "+15551234567",
@@ -269,6 +287,7 @@ async function runCdp() {
     await new Promise((resolve) => setTimeout(resolve, 100));
     const handoffRequests = await fetch('http://127.0.0.1:${hostPort}/handoff-log').then((response) => response.json());
     const image = document.querySelector('.dp-mms-image');
+    const pendingStatusText = document.querySelector('.dp-message-status.is-confirming')?.textContent.trim() || '';
     const imageBubble = image.closest('.dp-message-bubble');
     const imageAttachmentRows = imageBubble.querySelectorAll('.dp-attachment-row').length;
     const imageAttachmentStack = imageBubble.querySelector('.dp-attachment-stack');
@@ -296,6 +315,7 @@ async function runCdp() {
       scrollable,
       scrolledToBottom: scrollBox.scrollTop >= maxTop - 8,
       imageLoaded: image.naturalWidth > 0,
+      pendingStatusText,
       imageBubbleIsMediaOnly: imageBubble.classList.contains('is-media-only'),
       imageAttachmentRows,
       imageWhitespaceRemoved,
@@ -360,6 +380,7 @@ async function main() {
     if (!result.desktop.scrollable || !result.desktop.scrolledToBottom) failures.push("message history did not scroll to latest");
     if (result.desktop.messageCount < 150) failures.push("message history was capped too shallow for DeskPhone Web");
     if (!result.desktop.imageLoaded || result.desktop.placeholderShown) failures.push("MMS image did not replace placeholder");
+    if (!result.desktop.pendingStatusText.includes("Confirming on phone")) failures.push("outgoing pending message status was not visible");
     if (!result.desktop.imageBubbleIsMediaOnly || result.desktop.imageAttachmentRows !== 0) failures.push("MMS image still renders as a bordered attachment card instead of the message item");
     if (!result.desktop.imageWhitespaceRemoved) failures.push("MMS image-only bubble still has extra message whitespace/chrome");
     if (!result.desktop.viewerOpened || !result.desktop.viewerRotated || !result.desktop.viewerClosed) failures.push("image viewer open/rotate/close failed");

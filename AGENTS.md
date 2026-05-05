@@ -6,6 +6,7 @@ Read this file before product changes in this repo.
 
 - Start every session with `codex-briefing/README.md`, then check live git status and only open deeper files needed for the specific task.
 - This repo is the active OneTask / Switchboard / NerveCenter deploy root.
+- Standing user approval for DeskPhone Web clone/parity work: when a slice is verified and ready, ship it through build, commit, push, and Netlify deploy instead of stopping at a local checkpoint.
 - Do not deploy or push without explicit user approval unless the user has clearly asked for deploy/push work in the current task.
 - Do not hand-edit `dist` or `shailos` as source. `dist` is build output, and `shailos` is copied generated output.
 - Keep communication executive-friendly: brief status, practical risk, clear outcome.
@@ -23,4 +24,3 @@ Read this file before product changes in this repo.
 - Run `npm run build`.
 - Confirm the current Netlify deploy target before deploying.
 - Confirm whether Google/Firebase/AI environment variables are present when the task touches connectors.
-

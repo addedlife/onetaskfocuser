@@ -412,6 +412,24 @@ function messagePreview(message) {
   return "No preview";
 }
 
+function normalizeSendStatus(raw) {
+  return String(raw?.sendStatus || raw?.SendStatus || "").trim();
+}
+
+function outgoingStatusLabel(message) {
+  if (!message?.isSent) return "";
+  if (message.outgoingStatusLabel) return message.outgoingStatusLabel;
+  return message.sendStatus ? message.sendStatusLabel || message.sendStatus : "Sent";
+}
+
+function outgoingStatusIconName(message) {
+  const status = String(message?.sendStatus || "").toLowerCase();
+  if (status === "sending") return "schedule";
+  if (status === "confirming") return "hourglass_top";
+  if (status === "failed") return "error";
+  return "done_all";
+}
+
 function normalizeAttachment(raw, index) {
   const contentType = raw?.contentType || raw?.type || "";
   const fileName = raw?.fileName || raw?.name || `Attachment ${index + 1}`;
@@ -437,6 +455,7 @@ function normalizeMessage(raw, index) {
   const key = normalizePhoneKey(number) || `unknown-${index}`;
   const timestamp = raw?.timestamp || raw?.time || "";
   const attachments = getApiList(raw?.attachments).map(normalizeAttachment);
+  const sendStatus = normalizeSendStatus(raw);
   return {
     id: raw?.id || raw?.handle || `${key}-${timestamp}-${index}`,
     handle: raw?.handle || "",
@@ -451,6 +470,10 @@ function normalizeMessage(raw, index) {
     timestampMs: parseDate(timestamp)?.getTime() || 0,
     isSent: !!raw?.isSent,
     isRead: raw?.isSent ? true : raw?.isRead !== false,
+    sendStatus,
+    sendStatusLabel: raw?.sendStatusLabel || raw?.SendStatusLabel || "",
+    outgoingStatusLabel: raw?.outgoingStatusLabel || raw?.OutgoingStatusLabel || "",
+    outgoingStatusIcon: raw?.outgoingStatusIcon || raw?.OutgoingStatusIcon || "",
     isMms: !!raw?.isMms,
     sourceDeviceAddress: raw?.sourceDeviceAddress || "",
     attachments,
@@ -998,10 +1021,13 @@ function MessageBubble({ message, previousMessage, open, onToggleOpen, onCopy, o
   const hasVisibleImage = message.attachments.some((attachment) => attachment.isImage && attachment.dataUrl);
   const hasNonImageAttachment = message.attachments.some((attachment) => !(attachment.isImage && attachment.dataUrl));
   const isMediaOnly = hasVisibleImage && !hasNonImageAttachment && !message.body;
+  const statusLabel = outgoingStatusLabel(message);
+  const hasPendingSendStatus = !!message.sendStatus;
   const bubbleClass = [
     "dp-message-bubble",
     message.isSent ? "is-outgoing" : "is-incoming",
     isMediaOnly ? "is-media-only" : "",
+    hasPendingSendStatus ? "has-send-status" : "",
   ].filter(Boolean).join(" ");
 
   return (
@@ -1021,7 +1047,16 @@ function MessageBubble({ message, previousMessage, open, onToggleOpen, onCopy, o
         {!message.body && message.isMms && !hasVisibleImage ? <div className="dp-message-body dp-muted-body">MMS message</div> : null}
         <MessageAttachments message={message} onNativeHandoff={onNativeHandoff} onOpenImage={onOpenImage} />
         <div className="dp-message-meta">
-          {message.isSent ? <span className="dp-message-status">{icon("done_all", 13)}</span> : null}
+          {message.isSent ? (
+            <span
+              className={`dp-message-status ${message.sendStatus ? `is-${message.sendStatus.toLowerCase()}` : ""}`}
+              title={statusLabel}
+              aria-label={statusLabel}
+            >
+              {icon(outgoingStatusIconName(message), 13)}
+              {message.sendStatus ? <span>{statusLabel}</span> : null}
+            </span>
+          ) : null}
           <span>{formatBubbleTime(message.timestamp)}</span>
         </div>
         {open ? (
@@ -2531,11 +2566,21 @@ const css = `
 .dp-message-bubble.is-outgoing .dp-message-meta {
   color: rgba(255, 255, 255, 0.78);
 }
-.dp-message-bubble.is-media-only .dp-message-meta {
+.dp-message-bubble.is-media-only:not(.has-send-status) .dp-message-meta {
   display: none;
 }
 .dp-message-status {
   display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.dp-message-status.is-sending,
+.dp-message-status.is-confirming {
+  font-weight: 700;
+}
+.dp-message-status.is-failed {
+  color: #FCE8E6;
+  font-weight: 800;
 }
 .dp-attachment-stack {
   display: grid;
