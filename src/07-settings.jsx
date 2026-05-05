@@ -95,6 +95,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
     {id:"tasks",      label:"Tasks"},
     {id:"schedule",   label:"Schedule"},
     {id:"account",    label:"Account"},
+    {id:"google",     label:"Google"},
   ];
 
   const sh = {fontSize:11,fontWeight:700,color:T.tFaint,margin:"0 0 10px",fontFamily:"system-ui",textTransform:"uppercase",letterSpacing:1};
@@ -356,6 +357,42 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                   Sign out
                 </button>
               </>
+            )}
+          </div>
+        )}
+
+        {/* ── GOOGLE TAB ── */}
+        {sTab === "google" && (
+          <div>
+            <h4 style={sh}>Google Calendar & Gmail</h4>
+            <p style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 14px",lineHeight:1.6}}>
+              Shows today's calendar events and important unread emails on your launchpad. Requires a Google OAuth Client ID — takes ~5 minutes to set up.
+            </p>
+            <div style={{background:T.bgW,borderRadius:10,border:`1px solid ${T.brd}`,padding:"12px 14px",marginBottom:16}}>
+              <p style={{fontSize:11,fontWeight:700,color:T.tSoft,fontFamily:"system-ui",margin:"0 0 8px"}}>One-time setup:</p>
+              <ol style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",margin:0,paddingLeft:16,lineHeight:2}}>
+                <li>Go to <span style={{fontWeight:700}}>console.cloud.google.com</span> → select your project</li>
+                <li>APIs & Services → Enable <span style={{fontWeight:700}}>Google Calendar API</span> + <span style={{fontWeight:700}}>Gmail API</span></li>
+                <li>Credentials → Create → OAuth 2.0 Client ID → Web Application</li>
+                <li>Add origins: <span style={{fontFamily:"monospace",background:T.card,padding:"1px 4px",borderRadius:3}}>https://onetaskfocuser.netlify.app</span></li>
+                <li>Copy the Client ID and paste below</li>
+              </ol>
+            </div>
+            <div style={{marginBottom:16}}>
+              <label style={{fontSize:11,color:T.tSoft,fontFamily:"system-ui",fontWeight:600,display:"block",marginBottom:4}}>OAuth 2.0 Client ID</label>
+              <input
+                value={AS.googleClientId||""}
+                onChange={e=>setAS(p=>({...p,googleClientId:e.target.value.trim()}))}
+                placeholder="1234567890-abc….apps.googleusercontent.com"
+                style={{width:"100%",padding:"8px 12px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:11,fontFamily:"monospace",background:T.bgW,color:T.text,boxSizing:"border-box"}}
+              />
+              <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",marginTop:4}}>Stored only in your account — never sent to any server.</p>
+            </div>
+            {AS.googleClientId && (
+              <div style={{padding:"10px 14px",borderRadius:10,border:`1px solid #4CAF5040`,background:"rgba(76,175,80,0.06)",display:"flex",gap:8,alignItems:"center"}}>
+                <span style={{fontSize:13}}>✓</span>
+                <span style={{fontSize:11,color:T.tSoft,fontFamily:"system-ui"}}>Client ID saved. Go to your launchpad and tap <strong>Connect Google</strong> to authorize.</span>
+              </div>
             )}
           </div>
         )}

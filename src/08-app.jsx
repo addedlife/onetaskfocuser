@@ -34,9 +34,9 @@ function getInitialSuiteView() {
     const view = (params.get("suite") || params.get("view") || "").toLowerCase();
     if (view === "switchboard" || view === "nervecenter") return "nervecenter";
     if (view === "focus" || view === "shailos" || view === "deskphone" || view === "phone") return view === "phone" ? "deskphone" : view;
-    return "focus";
+    return "nervecenter";
   } catch {
-    return "focus";
+    return "nervecenter";
   }
 }
 
@@ -640,7 +640,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, sidebarW = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, sidebarW = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle }) {
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [editingTaskId, setEditingTaskId] = useState(null);
@@ -685,10 +685,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
   return (
     <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7600, background: T.bg, overflow: "hidden", borderLeft: `1px solid ${T.brdS || T.brd}` }}>
-      <div style={{ maxWidth: 1400, height: "100%", margin: "0 auto", padding: "clamp(12px,2vw,20px)", boxSizing: "border-box", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div style={{ height: "100%", maxWidth: 1400, margin: "0 auto", padding: "clamp(10px,1.6vw,18px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 10 }}>
 
-        {/* Three-panel grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 14, flex: 1, minHeight: 0, alignItems: "stretch" }}>
+        {/* Three-panel grid — fills all remaining height */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 10, flex: 1, minHeight: 0, alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
           <section style={{ background: T.card, border: `1px solid ${T.brd}`, borderRadius: 20, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", boxShadow: T.shadow || "none" }}>
@@ -868,6 +868,148 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
             </div>
           </section>
         </div>
+
+        {/* ── Google Calendar + Gmail strip ── fixed height, cards scroll internally */}
+        {googleClientId && (() => {
+          const accentBlue = T.isDark ? '#7EB0DE' : '#4A80CC';
+          const notConnected = !googleToken && !googleLoading;
+          // Debug status line — remove once Google integration is confirmed working
+          const dbgStatus = `clientId:${googleClientId ? '✓' : '✗'} token:${googleToken ? '✓' : '✗'} loading:${googleLoading} cal:${calendarEvents === null ? 'null' : calendarEvents.length} mail:${gmailMessages === null ? 'null' : gmailMessages.length} err:${googleError || 'none'}`;
+
+          const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || '';
+          const fmtFrom = (raw) => { const m = raw.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : raw.split('@')[0]; };
+          const fmtTime = (raw) => {
+            try {
+              const d = new Date(raw); const now = new Date();
+              if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+              return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            } catch { return ''; }
+          };
+          const fmtEvtTime = (evt) => {
+            if (evt.start?.date) return 'All day';
+            const s = new Date(evt.start?.dateTime);
+            const e = new Date(evt.end?.dateTime);
+            return `${s.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} – ${e.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+          };
+          const isNow = (evt) => {
+            if (!evt.start?.dateTime) return false;
+            const now = Date.now();
+            return new Date(evt.start.dateTime).getTime() <= now && new Date(evt.end.dateTime).getTime() >= now;
+          };
+
+          // Each card: header (fixed) + content (scrollable)
+          const cardWrap = { background: T.card, borderRadius: 16, border: `1px solid ${T.brd}`, flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" };
+          const cardHead = { padding: "8px 12px 6px", borderBottom: `1px solid ${T.brdS || T.brd}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 };
+          const cardBody = { flex: 1, overflow: "auto", padding: "0 12px" };
+          const headLabel = { fontSize: 11, fontWeight: 800, color: T.tSoft, fontFamily: "system-ui", letterSpacing: 0.3 };
+
+          return (
+            <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", gap: 4, minHeight: 0 }}>
+              {/* Temporary debug status — remove once confirmed working */}
+              <div style={{ fontSize: 9, fontFamily: "monospace", color: T.tFaint, paddingLeft: 4, userSelect: "text" }}>{dbgStatus}</div>
+              <div style={{ display: "flex", gap: 10, flex: "0 0 168px", minHeight: 0 }}>
+
+              {/* Not connected — wide connect button */}
+              {notConnected && !googleError && (
+                <button onClick={onConnectGoogle}
+                  style={{ flex: 1, borderRadius: 16, border: `1px dashed ${T.brd}`, background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tSoft, fontFamily: "system-ui", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = accentBlue; e.currentTarget.style.color = accentBlue; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = T.brd; e.currentTarget.style.color = T.tSoft; }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  Connect Google Calendar &amp; Gmail
+                </button>
+              )}
+
+              {/* Error banner */}
+              {googleError && (
+                <div style={{ ...cardWrap, borderColor: "#E07040", flexDirection: "row", alignItems: "center", padding: "0 14px", gap: 10 }}>
+                  <span style={{ fontSize: 12, color: "#E07040", fontFamily: "system-ui", flex: 1 }}>{googleError}</span>
+                  <button onClick={onConnectGoogle} style={{ fontSize: 11, fontFamily: "system-ui", fontWeight: 700, color: accentBlue, background: "none", border: `1px solid ${accentBlue}`, borderRadius: 8, padding: "5px 12px", cursor: "pointer", flexShrink: 0 }}>Retry</button>
+                  <button onClick={onDisconnectGoogle} style={{ fontSize: 12, fontFamily: "system-ui", color: T.tFaint, background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: 0 }}>✕</button>
+                </div>
+              )}
+
+              {/* Loading (before any data) */}
+              {googleLoading && !calendarEvents && !gmailMessages && !googleError && (
+                <div style={{ ...cardWrap, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <div style={{ width: 13, height: 13, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                  <span style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui" }}>Loading…</span>
+                </div>
+              )}
+
+              {/* ── Calendar card ── */}
+              {(calendarEvents !== null || (googleLoading && googleToken)) && (
+                <div style={cardWrap}>
+                  <div style={cardHead}>
+                    <span style={headLabel}>📅 Today</span>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+                      <button onClick={onConnectGoogle} title="Refresh" style={{ fontSize: 11, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .5, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↺</button>
+                      <button onClick={onDisconnectGoogle} title="Disconnect" style={{ fontSize: 11, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .35, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = .85} onMouseLeave={e => e.currentTarget.style.opacity = .35}>✕</button>
+                    </div>
+                  </div>
+                  <div style={cardBody}>
+                    {!calendarEvents ? (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: 7 }}>
+                        <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                        <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui" }}>Loading calendar…</span>
+                      </div>
+                    ) : calendarEvents.length === 0 ? (
+                      <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: "12px 0", textAlign: "center" }}>Nothing today</p>
+                    ) : calendarEvents.map((evt, i) => {
+                      const now = isNow(evt);
+                      return (
+                        <div key={evt.id || i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 0", borderBottom: i < calendarEvents.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
+                          <span style={{ fontSize: 10, fontFamily: "system-ui", color: now ? accentBlue : T.tFaint, fontWeight: now ? 700 : 400, flexShrink: 0, width: 52, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              {now && <span style={{ width: 5, height: 5, borderRadius: "50%", background: accentBlue, flexShrink: 0 }} />}
+                              <span style={{ fontSize: 12, color: now ? T.text : T.tSoft, fontWeight: now ? 700 : 400, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evt.summary || "(no title)"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Gmail card ── */}
+              {(gmailMessages !== null || (googleLoading && googleToken)) && (
+                <div style={cardWrap}>
+                  <div style={cardHead}>
+                    <span style={headLabel}>✉️ Important &amp; Unread</span>
+                    {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+                  </div>
+                  <div style={cardBody}>
+                    {!gmailMessages ? (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: 7 }}>
+                        <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                        <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui" }}>Loading mail…</span>
+                      </div>
+                    ) : gmailMessages.length === 0 ? (
+                      <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: "12px 0", textAlign: "center" }}>Inbox zero 🎉</p>
+                    ) : gmailMessages.map((msg, i) => {
+                      const subject = gmailHeader(msg, 'Subject') || '(no subject)';
+                      const from = fmtFrom(gmailHeader(msg, 'From'));
+                      const date = fmtTime(gmailHeader(msg, 'Date'));
+                      return (
+                        <div key={msg.id || i} style={{ padding: "6px 0", borderBottom: i < gmailMessages.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginBottom: 1 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: T.tSoft, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
+                            <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui", flexShrink: 0 }}>{date}</span>
+                          </div>
+                          <span style={{ fontSize: 12, color: T.text, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{subject}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              </div>{/* end cards row */}
+            </div>
+          );
+        })()}
 
         {/* Actions drawer */}
         {actionsOpen && (
@@ -1260,6 +1402,14 @@ function App({ user, onSignOut }) {
   const [mrsWPriLive, setMrsWPriLive] = useState(null); // live Mrs. W priority
   const [blockedResume, setBlockedResume] = useState(null); // task id to show nudge for
   const [staleNudge, setStaleNudge] = useState(null);       // task object that's been waiting 7+ days
+  // Google Calendar + Gmail integration
+  const [googleToken, setGoogleToken]       = useState(null);
+  const [calendarEvents, setCalendarEvents] = useState(null); // null=not loaded, []= loaded empty
+  const [gmailMessages, setGmailMessages]   = useState(null);
+  const [googleLoading, setGoogleLoading]   = useState(false);
+  const [googleError, setGoogleError]       = useState(null);
+  const gTokenClientRef = useRef(null);
+
   // Insights tab state
   const [tipViewIdx, setTipViewIdx] = useState(() => tipOfDay(dayKey())); // init to today's daily tip
   const [aiInsight, setAiInsight] = useState(null);       // AI-generated insight string
@@ -1540,6 +1690,133 @@ function App({ user, onSignOut }) {
     uT(() => aged);
     if (count > 0) showToast(`↑ ${count} task${count!==1?"s":""} nudged up — been sitting too long`, 8000);
   }, [loaded]); // eslint-disable-line
+
+  // ─── Google Calendar + Gmail via GIS OAuth ───────────────────────────────
+  useEffect(() => {
+    const clientId = AS?.googleClientId;
+    if (!clientId) return;
+    function initClient() {
+      if (!window.google?.accounts?.oauth2) { console.warn('[Google] GIS loaded but oauth2 not ready'); return; }
+      console.log('[Google] initTokenClient');
+      gTokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly',
+        callback: (resp) => {
+          console.log('[Google] OAuth callback error:', resp.error || 'none', '| has token:', !!resp.access_token);
+          if (resp.error) {
+            if (resp.error === 'popup_closed_by_user') return;
+            if (resp.error === 'access_denied') { setGoogleError('Access denied — please approve Calendar and Gmail access in the Google popup.'); return; }
+            setGoogleError(resp.error_description || resp.error);
+            return;
+          }
+          console.log('[Google] Token received, length:', resp.access_token?.length);
+          setGoogleToken(resp.access_token);
+          setGoogleError(null);
+        },
+      });
+      console.log('[Google] Token client ready:', !!gTokenClientRef.current);
+    }
+    if (window.google?.accounts?.oauth2) { initClient(); return; }
+    if (document.querySelector('script[src*="accounts.google.com/gsi"]')) {
+      const t = setInterval(() => { if (window.google?.accounts?.oauth2) { clearInterval(t); initClient(); } }, 200);
+      return () => clearInterval(t);
+    }
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.onload = () => { console.log('[Google] GIS script loaded'); initClient(); };
+    s.onerror = () => { console.error('[Google] GIS script failed to load'); setGoogleError('Could not load Google sign-in script.'); };
+    document.head.appendChild(s);
+    console.log('[Google] Loading GIS script…');
+  }, [AS?.googleClientId]); // eslint-disable-line
+
+  // These throw 'token_expired' on 401 but do NOT call setGoogleToken themselves —
+  // the effect handles token clearing to avoid cancelling its own load mid-flight.
+  async function fetchCalendarData(token) {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
+    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=10`;
+    console.log('[Google] Fetching calendar…');
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    console.log('[Google] Calendar status:', r.status);
+    if (r.status === 401) throw new Error('token_expired');
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + r.status}`); }
+    const d = await r.json();
+    console.log('[Google] Calendar items:', d.items?.length ?? 0);
+    return d.items || [];
+  }
+
+  async function fetchGmailData(token) {
+    console.log('[Google] Fetching Gmail…');
+    const listR = await fetch(
+      'https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=7&q=is%3Aunread+is%3Aimportant+in%3Ainbox',
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    console.log('[Google] Gmail list status:', listR.status);
+    if (listR.status === 401) throw new Error('token_expired');
+    if (!listR.ok) { const d = await listR.json().catch(() => ({})); throw new Error(`Gmail: ${d?.error?.message || 'HTTP ' + listR.status}`); }
+    const list = await listR.json();
+    console.log('[Google] Gmail message count:', list.messages?.length ?? 0);
+    if (!list.messages?.length) return [];
+    const msgs = await Promise.all(
+      list.messages.slice(0, 5).map(m =>
+        fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
+          { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
+      )
+    );
+    return msgs;
+  }
+
+  // Auto-fetch when token arrives; re-fetch every 15 min
+  useEffect(() => {
+    if (!googleToken) return;
+    let cancelled = false;
+    const load = () => {
+      if (cancelled) return;
+      console.log('[Google] Starting load, token length:', googleToken?.length);
+      setGoogleLoading(true);
+      Promise.allSettled([fetchCalendarData(googleToken), fetchGmailData(googleToken)])
+        .then(([calR, mailR]) => {
+          console.log('[Google] Results: cal=', calR.status, 'mail=', mailR.status);
+          if (cancelled) { console.log('[Google] cancelled — skipping state update'); return; }
+          const errs = [];
+          if (calR.status === 'fulfilled') {
+            setCalendarEvents(calR.value);
+          } else if (calR.reason?.message === 'token_expired') {
+            setGoogleToken(null); return;
+          } else {
+            console.error('[Google] cal error:', calR.reason?.message);
+            errs.push(calR.reason?.message || 'Calendar error');
+          }
+          if (mailR.status === 'fulfilled') {
+            setGmailMessages(mailR.value);
+          } else if (mailR.reason?.message === 'token_expired') {
+            setGoogleToken(null); return;
+          } else {
+            console.error('[Google] mail error:', mailR.reason?.message);
+            errs.push(mailR.reason?.message || 'Gmail error');
+          }
+          if (errs.length) setGoogleError(errs.join(' · '));
+        })
+        .finally(() => { if (!cancelled) setGoogleLoading(false); });
+    };
+    load();
+    const t = setInterval(load, 15 * 60000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [googleToken]); // eslint-disable-line
+
+  function connectGoogle() {
+    if (!gTokenClientRef.current) {
+      console.warn('[Google] connectGoogle: token client not ready');
+      setGoogleError('Google sign-in not ready — wait a moment and try again.');
+      return;
+    }
+    console.log('[Google] Requesting access token…');
+    setGoogleError(null);
+    gTokenClientRef.current.requestAccessToken();
+  }
+  function disconnectGoogle() { setGoogleToken(null); setCalendarEvents(null); setGmailMessages(null); setGoogleError(null); }
 
   // ─── Listen for shailos iframe "close" message ───────────────────────────
   useEffect(() => {
@@ -3718,6 +3995,14 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           setActionsOpen={setNcActionsOpen}
           actionCategoryId={ncActionCatId}
           setActionCategoryId={setNcActionCatId}
+          calendarEvents={calendarEvents}
+          gmailMessages={gmailMessages}
+          googleLoading={googleLoading}
+          googleError={googleError}
+          googleToken={googleToken}
+          googleClientId={AS?.googleClientId || null}
+          onConnectGoogle={connectGoogle}
+          onDisconnectGoogle={disconnectGoogle}
         />
       )}
 
@@ -3741,7 +4026,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
 
         {/* ===== FOCUS TAB ===== */}
         {tab === "focus" && (
-          <div style={{animation:"ot-fade 0.3s",display:"flex",alignItems:"center",justifyContent:"center",height:"100%",overflow:"hidden"}}>
+          <div style={{animation:"ot-fade 0.3s",display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100%",overflow:"hidden"}}>
 
             {/* ── Center spine ── */}
             <div style={{display:"flex",flexDirection:"column",alignItems:"stretch",gap:"clamp(18px,3.5vh,36px)",width:"min(88vw,500px)"}}>
@@ -3927,6 +4212,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                   Queue · {effectiveCount}
                 </button>
               </div>
+
 
             </div>{/* end spine */}
 
