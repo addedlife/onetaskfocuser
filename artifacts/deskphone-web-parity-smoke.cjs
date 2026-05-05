@@ -23,7 +23,7 @@ const imageDataUrl =
     '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320"><rect width="480" height="320" fill="#1A73E8"/><circle cx="170" cy="150" r="86" fill="#CEEAD6"/><rect x="285" y="86" width="130" height="170" rx="18" fill="#FCE8E6"/></svg>'
   ).toString("base64");
 
-const messages = Array.from({ length: 72 }, (_, i) => ({
+const messages = Array.from({ length: 180 }, (_, i) => ({
   id: `m${i}`,
   handle: `m${i}`,
   from: i % 3 === 0 ? "Me" : "+15551234567",
@@ -46,7 +46,7 @@ messages.push({
   number: "+15551234567",
   body: "",
   preview: "",
-  timestamp: new Date(Date.UTC(2026, 4, 3, 14, 0)).toISOString(),
+  timestamp: new Date(Date.UTC(2026, 4, 3, 16, 0)).toISOString(),
   isSent: false,
   isRead: true,
   isMms: true,
@@ -271,6 +271,13 @@ async function runCdp() {
     const image = document.querySelector('.dp-mms-image');
     const imageBubble = image.closest('.dp-message-bubble');
     const imageAttachmentRows = imageBubble.querySelectorAll('.dp-attachment-row').length;
+    const imageAttachmentStack = imageBubble.querySelector('.dp-attachment-stack');
+    const imageMeta = imageBubble.querySelector('.dp-message-meta');
+    const messageCount = document.querySelectorAll('.dp-message-item').length;
+    const imageWhitespaceRemoved =
+      getComputedStyle(imageAttachmentStack).marginTop === '0px' &&
+      getComputedStyle(imageMeta).display === 'none' &&
+      getComputedStyle(imageBubble).backgroundColor === 'rgba(0, 0, 0, 0)';
     image.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 50));
     const opened = !!document.querySelector('.dp-image-viewer');
@@ -291,6 +298,8 @@ async function runCdp() {
       imageLoaded: image.naturalWidth > 0,
       imageBubbleIsMediaOnly: imageBubble.classList.contains('is-media-only'),
       imageAttachmentRows,
+      imageWhitespaceRemoved,
+      messageCount,
       placeholderShown,
       viewerOpened: opened,
       viewerRotated: transform.includes('90deg'),
@@ -349,8 +358,10 @@ async function main() {
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-contact" && request.value.includes("15551234567"))) failures.push("add-contact handoff did not carry the conversation number");
     if (!result.desktop.handoffRequests.some((request) => request.target === "edit-contact" && request.value.includes("15551234567"))) failures.push("edit-contact handoff did not carry the conversation number");
     if (!result.desktop.scrollable || !result.desktop.scrolledToBottom) failures.push("message history did not scroll to latest");
+    if (result.desktop.messageCount < 150) failures.push("message history was capped too shallow for DeskPhone Web");
     if (!result.desktop.imageLoaded || result.desktop.placeholderShown) failures.push("MMS image did not replace placeholder");
     if (!result.desktop.imageBubbleIsMediaOnly || result.desktop.imageAttachmentRows !== 0) failures.push("MMS image still renders as a bordered attachment card instead of the message item");
+    if (!result.desktop.imageWhitespaceRemoved) failures.push("MMS image-only bubble still has extra message whitespace/chrome");
     if (!result.desktop.viewerOpened || !result.desktop.viewerRotated || !result.desktop.viewerClosed) failures.push("image viewer open/rotate/close failed");
     if (!result.desktop.noHorizontalOverflow || !result.mobile.noHorizontalOverflow || !result.mobile.splittersHidden) failures.push("responsive layout overflow or mobile splitters visible");
 

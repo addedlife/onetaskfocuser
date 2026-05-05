@@ -2493,12 +2493,13 @@ const css = `
   border-bottom-right-radius: 6px;
 }
 .dp-message-bubble.is-media-only {
-  max-width: min(340px, 76%);
+  max-width: min(340px, 70vw);
   padding: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
   overflow: visible;
+  line-height: 0;
 }
 .dp-message-bubble.is-media-only.is-incoming,
 .dp-message-bubble.is-media-only.is-outgoing {
@@ -2531,8 +2532,7 @@ const css = `
   color: rgba(255, 255, 255, 0.78);
 }
 .dp-message-bubble.is-media-only .dp-message-meta {
-  margin: 4px 6px 0;
-  color: var(--dp-muted);
+  display: none;
 }
 .dp-message-status {
   display: inline-flex;
@@ -2541,6 +2541,11 @@ const css = `
   display: grid;
   gap: 6px;
   margin-top: 6px;
+}
+.dp-message-bubble.is-media-only .dp-attachment-stack {
+  display: block;
+  margin: 0;
+  line-height: 0;
 }
 .dp-mms-image {
   display: block;
@@ -2551,6 +2556,12 @@ const css = `
   border: 0;
   border-radius: 16px;
   background: transparent;
+}
+.dp-message-bubble.is-media-only .dp-mms-image {
+  max-width: min(340px, 70vw);
+  height: auto;
+  border-radius: clamp(10px, 4%, 18px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
 }
 .dp-mms-image[role="button"] {
   cursor: zoom-in;
