@@ -701,6 +701,13 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [addEventError, setAddEventError] = useState(null);
   const [hoverEmail, setHoverEmail] = useState(null);
   const hoverTimerRef = useRef(null);
+  const [reconnectTimedOut, setReconnectTimedOut] = useState(false);
+  // Give silent reconnect 6 seconds; if still not connected, surface the button
+  useEffect(() => {
+    if (!googleWasConnected || googleToken) { setReconnectTimedOut(false); return; }
+    const t = setTimeout(() => setReconnectTimedOut(true), 6000);
+    return () => clearTimeout(t);
+  }, [googleWasConnected, googleToken]);
 
   // Helpers needed by both the Google IIFE and handleAddEvent
   const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || '';
@@ -1014,12 +1021,21 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                   Connect Google Calendar &amp; Gmail
                 </button>
               )}
-              {/* Was connected before — show reconnecting spinner instead of connect button */}
-              {notConnected && !googleError && googleWasConnected && (
+              {/* Was connected before — spinner until timeout, then show reconnect button */}
+              {notConnected && !googleError && googleWasConnected && !reconnectTimedOut && (
                 <div style={{ flex: 1, borderRadius: 16, border: `1px solid ${T.brd}`, background: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tFaint, fontFamily: "system-ui", fontSize: 12 }}>
                   <div style={{ width: 11, height: 11, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
                   Reconnecting…
                 </div>
+              )}
+              {notConnected && !googleError && googleWasConnected && reconnectTimedOut && (
+                <button onClick={onConnectGoogle}
+                  style={{ flex: 1, borderRadius: 16, border: `1px dashed ${T.brd}`, background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tSoft, fontFamily: "system-ui", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = accentBlue; e.currentTarget.style.color = accentBlue; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = T.brd; e.currentTarget.style.color = T.tSoft; }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                  Reconnect Google
+                </button>
               )}
 
               {/* Error banner */}
