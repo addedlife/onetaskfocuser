@@ -25,7 +25,7 @@ Latest verified deploy:
 
 Local parity progress:
 
-- 2026-05-06: DeskPhone Web parity CSV review began. Message/thread controls, shell/reconnect/build/call-banner controls, contact/attachment handoff blockers, thread-side call-history actions, compact thread-side dialer keypad plus duplicate native Calls-tab dialpad rows, full New Message composer blockers, Contacts tab create/text/call/edit/delete/save blockers, Connection settings shell and primary-device Connect, Appearance/Contact Sync/Audio settings blockers, contact-sync import/folder and message-backup export blockers, theme/history/auditor blockers, device scan/saved-device/default/forget blockers, Bluetooth Settings launch blocker, pinned-message preview blocker, Live Log clear, collapsed/full Calls controls, and one WPF template-only control were mapped to current web evidence: 89 implemented-web, 98 host-api-needed, 3 native-only, 9 not-yet-reviewed.
+- 2026-05-06: DeskPhone Web parity CSV review completed. All 199 native action rows are classified against current web evidence: 89 implemented-web, 104 host-api-needed, 6 native-only, 0 not-yet-reviewed. Final blockers include full compose/contact editor, settings device/contact-sync/audio/developer commands, and Windows folder/settings launch actions.
 
 Operational lesson from 2026-05-05:
 
