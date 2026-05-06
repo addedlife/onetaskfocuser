@@ -1666,6 +1666,8 @@ function SimpleTabContent({
   onNativeHandoff,
   onNotice,
 }) {
+  const [settingsSection, setSettingsSection] = useState("connection");
+
   if (activeTab === "messages") {
     return (
       <MessagesSlice
@@ -1704,26 +1706,74 @@ function SimpleTabContent({
     );
   }
   if (activeTab === "settings") {
+    const settingSections = [
+      ["connection", "Connection", "MainWindow.xaml:3995"],
+      ["appearance", "Appearance", "MainWindow.xaml:4000"],
+      ["contact-sync", "Contact Sync", "MainWindow.xaml:4005"],
+      ["audio", "Audio", "MainWindow.xaml:4010"],
+    ];
+
     return (
       <div className="dp-settings-shell" data-native-source="MainWindow.xaml:3847">
         <SourceTag>MainWindow.xaml:3847</SourceTag>
-        <h2>Connection Settings</h2>
-        <label className="dp-host-label">
-          Host URL
-          <input value={hostInput} onChange={(event) => setHostInput(event.target.value)} spellCheck={false} />
-        </label>
-        <div className="dp-settings-actions">
-          <ShellButton className="dp-primary" iconName="save" onClick={onSaveHost}>Save</ShellButton>
-          <ShellButton className="dp-tonal" iconName="refresh" onClick={onRefresh}>Test</ShellButton>
-          <ShellButton className="dp-tonal" iconName="open_in_new" onClick={onShowNative}>Show native app</ShellButton>
+        <div className="dp-settings-heading">
+          <h2>{settingSections.find(([id]) => id === settingsSection)?.[1] || "Settings"}</h2>
+          <div className="dp-settings-sections" data-native-source="MainWindow.xaml:3995">
+            {settingSections.map(([id, label, nativeSource]) => (
+              <button
+                key={id}
+                type="button"
+                className={settingsSection === id ? "is-active" : ""}
+                data-native-source={nativeSource}
+                onClick={() => setSettingsSection(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="dp-settings-actions dp-settings-tools">
-          <ShellButton className="dp-tonal" iconName="bluetooth" nativeSource="MainWindow.xaml:4140" onClick={() => onCommand("/open-bluetooth-settings", "open Bluetooth settings")}>Bluetooth Settings</ShellButton>
-          <ShellButton className="dp-tonal" iconName="volume_up" nativeSource="MainWindow.xaml:4480" onClick={() => onCommand("/open-sound-settings", "open sound settings")}>Sound Settings</ShellButton>
-          <ShellButton className="dp-tonal" iconName="sync" nativeSource="MainWindow.xaml:4476" onClick={() => onCommand("/audio-refresh", "refresh audio")}>Refresh Audio</ShellButton>
-          <ShellButton className="dp-tonal" iconName="folder_open" nativeSource="MainWindow.xaml:4627" onClick={() => onCommand("/open-builds-folder", "open builds folder")}>Builds Folder</ShellButton>
-          <ShellButton className="dp-tonal" iconName="article" nativeSource="MainWindow.xaml:4633" onClick={() => onCommand("/open-event-log", "open event log")}>Event Log</ShellButton>
-        </div>
+        {settingsSection === "connection" && (
+          <section className="dp-settings-panel" data-native-source="MainWindow.xaml:3995">
+            <label className="dp-host-label">
+              Host URL
+              <input value={hostInput} onChange={(event) => setHostInput(event.target.value)} spellCheck={false} />
+            </label>
+            <div className="dp-settings-actions">
+              <ShellButton className="dp-primary" iconName="save" onClick={onSaveHost}>Save</ShellButton>
+              <ShellButton className="dp-tonal" iconName="refresh" onClick={onRefresh}>Test</ShellButton>
+              <ShellButton className="dp-tonal" iconName="open_in_new" onClick={onShowNative}>Show native app</ShellButton>
+            </div>
+            <div className="dp-settings-actions dp-settings-tools">
+              <ShellButton className="dp-tonal" iconName="bluetooth" nativeSource="MainWindow.xaml:4140" onClick={() => onCommand("/open-bluetooth-settings", "open Bluetooth settings")}>Bluetooth Settings</ShellButton>
+              <ShellButton className="dp-tonal" iconName="folder_open" nativeSource="MainWindow.xaml:4627" onClick={() => onCommand("/open-builds-folder", "open builds folder")}>Builds Folder</ShellButton>
+              <ShellButton className="dp-tonal" iconName="article" nativeSource="MainWindow.xaml:4633" onClick={() => onCommand("/open-event-log", "open event log")}>Event Log</ShellButton>
+            </div>
+          </section>
+        )}
+        {settingsSection === "appearance" && (
+          <section className="dp-settings-panel" data-native-source="MainWindow.xaml:4000" aria-label="Appearance settings">
+            <span className="dp-native-hidden" data-native-source="MainWindow.xaml:4235" aria-hidden="true" />
+            <span className="dp-native-hidden" data-native-source="MainWindow.xaml:4258" aria-hidden="true" />
+            <span className="dp-native-hidden" data-native-source="MainWindow.xaml:4294" aria-hidden="true" />
+            <span className="dp-native-hidden" data-native-source="MainWindow.xaml:4309" aria-hidden="true" />
+          </section>
+        )}
+        {settingsSection === "contact-sync" && (
+          <section className="dp-settings-panel" data-native-source="MainWindow.xaml:4005">
+            <div className="dp-settings-actions dp-settings-tools">
+              <ShellButton className="dp-tonal" iconName="folder_open" nativeSource="MainWindow.xaml:4395" onClick={() => onCommand("/open-contact-sync-folder", "open contact sync folder")}>Sync Folder</ShellButton>
+              <ShellButton className="dp-tonal" iconName="download" nativeSource="MainWindow.xaml:4412" onClick={() => onCommand("/export-messages-backup", "export messages backup")}>Save Backup</ShellButton>
+            </div>
+          </section>
+        )}
+        {settingsSection === "audio" && (
+          <section className="dp-settings-panel" data-native-source="MainWindow.xaml:4010">
+            <div className="dp-settings-actions dp-settings-tools">
+              <ShellButton className="dp-tonal" iconName="volume_up" nativeSource="MainWindow.xaml:4480" onClick={() => onCommand("/open-sound-settings", "open sound settings")}>Sound Settings</ShellButton>
+              <ShellButton className="dp-tonal" iconName="sync" nativeSource="MainWindow.xaml:4476" onClick={() => onCommand("/audio-refresh", "refresh audio")}>Refresh Audio</ShellButton>
+            </div>
+          </section>
+        )}
         <div className="dp-host-note">Active endpoint: {host}</div>
       </div>
     );
@@ -3118,6 +3168,37 @@ const css = `
   color: var(--dp-text-second);
   font-size: 14px;
   line-height: 1.55;
+}
+.dp-settings-heading {
+  display: grid;
+  gap: 12px;
+}
+.dp-settings-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dp-settings-sections button {
+  min-height: 38px;
+  border: 1px solid var(--dp-border);
+  border-radius: 8px;
+  background: var(--dp-bg-input);
+  color: var(--dp-text-second);
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dp-settings-sections button.is-active {
+  border-color: var(--dp-blue);
+  background: var(--dp-blue-light);
+  color: var(--dp-blue-dark);
+}
+.dp-settings-panel {
+  display: grid;
+  gap: 14px;
+  min-height: 88px;
 }
 .dp-source-tag {
   display: inline-flex;

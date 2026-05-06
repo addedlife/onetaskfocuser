@@ -143,7 +143,7 @@ const server = http.createServer((req, res) => {
     send(handoffRequests);
   } else if (requestPath === "/command-log") {
     send(commandRequests);
-  } else if (["/dial", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-live-log", "/clear-log", "/run-ui-auditor"].includes(requestPath)) {
+  } else if (["/dial", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup", "/open-live-log", "/clear-log", "/run-ui-auditor"].includes(requestPath)) {
     commandRequests.push({ path: req.url });
     send({ ok: true });
   } else {
@@ -401,10 +401,28 @@ async function runCdp() {
     await new Promise((resolve) => setTimeout(resolve, 50));
     document.querySelector('[data-native-source="MainWindow.xaml:586"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
-    const settingsToolSources = ["MainWindow.xaml:4140", "MainWindow.xaml:4480", "MainWindow.xaml:4476", "MainWindow.xaml:4627", "MainWindow.xaml:4633"];
-    const settingsToolButtons = settingsToolSources.every((source) => !!document.querySelector('[data-native-source="' + source + '"]'));
-    for (const source of settingsToolSources) {
-      document.querySelector('[data-native-source="' + source + '"]').click();
+    const settingsSectionSources = ["MainWindow.xaml:4000", "MainWindow.xaml:4005", "MainWindow.xaml:4010"];
+    const settingsSectionButtons = settingsSectionSources.every((source) => !!document.querySelector('.dp-settings-sections button[data-native-source="' + source + '"]'));
+    const settingsToolSourcesBySection = [
+      { section: null, sources: ["MainWindow.xaml:4140", "MainWindow.xaml:4627", "MainWindow.xaml:4633"] },
+      { section: "MainWindow.xaml:4005", sources: ["MainWindow.xaml:4395", "MainWindow.xaml:4412"] },
+      { section: "MainWindow.xaml:4010", sources: ["MainWindow.xaml:4480", "MainWindow.xaml:4476"] },
+    ];
+    let settingsToolButtons = true;
+    for (const group of settingsToolSourcesBySection) {
+      if (group.section) {
+        document.querySelector('.dp-settings-sections button[data-native-source="' + group.section + '"]').click();
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      for (const source of group.sources) {
+        const button = document.querySelector('.dp-settings-shell button[data-native-source="' + source + '"]');
+        settingsToolButtons = settingsToolButtons && !!button;
+        button?.click();
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+    for (const source of settingsSectionSources) {
+      document.querySelector('.dp-settings-sections button[data-native-source="' + source + '"]').click();
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     document.querySelector('[data-native-source="MainWindow.xaml:603"]').click();
@@ -440,6 +458,7 @@ async function runCdp() {
       dialerAfterKeypad,
       dialerAfterBackspace,
       dialerClosed,
+      settingsSectionButtons,
       settingsToolButtons,
       developerToolButtons,
       imageLoaded: image.naturalWidth > 0,
@@ -521,8 +540,9 @@ async function main() {
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-message" && request.value.includes("555"))) failures.push("thread-side dialer text action did not hand off the typed number");
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("555"))) failures.push("thread-side dialer call did not use the host dial endpoint");
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("*86"))) failures.push("voicemail dialer action did not dial *86");
+    if (!result.desktop.settingsSectionButtons) failures.push("settings section buttons are incomplete");
     if (!result.desktop.settingsToolButtons) failures.push("settings host tool buttons are incomplete");
-    for (const endpoint of ["/open-bluetooth-settings", "/open-sound-settings", "/audio-refresh", "/open-builds-folder", "/open-event-log"]) {
+    for (const endpoint of ["/open-bluetooth-settings", "/open-sound-settings", "/audio-refresh", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup"]) {
       if (!result.desktop.commandRequests.some((request) => request.path.includes(endpoint))) failures.push(`${endpoint} was not called`);
     }
     if (!result.desktop.developerToolButtons) failures.push("developer host tool buttons are incomplete");
