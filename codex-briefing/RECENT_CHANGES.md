@@ -25,6 +25,7 @@ Latest verified deploy:
 
 Local parity progress:
 
+- 2026-05-06: Contact create/edit handoff rows were mapped for duplicate thread-header Add contact/Edit contact plus Save as contact. Existing smoke coverage verifies new-contact and edit-contact handoffs carry the conversation number. Ledger moved to 119 implemented-web, 74 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: Duplicate native thread-header rows for Block, Pin, Mute, Mark read, and Mark unread were mapped to the same verified browser header controls. Ledger moved to 114 implemented-web, 79 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web conversation row action menu sources were aligned to the exact native inventory for Mark read, Mark unread, Pin, Mute, and Block. Smoke coverage now opens the row menu and verifies those exact-source controls. Ledger moved to 109 implemented-web, 84 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web thread header action sources were aligned to the exact native inventory for Block, Pin, Mute, Mark read, and Mark unread. Existing smoke coverage verifies those handoffs carry the selected conversation number. Ledger moved to 104 implemented-web, 89 host-api-needed, 6 native-only, 0 not-yet-reviewed.
