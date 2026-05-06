@@ -1023,8 +1023,8 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: "12px 0", textAlign: "center" }}>Nothing today</p>
                     ) : calendarEvents.map((evt, i) => {
                       const now = isNow(evt);
-                      return (
-                        <div key={evt.id || i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 0", borderBottom: i < calendarEvents.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
+                      const inner = (
+                        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flex: 1, minWidth: 0 }}>
                           <span style={{ fontSize: 10, fontFamily: "system-ui", color: now ? accentBlue : T.tFaint, fontWeight: now ? 700 : 400, flexShrink: 0, width: 52, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -1032,12 +1032,15 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                               <span style={{ fontSize: 12, color: now ? T.text : T.tSoft, fontWeight: now ? 700 : 400, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evt.summary || "(no title)"}</span>
                             </div>
                           </div>
-                          {evt.htmlLink && (
-                            <a href={evt.htmlLink} target="_blank" rel="noopener noreferrer" title="Open in Calendar"
-                               style={{ fontSize: 11, color: accentBlue, textDecoration: "none", flexShrink: 0, opacity: .6, lineHeight: 1, paddingTop: 2 }}
-                               onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .6}>↗</a>
-                          )}
                         </div>
+                      );
+                      const rowBase = { display: "flex", padding: "6px 0", borderBottom: i < calendarEvents.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none", borderRadius: 4, textDecoration: "none" };
+                      const hov = e => { e.currentTarget.style.background = T.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'; };
+                      const unhov = e => { e.currentTarget.style.background = 'none'; };
+                      return evt.htmlLink ? (
+                        <a key={evt.id || i} href={evt.htmlLink} target="_blank" rel="noopener noreferrer" style={rowBase} onMouseEnter={hov} onMouseLeave={unhov}>{inner}</a>
+                      ) : (
+                        <div key={evt.id || i} style={rowBase}>{inner}</div>
                       );
                     })}
                   </div>
@@ -1069,19 +1072,24 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       const from = fmtFrom(gmailHeader(msg, 'From'));
                       const date = fmtTime(gmailHeader(msg, 'Date'));
                       return (
-                        <div key={msg.id || i} style={{ padding: "6px 0", borderBottom: i < gmailMessages.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
+                        <a key={msg.id || i} href={`https://mail.google.com/mail/u/0/#inbox/${msg.id}`} target="_blank" rel="noopener noreferrer"
+                           style={{ display: "block", padding: "6px 0", borderBottom: i < gmailMessages.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none", textDecoration: "none", borderRadius: 4 }}
+                           onMouseEnter={e => {
+                             e.currentTarget.style.background = T.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
+                             const rect = e.currentTarget.getBoundingClientRect();
+                             hoverTimerRef.current = setTimeout(() => setHoverEmail({ msg, x: rect.left, y: rect.bottom + 6 }), 400);
+                           }}
+                           onMouseLeave={e => {
+                             e.currentTarget.style.background = 'none';
+                             clearTimeout(hoverTimerRef.current);
+                             setHoverEmail(null);
+                           }}>
                           <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginBottom: 1 }}>
                             <span style={{ fontSize: 11, fontWeight: 700, color: T.tSoft, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
-                            <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
-                              <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui" }}>{date}</span>
-                              <a href={`https://mail.google.com/mail/u/0/#inbox/${msg.id}`} target="_blank" rel="noopener noreferrer" title="Open email"
-                                 style={{ fontSize: 11, color: accentBlue, textDecoration: "none", opacity: .7, lineHeight: 1 }}
-                                 onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .7}>↗</a>
-                            </div>
+                            <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui", flexShrink: 0 }}>{date}</span>
                           </div>
                           <span style={{ fontSize: 12, color: T.text, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{subject}</span>
-                          {msg.snippet && <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui", display: "block", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.snippet}</span>}
-                        </div>
+                        </a>
                       );
                     })}
                   </div>
@@ -1127,6 +1135,45 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 </div>
               </div>
             </aside>
+          </div>
+        )}
+
+        {/* Gmail hover tooltip — fixed position, safe from scroll containers */}
+        {hoverEmail && (
+          <div style={{ position: "fixed", top: hoverEmail.y, left: Math.min(hoverEmail.x, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 340), zIndex: 9900, background: T.card, border: `1px solid ${T.brd}`, borderRadius: 12, padding: "10px 14px", maxWidth: 320, boxShadow: "0 6px 24px rgba(0,0,0,0.22)", pointerEvents: "none", fontFamily: "system-ui" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 2 }}>{fmtFrom(gmailHeader(hoverEmail.msg, 'From'))}</div>
+            <div style={{ fontSize: 11, color: T.tSoft, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{gmailHeader(hoverEmail.msg, 'Subject') || '(no subject)'}</div>
+            {hoverEmail.msg.snippet && <div style={{ fontSize: 11, color: T.tFaint, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{hoverEmail.msg.snippet.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#39;/g,"'").replace(/&quot;/g,'"')}</div>}
+          </div>
+        )}
+
+        {/* Add Event dialog */}
+        {showAddEvent && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 9800, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => { setShowAddEvent(false); setAddEventText(''); setAddEventError(null); }}>
+            <div style={{ background: T.card, borderRadius: 20, padding: 24, width: "min(460px,92vw)", boxShadow: "0 12px 48px rgba(0,0,0,0.32)", display: "flex", flexDirection: "column", gap: 14 }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 15, fontWeight: 900, color: T.text, fontFamily: "system-ui" }}>📅 Add Event</span>
+                <button onClick={() => { setShowAddEvent(false); setAddEventText(''); setAddEventError(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: T.tFaint, fontSize: 18, lineHeight: 1, padding: 0 }}>✕</button>
+              </div>
+              <textarea
+                autoFocus
+                value={addEventText}
+                onChange={e => setAddEventText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAddEvent(); }}
+                placeholder="e.g. Speech at BYHSI on Thu May 14 at 12:55pm – 2pm, remind me 30 mins and 1 hr before"
+                rows={3}
+                style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1.5px solid ${T.brd}`, background: T.bgW || T.bg, color: T.text, fontFamily: "system-ui", fontSize: 13, padding: "10px 12px", resize: "vertical", outline: "none", lineHeight: 1.5 }}
+              />
+              {addEventError && <div style={{ fontSize: 12, color: "#E07040", fontFamily: "system-ui" }}>{addEventError}</div>}
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button onClick={() => { setShowAddEvent(false); setAddEventText(''); setAddEventError(null); }} style={{ padding: "8px 18px", borderRadius: 10, border: `1px solid ${T.brd}`, background: "none", color: T.tSoft, cursor: "pointer", fontFamily: "system-ui", fontSize: 13, fontWeight: 600 }}>Cancel</button>
+                <button onClick={handleAddEvent} disabled={addEventLoading || !addEventText.trim()} style={{ padding: "8px 20px", borderRadius: 10, border: "none", background: accentBlue, color: "#fff", cursor: addEventLoading || !addEventText.trim() ? "default" : "pointer", opacity: addEventLoading || !addEventText.trim() ? 0.6 : 1, fontFamily: "system-ui", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                  {addEventLoading && <div style={{ width: 11, height: 11, borderRadius: "50%", border: "1.5px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", animation: "ot-spin 0.8s linear infinite" }} />}
+                  {addEventLoading ? 'Adding…' : 'Add Event'}
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui", textAlign: "center" }}>Describe naturally · Cmd/Ctrl+Enter to submit</div>
+            </div>
           </div>
         )}
       </div>
@@ -1502,6 +1549,10 @@ function App({ user, onSignOut }) {
   const [gmailMessages, setGmailMessages]   = useState(null);
   const [googleLoading, setGoogleLoading]   = useState(false);
   const [googleError, setGoogleError]       = useState(null);
+  const [googleWasConnected, setGoogleWasConnected] = useState(() => {
+    try { return localStorage.getItem('ot_google_connected') === '1'; } catch { return false; }
+  });
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
   const gTokenClientRef = useRef(null);
 
   // Insights tab state
@@ -1799,7 +1850,7 @@ function App({ user, onSignOut }) {
       console.log('[Google] initTokenClient');
       gTokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly',
+        scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly',
         callback: (resp) => {
           console.log('[Google] OAuth callback error:', resp.error || 'none', '| has token:', !!resp.access_token);
           if (resp.error) {
@@ -1812,9 +1863,10 @@ function App({ user, onSignOut }) {
           setGoogleToken(resp.access_token);
           try {
             localStorage.setItem('ot_google_token', resp.access_token);
-            localStorage.setItem('ot_google_token_expiry', String(Date.now() + 3500 * 1000));
+            localStorage.setItem('ot_google_token_expiry', String(Date.now() + 3300 * 1000)); // 55 min — refresh before 60 min expiry
             localStorage.setItem('ot_google_connected', '1');
           } catch {}
+          setGoogleWasConnected(true);
           setGoogleError(null);
         },
       });
@@ -1841,27 +1893,58 @@ function App({ user, onSignOut }) {
     console.log('[Google] Loading GIS script…');
   }, [effectiveGoogleClientId]); // eslint-disable-line
 
+  // Silent reconnect — fires whenever token drops to null and user was previously connected
+  useEffect(() => {
+    if (googleToken !== null) return;
+    try { if (localStorage.getItem('ot_google_connected') !== '1') return; } catch { return; }
+    if (!gTokenClientRef.current) return;
+    const t = setTimeout(() => { gTokenClientRef.current?.requestAccessToken({ prompt: '' }); }, 800);
+    return () => clearTimeout(t);
+  }, [googleToken]); // eslint-disable-line
+
   // These throw 'token_expired' on 401 but do NOT call setGoogleToken themselves —
   // the effect handles token clearing to avoid cancelling its own load mid-flight.
   async function fetchCalendarData(token) {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
-    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=10`;
-    console.log('[Google] Fetching calendar…');
-    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    console.log('[Google] Calendar status:', r.status);
-    if (r.status === 401) throw new Error('token_expired');
-    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + r.status}`); }
-    const d = await r.json();
-    console.log('[Google] Calendar items:', d.items?.length ?? 0);
-    return d.items || [];
+    // Fetch all user calendars first
+    const listR = await fetch('https://www.googleapis.com/calendar/v3/calendarList?showHidden=false&maxResults=50',
+      { headers: { Authorization: `Bearer ${token}` } });
+    if (listR.status === 401) throw new Error('token_expired');
+    const listD = listR.ok ? await listR.json() : { items: [] };
+    const cals = (listD.items || []).filter(c => c.selected !== false && c.accessRole !== 'none');
+    if (!cals.length) cals.push({ id: 'primary' });
+    // Fetch events from every calendar in parallel
+    const results = await Promise.allSettled(
+      cals.map(cal =>
+        fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=25`,
+          { headers: { Authorization: `Bearer ${token}` } })
+          .then(r => {
+            if (r.status === 401) throw new Error('token_expired');
+            return r.ok ? r.json() : { items: [] };
+          })
+          .then(d => (d.items || []).map(evt => ({ ...evt, _calColor: cal.backgroundColor })))
+          .catch(err => { if (err.message === 'token_expired') throw err; return []; })
+      )
+    );
+    for (const r of results) {
+      if (r.status === 'rejected' && r.reason?.message === 'token_expired') throw new Error('token_expired');
+    }
+    // Merge, deduplicate by id, sort by start time
+    const seen = new Set();
+    const all = [];
+    for (const r of results) {
+      if (r.status === 'fulfilled') for (const evt of r.value) { if (!seen.has(evt.id)) { seen.add(evt.id); all.push(evt); } }
+    }
+    all.sort((a, b) => { const at = a.start?.dateTime || a.start?.date || ''; const bt = b.start?.dateTime || b.start?.date || ''; return at < bt ? -1 : at > bt ? 1 : 0; });
+    return all.slice(0, 20);
   }
 
   async function fetchGmailData(token) {
     console.log('[Google] Fetching Gmail…');
     const listR = await fetch(
-      'https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=7&q=is%3Aunread+is%3Aimportant+in%3Ainbox',
+      'https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=is%3Aunread+is%3Aimportant+in%3Ainbox',
       { headers: { Authorization: `Bearer ${token}` } }
     );
     console.log('[Google] Gmail list status:', listR.status);
@@ -1871,7 +1954,7 @@ function App({ user, onSignOut }) {
     console.log('[Google] Gmail message count:', list.messages?.length ?? 0);
     if (!list.messages?.length) return [];
     const msgs = await Promise.all(
-      list.messages.slice(0, 5).map(m =>
+      list.messages.slice(0, 20).map(m =>
         fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
           { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
       )
@@ -1895,6 +1978,7 @@ function App({ user, onSignOut }) {
           if (calR.status === 'fulfilled') {
             setCalendarEvents(calR.value);
           } else if (calR.reason?.message === 'token_expired') {
+            try { localStorage.removeItem('ot_google_token'); localStorage.removeItem('ot_google_token_expiry'); } catch {}
             setGoogleToken(null); return;
           } else {
             console.error('[Google] cal error:', calR.reason?.message);
@@ -1904,6 +1988,7 @@ function App({ user, onSignOut }) {
           if (mailR.status === 'fulfilled') {
             setGmailMessages(mailR.value);
           } else if (mailR.reason?.message === 'token_expired') {
+            try { localStorage.removeItem('ot_google_token'); localStorage.removeItem('ot_google_token_expiry'); } catch {}
             setGoogleToken(null); return;
           } else {
             console.error('[Google] mail error:', mailR.reason?.message);
@@ -1917,7 +2002,7 @@ function App({ user, onSignOut }) {
     load();
     const t = setInterval(load, 15 * 60000);
     return () => { cancelled = true; clearInterval(t); };
-  }, [googleToken]); // eslint-disable-line
+  }, [googleToken, calendarRefreshKey]); // eslint-disable-line
 
   function connectGoogle() {
     if (!effectiveGoogleClientId) {
@@ -1935,6 +2020,7 @@ function App({ user, onSignOut }) {
   }
   function disconnectGoogle() {
     setGoogleToken(null); setCalendarEvents(null); setGmailMessages(null); setGoogleError(null);
+    setGoogleWasConnected(false);
     try { localStorage.removeItem('ot_google_token'); localStorage.removeItem('ot_google_token_expiry'); localStorage.removeItem('ot_google_connected'); } catch {}
   }
 
@@ -4131,6 +4217,8 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           googleClientId={effectiveGoogleClientId || null}
           onConnectGoogle={connectGoogle}
           onDisconnectGoogle={disconnectGoogle}
+          googleWasConnected={googleWasConnected}
+          onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
         />
       )}
 
