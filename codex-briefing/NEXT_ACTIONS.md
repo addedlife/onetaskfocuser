@@ -14,6 +14,7 @@ Active product queue:
 - Preserve every native DeskPhone button, function, layout behavior, and expected phone-app behavior unless intentionally replaced.
 - Keep native shortcut handoffs for web buttons until each function is implemented natively in the web version.
 - Continue polishing NerveCenter layout so the persistent left panel pushes content instead of covering it.
+- Queue later mobile-localhost lane: build/document iOS localhost first, then Android, carrying required connector setup for Google Calendar/Gmail OAuth, OneTask/NerveCenter web config, and DeskPhone local host/bridge endpoints needed for phone-pane testing.
 
 Verification default:
 

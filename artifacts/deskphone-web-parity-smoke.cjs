@@ -106,6 +106,28 @@ const calls = [
     timestamp: new Date(Date.UTC(2026, 4, 3, 17, 30)).toISOString(),
     durationDisplay: "48 sec",
   },
+  {
+    id: "call-4",
+    number: "+15557654321",
+    direction: "Outgoing",
+    directionLabel: "Outgoing",
+    timestamp: new Date(Date.UTC(2026, 4, 3, 18, 0)).toISOString(),
+    durationDisplay: "1 min",
+  },
+];
+const contacts = [
+  {
+    id: "contact-1",
+    displayName: "A Test Contact",
+    primaryPhone: "+15551234567",
+    phoneNumbers: ["+15551234567"],
+  },
+  {
+    id: "contact-2",
+    displayName: "B Backup Contact",
+    primaryPhone: "+15557654321",
+    phoneNumbers: ["+15557654321"],
+  },
 ];
 const handoffRequests = [];
 const commandRequests = [];
@@ -142,6 +164,8 @@ const server = http.createServer((req, res) => {
     send(messages);
   } else if (requestPath === "/calls") {
     send(calls);
+  } else if (requestPath === "/contacts") {
+    send(contacts);
   } else if (requestPath === "/handoff") {
     const searchParams = new URL(req.url, `http://127.0.0.1:${hostPort}`).searchParams;
     handoffRequests.push({
@@ -444,12 +468,48 @@ async function runCdp() {
       document.querySelector('.dp-settings-sections button[data-native-source="' + source + '"]').click();
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    document.querySelector('[data-native-source="MainWindow.xaml:603"]').click();
+    document.querySelector('button[data-native-source="MainWindow.xaml:562"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const contactsSurface = !!document.querySelector('.dp-contacts-shell[data-native-source="MainWindow.xaml:3368"]');
+    const contactActionSources = ["MainWindow.xaml:3766", "MainWindow.xaml:3888", "MainWindow.xaml:3895", "MainWindow.xaml:3919"];
+    const contactActionButtons = contactActionSources.every((source) => !!document.querySelector('.dp-contacts-shell [data-native-source="' + source + '"]'));
+    document.querySelector('.dp-contacts-shell [data-native-source="MainWindow.xaml:3888"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('.dp-contacts-shell [data-native-source="MainWindow.xaml:3895"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('.dp-contacts-shell [data-native-source="MainWindow.xaml:3919"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('.dp-contacts-shell [data-native-source="MainWindow.xaml:3766"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('button[data-native-source="MainWindow.xaml:544"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const fullCallsSurface = !!document.querySelector('.dp-calls-shell .dp-thread-calls.is-full-calls');
+    const fullCallsRowsAll = document.querySelectorAll('.dp-calls-shell .dp-thread-call-row').length;
+    document.querySelector('.dp-calls-shell [data-automation-id="CallHistoryFilterOut"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const fullCallsRowsOut = document.querySelectorAll('.dp-calls-shell .dp-thread-call-row').length;
+    const fullCallsActionSources = ["MainWindow.xaml:3513", "MainWindow.xaml:3518", "MainWindow.xaml:3522", "MainWindow.xaml:3527"]
+      .every((source) => !!document.querySelector('.dp-calls-shell [data-native-source="' + source + '"]'));
+    document.querySelector('.dp-calls-shell [data-native-source="MainWindow.xaml:3513"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('.dp-calls-shell [data-native-source="MainWindow.xaml:3518"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('.dp-calls-shell [data-native-source="MainWindow.xaml:3522"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('.dp-calls-shell [data-native-source="MainWindow.xaml:3527"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('.dp-calls-shell [data-native-source="MainWindow.xaml:3576"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const fullCallsDialerClosed = !document.querySelector('.dp-calls-shell .dp-thread-dialer');
+    document.querySelector('button[data-native-source="MainWindow.xaml:525"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const fullCallsDialerFromMakeCall = !!document.querySelector('.dp-calls-shell .dp-thread-dialer');
+    document.querySelector('button[data-native-source="MainWindow.xaml:603"]')?.click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     const developerToolSources = ["MainWindow.xaml:620", "LogWindow.xaml:45", "MainWindow.xaml:4346", "MainWindow.xaml:4639"];
     const developerToolButtons = developerToolSources.every((source) => !!document.querySelector('.dp-tab-placeholder button[data-native-source="' + source + '"]'));
     for (const source of developerToolSources) {
-      document.querySelector('.dp-tab-placeholder button[data-native-source="' + source + '"]').click();
+      document.querySelector('.dp-tab-placeholder button[data-native-source="' + source + '"]')?.click();
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     const handoffRequests = await fetch('http://127.0.0.1:${hostPort}/handoff-log').then((response) => response.json());
@@ -480,6 +540,14 @@ async function runCdp() {
       settingsSectionButtons,
       settingsToolButtons,
       settingsToggleButtons,
+      contactsSurface,
+      contactActionButtons,
+      fullCallsSurface,
+      fullCallsRowsAll,
+      fullCallsRowsOut,
+      fullCallsActionSources,
+      fullCallsDialerClosed,
+      fullCallsDialerFromMakeCall,
       developerToolButtons,
       imageLoaded: image.naturalWidth > 0,
       pendingStatusText,
@@ -566,6 +634,19 @@ async function main() {
     for (const endpoint of ["/open-bluetooth-settings", "/open-sound-settings", "/audio-refresh", "/open-builds-folder", "/open-event-log", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-contact-sync-folder", "/export-messages-backup"]) {
       if (!result.desktop.commandRequests.some((request) => request.path.includes(endpoint))) failures.push(`${endpoint} was not called`);
     }
+    if (!result.desktop.contactsSurface || !result.desktop.contactActionButtons) failures.push("contacts browser surface/action buttons are incomplete");
+    if (!result.desktop.handoffRequests.some((request) => request.target === "new-message" && request.value.includes("5551234567"))) failures.push("contact Text action did not hand off selected phone number");
+    if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("5551234567"))) failures.push("contact Call action did not dial selected phone number");
+    if (!result.desktop.handoffRequests.some((request) => request.target === "edit-contact" && request.value.includes("5551234567"))) failures.push("contact Edit Details action did not hand off selected phone number");
+    if (!result.desktop.handoffRequests.some((request) => request.target === "new-contact")) failures.push("contact New Contact action did not open native contact handoff");
+    if (!result.desktop.fullCallsSurface) failures.push("full Calls browser surface did not open");
+    if (result.desktop.fullCallsRowsAll !== 4 || result.desktop.fullCallsRowsOut !== 2) failures.push("full Calls surface did not show/filter all call history");
+    if (!result.desktop.fullCallsActionSources) failures.push("full Calls row action sources are incomplete");
+    if (!result.desktop.fullCallsDialerClosed || !result.desktop.fullCallsDialerFromMakeCall) failures.push("Make Call did not reopen the full Calls dialer");
+    if (!result.desktop.handoffRequests.some((request) => request.target === "new-message" && request.value.includes("5557654321"))) failures.push("full Calls message action did not hand off the selected call number");
+    if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("5557654321"))) failures.push("full Calls call action did not dial the selected call number");
+    if (!result.desktop.handoffRequests.some((request) => request.target === "toggle-block" && request.value.includes("5557654321"))) failures.push("full Calls block action did not carry the selected call number");
+    if (!result.desktop.handoffRequests.some((request) => request.target === "delete-call-entry" && request.value.includes("5557654321"))) failures.push("full Calls delete action did not carry the selected call number");
     if (!result.desktop.developerToolButtons) failures.push("developer host tool buttons are incomplete");
     for (const endpoint of ["/open-live-log", "/clear-log", "/run-ui-auditor"]) {
       if (!result.desktop.commandRequests.some((request) => request.path.includes(endpoint))) failures.push(`${endpoint} was not called`);
