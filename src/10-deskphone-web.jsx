@@ -1712,6 +1712,9 @@ function SimpleTabContent({
       ["contact-sync", "Contact Sync", "MainWindow.xaml:4005"],
       ["audio", "Audio", "MainWindow.xaml:4010"],
     ];
+    const syncThemeWithShamash = Boolean(status?.syncThemeWithShamash ?? status?.SyncThemeWithShamash);
+    const pauseHistoryActivity = Boolean(status?.pauseHistoryActivity ?? status?.PauseHistoryActivity);
+    const isDarkModeEnabled = Boolean(status?.isDarkModeEnabled ?? status?.IsDarkModeEnabled);
 
     return (
       <div className="dp-settings-shell" data-native-source="MainWindow.xaml:3847">
@@ -1756,9 +1759,18 @@ function SimpleTabContent({
               <ShellButton className="dp-tonal" iconName="restart_alt" nativeSource="MainWindow.xaml:4235" onClick={() => onCommand("/reset-ui-scale", "reset appearance")}>Reset</ShellButton>
               <ShellButton className="dp-tonal" iconName="sync" nativeSource="MainWindow.xaml:4288" onClick={() => onCommand("/refresh-theme-sync", "refresh theme sync")}>Refresh Sync</ShellButton>
             </div>
-            <span className="dp-native-hidden" data-native-source="MainWindow.xaml:4258" aria-hidden="true" />
-            <span className="dp-native-hidden" data-native-source="MainWindow.xaml:4294" aria-hidden="true" />
-            <span className="dp-native-hidden" data-native-source="MainWindow.xaml:4309" aria-hidden="true" />
+            <label className="dp-settings-toggle" data-native-source="MainWindow.xaml:4258">
+              <span>Sync theme with Shamash app</span>
+              <input type="checkbox" checked={syncThemeWithShamash} onChange={(event) => onCommand(`/set-theme-sync?enabled=${event.target.checked ? 1 : 0}`, "set theme sync")} />
+            </label>
+            <label className="dp-settings-toggle" data-native-source="MainWindow.xaml:4294">
+              <span>History Background Fetching</span>
+              <input type="checkbox" checked={!pauseHistoryActivity} onChange={(event) => onCommand(`/set-history-paused?paused=${event.target.checked ? 0 : 1}`, "set history background fetching")} />
+            </label>
+            <label className="dp-settings-toggle" data-native-source="MainWindow.xaml:4309">
+              <span>Dark mode</span>
+              <input type="checkbox" checked={isDarkModeEnabled} onChange={(event) => onCommand(`/set-dark-mode?enabled=${event.target.checked ? 1 : 0}`, "set dark mode")} />
+            </label>
           </section>
         )}
         {settingsSection === "contact-sync" && (
@@ -3205,6 +3217,25 @@ const css = `
   display: grid;
   gap: 14px;
   min-height: 88px;
+}
+.dp-settings-toggle {
+  min-height: 44px;
+  border: 1px solid var(--dp-border);
+  border-radius: 8px;
+  background: var(--dp-bg-input);
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--dp-text);
+  font-size: 14px;
+  font-weight: 650;
+}
+.dp-settings-toggle input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--dp-blue);
 }
 .dp-source-tag {
   display: inline-flex;

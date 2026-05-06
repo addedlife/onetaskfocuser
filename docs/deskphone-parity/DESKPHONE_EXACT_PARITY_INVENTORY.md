@@ -28,7 +28,7 @@ No further DeskPhone Web clone work should proceed from visual guesswork. Each n
 | Command declarations and wiring entries | 135 |
 | C# methods/functions | 506 |
 | C# types | 84 |
-| Host API endpoints | 26 |
+| Host API endpoints | 29 |
 
 ## Web Review Progress
 
@@ -36,12 +36,12 @@ Updated: 2026-05-06
 
 | Web parity state | Count |
 | --- | ---: |
-| implemented-web | 147 |
-| host-api-needed | 46 |
+| implemented-web | 150 |
+| host-api-needed | 43 |
 | native-only | 6 |
 | not-yet-reviewed | 0 |
 
-Reviewed slice: all 199 native action rows have now been classified against `src/10-deskphone-web.jsx`: 147 browser-implemented rows, 46 host/API-needed rows, and 6 native-only WPF/template rows. Covered browser behavior includes navigation rail collapse, phone/settings navigation, reconnect/settings rail actions, reconnect prompt actions, build prompt actions, call banner answer/hangup actions, contacts/developer/log shell routing, top/header new-message handoffs, conversation filters, unread-first sorting, row-menu and thread-header block/pin/mute/read/unread handoffs including duplicate native header rows, add/edit contact handoffs, show/hide thread list, thread search previous/next navigation, thread clear-search, call actions through `/dial`, call-history All/Missed/In/Out filters, call-row message/call/block/delete/delete-all handoffs, thread-side dialer show/hide/backspace/keypad/text/call/voicemail controls including typed-number text handoff rows, settings section navigation for Appearance/Contact Sync/Audio, settings host-tool actions for Bluetooth Settings, Sound Settings, audio refresh, builds folder, event log, appearance reset, theme-sync refresh, VCF/contact import, ignore pending contacts, contact-sync folder, message backup export, live log, clear log, and UI auditor, duplicate native Calls-tab dialpad rows, attachment save where browser data is available, scroll-to-latest, and text send through `/send`. Remaining parity blockers are explicitly marked `host-api-needed` with the missing endpoint or browser surface named in the CSV.
+Reviewed slice: all 199 native action rows have now been classified against `src/10-deskphone-web.jsx`: 150 browser-implemented rows, 43 host/API-needed rows, and 6 native-only WPF/template rows. Covered browser behavior includes navigation rail collapse, phone/settings navigation, reconnect/settings rail actions, reconnect prompt actions, build prompt actions, call banner answer/hangup actions, contacts/developer/log shell routing, top/header new-message handoffs, conversation filters, unread-first sorting, row-menu and thread-header block/pin/mute/read/unread handoffs including duplicate native header rows, add/edit contact handoffs, show/hide thread list, thread search previous/next navigation, thread clear-search, call actions through `/dial`, call-history All/Missed/In/Out filters, call-row message/call/block/delete/delete-all handoffs, thread-side dialer show/hide/backspace/keypad/text/call/voicemail controls including typed-number text handoff rows, settings section navigation for Appearance/Contact Sync/Audio, settings host-tool actions for Bluetooth Settings, Sound Settings, audio refresh, builds folder, event log, appearance reset, theme-sync refresh/toggle, history background fetching, dark mode, VCF/contact import, ignore pending contacts, contact-sync folder, message backup export, live log, clear log, and UI auditor, duplicate native Calls-tab dialpad rows, attachment save where browser data is available, scroll-to-latest, and text send through `/send`. Remaining parity blockers are explicitly marked `host-api-needed` with the missing endpoint or browser surface named in the CSV.
 
 ## Files Written
 

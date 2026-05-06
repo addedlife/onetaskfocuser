@@ -127,7 +127,17 @@ const server = http.createServer((req, res) => {
   };
 
   if (requestPath === "/status") {
-    send({ hfp: "Connected", map: "Connected", fullHistoryStatus: "Full history ready", build: "b242  2026-05-04 10:00" });
+    send({
+      hfp: "Connected",
+      map: "Connected",
+      fullHistoryStatus: "Full history ready",
+      build: "b242  2026-05-04 10:00",
+      syncThemeWithShamash: false,
+      pauseHistoryActivity: false,
+      isDarkModeEnabled: false,
+      themeSyncLabel: "Theme sync off",
+      themeSyncRefreshStatus: "",
+    });
   } else if (requestPath === "/messages") {
     send(messages);
   } else if (requestPath === "/calls") {
@@ -143,7 +153,7 @@ const server = http.createServer((req, res) => {
     send(handoffRequests);
   } else if (requestPath === "/command-log") {
     send(commandRequests);
-  } else if (["/dial", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/open-live-log", "/clear-log", "/run-ui-auditor"].includes(requestPath)) {
+  } else if (["/dial", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-live-log", "/clear-log", "/run-ui-auditor"].includes(requestPath)) {
     commandRequests.push({ path: req.url });
     send({ ok: true });
   } else {
@@ -422,6 +432,14 @@ async function runCdp() {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
+    const settingsToggleSources = ["MainWindow.xaml:4258", "MainWindow.xaml:4294", "MainWindow.xaml:4309"];
+    document.querySelector('.dp-settings-sections button[data-native-source="MainWindow.xaml:4000"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const settingsToggleButtons = settingsToggleSources.every((source) => !!document.querySelector('.dp-settings-toggle[data-native-source="' + source + '"] input'));
+    for (const source of settingsToggleSources) {
+      document.querySelector('.dp-settings-toggle[data-native-source="' + source + '"] input')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
     for (const source of settingsSectionSources) {
       document.querySelector('.dp-settings-sections button[data-native-source="' + source + '"]').click();
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -461,6 +479,7 @@ async function runCdp() {
       dialerClosed,
       settingsSectionButtons,
       settingsToolButtons,
+      settingsToggleButtons,
       developerToolButtons,
       imageLoaded: image.naturalWidth > 0,
       pendingStatusText,
@@ -543,7 +562,8 @@ async function main() {
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("*86"))) failures.push("voicemail dialer action did not dial *86");
     if (!result.desktop.settingsSectionButtons) failures.push("settings section buttons are incomplete");
     if (!result.desktop.settingsToolButtons) failures.push("settings host tool buttons are incomplete");
-    for (const endpoint of ["/open-bluetooth-settings", "/open-sound-settings", "/audio-refresh", "/open-builds-folder", "/open-event-log", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/open-contact-sync-folder", "/export-messages-backup"]) {
+    if (!result.desktop.settingsToggleButtons) failures.push("settings toggle controls are incomplete");
+    for (const endpoint of ["/open-bluetooth-settings", "/open-sound-settings", "/audio-refresh", "/open-builds-folder", "/open-event-log", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-contact-sync-folder", "/export-messages-backup"]) {
       if (!result.desktop.commandRequests.some((request) => request.path.includes(endpoint))) failures.push(`${endpoint} was not called`);
     }
     if (!result.desktop.developerToolButtons) failures.push("developer host tool buttons are incomplete");

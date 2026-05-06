@@ -25,6 +25,7 @@ Latest verified deploy:
 
 Local parity progress:
 
+- 2026-05-06: DeskPhone Web Settings now exposes real toggles for Sync theme with Shamash app, History Background Fetching, and Dark mode. Native b254 adds status fields plus /set-theme-sync, /set-history-paused, and /set-dark-mode support. Ledger moved to 150 implemented-web, 43 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web Settings now exposes host-backed Appearance Reset, Refresh Sync, Import VCF, Import Synced, and Ignore Pending controls. Native b253 adds /reset-ui-scale, /refresh-theme-sync, /import-starter-vcf, /import-pending-contacts, and /skip-pending-contacts support. Ledger moved to 147 implemented-web, 46 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web Settings now has native-mapped Appearance, Contact Sync, and Audio section selectors, plus host-backed Sync Folder and Save Backup controls. Native b252 adds /open-contact-sync-folder and /export-messages-backup support. Ledger moved to 142 implemented-web, 51 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: Top/header New Message rows and the remaining duplicate call-record Delete row were mapped to verified browser handoffs; the top New Message button now actually opens the native compose handoff. Ledger moved to 137 implemented-web, 56 host-api-needed, 6 native-only, 0 not-yet-reviewed.
