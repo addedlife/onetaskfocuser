@@ -25,6 +25,7 @@ Latest verified deploy:
 
 Local parity progress:
 
+- 2026-05-06: DeskPhone Web conversation row action menu sources were aligned to the exact native inventory for Mark read, Mark unread, Pin, Mute, and Block. Smoke coverage now opens the row menu and verifies those exact-source controls. Ledger moved to 109 implemented-web, 84 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web thread header action sources were aligned to the exact native inventory for Block, Pin, Mute, Mark read, and Mark unread. Existing smoke coverage verifies those handoffs carry the selected conversation number. Ledger moved to 104 implemented-web, 89 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web thread search Previous/Next is now real browser behavior. Search matches are highlighted, the active match scrolls into view, and the smoke test verifies both arrow buttons. Ledger moved to 99 implemented-web, 94 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web Settings now exposes host-backed Windows tool actions: Bluetooth Settings, Sound Settings, audio refresh, builds folder, and event log. The matching smoke test verifies all five browser buttons call their host endpoints. Ledger moved to 95 implemented-web, 98 host-api-needed, 6 native-only, 0 not-yet-reviewed.

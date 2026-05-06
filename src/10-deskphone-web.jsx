@@ -942,11 +942,11 @@ function ConversationRow({ conversation, selected, onSelect, onNativeHandoff }) 
       <details className="dp-conversation-menu" onClick={(event) => event.stopPropagation()}>
         <summary aria-label="Conversation actions">{icon("more_vert", 18)}</summary>
         <div className="dp-floating-menu" data-native-source="MainWindow.xaml:1299">
-          <button type="button" onClick={() => onNativeHandoff("Mark read", "MainWindow.xaml:1301", conversation.number)}>Mark read</button>
-          <button type="button" onClick={() => onNativeHandoff("Mark unread", "MainWindow.xaml:1304", conversation.number)}>Mark unread</button>
-          <button type="button" onClick={() => onNativeHandoff("Pin / unpin", "MainWindow.xaml:1308", conversation.number)}>Pin / unpin</button>
-          <button type="button" onClick={() => onNativeHandoff("Mute / unmute alerts", "MainWindow.xaml:1311", conversation.number)}>Mute / unmute alerts</button>
-          <button type="button" onClick={() => onNativeHandoff("Block / unblock locally", "MainWindow.xaml:1314", conversation.number)}>Block / unblock locally</button>
+          <button type="button" data-native-source="MainWindow.xaml:1299" onClick={() => onNativeHandoff("Mark read", "MainWindow.xaml:1299", conversation.number)}>Mark read</button>
+          <button type="button" data-native-source="MainWindow.xaml:1302" onClick={() => onNativeHandoff("Mark unread", "MainWindow.xaml:1302", conversation.number)}>Mark unread</button>
+          <button type="button" data-native-source="MainWindow.xaml:1306" onClick={() => onNativeHandoff("Pin / unpin", "MainWindow.xaml:1306", conversation.number)}>Pin / unpin</button>
+          <button type="button" data-native-source="MainWindow.xaml:1309" onClick={() => onNativeHandoff("Mute / unmute alerts", "MainWindow.xaml:1309", conversation.number)}>Mute / unmute alerts</button>
+          <button type="button" data-native-source="MainWindow.xaml:1312" onClick={() => onNativeHandoff("Block / unblock locally", "MainWindow.xaml:1312", conversation.number)}>Block / unblock locally</button>
         </div>
       </details>
     </div>

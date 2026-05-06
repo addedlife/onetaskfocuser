@@ -299,6 +299,15 @@ async function runCdp() {
     await new Promise((resolve) => setTimeout(resolve, 150));
     const previousSearchCurrent = document.querySelector('[data-thread-search-current="true"] .dp-message-body')?.textContent.trim() || '';
     const threadSearchNavigation = threadSearchButtonSources && firstSearchCurrent && nextSearchCurrent && nextSearchCurrent !== firstSearchCurrent && previousSearchCurrent === firstSearchCurrent;
+    const conversationMenu = document.querySelector('.dp-conversation-menu');
+    conversationMenu.open = true;
+    const conversationMenuSources = ["MainWindow.xaml:1299", "MainWindow.xaml:1302", "MainWindow.xaml:1306", "MainWindow.xaml:1309", "MainWindow.xaml:1312"];
+    const conversationMenuActions = conversationMenuSources.every((source) => !!document.querySelector('.dp-conversation-menu button[data-native-source="' + source + '"]'));
+    for (const source of conversationMenuSources) {
+      document.querySelector('.dp-conversation-menu button[data-native-source="' + source + '"]').click();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    }
+    conversationMenu.open = false;
     const scrollBox = document.querySelector('.dp-message-scroll');
     const scrollable = scrollBox.scrollHeight > scrollBox.clientHeight + 30;
     scrollBox.scrollTop = 0;
@@ -407,6 +416,7 @@ async function runCdp() {
       handoffRequests,
       commandRequests,
       threadSearchNavigation,
+      conversationMenuActions,
       scrollable,
       scrolledToBottom,
       callRowsAll,
@@ -479,6 +489,7 @@ async function main() {
     if (!(result.desktop.callHistory.after > result.desktop.callHistory.before)) failures.push("call-history splitter did not expand");
     if (result.desktop.webVersionText !== "DeskPhone Web Version 001" || result.desktop.hostBuildText !== "Windows Host: b242") failures.push("web version or Windows host label is wrong");
     if (!result.desktop.threadSearchNavigation) failures.push("thread search previous/next navigation failed");
+    if (!result.desktop.conversationMenuActions) failures.push("conversation row action menu sources are incomplete");
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-message")) failures.push("new-message handoff did not target desktop compose");
     for (const target of ["mark-read", "mark-unread", "toggle-pin", "toggle-mute", "toggle-block"]) {
       if (!result.desktop.handoffRequests.some((request) => request.target === target && request.value.includes("15551234567"))) failures.push(`${target} handoff did not carry the conversation number`);
