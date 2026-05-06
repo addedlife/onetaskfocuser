@@ -1181,6 +1181,9 @@ function ConversationCallHistory({
   mode = "thread",
   dialerDefaultOpen = false,
   dialerOpenSignal = 0,
+  hasUndoCallHistoryDelete = false,
+  undoCallHistoryDeleteText = "Call deleted",
+  onUndoCallHistoryDelete,
   onCall,
   onText,
   onDial,
@@ -1266,6 +1269,12 @@ function ConversationCallHistory({
           </div>
         </>
       )}
+      {hasUndoCallHistoryDelete ? (
+        <div className="dp-call-undo-bar" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3378" : "MainWindow.xaml:2627"}>
+          <span>{undoCallHistoryDeleteText}</span>
+          <button type="button" onClick={onUndoCallHistoryDelete}>Undo</button>
+        </div>
+      ) : null}
       {dialerOpen ? (
         <div className="dp-thread-dialer" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3552" : "MainWindow.xaml:2871"}>
           <div className="dp-thread-dialer-top">
@@ -1361,6 +1370,8 @@ function MessagesSlice({
     null;
   const hasUndoMessageDelete = !!(status?.hasUndoMessageDelete || status?.HasUndoMessageDelete);
   const undoMessageDeleteText = status?.undoMessageDeleteText || status?.UndoMessageDeleteText || "Message deleted";
+  const hasUndoCallHistoryDelete = !!(status?.hasUndoCallHistoryDelete || status?.HasUndoCallHistoryDelete);
+  const undoCallHistoryDeleteText = status?.undoCallHistoryDeleteText || status?.UndoCallHistoryDeleteText || "Call deleted";
   const pinnedMessages = useMemo(
     () => selectedConversation?.messages.filter((message) => message.isPinned).slice().reverse() || [],
     [selectedConversation]
@@ -1757,6 +1768,9 @@ function MessagesSlice({
               <ConversationCallHistory
                 calls={calls}
                 selectedConversation={selectedConversation}
+                hasUndoCallHistoryDelete={hasUndoCallHistoryDelete}
+                undoCallHistoryDeleteText={undoCallHistoryDeleteText}
+                onUndoCallHistoryDelete={() => onCommand("/undo-call-history-delete", "undo call history delete")}
                 onCall={callNumber}
                 onText={textNumber}
                 onDial={dialRawNumber}
@@ -1809,12 +1823,16 @@ function ContactsSlice({ contacts, onCommand, onNativeHandoff }) {
     [contacts]
   );
   const [selectedKey, setSelectedKey] = useState("");
+  const [editorName, setEditorName] = useState("");
+  const [editorPhone, setEditorPhone] = useState("");
+  const [editorId, setEditorId] = useState("");
   const selectedContact = useMemo(
     () => sortedContacts.find((contact, index) => contactKey(contact, index) === selectedKey) || sortedContacts[0] || null,
     [selectedKey, sortedContacts]
   );
   const selectedPhones = contactPhoneOptions(selectedContact);
   const selectedPhone = selectedPhones[0] || "";
+  const canSave = editorName.trim() && editorPhone.trim();
 
   useEffect(() => {
     if (!sortedContacts.length) {
@@ -1826,12 +1844,40 @@ function ContactsSlice({ contacts, onCommand, onNativeHandoff }) {
     }
   }, [selectedKey, sortedContacts]);
 
+  useEffect(() => {
+    if (!selectedContact) return;
+    setEditorId(contactKey(selectedContact, 0));
+    setEditorName(contactDisplayName(selectedContact));
+    setEditorPhone(contactPhoneOptions(selectedContact)[0] || "");
+  }, [selectedContact]);
+
+  const startNewContact = useCallback(() => {
+    setSelectedKey("");
+    setEditorId("");
+    setEditorName("");
+    setEditorPhone("");
+  }, []);
+
+  const saveContact = useCallback(() => {
+    if (!canSave) return;
+    onCommand(`/save-contact?id=${encodeURIComponent(editorId)}&name=${encodeURIComponent(editorName.trim())}&phone=${encodeURIComponent(editorPhone.trim())}`, "save contact");
+  }, [canSave, editorId, editorName, editorPhone, onCommand]);
+
+  const deleteContact = useCallback(() => {
+    const phone = editorPhone.trim() || selectedPhone;
+    if (!editorId && !phone) return;
+    onCommand(`/delete-contact?id=${encodeURIComponent(editorId)}&phone=${encodeURIComponent(phone)}`, "delete contact");
+  }, [editorId, editorPhone, onCommand, selectedPhone]);
+
   return (
     <div className="dp-contacts-shell" data-native-source="MainWindow.xaml:3368">
       <div className="dp-contacts-header">
         <SourceTag>MainWindow.xaml:3368</SourceTag>
         <h2>Contacts</h2>
-        <ShellButton className="dp-primary" iconName="person_add" nativeSource="MainWindow.xaml:3766" onClick={() => onNativeHandoff("New Contact", "MainWindow.xaml:3766")}>New Contact</ShellButton>
+        <div className="dp-settings-actions">
+          <ShellButton className="dp-tonal" iconName="open_in_new" nativeSource="MainWindow.xaml:3766" onClick={() => onNativeHandoff("New Contact", "MainWindow.xaml:3766")}>Open Native</ShellButton>
+          <ShellButton className="dp-primary" iconName="person_add" nativeSource="MainWindow.xaml:3948" onClick={startNewContact}>New</ShellButton>
+        </div>
       </div>
       <div className="dp-contacts-grid">
         <div className="dp-contacts-list" data-native-source="MainWindow.xaml:3762">
@@ -1853,16 +1899,28 @@ function ContactsSlice({ contacts, onCommand, onNativeHandoff }) {
           })}
         </div>
         <section className="dp-contact-detail" data-native-source="MainWindow.xaml:3840">
-          {selectedContact ? (
+          {selectedContact || editorId === "" ? (
             <>
-              <h3>{contactDisplayName(selectedContact)}</h3>
+              <h3>{selectedContact ? contactDisplayName(selectedContact) : "New contact"}</h3>
               <div className="dp-contact-phone-list">
                 {selectedPhones.length ? selectedPhones.map((phone) => <span key={phone}>{phone}</span>) : <span>No phone number</span>}
+              </div>
+              <div className="dp-contact-editor" data-native-source="MainWindow.xaml:3933">
+                <label>
+                  <span>Name</span>
+                  <input value={editorName} onChange={(event) => setEditorName(event.target.value)} data-automation-id="ContactEditorName" />
+                </label>
+                <label>
+                  <span>Phone</span>
+                  <input value={editorPhone} onChange={(event) => setEditorPhone(event.target.value)} inputMode="tel" data-automation-id="ContactEditorPhone" />
+                </label>
               </div>
               <div className="dp-settings-actions dp-contact-actions">
                 <ShellButton className="dp-tonal" iconName="sms" nativeSource="MainWindow.xaml:3888" onClick={() => onNativeHandoff("Message this number", "MainWindow.xaml:3888", selectedPhone)} disabled={!selectedPhone}>Text</ShellButton>
                 <ShellButton className="dp-tonal" iconName="call" nativeSource="MainWindow.xaml:3895" onClick={() => onCommand(`/dial?n=${encodeURIComponent(selectedPhone)}`, "call contact")} disabled={!selectedPhone}>Call</ShellButton>
                 <ShellButton className="dp-tonal" iconName="edit" nativeSource="MainWindow.xaml:3919" onClick={() => onNativeHandoff("Edit contact", "MainWindow.xaml:3919", selectedPhone)}>Edit Details</ShellButton>
+                <ShellButton className="dp-tonal" iconName="delete" nativeSource="MainWindow.xaml:3953" onClick={deleteContact} disabled={!editorId && !editorPhone.trim()}>Delete</ShellButton>
+                <ShellButton className="dp-primary" iconName="save" nativeSource="MainWindow.xaml:3959" onClick={saveContact} disabled={!canSave}>Save Contact</ShellButton>
               </div>
             </>
           ) : (
@@ -2053,6 +2111,9 @@ function SimpleTabContent({
           mode="full"
           dialerDefaultOpen={true}
           dialerOpenSignal={callDialerSignal}
+          hasUndoCallHistoryDelete={!!(status?.hasUndoCallHistoryDelete || status?.HasUndoCallHistoryDelete)}
+          undoCallHistoryDeleteText={status?.undoCallHistoryDeleteText || status?.UndoCallHistoryDeleteText || "Call deleted"}
+          onUndoCallHistoryDelete={() => onCommand("/undo-call-history-delete", "undo call history delete")}
           onCall={(number) => {
             const normalized = normalizePhoneKey(number);
             if (!normalized) {
@@ -3511,6 +3572,27 @@ const css = `
 .dp-undo-delete-bar {
   display: none;
 }
+.dp-call-undo-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--dp-border);
+  border-radius: 8px;
+  background: var(--dp-bg-input);
+  color: var(--dp-text);
+  padding: 9px 10px;
+  font-size: 13px;
+}
+.dp-call-undo-bar button {
+  min-height: 30px;
+  border: 1px solid var(--dp-border-strong);
+  border-radius: 7px;
+  background: var(--dp-bg-main);
+  color: var(--dp-blue-dark);
+  font-weight: 700;
+  cursor: pointer;
+}
 .dp-compose-bar {
   min-width: 0;
   border-top: 1px solid var(--dp-border);
@@ -3803,6 +3885,26 @@ const css = `
   border-radius: 8px;
   background: var(--dp-bg-main);
   padding: 6px 9px;
+}
+.dp-contact-editor {
+  display: grid;
+  gap: 10px;
+}
+.dp-contact-editor label {
+  display: grid;
+  gap: 5px;
+  color: var(--dp-text-second);
+  font-size: 12px;
+  font-weight: 700;
+}
+.dp-contact-editor input {
+  min-height: 38px;
+  border: 1px solid var(--dp-border-strong);
+  border-radius: 8px;
+  background: var(--dp-bg-main);
+  color: var(--dp-text);
+  padding: 0 10px;
+  font: inherit;
 }
 .dp-contact-actions {
   margin-top: 4px;

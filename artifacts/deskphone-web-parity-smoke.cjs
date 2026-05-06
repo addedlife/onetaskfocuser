@@ -174,6 +174,8 @@ const server = http.createServer((req, res) => {
       themeSyncRefreshStatus: "",
       hasUndoMessageDelete,
       undoMessageDeleteText: hasUndoMessageDelete ? "Message deleted from +1 (555) 123-4567" : "",
+      hasUndoCallHistoryDelete: true,
+      undoCallHistoryDeleteText: "Call deleted: Incoming +1 (555) 123-4567",
       bluetoothStatus: "2 device(s) found",
       isScanning: false,
       isConnecting: false,
@@ -210,7 +212,7 @@ const server = http.createServer((req, res) => {
     hasUndoMessageDelete = false;
     commandRequests.push({ path: req.url });
     send({ ok: true });
-  } else if (["/dial", "/send", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-live-log", "/clear-log", "/run-ui-auditor", "/toggle-mute", "/accept-build-update", "/snooze-build-update", "/show-build-update-prompt", "/toggle-message-pin", "/scan-devices", "/connect-saved-device", "/set-default-saved-device", "/forget-saved-device", "/connect-scanned-device"].includes(requestPath)) {
+  } else if (["/dial", "/send", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-live-log", "/clear-log", "/run-ui-auditor", "/toggle-mute", "/accept-build-update", "/snooze-build-update", "/show-build-update-prompt", "/toggle-message-pin", "/scan-devices", "/connect-saved-device", "/set-default-saved-device", "/forget-saved-device", "/connect-scanned-device", "/save-contact", "/delete-contact", "/undo-call-history-delete"].includes(requestPath)) {
     commandRequests.push({ path: req.url });
     send({ ok: true });
   } else {
@@ -466,6 +468,9 @@ async function runCdp() {
     await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-native-source="MainWindow.xaml:2841"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
+    const threadCallUndoVisible = !!document.querySelector('.dp-call-undo-bar[data-native-source="MainWindow.xaml:2627"] button');
+    document.querySelector('.dp-call-undo-bar[data-native-source="MainWindow.xaml:2627"] button')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-native-source="MainWindow.xaml:2573"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     const dialerOpened = !!document.querySelector('.dp-thread-dialer');
@@ -583,7 +588,7 @@ async function runCdp() {
     document.querySelector('button[data-native-source="MainWindow.xaml:562"]')?.click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     const contactsSurface = !!document.querySelector('.dp-contacts-shell[data-native-source="MainWindow.xaml:3368"]');
-    const contactActionSources = ["MainWindow.xaml:3766", "MainWindow.xaml:3888", "MainWindow.xaml:3895", "MainWindow.xaml:3919"];
+    const contactActionSources = ["MainWindow.xaml:3766", "MainWindow.xaml:3888", "MainWindow.xaml:3895", "MainWindow.xaml:3919", "MainWindow.xaml:3948", "MainWindow.xaml:3953", "MainWindow.xaml:3959"];
     const contactActionButtons = contactActionSources.every((source) => !!document.querySelector('.dp-contacts-shell [data-native-source="' + source + '"]'));
     document.querySelector('.dp-contacts-shell [data-native-source="MainWindow.xaml:3888"]')?.click();
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -591,7 +596,19 @@ async function runCdp() {
     await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('.dp-contacts-shell [data-native-source="MainWindow.xaml:3919"]')?.click();
     await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('.dp-contacts-shell [data-native-source="MainWindow.xaml:3953"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('.dp-contacts-shell [data-native-source="MainWindow.xaml:3766"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('.dp-contacts-shell [data-native-source="MainWindow.xaml:3948"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const contactNameInput = document.querySelector('[data-automation-id="ContactEditorName"]');
+    const contactPhoneInput = document.querySelector('[data-automation-id="ContactEditorPhone"]');
+    inputSetter.call(contactNameInput, 'Browser Contact');
+    contactNameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    inputSetter.call(contactPhoneInput, '+15550001111');
+    contactPhoneInput.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('.dp-contacts-shell [data-native-source="MainWindow.xaml:3959"]')?.click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('button[data-native-source="MainWindow.xaml:544"]')?.click();
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -616,6 +633,9 @@ async function runCdp() {
     document.querySelector('.dp-calls-hidden-pane [data-native-source="MainWindow.xaml:3204"]')?.click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     const fullCallsRecentsRestored = document.querySelectorAll('.dp-calls-shell .dp-thread-call-row').length === fullCallsRowsOut;
+    const fullCallUndoVisible = !!document.querySelector('.dp-call-undo-bar[data-native-source="MainWindow.xaml:3378"] button');
+    document.querySelector('.dp-call-undo-bar[data-native-source="MainWindow.xaml:3378"] button')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('.dp-calls-shell [data-native-source="MainWindow.xaml:3576"]')?.click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     const fullCallsDialerClosed = !document.querySelector('.dp-calls-shell .dp-thread-dialer');
@@ -663,6 +683,7 @@ async function runCdp() {
       callRowsOut,
       outLabel,
       replyFocusedFromCallRow,
+      threadCallUndoVisible,
       dialerOpened,
       dialerKeypadSources,
       dialerAfterKeypad,
@@ -674,6 +695,7 @@ async function runCdp() {
       settingsToggleButtons,
       contactsSurface,
       contactActionButtons,
+      fullCallUndoVisible,
       fullCallsSurface,
       fullCallsRowsAll,
       fullCallsRowsOut,
@@ -766,6 +788,7 @@ async function main() {
     if (result.desktop.callRowsAll !== 3 || result.desktop.callRowsMissed !== 1 || result.desktop.missedLabel !== "Missed") failures.push("missed-call filter did not isolate missed calls");
     if (result.desktop.callRowsOut !== 1 || result.desktop.outLabel !== "Outgoing") failures.push("outgoing-call filter did not isolate outgoing calls");
     if (!result.desktop.replyFocusedFromCallRow) failures.push("message-this-number call-row action did not focus the reply box");
+    if (!result.desktop.threadCallUndoVisible) failures.push("thread call-history undo bar was not visible");
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && (request.path.includes("15551234567") || request.path.includes("5551234567")))) failures.push("call-this-number call-row action did not dial through the host");
     if (!result.desktop.handoffRequests.some((request) => request.target === "delete-all-calls")) failures.push("delete-all-calls handoff was not recorded");
     if (!result.desktop.handoffRequests.some((request) => request.target === "toggle-block" && request.value.includes("15551234567"))) failures.push("call-record block handoff did not carry the number");
@@ -784,6 +807,9 @@ async function main() {
       if (!result.desktop.commandRequests.some((request) => request.path.includes(endpoint))) failures.push(`${endpoint} was not called`);
     }
     if (!result.desktop.contactsSurface || !result.desktop.contactActionButtons) failures.push("contacts browser surface/action buttons are incomplete");
+    for (const endpoint of ["/save-contact", "/delete-contact", "/undo-call-history-delete"]) {
+      if (!result.desktop.commandRequests.some((request) => request.path.includes(endpoint))) failures.push(`${endpoint} was not called`);
+    }
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-message" && request.value.includes("5551234567"))) failures.push("contact Text action did not hand off selected phone number");
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("5551234567"))) failures.push("contact Call action did not dial selected phone number");
     if (!result.desktop.handoffRequests.some((request) => request.target === "edit-contact" && request.value.includes("5551234567"))) failures.push("contact Edit Details action did not hand off selected phone number");
@@ -792,6 +818,7 @@ async function main() {
     if (result.desktop.fullCallsRowsAll !== 4 || result.desktop.fullCallsRowsOut !== 2) failures.push("full Calls surface did not show/filter all call history");
     if (!result.desktop.fullCallsActionSources) failures.push("full Calls row action sources are incomplete");
     if (!result.desktop.fullCallsRecentsHidden || !result.desktop.fullCallsRecentsRestored) failures.push("full Calls hide/show recents failed");
+    if (!result.desktop.fullCallUndoVisible) failures.push("full Calls undo bar was not visible");
     if (!result.desktop.fullCallsDialerClosed || !result.desktop.fullCallsDialerFromMakeCall) failures.push("Make Call did not reopen the full Calls dialer");
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/send") && request.path.includes("5551234567") && request.path.includes("Browser%20full%20compose%20smoke"))) failures.push("full New Message composer did not send through /send");
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-message" && request.value.includes("5557654321"))) failures.push("full Calls message action did not hand off the selected call number");
