@@ -318,6 +318,12 @@ async function runCdp() {
     await new Promise((resolve) => setTimeout(resolve, 100));
     const dialerOpened = !!document.querySelector('.dp-thread-dialer');
     const dialerInput = document.querySelector('[data-automation-id="ThreadDialerNumber"]');
+    const dialerKeypadSources = Array.from(document.querySelectorAll('.dp-thread-dialer-keys button')).map((button) => button.getAttribute('data-native-source'));
+    document.querySelector('[data-native-source="MainWindow.xaml:2952"]').click();
+    document.querySelector('[data-native-source="MainWindow.xaml:2961"]').click();
+    document.querySelector('[data-native-source="MainWindow.xaml:2963"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const dialerAfterKeypad = document.querySelector('[data-automation-id="ThreadDialerNumber"]').value;
     const inputSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     inputSetter.call(dialerInput, '5559');
     dialerInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -387,6 +393,8 @@ async function runCdp() {
       outLabel,
       replyFocusedFromCallRow,
       dialerOpened,
+      dialerKeypadSources,
+      dialerAfterKeypad,
       dialerAfterBackspace,
       dialerClosed,
       imageLoaded: image.naturalWidth > 0,
@@ -460,6 +468,8 @@ async function main() {
     if (!result.desktop.handoffRequests.some((request) => request.target === "delete-all-calls")) failures.push("delete-all-calls handoff was not recorded");
     if (!result.desktop.handoffRequests.some((request) => request.target === "toggle-block" && request.value.includes("15551234567"))) failures.push("call-record block handoff did not carry the number");
     if (!result.desktop.handoffRequests.some((request) => request.target === "delete-call-entry" && request.value.includes("15551234567"))) failures.push("delete-call-entry handoff did not carry the number");
+    if (result.desktop.dialerKeypadSources.length !== 12 || !result.desktop.dialerKeypadSources.includes("MainWindow.xaml:2952") || !result.desktop.dialerKeypadSources.includes("MainWindow.xaml:2963")) failures.push("thread-side dialer keypad native sources are incomplete");
+    if (result.desktop.dialerAfterKeypad !== "1*#") failures.push("thread-side dialer keypad buttons did not append digits");
     if (!result.desktop.dialerOpened || result.desktop.dialerAfterBackspace !== "555" || !result.desktop.dialerClosed) failures.push("thread-side dialer show/backspace/hide behavior failed");
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-message" && request.value.includes("555"))) failures.push("thread-side dialer text action did not hand off the typed number");
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("555"))) failures.push("thread-side dialer call did not use the host dial endpoint");

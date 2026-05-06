@@ -7,6 +7,20 @@ const RAIL_COLLAPSED_KEY = "deskphone_web_rail_collapsed";
 const RAIL_WIDTH_KEY = "deskphone_web_rail_width";
 const MESSAGE_LIST_WIDTH_KEY = "deskphone_web_message_list_width";
 const CALL_HISTORY_WIDTH_KEY = "deskphone_web_call_history_width";
+const THREAD_DIALPAD_KEYS = [
+  ["1", "MainWindow.xaml:2952"],
+  ["2", "MainWindow.xaml:2953"],
+  ["3", "MainWindow.xaml:2954"],
+  ["4", "MainWindow.xaml:2955"],
+  ["5", "MainWindow.xaml:2956"],
+  ["6", "MainWindow.xaml:2957"],
+  ["7", "MainWindow.xaml:2958"],
+  ["8", "MainWindow.xaml:2959"],
+  ["9", "MainWindow.xaml:2960"],
+  ["*", "MainWindow.xaml:2961"],
+  ["0", "MainWindow.xaml:2962"],
+  ["#", "MainWindow.xaml:2963"],
+];
 const DESKPHONE_WEB_VERSION = "001";
 
 const COLORS = {
@@ -1142,6 +1156,18 @@ function ConversationCallHistory({ calls, selectedConversation, onCall, onText, 
               />
             </label>
             <button type="button" title="Hide keypad" aria-label="Hide keypad" data-native-source="MainWindow.xaml:2871" onClick={() => setDialerOpen(false)}>{icon("close", 18)}</button>
+          </div>
+          <div className="dp-thread-dialer-keys" aria-label="Dial pad">
+            {THREAD_DIALPAD_KEYS.map(([key, nativeSource]) => (
+              <button
+                type="button"
+                key={key}
+                data-native-source={nativeSource}
+                onClick={() => setDialerNumber((value) => `${value}${key}`)}
+              >
+                {key}
+              </button>
+            ))}
           </div>
           <div className="dp-thread-dialer-actions">
             <button type="button" title="Backspace" aria-label="Backspace" data-native-source="MainWindow.xaml:2893" onClick={() => setDialerNumber((value) => value.slice(0, -1))}>{icon("backspace", 17)}</button>
@@ -2916,6 +2942,20 @@ const css = `
   padding: 8px 9px;
   color: var(--dp-text);
   font: 600 14px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+}
+.dp-thread-dialer-keys {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.dp-thread-dialer-keys button {
+  width: 100%;
+  height: 32px;
+  border-radius: 10px;
+  color: var(--dp-text);
+  font-size: 15px;
+  font-weight: 700;
 }
 .dp-thread-dialer-actions {
   margin-top: 8px;
