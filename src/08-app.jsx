@@ -1133,7 +1133,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                             <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui", flexShrink: 0 }}>{date}</span>
                           </div>
                           <span style={{ fontSize: 11, color: T.tSoft, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", marginBottom: 1 }}>{subject}</span>
-                          {msg.snippet && <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.4 }}>{decodeSnippet(msg.snippet)}</span>}
+                          {(msg.aiSummary || msg.snippet) && <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.aiSummary || decodeSnippet(msg.snippet)}</span>}
                         </a>
                       );
                     })}
@@ -1944,6 +1944,16 @@ function App({ user, onSignOut }) {
 
   // These throw 'token_expired' on 401 but do NOT call setGoogleToken themselves —
   // the effect handles token clearing to avoid cancelling its own load mid-flight.
+  function sortCalEvents(evts) {
+    return [...evts].sort((a, b) => {
+      const aAllDay = !a.start?.dateTime;
+      const bAllDay = !b.start?.dateTime;
+      if (aAllDay !== bAllDay) return aAllDay ? 1 : -1; // timed first, all-day last
+      const aKey = a.start?.dateTime || a.start?.date || '';
+      const bKey = b.start?.dateTime || b.start?.date || '';
+      return aKey < bKey ? -1 : aKey > bKey ? 1 : 0;
+    });
+  }
   async function fetchCalendarData(token) {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
@@ -1973,7 +1983,7 @@ function App({ user, onSignOut }) {
       if (r.status === 401) throw new Error('token_expired');
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + r.status}`); }
       const d = await r.json();
-      return (d.items || []).slice(0, 20);
+      return sortCalEvents(d.items || []).slice(0, 20);
     }
 
     // Step 2: fetch events from each calendar in parallel
@@ -1986,12 +1996,11 @@ function App({ user, onSignOut }) {
     );
     // Re-throw token_expired if any calendar hit it
     for (const r of results) { if (r.reason?.message === 'token_expired') throw new Error('token_expired'); }
-    // Merge, dedupe by event id, sort by start, cap at 20
+    // Merge, dedupe by event id, sort (timed first, all-day last), cap at 20
     const seen = new Set();
     const all = results.flatMap(r => r.status === 'fulfilled' ? r.value : []).filter(evt => { if (seen.has(evt.id)) return false; seen.add(evt.id); return true; });
-    all.sort((a, b) => (a.start?.dateTime || a.start?.date || '') < (b.start?.dateTime || b.start?.date || '') ? -1 : 1);
     console.log('[Google] Total calendar events after merge:', all.length);
-    return all.slice(0, 20);
+    return sortCalEvents(all).slice(0, 20);
   }
 
   async function fetchGmailData(token) {
@@ -2012,6 +2021,23 @@ function App({ user, onSignOut }) {
           { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
       )
     );
+    // Batch AI: generate one-sentence summaries for all emails in a single call
+    try {
+      const lines = msgs.map((m, i) => {
+        const subj = m?.payload?.headers?.find(h => h.name === 'Subject')?.value || '';
+        const snip = (m.snippet || '').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+        return `${i + 1}. Subject: "${subj}" | Body: "${snip}"`;
+      }).join('\n');
+      const prompt = `For each email, write ONE sentence (8 words or fewer) capturing what it is about. Return ONLY a JSON array of strings, one per email, in order.\n\n${lines}`;
+      const raw = await callAI(prompt, { maxTokens: 400 });
+      const match = raw.match(/\[[\s\S]*?\]/);
+      if (match) {
+        const summaries = JSON.parse(match[0]);
+        return msgs.map((m, i) => ({ ...m, aiSummary: typeof summaries[i] === 'string' ? summaries[i].replace(/^"|"$/g, '') : '' }));
+      }
+    } catch (e) {
+      console.warn('[Google] AI email summary failed:', e.message);
+    }
     return msgs;
   }
 
