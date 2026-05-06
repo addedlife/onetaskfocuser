@@ -1520,12 +1520,12 @@ function MessagesSlice({
                   </ShellButton>
                 ) : null}
                 <DeskPhoneIconButton iconName="block" label="Block / unblock locally" nativeSource="MainWindow.xaml:1738" nativeGlyph="E14B" onClick={() => onNativeHandoff("Block / unblock locally", "MainWindow.xaml:1738", selectedConversation.number)} />
-                <DeskPhoneIconButton iconName="push_pin" label="Pin / unpin conversation" nativeSource="MainWindow.xaml:1743" nativeGlyph="F10D" onClick={() => onNativeHandoff("Pin / unpin conversation", "MainWindow.xaml:1743", selectedConversation.number)} />
-                <DeskPhoneIconButton iconName="notifications_off" label="Mute / unmute alerts" nativeSource="MainWindow.xaml:1748" nativeGlyph="E7F6" onClick={() => onNativeHandoff("Mute / unmute alerts", "MainWindow.xaml:1748", selectedConversation.number)} />
-                <DeskPhoneIconButton iconName="mark_email_read" label="Mark read" nativeSource="MainWindow.xaml:1753" nativeGlyph="E151" onClick={() => onNativeHandoff("Mark read", "MainWindow.xaml:1753", selectedConversation.number)} />
-                <DeskPhoneIconButton iconName="mark_email_unread" label="Mark unread" nativeSource="MainWindow.xaml:1758" nativeGlyph="F18A" onClick={() => onNativeHandoff("Mark unread", "MainWindow.xaml:1758", selectedConversation.number)} />
-                <DeskPhoneIconButton iconName="person_add" label="Add contact" nativeSource="MainWindow.xaml:1763" nativeGlyph="E7FE" onClick={() => onNativeHandoff("Add contact", "MainWindow.xaml:1763", selectedConversation.number)} />
-                <DeskPhoneIconButton iconName="edit" label="Edit contact" nativeSource="MainWindow.xaml:1768" nativeGlyph="E3C9" onClick={() => onNativeHandoff("Edit contact", "MainWindow.xaml:1768", selectedConversation.number)} />
+                <DeskPhoneIconButton iconName="push_pin" label="Pin / unpin conversation" nativeSource="MainWindow.xaml:1742" nativeGlyph="F10D" onClick={() => onNativeHandoff("Pin / unpin conversation", "MainWindow.xaml:1742", selectedConversation.number)} />
+                <DeskPhoneIconButton iconName="notifications_off" label="Mute / unmute alerts" nativeSource="MainWindow.xaml:1746" nativeGlyph="E7F6" onClick={() => onNativeHandoff("Mute / unmute alerts", "MainWindow.xaml:1746", selectedConversation.number)} />
+                <DeskPhoneIconButton iconName="mark_email_read" label="Mark read" nativeSource="MainWindow.xaml:1750" nativeGlyph="E151" onClick={() => onNativeHandoff("Mark read", "MainWindow.xaml:1750", selectedConversation.number)} />
+                <DeskPhoneIconButton iconName="mark_email_unread" label="Mark unread" nativeSource="MainWindow.xaml:1755" nativeGlyph="F18A" onClick={() => onNativeHandoff("Mark unread", "MainWindow.xaml:1755", selectedConversation.number)} />
+                <DeskPhoneIconButton iconName="person_add" label="Add contact" nativeSource="MainWindow.xaml:1760" nativeGlyph="E7FE" onClick={() => onNativeHandoff("Add contact", "MainWindow.xaml:1760", selectedConversation.number)} />
+                <DeskPhoneIconButton iconName="edit" label="Edit contact" nativeSource="MainWindow.xaml:1766" nativeGlyph="E3C9" onClick={() => onNativeHandoff("Edit contact", "MainWindow.xaml:1766", selectedConversation.number)} />
                 <DeskPhoneIconButton iconName="call" label="Call" nativeSource="MainWindow.xaml:1776" nativeGlyph="E0B0" onClick={() => callNumber(selectedConversation.number)} />
               </div>
             </header>
