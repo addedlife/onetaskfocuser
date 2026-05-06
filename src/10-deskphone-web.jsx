@@ -813,14 +813,14 @@ function ContactImportPrompt() {
   );
 }
 
-function BuildUpdateOverlay({ showPrompt, showIndicator, onShowPrompt, onAccept, onSnooze }) {
+function BuildUpdateOverlay({ showPrompt, showIndicator, title, body, onShowPrompt, onAccept, onSnooze }) {
   return (
     <>
       {showPrompt ? (
         <div className="dp-build-overlay" data-native-source="MainWindow.xaml:855">
           <div className="dp-build-dialog">
-            <h2>New DeskPhone build available</h2>
-            <p>The native DeskPhone app can switch to the staged build when the host exposes the update action to the web shell.</p>
+            <h2>{title || "New DeskPhone build available"}</h2>
+            <p>{body || "The native DeskPhone app can switch to the staged build when the host exposes the update action to the web shell."}</p>
             <div className="dp-build-dialog-actions">
               <ShellButton className="dp-primary" nativeSource="MainWindow.xaml:882" onClick={onAccept}>
                 Use New Build
@@ -1067,6 +1067,7 @@ function MessageBubble({
   onToggleOpen,
   onCopy,
   onCall,
+  onForward,
   onNativeHandoff,
   onOpenImage,
 }) {
@@ -1128,7 +1129,17 @@ function MessageBubble({
         {open ? (
           <div className="dp-bubble-actions" data-native-source={message.isSent ? "MainWindow.xaml:2248" : "MainWindow.xaml:2032"}>
             <button type="button" title="Copy" onClick={(event) => { event.stopPropagation(); onCopy(message); }}>{icon("content_copy", 17)}</button>
-            <button type="button" title="Forward" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Forward message", "MainWindow.xaml:2037", message.number); }}>{icon("forward", 17)}</button>
+            <button
+              type="button"
+              title="Forward"
+              data-native-source={message.isSent ? "MainWindow.xaml:2260" : "MainWindow.xaml:2040"}
+              onClick={(event) => {
+                event.stopPropagation();
+                onForward(message);
+              }}
+            >
+              {icon("forward", 17)}
+            </button>
             <button type="button" title="Call" onClick={(event) => { event.stopPropagation(); onCall(message.number); }}>{icon("call", 17)}</button>
             <button type="button" title="Delete" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Delete message", "MainWindow.xaml:2043", message.number); }}>{icon("delete", 17)}</button>
             <button type="button" title="Pin" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Pin message", "MainWindow.xaml:2047", message.number); }}>{icon("push_pin", 17)}</button>
@@ -1397,6 +1408,12 @@ function MessagesSlice({
     }
   }, [onNativeHandoff, onNotice]);
 
+  const forwardMessage = useCallback((message) => {
+    setDraft(message.body || message.preview || "");
+    onOpenNewMessage();
+    onNotice("Forward draft ready. Choose a recipient.");
+  }, [onNotice, onOpenNewMessage, setDraft]);
+
   const sendMessage = useCallback(async () => {
     const body = draft.trim();
     if (!body || !selectedConversation?.number) return;
@@ -1588,6 +1605,7 @@ function MessagesSlice({
                       onToggleOpen={(id) => setOpenActionMessageId((current) => current === id ? "" : id)}
                       onCopy={copyMessage}
                       onCall={callNumber}
+                      onForward={forwardMessage}
                       onNativeHandoff={onNativeHandoff}
                       onOpenImage={openImageViewer}
                     />
@@ -1777,10 +1795,10 @@ function ContactsSlice({ contacts, onCommand, onNativeHandoff }) {
   );
 }
 
-function NewMessageComposer({ contacts, onCommand, onCancel, onNotice }) {
+function NewMessageComposer({ contacts, initialBody = "", onCommand, onCancel, onNotice }) {
   const [query, setQuery] = useState("");
   const [selectedPhone, setSelectedPhone] = useState("");
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState(initialBody);
   const contactOptions = useMemo(() => {
     const search = query.trim().toLowerCase();
     return contacts.flatMap((contact, contactIndex) => (
@@ -1932,6 +1950,7 @@ function SimpleTabContent({
     return (
       <NewMessageComposer
         contacts={contacts}
+        initialBody={draft}
         onCommand={onCommand}
         onCancel={onCancelNewMessage}
         onNotice={onNotice}
@@ -4123,7 +4142,10 @@ export function DeskPhoneWebPanel({
   const connectionStatus = useMemo(() => connectionStatusFromStatus(status), [status]);
   const callsConnectionLabel = useMemo(() => channelLabel(status?.hfp || status?.Hfp, "Calls"), [status]);
   const messagesConnectionLabel = useMemo(() => channelLabel(status?.map || status?.Map, "Messages"), [status]);
-  const showReconnectPrompt = !reconnectDismissed && !online;
+  const showReconnectPrompt = !reconnectDismissed && !!(status?.showReconnectPrompt || status?.ShowReconnectPrompt || !online);
+  const effectiveBuildPrompt = !!(status?.showBuildUpdatePrompt || status?.ShowBuildUpdatePrompt || showBuildPrompt);
+  const effectiveBuildIndicator = !!(status?.showBuildUpdateIndicator || status?.ShowBuildUpdateIndicator || showBuildIndicator);
+  const effectiveMuted = !!(status?.isMuted ?? status?.IsMuted ?? muted);
 
   const runCommand = useCallback(async (path, label) => {
     setBusy(label);
@@ -4365,32 +4387,43 @@ export function DeskPhoneWebPanel({
               visible={showReconnectPrompt}
               status={status}
               onConnect={() => runCommand("/connect", "connect")}
-              onChooseDevice={showNativeApp}
+              onChooseDevice={() => {
+                setReconnectDismissed(true);
+                setActiveTab("settings");
+              }}
               onDismiss={() => setReconnectDismissed(true)}
             />
             <ContactImportPrompt />
           </div>
 
           <BuildUpdateOverlay
-            showPrompt={showBuildPrompt}
-            showIndicator={showBuildIndicator}
+            showPrompt={effectiveBuildPrompt}
+            showIndicator={effectiveBuildIndicator && !effectiveBuildPrompt}
+            title={status?.pendingBuildTitle || status?.PendingBuildTitle}
+            body={status?.pendingBuildBody || status?.PendingBuildBody}
             onShowPrompt={() => {
               setShowBuildPrompt(true);
               setShowBuildIndicator(false);
+              runCommand("/show-build-update-prompt", "show build update");
             }}
-            onAccept={() => nativeHandoff("Use New Build", "MainWindow.xaml:882")}
+            onAccept={() => {
+              setShowBuildPrompt(false);
+              setShowBuildIndicator(false);
+              runCommand("/accept-build-update", "use new build");
+            }}
             onSnooze={() => {
               setShowBuildPrompt(false);
               setShowBuildIndicator(true);
+              runCommand("/snooze-build-update", "snooze build update");
             }}
           />
 
           <CallBanner
             status={status}
-            muted={muted}
+            muted={effectiveMuted}
             onMute={() => {
               setMuted((value) => !value);
-              nativeHandoff(muted ? "Unmute call" : "Mute call", "MainWindow.xaml:973");
+              runCommand("/toggle-mute", effectiveMuted ? "unmute call" : "mute call");
             }}
             onAnswer={() => runCommand("/answer", "answer")}
             onHangup={() => runCommand("/hangup", "hangup")}

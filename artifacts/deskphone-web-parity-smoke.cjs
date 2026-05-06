@@ -152,6 +152,15 @@ const server = http.createServer((req, res) => {
     send({
       hfp: "Connected",
       map: "Connected",
+      callState: "Active",
+      isCallActive: true,
+      isMuted: false,
+      showReconnectPrompt: true,
+      showBuildUpdatePrompt: false,
+      showBuildUpdateIndicator: true,
+      pendingBuildVersion: "b999",
+      pendingBuildTitle: "New Build Available: b999",
+      pendingBuildBody: "Switch to the staged smoke-test build.",
       fullHistoryStatus: "Full history ready",
       build: "b242  2026-05-04 10:00",
       syncThemeWithShamash: false,
@@ -177,7 +186,7 @@ const server = http.createServer((req, res) => {
     send(handoffRequests);
   } else if (requestPath === "/command-log") {
     send(commandRequests);
-  } else if (["/dial", "/send", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-live-log", "/clear-log", "/run-ui-auditor"].includes(requestPath)) {
+  } else if (["/dial", "/send", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-live-log", "/clear-log", "/run-ui-auditor", "/toggle-mute", "/accept-build-update", "/snooze-build-update", "/show-build-update-prompt"].includes(requestPath)) {
     commandRequests.push({ path: req.url });
     send({ ok: true });
   } else {
@@ -330,6 +339,23 @@ async function runCdp() {
     const callHistory = await drag('.dp-thread-inner-splitter', '.dp-thread-calls', -72);
     const webVersionText = document.querySelector('.dp-app-build')?.textContent.trim() || '';
     const hostBuildText = document.querySelector('.dp-app-time')?.textContent.trim() || '';
+    const chooseDeviceButton = document.querySelector('.dp-reconnect-prompt [data-native-source="MainWindow.xaml:812"]');
+    chooseDeviceButton?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const chooseDeviceOpenedSettings = !!document.querySelector('.dp-settings-shell');
+    document.querySelector('button[data-native-source="MainWindow.xaml:508"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('[data-native-source="MainWindow.xaml:904"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const buildPromptShown = !!document.querySelector('.dp-build-overlay [data-native-source="MainWindow.xaml:882"]');
+    document.querySelector('.dp-build-overlay [data-native-source="MainWindow.xaml:887"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('[data-native-source="MainWindow.xaml:904"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('.dp-build-overlay [data-native-source="MainWindow.xaml:882"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('[data-native-source="MainWindow.xaml:973"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('button[data-native-source="MainWindow.xaml:455"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     const topNewMessageComposerOpened = !!document.querySelector('.dp-new-compose-shell[data-native-source="MainWindow.xaml:2999"]');
@@ -337,8 +363,19 @@ async function runCdp() {
     const topNewMessageCancelReturned = !!(await waitForSelector('[data-automation-id="ThreadSearchBox"]'));
     const inputSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     const textareaSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
-    const threadSearchInput = await waitForSelector('[data-automation-id="ThreadSearchBox"]');
+    let threadSearchInput = await waitForSelector('[data-automation-id="ThreadSearchBox"]');
     if (!threadSearchInput) throw new Error('Thread search input missing after top New Message cancel');
+    const incomingBubble = Array.from(document.querySelectorAll('.dp-message-bubble.is-incoming')).find((bubble) => bubble.querySelector('.dp-message-body'));
+    const incomingForwardBody = incomingBubble?.querySelector('.dp-message-body')?.textContent.trim() || '';
+    incomingBubble?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('button[data-native-source="MainWindow.xaml:2040"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const forwardDraftBody = document.querySelector('[data-automation-id="NewMessageBody"]')?.value || '';
+    const forwardDraftReady = !!incomingForwardBody && forwardDraftBody === incomingForwardBody;
+    document.querySelector('.dp-new-compose-shell [data-native-source="MainWindow.xaml:3036"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    threadSearchInput = await waitForSelector('[data-automation-id="ThreadSearchBox"]');
     inputSetter.call(threadSearchInput, 'History line 17');
     threadSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 150));
@@ -564,6 +601,9 @@ async function runCdp() {
       callHistory,
       webVersionText,
       hostBuildText,
+      chooseDeviceOpenedSettings,
+      buildPromptShown,
+      forwardDraftReady,
       handoffRequests,
       commandRequests,
       threadSearchNavigation,
@@ -657,8 +697,14 @@ async function main() {
     if (!(result.desktop.messageList.after > result.desktop.messageList.before)) failures.push("message splitter did not expand");
     if (!(result.desktop.callHistory.after > result.desktop.callHistory.before)) failures.push("call-history splitter did not expand");
     if (result.desktop.webVersionText !== "DeskPhone Web Version 001" || result.desktop.hostBuildText !== "Windows Host: b242") failures.push("web version or Windows host label is wrong");
+    if (!result.desktop.chooseDeviceOpenedSettings) failures.push("Choose device did not open browser settings");
+    if (!result.desktop.buildPromptShown) failures.push("build update indicator did not open the build prompt");
+    for (const endpoint of ["/show-build-update-prompt", "/snooze-build-update", "/accept-build-update", "/toggle-mute"]) {
+      if (!result.desktop.commandRequests.some((request) => request.path.includes(endpoint))) failures.push(`${endpoint} was not called`);
+    }
     if (!result.desktop.topNewMessageComposerOpened || !result.desktop.topNewMessageCancelReturned) failures.push("top New Message composer open/cancel failed");
     if (!result.desktop.headerNewMessageComposerOpened || !result.desktop.pickedComposeContact.includes("5551234567")) failures.push("header New Message composer contact pick failed");
+    if (!result.desktop.forwardDraftReady) failures.push("message forward did not open a prefilled New Message draft");
     if (!result.desktop.threadSearchNavigation) failures.push("thread search previous/next navigation failed");
     if (!result.desktop.conversationMenuActions) failures.push("conversation row action menu sources are incomplete");
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-message")) failures.push("new-message handoff did not target desktop compose");
