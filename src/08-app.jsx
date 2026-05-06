@@ -705,6 +705,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   // Helpers needed by both the Google IIFE and handleAddEvent
   const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || '';
   const fmtFrom = (raw) => { const m = raw?.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : (raw || '').split('@')[0]; };
+  const decodeSnippet = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ').trim();
 
   async function handleAddEvent() {
     if (!addEventText.trim() || addEventLoading) return;
@@ -1001,7 +1002,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           return (
             <React.Fragment>
             <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", gap: 4, minHeight: 0 }}>
-              <div style={{ display: "flex", gap: 10, flex: "0 0 220px", minHeight: 0 }}>
+              <div style={{ display: "flex", gap: 10, flex: "0 0 260px", minHeight: 0 }}>
 
               {/* Not connected — never been connected: show connect button */}
               {notConnected && !googleError && !googleWasConnected && (
@@ -1127,11 +1128,12 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                             setHoverEmail(null);
                           }}
                         >
-                          <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginBottom: 1 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: T.tSoft, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6, marginBottom: 1 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: T.text, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
                             <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui", flexShrink: 0 }}>{date}</span>
                           </div>
-                          <span style={{ fontSize: 12, color: T.text, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{subject}</span>
+                          <span style={{ fontSize: 11, color: T.tSoft, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", marginBottom: 1 }}>{subject}</span>
+                          {msg.snippet && <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.4 }}>{decodeSnippet(msg.snippet)}</span>}
                         </a>
                       );
                     })}
@@ -1946,19 +1948,38 @@ function App({ user, onSignOut }) {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
-    // Step 1: get all subscribed calendars
-    console.log('[Google] Fetching calendar list…');
-    const listR = await fetch('https://www.googleapis.com/calendar/v3/calendarList?showHidden=false&maxResults=50', { headers: { Authorization: `Bearer ${token}` } });
-    console.log('[Google] CalendarList status:', listR.status);
-    if (listR.status === 401) throw new Error('token_expired');
-    if (!listR.ok) { const d = await listR.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + listR.status}`); }
-    const listD = await listR.json();
-    const cals = (listD.items || []).filter(c => c.selected !== false && c.accessRole !== 'none');
-    console.log('[Google] Subscribed calendars:', cals.length);
+    const eventsUrl = (calId) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=25`;
+
+    // Step 1: try to get all subscribed calendars via calendarList
+    let cals = null;
+    try {
+      console.log('[Google] Fetching calendar list…');
+      const listR = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?showHidden=false&maxResults=50', { headers: { Authorization: `Bearer ${token}` } });
+      console.log('[Google] CalendarList status:', listR.status);
+      if (listR.status === 401) throw new Error('token_expired');
+      if (listR.ok) {
+        const listD = await listR.json();
+        cals = (listD.items || []).filter(c => c.selected !== false && c.accessRole !== 'none');
+        console.log('[Google] Subscribed calendars:', cals.length);
+      }
+    } catch (e) {
+      if (e.message === 'token_expired') throw e;
+      console.warn('[Google] calendarList failed, falling back to primary:', e.message);
+    }
+
+    // If calendarList failed or returned nothing, fall back to primary
+    if (!cals || cals.length === 0) {
+      const r = await fetch(eventsUrl('primary'), { headers: { Authorization: `Bearer ${token}` } });
+      if (r.status === 401) throw new Error('token_expired');
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + r.status}`); }
+      const d = await r.json();
+      return (d.items || []).slice(0, 20);
+    }
+
     // Step 2: fetch events from each calendar in parallel
     const results = await Promise.allSettled(
       cals.map(cal =>
-        fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=25`, { headers: { Authorization: `Bearer ${token}` } })
+        fetch(eventsUrl(cal.id), { headers: { Authorization: `Bearer ${token}` } })
           .then(r => { if (r.status === 401) throw new Error('token_expired'); return r.json(); })
           .then(d => (d.items || []))
       )
