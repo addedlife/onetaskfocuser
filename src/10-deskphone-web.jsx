@@ -1071,6 +1071,7 @@ function MessageBubble({
   onCall,
   onForward,
   onTogglePin,
+  onDelete,
   onNativeHandoff,
   onOpenImage,
 }) {
@@ -1145,7 +1146,17 @@ function MessageBubble({
               {icon("forward", 17)}
             </button>
             <button type="button" title="Call" onClick={(event) => { event.stopPropagation(); onCall(message.number); }}>{icon("call", 17)}</button>
-            <button type="button" title="Delete" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Delete message", "MainWindow.xaml:2043", message.number); }}>{icon("delete", 17)}</button>
+            <button
+              type="button"
+              title="Delete"
+              data-native-source={message.isSent ? "MainWindow.xaml:2268" : "MainWindow.xaml:2048"}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete(message);
+              }}
+            >
+              {icon("delete", 17)}
+            </button>
             <button
               type="button"
               title={message.pinActionLabel || "Pin"}
@@ -1348,6 +1359,8 @@ function MessagesSlice({
     conversations.find((conversation) => conversation.key === selectedConversationKey) ||
     visibleConversations[0] ||
     null;
+  const hasUndoMessageDelete = !!(status?.hasUndoMessageDelete || status?.HasUndoMessageDelete);
+  const undoMessageDeleteText = status?.undoMessageDeleteText || status?.UndoMessageDeleteText || "Message deleted";
   const pinnedMessages = useMemo(
     () => selectedConversation?.messages.filter((message) => message.isPinned).slice().reverse() || [],
     [selectedConversation]
@@ -1458,6 +1471,14 @@ function MessagesSlice({
       return;
     }
     await onCommand(`/toggle-message-pin?id=${encodeURIComponent(message.id)}`, "toggle message pin");
+  }, [onCommand, onNativeHandoff]);
+
+  const deleteMessage = useCallback(async (message) => {
+    if (!message?.id) {
+      onNativeHandoff("Delete message", message?.isSent ? "MainWindow.xaml:2268" : "MainWindow.xaml:2048", message?.number || "");
+      return;
+    }
+    await onCommand(`/delete-message?id=${encodeURIComponent(message.id)}`, "delete message");
   }, [onCommand, onNativeHandoff]);
 
   const openImageViewer = useCallback((attachment) => {
@@ -1661,6 +1682,7 @@ function MessagesSlice({
                       onCall={callNumber}
                       onForward={forwardMessage}
                       onTogglePin={toggleMessagePin}
+                      onDelete={deleteMessage}
                       onNativeHandoff={onNativeHandoff}
                       onOpenImage={openImageViewer}
                     />
@@ -1676,10 +1698,12 @@ function MessagesSlice({
                 >
                   {icon("keyboard_arrow_down", 24)}
                 </button>
-                <div className="dp-undo-delete-bar" data-native-source="MainWindow.xaml:2315" aria-hidden="true">
-                  <span>Message deleted</span>
-                  <button type="button" onClick={() => onNativeHandoff("Undo message delete", "MainWindow.xaml:2334")}>Undo</button>
-                </div>
+                {hasUndoMessageDelete ? (
+                  <div className="dp-undo-delete-bar" data-native-source="MainWindow.xaml:2315">
+                    <span>{undoMessageDeleteText}</span>
+                    <button type="button" data-native-source="MainWindow.xaml:2340" onClick={() => onCommand("/undo-message-delete", "undo message delete")}>Undo</button>
+                  </div>
+                ) : null}
                 <footer className="dp-compose-bar" data-native-source="MainWindow.xaml:2342">
                   <button
                     type="button"

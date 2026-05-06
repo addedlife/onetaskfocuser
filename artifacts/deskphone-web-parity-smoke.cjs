@@ -131,6 +131,8 @@ const contacts = [
     phoneNumbers: ["+15557654321"],
   },
 ];
+
+let hasUndoMessageDelete = false;
 const handoffRequests = [];
 const commandRequests = [];
 
@@ -170,6 +172,8 @@ const server = http.createServer((req, res) => {
       isDarkModeEnabled: false,
       themeSyncLabel: "Theme sync off",
       themeSyncRefreshStatus: "",
+      hasUndoMessageDelete,
+      undoMessageDeleteText: hasUndoMessageDelete ? "Message deleted from +1 (555) 123-4567" : "",
     });
   } else if (requestPath === "/messages") {
     send(messages);
@@ -188,6 +192,14 @@ const server = http.createServer((req, res) => {
     send(handoffRequests);
   } else if (requestPath === "/command-log") {
     send(commandRequests);
+  } else if (requestPath === "/delete-message") {
+    hasUndoMessageDelete = true;
+    commandRequests.push({ path: req.url });
+    send({ ok: true });
+  } else if (requestPath === "/undo-message-delete") {
+    hasUndoMessageDelete = false;
+    commandRequests.push({ path: req.url });
+    send({ ok: true });
   } else if (["/dial", "/send", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-live-log", "/clear-log", "/run-ui-auditor", "/toggle-mute", "/accept-build-update", "/snooze-build-update", "/show-build-update-prompt", "/toggle-message-pin"].includes(requestPath)) {
     commandRequests.push({ path: req.url });
     send({ ok: true });
@@ -386,6 +398,12 @@ async function runCdp() {
     pinnedMessage?.click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-message-id="m20"] button[data-native-source="MainWindow.xaml:2052"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const deleteMessage = document.querySelector('[data-message-id="m20"] button[data-native-source="MainWindow.xaml:2048"]');
+    deleteMessage?.click();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const messageDeleteUndoVisible = !!document.querySelector('.dp-undo-delete-bar button[data-native-source="MainWindow.xaml:2340"]');
+    document.querySelector('.dp-undo-delete-bar button[data-native-source="MainWindow.xaml:2340"]')?.click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     inputSetter.call(threadSearchInput, 'History line 17');
     threadSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -617,6 +635,7 @@ async function runCdp() {
       forwardDraftReady,
       pinnedStripVisible,
       pinnedJumpFound,
+      messageDeleteUndoVisible,
       handoffRequests,
       commandRequests,
       threadSearchNavigation,
@@ -720,6 +739,9 @@ async function main() {
     if (!result.desktop.forwardDraftReady) failures.push("message forward did not open a prefilled New Message draft");
     if (!result.desktop.pinnedStripVisible || !result.desktop.pinnedJumpFound) failures.push("pinned message strip did not render or jump to the pinned message");
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/toggle-message-pin") && request.path.includes("m20"))) failures.push("message pin action did not call /toggle-message-pin with the message id");
+    if (!result.desktop.messageDeleteUndoVisible) failures.push("message delete did not show the undo bar");
+    if (!result.desktop.commandRequests.some((request) => request.path.includes("/delete-message") && request.path.includes("m20"))) failures.push("message delete action did not call /delete-message with the message id");
+    if (!result.desktop.commandRequests.some((request) => request.path.includes("/undo-message-delete"))) failures.push("message undo action did not call /undo-message-delete");
     if (!result.desktop.threadSearchNavigation) failures.push("thread search previous/next navigation failed");
     if (!result.desktop.conversationMenuActions) failures.push("conversation row action menu sources are incomplete");
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-message")) failures.push("new-message handoff did not target desktop compose");
