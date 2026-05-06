@@ -1752,7 +1752,10 @@ function SimpleTabContent({
         )}
         {settingsSection === "appearance" && (
           <section className="dp-settings-panel" data-native-source="MainWindow.xaml:4000" aria-label="Appearance settings">
-            <span className="dp-native-hidden" data-native-source="MainWindow.xaml:4235" aria-hidden="true" />
+            <div className="dp-settings-actions dp-settings-tools">
+              <ShellButton className="dp-tonal" iconName="restart_alt" nativeSource="MainWindow.xaml:4235" onClick={() => onCommand("/reset-ui-scale", "reset appearance")}>Reset</ShellButton>
+              <ShellButton className="dp-tonal" iconName="sync" nativeSource="MainWindow.xaml:4288" onClick={() => onCommand("/refresh-theme-sync", "refresh theme sync")}>Refresh Sync</ShellButton>
+            </div>
             <span className="dp-native-hidden" data-native-source="MainWindow.xaml:4258" aria-hidden="true" />
             <span className="dp-native-hidden" data-native-source="MainWindow.xaml:4294" aria-hidden="true" />
             <span className="dp-native-hidden" data-native-source="MainWindow.xaml:4309" aria-hidden="true" />
@@ -1761,6 +1764,9 @@ function SimpleTabContent({
         {settingsSection === "contact-sync" && (
           <section className="dp-settings-panel" data-native-source="MainWindow.xaml:4005">
             <div className="dp-settings-actions dp-settings-tools">
+              <ShellButton className="dp-tonal" iconName="upload_file" nativeSource="MainWindow.xaml:4381" onClick={() => onCommand("/import-starter-vcf", "import starter VCF")}>Import VCF</ShellButton>
+              <ShellButton className="dp-tonal" iconName="move_to_inbox" nativeSource="MainWindow.xaml:4385" onClick={() => onCommand("/import-pending-contacts", "import synced contacts")}>Import Synced</ShellButton>
+              <ShellButton className="dp-tonal" iconName="block" nativeSource="MainWindow.xaml:4390" onClick={() => onCommand("/skip-pending-contacts", "ignore pending contacts")}>Ignore Pending</ShellButton>
               <ShellButton className="dp-tonal" iconName="folder_open" nativeSource="MainWindow.xaml:4395" onClick={() => onCommand("/open-contact-sync-folder", "open contact sync folder")}>Sync Folder</ShellButton>
               <ShellButton className="dp-tonal" iconName="download" nativeSource="MainWindow.xaml:4412" onClick={() => onCommand("/export-messages-backup", "export messages backup")}>Save Backup</ShellButton>
             </div>
