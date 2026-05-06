@@ -36,12 +36,12 @@ Updated: 2026-05-06
 
 | Web parity state | Count |
 | --- | ---: |
-| implemented-web | 109 |
-| host-api-needed | 84 |
+| implemented-web | 114 |
+| host-api-needed | 79 |
 | native-only | 6 |
 | not-yet-reviewed | 0 |
 
-Reviewed slice: all 199 native action rows have now been classified against `src/10-deskphone-web.jsx`: 109 browser-implemented rows, 84 host/API-needed rows, and 6 native-only WPF/template rows. Covered browser behavior includes navigation rail collapse, phone/settings navigation, reconnect/settings rail actions, reconnect prompt actions, build prompt actions, call banner answer/hangup actions, contacts/developer/log shell routing, conversation filters, unread-first sorting, row-menu and thread-header block/pin/mute/read/unread handoffs, show/hide thread list, thread search previous/next navigation, thread clear-search, call actions through `/dial`, call-history All/Missed/In/Out filters, call-row message/call actions, thread-side dialer show/hide/backspace/keypad/text/call/voicemail controls, settings host-tool actions for Bluetooth Settings, Sound Settings, audio refresh, builds folder, and event log, duplicate native Calls-tab dialpad rows, attachment save where browser data is available, scroll-to-latest, and text send through `/send`. Remaining parity blockers are explicitly marked `host-api-needed` with the missing endpoint or browser surface named in the CSV.
+Reviewed slice: all 199 native action rows have now been classified against `src/10-deskphone-web.jsx`: 114 browser-implemented rows, 79 host/API-needed rows, and 6 native-only WPF/template rows. Covered browser behavior includes navigation rail collapse, phone/settings navigation, reconnect/settings rail actions, reconnect prompt actions, build prompt actions, call banner answer/hangup actions, contacts/developer/log shell routing, conversation filters, unread-first sorting, row-menu and thread-header block/pin/mute/read/unread handoffs including duplicate native header rows, show/hide thread list, thread search previous/next navigation, thread clear-search, call actions through `/dial`, call-history All/Missed/In/Out filters, call-row message/call actions, thread-side dialer show/hide/backspace/keypad/text/call/voicemail controls, settings host-tool actions for Bluetooth Settings, Sound Settings, audio refresh, builds folder, and event log, duplicate native Calls-tab dialpad rows, attachment save where browser data is available, scroll-to-latest, and text send through `/send`. Remaining parity blockers are explicitly marked `host-api-needed` with the missing endpoint or browser surface named in the CSV.
 
 ## Files Written
 
