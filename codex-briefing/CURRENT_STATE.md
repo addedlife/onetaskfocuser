@@ -29,7 +29,7 @@ Current product truth:
 Current repo condition:
 
 - The send-state parity slice is committed and deployed.
-- DeskPhone Web parity map review is complete: 199 of 199 action rows reviewed as of 2026-05-06 (119 implemented-web, 74 host-api-needed, 6 native-only, 0 not-yet-reviewed). Latest runtime slices add Settings host-tool buttons, in-browser thread search previous/next navigation, exact-source thread/row action handoffs, duplicate native-header row mapping, and add/edit contact handoff mapping.
+- DeskPhone Web parity map review is complete: 199 of 199 action rows reviewed as of 2026-05-06 (124 implemented-web, 69 host-api-needed, 6 native-only, 0 not-yet-reviewed). Latest runtime slices add Settings host-tool buttons, in-browser thread search previous/next navigation, exact-source thread/row action handoffs, duplicate native-header row mapping, add/edit contact handoff mapping, and typed-number Text handoff mapping.
 - Many untracked artifacts/logs/docs exist from prior work. The user has allowed careful cleanup; inspect and classify before removing anything.
 - `shailos/` is generated output copied into the deploy; do not treat it as editable source.
 
