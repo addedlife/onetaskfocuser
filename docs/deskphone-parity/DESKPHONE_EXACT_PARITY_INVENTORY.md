@@ -36,12 +36,12 @@ Updated: 2026-05-06
 
 | Web parity state | Count |
 | --- | ---: |
-| implemented-web | 44 |
-| host-api-needed | 41 |
+| implemented-web | 48 |
+| host-api-needed | 42 |
 | native-only | 0 |
-| not-yet-reviewed | 114 |
+| not-yet-reviewed | 109 |
 
-Reviewed slice: message/thread and shell controls already present in `src/10-deskphone-web.jsx`, including navigation rail collapse, phone/settings navigation, reconnect/settings rail actions, reconnect prompt actions, conversation filters, unread-first sorting, show/hide thread list, thread clear-search, call actions through `/dial`, call-history All/Missed/In/Out filters, call-row message/call actions, thread-side dialer show/hide/backspace/call/voicemail controls, attachment save where browser data is available, scroll-to-latest, and text send through `/send`. Controls that are visible but still route through native handoff are now marked `host-api-needed` with the missing endpoint named in the CSV.
+Reviewed slice: message/thread and shell controls already present in `src/10-deskphone-web.jsx`, including navigation rail collapse, phone/settings navigation, reconnect/settings rail actions, reconnect prompt actions, build prompt actions, call banner answer/hangup actions, conversation filters, unread-first sorting, show/hide thread list, thread clear-search, call actions through `/dial`, call-history All/Missed/In/Out filters, call-row message/call actions, thread-side dialer show/hide/backspace/call/voicemail controls, attachment save where browser data is available, scroll-to-latest, and text send through `/send`. Controls that are visible but still route through native handoff are now marked `host-api-needed` with the missing endpoint named in the CSV.
 
 ## Files Written
 
