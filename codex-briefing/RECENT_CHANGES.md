@@ -25,6 +25,7 @@ Latest verified deploy:
 
 Local parity progress:
 
+- 2026-05-06: DeskPhone Web Settings now exposes host-backed Windows tool actions: Bluetooth Settings, Sound Settings, audio refresh, builds folder, and event log. The matching smoke test verifies all five browser buttons call their host endpoints. Ledger moved to 95 implemented-web, 98 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web parity CSV review completed. All 199 native action rows are classified against current web evidence: 89 implemented-web, 104 host-api-needed, 6 native-only, 0 not-yet-reviewed. Final blockers include full compose/contact editor, settings device/contact-sync/audio/developer commands, and Windows folder/settings launch actions.
 
 Operational lesson from 2026-05-05:

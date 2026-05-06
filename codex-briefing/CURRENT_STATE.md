@@ -29,7 +29,7 @@ Current product truth:
 Current repo condition:
 
 - The send-state parity slice is committed and deployed.
-- DeskPhone Web parity map review is complete: 199 of 199 action rows reviewed as of 2026-05-06 (89 implemented-web, 104 host-api-needed, 6 native-only, 0 not-yet-reviewed).
+- DeskPhone Web parity map review is complete: 199 of 199 action rows reviewed as of 2026-05-06 (95 implemented-web, 98 host-api-needed, 6 native-only, 0 not-yet-reviewed). Latest runtime slice adds Settings host-tool buttons for Bluetooth Settings, Sound Settings, audio refresh, builds folder, and event log.
 - Many untracked artifacts/logs/docs exist from prior work. The user has allowed careful cleanup; inspect and classify before removing anything.
 - `shailos/` is generated output copied into the deploy; do not treat it as editable source.
 

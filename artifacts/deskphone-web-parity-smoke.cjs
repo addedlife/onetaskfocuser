@@ -143,7 +143,7 @@ const server = http.createServer((req, res) => {
     send(handoffRequests);
   } else if (requestPath === "/command-log") {
     send(commandRequests);
-  } else if (requestPath === "/dial") {
+  } else if (["/dial", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log"].includes(requestPath)) {
     commandRequests.push({ path: req.url });
     send({ ok: true });
   } else {
@@ -291,6 +291,7 @@ async function runCdp() {
     document.querySelector('.dp-scroll-bottom').click();
     await new Promise((resolve) => setTimeout(resolve, 600));
     const maxTop = scrollBox.scrollHeight - scrollBox.clientHeight;
+    const scrolledToBottom = scrollBox.scrollTop >= maxTop - 8;
     const placeholderShown = Array.from(document.querySelectorAll('.dp-muted-body')).some((el) => el.textContent.includes('MMS message'));
     const callRowsAll = document.querySelectorAll('.dp-thread-call-row').length;
     document.querySelector('[data-automation-id="CallHistoryFilterMissed"]').click();
@@ -336,7 +337,7 @@ async function runCdp() {
     await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-native-source="MainWindow.xaml:2966"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
-    document.querySelector('[data-native-source="MainWindow.xaml:2871"]').click();
+    document.querySelector('button[data-native-source="MainWindow.xaml:2871"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     const dialerClosed = !document.querySelector('.dp-thread-dialer');
     document.querySelector('[data-native-source="MainWindow.xaml:1078"]').click();
@@ -355,8 +356,6 @@ async function runCdp() {
     await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-native-source="MainWindow.xaml:1768"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
-    const handoffRequests = await fetch('http://127.0.0.1:${hostPort}/handoff-log').then((response) => response.json());
-    const commandRequests = await fetch('http://127.0.0.1:${hostPort}/command-log').then((response) => response.json());
     const image = document.querySelector('.dp-mms-image');
     const pendingStatusText = document.querySelector('.dp-message-status.is-confirming')?.textContent.trim() || '';
     const imageBubble = image.closest('.dp-message-bubble');
@@ -376,6 +375,16 @@ async function runCdp() {
     const transform = document.querySelector('.dp-image-viewer-stage img')?.style.transform || '';
     document.querySelector('.dp-image-viewer-close').click();
     await new Promise((resolve) => setTimeout(resolve, 50));
+    document.querySelector('[data-native-source="MainWindow.xaml:586"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const settingsToolSources = ["MainWindow.xaml:4140", "MainWindow.xaml:4480", "MainWindow.xaml:4476", "MainWindow.xaml:4627", "MainWindow.xaml:4633"];
+    const settingsToolButtons = settingsToolSources.every((source) => !!document.querySelector('[data-native-source="' + source + '"]'));
+    for (const source of settingsToolSources) {
+      document.querySelector('[data-native-source="' + source + '"]').click();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const handoffRequests = await fetch('http://127.0.0.1:${hostPort}/handoff-log').then((response) => response.json());
+    const commandRequests = await fetch('http://127.0.0.1:${hostPort}/command-log').then((response) => response.json());
     return {
       rail,
       messageList,
@@ -385,7 +394,7 @@ async function runCdp() {
       handoffRequests,
       commandRequests,
       scrollable,
-      scrolledToBottom: scrollBox.scrollTop >= maxTop - 8,
+      scrolledToBottom,
       callRowsAll,
       callRowsMissed,
       missedLabel,
@@ -397,6 +406,7 @@ async function runCdp() {
       dialerAfterKeypad,
       dialerAfterBackspace,
       dialerClosed,
+      settingsToolButtons,
       imageLoaded: image.naturalWidth > 0,
       pendingStatusText,
       imageBubbleIsMediaOnly: imageBubble.classList.contains('is-media-only'),
@@ -464,7 +474,7 @@ async function main() {
     if (result.desktop.callRowsAll !== 3 || result.desktop.callRowsMissed !== 1 || result.desktop.missedLabel !== "Missed") failures.push("missed-call filter did not isolate missed calls");
     if (result.desktop.callRowsOut !== 1 || result.desktop.outLabel !== "Outgoing") failures.push("outgoing-call filter did not isolate outgoing calls");
     if (!result.desktop.replyFocusedFromCallRow) failures.push("message-this-number call-row action did not focus the reply box");
-    if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("15551234567"))) failures.push("call-this-number call-row action did not dial through the host");
+    if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && (request.path.includes("15551234567") || request.path.includes("5551234567")))) failures.push("call-this-number call-row action did not dial through the host");
     if (!result.desktop.handoffRequests.some((request) => request.target === "delete-all-calls")) failures.push("delete-all-calls handoff was not recorded");
     if (!result.desktop.handoffRequests.some((request) => request.target === "toggle-block" && request.value.includes("15551234567"))) failures.push("call-record block handoff did not carry the number");
     if (!result.desktop.handoffRequests.some((request) => request.target === "delete-call-entry" && request.value.includes("15551234567"))) failures.push("delete-call-entry handoff did not carry the number");
@@ -474,6 +484,10 @@ async function main() {
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-message" && request.value.includes("555"))) failures.push("thread-side dialer text action did not hand off the typed number");
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("555"))) failures.push("thread-side dialer call did not use the host dial endpoint");
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("*86"))) failures.push("voicemail dialer action did not dial *86");
+    if (!result.desktop.settingsToolButtons) failures.push("settings host tool buttons are incomplete");
+    for (const endpoint of ["/open-bluetooth-settings", "/open-sound-settings", "/audio-refresh", "/open-builds-folder", "/open-event-log"]) {
+      if (!result.desktop.commandRequests.some((request) => request.path.includes(endpoint))) failures.push(`${endpoint} was not called`);
+    }
     if (result.desktop.messageCount < 150) failures.push("message history was capped too shallow for DeskPhone Web");
     if (!result.desktop.imageLoaded || result.desktop.placeholderShown) failures.push("MMS image did not replace placeholder");
     if (!result.desktop.pendingStatusText.includes("Confirming on phone")) failures.push("outgoing pending message status was not visible");

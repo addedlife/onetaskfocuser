@@ -36,12 +36,12 @@ Updated: 2026-05-06
 
 | Web parity state | Count |
 | --- | ---: |
-| implemented-web | 89 |
-| host-api-needed | 104 |
+| implemented-web | 95 |
+| host-api-needed | 98 |
 | native-only | 6 |
 | not-yet-reviewed | 0 |
 
-Reviewed slice: all 199 native action rows have now been classified against `src/10-deskphone-web.jsx`: 89 browser-implemented rows, 104 host/API-needed rows, and 6 native-only WPF/template rows. Covered browser behavior includes navigation rail collapse, phone/settings navigation, reconnect/settings rail actions, reconnect prompt actions, build prompt actions, call banner answer/hangup actions, contacts/developer/log shell routing, conversation filters, unread-first sorting, show/hide thread list, thread clear-search, call actions through `/dial`, call-history All/Missed/In/Out filters, call-row message/call actions, thread-side dialer show/hide/backspace/keypad/text/call/voicemail controls, duplicate native Calls-tab dialpad rows, attachment save where browser data is available, scroll-to-latest, and text send through `/send`. Remaining parity blockers are explicitly marked `host-api-needed` with the missing endpoint or browser surface named in the CSV.
+Reviewed slice: all 199 native action rows have now been classified against `src/10-deskphone-web.jsx`: 95 browser-implemented rows, 98 host/API-needed rows, and 6 native-only WPF/template rows. Covered browser behavior includes navigation rail collapse, phone/settings navigation, reconnect/settings rail actions, reconnect prompt actions, build prompt actions, call banner answer/hangup actions, contacts/developer/log shell routing, conversation filters, unread-first sorting, show/hide thread list, thread clear-search, call actions through `/dial`, call-history All/Missed/In/Out filters, call-row message/call actions, thread-side dialer show/hide/backspace/keypad/text/call/voicemail controls, settings host-tool actions for Bluetooth Settings, Sound Settings, audio refresh, builds folder, and event log, duplicate native Calls-tab dialpad rows, attachment save where browser data is available, scroll-to-latest, and text send through `/send`. Remaining parity blockers are explicitly marked `host-api-needed` with the missing endpoint or browser surface named in the CSV.
 
 ## Files Written
 

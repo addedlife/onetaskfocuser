@@ -263,7 +263,7 @@ function handoffPath(target, value = "") {
 
 function nativeHandoffTarget(label, source = "") {
   const text = `${label || ""} ${source || ""}`.toLowerCase();
-  if (text.includes("new message") || source.includes("MainWindow.xaml:455") || source.includes("MainWindow.xaml:1078")) return "new-message";
+  if (text.includes("new message") || text.includes("message this number") || source.includes("MainWindow.xaml:455") || source.includes("MainWindow.xaml:1078") || source.includes("MainWindow.xaml:2826") || source.includes("MainWindow.xaml:2931")) return "new-message";
   if (text.includes("make call") || source.includes("MainWindow.xaml:525")) return "make-call";
   if (text.includes("live log") || source.includes("MainWindow.xaml:620")) return "live-log";
   if (text.includes("developer") || source.includes("MainWindow.xaml:603")) return "developer-tools";
@@ -1657,6 +1657,13 @@ function SimpleTabContent({
           <ShellButton className="dp-primary" iconName="save" onClick={onSaveHost}>Save</ShellButton>
           <ShellButton className="dp-tonal" iconName="refresh" onClick={onRefresh}>Test</ShellButton>
           <ShellButton className="dp-tonal" iconName="open_in_new" onClick={onShowNative}>Show native app</ShellButton>
+        </div>
+        <div className="dp-settings-actions dp-settings-tools">
+          <ShellButton className="dp-tonal" iconName="bluetooth" nativeSource="MainWindow.xaml:4140" onClick={() => onCommand("/open-bluetooth-settings", "open Bluetooth settings")}>Bluetooth Settings</ShellButton>
+          <ShellButton className="dp-tonal" iconName="volume_up" nativeSource="MainWindow.xaml:4480" onClick={() => onCommand("/open-sound-settings", "open sound settings")}>Sound Settings</ShellButton>
+          <ShellButton className="dp-tonal" iconName="sync" nativeSource="MainWindow.xaml:4476" onClick={() => onCommand("/audio-refresh", "refresh audio")}>Refresh Audio</ShellButton>
+          <ShellButton className="dp-tonal" iconName="folder_open" nativeSource="MainWindow.xaml:4627" onClick={() => onCommand("/open-builds-folder", "open builds folder")}>Builds Folder</ShellButton>
+          <ShellButton className="dp-tonal" iconName="article" nativeSource="MainWindow.xaml:4633" onClick={() => onCommand("/open-event-log", "open event log")}>Event Log</ShellButton>
         </div>
         <div className="dp-host-note">Active endpoint: {host}</div>
       </div>
@@ -3096,6 +3103,9 @@ const css = `
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+.dp-settings-tools {
+  margin-top: 10px;
 }
 .dp-ledger-panel {
   margin: 0 24px 20px;
