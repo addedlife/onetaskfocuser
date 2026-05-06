@@ -17,7 +17,7 @@ Latest verified deploy:
 
 Local parity progress:
 
-- 2026-05-06: DeskPhone Web parity CSV review began. Message/thread controls and thread-side call-history filters were mapped to current web evidence: 28 implemented-web, 37 host-api-needed, 134 not-yet-reviewed. Added browser All/Missed/In/Out filters to the thread-side call history column.
+- 2026-05-06: DeskPhone Web parity CSV review began. Message/thread controls and thread-side call-history actions were mapped to current web evidence: 30 implemented-web, 40 host-api-needed, 129 not-yet-reviewed. Added browser All/Missed/In/Out filters plus call-row message/call/block/delete controls to the thread-side call history column.
 
 Operational lesson from 2026-05-05:
 

@@ -259,6 +259,8 @@ function nativeHandoffTarget(label, source = "") {
   if (text.includes("pin / unpin") || text.includes("pin conversation")) return "toggle-pin";
   if (text.includes("mute / unmute") || text.includes("mute alerts")) return "toggle-mute";
   if (text.includes("block / unblock") || text.includes("block locally")) return "toggle-block";
+  if (text.includes("delete all call history") || source.includes("MainWindow.xaml:2592")) return "delete-all-calls";
+  if (text.includes("delete call entry") || source.includes("MainWindow.xaml:2841")) return "delete-call-entry";
   if (text.includes("edit contact")) return "edit-contact";
   if (text.includes("new contact") || text.includes("add contact") || text.includes("save as contact")) return "new-contact";
   if (text.includes("contact") || source.includes("MainWindow.xaml:562")) return "contacts";
@@ -1088,7 +1090,7 @@ function MessageBubble({ message, previousMessage, open, onToggleOpen, onCopy, o
   );
 }
 
-function ConversationCallHistory({ calls, selectedConversation, onCall, onNativeHandoff }) {
+function ConversationCallHistory({ calls, selectedConversation, onCall, onText, onNativeHandoff }) {
   const [callFilter, setCallFilter] = useState("All");
   const selectedCalls = selectedConversation ? groupCallsByNumber(calls, selectedConversation.key) : [];
   const visibleCalls = selectedCalls.filter((call) => callMatchesFilter(call, callFilter));
@@ -1105,7 +1107,10 @@ function ConversationCallHistory({ calls, selectedConversation, onCall, onNative
           <strong>Call history</strong>
           <span>{callSummary}</span>
         </div>
-        <button type="button" onClick={() => onNativeHandoff("Open full call history", "MainWindow.xaml:2459")}>{icon("open_in_new", 18)}</button>
+        <div className="dp-thread-calls-header-actions">
+          <button type="button" title="Open full call history" aria-label="Open full call history" onClick={() => onNativeHandoff("Open full call history", "MainWindow.xaml:2459")}>{icon("open_in_new", 18)}</button>
+          <button type="button" title="Delete all call history" aria-label="Delete all call history" data-native-source="MainWindow.xaml:2592" onClick={() => onNativeHandoff("Delete all call history", "MainWindow.xaml:2592")}>{icon("delete", 18)}</button>
+        </div>
       </div>
       <div className="dp-call-filter-grid" data-native-source="MainWindow.xaml:2483">
         {CALL_FILTERS.map((filter) => (
@@ -1128,7 +1133,12 @@ function ConversationCallHistory({ calls, selectedConversation, onCall, onNative
               <strong>{call.directionLabel || call.direction || "Call"}</strong>
               <span>{call.timeDisplay || formatConversationTime(call.timestamp)}{call.durationDisplay ? ` - ${call.durationDisplay}` : ""}</span>
             </div>
-            <button type="button" title="Call back" aria-label="Call back" onClick={() => onCall(call.number)}>{icon("call", 17)}</button>
+            <div className="dp-thread-call-actions">
+              <button type="button" title="Message this number" aria-label="Message this number" data-native-source="MainWindow.xaml:2826" onClick={() => onText(call.number)}>{icon("sms", 17)}</button>
+              <button type="button" title="Call this number" aria-label="Call this number" data-native-source="MainWindow.xaml:2831" onClick={() => onCall(call.number)}>{icon("call", 17)}</button>
+              <button type="button" title="Block / unblock locally" aria-label="Block / unblock locally" data-native-source="MainWindow.xaml:2836" onClick={() => onNativeHandoff("Block / unblock call record", "MainWindow.xaml:2836", call.number)}>{icon("block", 17)}</button>
+              <button type="button" title="Delete call entry" aria-label="Delete call entry" data-native-source="MainWindow.xaml:2841" onClick={() => onNativeHandoff("Delete call entry", "MainWindow.xaml:2841", call.number)}>{icon("delete", 17)}</button>
+            </div>
           </div>
         ))}
         {!visibleCalls.length ? (
@@ -1170,6 +1180,7 @@ function MessagesSlice({
   const [activeImage, setActiveImage] = useState(null);
   const [imageRotation, setImageRotation] = useState(0);
   const messageScrollRef = useRef(null);
+  const composeRef = useRef(null);
 
   const conversations = useMemo(() => buildConversations(messages), [messages]);
   const visibleConversations = useMemo(
@@ -1207,6 +1218,16 @@ function MessagesSlice({
     }
     onCommand(`/dial?n=${encodeURIComponent(normalized)}`, "call");
   }, [onCommand, onNativeHandoff]);
+
+  const textNumber = useCallback((number) => {
+    const normalized = normalizePhoneKey(number);
+    if (!normalized || normalized !== selectedConversation?.key) {
+      onNativeHandoff("Message this number", "MainWindow.xaml:2826", number);
+      return;
+    }
+    composeRef.current?.focus();
+    onNotice("Reply box ready for this number.");
+  }, [onNativeHandoff, onNotice, selectedConversation?.key]);
 
   const copyMessage = useCallback(async (message) => {
     const text = message.body || message.preview || "";
@@ -1436,6 +1457,7 @@ function MessagesSlice({
                     {icon("attach_file", 22)}
                   </button>
                   <textarea
+                    ref={composeRef}
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     onKeyDown={(event) => {
@@ -1477,6 +1499,7 @@ function MessagesSlice({
                 calls={calls}
                 selectedConversation={selectedConversation}
                 onCall={callNumber}
+                onText={textNumber}
                 onNativeHandoff={onNativeHandoff}
               />
             </div>
@@ -2799,6 +2822,12 @@ const css = `
   margin-top: 2px;
   color: var(--dp-muted);
   font-size: 12px;
+}
+.dp-thread-calls-header-actions,
+.dp-thread-call-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 .dp-call-filter-grid {
   border-bottom: 1px solid var(--dp-border);
