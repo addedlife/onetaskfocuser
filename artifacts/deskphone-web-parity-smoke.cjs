@@ -285,6 +285,20 @@ async function runCdp() {
     const callHistory = await drag('.dp-thread-inner-splitter', '.dp-thread-calls', -72);
     const webVersionText = document.querySelector('.dp-app-build')?.textContent.trim() || '';
     const hostBuildText = document.querySelector('.dp-app-time')?.textContent.trim() || '';
+    const inputSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    const threadSearchInput = document.querySelector('[data-automation-id="ThreadSearchBox"]');
+    inputSetter.call(threadSearchInput, 'History line 17');
+    threadSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const threadSearchButtonSources = ["MainWindow.xaml:1693", "MainWindow.xaml:1697"].every((source) => !!document.querySelector('button[data-native-source="' + source + '"]'));
+    const firstSearchCurrent = document.querySelector('[data-thread-search-current="true"] .dp-message-body')?.textContent.trim() || '';
+    document.querySelector('button[data-native-source="MainWindow.xaml:1697"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const nextSearchCurrent = document.querySelector('[data-thread-search-current="true"] .dp-message-body')?.textContent.trim() || '';
+    document.querySelector('button[data-native-source="MainWindow.xaml:1693"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const previousSearchCurrent = document.querySelector('[data-thread-search-current="true"] .dp-message-body')?.textContent.trim() || '';
+    const threadSearchNavigation = threadSearchButtonSources && firstSearchCurrent && nextSearchCurrent && nextSearchCurrent !== firstSearchCurrent && previousSearchCurrent === firstSearchCurrent;
     const scrollBox = document.querySelector('.dp-message-scroll');
     const scrollable = scrollBox.scrollHeight > scrollBox.clientHeight + 30;
     scrollBox.scrollTop = 0;
@@ -325,7 +339,6 @@ async function runCdp() {
     document.querySelector('[data-native-source="MainWindow.xaml:2963"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     const dialerAfterKeypad = document.querySelector('[data-automation-id="ThreadDialerNumber"]').value;
-    const inputSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     inputSetter.call(dialerInput, '5559');
     dialerInput.dispatchEvent(new Event('input', { bubbles: true }));
     document.querySelector('[data-native-source="MainWindow.xaml:2893"]').click();
@@ -393,6 +406,7 @@ async function runCdp() {
       hostBuildText,
       handoffRequests,
       commandRequests,
+      threadSearchNavigation,
       scrollable,
       scrolledToBottom,
       callRowsAll,
@@ -464,6 +478,7 @@ async function main() {
     if (!(result.desktop.messageList.after > result.desktop.messageList.before)) failures.push("message splitter did not expand");
     if (!(result.desktop.callHistory.after > result.desktop.callHistory.before)) failures.push("call-history splitter did not expand");
     if (result.desktop.webVersionText !== "DeskPhone Web Version 001" || result.desktop.hostBuildText !== "Windows Host: b242") failures.push("web version or Windows host label is wrong");
+    if (!result.desktop.threadSearchNavigation) failures.push("thread search previous/next navigation failed");
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-message")) failures.push("new-message handoff did not target desktop compose");
     for (const target of ["mark-read", "mark-unread", "toggle-pin", "toggle-mute", "toggle-block"]) {
       if (!result.desktop.handoffRequests.some((request) => request.target === target && request.value.includes("15551234567"))) failures.push(`${target} handoff did not carry the conversation number`);

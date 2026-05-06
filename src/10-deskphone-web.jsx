@@ -953,8 +953,9 @@ function ConversationRow({ conversation, selected, onSelect, onNativeHandoff }) 
   );
 }
 
-function ThreadSearchBar({ value, onChange, matchCount, onNativeHandoff }) {
-  const status = value ? (matchCount ? `${matchCount} matches` : "No matches") : "";
+function ThreadSearchBar({ value, onChange, matchCount, currentIndex, onPrevious, onNext }) {
+  const status = value ? (matchCount ? `${currentIndex + 1} of ${matchCount}` : "No matches") : "";
+  const disabled = !matchCount;
   return (
     <div className="dp-thread-search" data-native-source="MainWindow.xaml:1688">
       {icon("search", 15)}
@@ -966,8 +967,8 @@ function ThreadSearchBar({ value, onChange, matchCount, onNativeHandoff }) {
         placeholder="Search this conversation"
       />
       <span>{status}</span>
-      <button type="button" title="Previous match" aria-label="Previous match" onClick={() => onNativeHandoff("Previous thread search match", "MainWindow.xaml:1693")}>{icon("keyboard_arrow_up", 18)}</button>
-      <button type="button" title="Next match" aria-label="Next match" onClick={() => onNativeHandoff("Next thread search match", "MainWindow.xaml:1697")}>{icon("keyboard_arrow_down", 18)}</button>
+      <button type="button" title="Previous match" aria-label="Previous match" data-native-source="MainWindow.xaml:1693" onClick={onPrevious} disabled={disabled}>{icon("keyboard_arrow_up", 18)}</button>
+      <button type="button" title="Next match" aria-label="Next match" data-native-source="MainWindow.xaml:1697" onClick={onNext} disabled={disabled}>{icon("keyboard_arrow_down", 18)}</button>
       <button type="button" title="Clear search" aria-label="Clear search" onClick={() => onChange("")}>{icon("close", 18)}</button>
     </div>
   );
@@ -1046,7 +1047,18 @@ function MessageAttachments({ message, onNativeHandoff, onOpenImage }) {
   );
 }
 
-function MessageBubble({ message, previousMessage, open, onToggleOpen, onCopy, onCall, onNativeHandoff, onOpenImage }) {
+function MessageBubble({
+  message,
+  previousMessage,
+  open,
+  searchMatch = false,
+  searchCurrent = false,
+  onToggleOpen,
+  onCopy,
+  onCall,
+  onNativeHandoff,
+  onOpenImage,
+}) {
   const currentDivider = formatDateDivider(message.timestamp);
   const previousDivider = previousMessage ? formatDateDivider(previousMessage.timestamp) : "";
   const showDateDivider = currentDivider && currentDivider !== previousDivider;
@@ -1061,9 +1073,20 @@ function MessageBubble({ message, previousMessage, open, onToggleOpen, onCopy, o
     isMediaOnly ? "is-media-only" : "",
     hasPendingSendStatus ? "has-send-status" : "",
   ].filter(Boolean).join(" ");
+  const itemClass = [
+    "dp-message-item",
+    message.isSent ? "is-outgoing" : "is-incoming",
+    searchMatch ? "is-search-match" : "",
+    searchCurrent ? "is-search-current" : "",
+  ].filter(Boolean).join(" ");
 
   return (
-    <div className={`dp-message-item ${message.isSent ? "is-outgoing" : "is-incoming"}`} data-native-source="MainWindow.xaml:1845">
+    <div
+      className={itemClass}
+      data-native-source="MainWindow.xaml:1845"
+      data-thread-search-match={searchMatch ? "true" : undefined}
+      data-thread-search-current={searchCurrent ? "true" : undefined}
+    >
       {showDateDivider ? <div className="dp-date-divider" data-native-source="MainWindow.xaml:1872">{currentDivider}</div> : null}
       <div
         role="button"
@@ -1229,6 +1252,7 @@ function MessagesSlice({
   onNotice,
 }) {
   const [threadSearch, setThreadSearch] = useState("");
+  const [threadSearchCursor, setThreadSearchCursor] = useState(0);
   const [openActionMessageId, setOpenActionMessageId] = useState("");
   const [activeImage, setActiveImage] = useState(null);
   const [imageRotation, setImageRotation] = useState(0);
@@ -1256,12 +1280,43 @@ function MessagesSlice({
     visibleConversations[0] ||
     null;
   const threadSearchLower = threadSearch.trim().toLowerCase();
-  const threadMatchCount = threadSearchLower
-    ? selectedConversation?.messages.filter((message) => (
+  const threadMatchIds = useMemo(() => (
+    threadSearchLower && selectedConversation
+      ? selectedConversation.messages.filter((message) => (
         message.body.toLowerCase().includes(threadSearchLower) ||
         message.preview.toLowerCase().includes(threadSearchLower)
-      )).length || 0
-    : 0;
+      )).map((message) => message.id)
+      : []
+  ), [selectedConversation, threadSearchLower]);
+  const threadMatchIdSet = useMemo(() => new Set(threadMatchIds), [threadMatchIds]);
+  const threadMatchCount = threadMatchIds.length;
+  const activeThreadSearchCursor = threadMatchCount ? Math.min(threadSearchCursor, threadMatchCount - 1) : 0;
+
+  useEffect(() => {
+    setThreadSearchCursor(threadMatchIds.length ? threadMatchIds.length - 1 : 0);
+  }, [selectedConversation?.key, threadSearchLower, threadMatchIds.length]);
+
+  useEffect(() => {
+    if (!threadMatchIds.length) return;
+    const scrollBox = messageScrollRef.current;
+    window.requestAnimationFrame(() => {
+      scrollBox?.querySelector('[data-thread-search-current="true"]')?.scrollIntoView({
+        block: "center",
+        behavior: "smooth",
+      });
+    });
+  }, [threadSearchCursor, threadMatchIds.length]);
+
+  const stepThreadSearchMatch = useCallback((direction) => {
+    if (!threadMatchIds.length) {
+      onNotice("No search matches.");
+      return;
+    }
+    setThreadSearchCursor((current) => {
+      const offset = direction === "previous" ? -1 : 1;
+      return (current + offset + threadMatchIds.length) % threadMatchIds.length;
+    });
+  }, [onNotice, threadMatchIds.length]);
 
   const callNumber = useCallback((number) => {
     const normalized = normalizePhoneKey(number);
@@ -1454,7 +1509,9 @@ function MessagesSlice({
                 value={threadSearch}
                 onChange={setThreadSearch}
                 matchCount={threadMatchCount}
-                onNativeHandoff={onNativeHandoff}
+                currentIndex={activeThreadSearchCursor}
+                onPrevious={() => stepThreadSearchMatch("previous")}
+                onNext={() => stepThreadSearchMatch("next")}
               />
               <div className="dp-thread-actions" data-native-source="MainWindow.xaml:1738">
                 {!showMessagesList ? (
@@ -1482,6 +1539,8 @@ function MessagesSlice({
                       message={message}
                       previousMessage={selectedConversation.messages[index - 1]}
                       open={openActionMessageId === message.id}
+                      searchMatch={threadMatchIdSet.has(message.id)}
+                      searchCurrent={threadMatchIds[activeThreadSearchCursor] === message.id}
                       onToggleOpen={(id) => setOpenActionMessageId((current) => current === id ? "" : id)}
                       onCopy={copyMessage}
                       onCall={callNumber}
@@ -2630,6 +2689,13 @@ const css = `
 }
 .dp-message-item.is-incoming {
   justify-items: start;
+}
+.dp-message-item.is-search-match .dp-message-bubble {
+  box-shadow: 0 0 0 2px rgba(251, 188, 4, 0.32);
+}
+.dp-message-item.is-search-current .dp-message-bubble {
+  outline: 2px solid #fbbc04;
+  outline-offset: 2px;
 }
 .dp-date-divider {
   justify-self: center;
