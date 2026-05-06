@@ -2081,6 +2081,12 @@ function SimpleTabContent({
     const syncThemeWithShamash = Boolean(status?.syncThemeWithShamash ?? status?.SyncThemeWithShamash);
     const pauseHistoryActivity = Boolean(status?.pauseHistoryActivity ?? status?.PauseHistoryActivity);
     const isDarkModeEnabled = Boolean(status?.isDarkModeEnabled ?? status?.IsDarkModeEnabled);
+    const knownDevices = getApiList(status?.knownDevices || status?.KnownDevices);
+    const scannedDevices = getApiList(status?.scannedDevices || status?.ScannedDevices);
+    const deviceAddress = (device) => device?.address || device?.Address || "";
+    const deviceName = (device) => device?.name || device?.Name || deviceAddress(device) || "Phone";
+    const isScanning = Boolean(status?.isScanning ?? status?.IsScanning);
+    const bluetoothStatus = status?.bluetoothStatus || status?.BluetoothStatus || "";
 
     return (
       <div className="dp-settings-shell" data-native-source="MainWindow.xaml:3847">
@@ -2116,6 +2122,53 @@ function SimpleTabContent({
               <ShellButton className="dp-tonal" iconName="bluetooth" nativeSource="MainWindow.xaml:4140" onClick={() => onCommand("/open-bluetooth-settings", "open Bluetooth settings")}>Bluetooth Settings</ShellButton>
               <ShellButton className="dp-tonal" iconName="folder_open" nativeSource="MainWindow.xaml:4627" onClick={() => onCommand("/open-builds-folder", "open builds folder")}>Builds Folder</ShellButton>
               <ShellButton className="dp-tonal" iconName="article" nativeSource="MainWindow.xaml:4633" onClick={() => onCommand("/open-event-log", "open event log")}>Event Log</ShellButton>
+            </div>
+            <div className="dp-device-manager" data-native-source="MainWindow.xaml:4052">
+              <div className="dp-device-manager-head">
+                <h3>Saved phones</h3>
+                <ShellButton className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4052" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Scan for new device</ShellButton>
+              </div>
+              {bluetoothStatus ? <div className="dp-device-status">{bluetoothStatus}</div> : null}
+              <div className="dp-device-list">
+                {knownDevices.length ? knownDevices.map((device) => {
+                  const address = deviceAddress(device);
+                  return (
+                    <div className="dp-device-row" key={`known-${address || deviceName(device)}`}>
+                      <div>
+                        <strong>{deviceName(device)}</strong>
+                        <span>{address}{device?.isDefault || device?.IsDefault ? " - default" : ""}</span>
+                      </div>
+                      <div className="dp-device-row-actions">
+                        <ShellButton className="dp-tonal" iconName="link" nativeSource="MainWindow.xaml:4083" onClick={() => onCommand(`/connect-saved-device?addr=${encodeURIComponent(address)}`, "connect saved device")} disabled={!address}>Connect</ShellButton>
+                        <ShellButton className="dp-tonal" iconName="star" nativeSource="MainWindow.xaml:4088" onClick={() => onCommand(`/set-default-saved-device?addr=${encodeURIComponent(address)}`, "set default device")} disabled={!address}>Set default</ShellButton>
+                        <ShellButton className="dp-tonal" iconName="delete" nativeSource="MainWindow.xaml:4102" onClick={() => onCommand(`/forget-saved-device?addr=${encodeURIComponent(address)}`, "forget device")} disabled={!address}>Forget</ShellButton>
+                      </div>
+                    </div>
+                  );
+                }) : <div className="dp-device-empty">No saved phones yet.</div>}
+              </div>
+            </div>
+            <div className="dp-device-manager" data-native-source="MainWindow.xaml:4135">
+              <div className="dp-device-manager-head">
+                <h3>Scanned phones</h3>
+                <ShellButton className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4135" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Scan for devices</ShellButton>
+              </div>
+              <div className="dp-device-list">
+                {scannedDevices.length ? scannedDevices.map((device) => {
+                  const address = deviceAddress(device);
+                  return (
+                    <div className="dp-device-row" key={`scanned-${address || deviceName(device)}`}>
+                      <div>
+                        <strong>{deviceName(device)}</strong>
+                        <span>{address}{device?.isPaired || device?.IsPaired ? " - paired" : ""}</span>
+                      </div>
+                      <div className="dp-device-row-actions">
+                        <ShellButton className="dp-tonal" iconName="link" nativeSource="MainWindow.xaml:4150" onClick={() => onCommand(`/connect-scanned-device?addr=${encodeURIComponent(address)}`, "connect scanned device")} disabled={!address}>Connect to selected device</ShellButton>
+                      </div>
+                    </div>
+                  );
+                }) : <div className="dp-device-empty">No scanned phones shown.</div>}
+              </div>
             </div>
           </section>
         )}
@@ -3888,6 +3941,60 @@ const css = `
 }
 .dp-settings-tools {
   margin-top: 10px;
+}
+.dp-device-manager {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--dp-border);
+  border-radius: 8px;
+  background: var(--dp-bg-input);
+  padding: 12px;
+}
+.dp-device-manager-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dp-device-manager h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.dp-device-status,
+.dp-device-empty {
+  color: var(--dp-muted);
+  font-size: 13px;
+}
+.dp-device-list {
+  display: grid;
+  gap: 8px;
+}
+.dp-device-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 52px;
+  border-top: 1px solid var(--dp-border);
+  padding-top: 8px;
+}
+.dp-device-row strong,
+.dp-device-row span {
+  display: block;
+}
+.dp-device-row span {
+  margin-top: 2px;
+  color: var(--dp-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.dp-device-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 .dp-ledger-panel {
   margin: 0 24px 20px;

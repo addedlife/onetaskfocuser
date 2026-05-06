@@ -25,6 +25,7 @@ Latest verified deploy:
 
 Local parity progress:
 
+- 2026-05-06: DeskPhone Web now handles six Settings device-control parity rows in-browser. Native b258 exposes saved/scanned device lists plus scan, connect saved, set default, forget, and connect scanned-device host endpoints. Ledger moved to 184 implemented-web, 9 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web now handles five message delete/undo parity rows in-browser. Native b257 exposes `/delete-message?id=ID`, `/undo-message-delete`, and undo status fields; the browser delete button calls the host, then shows the native-style Undo bar. Ledger moved to 178 implemented-web, 15 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web now handles five pinned-message parity rows in-browser. Native b256 exposes message pin state and `/toggle-message-pin`; the browser shows a pinned-message strip, jumps back to the pinned message, and toggles pin/unpin from message controls. Ledger moved to 173 implemented-web, 20 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web now handles seven more native action rows in-browser. Choose Device opens the browser Settings / Connection surface, Use New Build / Not Yet / New Build Available call native host build-update endpoints, active-call Mute calls the native mute endpoint, and message Forward opens a prefilled browser New Message draft. Native host support shipped as DeskPhone b255. Ledger moved to 168 implemented-web, 25 host-api-needed, 6 native-only, 0 not-yet-reviewed.

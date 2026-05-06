@@ -174,6 +174,16 @@ const server = http.createServer((req, res) => {
       themeSyncRefreshStatus: "",
       hasUndoMessageDelete,
       undoMessageDeleteText: hasUndoMessageDelete ? "Message deleted from +1 (555) 123-4567" : "",
+      bluetoothStatus: "2 device(s) found",
+      isScanning: false,
+      isConnecting: false,
+      selectedDeviceAddress: "AABBCCDDEEFF",
+      knownDevices: [
+        { address: "AABBCCDDEEFF", name: "FIG-NEWTON", isDefault: true, lastSeen: "2026-05-06T12:00:00Z" },
+      ],
+      scannedDevices: [
+        { address: "112233445566", name: "Backup Phone", isPaired: true },
+      ],
     });
   } else if (requestPath === "/messages") {
     send(messages);
@@ -200,7 +210,7 @@ const server = http.createServer((req, res) => {
     hasUndoMessageDelete = false;
     commandRequests.push({ path: req.url });
     send({ ok: true });
-  } else if (["/dial", "/send", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-live-log", "/clear-log", "/run-ui-auditor", "/toggle-mute", "/accept-build-update", "/snooze-build-update", "/show-build-update-prompt", "/toggle-message-pin"].includes(requestPath)) {
+  } else if (["/dial", "/send", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-live-log", "/clear-log", "/run-ui-auditor", "/toggle-mute", "/accept-build-update", "/snooze-build-update", "/show-build-update-prompt", "/toggle-message-pin", "/scan-devices", "/connect-saved-device", "/set-default-saved-device", "/forget-saved-device", "/connect-scanned-device"].includes(requestPath)) {
     commandRequests.push({ path: req.url });
     send({ ok: true });
   } else {
@@ -538,8 +548,9 @@ async function runCdp() {
     await new Promise((resolve) => setTimeout(resolve, 100));
     const settingsSectionSources = ["MainWindow.xaml:4000", "MainWindow.xaml:4005", "MainWindow.xaml:4010"];
     const settingsSectionButtons = settingsSectionSources.every((source) => !!document.querySelector('.dp-settings-sections button[data-native-source="' + source + '"]'));
+    const deviceControlButtons = ["MainWindow.xaml:4052", "MainWindow.xaml:4083", "MainWindow.xaml:4088", "MainWindow.xaml:4102", "MainWindow.xaml:4135", "MainWindow.xaml:4150"].every((source) => !!document.querySelector('.dp-settings-shell button[data-native-source="' + source + '"]'));
     const settingsToolSourcesBySection = [
-      { section: null, sources: ["MainWindow.xaml:4140", "MainWindow.xaml:4627", "MainWindow.xaml:4633"] },
+      { section: null, sources: ["MainWindow.xaml:4140", "MainWindow.xaml:4627", "MainWindow.xaml:4633", "MainWindow.xaml:4052", "MainWindow.xaml:4083", "MainWindow.xaml:4088", "MainWindow.xaml:4102", "MainWindow.xaml:4135", "MainWindow.xaml:4150"] },
       { section: "MainWindow.xaml:4000", sources: ["MainWindow.xaml:4235", "MainWindow.xaml:4288"] },
       { section: "MainWindow.xaml:4005", sources: ["MainWindow.xaml:4381", "MainWindow.xaml:4385", "MainWindow.xaml:4390", "MainWindow.xaml:4395", "MainWindow.xaml:4412"] },
       { section: "MainWindow.xaml:4010", sources: ["MainWindow.xaml:4480", "MainWindow.xaml:4476"] },
@@ -659,6 +670,7 @@ async function runCdp() {
       dialerClosed,
       settingsSectionButtons,
       settingsToolButtons,
+      deviceControlButtons,
       settingsToggleButtons,
       contactsSurface,
       contactActionButtons,
@@ -766,8 +778,9 @@ async function main() {
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("*86"))) failures.push("voicemail dialer action did not dial *86");
     if (!result.desktop.settingsSectionButtons) failures.push("settings section buttons are incomplete");
     if (!result.desktop.settingsToolButtons) failures.push("settings host tool buttons are incomplete");
+    if (!result.desktop.deviceControlButtons) failures.push("settings device control buttons are incomplete");
     if (!result.desktop.settingsToggleButtons) failures.push("settings toggle controls are incomplete");
-    for (const endpoint of ["/open-bluetooth-settings", "/open-sound-settings", "/audio-refresh", "/open-builds-folder", "/open-event-log", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-contact-sync-folder", "/export-messages-backup"]) {
+    for (const endpoint of ["/open-bluetooth-settings", "/open-sound-settings", "/audio-refresh", "/open-builds-folder", "/open-event-log", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-contact-sync-folder", "/export-messages-backup", "/scan-devices", "/connect-saved-device", "/set-default-saved-device", "/forget-saved-device", "/connect-scanned-device"]) {
       if (!result.desktop.commandRequests.some((request) => request.path.includes(endpoint))) failures.push(`${endpoint} was not called`);
     }
     if (!result.desktop.contactsSurface || !result.desktop.contactActionButtons) failures.push("contacts browser surface/action buttons are incomplete");
