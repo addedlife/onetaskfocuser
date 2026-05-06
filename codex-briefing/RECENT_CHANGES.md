@@ -25,6 +25,7 @@ Latest verified deploy:
 
 Local parity progress:
 
+- 2026-05-06: DeskPhone Web Developer Tools now exposes host-backed Live Log, Clear Log, Open Auditor, and Run UI Auditor controls. Native b251 adds /open-live-log, /clear-log, and /run-ui-auditor support. Ledger moved to 134 implemented-web, 59 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: Call-history Delete all and call-row Block/Delete rows were mapped to verified browser handoffs. Ledger moved to 129 implemented-web, 64 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: Remaining edit/save-contact duplicate rows and dialer Text duplicate rows were mapped to verified browser handoffs. Ledger moved to 124 implemented-web, 69 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: Contact create/edit handoff rows were mapped for duplicate thread-header Add contact/Edit contact plus Save as contact. Existing smoke coverage verifies new-contact and edit-contact handoffs carry the conversation number. Ledger moved to 119 implemented-web, 74 host-api-needed, 6 native-only, 0 not-yet-reviewed.

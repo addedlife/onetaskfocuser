@@ -143,7 +143,7 @@ const server = http.createServer((req, res) => {
     send(handoffRequests);
   } else if (requestPath === "/command-log") {
     send(commandRequests);
-  } else if (["/dial", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log"].includes(requestPath)) {
+  } else if (["/dial", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-live-log", "/clear-log", "/run-ui-auditor"].includes(requestPath)) {
     commandRequests.push({ path: req.url });
     send({ ok: true });
   } else {
@@ -405,6 +405,14 @@ async function runCdp() {
       document.querySelector('[data-native-source="' + source + '"]').click();
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
+    document.querySelector('[data-native-source="MainWindow.xaml:603"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const developerToolSources = ["MainWindow.xaml:620", "LogWindow.xaml:45", "MainWindow.xaml:4346", "MainWindow.xaml:4639"];
+    const developerToolButtons = developerToolSources.every((source) => !!document.querySelector('.dp-tab-placeholder button[data-native-source="' + source + '"]'));
+    for (const source of developerToolSources) {
+      document.querySelector('.dp-tab-placeholder button[data-native-source="' + source + '"]').click();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
     const handoffRequests = await fetch('http://127.0.0.1:${hostPort}/handoff-log').then((response) => response.json());
     const commandRequests = await fetch('http://127.0.0.1:${hostPort}/command-log').then((response) => response.json());
     return {
@@ -431,6 +439,7 @@ async function runCdp() {
       dialerAfterBackspace,
       dialerClosed,
       settingsToolButtons,
+      developerToolButtons,
       imageLoaded: image.naturalWidth > 0,
       pendingStatusText,
       imageBubbleIsMediaOnly: imageBubble.classList.contains('is-media-only'),
@@ -512,6 +521,10 @@ async function main() {
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("*86"))) failures.push("voicemail dialer action did not dial *86");
     if (!result.desktop.settingsToolButtons) failures.push("settings host tool buttons are incomplete");
     for (const endpoint of ["/open-bluetooth-settings", "/open-sound-settings", "/audio-refresh", "/open-builds-folder", "/open-event-log"]) {
+      if (!result.desktop.commandRequests.some((request) => request.path.includes(endpoint))) failures.push(`${endpoint} was not called`);
+    }
+    if (!result.desktop.developerToolButtons) failures.push("developer host tool buttons are incomplete");
+    for (const endpoint of ["/open-live-log", "/clear-log", "/run-ui-auditor"]) {
       if (!result.desktop.commandRequests.some((request) => request.path.includes(endpoint))) failures.push(`${endpoint} was not called`);
     }
     if (result.desktop.messageCount < 150) failures.push("message history was capped too shallow for DeskPhone Web");

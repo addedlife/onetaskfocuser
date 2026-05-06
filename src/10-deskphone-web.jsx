@@ -1732,7 +1732,13 @@ function SimpleTabContent({
     <div className="dp-tab-placeholder" data-native-source="MainWindow.xaml:3920">
       <SourceTag>MainWindow.xaml:3920</SourceTag>
       <h2>Developer Tools shell</h2>
-      <p>The native shell contains build, log, UI-auditor, and theme-sync actions here. They will be copied from the inventory as their own slice.</p>
+      <p>The native shell contains build, log, UI-auditor, and theme-sync actions here. The safest host-backed controls are exposed below first.</p>
+      <div className="dp-settings-actions dp-settings-tools">
+        <ShellButton className="dp-tonal" iconName="article" nativeSource="MainWindow.xaml:620" onClick={() => onCommand("/open-live-log", "open live log")}>Live Log</ShellButton>
+        <ShellButton className="dp-tonal" iconName="ink_eraser" nativeSource="LogWindow.xaml:45" onClick={() => onCommand("/clear-log", "clear log")}>Clear Log</ShellButton>
+        <ShellButton className="dp-tonal" iconName="fact_check" nativeSource="MainWindow.xaml:4346" onClick={() => onCommand("/run-ui-auditor", "run UI auditor")}>Open Auditor</ShellButton>
+        <ShellButton className="dp-tonal" iconName="bug_report" nativeSource="MainWindow.xaml:4639" onClick={() => onCommand("/run-ui-auditor", "run UI auditor")}>Run UI Auditor</ShellButton>
+      </div>
     </div>
   );
 }
