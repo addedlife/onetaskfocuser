@@ -23,6 +23,7 @@ const THREAD_DIALPAD_KEYS = [
   ["#", "MainWindow.xaml:2963"],
 ];
 const DESKPHONE_WEB_VERSION = "001";
+const MAX_COMPOSE_ATTACHMENTS = 6;
 
 const COLORS = {
   bgMain: "#FAFAFA",
@@ -240,10 +241,23 @@ async function readJson(host, path) {
   return response.json();
 }
 
-async function postJson(host, path) {
-  const response = await fetch(`${host}${path}`, {
+function stringifyAsciiJson(value) {
+  return JSON.stringify(value).replace(/[^\x00-\x7F]/g, (char) =>
+    `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`
+  );
+}
+
+async function postJson(host, path, payload) {
+  const options = {
     method: "POST",
     cache: "no-store",
+  };
+  if (payload !== undefined) {
+    options.headers = { "Content-Type": "application/json" };
+    options.body = stringifyAsciiJson(payload);
+  }
+  const response = await fetch(`${host}${path}`, {
+    ...options,
   });
   if (!response.ok) throw new Error(`${path} returned ${response.status}`);
   const text = await response.text();
@@ -253,6 +267,105 @@ async function postJson(host, path) {
   } catch {
     return { ok: true };
   }
+}
+
+function formatFileSize(bytes = 0) {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
+function sanitizeUploadFileName(name = "") {
+  const clean = String(name || "attachment.bin")
+    .replace(/[^\w.\- ()]/g, "_")
+    .replace(/\s+/g, " ")
+    .trim();
+  return clean || "attachment.bin";
+}
+
+function guessUploadContentType(file) {
+  if (file?.type) return file.type;
+  const name = String(file?.name || "").toLowerCase();
+  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+  if (name.endsWith(".png")) return "image/png";
+  if (name.endsWith(".gif")) return "image/gif";
+  if (name.endsWith(".webp")) return "image/webp";
+  if (name.endsWith(".vcf")) return "text/vcard";
+  if (name.endsWith(".pdf")) return "application/pdf";
+  if (name.endsWith(".txt")) return "text/plain";
+  return "application/octet-stream";
+}
+
+function makeComposeAttachment(file, index = 0) {
+  return {
+    id: `${Date.now()}-${index}-${file?.name || "attachment"}-${file?.size || 0}-${file?.lastModified || 0}`,
+    file,
+    fileName: sanitizeUploadFileName(file?.name),
+    contentType: guessUploadContentType(file),
+    size: file?.size || 0,
+  };
+}
+
+function addComposeFiles(fileList, setAttachments, onNotice) {
+  const files = Array.from(fileList || []);
+  if (!files.length) return;
+  setAttachments((current) => {
+    const room = Math.max(0, MAX_COMPOSE_ATTACHMENTS - current.length);
+    const next = files.slice(0, room).map(makeComposeAttachment);
+    if (files.length > room) onNotice?.(`Attached ${room}; DeskPhone allows ${MAX_COMPOSE_ATTACHMENTS} at once in the browser.`);
+    return [...current, ...next];
+  });
+}
+
+function fileToDataBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      resolve(result.includes(",") ? result.split(",").pop() : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error("Attachment read failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function composeAttachmentUpload(attachment) {
+  return {
+    fileName: attachment.fileName,
+    contentType: attachment.contentType,
+    dataBase64: await fileToDataBase64(attachment.file),
+  };
+}
+
+async function sendComposeMessage({ onCommand, to, body, attachments, label }) {
+  const phone = String(to || "").trim();
+  const text = String(body || "").trim();
+  if (!phone || (!text && !attachments.length)) return false;
+  if (attachments.length) {
+    const uploads = await Promise.all(attachments.map(composeAttachmentUpload));
+    await onCommand("/send-with-attachments", label, { to: phone, body: text, attachments: uploads });
+  } else {
+    await onCommand(`/send?to=${encodeURIComponent(phone)}&body=${encodeURIComponent(text)}`, label);
+  }
+  return true;
+}
+
+function ComposeAttachmentTray({ attachments, onRemove, removeSource }) {
+  if (!attachments.length) return null;
+  return (
+    <div className="dp-compose-attachments">
+      {attachments.map((attachment) => (
+        <span className="dp-compose-attachment-chip" key={attachment.id}>
+          {icon(attachment.contentType?.startsWith("image/") ? "image" : "attach_file", 16)}
+          <span>{attachment.fileName}</span>
+          <small>{formatFileSize(attachment.size)}</small>
+          <button type="button" aria-label={`Remove ${attachment.fileName}`} data-native-source={removeSource} onClick={() => onRemove(attachment.id)}>
+            {icon("close", 15)}
+          </button>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function handoffPath(target, value = "") {
@@ -1345,8 +1458,10 @@ function MessagesSlice({
   const [openActionMessageId, setOpenActionMessageId] = useState("");
   const [activeImage, setActiveImage] = useState(null);
   const [imageRotation, setImageRotation] = useState(0);
+  const [replyAttachments, setReplyAttachments] = useState([]);
   const messageScrollRef = useRef(null);
   const composeRef = useRef(null);
+  const replyAttachmentInputRef = useRef(null);
 
   const conversations = useMemo(() => buildConversations(messages), [messages]);
   const visibleConversations = useMemo(
@@ -1368,6 +1483,11 @@ function MessagesSlice({
     conversations.find((conversation) => conversation.key === selectedConversationKey) ||
     visibleConversations[0] ||
     null;
+
+  useEffect(() => {
+    setReplyAttachments([]);
+  }, [selectedConversation?.key]);
+
   const hasUndoMessageDelete = !!(status?.hasUndoMessageDelete || status?.HasUndoMessageDelete);
   const undoMessageDeleteText = status?.undoMessageDeleteText || status?.UndoMessageDeleteText || "Message deleted";
   const hasUndoCallHistoryDelete = !!(status?.hasUndoCallHistoryDelete || status?.HasUndoCallHistoryDelete);
@@ -1457,11 +1577,17 @@ function MessagesSlice({
   }, [onNotice, onOpenNewMessage, setDraft]);
 
   const sendMessage = useCallback(async () => {
-    const body = draft.trim();
-    if (!body || !selectedConversation?.number) return;
-    await onCommand(`/send?to=${encodeURIComponent(selectedConversation.number)}&body=${encodeURIComponent(body)}`, "send message");
+    const sent = await sendComposeMessage({
+      onCommand,
+      to: selectedConversation?.number,
+      body: draft,
+      attachments: replyAttachments,
+      label: replyAttachments.length ? "send message with attachments" : "send message",
+    });
+    if (!sent) return;
     setDraft("");
-  }, [draft, selectedConversation, onCommand, setDraft]);
+    setReplyAttachments([]);
+  }, [draft, selectedConversation, onCommand, replyAttachments, setDraft]);
 
   const scrollToLatestMessage = useCallback(() => {
     const scrollBox = messageScrollRef.current;
@@ -1721,11 +1847,22 @@ function MessagesSlice({
                     className="dp-compose-attach"
                     title="Attach pictures, files, or contact cards"
                     aria-label="Attach pictures, files, or contact cards"
-                    data-native-source="MainWindow.xaml:2354"
-                    onClick={() => onNativeHandoff("Attach pictures, files, or contact cards", "MainWindow.xaml:2354")}
+                    data-native-source="MainWindow.xaml:2362"
+                    onClick={() => replyAttachmentInputRef.current?.click()}
                   >
                     {icon("attach_file", 22)}
                   </button>
+                  <input
+                    ref={replyAttachmentInputRef}
+                    type="file"
+                    multiple
+                    className="dp-hidden-file-input"
+                    data-native-source="MainWindow.xaml:2362"
+                    onChange={(event) => {
+                      addComposeFiles(event.target.files, setReplyAttachments, onNotice);
+                      event.target.value = "";
+                    }}
+                  />
                   <textarea
                     ref={composeRef}
                     value={draft}
@@ -1744,11 +1881,16 @@ function MessagesSlice({
                     aria-label="Send message"
                     data-automation-id="ReplySendButton"
                     data-native-source="MainWindow.xaml:2402"
-                    disabled={!draft.trim()}
+                    disabled={!draft.trim() && !replyAttachments.length}
                     onClick={sendMessage}
                   >
                     {icon("send", 21)}
                   </button>
+                  <ComposeAttachmentTray
+                    attachments={replyAttachments}
+                    removeSource="MainWindow.xaml:2399"
+                    onRemove={(id) => setReplyAttachments((current) => current.filter((attachment) => attachment.id !== id))}
+                  />
                 </footer>
               </main>
               <div
@@ -1936,6 +2078,8 @@ function NewMessageComposer({ contacts, initialBody = "", onCommand, onCancel, o
   const [query, setQuery] = useState("");
   const [selectedPhone, setSelectedPhone] = useState("");
   const [body, setBody] = useState(initialBody);
+  const [attachments, setAttachments] = useState([]);
+  const attachmentInputRef = useRef(null);
   const contactOptions = useMemo(() => {
     const search = query.trim().toLowerCase();
     return contacts.flatMap((contact, contactIndex) => (
@@ -1949,13 +2093,18 @@ function NewMessageComposer({ contacts, initialBody = "", onCommand, onCancel, o
   }, [contacts, query]);
 
   const send = useCallback(async () => {
-    const phone = selectedPhone.trim();
-    const text = body.trim();
-    if (!phone || !text) return;
-    await onCommand(`/send?to=${encodeURIComponent(phone)}&body=${encodeURIComponent(text)}`, "send new message");
+    const sent = await sendComposeMessage({
+      onCommand,
+      to: selectedPhone,
+      body,
+      attachments,
+      label: attachments.length ? "send new message with attachments" : "send new message",
+    });
+    if (!sent) return;
     setBody("");
+    setAttachments([]);
     onNotice("Message sent to DeskPhone.");
-  }, [body, onCommand, onNotice, selectedPhone]);
+  }, [attachments, body, onCommand, onNotice, selectedPhone]);
 
   return (
     <div className="dp-new-compose-shell" data-native-source="MainWindow.xaml:2999">
@@ -2008,8 +2157,25 @@ function NewMessageComposer({ contacts, initialBody = "", onCommand, onCancel, o
             placeholder="Message text"
             data-automation-id="NewMessageBody"
           />
+          <input
+            ref={attachmentInputRef}
+            type="file"
+            multiple
+            className="dp-hidden-file-input"
+            data-native-source="MainWindow.xaml:3124"
+            onChange={(event) => {
+              addComposeFiles(event.target.files, setAttachments, onNotice);
+              event.target.value = "";
+            }}
+          />
+          <ComposeAttachmentTray
+            attachments={attachments}
+            removeSource="MainWindow.xaml:3153"
+            onRemove={(id) => setAttachments((current) => current.filter((attachment) => attachment.id !== id))}
+          />
           <div className="dp-settings-actions">
-            <ShellButton className="dp-primary" iconName="send" nativeSource="MainWindow.xaml:3136" onClick={send} disabled={!selectedPhone.trim() || !body.trim()}>Send Message</ShellButton>
+            <ShellButton className="dp-tonal" iconName="attach_file" nativeSource="MainWindow.xaml:3124" onClick={() => attachmentInputRef.current?.click()}>Attach</ShellButton>
+            <ShellButton className="dp-primary" iconName="send" nativeSource="MainWindow.xaml:3136" onClick={send} disabled={!selectedPhone.trim() || (!body.trim() && !attachments.length)}>Send Message</ShellButton>
           </div>
         </section>
       </div>
@@ -3603,6 +3769,56 @@ const css = `
   align-items: end;
   gap: 10px;
 }
+.dp-hidden-file-input {
+  display: none;
+}
+.dp-compose-attachments {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dp-compose-bar .dp-compose-attachments {
+  grid-column: 2 / 4;
+}
+.dp-compose-attachment-chip {
+  max-width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--dp-border);
+  border-radius: 8px;
+  background: var(--dp-bg-input);
+  color: var(--dp-text);
+  padding: 5px 6px 5px 9px;
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+}
+.dp-compose-attachment-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: 12px;
+}
+.dp-compose-attachment-chip small {
+  color: var(--dp-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.dp-compose-attachment-chip button {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dp-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .dp-compose-attach,
 .dp-send-button {
   width: 44px;
@@ -4489,10 +4705,10 @@ export function DeskPhoneWebPanel({
   const effectiveBuildIndicator = !!(status?.showBuildUpdateIndicator || status?.ShowBuildUpdateIndicator || showBuildIndicator);
   const effectiveMuted = !!(status?.isMuted ?? status?.IsMuted ?? muted);
 
-  const runCommand = useCallback(async (path, label) => {
+  const runCommand = useCallback(async (path, label, payload) => {
     setBusy(label);
     try {
-      await postJson(host, path);
+      await postJson(host, path, payload);
       await refresh();
       setError("");
     } catch (err) {

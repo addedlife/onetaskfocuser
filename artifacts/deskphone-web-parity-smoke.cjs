@@ -136,7 +136,17 @@ let hasUndoMessageDelete = false;
 const handoffRequests = [];
 const commandRequests = [];
 
-const server = http.createServer((req, res) => {
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => resolve(body));
+    req.on("error", reject);
+  });
+}
+
+const server = http.createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "*");
@@ -147,6 +157,14 @@ const server = http.createServer((req, res) => {
   }
 
   const requestPath = new URL(req.url, `http://127.0.0.1:${hostPort}`).pathname;
+  const requestBody = req.method === "POST" ? await readRequestBody(req) : "";
+  const pushCommand = () => {
+    let payload = null;
+    if (requestBody) {
+      try { payload = JSON.parse(requestBody); } catch { payload = requestBody; }
+    }
+    commandRequests.push({ path: req.url, body: payload });
+  };
   const send = (payload) => {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(payload));
@@ -206,14 +224,14 @@ const server = http.createServer((req, res) => {
     send(commandRequests);
   } else if (requestPath === "/delete-message") {
     hasUndoMessageDelete = true;
-    commandRequests.push({ path: req.url });
+    pushCommand();
     send({ ok: true });
   } else if (requestPath === "/undo-message-delete") {
     hasUndoMessageDelete = false;
-    commandRequests.push({ path: req.url });
+    pushCommand();
     send({ ok: true });
-  } else if (["/dial", "/send", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-live-log", "/clear-log", "/run-ui-auditor", "/toggle-mute", "/accept-build-update", "/snooze-build-update", "/show-build-update-prompt", "/toggle-message-pin", "/scan-devices", "/connect-saved-device", "/set-default-saved-device", "/forget-saved-device", "/connect-scanned-device", "/save-contact", "/delete-contact", "/undo-call-history-delete"].includes(requestPath)) {
-    commandRequests.push({ path: req.url });
+  } else if (["/dial", "/send", "/send-with-attachments", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-live-log", "/clear-log", "/run-ui-auditor", "/toggle-mute", "/accept-build-update", "/snooze-build-update", "/show-build-update-prompt", "/toggle-message-pin", "/scan-devices", "/connect-saved-device", "/set-default-saved-device", "/forget-saved-device", "/connect-scanned-device", "/save-contact", "/delete-contact", "/undo-call-history-delete"].includes(requestPath)) {
+    pushCommand();
     send({ ok: true });
   } else {
     send({ ok: true });
@@ -389,6 +407,15 @@ async function runCdp() {
     const topNewMessageCancelReturned = !!(await waitForSelector('[data-automation-id="ThreadSearchBox"]'));
     const inputSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     const textareaSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+    const attachFile = (selector, name, content, type = 'text/plain') => {
+      const input = document.querySelector(selector);
+      if (!input) return false;
+      const dt = new DataTransfer();
+      dt.items.add(new File([content], name, { type }));
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    };
     let threadSearchInput = await waitForSelector('[data-automation-id="ThreadSearchBox"]');
     if (!threadSearchInput) throw new Error('Thread search input missing after top New Message cancel');
     const incomingBubble = Array.from(document.querySelectorAll('.dp-message-bubble.is-incoming')).find((bubble) => bubble.querySelector('.dp-message-body'));
@@ -460,6 +487,21 @@ async function runCdp() {
     document.querySelector('[data-native-source="MainWindow.xaml:2826"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     const replyFocusedFromCallRow = document.activeElement?.getAttribute('data-automation-id') === 'ReplyComposeBox';
+    const replyAttachSourceVisible = !!document.querySelector('button[data-native-source="MainWindow.xaml:2362"]');
+    const replyFirstAttached = attachFile('input[data-native-source="MainWindow.xaml:2362"]', 'remove-me.txt', 'remove this attachment');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const replyChipAdded = !!document.querySelector('.dp-compose-bar .dp-compose-attachment-chip');
+    document.querySelector('.dp-compose-bar button[data-native-source="MainWindow.xaml:2399"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const replyChipRemoved = !document.querySelector('.dp-compose-bar .dp-compose-attachment-chip');
+    const replySecondAttached = attachFile('input[data-native-source="MainWindow.xaml:2362"]', 'reply-smoke.txt', 'reply attachment payload');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const replyBox = document.querySelector('[data-automation-id="ReplyComposeBox"]');
+    textareaSetter.call(replyBox, 'Reply attachment smoke');
+    replyBox.dispatchEvent(new Event('input', { bubbles: true }));
+    replyBox.dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('[data-automation-id="ReplySendButton"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 150));
     document.querySelector('[data-native-source="MainWindow.xaml:2831"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-native-source="MainWindow.xaml:2592"]').click();
@@ -507,6 +549,15 @@ async function runCdp() {
     textareaSetter.call(newMessageBody, 'Browser full compose smoke');
     newMessageBody.dispatchEvent(new Event('input', { bubbles: true }));
     newMessageBody.dispatchEvent(new Event('change', { bubbles: true }));
+    const fullAttachSourceVisible = !!document.querySelector('.dp-new-compose-shell [data-native-source="MainWindow.xaml:3124"]');
+    const fullFirstAttached = attachFile('.dp-new-compose-shell input[data-native-source="MainWindow.xaml:3124"]', 'full-remove.txt', 'full remove attachment');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const fullChipAdded = !!document.querySelector('.dp-new-compose-shell .dp-compose-attachment-chip');
+    document.querySelector('.dp-new-compose-shell button[data-native-source="MainWindow.xaml:3153"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const fullChipRemoved = !document.querySelector('.dp-new-compose-shell .dp-compose-attachment-chip');
+    const fullSecondAttached = attachFile('.dp-new-compose-shell input[data-native-source="MainWindow.xaml:3124"]', 'full-smoke.txt', 'full attachment payload');
+    await new Promise((resolve) => setTimeout(resolve, 100));
     let newMessageSendButton = document.querySelector('.dp-new-compose-shell [data-native-source="MainWindow.xaml:3136"]');
     for (let i = 0; i < 20 && newMessageSendButton?.disabled; i++) {
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -675,6 +726,11 @@ async function runCdp() {
       topNewMessageCancelReturned,
       headerNewMessageComposerOpened,
       pickedComposeContact,
+      fullAttachSourceVisible,
+      fullFirstAttached,
+      fullChipAdded,
+      fullChipRemoved,
+      fullSecondAttached,
       scrollable,
       scrolledToBottom,
       callRowsAll,
@@ -683,6 +739,11 @@ async function runCdp() {
       callRowsOut,
       outLabel,
       replyFocusedFromCallRow,
+      replyAttachSourceVisible,
+      replyFirstAttached,
+      replyChipAdded,
+      replyChipRemoved,
+      replySecondAttached,
       threadCallUndoVisible,
       dialerOpened,
       dialerKeypadSources,
@@ -770,6 +831,7 @@ async function main() {
     }
     if (!result.desktop.topNewMessageComposerOpened || !result.desktop.topNewMessageCancelReturned) failures.push("top New Message composer open/cancel failed");
     if (!result.desktop.headerNewMessageComposerOpened || !result.desktop.pickedComposeContact.includes("5551234567")) failures.push("header New Message composer contact pick failed");
+    if (!result.desktop.fullAttachSourceVisible || !result.desktop.fullFirstAttached || !result.desktop.fullChipAdded || !result.desktop.fullChipRemoved || !result.desktop.fullSecondAttached) failures.push("full New Message attachment add/remove flow failed");
     if (!result.desktop.forwardDraftReady) failures.push("message forward did not open a prefilled New Message draft");
     if (!result.desktop.pinnedStripVisible || !result.desktop.pinnedJumpFound) failures.push("pinned message strip did not render or jump to the pinned message");
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/toggle-message-pin") && request.path.includes("m20"))) failures.push("message pin action did not call /toggle-message-pin with the message id");
@@ -788,6 +850,7 @@ async function main() {
     if (result.desktop.callRowsAll !== 3 || result.desktop.callRowsMissed !== 1 || result.desktop.missedLabel !== "Missed") failures.push("missed-call filter did not isolate missed calls");
     if (result.desktop.callRowsOut !== 1 || result.desktop.outLabel !== "Outgoing") failures.push("outgoing-call filter did not isolate outgoing calls");
     if (!result.desktop.replyFocusedFromCallRow) failures.push("message-this-number call-row action did not focus the reply box");
+    if (!result.desktop.replyAttachSourceVisible || !result.desktop.replyFirstAttached || !result.desktop.replyChipAdded || !result.desktop.replyChipRemoved || !result.desktop.replySecondAttached) failures.push("thread reply attachment add/remove flow failed");
     if (!result.desktop.threadCallUndoVisible) failures.push("thread call-history undo bar was not visible");
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && (request.path.includes("15551234567") || request.path.includes("5551234567")))) failures.push("call-this-number call-row action did not dial through the host");
     if (!result.desktop.handoffRequests.some((request) => request.target === "delete-all-calls")) failures.push("delete-all-calls handoff was not recorded");
@@ -820,7 +883,20 @@ async function main() {
     if (!result.desktop.fullCallsRecentsHidden || !result.desktop.fullCallsRecentsRestored) failures.push("full Calls hide/show recents failed");
     if (!result.desktop.fullCallUndoVisible) failures.push("full Calls undo bar was not visible");
     if (!result.desktop.fullCallsDialerClosed || !result.desktop.fullCallsDialerFromMakeCall) failures.push("Make Call did not reopen the full Calls dialer");
-    if (!result.desktop.commandRequests.some((request) => request.path.includes("/send") && request.path.includes("5551234567") && request.path.includes("Browser%20full%20compose%20smoke"))) failures.push("full New Message composer did not send through /send");
+    const attachmentSends = result.desktop.commandRequests.filter((request) => request.path.includes("/send-with-attachments"));
+    const replyAttachmentSend = attachmentSends.find((request) =>
+      request.body?.body === "Reply attachment smoke" &&
+      request.body?.attachments?.[0]?.fileName === "reply-smoke.txt" &&
+      request.body?.attachments?.[0]?.dataBase64
+    );
+    const fullAttachmentSend = attachmentSends.find((request) =>
+      request.body?.body === "Browser full compose smoke" &&
+      request.body?.to?.includes("5551234567") &&
+      request.body?.attachments?.[0]?.fileName === "full-smoke.txt" &&
+      request.body?.attachments?.[0]?.dataBase64
+    );
+    if (!replyAttachmentSend) failures.push("thread reply attachment send did not call /send-with-attachments with file data");
+    if (!fullAttachmentSend) failures.push("full New Message attachment send did not call /send-with-attachments with file data");
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-message" && request.value.includes("5557654321"))) failures.push("full Calls message action did not hand off the selected call number");
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("5557654321"))) failures.push("full Calls call action did not dial the selected call number");
     if (!result.desktop.handoffRequests.some((request) => request.target === "toggle-block" && request.value.includes("5557654321"))) failures.push("full Calls block action did not carry the selected call number");
