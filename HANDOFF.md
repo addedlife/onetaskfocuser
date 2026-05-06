@@ -380,7 +380,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
   - **AB action buttons** (call/text on each row) are white/neutral — no longer green
   - **SMS direction icons**: incoming shows `sms`, outgoing shows `outgoing_mail`; unread contacts display in bold (fw 900)
   - **Shailos column**: research-type tasks (`type === "shaila-research"` / `"shailo-research"`) filtered out of the active/get-back section — only pure get-back tasks appear until research is complete
-- **DeskPhone web screen** (`src/10-deskphone-web.jsx`): active exact-parity surface. Current reviewed ledger: 199 of 199 native action rows reviewed (161 implemented-web, 32 host-api-needed, 6 native-only, 0 not-yet-reviewed). Latest slices added a full browser New Message composer with contact pick/send, a full Calls / Make Call browser surface backed by all native `/calls` data, browser Contacts list/detail with New/Text/Call/Edit actions, browser All/Missed/In/Out filters, full Calls hide/show recents, call-row message/call/block/delete/delete-all controls, compact thread-side dialer controls including keypad/Text handoff, top/header New Message entrypoints, in-browser thread search Previous/Next, exact-source row-menu and thread-header block/pin/mute/read/unread handoffs including duplicate native header rows, add/edit contact handoffs, typed-number Text handoff rows, shell/reconnect/build/call-banner/contact-import/contact-action/Contacts-tab/full-compose/settings/log/collapsed-calls parity mapping, Settings section selectors plus host-tool buttons/toggles including Appearance Reset, Refresh Sync, Sync theme, History Background Fetching, Dark mode, Import VCF, Import Synced, Ignore Pending, Sync Folder, and Save Backup, and Developer Tools host buttons for Live Log, Clear Log, and UI Auditor. `artifacts/deskphone-web-parity-smoke.cjs` covers the verified browser and handoff behavior. Next runtime work should keep converting `host-api-needed` rows into host/browser endpoints.
+- **DeskPhone web screen** (`src/10-deskphone-web.jsx`): active exact-parity surface. Current reviewed ledger: 199 of 199 native action rows reviewed (161 implemented-web, 32 host-api-needed, 6 native-only, 0 not-yet-reviewed). Latest slices added a full browser New Message composer with contact pick/send, a full Calls / Make Call browser surface backed by all native `/calls` data, browser Contacts list/detail with New/Text/Call/Edit actions, browser All/Missed/In/Out filters, full Calls hide/show recents, call-row message/call/block/delete/delete-all controls, compact thread-side dialer controls including keypad/Text handoff, top/header New Message entrypoints, in-browser thread search Previous/Next, exact-source row-menu and thread-header block/pin/mute/read/unread handoffs including duplicate native header rows, add/edit contact handoffs, typed-number Text handoff rows, shell/reconnect/build/call-banner/contact-import/contact-action/Contacts-tab/full-compose/settings/log/collapsed-calls parity mapping, Settings section selectors plus host-tool buttons/toggles including Appearance Reset, Refresh Sync, Sync theme, History Background Fetching, Dark mode, Import VCF, Import Synced, Ignore Pending, Sync Folder, and Save Backup, and Developer Tools host buttons for Live Log, Clear Log, and UI Auditor. Same-day auto-collapse repair now starts the rail timer on open/toggle/state change instead of only on mouse leave; smoke coverage proves the DeskPhone rail closes after idle. `artifacts/deskphone-web-parity-smoke.cjs` covers the verified browser and handoff behavior. Next runtime work should keep converting `host-api-needed` rows into host/browser endpoints.
 - **NerveCenter** (formerly Switchboard): unified 3-column command dashboard — Tasks | Shailos | Phone. Reached via `?suite=nervecenter` (or legacy `?suite=switchboard` still works). Material 3 design throughout: priority color bars + named priority chips per row, gold (#C9923C) visual identity for all shailos/shaila-work, M3 contact list in phone column with compose-on-select. `DeskPhoneMiniDock` floating pill removed — redundant. "Tasks" back button removed from panel header. Nav bar renamed hub icon + "NerveCenter" label.
 - **Universal Conversation Recorder**: full in-app flow — record → transcribe (Yeshivish-aware) → AI extracts tasks/shailos/schedule/got-backs → review card → user approves → items added to queue
 - **FAB**: 2 large buttons (record shaila, record conversation), 2 compact links (Add | Records)
@@ -407,10 +407,17 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 ## 15. Recent Git History
 
-Latest: DeskPhone Web parity action-row review is complete.
+Latest: Auto-collapse timer repair verified for app and DeskPhone Web rails.
 
 ```
-pending docs: complete DeskPhone web action-row parity review
+pending fix: restore rail auto-collapse idle timers
+887fba3 feat: DeskPhone web compose surface
+cacdb7f feat: DeskPhone web full calls pane
+c5957be feat: DeskPhone web appearance setting toggles
+4d9aed5 feat: DeskPhone web contact sync host tools
+1090d6f feat: DeskPhone web settings section parity
+01bfe28 feat: DeskPhone web new message handoff
+b1f5a7c feat: DeskPhone web developer host tools
 cc3651c docs: map DeskPhone web contact sync and backup controls
 449554b docs: map DeskPhone web theme and auditor settings controls
 b2f80f2 docs: map DeskPhone web settings scan and forget controls

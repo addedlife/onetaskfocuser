@@ -47,16 +47,26 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRec
     { id: "deskphone", label: "Phone",   icon: "smartphone" },
   ];
   const W = open ? 168 : 46;
+  const chromeRef = useRef(null);
   const acTimer = useRef(null);
-  const clearAC = () => { if (acTimer.current) { clearTimeout(acTimer.current); acTimer.current = null; } };
-  const scheduleAC = () => {
+  const isChromeHovered = useCallback(() => Boolean(chromeRef.current?.matches?.(":hover")), []);
+  const clearAC = useCallback(() => {
+    if (acTimer.current) { clearTimeout(acTimer.current); acTimer.current = null; }
+  }, []);
+  const scheduleAC = useCallback(() => {
     clearAC();
-    if (!autoCollapseEnabled || !open) return;
-    acTimer.current = setTimeout(() => { onCollapse?.(); }, 10000);
-  };
-  useEffect(() => () => clearAC(), []); // eslint-disable-line
+    if (!autoCollapseEnabled || !open || isChromeHovered()) return;
+    acTimer.current = setTimeout(() => {
+      if (!isChromeHovered()) onCollapse?.();
+    }, 10000);
+  }, [autoCollapseEnabled, clearAC, isChromeHovered, onCollapse, open]);
+  useEffect(() => {
+    scheduleAC();
+    return clearAC;
+  }, [scheduleAC, clearAC]);
   return (
     <div
+      ref={chromeRef}
       onMouseEnter={clearAC}
       onMouseLeave={scheduleAC}
       style={{
@@ -151,6 +161,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRec
 
       {/* Auto-collapse toggle */}
       <button onClick={onToggleAutoCollapse} title={autoCollapseEnabled ? "Auto-collapse: ON (click to disable)" : "Auto-collapse: OFF (click to enable)"}
+        data-automation-id="AppSuiteAutoCollapseToggle"
         style={{
           width: open ? "100%" : 32, height: 28, borderRadius: 10,
           border: `1px solid ${T.brdS || T.brd}`,

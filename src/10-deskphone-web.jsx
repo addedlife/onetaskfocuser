@@ -4062,6 +4062,7 @@ export function DeskPhoneWebPanel({
   const [railAutoCollapse, setRailAutoCollapse] = useState(() => {
     try { return localStorage.getItem(RAIL_AUTO_COLLAPSE_KEY) !== 'false'; } catch { return true; }
   });
+  const railRef = useRef(null);
   const railAcTimer = useRef(null);
   const [reconnectDismissed, setReconnectDismissed] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -4183,14 +4184,23 @@ export function DeskPhoneWebPanel({
     if (railAcTimer.current) { clearTimeout(railAcTimer.current); railAcTimer.current = null; }
   }, []);
 
+  const isRailHovered = useCallback(() => Boolean(railRef.current?.matches?.(":hover")), []);
+
   const scheduleRailAC = useCallback(() => {
     clearRailAC();
-    if (!railAutoCollapse || railCollapsed) return;
+    if (!railAutoCollapse || railCollapsed || isRailHovered()) return;
     railAcTimer.current = setTimeout(() => {
-      setRailCollapsed(true);
-      try { localStorage.setItem(RAIL_COLLAPSED_KEY, 'true'); } catch {}
+      if (!isRailHovered()) {
+        setRailCollapsed(true);
+        try { localStorage.setItem(RAIL_COLLAPSED_KEY, 'true'); } catch {}
+      }
     }, 10000);
-  }, [railAutoCollapse, railCollapsed, clearRailAC]);
+  }, [railAutoCollapse, railCollapsed, clearRailAC, isRailHovered]);
+
+  useEffect(() => {
+    scheduleRailAC();
+    return clearRailAC;
+  }, [scheduleRailAC, clearRailAC]);
 
   const toggleRailAutoCollapse = useCallback(() => {
     setRailAutoCollapse(v => {
@@ -4249,7 +4259,7 @@ export function DeskPhoneWebPanel({
         data-native-source="MainWindow.xaml:359"
         style={{ "--dp-rail-width": `${railWidth}px` }}
       >
-        <aside className="dp-rail" data-native-source="MainWindow.xaml:382" onMouseEnter={clearRailAC} onMouseLeave={scheduleRailAC}>
+        <aside ref={railRef} className="dp-rail" data-native-source="MainWindow.xaml:382" onMouseEnter={clearRailAC} onMouseLeave={scheduleRailAC}>
           <div className="dp-app-identity" data-native-source="MainWindow.xaml:396">
             <div className="dp-app-title-block">
               <div className="dp-app-icon-box" data-native-source="MainWindow.xaml:410">
@@ -4318,6 +4328,7 @@ export function DeskPhoneWebPanel({
           <button
             onClick={toggleRailAutoCollapse}
             title={railAutoCollapse ? "Auto-collapse: ON — click to disable" : "Auto-collapse: OFF — click to enable"}
+            data-automation-id="DeskPhoneRailAutoCollapseToggle"
             style={{
               display: "flex", alignItems: "center", gap: railCollapsed ? 0 : 6,
               justifyContent: railCollapsed ? "center" : "flex-start",

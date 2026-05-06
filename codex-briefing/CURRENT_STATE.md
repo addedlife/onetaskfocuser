@@ -21,14 +21,14 @@ Current product truth:
 - Google token is now persisted to localStorage (`ot_google_token`, `ot_google_token_expiry`, `ot_google_connected`). Silent re-auth fires automatically on load if expired. Disconnect clears all three keys.
 - Calendar card has Add-Event and Open-Calendar header buttons plus per-event Open links. Gmail card has Open-Gmail header button, per-email Open links, and snippet previews.
 - NerveCenter phone section is a vertical split — texts top, calls bottom, each independently scrollable.
-- AppSuiteChrome left rail and DeskPhone Web left rail both auto-collapse after 10 seconds of inactivity. Toggle at bottom of each.
+- AppSuiteChrome left rail and DeskPhone Web left rail both auto-collapse after 10 seconds of inactivity. Toggle at bottom of each. On 2026-05-06, both timer paths were repaired so turning the feature on or opening the rail starts the countdown without requiring a mouse-leave event first.
 - Top-left menu button and PostItStack now track `sidebarW` so they are never hidden behind the sidebar.
 - DeskPhone Web message history, MMS clean image bubbles, fullscreen image rotate/close, and splitters were smoke-tested before the latest deploy.
 - DeskPhone Web now shows native outgoing send states such as `Confirming on phone`; deployed after native DeskPhone b249 exposed the host API fields.
 
 Current repo condition:
 
-- The send-state parity slice is committed and deployed.
+- The current local source includes a verified auto-collapse timer repair for both app rails; next push triggers Netlify deployment.
 - DeskPhone Web parity map review is complete: 199 of 199 action rows reviewed as of 2026-05-06 (161 implemented-web, 32 host-api-needed, 6 native-only, 0 not-yet-reviewed). Latest runtime slices add a browser full New Message composer, full Calls / Make Call surface backed by all native `/calls` data, a browser Contacts list/detail surface, Settings and Developer Tools host buttons, settings section navigation, appearance reset/theme refresh/toggles, contact-import/sync/backup host buttons, in-browser thread search previous/next navigation, exact-source thread/row action handoffs, contact/Text handoff mapping, and call-history/call-row handoff mapping.
 - Many untracked artifacts/logs/docs exist from prior work. The user has allowed careful cleanup; inspect and classify before removing anything.
 - `shailos/` is generated output copied into the deploy; do not treat it as editable source.

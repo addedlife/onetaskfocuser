@@ -8,8 +8,8 @@ Last updated: 2026-05-06
 - `2026-05-06 session`: Gmail card gets "↗" header button (Open Gmail), per-email "↗" open links, and snippet preview on each row.
 - `2026-05-06 session`: NerveCenter phone section vertically split — texts on top, calls on bottom, each box independently scrollable, never pushed off screen.
 - `2026-05-06 session`: Top-left menu button and PostItStack now offset by `sidebarW` so sidebar never covers them.
-- `2026-05-06 session`: AppSuiteChrome left rail auto-collapses after 10s idle (mouse leave) with persist-to-localStorage toggle at bottom.
-- `2026-05-06 session`: DeskPhone Web rail auto-collapses after 10s idle with same toggle at rail bottom.
+- `2026-05-06 session`: AppSuiteChrome left rail auto-collapses after 10s idle with persist-to-localStorage toggle at bottom. Later same-day repair starts the timer on open/toggle/state change, not only after mouse leave.
+- `2026-05-06 session`: DeskPhone Web rail auto-collapses after 10s idle with same toggle at rail bottom. Later same-day repair added smoke coverage proving the rail closes after an idle wait while auto-collapse is enabled.
 - `8674b16`: DeskPhone Web now reads native outgoing message send-state fields and shows `Confirming on phone`; the parity smoke harness verifies that state.
 - `da44212`: Google connector setup path is visible when no Google Client ID exists.
 - `ff7afed`: Google connector config handoff added through Netlify app config.
@@ -25,6 +25,7 @@ Latest verified deploy:
 
 Local parity progress:
 
+- 2026-05-06: Auto-collapse regression repaired. The app-wide rail and DeskPhone Web rail now schedule their 10-second collapse timer whenever the rail is open and auto-collapse is enabled, while still cancelling if the pointer is over the rail. Smoke coverage verifies DeskPhone Web collapses after idle.
 - 2026-05-06: DeskPhone Web now has a full browser New Message composer. Top/header New Message opens the composer, Cancel returns to Messages, contact rows can be picked from native /contacts data, and Send Message calls /send. Full Calls also supports Hide recents / Show recents. Smoke coverage verifies the compose flow, /send request, and recents hide/show. Ledger moved to 161 implemented-web, 32 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web now has a full Calls / Make Call browser surface. Calls navigation shows all native `/calls` records across numbers, row actions still hand off/dial the selected call number, and Make Call opens the browser dialer directly. Smoke coverage verifies all-number call history, Out filtering across numbers, full Calls row actions, and Make Call dialer reopen. Ledger moved to 157 implemented-web, 36 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web Contacts now uses native /contacts data for a browser list/detail surface with New Contact, Text, Call, and Edit Details actions. Smoke coverage verifies selected contact phone handoffs and /dial. Ledger moved to 155 implemented-web, 38 host-api-needed, 6 native-only, 0 not-yet-reviewed.

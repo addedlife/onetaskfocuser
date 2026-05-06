@@ -291,6 +291,8 @@ async function runCdp() {
     source: `
       localStorage.setItem('deskphone_web_host_url','http://127.0.0.1:${hostPort}');
       localStorage.setItem('deskphone_web_bridge_url','http://127.0.0.1:${hostPort}');
+      localStorage.setItem('deskphone_web_rail_autocollapse','false');
+      localStorage.setItem('deskphone_web_rail_collapsed','false');
       localStorage.removeItem('deskphone_web_rail_width');
       localStorage.removeItem('deskphone_web_message_list_width');
       localStorage.removeItem('deskphone_web_call_history_width');
@@ -551,6 +553,9 @@ async function runCdp() {
       document.querySelector('.dp-tab-placeholder button[data-native-source="' + source + '"]')?.click();
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
+    document.querySelector('[data-automation-id="DeskPhoneRailAutoCollapseToggle"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 10650));
+    const railAutoCollapsedAfterIdle = document.querySelector('.dp-shell')?.classList.contains('is-collapsed') || false;
     const handoffRequests = await fetch('http://127.0.0.1:${hostPort}/handoff-log').then((response) => response.json());
     const commandRequests = await fetch('http://127.0.0.1:${hostPort}/command-log').then((response) => response.json());
     return {
@@ -594,6 +599,7 @@ async function runCdp() {
       fullCallsDialerClosed,
       fullCallsDialerFromMakeCall,
       developerToolButtons,
+      railAutoCollapsedAfterIdle,
       imageLoaded: image.naturalWidth > 0,
       pendingStatusText,
       imageBubbleIsMediaOnly: imageBubble.classList.contains('is-media-only'),
@@ -697,6 +703,7 @@ async function main() {
     if (!result.desktop.handoffRequests.some((request) => request.target === "toggle-block" && request.value.includes("5557654321"))) failures.push("full Calls block action did not carry the selected call number");
     if (!result.desktop.handoffRequests.some((request) => request.target === "delete-call-entry" && request.value.includes("5557654321"))) failures.push("full Calls delete action did not carry the selected call number");
     if (!result.desktop.developerToolButtons) failures.push("developer host tool buttons are incomplete");
+    if (!result.desktop.railAutoCollapsedAfterIdle) failures.push("DeskPhone rail auto-collapse did not close after idle while enabled");
     for (const endpoint of ["/open-live-log", "/clear-log", "/run-ui-auditor"]) {
       if (!result.desktop.commandRequests.some((request) => request.path.includes(endpoint))) failures.push(`${endpoint} was not called`);
     }
