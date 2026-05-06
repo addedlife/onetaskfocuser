@@ -25,7 +25,7 @@ Latest verified deploy:
 
 Local parity progress:
 
-- 2026-05-06: DeskPhone Web parity CSV review began. Message/thread controls, shell/reconnect/build/call-banner controls, contact/attachment handoff blockers, thread-side call-history actions, and a compact thread-side dialer were mapped to current web evidence: 63 implemented-web, 60 host-api-needed, 2 native-only, 74 not-yet-reviewed.
+- 2026-05-06: DeskPhone Web parity CSV review began. Message/thread controls, shell/reconnect/build/call-banner controls, contact/attachment handoff blockers, thread-side call-history actions, compact thread-side dialer, and Contacts tab create/text/call/edit blockers were mapped to current web evidence: 63 implemented-web, 65 host-api-needed, 2 native-only, 69 not-yet-reviewed.
 
 Operational lesson from 2026-05-05:
 
