@@ -37,11 +37,11 @@ Updated: 2026-05-06
 | Web parity state | Count |
 | --- | ---: |
 | implemented-web | 63 |
-| host-api-needed | 65 |
-| native-only | 2 |
-| not-yet-reviewed | 69 |
+| host-api-needed | 69 |
+| native-only | 3 |
+| not-yet-reviewed | 64 |
 
-Reviewed slice: message/thread and shell controls already present in `src/10-deskphone-web.jsx`, including navigation rail collapse, phone/settings navigation, reconnect/settings rail actions, reconnect prompt actions, build prompt actions, call banner answer/hangup actions, contacts/developer/log shell routing, native-only contact-import prompt controls, conversation filters, unread-first sorting, show/hide thread list, thread clear-search, call actions through `/dial`, call-history All/Missed/In/Out filters, call-row message/call actions, thread-side dialer show/hide/backspace/text/call/voicemail controls, contact/create-edit handoffs, Contacts tab contact create/text/call/edit blockers, attachment save where browser data is available, scroll-to-latest, and text send through `/send`. Controls that are visible but still route through native handoff are now marked `host-api-needed` with the missing endpoint named in the CSV.
+Reviewed slice: message/thread and shell controls already present in `src/10-deskphone-web.jsx`, including navigation rail collapse, phone/settings navigation, reconnect/settings rail actions, reconnect prompt actions, build prompt actions, call banner answer/hangup actions, contacts/developer/log shell routing, native-only WPF/template chrome and contact-import prompt controls, conversation filters, unread-first sorting, show/hide thread list, thread clear-search, call actions through `/dial`, call-history All/Missed/In/Out filters, call-row message/call actions, thread-side dialer show/hide/backspace/text/call/voicemail controls, contact/create-edit handoffs, Contacts tab contact create/text/call/edit blockers, Live Log clear and collapsed Calls rail blockers, attachment save where browser data is available, scroll-to-latest, and text send through `/send`. Controls that are visible but still route through native handoff are now marked `host-api-needed` with the missing endpoint named in the CSV.
 
 ## Files Written
 
