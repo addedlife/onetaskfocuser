@@ -34,6 +34,8 @@ const messages = Array.from({ length: 180 }, (_, i) => ({
   timestamp: new Date(Date.UTC(2026, 4, 3, 12, i)).toISOString(),
   isSent: i % 3 === 0,
   isRead: i % 4 !== 0,
+  isPinned: i === 20,
+  pinActionLabel: i === 20 ? "Unpin" : "Pin",
   isMms: false,
   attachments: [],
 }));
@@ -186,7 +188,7 @@ const server = http.createServer((req, res) => {
     send(handoffRequests);
   } else if (requestPath === "/command-log") {
     send(commandRequests);
-  } else if (["/dial", "/send", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-live-log", "/clear-log", "/run-ui-auditor", "/toggle-mute", "/accept-build-update", "/snooze-build-update", "/show-build-update-prompt"].includes(requestPath)) {
+  } else if (["/dial", "/send", "/audio-refresh", "/open-bluetooth-settings", "/open-sound-settings", "/open-builds-folder", "/open-event-log", "/open-contact-sync-folder", "/export-messages-backup", "/reset-ui-scale", "/refresh-theme-sync", "/import-starter-vcf", "/import-pending-contacts", "/skip-pending-contacts", "/set-theme-sync", "/set-history-paused", "/set-dark-mode", "/open-live-log", "/clear-log", "/run-ui-auditor", "/toggle-mute", "/accept-build-update", "/snooze-build-update", "/show-build-update-prompt", "/toggle-message-pin"].includes(requestPath)) {
     commandRequests.push({ path: req.url });
     send({ ok: true });
   } else {
@@ -376,6 +378,15 @@ async function runCdp() {
     document.querySelector('.dp-new-compose-shell [data-native-source="MainWindow.xaml:3036"]')?.click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     threadSearchInput = await waitForSelector('[data-automation-id="ThreadSearchBox"]');
+    const pinnedStripVisible = !!document.querySelector('.dp-pinned-message-strip[data-native-source="MainWindow.xaml:2670"]');
+    document.querySelector('.dp-pinned-message-strip button[data-native-source="MainWindow.xaml:2670"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const pinnedJumpFound = document.querySelector('[data-message-id="m20"]')?.getBoundingClientRect().top < window.innerHeight;
+    const pinnedMessage = document.querySelector('[data-message-id="m20"] .dp-message-bubble');
+    pinnedMessage?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('[data-message-id="m20"] button[data-native-source="MainWindow.xaml:2052"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
     inputSetter.call(threadSearchInput, 'History line 17');
     threadSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 150));
@@ -604,6 +615,8 @@ async function runCdp() {
       chooseDeviceOpenedSettings,
       buildPromptShown,
       forwardDraftReady,
+      pinnedStripVisible,
+      pinnedJumpFound,
       handoffRequests,
       commandRequests,
       threadSearchNavigation,
@@ -705,6 +718,8 @@ async function main() {
     if (!result.desktop.topNewMessageComposerOpened || !result.desktop.topNewMessageCancelReturned) failures.push("top New Message composer open/cancel failed");
     if (!result.desktop.headerNewMessageComposerOpened || !result.desktop.pickedComposeContact.includes("5551234567")) failures.push("header New Message composer contact pick failed");
     if (!result.desktop.forwardDraftReady) failures.push("message forward did not open a prefilled New Message draft");
+    if (!result.desktop.pinnedStripVisible || !result.desktop.pinnedJumpFound) failures.push("pinned message strip did not render or jump to the pinned message");
+    if (!result.desktop.commandRequests.some((request) => request.path.includes("/toggle-message-pin") && request.path.includes("m20"))) failures.push("message pin action did not call /toggle-message-pin with the message id");
     if (!result.desktop.threadSearchNavigation) failures.push("thread search previous/next navigation failed");
     if (!result.desktop.conversationMenuActions) failures.push("conversation row action menu sources are incomplete");
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-message")) failures.push("new-message handoff did not target desktop compose");

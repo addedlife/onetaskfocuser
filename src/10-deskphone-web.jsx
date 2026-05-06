@@ -488,6 +488,8 @@ function normalizeMessage(raw, index) {
     timestampMs: parseDate(timestamp)?.getTime() || 0,
     isSent: !!raw?.isSent,
     isRead: raw?.isSent ? true : raw?.isRead !== false,
+    isPinned: !!(raw?.isPinned ?? raw?.IsPinned),
+    pinActionLabel: raw?.pinActionLabel || raw?.PinActionLabel || ((raw?.isPinned ?? raw?.IsPinned) ? "Unpin" : "Pin"),
     sendStatus,
     sendStatusLabel: raw?.sendStatusLabel || raw?.SendStatusLabel || "",
     outgoingStatusLabel: raw?.outgoingStatusLabel || raw?.OutgoingStatusLabel || "",
@@ -1068,6 +1070,7 @@ function MessageBubble({
   onCopy,
   onCall,
   onForward,
+  onTogglePin,
   onNativeHandoff,
   onOpenImage,
 }) {
@@ -1096,6 +1099,7 @@ function MessageBubble({
     <div
       className={itemClass}
       data-native-source="MainWindow.xaml:1845"
+      data-message-id={message.id}
       data-thread-search-match={searchMatch ? "true" : undefined}
       data-thread-search-current={searchCurrent ? "true" : undefined}
     >
@@ -1142,7 +1146,17 @@ function MessageBubble({
             </button>
             <button type="button" title="Call" onClick={(event) => { event.stopPropagation(); onCall(message.number); }}>{icon("call", 17)}</button>
             <button type="button" title="Delete" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Delete message", "MainWindow.xaml:2043", message.number); }}>{icon("delete", 17)}</button>
-            <button type="button" title="Pin" onClick={(event) => { event.stopPropagation(); onNativeHandoff("Pin message", "MainWindow.xaml:2047", message.number); }}>{icon("push_pin", 17)}</button>
+            <button
+              type="button"
+              title={message.pinActionLabel || "Pin"}
+              data-native-source={message.isSent ? "MainWindow.xaml:2272" : "MainWindow.xaml:2052"}
+              onClick={(event) => {
+                event.stopPropagation();
+                onTogglePin(message);
+              }}
+            >
+              {icon("push_pin", 17)}
+            </button>
           </div>
         ) : null}
       </div>
@@ -1334,6 +1348,10 @@ function MessagesSlice({
     conversations.find((conversation) => conversation.key === selectedConversationKey) ||
     visibleConversations[0] ||
     null;
+  const pinnedMessages = useMemo(
+    () => selectedConversation?.messages.filter((message) => message.isPinned).slice().reverse() || [],
+    [selectedConversation]
+  );
   const threadSearchLower = threadSearch.trim().toLowerCase();
   const threadMatchIds = useMemo(() => (
     threadSearchLower && selectedConversation
@@ -1426,6 +1444,21 @@ function MessagesSlice({
     if (!scrollBox) return;
     scrollBox.scrollTop = scrollBox.scrollHeight;
   }, []);
+
+  const scrollToMessage = useCallback((messageId) => {
+    const scrollBox = messageScrollRef.current;
+    const item = Array.from(scrollBox?.querySelectorAll?.("[data-message-id]") || [])
+      .find((node) => node.getAttribute("data-message-id") === messageId);
+    item?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, []);
+
+  const toggleMessagePin = useCallback(async (message) => {
+    if (!message?.id) {
+      onNativeHandoff("Pin message", message?.isSent ? "MainWindow.xaml:2272" : "MainWindow.xaml:2052", message?.number || "");
+      return;
+    }
+    await onCommand(`/toggle-message-pin?id=${encodeURIComponent(message.id)}`, "toggle message pin");
+  }, [onCommand, onNativeHandoff]);
 
   const openImageViewer = useCallback((attachment) => {
     setActiveImage(attachment);
@@ -1593,6 +1626,27 @@ function MessagesSlice({
 
             <div className="dp-thread-detail-grid" data-native-source="MainWindow.xaml:1611">
               <main className="dp-thread-messages" data-native-source="MainWindow.xaml:1845">
+                {pinnedMessages.length ? (
+                  <div className="dp-pinned-message-strip" data-native-source="MainWindow.xaml:2670">
+                    <div className="dp-pinned-strip-title">
+                      {icon("push_pin", 15)}
+                      <span>{pinnedMessages.length === 1 ? "1 pinned message" : `${pinnedMessages.length} pinned messages`}</span>
+                    </div>
+                    <div className="dp-pinned-strip-list">
+                      {pinnedMessages.slice(0, 4).map((message) => (
+                        <button
+                          key={message.id}
+                          type="button"
+                          data-native-source="MainWindow.xaml:2670"
+                          onClick={() => scrollToMessage(message.id)}
+                        >
+                          <strong>{formatBubbleTime(message.timestamp)}</strong>
+                          <span>{message.preview || message.body || "Pinned message"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="dp-message-scroll" ref={messageScrollRef}>
                   {selectedConversation.messages.map((message, index) => (
                     <MessageBubble
@@ -1606,6 +1660,7 @@ function MessagesSlice({
                       onCopy={copyMessage}
                       onCall={callNumber}
                       onForward={forwardMessage}
+                      onTogglePin={toggleMessagePin}
                       onNativeHandoff={onNativeHandoff}
                       onOpenImage={openImageViewer}
                     />
@@ -3115,6 +3170,60 @@ const css = `
   grid-template-rows: minmax(0, 1fr) auto;
   position: relative;
   background: var(--dp-bg-sidebar);
+}
+.dp-thread-messages:has(.dp-pinned-message-strip) {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.dp-pinned-message-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--dp-border);
+  background: var(--dp-bg-surface);
+}
+.dp-pinned-strip-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--dp-text-second);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.dp-pinned-strip-list {
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+.dp-pinned-strip-list button {
+  min-width: 160px;
+  max-width: 240px;
+  height: 42px;
+  border: 1px solid var(--dp-border);
+  border-radius: 8px;
+  background: var(--dp-bg-input);
+  color: var(--dp-text);
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  text-align: left;
+}
+.dp-pinned-strip-list strong {
+  color: var(--dp-muted);
+  font-size: 11px;
+}
+.dp-pinned-strip-list span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 650;
 }
 .dp-message-scroll {
   min-height: 0;

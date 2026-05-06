@@ -29,7 +29,7 @@ Current product truth:
 Current repo condition:
 
 - The current local source includes a verified auto-collapse timer repair for both app rails; next push triggers Netlify deployment.
-- DeskPhone Web parity map review is complete: 199 of 199 action rows reviewed as of 2026-05-06 (168 implemented-web, 25 host-api-needed, 6 native-only, 0 not-yet-reviewed). Latest runtime slices add browser Choose Device routing to Settings, host-backed build update accept/snooze/show controls, host-backed active-call mute, and browser message Forward into a prefilled New Message draft.
+- DeskPhone Web parity map review is complete: 199 of 199 action rows reviewed as of 2026-05-06 (173 implemented-web, 20 host-api-needed, 6 native-only, 0 not-yet-reviewed). Latest runtime slices add browser Choose Device routing to Settings, host-backed build update accept/snooze/show controls, host-backed active-call mute, browser message Forward into a prefilled New Message draft, and browser message Pin plus pinned-message jump behavior through native b256 host support.
 - Many untracked artifacts/logs/docs exist from prior work. The user has allowed careful cleanup; inspect and classify before removing anything.
 - `shailos/` is generated output copied into the deploy; do not treat it as editable source.
 
