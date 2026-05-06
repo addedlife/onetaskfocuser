@@ -40,15 +40,26 @@ function getInitialSuiteView() {
   }
 }
 
-function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreActions }) {
+function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRecord, onMoreActions, autoCollapseEnabled = true, onToggleAutoCollapse }) {
   const screenApps = [
     { id: "focus",     label: "Tasks",   icon: "task_alt"   },
     { id: "shailos",   label: "Shailos", icon: "rule"       },
     { id: "deskphone", label: "Phone",   icon: "smartphone" },
   ];
   const W = open ? 168 : 46;
+  const acTimer = useRef(null);
+  const clearAC = () => { if (acTimer.current) { clearTimeout(acTimer.current); acTimer.current = null; } };
+  const scheduleAC = () => {
+    clearAC();
+    if (!autoCollapseEnabled || !open) return;
+    acTimer.current = setTimeout(() => { onCollapse?.(); }, 10000);
+  };
+  useEffect(() => () => clearAC(), []); // eslint-disable-line
   return (
-    <div style={{
+    <div
+      onMouseEnter={clearAC}
+      onMouseLeave={scheduleAC}
+      style={{
       position: "fixed", left: 0, top: 0, bottom: 0, width: W, zIndex: 8600,
       display: "flex", flexDirection: "column", alignItems: open ? "stretch" : "center",
       boxSizing: "border-box", padding: open ? "16px 10px 14px" : "16px 5px 14px",
@@ -137,6 +148,22 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />
+
+      {/* Auto-collapse toggle */}
+      <button onClick={onToggleAutoCollapse} title={autoCollapseEnabled ? "Auto-collapse: ON (click to disable)" : "Auto-collapse: OFF (click to enable)"}
+        style={{
+          width: open ? "100%" : 32, height: 28, borderRadius: 10,
+          border: `1px solid ${T.brdS || T.brd}`,
+          background: autoCollapseEnabled ? (T.tonal || "rgba(127,127,127,0.10)") : "transparent",
+          color: autoCollapseEnabled ? T.tSoft : T.tFaint,
+          cursor: "pointer", display: "flex", alignItems: "center",
+          justifyContent: open ? "flex-start" : "center",
+          padding: open ? "0 8px" : "0", gap: open ? 6 : 0, flexShrink: 0, marginBottom: 3,
+          fontFamily: "system-ui", fontSize: 11, fontWeight: 700, overflow: "hidden", whiteSpace: "nowrap",
+        }}>
+        {suiteIcon("timer", 13)}
+        {open && (autoCollapseEnabled ? "Auto-collapse: on" : "Auto-collapse: off")}
+      </button>
 
       {/* Collapse / expand toggle */}
       <button onClick={onToggle} title={open ? "Collapse sidebar" : "Expand sidebar"}
@@ -423,7 +450,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden" }}>
 
       {/* ── Status bar ── */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, paddingBottom: 8, borderBottom: `1px solid ${T.brdS || T.brd}` }}>
@@ -566,69 +593,80 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
         </div>
       )}
 
-      {/* ── Messages ── */}
-      {statusOnline && hasMessages && (
-        <div style={{ marginTop: 2 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: T.tFaint, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 4, paddingLeft: 2 }}>Messages</div>
-          {threads.map((m, idx) => {
-            const { icon: msgIcon, color: msgColor } = msgDirIcon(m);
-            const isUnread = !!(m.unread || m.isUnread || m.read === false || m.status === "unread");
-            const preview = m.body || m.text || m.message || m.content || "";
-            const time = fmtTime(m.timestamp || m.date || m.time);
-            return (
-              <div key={`${m._who}-${idx}`} style={{ display: "grid", gridTemplateColumns: "30px minmax(0,1fr) 28px 28px", gap: 6, alignItems: "start", padding: "7px 2px", borderBottom: idx < threads.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
-                <span style={{ width: 28, height: 28, borderRadius: 99, background: T.bgW, border: `1px solid ${T.brd}`, display: "flex", alignItems: "center", justifyContent: "center", color: msgColor, flexShrink: 0, marginTop: 2 }}>{suiteIcon(msgIcon, 15)}</span>
-                <button onClick={() => openCompose(m._name, m._who)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: T.text }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
-                    <span style={{ flex: 1, fontSize: 13, fontWeight: isUnread ? 900 : 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m._name}</span>
-                    {time && <span style={{ fontSize: 10, color: T.tFaint, flexShrink: 0, fontWeight: 600 }}>{time}</span>}
+      {/* ── Vertical split: Texts (top) then Calls (bottom), each independently scrollable ── */}
+      {statusOnline && (hasMessages || hasCalls) && (
+        <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+          {/* TEXTS section */}
+          {hasMessages && (
+            <div style={{ flex: "1 1 0", minHeight: 60, overflowY: "auto", paddingRight: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: T.tFaint, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 4, paddingLeft: 2, paddingTop: 2, position: "sticky", top: 0, background: T.bg, zIndex: 1 }}>Messages</div>
+              {threads.map((m, idx) => {
+                const { icon: msgIcon, color: msgColor } = msgDirIcon(m);
+                const isUnread = !!(m.unread || m.isUnread || m.read === false || m.status === "unread");
+                const preview = m.body || m.text || m.message || m.content || "";
+                const time = fmtTime(m.timestamp || m.date || m.time);
+                return (
+                  <div key={`${m._who}-${idx}`} style={{ display: "grid", gridTemplateColumns: "30px minmax(0,1fr) 28px 28px", gap: 6, alignItems: "start", padding: "7px 2px", borderBottom: idx < threads.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
+                    <span style={{ width: 28, height: 28, borderRadius: 99, background: T.bgW, border: `1px solid ${T.brd}`, display: "flex", alignItems: "center", justifyContent: "center", color: msgColor, flexShrink: 0, marginTop: 2 }}>{suiteIcon(msgIcon, 15)}</span>
+                    <button onClick={() => openCompose(m._name, m._who)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: T.text }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
+                        <span style={{ flex: 1, fontSize: 13, fontWeight: isUnread ? 900 : 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m._name}</span>
+                        {time && <span style={{ fontSize: 10, color: T.tFaint, flexShrink: 0, fontWeight: 600 }}>{time}</span>}
+                      </div>
+                      {preview && <span style={{ display: "block", fontSize: 11, color: T.tSoft, marginTop: 1, whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4 }}>{preview}</span>}
+                    </button>
+                    <AB icon="call" title="Call" onClick={() => dialNum(m._who)} />
+                    <AB icon="sms" title="Text" onClick={() => openCompose(m._name, m._who)} />
                   </div>
-                  {preview && <span style={{ display: "block", fontSize: 11, color: T.tSoft, marginTop: 1, whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4 }}>{preview}</span>}
-                </button>
-                <AB icon="call" title="Call" onClick={() => dialNum(m._who)} />
-                <AB icon="sms" title="Text" onClick={() => openCompose(m._name, m._who)} />
-              </div>
-            );
-          })}
-          {onMoreHistory && (
-            <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
-              <button onClick={onMoreHistory} style={{ height: 26, padding: "0 14px", borderRadius: 13, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
-                {suiteIcon("history", 13)} More history
-              </button>
+                );
+              })}
+              {onMoreHistory && (
+                <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
+                  <button onClick={onMoreHistory} style={{ height: 26, padding: "0 14px", borderRadius: 13, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+                    {suiteIcon("history", 13)} More history
+                  </button>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {/* ── Recent calls ── */}
-      {statusOnline && hasCalls && (
-        <div style={{ marginTop: 2 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: T.tFaint, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 4, paddingLeft: 2 }}>Recent calls</div>
-          {recentCalls.map((c, idx) => {
-            const num = c.number || c.phoneNumber || c.from || c.Number || c.PhoneNumber || "";
-            const name = lookupName(num) || c.name || c.displayName || c.Name || c.DisplayName || c.from || num || "Unknown";
-            const { icon, color } = callDirIcon(c);
-            const time = fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime);
-            return (
-              <div key={`call-${idx}`} style={{ display: "grid", gridTemplateColumns: "30px minmax(0,1fr) 28px 28px", gap: 6, alignItems: "start", padding: "7px 2px", borderBottom: idx < recentCalls.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
-                <span style={{ width: 28, height: 28, borderRadius: 99, background: T.bgW, border: `1px solid ${T.brd}`, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0, marginTop: 2 }}>{suiteIcon(icon, 14)}</span>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
-                    <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
-                    {time && <span style={{ fontSize: 10, color: T.tFaint, flexShrink: 0, fontWeight: 600 }}>{time}</span>}
+          {/* Divider between sections */}
+          {hasMessages && hasCalls && (
+            <div style={{ height: 1, background: T.brdS || T.brd, flexShrink: 0, margin: "2px 0" }} />
+          )}
+
+          {/* CALLS section */}
+          {hasCalls && (
+            <div style={{ flex: "1 1 0", minHeight: 60, overflowY: "auto", paddingRight: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: T.tFaint, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 4, paddingLeft: 2, paddingTop: 2, position: "sticky", top: 0, background: T.bg, zIndex: 1 }}>Recent calls</div>
+              {recentCalls.map((c, idx) => {
+                const num = c.number || c.phoneNumber || c.from || c.Number || c.PhoneNumber || "";
+                const name = lookupName(num) || c.name || c.displayName || c.Name || c.DisplayName || c.from || num || "Unknown";
+                const { icon, color } = callDirIcon(c);
+                const time = fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime);
+                return (
+                  <div key={`call-${idx}`} style={{ display: "grid", gridTemplateColumns: "30px minmax(0,1fr) 28px 28px", gap: 6, alignItems: "start", padding: "7px 2px", borderBottom: idx < recentCalls.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
+                    <span style={{ width: 28, height: 28, borderRadius: 99, background: T.bgW, border: `1px solid ${T.brd}`, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0, marginTop: 2 }}>{suiteIcon(icon, 14)}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
+                        <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                        {time && <span style={{ fontSize: 10, color: T.tFaint, flexShrink: 0, fontWeight: 600 }}>{time}</span>}
+                      </div>
+                      {num && num !== name && <span style={{ display: "block", fontSize: 11, color: T.tSoft, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{num}</span>}
+                    </div>
+                    <AB icon="call" title="Call back" onClick={() => dialNum(num)} />
+                    <AB icon="sms" title="Text back" onClick={() => openCompose(name, num)} />
                   </div>
-                  {num && num !== name && <span style={{ display: "block", fontSize: 11, color: T.tSoft, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{num}</span>}
+                );
+              })}
+              {onMoreHistory && (
+                <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
+                  <button onClick={onMoreHistory} style={{ height: 26, padding: "0 14px", borderRadius: 13, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+                    {suiteIcon("history", 13)} More history
+                  </button>
                 </div>
-                <AB icon="call" title="Call back" onClick={() => dialNum(num)} />
-                <AB icon="sms" title="Text back" onClick={() => openCompose(name, num)} />
-              </div>
-            );
-          })}
-          {onMoreHistory && (
-            <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
-              <button onClick={onMoreHistory} style={{ height: 26, padding: "0 14px", borderRadius: 13, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
-                {suiteIcon("history", 13)} More history
-              </button>
+              )}
             </div>
           )}
         </div>
@@ -863,7 +901,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 <button onClick={() => { setActionCategoryId("phone"); setActionsOpen(true); }} title="Phone actions" style={{ width: 28, height: 28, borderRadius: 99, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("apps", 14)}</button>
               </div>
             </div>
-            <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0, padding: "10px 14px" }}>
+            <div style={{ overflow: "hidden", flex: "1 1 auto", minHeight: 0, padding: "10px 14px", display: "flex", flexDirection: "column" }}>
               <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </section>
@@ -954,6 +992,12 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     <span style={headLabel}>📅 Today</span>
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                       {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+                      <a href="https://calendar.google.com/calendar/r/eventedit" target="_blank" rel="noopener noreferrer" title="Add event"
+                         style={{ fontSize: 16, color: T.tFaint, textDecoration: "none", lineHeight: 1, opacity: .5, display: "flex" }}
+                         onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>+</a>
+                      <a href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer" title="Open Google Calendar"
+                         style={{ fontSize: 11, color: T.tFaint, textDecoration: "none", lineHeight: 1, opacity: .5, display: "flex" }}
+                         onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↗</a>
                       <button onClick={onConnectGoogle} title="Refresh" style={{ fontSize: 11, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .5, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↺</button>
                       <button onClick={onDisconnectGoogle} title="Disconnect" style={{ fontSize: 11, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .35, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = .85} onMouseLeave={e => e.currentTarget.style.opacity = .35}>✕</button>
                     </div>
@@ -977,6 +1021,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                               <span style={{ fontSize: 12, color: now ? T.text : T.tSoft, fontWeight: now ? 700 : 400, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evt.summary || "(no title)"}</span>
                             </div>
                           </div>
+                          {evt.htmlLink && (
+                            <a href={evt.htmlLink} target="_blank" rel="noopener noreferrer" title="Open in Calendar"
+                               style={{ fontSize: 11, color: accentBlue, textDecoration: "none", flexShrink: 0, opacity: .6, lineHeight: 1, paddingTop: 2 }}
+                               onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .6}>↗</a>
+                          )}
                         </div>
                       );
                     })}
@@ -989,7 +1038,12 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 <div style={cardWrap}>
                   <div style={cardHead}>
                     <span style={headLabel}>✉️ Important &amp; Unread</span>
-                    {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+                      <a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" title="Open Gmail"
+                         style={{ fontSize: 11, color: T.tFaint, textDecoration: "none", opacity: .5, lineHeight: 1 }}
+                         onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↗</a>
+                    </div>
                   </div>
                   <div style={cardBody}>
                     {!gmailMessages ? (
@@ -1007,9 +1061,15 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                         <div key={msg.id || i} style={{ padding: "6px 0", borderBottom: i < gmailMessages.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", gap: 6, marginBottom: 1 }}>
                             <span style={{ fontSize: 11, fontWeight: 700, color: T.tSoft, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
-                            <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui", flexShrink: 0 }}>{date}</span>
+                            <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+                              <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui" }}>{date}</span>
+                              <a href={`https://mail.google.com/mail/u/0/#inbox/${msg.id}`} target="_blank" rel="noopener noreferrer" title="Open email"
+                                 style={{ fontSize: 11, color: accentBlue, textDecoration: "none", opacity: .7, lineHeight: 1 }}
+                                 onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .7}>↗</a>
+                            </div>
                           </div>
                           <span style={{ fontSize: 12, color: T.text, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{subject}</span>
+                          {msg.snippet && <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui", display: "block", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.snippet}</span>}
                         </div>
                       );
                     })}
@@ -1366,6 +1426,9 @@ function App({ user, onSignOut }) {
   const [tab, setTab] = useState("focus");
   const [suiteView, setSuiteView] = useState(getInitialSuiteView);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarAutoCollapse, setSidebarAutoCollapse] = useState(() => {
+    try { return localStorage.getItem('ot_sidebar_autocollapse') !== 'false'; } catch { return true; }
+  });
   const [ncActionsOpen, setNcActionsOpen] = useState(false);
   const [ncActionCatId, setNcActionCatId] = useState("tasks");
   const [deskPhoneOnline, setDeskPhoneOnline] = useState(false);
@@ -1414,7 +1477,16 @@ function App({ user, onSignOut }) {
   const [blockedResume, setBlockedResume] = useState(null); // task id to show nudge for
   const [staleNudge, setStaleNudge] = useState(null);       // task object that's been waiting 7+ days
   // Google Calendar + Gmail integration
-  const [googleToken, setGoogleToken]       = useState(null);
+  const [googleToken, setGoogleToken] = useState(() => {
+    try {
+      const tok = localStorage.getItem('ot_google_token');
+      const exp = Number(localStorage.getItem('ot_google_token_expiry') || 0);
+      if (tok && exp > Date.now()) return tok;
+      localStorage.removeItem('ot_google_token');
+      localStorage.removeItem('ot_google_token_expiry');
+    } catch {}
+    return null;
+  });
   const [calendarEvents, setCalendarEvents] = useState(null); // null=not loaded, []= loaded empty
   const [gmailMessages, setGmailMessages]   = useState(null);
   const [googleLoading, setGoogleLoading]   = useState(false);
@@ -1727,10 +1799,22 @@ function App({ user, onSignOut }) {
           }
           console.log('[Google] Token received, length:', resp.access_token?.length);
           setGoogleToken(resp.access_token);
+          try {
+            localStorage.setItem('ot_google_token', resp.access_token);
+            localStorage.setItem('ot_google_token_expiry', String(Date.now() + 3500 * 1000));
+            localStorage.setItem('ot_google_connected', '1');
+          } catch {}
           setGoogleError(null);
         },
       });
       console.log('[Google] Token client ready:', !!gTokenClientRef.current);
+      // Auto-reconnect silently if user was previously connected and token is expired
+      if (localStorage.getItem('ot_google_connected') === '1') {
+        const exp = Number(localStorage.getItem('ot_google_token_expiry') || 0);
+        if (exp <= Date.now()) {
+          setTimeout(() => { gTokenClientRef.current?.requestAccessToken({ prompt: '' }); }, 600);
+        }
+      }
     }
     if (window.google?.accounts?.oauth2) { initClient(); return; }
     if (document.querySelector('script[src*="accounts.google.com/gsi"]')) {
@@ -1804,6 +1888,7 @@ function App({ user, onSignOut }) {
           } else {
             console.error('[Google] cal error:', calR.reason?.message);
             errs.push(calR.reason?.message || 'Calendar error');
+            setCalendarEvents(prev => prev ?? []); // still show card on error
           }
           if (mailR.status === 'fulfilled') {
             setGmailMessages(mailR.value);
@@ -1812,6 +1897,7 @@ function App({ user, onSignOut }) {
           } else {
             console.error('[Google] mail error:', mailR.reason?.message);
             errs.push(mailR.reason?.message || 'Gmail error');
+            setGmailMessages(prev => prev ?? []); // still show card on error
           }
           if (errs.length) setGoogleError(errs.join(' · '));
         })
@@ -1836,7 +1922,10 @@ function App({ user, onSignOut }) {
     setGoogleError(null);
     gTokenClientRef.current.requestAccessToken();
   }
-  function disconnectGoogle() { setGoogleToken(null); setCalendarEvents(null); setGmailMessages(null); setGoogleError(null); }
+  function disconnectGoogle() {
+    setGoogleToken(null); setCalendarEvents(null); setGmailMessages(null); setGoogleError(null);
+    try { localStorage.removeItem('ot_google_token'); localStorage.removeItem('ot_google_token_expiry'); localStorage.removeItem('ot_google_connected'); } catch {}
+  }
 
   // ─── Listen for shailos iframe "close" message ───────────────────────────
   useEffect(() => {
@@ -3979,8 +4068,15 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onSelect={openCommandView}
           open={sidebarOpen}
           onToggle={() => setSidebarOpen(v => !v)}
+          onCollapse={() => setSidebarOpen(false)}
           onRecord={() => { setConvCallMode(false); setShowConvCapture(true); }}
           onMoreActions={() => setNcActionsOpen(true)}
+          autoCollapseEnabled={sidebarAutoCollapse}
+          onToggleAutoCollapse={() => setSidebarAutoCollapse(v => {
+            const next = !v;
+            try { localStorage.setItem('ot_sidebar_autocollapse', String(next)); } catch {}
+            return next;
+          })}
         />
       )}
 
@@ -4273,14 +4369,14 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
               ];
 
               return (
-                <div style={{position:"fixed",top:"clamp(12px,2vh,20px)",left:"clamp(12px,2vw,20px)",zIndex:200}}>
+                <div style={{position:"fixed",top:"clamp(12px,2vh,20px)",left:(sidebarW + 12) + "px",zIndex:200}}>
                   <button onClick={()=>setLpMenu(p=>!p)} style={{width:36,height:36,borderRadius:10,background:T.glow?`${T.card}cc`:T.card,border:`1px solid ${T.brd}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:T.glow?`0 0 12px ${T.brd}80`:T.shadow,transition:"all 0.2s"}}
                     onMouseEnter={e=>{e.currentTarget.style.boxShadow=T.glow?`0 0 20px ${T.brd}`:"0 4px 16px rgba(0,0,0,0.12)";}}
                     onMouseLeave={e=>{e.currentTarget.style.boxShadow=T.glow?`0 0 12px ${T.brd}80`:T.shadow;}}>
                     <IC.List s={16} c={T.tSoft}/>
                   </button>
                   {lpMenu && (
-                    <div style={{position:"fixed",top:"clamp(56px,calc(2vh + 44px),72px)",left:"clamp(12px,2vw,20px)",background:T.card,border:`1px solid ${T.brd}`,borderRadius:14,padding:"8px 0",minWidth:200,zIndex:9999,boxShadow:T.glow?`0 4px 30px ${T.bg}cc, 0 0 20px ${T.brd}60`:"0 8px 32px rgba(0,0,0,0.18)",animation:"ot-fade 0.15s",maxHeight:"calc(100vh - 80px)",overflowY:"auto"}}
+                    <div style={{position:"fixed",top:"clamp(56px,calc(2vh + 44px),72px)",left:(sidebarW + 12) + "px",background:T.card,border:`1px solid ${T.brd}`,borderRadius:14,padding:"8px 0",minWidth:200,zIndex:9999,boxShadow:T.glow?`0 4px 30px ${T.bg}cc, 0 0 20px ${T.brd}60`:"0 8px 32px rgba(0,0,0,0.18)",animation:"ot-fade 0.15s",maxHeight:"calc(100vh - 80px)",overflowY:"auto"}}
                       onClick={()=>setLpMenu(false)}>
                       {menuSections.map((sec,si)=>(
                         <div key={si}>
@@ -4303,7 +4399,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
 
             {/* PostIt stack — Tasks screen only */}
             {suiteView === "focus" && tab === "focus" && compT.length > 0 && (
-              <div style={{position:"fixed",bottom:"clamp(24px,4vh,48px)",left:"clamp(16px,3vw,32px)",zIndex:9000}}>
+              <div style={{position:"fixed",bottom:"clamp(24px,4vh,48px)",left:(sidebarW + 16) + "px",zIndex:9000}}>
                 <PostItStack tasks={compT} pris={pris} T={T} open={postItOpen} onToggle={()=>setPostItOpen(p=>!p)} onUncomp={uncompTask} onClone={cloneTask}/>
               </div>
             )}

@@ -4,6 +4,7 @@ const DEFAULT_HOST = "http://127.0.0.1:8765";
 const HOST_CONNECTOR_KEY = "deskphone_web_host_url";
 const LEGACY_BRIDGE_KEY = "deskphone_web_bridge_url";
 const RAIL_COLLAPSED_KEY = "deskphone_web_rail_collapsed";
+const RAIL_AUTO_COLLAPSE_KEY = "deskphone_web_rail_autocollapse";
 const RAIL_WIDTH_KEY = "deskphone_web_rail_width";
 const MESSAGE_LIST_WIDTH_KEY = "deskphone_web_message_list_width";
 const CALL_HISTORY_WIDTH_KEY = "deskphone_web_call_history_width";
@@ -3402,6 +3403,10 @@ export function DeskPhoneWebPanel({
   const [notice, setNotice] = useState("");
   const [activeTab, setActiveTab] = useState("messages");
   const [railCollapsed, setRailCollapsed] = useState(() => readSavedRailState());
+  const [railAutoCollapse, setRailAutoCollapse] = useState(() => {
+    try { return localStorage.getItem(RAIL_AUTO_COLLAPSE_KEY) !== 'false'; } catch { return true; }
+  });
+  const railAcTimer = useRef(null);
   const [reconnectDismissed, setReconnectDismissed] = useState(false);
   const [muted, setMuted] = useState(false);
   const [showBuildPrompt, setShowBuildPrompt] = useState(false);
@@ -3514,6 +3519,27 @@ export function DeskPhoneWebPanel({
     });
   }, []);
 
+  const clearRailAC = useCallback(() => {
+    if (railAcTimer.current) { clearTimeout(railAcTimer.current); railAcTimer.current = null; }
+  }, []);
+
+  const scheduleRailAC = useCallback(() => {
+    clearRailAC();
+    if (!railAutoCollapse || railCollapsed) return;
+    railAcTimer.current = setTimeout(() => {
+      setRailCollapsed(true);
+      try { localStorage.setItem(RAIL_COLLAPSED_KEY, 'true'); } catch {}
+    }, 10000);
+  }, [railAutoCollapse, railCollapsed, clearRailAC]);
+
+  const toggleRailAutoCollapse = useCallback(() => {
+    setRailAutoCollapse(v => {
+      const next = !v;
+      try { localStorage.setItem(RAIL_AUTO_COLLAPSE_KEY, String(next)); } catch {}
+      return next;
+    });
+  }, []);
+
   const handleSaveHost = useCallback(() => {
     const normalized = saveHost(hostInput);
     setHostInput(normalized);
@@ -3560,7 +3586,7 @@ export function DeskPhoneWebPanel({
         data-native-source="MainWindow.xaml:359"
         style={{ "--dp-rail-width": `${railWidth}px` }}
       >
-        <aside className="dp-rail" data-native-source="MainWindow.xaml:382">
+        <aside className="dp-rail" data-native-source="MainWindow.xaml:382" onMouseEnter={clearRailAC} onMouseLeave={scheduleRailAC}>
           <div className="dp-app-identity" data-native-source="MainWindow.xaml:396">
             <div className="dp-app-title-block">
               <div className="dp-app-icon-box" data-native-source="MainWindow.xaml:410">
@@ -3624,6 +3650,25 @@ export function DeskPhoneWebPanel({
             onReconnect={() => runCommand("/connect", "connect")}
             onSettings={() => setActiveTab("settings")}
           />
+
+          {/* Auto-collapse toggle */}
+          <button
+            onClick={toggleRailAutoCollapse}
+            title={railAutoCollapse ? "Auto-collapse: ON — click to disable" : "Auto-collapse: OFF — click to enable"}
+            style={{
+              display: "flex", alignItems: "center", gap: railCollapsed ? 0 : 6,
+              justifyContent: railCollapsed ? "center" : "flex-start",
+              width: "100%", padding: railCollapsed ? "6px 0" : "6px 10px",
+              margin: "6px 0 2px", border: "none", borderRadius: 8, cursor: "pointer",
+              background: railAutoCollapse ? "rgba(127,127,127,0.10)" : "transparent",
+              color: railAutoCollapse ? COLORS.textSecond : COLORS.textMuted,
+              fontSize: 11, fontWeight: 700, fontFamily: "system-ui",
+              overflow: "hidden", whiteSpace: "nowrap", boxSizing: "border-box",
+            }}
+          >
+            <span className="material-symbols-rounded dp-material-icon" aria-hidden="true" style={{ fontSize: 14 }}>timer</span>
+            {!railCollapsed && (railAutoCollapse ? "Auto-collapse: on" : "Auto-collapse: off")}
+          </button>
         </aside>
 
         <div
