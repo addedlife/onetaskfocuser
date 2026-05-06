@@ -89,6 +89,23 @@ const calls = [
     timestamp: new Date(Date.UTC(2026, 4, 3, 15, 0)).toISOString(),
     durationDisplay: "2 min",
   },
+  {
+    id: "call-2",
+    number: "+15551234567",
+    direction: "Missed",
+    directionLabel: "Missed",
+    timestamp: new Date(Date.UTC(2026, 4, 3, 16, 15)).toISOString(),
+    durationDisplay: "",
+    isMissed: true,
+  },
+  {
+    id: "call-3",
+    number: "+15551234567",
+    direction: "Outgoing",
+    directionLabel: "Outgoing",
+    timestamp: new Date(Date.UTC(2026, 4, 3, 17, 30)).toISOString(),
+    durationDisplay: "48 sec",
+  },
 ];
 const handoffRequests = [];
 
@@ -269,6 +286,17 @@ async function runCdp() {
     await new Promise((resolve) => setTimeout(resolve, 600));
     const maxTop = scrollBox.scrollHeight - scrollBox.clientHeight;
     const placeholderShown = Array.from(document.querySelectorAll('.dp-muted-body')).some((el) => el.textContent.includes('MMS message'));
+    const callRowsAll = document.querySelectorAll('.dp-thread-call-row').length;
+    document.querySelector('[data-automation-id="CallHistoryFilterMissed"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const callRowsMissed = document.querySelectorAll('.dp-thread-call-row').length;
+    const missedLabel = document.querySelector('.dp-thread-call-row strong')?.textContent.trim() || '';
+    document.querySelector('[data-automation-id="CallHistoryFilterOut"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const callRowsOut = document.querySelectorAll('.dp-thread-call-row').length;
+    const outLabel = document.querySelector('.dp-thread-call-row strong')?.textContent.trim() || '';
+    document.querySelector('[data-automation-id="CallHistoryFilterAll"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-native-source="MainWindow.xaml:1078"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-native-source="MainWindow.xaml:1753"]').click();
@@ -314,6 +342,11 @@ async function runCdp() {
       handoffRequests,
       scrollable,
       scrolledToBottom: scrollBox.scrollTop >= maxTop - 8,
+      callRowsAll,
+      callRowsMissed,
+      missedLabel,
+      callRowsOut,
+      outLabel,
       imageLoaded: image.naturalWidth > 0,
       pendingStatusText,
       imageBubbleIsMediaOnly: imageBubble.classList.contains('is-media-only'),
@@ -378,6 +411,8 @@ async function main() {
     if (!result.desktop.handoffRequests.some((request) => request.target === "new-contact" && request.value.includes("15551234567"))) failures.push("add-contact handoff did not carry the conversation number");
     if (!result.desktop.handoffRequests.some((request) => request.target === "edit-contact" && request.value.includes("15551234567"))) failures.push("edit-contact handoff did not carry the conversation number");
     if (!result.desktop.scrollable || !result.desktop.scrolledToBottom) failures.push("message history did not scroll to latest");
+    if (result.desktop.callRowsAll !== 3 || result.desktop.callRowsMissed !== 1 || result.desktop.missedLabel !== "Missed") failures.push("missed-call filter did not isolate missed calls");
+    if (result.desktop.callRowsOut !== 1 || result.desktop.outLabel !== "Outgoing") failures.push("outgoing-call filter did not isolate outgoing calls");
     if (result.desktop.messageCount < 150) failures.push("message history was capped too shallow for DeskPhone Web");
     if (!result.desktop.imageLoaded || result.desktop.placeholderShown) failures.push("MMS image did not replace placeholder");
     if (!result.desktop.pendingStatusText.includes("Confirming on phone")) failures.push("outgoing pending message status was not visible");

@@ -380,7 +380,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
   - **AB action buttons** (call/text on each row) are white/neutral — no longer green
   - **SMS direction icons**: incoming shows `sms`, outgoing shows `outgoing_mail`; unread contacts display in bold (fw 900)
   - **Shailos column**: research-type tasks (`type === "shaila-research"` / `"shailo-research"`) filtered out of the active/get-back section — only pure get-back tasks appear until research is complete
-- **DeskPhone web screen** (`src/10-deskphone-web.jsx`): full screen written by a second developer (5 commits on main branch). **Do not touch this file.** It is included in every deploy automatically — no special action needed.
+- **DeskPhone web screen** (`src/10-deskphone-web.jsx`): active exact-parity surface. Current reviewed ledger: 65 of 199 native action rows reviewed (28 implemented-web, 37 host-api-needed, 134 not-yet-reviewed). Latest slice added browser All/Missed/In/Out filters to the thread-side call-history column and expanded `artifacts/deskphone-web-parity-smoke.cjs` to verify Missed and Out filters. Continue in small inventory-backed slices; preserve native handoff shortcuts until host endpoints exist.
 - **NerveCenter** (formerly Switchboard): unified 3-column command dashboard — Tasks | Shailos | Phone. Reached via `?suite=nervecenter` (or legacy `?suite=switchboard` still works). Material 3 design throughout: priority color bars + named priority chips per row, gold (#C9923C) visual identity for all shailos/shaila-work, M3 contact list in phone column with compose-on-select. `DeskPhoneMiniDock` floating pill removed — redundant. "Tasks" back button removed from panel header. Nav bar renamed hub icon + "NerveCenter" label.
 - **Universal Conversation Recorder**: full in-app flow — record → transcribe (Yeshivish-aware) → AI extracts tasks/shailos/schedule/got-backs → review card → user approves → items added to queue
 - **FAB**: 2 large buttons (record shaila, record conversation), 2 compact links (Add | Records)
@@ -407,9 +407,19 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 ## 15. Recent Git History
 
-Latest: NerveCenter fixed viewport layout (no page scroll) + Google Calendar/Gmail as fixed-height bottom strip; each card scrolls internally.
+Latest: DeskPhone Web parity slice adds call-history filters and updates the parity ledger.
 
 ```
+(pending push) feat: DeskPhone web call-history parity filters
+b50191d Avoid stale Netlify deploy IDs in briefing
+285b4f2 Update live DeskPhone web deploy ID
+a32d765 Update DeskPhone web deploy briefing
+8674b16 Ship DeskPhone web send status parity
+10d8446 docs: add Codex briefing pack
+da44212 Show Google connector setup path
+ff7afed Fix Google connector config handoff
+856c162 Merge remote-tracking branch 'origin/main'
+fd507df Fix DeskPhone web history and MMS photo chrome
 (pending push) fix: NerveCenter single-screen layout + Google strip with internal scroll
 becb7df fix: Google Calendar + Gmail data not loading after connect
 04849e3 feat: Google cards on NerveCenter, default home to NerveCenter, CHANGELOG

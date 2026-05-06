@@ -55,6 +55,7 @@ const SHELL_PARITY_ROWS = [
 ];
 
 const MESSAGE_FILTERS = ["All", "Unread", "Pinned", "Muted", "Blocked"];
+const CALL_FILTERS = ["All", "Missed", "In", "Out"];
 
 const MESSAGE_PARITY_ROWS = [
   ["MainWindow.xaml:1036", "MessagesRootGrid", "300px conversation list, splitter, thread pane"],
@@ -563,6 +564,20 @@ function groupCallsByNumber(calls, selectedKey) {
   return getApiList(calls)
     .filter((call) => normalizePhoneKey(call?.number) === selectedKey)
     .slice(0, 12);
+}
+
+function callBucket(call) {
+  const raw = String(call?.direction || call?.directionLabel || call?.type || call?.callType || "").toLowerCase();
+  const numeric = Number(call?.type ?? call?.callType ?? call?.directionCode ?? call?.direction);
+  if (call?.isMissed || raw.includes("miss") || numeric === 3) return "Missed";
+  if (raw.includes("out") || raw.includes("dial") || numeric === 2) return "Out";
+  if (raw.includes("in") || raw.includes("receiv") || numeric === 1) return "In";
+  return "";
+}
+
+function callMatchesFilter(call, filter) {
+  if (filter === "All") return true;
+  return callBucket(call) === filter;
 }
 
 function startHorizontalDrag(event, { startValue, min, max, onChange, invert = false }) {
@@ -1074,18 +1089,39 @@ function MessageBubble({ message, previousMessage, open, onToggleOpen, onCopy, o
 }
 
 function ConversationCallHistory({ calls, selectedConversation, onCall, onNativeHandoff }) {
+  const [callFilter, setCallFilter] = useState("All");
   const selectedCalls = selectedConversation ? groupCallsByNumber(calls, selectedConversation.key) : [];
+  const visibleCalls = selectedCalls.filter((call) => callMatchesFilter(call, callFilter));
+  const callSummary = selectedCalls.length
+    ? callFilter === "All"
+      ? `${selectedCalls.length} with this number`
+      : `${visibleCalls.length} of ${selectedCalls.length} ${callFilter.toLowerCase()}`
+    : "No recent calls";
+
   return (
     <aside className="dp-thread-calls" data-native-source="MainWindow.xaml:2459">
       <div className="dp-thread-calls-header">
         <div>
           <strong>Call history</strong>
-          <span>{selectedCalls.length ? `${selectedCalls.length} with this number` : "No recent calls"}</span>
+          <span>{callSummary}</span>
         </div>
         <button type="button" onClick={() => onNativeHandoff("Open full call history", "MainWindow.xaml:2459")}>{icon("open_in_new", 18)}</button>
       </div>
+      <div className="dp-call-filter-grid" data-native-source="MainWindow.xaml:2483">
+        {CALL_FILTERS.map((filter) => (
+          <button
+            type="button"
+            key={filter}
+            className={callFilter === filter ? "is-active" : ""}
+            onClick={() => setCallFilter(filter)}
+            data-automation-id={`CallHistoryFilter${filter}`}
+          >
+            {filter}
+          </button>
+        ))}
+      </div>
       <div className="dp-thread-call-list">
-        {selectedCalls.map((call) => (
+        {visibleCalls.map((call) => (
           <div className={`dp-thread-call-row ${call.isMissed ? "is-missed" : ""}`} key={call.id || `${call.number}-${call.timestamp}`}>
             <div>{icon(call.isMissed ? "phone_missed" : call.direction === "Outgoing" ? "call_made" : "call_received", 18)}</div>
             <div>
@@ -1095,8 +1131,10 @@ function ConversationCallHistory({ calls, selectedConversation, onCall, onNative
             <button type="button" title="Call back" aria-label="Call back" onClick={() => onCall(call.number)}>{icon("call", 17)}</button>
           </div>
         ))}
-        {!selectedCalls.length ? (
-          <div className="dp-thread-call-empty">Calls for this conversation will appear here when DeskPhone reports them.</div>
+        {!visibleCalls.length ? (
+          <div className="dp-thread-call-empty">
+            {selectedCalls.length ? `No ${callFilter.toLowerCase()} calls for this conversation.` : "Calls for this conversation will appear here when DeskPhone reports them."}
+          </div>
         ) : null}
       </div>
     </aside>
@@ -2737,7 +2775,7 @@ const css = `
   min-height: 0;
   background: var(--dp-bg-main);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
 }
 .dp-thread-calls-header {
@@ -2761,6 +2799,29 @@ const css = `
   margin-top: 2px;
   color: var(--dp-muted);
   font-size: 12px;
+}
+.dp-call-filter-grid {
+  border-bottom: 1px solid var(--dp-border);
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.dp-call-filter-grid button {
+  height: 30px;
+  min-width: 0;
+  border: 0;
+  border-radius: 9px;
+  padding: 0 6px;
+  background: var(--dp-bg-input);
+  color: var(--dp-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dp-call-filter-grid button.is-active {
+  background: var(--dp-blue-light);
+  color: var(--dp-blue);
 }
 .dp-thread-call-list {
   min-height: 0;

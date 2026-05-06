@@ -15,6 +15,10 @@ Latest verified deploy:
 - Served asset `index-BoHqrUDj.js`
 - App config reports `googleAvailable: false` because no production `GOOGLE_CLIENT_ID` is configured.
 
+Local parity progress:
+
+- 2026-05-06: DeskPhone Web parity CSV review began. Message/thread controls and thread-side call-history filters were mapped to current web evidence: 28 implemented-web, 37 host-api-needed, 134 not-yet-reviewed. Added browser All/Missed/In/Out filters to the thread-side call history column.
+
 Operational lesson from 2026-05-05:
 
 - Always fetch/merge latest `origin/main` before web work because another coder may be active.

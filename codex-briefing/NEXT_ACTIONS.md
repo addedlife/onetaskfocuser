@@ -10,6 +10,7 @@ Immediate connector action:
 Active product queue:
 
 - Continue DeskPhone Web parity from the existing DeskPhone native inventory.
+- Next recommended parity slice: continue call-history/dialer review from `deskphone-web-parity-map.csv`, especially delete/undo, block/unblock, voicemail, and keypad rows; implement only the smallest host/API or browser behavior needed for that slice.
 - Preserve every native DeskPhone button, function, layout behavior, and expected phone-app behavior unless intentionally replaced.
 - Keep native shortcut handoffs for web buttons until each function is implemented natively in the web version.
 - Continue polishing NerveCenter layout so the persistent left panel pushes content instead of covering it.
