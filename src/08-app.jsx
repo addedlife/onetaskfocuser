@@ -1002,7 +1002,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           return (
             <React.Fragment>
             <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", gap: 4, minHeight: 0 }}>
-              <div style={{ display: "flex", gap: 10, flex: "0 0 260px", minHeight: 0 }}>
+              <div style={{ display: "flex", gap: 10, flex: "0 0 220px", minHeight: 0 }}>
 
               {/* Not connected — never been connected: show connect button */}
               {notConnected && !googleError && !googleWasConnected && (
@@ -1128,12 +1128,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                             setHoverEmail(null);
                           }}
                         >
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6, marginBottom: 1 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6, marginBottom: 2 }}>
                             <span style={{ fontSize: 12, fontWeight: 700, color: T.text, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
                             <span style={{ fontSize: 10, color: T.tFaint, fontFamily: "system-ui", flexShrink: 0 }}>{date}</span>
                           </div>
-                          <span style={{ fontSize: 11, color: T.tSoft, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", marginBottom: 1 }}>{subject}</span>
-                          {(msg.aiSummary || msg.snippet) && <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.aiSummary || decodeSnippet(msg.snippet)}</span>}
+                          <span style={{ fontSize: 11, color: T.tSoft, fontFamily: "system-ui", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
                         </a>
                       );
                     })}
@@ -2005,8 +2004,10 @@ function App({ user, onSignOut }) {
 
   async function fetchGmailData(token) {
     console.log('[Google] Fetching Gmail…');
+    // Personal = all; Promotions + Updates = important only; most recent 20 combined
+    const q = encodeURIComponent('(category:primary) OR (category:promotions is:important) OR (category:updates is:important)');
     const listR = await fetch(
-      'https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=is%3Aunread+is%3Aimportant+in%3Ainbox',
+      `https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=${q}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     console.log('[Google] Gmail list status:', listR.status);
@@ -2025,10 +2026,10 @@ function App({ user, onSignOut }) {
     try {
       const lines = msgs.map((m, i) => {
         const subj = m?.payload?.headers?.find(h => h.name === 'Subject')?.value || '';
-        const snip = (m.snippet || '').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+        const snip = (m.snippet || '').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
         return `${i + 1}. Subject: "${subj}" | Body: "${snip}"`;
       }).join('\n');
-      const prompt = `For each email, write ONE sentence (8 words or fewer) capturing what it is about. Return ONLY a JSON array of strings, one per email, in order.\n\n${lines}`;
+      const prompt = `For each email below, summarize what the body is actually saying in ONE sentence of 10 words or fewer. Focus on the body content — do not just restate the subject line. Return ONLY a valid JSON array of strings, one per email, in order.\n\n${lines}`;
       const raw = await callAI(prompt, { maxTokens: 400 });
       const match = raw.match(/\[[\s\S]*?\]/);
       if (match) {
