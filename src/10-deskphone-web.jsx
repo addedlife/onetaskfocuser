@@ -1090,8 +1090,10 @@ function MessageBubble({ message, previousMessage, open, onToggleOpen, onCopy, o
   );
 }
 
-function ConversationCallHistory({ calls, selectedConversation, onCall, onText, onNativeHandoff }) {
+function ConversationCallHistory({ calls, selectedConversation, onCall, onText, onDial, onNativeHandoff }) {
   const [callFilter, setCallFilter] = useState("All");
+  const [dialerOpen, setDialerOpen] = useState(false);
+  const [dialerNumber, setDialerNumber] = useState("");
   const selectedCalls = selectedConversation ? groupCallsByNumber(calls, selectedConversation.key) : [];
   const visibleCalls = selectedCalls.filter((call) => callMatchesFilter(call, callFilter));
   const callSummary = selectedCalls.length
@@ -1108,6 +1110,7 @@ function ConversationCallHistory({ calls, selectedConversation, onCall, onText, 
           <span>{callSummary}</span>
         </div>
         <div className="dp-thread-calls-header-actions">
+          <button type="button" title="Show keypad" aria-label="Show keypad" data-native-source="MainWindow.xaml:2573" onClick={() => setDialerOpen(true)}>{icon("dialpad", 18)}</button>
           <button type="button" title="Open full call history" aria-label="Open full call history" onClick={() => onNativeHandoff("Open full call history", "MainWindow.xaml:2459")}>{icon("open_in_new", 18)}</button>
           <button type="button" title="Delete all call history" aria-label="Delete all call history" data-native-source="MainWindow.xaml:2592" onClick={() => onNativeHandoff("Delete all call history", "MainWindow.xaml:2592")}>{icon("delete", 18)}</button>
         </div>
@@ -1125,6 +1128,28 @@ function ConversationCallHistory({ calls, selectedConversation, onCall, onText, 
           </button>
         ))}
       </div>
+      {dialerOpen ? (
+        <div className="dp-thread-dialer" data-native-source="MainWindow.xaml:2871">
+          <div className="dp-thread-dialer-top">
+            <label>
+              <span>Number</span>
+              <input
+                value={dialerNumber}
+                onChange={(event) => setDialerNumber(event.target.value)}
+                inputMode="tel"
+                aria-label="Dial number"
+                data-automation-id="ThreadDialerNumber"
+              />
+            </label>
+            <button type="button" title="Hide keypad" aria-label="Hide keypad" data-native-source="MainWindow.xaml:2871" onClick={() => setDialerOpen(false)}>{icon("close", 18)}</button>
+          </div>
+          <div className="dp-thread-dialer-actions">
+            <button type="button" title="Backspace" aria-label="Backspace" data-native-source="MainWindow.xaml:2893" onClick={() => setDialerNumber((value) => value.slice(0, -1))}>{icon("backspace", 17)}</button>
+            <button type="button" title="Voicemail" aria-label="Voicemail" data-native-source="MainWindow.xaml:2966" onClick={() => onDial("*86")}>{icon("voicemail", 17)}<span>Voicemail</span></button>
+            <button type="button" title="Call" aria-label="Call" data-native-source="MainWindow.xaml:2992" onClick={() => onDial(dialerNumber)} disabled={!dialerNumber.trim()}>{icon("call", 17)}<span>Call</span></button>
+          </div>
+        </div>
+      ) : null}
       <div className="dp-thread-call-list">
         {visibleCalls.map((call) => (
           <div className={`dp-thread-call-row ${call.isMissed ? "is-missed" : ""}`} key={call.id || `${call.number}-${call.timestamp}`}>
@@ -1218,6 +1243,12 @@ function MessagesSlice({
     }
     onCommand(`/dial?n=${encodeURIComponent(normalized)}`, "call");
   }, [onCommand, onNativeHandoff]);
+
+  const dialRawNumber = useCallback((number) => {
+    const cleaned = String(number || "").replace(/[^\d+*#]/g, "");
+    if (!cleaned) return;
+    onCommand(`/dial?n=${encodeURIComponent(cleaned)}`, "call");
+  }, [onCommand]);
 
   const textNumber = useCallback((number) => {
     const normalized = normalizePhoneKey(number);
@@ -1500,6 +1531,7 @@ function MessagesSlice({
                 selectedConversation={selectedConversation}
                 onCall={callNumber}
                 onText={textNumber}
+                onDial={dialRawNumber}
                 onNativeHandoff={onNativeHandoff}
               />
             </div>
@@ -2501,7 +2533,8 @@ const css = `
 .dp-thread-search button,
 .dp-bubble-actions button,
 .dp-thread-call-row button,
-.dp-thread-calls-header button {
+.dp-thread-calls-header button,
+.dp-thread-dialer button {
   width: 28px;
   height: 28px;
   border: 0;
@@ -2516,7 +2549,8 @@ const css = `
 .dp-thread-search button:hover,
 .dp-bubble-actions button:hover,
 .dp-thread-call-row button:hover,
-.dp-thread-calls-header button:hover {
+.dp-thread-calls-header button:hover,
+.dp-thread-dialer button:hover {
   background: rgba(26, 115, 232, 0.12);
 }
 .dp-thread-actions {
@@ -2797,8 +2831,8 @@ const css = `
   min-width: 0;
   min-height: 0;
   background: var(--dp-bg-main);
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 .dp-thread-calls-header {
@@ -2852,8 +2886,52 @@ const css = `
   background: var(--dp-blue-light);
   color: var(--dp-blue);
 }
+.dp-thread-dialer {
+  border-bottom: 1px solid var(--dp-border);
+  padding: 10px 12px 12px;
+  background: white;
+}
+.dp-thread-dialer-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+.dp-thread-dialer-top label,
+.dp-thread-dialer-top span {
+  display: block;
+}
+.dp-thread-dialer-top span {
+  margin-bottom: 4px;
+  color: var(--dp-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.dp-thread-dialer-top input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--dp-border);
+  border-radius: 9px;
+  padding: 8px 9px;
+  color: var(--dp-text);
+  font: 600 14px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+}
+.dp-thread-dialer-actions {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  gap: 6px;
+}
+.dp-thread-dialer-actions button {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
 .dp-thread-call-list {
   min-height: 0;
+  flex: 1 1 auto;
   overflow: auto;
 }
 .dp-thread-call-row {

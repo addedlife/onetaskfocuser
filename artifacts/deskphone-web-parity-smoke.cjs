@@ -314,6 +314,23 @@ async function runCdp() {
     await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-native-source="MainWindow.xaml:2841"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('[data-native-source="MainWindow.xaml:2573"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const dialerOpened = !!document.querySelector('.dp-thread-dialer');
+    const dialerInput = document.querySelector('[data-automation-id="ThreadDialerNumber"]');
+    const inputSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    inputSetter.call(dialerInput, '5559');
+    dialerInput.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('[data-native-source="MainWindow.xaml:2893"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const dialerAfterBackspace = document.querySelector('[data-automation-id="ThreadDialerNumber"]').value;
+    document.querySelector('[data-native-source="MainWindow.xaml:2992"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('[data-native-source="MainWindow.xaml:2966"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    document.querySelector('[data-native-source="MainWindow.xaml:2871"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const dialerClosed = !document.querySelector('.dp-thread-dialer');
     document.querySelector('[data-native-source="MainWindow.xaml:1078"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-native-source="MainWindow.xaml:1753"]').click();
@@ -367,6 +384,9 @@ async function runCdp() {
       callRowsOut,
       outLabel,
       replyFocusedFromCallRow,
+      dialerOpened,
+      dialerAfterBackspace,
+      dialerClosed,
       imageLoaded: image.naturalWidth > 0,
       pendingStatusText,
       imageBubbleIsMediaOnly: imageBubble.classList.contains('is-media-only'),
@@ -438,6 +458,9 @@ async function main() {
     if (!result.desktop.handoffRequests.some((request) => request.target === "delete-all-calls")) failures.push("delete-all-calls handoff was not recorded");
     if (!result.desktop.handoffRequests.some((request) => request.target === "toggle-block" && request.value.includes("15551234567"))) failures.push("call-record block handoff did not carry the number");
     if (!result.desktop.handoffRequests.some((request) => request.target === "delete-call-entry" && request.value.includes("15551234567"))) failures.push("delete-call-entry handoff did not carry the number");
+    if (!result.desktop.dialerOpened || result.desktop.dialerAfterBackspace !== "555" || !result.desktop.dialerClosed) failures.push("thread-side dialer show/backspace/hide behavior failed");
+    if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("555"))) failures.push("thread-side dialer call did not use the host dial endpoint");
+    if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("*86"))) failures.push("voicemail dialer action did not dial *86");
     if (result.desktop.messageCount < 150) failures.push("message history was capped too shallow for DeskPhone Web");
     if (!result.desktop.imageLoaded || result.desktop.placeholderShown) failures.push("MMS image did not replace placeholder");
     if (!result.desktop.pendingStatusText.includes("Confirming on phone")) failures.push("outgoing pending message status was not visible");
