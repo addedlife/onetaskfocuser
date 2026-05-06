@@ -380,7 +380,7 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
   - **AB action buttons** (call/text on each row) are white/neutral — no longer green
   - **SMS direction icons**: incoming shows `sms`, outgoing shows `outgoing_mail`; unread contacts display in bold (fw 900)
   - **Shailos column**: research-type tasks (`type === "shaila-research"` / `"shailo-research"`) filtered out of the active/get-back section — only pure get-back tasks appear until research is complete
-- **DeskPhone web screen** (`src/10-deskphone-web.jsx`): active exact-parity surface. Current reviewed ledger: 180 of 199 native action rows reviewed (89 implemented-web, 88 host-api-needed, 3 native-only, 19 not-yet-reviewed). Latest slices added browser All/Missed/In/Out filters, call-row message/call/block/delete controls, compact thread-side dialer controls including keypad/Text handoff, and shell/reconnect/build/call-banner/contact-import/contact-action/Contacts-tab/full-compose/settings/log/collapsed-calls parity mapping. `artifacts/deskphone-web-parity-smoke.cjs` covers the verified browser and handoff behavior. Continue in small inventory-backed slices; preserve native handoff shortcuts until host endpoints exist.
+- **DeskPhone web screen** (`src/10-deskphone-web.jsx`): active exact-parity surface. Current reviewed ledger: 185 of 199 native action rows reviewed (89 implemented-web, 93 host-api-needed, 3 native-only, 14 not-yet-reviewed). Latest slices added browser All/Missed/In/Out filters, call-row message/call/block/delete controls, compact thread-side dialer controls including keypad/Text handoff, and shell/reconnect/build/call-banner/contact-import/contact-action/Contacts-tab/full-compose/settings/log/collapsed-calls parity mapping. `artifacts/deskphone-web-parity-smoke.cjs` covers the verified browser and handoff behavior. Continue in small inventory-backed slices; preserve native handoff shortcuts until host endpoints exist.
 - **NerveCenter** (formerly Switchboard): unified 3-column command dashboard — Tasks | Shailos | Phone. Reached via `?suite=nervecenter` (or legacy `?suite=switchboard` still works). Material 3 design throughout: priority color bars + named priority chips per row, gold (#C9923C) visual identity for all shailos/shaila-work, M3 contact list in phone column with compose-on-select. `DeskPhoneMiniDock` floating pill removed — redundant. "Tasks" back button removed from panel header. Nav bar renamed hub icon + "NerveCenter" label.
 - **Universal Conversation Recorder**: full in-app flow — record → transcribe (Yeshivish-aware) → AI extracts tasks/shailos/schedule/got-backs → review card → user approves → items added to queue
 - **FAB**: 2 large buttons (record shaila, record conversation), 2 compact links (Add | Records)
@@ -407,10 +407,11 @@ To update: edit source in sto-src → build → copy `dist/*` to `sandbox/shailo
 
 ## 15. Recent Git History
 
-Latest: DeskPhone Web parity slice maps settings scan/forget/open controls.
+Latest: DeskPhone Web parity slice maps theme/history/auditor settings controls.
 
 ```
-pending docs: map DeskPhone web settings scan and forget controls
+pending docs: map DeskPhone web theme and auditor settings controls
+b2f80f2 docs: map DeskPhone web settings scan and forget controls
 43826e7 docs: map DeskPhone web settings device controls
 765f467 docs: map DeskPhone web contact editor and settings rows
 4fa083c docs: map DeskPhone web duplicate Calls dialpad rows
