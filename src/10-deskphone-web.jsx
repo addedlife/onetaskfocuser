@@ -3701,7 +3701,7 @@ export function DeskPhoneWebPanel({
               iconName="edit_square"
               nativeSource="MainWindow.xaml:455"
               nativeGlyph="E3C9"
-              onClick={() => setActiveTab("messages")}
+              onClick={() => nativeHandoff("New Message", "MainWindow.xaml:455")}
               title="New message"
             >
               New Message

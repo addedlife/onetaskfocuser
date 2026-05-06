@@ -285,6 +285,8 @@ async function runCdp() {
     const callHistory = await drag('.dp-thread-inner-splitter', '.dp-thread-calls', -72);
     const webVersionText = document.querySelector('.dp-app-build')?.textContent.trim() || '';
     const hostBuildText = document.querySelector('.dp-app-time')?.textContent.trim() || '';
+    document.querySelector('button[data-native-source="MainWindow.xaml:455"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
     const inputSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     const threadSearchInput = document.querySelector('[data-automation-id="ThreadSearchBox"]');
     inputSetter.call(threadSearchInput, 'History line 17');
