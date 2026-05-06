@@ -324,6 +324,8 @@ async function runCdp() {
     document.querySelector('[data-native-source="MainWindow.xaml:2893"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     const dialerAfterBackspace = document.querySelector('[data-automation-id="ThreadDialerNumber"]').value;
+    document.querySelector('[data-native-source="MainWindow.xaml:2931"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-native-source="MainWindow.xaml:2992"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     document.querySelector('[data-native-source="MainWindow.xaml:2966"]').click();
@@ -459,6 +461,7 @@ async function main() {
     if (!result.desktop.handoffRequests.some((request) => request.target === "toggle-block" && request.value.includes("15551234567"))) failures.push("call-record block handoff did not carry the number");
     if (!result.desktop.handoffRequests.some((request) => request.target === "delete-call-entry" && request.value.includes("15551234567"))) failures.push("delete-call-entry handoff did not carry the number");
     if (!result.desktop.dialerOpened || result.desktop.dialerAfterBackspace !== "555" || !result.desktop.dialerClosed) failures.push("thread-side dialer show/backspace/hide behavior failed");
+    if (!result.desktop.handoffRequests.some((request) => request.target === "new-message" && request.value.includes("555"))) failures.push("thread-side dialer text action did not hand off the typed number");
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("555"))) failures.push("thread-side dialer call did not use the host dial endpoint");
     if (!result.desktop.commandRequests.some((request) => request.path.includes("/dial") && request.path.includes("*86"))) failures.push("voicemail dialer action did not dial *86");
     if (result.desktop.messageCount < 150) failures.push("message history was capped too shallow for DeskPhone Web");

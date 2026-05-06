@@ -1145,6 +1145,7 @@ function ConversationCallHistory({ calls, selectedConversation, onCall, onText, 
           </div>
           <div className="dp-thread-dialer-actions">
             <button type="button" title="Backspace" aria-label="Backspace" data-native-source="MainWindow.xaml:2893" onClick={() => setDialerNumber((value) => value.slice(0, -1))}>{icon("backspace", 17)}</button>
+            <button type="button" title="Text" aria-label="Text" data-native-source="MainWindow.xaml:2931" onClick={() => onText(dialerNumber)} disabled={!dialerNumber.trim()}>{icon("sms", 17)}<span>Text</span></button>
             <button type="button" title="Voicemail" aria-label="Voicemail" data-native-source="MainWindow.xaml:2966" onClick={() => onDial("*86")}>{icon("voicemail", 17)}<span>Voicemail</span></button>
             <button type="button" title="Call" aria-label="Call" data-native-source="MainWindow.xaml:2992" onClick={() => onDial(dialerNumber)} disabled={!dialerNumber.trim()}>{icon("call", 17)}<span>Call</span></button>
           </div>
@@ -1253,7 +1254,7 @@ function MessagesSlice({
   const textNumber = useCallback((number) => {
     const normalized = normalizePhoneKey(number);
     if (!normalized || normalized !== selectedConversation?.key) {
-      onNativeHandoff("Message this number", "MainWindow.xaml:2826", number);
+      onNativeHandoff("Message this number", "MainWindow.xaml:2826", normalized || number);
       return;
     }
     composeRef.current?.focus();
@@ -2919,7 +2920,7 @@ const css = `
 .dp-thread-dialer-actions {
   margin-top: 8px;
   display: grid;
-  grid-template-columns: auto 1fr 1fr;
+  grid-template-columns: auto 1fr 1fr 1fr;
   gap: 6px;
 }
 .dp-thread-dialer-actions button {

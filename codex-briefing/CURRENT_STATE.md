@@ -24,7 +24,7 @@ Current product truth:
 Current repo condition:
 
 - The send-state parity slice is committed and deployed.
-- DeskPhone Web parity map review has started: 90 of 199 action rows reviewed as of 2026-05-06 (48 implemented-web, 42 host-api-needed, 109 not-yet-reviewed).
+- DeskPhone Web parity map review has started: 95 of 199 action rows reviewed as of 2026-05-06 (50 implemented-web, 45 host-api-needed, 104 not-yet-reviewed).
 - Many untracked artifacts/logs/docs exist from prior work. The user has allowed careful cleanup; inspect and classify before removing anything.
 - `shailos/` is generated output copied into the deploy; do not treat it as editable source.
 
