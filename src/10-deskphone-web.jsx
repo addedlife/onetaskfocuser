@@ -268,7 +268,9 @@ function saveHost(value) {
 function isLocalBridgeHost(host) {
   try {
     const url = new URL(normalizeHost(host));
-    return url.hostname === "127.0.0.1" && url.port === "8765";
+    const hostname = url.hostname.toLowerCase();
+    const isLoopback = hostname === "127.0.0.1" || hostname === "localhost" || hostname === "[::1]";
+    return isLoopback && url.port === "8765";
   } catch {
     return false;
   }
@@ -469,6 +471,15 @@ function remotePhoneStatus(status) {
   return status?.remotePhone || status?.RemotePhone || {};
 }
 
+function hasRemotePhoneRows(status) {
+  const remote = remotePhoneStatus(status);
+  return !!(remote.contacts || remote.calls || remote.messages);
+}
+
+function isBridgeApiReady(status, online) {
+  return !!(online && isAndroidPhoneBridge(status));
+}
+
 function connectionStatusFromStatus(status) {
   if (!status) return "Not connected";
   const remote = remotePhoneStatus(status);
@@ -532,21 +543,20 @@ function quickConnectSummary(status, online) {
 
 function bridgeConnectSummary(status, online) {
   const remote = remotePhoneStatus(status);
-  if (remote.contacts || remote.calls || remote.messages) {
+  if (hasRemotePhoneRows(status)) {
     return `${remote.contacts || 0} contacts, ${remote.calls || 0} calls, ${remote.messages || 0} texts`;
   }
-  return online ? "Local bridge is ready" : "Open the bridge app";
+  return isBridgeApiReady(status, online) ? "Bridge API connected" : online ? "Local bridge is ready" : "Open the bridge app";
 }
 
 function bridgeStatusLabel(status, online) {
-  const remote = remotePhoneStatus(status);
-  if (remote.contacts || remote.calls || remote.messages) return "Local bridge connected";
+  if (isBridgeApiReady(status, online)) return "Local bridge connected";
   return online ? "Local bridge ready" : "Bridge app not reached";
 }
 
 function bridgeIndicatorRows(status, online) {
   const remote = remotePhoneStatus(status);
-  const displayConnected = online && isAndroidPhoneBridge(status);
+  const displayConnected = isBridgeApiReady(status, online);
   return [
     {
       key: "display",
@@ -557,14 +567,14 @@ function bridgeIndicatorRows(status, online) {
     {
       key: "calls",
       label: "Calls",
-      value: remote.calls ? "Loaded" : "No call rows yet",
-      ok: !!remote.calls,
+      value: remote.calls ? "Loaded" : status?.calls || status?.Calls || "No call rows yet",
+      ok: !!(remote.calls || status?.calls || status?.Calls),
     },
     {
       key: "messages",
       label: "Texts",
-      value: remote.messages ? "Loaded" : "No text rows yet",
-      ok: !!remote.messages,
+      value: remote.messages ? "Loaded" : status?.messages || status?.Messages || "No text rows yet",
+      ok: !!(remote.messages || status?.messages || status?.Messages),
     },
   ];
 }
@@ -941,7 +951,7 @@ function ConnectionRail({
     return (
       <div className="dp-rail-connection-collapsed" data-native-source="MainWindow.xaml:710">
         <div className="dp-collapsed-status-tile" title={connectionStatus}>
-          <span className={`dp-status-dot ${online && status?.connected ? "is-online" : ""}`} />
+          <span className={`dp-status-dot ${online && (status?.connected || isBridge) ? "is-online" : ""}`} />
           <span className="dp-collapsed-bt">{collapsedCode}</span>
         </div>
         <button
@@ -977,7 +987,7 @@ function ConnectionRail({
       <div className="dp-rail-status-card">
         <div className="dp-rail-status-row">
           <div className="dp-rail-status-left">
-            <span className={`dp-status-dot ${online && status?.connected ? "is-online" : ""}`} />
+            <span className={`dp-status-dot ${online && (status?.connected || isBridge) ? "is-online" : ""}`} />
             <span className="dp-rail-status-text">{connectionStatus}</span>
           </div>
           <button
@@ -2681,7 +2691,7 @@ function SimpleTabContent({
     const bluetoothStatus = status?.bluetoothStatus || status?.BluetoothStatus || "";
     const isAndroidBridge = isAndroidPhoneBridge(status) || isLocalMobileBridgeHost(hostInput);
     const remotePhone = remotePhoneStatus(status);
-    const phoneDataReady = Boolean(remotePhone.contacts || remotePhone.calls || remotePhone.messages);
+    const phoneDataReady = isBridgeApiReady(status, true);
     const bridgeRows = isAndroidBridge ? bridgeIndicatorRows(status, true) : [];
     const settingSections = isAndroidBridge
       ? [
@@ -2737,7 +2747,7 @@ function SimpleTabContent({
                 <div className="dp-device-manager-head">
                   <h3>Local bridge</h3>
                   <span className={`dp-bridge-state ${phoneDataReady ? "is-ready" : "needs-attention"}`}>
-                    {phoneDataReady ? "Data connected" : "Bridge needs attention"}
+                    {phoneDataReady ? "Bridge connected" : "Bridge needs attention"}
                   </span>
                 </div>
                 <div className="dp-device-status">Endpoint: {normalizeHost(hostInput)}</div>
