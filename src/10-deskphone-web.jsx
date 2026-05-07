@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const DEFAULT_HOST = "http://127.0.0.1:8765";
+const ANDROID_BRIDGE_INTENT_URL = "intent://start#Intent;scheme=webphonebridge;package=com.pureinc.webphonebridge;end";
 const HOST_CONNECTOR_KEY = "deskphone_web_host_url";
 const LEGACY_BRIDGE_KEY = "deskphone_web_bridge_url";
 const RAIL_COLLAPSED_KEY = "deskphone_web_rail_collapsed";
@@ -264,10 +265,51 @@ function saveHost(value) {
   return normalized;
 }
 
+function isLocalBridgeHost(host) {
+  try {
+    const url = new URL(normalizeHost(host));
+    return url.hostname === "127.0.0.1" && url.port === "8765";
+  } catch {
+    return false;
+  }
+}
+
+function isLikelyMobileBridgeBrowser() {
+  if (typeof navigator === "undefined") return false;
+  const userAgent = `${navigator.userAgent || ""} ${navigator.platform || ""}`.toLowerCase();
+  const coarsePointer = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches;
+  return userAgent.includes("android") || (coarsePointer && (navigator.maxTouchPoints || 0) > 0);
+}
+
+function isLocalMobileBridgeHost(host) {
+  return isLocalBridgeHost(host) && isLikelyMobileBridgeBrowser();
+}
+
+function openAndroidBridgeApp() {
+  window.location.href = ANDROID_BRIDGE_INTENT_URL;
+}
+
 async function readJson(host, path) {
   const response = await fetch(`${host}${path}`, { cache: "no-store" });
-  if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+  if (!response.ok) {
+    let detail = "";
+    try {
+      const body = await response.json();
+      detail = body?.error || body?.message || "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail ? `${path}: ${detail}` : `${path} returned ${response.status}`);
+  }
   return response.json();
+}
+
+async function readOptionalJson(host, path) {
+  try {
+    return { ok: true, path, data: await readJson(host, path) };
+  } catch (error) {
+    return { ok: false, path, error };
+  }
 }
 
 function stringifyAsciiJson(value) {
@@ -418,8 +460,19 @@ function channelLabel(status, label) {
   return `${label}: Not connected`;
 }
 
+function isAndroidPhoneBridge(status) {
+  const build = String(status?.build || status?.Build || "");
+  return build.toLowerCase().includes("android bridge") || !!status?.remotePhone;
+}
+
+function remotePhoneStatus(status) {
+  return status?.remotePhone || status?.RemotePhone || {};
+}
+
 function connectionStatusFromStatus(status) {
   if (!status) return "Not connected";
+  const remote = remotePhoneStatus(status);
+  if (remote.contacts || remote.calls || remote.messages) return "Phone data connected";
   const callsOk = includesConnected(status.hfp || status.Hfp || status.calls);
   const msgsOk = includesConnected(status.map || status.Map || status.messages);
   if (callsOk && msgsOk) return "Connected";
@@ -438,12 +491,14 @@ function hostBuildNumber(status) {
 }
 
 function hostBuildLabel(status) {
+  if (isAndroidPhoneBridge(status)) return hostBuildNumber(status) || "Android Bridge";
   const numberOnly = hostBuildNumber(status);
   return numberOnly ? `Windows Host: ${numberOnly}` : "Windows Host: unknown";
 }
 
 function hostBuildDetailLabel(status) {
   const build = status?.build || status?.Build || status?.buildNumber || status?.BuildNumber || "";
+  if (isAndroidPhoneBridge(status)) return build || "Android Bridge";
   return build ? `Windows Host: ${build}` : "Windows Host: not reporting build details";
 }
 
@@ -452,7 +507,9 @@ function webVersionBadge() {
 }
 
 function hostDeviceName(status) {
+  const remote = remotePhoneStatus(status);
   return (
+    remote.preferredName ||
     status?.phoneName ||
     status?.PhoneName ||
     status?.deviceName ||
@@ -460,13 +517,56 @@ function hostDeviceName(status) {
     status?.connectedDeviceName ||
     status?.ConnectedDeviceName ||
     status?.hostConnector ||
-    "saved phone"
+    "phone"
   );
 }
 
 function quickConnectSummary(status, online) {
+  const remote = remotePhoneStatus(status);
+  if (remote.contacts || remote.calls || remote.messages) {
+    return `${hostDeviceName(status)}: ${remote.contacts || 0} contacts, ${remote.calls || 0} calls, ${remote.messages || 0} messages`;
+  }
   const state = online && status?.connected ? "connected" : online ? "ready" : "ready";
   return `Preferred Phone [${hostDeviceName(status)}] ${state}`;
+}
+
+function bridgeConnectSummary(status, online) {
+  const remote = remotePhoneStatus(status);
+  if (remote.contacts || remote.calls || remote.messages) {
+    return `${remote.contacts || 0} contacts, ${remote.calls || 0} calls, ${remote.messages || 0} texts`;
+  }
+  return online ? "Local bridge is ready" : "Open the bridge app";
+}
+
+function bridgeStatusLabel(status, online) {
+  const remote = remotePhoneStatus(status);
+  if (remote.contacts || remote.calls || remote.messages) return "Local bridge connected";
+  return online ? "Local bridge ready" : "Bridge app not reached";
+}
+
+function bridgeIndicatorRows(status, online) {
+  const remote = remotePhoneStatus(status);
+  const displayConnected = online && isAndroidPhoneBridge(status);
+  return [
+    {
+      key: "display",
+      label: "Local bridge",
+      value: displayConnected ? "Connected" : "Not connected",
+      ok: displayConnected,
+    },
+    {
+      key: "calls",
+      label: "Calls",
+      value: remote.calls ? "Loaded" : "No call rows yet",
+      ok: !!remote.calls,
+    },
+    {
+      key: "messages",
+      label: "Texts",
+      value: remote.messages ? "Loaded" : "No text rows yet",
+      ok: !!remote.messages,
+    },
+  ];
 }
 
 function callBannerText(status) {
@@ -483,6 +583,14 @@ function callBannerText(status) {
 function getApiList(value) {
   if (Array.isArray(value)) return value;
   if (Array.isArray(value?.value)) return value.value;
+  if (Array.isArray(value?.messages)) return value.messages;
+  if (Array.isArray(value?.calls)) return value.calls;
+  if (Array.isArray(value?.contacts)) return value.contacts;
+  if (Array.isArray(value?.devices)) return value.devices;
+  if (Array.isArray(value?.knownDevices)) return value.knownDevices;
+  if (Array.isArray(value?.KnownDevices)) return value.KnownDevices;
+  if (Array.isArray(value?.scannedDevices)) return value.scannedDevices;
+  if (Array.isArray(value?.ScannedDevices)) return value.ScannedDevices;
   return [];
 }
 
@@ -503,7 +611,24 @@ function formatPhone(value) {
 }
 
 function parseDate(value) {
-  const date = new Date(value);
+  if (typeof value === "number" && Number.isFinite(value)) return new Date(value);
+  const text = String(value || "").trim();
+  const mapMatch = text.match(/^(\d{4})(\d{2})(\d{2})T?(\d{2})?(\d{2})?(\d{2})?/);
+  if (mapMatch) {
+    const [, year, month, day, hour = "00", minute = "00", second = "00"] = mapMatch;
+    const parsed = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second)
+    );
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  const numeric = text.match(/^\d{12,}$/) ? Number(text) : NaN;
+  if (Number.isFinite(numeric)) return new Date(numeric);
+  const date = new Date(text);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
@@ -584,9 +709,11 @@ function normalizeAttachment(raw, index) {
 function normalizeMessage(raw, index) {
   const number = raw?.number || raw?.to || raw?.from || "";
   const key = normalizePhoneKey(number) || `unknown-${index}`;
-  const timestamp = raw?.timestamp || raw?.time || "";
+  const timestamp = raw?.timestamp || raw?.datetime || raw?.date || raw?.time || "";
   const attachments = getApiList(raw?.attachments).map(normalizeAttachment);
   const sendStatus = normalizeSendStatus(raw);
+  const readValue = raw?.isRead ?? raw?.IsRead ?? raw?.read ?? raw?.Read;
+  const isRead = typeof readValue === "string" ? !["0", "false", "no"].includes(readValue.toLowerCase()) : readValue !== false;
   return {
     id: raw?.id || raw?.handle || `${key}-${timestamp}-${index}`,
     handle: raw?.handle || "",
@@ -600,7 +727,7 @@ function normalizeMessage(raw, index) {
     timestamp,
     timestampMs: parseDate(timestamp)?.getTime() || 0,
     isSent: !!raw?.isSent,
-    isRead: raw?.isSent ? true : raw?.isRead !== false,
+    isRead: raw?.isSent ? true : isRead,
     isPinned: !!(raw?.isPinned ?? raw?.IsPinned),
     pinActionLabel: raw?.pinActionLabel || raw?.PinActionLabel || ((raw?.isPinned ?? raw?.IsPinned) ? "Unpin" : "Pin"),
     sendStatus,
@@ -798,23 +925,29 @@ function ConnectionRail({
   collapsed,
   online,
   status,
+  bridgeMode,
   connectionStatus,
   callsConnectionLabel,
   messagesConnectionLabel,
   onReconnect,
   onSettings,
 }) {
+  const isBridge = bridgeMode || isAndroidPhoneBridge(status);
+  const bridgeRows = isBridge ? bridgeIndicatorRows(status, online) : [];
+  const reconnectLabel = isBridge ? "Refresh phone data" : "Reconnect saved phone";
+  const settingsLabel = isBridge ? "Bridge settings" : "Connection settings";
+  const collapsedCode = isBridge ? "API" : "BT";
   if (collapsed) {
     return (
       <div className="dp-rail-connection-collapsed" data-native-source="MainWindow.xaml:710">
         <div className="dp-collapsed-status-tile" title={connectionStatus}>
           <span className={`dp-status-dot ${online && status?.connected ? "is-online" : ""}`} />
-          <span className="dp-collapsed-bt">BT</span>
+          <span className="dp-collapsed-bt">{collapsedCode}</span>
         </div>
         <button
           className="dp-collapsed-icon-button"
-          aria-label="Reconnect saved phone"
-          title="Reconnect saved phone"
+          aria-label={reconnectLabel}
+          title={reconnectLabel}
           data-native-source="MainWindow.xaml:737"
           data-native-glyph="E627"
           onClick={onReconnect}
@@ -824,8 +957,8 @@ function ConnectionRail({
         </button>
         <button
           className="dp-collapsed-icon-button"
-          aria-label="Connection settings"
-          title="Connection settings"
+          aria-label={settingsLabel}
+          title={settingsLabel}
           data-native-source="MainWindow.xaml:745"
           data-native-glyph="E8B8"
           onClick={onSettings}
@@ -849,8 +982,8 @@ function ConnectionRail({
           </div>
           <button
             className="dp-compact-icon-button"
-            aria-label="Reconnect saved phone"
-            title="Clean reconnect to saved device"
+            aria-label={reconnectLabel}
+            title={reconnectLabel}
             data-native-source="MainWindow.xaml:665"
             data-native-glyph="E627"
             onClick={onReconnect}
@@ -859,9 +992,22 @@ function ConnectionRail({
             {icon("sync", 20)}
           </button>
         </div>
-        <div className="dp-rail-subtitle">{quickConnectSummary(status, online)}</div>
-        <div className="dp-rail-channel">{callsConnectionLabel}</div>
-        <div className="dp-rail-channel">{messagesConnectionLabel}</div>
+        <div className="dp-rail-subtitle">{isBridge ? bridgeConnectSummary(status, online) : quickConnectSummary(status, online)}</div>
+        {bridgeRows.length ? (
+          <div className="dp-bridge-indicators is-compact">
+            {bridgeRows.map((row) => (
+              <div className="dp-bridge-indicator" key={row.key}>
+                <span className={`dp-status-dot ${row.ok ? "is-online" : ""}`} />
+                <span>{row.label}: {row.ok ? "Connected" : "Needs attention"}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="dp-rail-channel">{callsConnectionLabel}</div>
+            <div className="dp-rail-channel">{messagesConnectionLabel}</div>
+          </>
+        )}
       </div>
       <ShellButton
         className="dp-tonal dp-rail-wide-button"
@@ -869,20 +1015,20 @@ function ConnectionRail({
         onClick={onReconnect}
         disabled={!online}
       >
-        Reconnect saved phone
+        {reconnectLabel}
       </ShellButton>
       <ShellButton
         className="dp-tonal dp-rail-wide-button"
         nativeSource="MainWindow.xaml:701"
         onClick={onSettings}
       >
-        Connection Settings
+        {settingsLabel}
       </ShellButton>
     </div>
   );
 }
 
-function ReconnectPrompt({ visible, status, onConnect, onChooseDevice, onDismiss }) {
+function ReconnectPrompt({ visible, status, bridgeMode, onConnect, onChooseDevice, onDismiss }) {
   if (!visible) {
     return (
       <div className="dp-native-hidden" data-native-source="MainWindow.xaml:788" aria-hidden="true">
@@ -892,17 +1038,18 @@ function ReconnectPrompt({ visible, status, onConnect, onChooseDevice, onDismiss
       </div>
     );
   }
+  const isBridge = bridgeMode || isAndroidPhoneBridge(status);
   return (
     <div className="dp-prompt dp-reconnect-prompt" data-native-source="MainWindow.xaml:788">
       <div className="dp-prompt-text">
-        <div className="dp-prompt-title">Reconnect to {hostDeviceName(status)}?</div>
-        <div className="dp-prompt-subtitle">Your phone was connected last session.</div>
+        <div className="dp-prompt-title">{isBridge ? "Refresh phone data?" : `Reconnect to ${hostDeviceName(status)}?`}</div>
+        <div className="dp-prompt-subtitle">{isBridge ? "The local Android bridge is the active phone source." : "Your phone was connected last session."}</div>
       </div>
       <ShellButton className="dp-primary" nativeSource="MainWindow.xaml:808" onClick={onConnect}>
-        Connect
+        {isBridge ? "Refresh" : "Connect"}
       </ShellButton>
       <ShellButton className="dp-tonal" nativeSource="MainWindow.xaml:812" onClick={onChooseDevice}>
-        Choose device
+        {isBridge ? "Bridge settings" : "Choose device"}
       </ShellButton>
       <button
         className="dp-compact-icon-button"
@@ -2410,6 +2557,7 @@ function SimpleTabContent({
   onSaveHost,
   onRefresh,
   onCommand,
+  onOpenBridge,
   onOpenNewMessage,
   onOpenFullCalls,
   onOpenContactEditor,
@@ -2522,12 +2670,6 @@ function SimpleTabContent({
     );
   }
   if (activeTab === "settings") {
-    const settingSections = [
-      ["connection", "Connection", "MainWindow.xaml:3995"],
-      ["appearance", "Appearance", "MainWindow.xaml:4000"],
-      ["contact-sync", "Contact Sync", "MainWindow.xaml:4005"],
-      ["audio", "Audio", "MainWindow.xaml:4010"],
-    ];
     const syncThemeWithShamash = Boolean(status?.syncThemeWithShamash ?? status?.SyncThemeWithShamash);
     const pauseHistoryActivity = Boolean(status?.pauseHistoryActivity ?? status?.PauseHistoryActivity);
     const isDarkModeEnabled = Boolean(status?.isDarkModeEnabled ?? status?.IsDarkModeEnabled);
@@ -2537,6 +2679,21 @@ function SimpleTabContent({
     const deviceName = (device) => device?.name || device?.Name || deviceAddress(device) || "Phone";
     const isScanning = Boolean(status?.isScanning ?? status?.IsScanning);
     const bluetoothStatus = status?.bluetoothStatus || status?.BluetoothStatus || "";
+    const isAndroidBridge = isAndroidPhoneBridge(status) || isLocalMobileBridgeHost(hostInput);
+    const remotePhone = remotePhoneStatus(status);
+    const phoneDataReady = Boolean(remotePhone.contacts || remotePhone.calls || remotePhone.messages);
+    const bridgeRows = isAndroidBridge ? bridgeIndicatorRows(status, true) : [];
+    const settingSections = isAndroidBridge
+      ? [
+          ["connection", "Bridge", "MainWindow.xaml:3995"],
+          ["appearance", "Appearance", "MainWindow.xaml:4000"],
+        ]
+      : [
+          ["connection", "Connection", "MainWindow.xaml:3995"],
+          ["appearance", "Appearance", "MainWindow.xaml:4000"],
+          ["contact-sync", "Contact Sync", "MainWindow.xaml:4005"],
+          ["audio", "Audio", "MainWindow.xaml:4010"],
+        ];
 
     return (
       <div className="dp-settings-shell" data-native-source="MainWindow.xaml:3847">
@@ -2566,59 +2723,97 @@ function SimpleTabContent({
             <div className="dp-settings-actions">
               <ShellButton className="dp-primary" iconName="save" onClick={onSaveHost}>Save</ShellButton>
               <ShellButton className="dp-tonal" iconName="refresh" onClick={onRefresh}>Test</ShellButton>
+              {isLocalMobileBridgeHost(hostInput) ? <ShellButton className="dp-tonal" iconName="open_in_new" onClick={onOpenBridge}>Open bridge app</ShellButton> : null}
             </div>
-            <div className="dp-settings-actions dp-settings-tools">
-              <ShellButton className="dp-tonal" iconName="bluetooth" nativeSource="MainWindow.xaml:4140" onClick={() => onCommand("/open-bluetooth-settings", "open Bluetooth settings")}>Bluetooth Settings</ShellButton>
-              <ShellButton className="dp-tonal" iconName="folder_open" nativeSource="MainWindow.xaml:4627" onClick={() => onCommand("/open-builds-folder", "open builds folder")}>Builds Folder</ShellButton>
-              <ShellButton className="dp-tonal" iconName="article" nativeSource="MainWindow.xaml:4633" onClick={() => onCommand("/open-event-log", "open event log")}>Event Log</ShellButton>
-            </div>
-            <div className="dp-device-manager" data-native-source="MainWindow.xaml:4052">
-              <div className="dp-device-manager-head">
-                <h3>Saved phones</h3>
-                <ShellButton className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4052" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Scan for new device</ShellButton>
+            {!isAndroidBridge ? (
+              <div className="dp-settings-actions dp-settings-tools">
+                <ShellButton className="dp-tonal" iconName="bluetooth" nativeSource="MainWindow.xaml:4140" onClick={() => onCommand("/open-bluetooth-settings", "open Bluetooth settings")}>Bluetooth Settings</ShellButton>
+                <ShellButton className="dp-tonal" iconName="folder_open" nativeSource="MainWindow.xaml:4627" onClick={() => onCommand("/open-builds-folder", "open builds folder")}>Builds Folder</ShellButton>
+                <ShellButton className="dp-tonal" iconName="article" nativeSource="MainWindow.xaml:4633" onClick={() => onCommand("/open-event-log", "open event log")}>Event Log</ShellButton>
               </div>
-              {bluetoothStatus ? <div className="dp-device-status">{bluetoothStatus}</div> : null}
-              <div className="dp-device-list">
-                {knownDevices.length ? knownDevices.map((device) => {
-                  const address = deviceAddress(device);
-                  return (
-                    <div className="dp-device-row" key={`known-${address || deviceName(device)}`}>
+            ) : null}
+            {isAndroidBridge ? (
+              <div className="dp-device-manager dp-phone-bridge-card" data-native-source="MainWindow.xaml:4052">
+                <div className="dp-device-manager-head">
+                  <h3>Local bridge</h3>
+                  <span className={`dp-bridge-state ${phoneDataReady ? "is-ready" : "needs-attention"}`}>
+                    {phoneDataReady ? "Data connected" : "Bridge needs attention"}
+                  </span>
+                </div>
+                <div className="dp-device-status">Endpoint: {normalizeHost(hostInput)}</div>
+                <div className="dp-bridge-metrics" aria-label="Bridge data available">
+                  <div><strong>{remotePhone.contacts || 0}</strong><span>Contacts</span></div>
+                  <div><strong>{remotePhone.calls || 0}</strong><span>Calls</span></div>
+                  <div><strong>{remotePhone.messages || 0}</strong><span>Texts</span></div>
+                </div>
+                {remotePhone.lastError ? <div className="dp-device-empty">{remotePhone.lastError}</div> : null}
+                <div className="dp-bridge-indicators">
+                  {bridgeRows.map((row) => (
+                    <div className="dp-bridge-indicator" key={row.key}>
+                      <span className={`dp-status-dot ${row.ok ? "is-online" : ""}`} />
                       <div>
-                        <strong>{deviceName(device)}</strong>
-                        <span>{address}{device?.isDefault || device?.IsDefault ? " - default" : ""}</span>
-                      </div>
-                      <div className="dp-device-row-actions">
-                        <ShellButton className="dp-tonal" iconName="link" nativeSource="MainWindow.xaml:4083" onClick={() => onCommand(`/connect-saved-device?addr=${encodeURIComponent(address)}`, "connect saved device")} disabled={!address}>Connect</ShellButton>
-                        <ShellButton className="dp-tonal" iconName="star" nativeSource="MainWindow.xaml:4088" onClick={() => onCommand(`/set-default-saved-device?addr=${encodeURIComponent(address)}`, "set default device")} disabled={!address}>Set default</ShellButton>
-                        <ShellButton className="dp-tonal" iconName="delete" nativeSource="MainWindow.xaml:4102" onClick={() => onCommand(`/forget-saved-device?addr=${encodeURIComponent(address)}`, "forget device")} disabled={!address}>Forget</ShellButton>
+                        <strong>{row.label}</strong>
+                        <span>{row.value}</span>
                       </div>
                     </div>
-                  );
-                }) : <div className="dp-device-empty">No saved phones yet.</div>}
+                  ))}
+                </div>
+                <div className="dp-settings-actions">
+                  <ShellButton className="dp-primary" iconName="sync" nativeSource="MainWindow.xaml:4083" onClick={() => onCommand("/phone/sync", "refresh phone data")}>Refresh phone data</ShellButton>
+                  {isLocalMobileBridgeHost(hostInput) ? <ShellButton className="dp-tonal" iconName="open_in_new" onClick={onOpenBridge}>Open bridge app</ShellButton> : null}
+                </div>
               </div>
-            </div>
-            <div className="dp-device-manager" data-native-source="MainWindow.xaml:4135">
-              <div className="dp-device-manager-head">
-                <h3>Scanned phones</h3>
-                <ShellButton className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4135" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Scan for devices</ShellButton>
-              </div>
-              <div className="dp-device-list">
-                {scannedDevices.length ? scannedDevices.map((device) => {
-                  const address = deviceAddress(device);
-                  return (
-                    <div className="dp-device-row" key={`scanned-${address || deviceName(device)}`}>
-                      <div>
-                        <strong>{deviceName(device)}</strong>
-                        <span>{address}{device?.isPaired || device?.IsPaired ? " - paired" : ""}</span>
-                      </div>
-                      <div className="dp-device-row-actions">
-                        <ShellButton className="dp-tonal" iconName="link" nativeSource="MainWindow.xaml:4150" onClick={() => onCommand(`/connect-scanned-device?addr=${encodeURIComponent(address)}`, "connect scanned device")} disabled={!address}>Connect to selected device</ShellButton>
-                      </div>
-                    </div>
-                  );
-                }) : <div className="dp-device-empty">No scanned phones shown.</div>}
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="dp-device-manager" data-native-source="MainWindow.xaml:4052">
+                  <div className="dp-device-manager-head">
+                    <h3>Saved phones</h3>
+                    <ShellButton className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4052" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Scan for new device</ShellButton>
+                  </div>
+                  {bluetoothStatus ? <div className="dp-device-status">{bluetoothStatus}</div> : null}
+                  <div className="dp-device-list">
+                    {knownDevices.length ? knownDevices.map((device) => {
+                      const address = deviceAddress(device);
+                      return (
+                        <div className="dp-device-row" key={`known-${address || deviceName(device)}`}>
+                          <div>
+                            <strong>{deviceName(device)}</strong>
+                            <span>{address}{device?.isDefault || device?.IsDefault ? " - default" : ""}</span>
+                          </div>
+                          <div className="dp-device-row-actions">
+                            <ShellButton className="dp-tonal" iconName="link" nativeSource="MainWindow.xaml:4083" onClick={() => onCommand(`/connect-saved-device?addr=${encodeURIComponent(address)}`, "connect saved device")} disabled={!address}>Connect</ShellButton>
+                            <ShellButton className="dp-tonal" iconName="star" nativeSource="MainWindow.xaml:4088" onClick={() => onCommand(`/set-default-saved-device?addr=${encodeURIComponent(address)}`, "set default device")} disabled={!address}>Set default</ShellButton>
+                            <ShellButton className="dp-tonal" iconName="delete" nativeSource="MainWindow.xaml:4102" onClick={() => onCommand(`/forget-saved-device?addr=${encodeURIComponent(address)}`, "forget device")} disabled={!address}>Forget</ShellButton>
+                          </div>
+                        </div>
+                      );
+                    }) : <div className="dp-device-empty">No saved phones yet.</div>}
+                  </div>
+                </div>
+                <div className="dp-device-manager" data-native-source="MainWindow.xaml:4135">
+                  <div className="dp-device-manager-head">
+                    <h3>Scanned phones</h3>
+                    <ShellButton className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4135" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Scan for devices</ShellButton>
+                  </div>
+                  <div className="dp-device-list">
+                    {scannedDevices.length ? scannedDevices.map((device) => {
+                      const address = deviceAddress(device);
+                      return (
+                        <div className="dp-device-row" key={`scanned-${address || deviceName(device)}`}>
+                          <div>
+                            <strong>{deviceName(device)}</strong>
+                            <span>{address}{device?.isPaired || device?.IsPaired ? " - paired" : ""}</span>
+                          </div>
+                          <div className="dp-device-row-actions">
+                            <ShellButton className="dp-tonal" iconName="link" nativeSource="MainWindow.xaml:4150" onClick={() => onCommand(`/connect-scanned-device?addr=${encodeURIComponent(address)}`, "connect scanned device")} disabled={!address}>Connect to selected device</ShellButton>
+                          </div>
+                        </div>
+                      );
+                    }) : <div className="dp-device-empty">No scanned phones shown.</div>}
+                  </div>
+                </div>
+              </>
+            )}
           </section>
         )}
         {settingsSection === "appearance" && (
@@ -4595,6 +4790,106 @@ const css = `
   justify-content: flex-end;
   gap: 6px;
 }
+.dp-phone-bridge-card {
+  background: var(--dp-bg-input);
+}
+.dp-bridge-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: var(--dp-bg-main);
+  color: var(--dp-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.dp-bridge-state.is-ready {
+  color: var(--dp-green-dark);
+  background: var(--dp-green-light);
+}
+.dp-bridge-state.needs-attention {
+  color: var(--dp-red);
+}
+.dp-bridge-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.dp-bridge-metrics div {
+  min-height: 62px;
+  border: 1px solid var(--dp-border);
+  border-radius: 8px;
+  background: var(--dp-bg-main);
+  padding: 10px;
+}
+.dp-bridge-metrics strong,
+.dp-bridge-metrics span {
+  display: block;
+}
+.dp-bridge-metrics strong {
+  color: var(--dp-text);
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 700;
+}
+.dp-bridge-metrics span {
+  margin-top: 6px;
+  color: var(--dp-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.dp-bridge-details {
+  border-top: 1px solid var(--dp-border);
+  padding-top: 8px;
+}
+.dp-bridge-details summary {
+  cursor: pointer;
+  color: var(--dp-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.dp-bridge-details .dp-device-list {
+  margin-top: 8px;
+}
+.dp-bridge-details .dp-device-row {
+  grid-template-columns: 1fr;
+}
+.dp-bridge-indicators {
+  display: grid;
+  gap: 8px;
+}
+.dp-bridge-indicators.is-compact {
+  gap: 5px;
+  margin-top: 8px;
+}
+.dp-bridge-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  color: var(--dp-text);
+  font-size: 13px;
+}
+.dp-bridge-indicator strong,
+.dp-bridge-indicator span {
+  display: block;
+}
+.dp-bridge-indicator strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+.dp-bridge-indicator div > span {
+  margin-top: 2px;
+  color: var(--dp-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.dp-bridge-indicators.is-compact .dp-bridge-indicator {
+  min-height: 20px;
+  color: var(--dp-muted);
+  font-size: 12px;
+}
 .dp-ledger-panel {
   margin: 0 24px 20px;
   border: 1px solid var(--dp-border);
@@ -4732,6 +5027,118 @@ const css = `
 .dp-image-viewer-close:hover,
 .dp-image-viewer-tools button:hover {
   background: rgba(255, 255, 255, 0.26);
+}
+@media (max-width: 760px), (pointer: coarse) and (max-width: 920px) {
+  .dp-web-root.is-mobile-bridge {
+    min-height: 100dvh;
+    padding-top: 0;
+  }
+  .dp-shell.is-mobile-bridge,
+  .dp-shell.is-mobile-bridge.is-collapsed {
+    height: 100dvh;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .dp-shell.is-mobile-bridge .dp-rail {
+    min-height: 58px;
+    border-bottom: 1px solid var(--dp-border);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto;
+    align-items: center;
+    overflow: hidden;
+  }
+  .dp-shell.is-mobile-bridge .dp-app-identity {
+    margin: 8px 6px 8px 10px;
+    grid-template-columns: 1fr;
+  }
+  .dp-shell.is-mobile-bridge .dp-app-copy,
+  .dp-shell.is-mobile-bridge .dp-new-message-slot,
+  .dp-shell.is-mobile-bridge .dp-nav-label,
+  .dp-shell.is-mobile-bridge .dp-nav-divider,
+  .dp-shell.is-mobile-bridge .dp-rail-connection {
+    display: none;
+  }
+  .dp-shell.is-mobile-bridge .dp-nav-list {
+    min-width: 0;
+    margin: 0 4px;
+    flex-direction: row;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .dp-shell.is-mobile-bridge .dp-nav-list::-webkit-scrollbar {
+    display: none;
+  }
+  .dp-shell.is-mobile-bridge .dp-nav-item,
+  .dp-shell.is-mobile-bridge .dp-nav-item.is-collapsed {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    margin: 4px 1px;
+    padding: 0;
+    justify-content: center;
+  }
+  .dp-shell.is-mobile-bridge .dp-nav-icon {
+    width: auto;
+    justify-content: center;
+  }
+  .dp-shell.is-mobile-bridge .dp-rail-connection-collapsed {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 8px 0 0;
+    gap: 2px;
+  }
+  .dp-shell.is-mobile-bridge .dp-collapsed-status-tile,
+  .dp-shell.is-mobile-bridge .dp-collapsed-icon-button,
+  .dp-shell.is-mobile-bridge .dp-build-badge {
+    width: 40px;
+    height: 40px;
+    margin-top: 0;
+  }
+  .dp-shell.is-mobile-bridge .dp-build-badge {
+    display: none;
+  }
+  .dp-shell.is-mobile-bridge .dp-splitter {
+    display: none;
+  }
+  .dp-shell.is-mobile-bridge .dp-content {
+    min-height: 0;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+  }
+  .dp-shell.is-mobile-bridge .dp-tab-area {
+    min-height: 0;
+  }
+  .dp-shell.is-mobile-bridge .dp-tab-area.is-messages {
+    min-height: 0;
+  }
+  .dp-shell.is-mobile-bridge .dp-message-shell,
+  .dp-shell.is-mobile-bridge .dp-message-shell.is-list-hidden {
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(190px, 42%) minmax(0, 1fr);
+  }
+  .dp-shell.is-mobile-bridge .dp-message-shell.is-list-hidden {
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .dp-shell.is-mobile-bridge .dp-message-splitter,
+  .dp-shell.is-mobile-bridge .dp-thread-inner-splitter {
+    display: none;
+  }
+  .dp-shell.is-mobile-bridge .dp-conversation-pane {
+    border-right: 0;
+    border-bottom: 1px solid var(--dp-border);
+  }
+  .dp-shell.is-mobile-bridge .dp-thread-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .dp-shell.is-mobile-bridge .dp-thread-calls {
+    display: none;
+  }
 }
 @media (max-width: 980px) {
   .dp-shell,
@@ -4922,6 +5329,7 @@ export function DeskPhoneWebPanel({
   });
   const railRef = useRef(null);
   const railAcTimer = useRef(null);
+  const bridgeAutoOpenAttempted = useRef(false);
   const [reconnectDismissed, setReconnectDismissed] = useState(false);
   const [muted, setMuted] = useState(false);
   const [showBuildPrompt, setShowBuildPrompt] = useState(false);
@@ -4947,17 +5355,22 @@ export function DeskPhoneWebPanel({
   const refresh = useCallback(async () => {
     try {
       const [nextStatus, nextMessages, nextCalls, nextContacts] = await Promise.all([
-        readJson(host, "/status"),
-        readJson(host, "/messages"),
-        readJson(host, "/calls"),
-        readJson(host, "/contacts"),
+        readOptionalJson(host, "/status"),
+        readOptionalJson(host, "/messages"),
+        readOptionalJson(host, "/calls"),
+        readOptionalJson(host, "/contacts"),
       ]);
-      setStatus(nextStatus);
-      setMessages(getApiList(nextMessages));
-      setCalls(getApiList(nextCalls));
-      setContacts(getApiList(nextContacts));
+      const anyOnline = nextStatus.ok || nextMessages.ok || nextCalls.ok || nextContacts.ok;
+      if (!anyOnline) {
+        throw nextStatus.error || nextMessages.error || nextCalls.error || nextContacts.error || new Error("DeskPhone host was not reached.");
+      }
+      if (nextStatus.ok) setStatus(nextStatus.data);
+      if (nextMessages.ok) setMessages(getApiList(nextMessages.data));
+      if (nextCalls.ok) setCalls(getApiList(nextCalls.data));
+      if (nextContacts.ok) setContacts(getApiList(nextContacts.data));
       setOnline(true);
-      setError("");
+      const failed = [nextStatus, nextMessages, nextCalls, nextContacts].filter((item) => !item.ok);
+      setError(failed.length ? failed.map((item) => item.error?.message || `${item.path} failed`).join(" | ") : "");
       onOnlineChange?.(true);
     } catch (err) {
       setStatus(null);
@@ -4965,7 +5378,13 @@ export function DeskPhoneWebPanel({
       setCalls([]);
       setContacts([]);
       setOnline(false);
-      setError(err?.message || "DeskPhone host was not reached.");
+      if (isLocalMobileBridgeHost(host) && !bridgeAutoOpenAttempted.current) {
+        bridgeAutoOpenAttempted.current = true;
+        openAndroidBridgeApp();
+        setError("Opening Android bridge app. Return here after it starts.");
+      } else {
+        setError(err?.message || "DeskPhone host was not reached.");
+      }
       onOnlineChange?.(false);
     }
   }, [host, onOnlineChange]);
@@ -4980,10 +5399,14 @@ export function DeskPhoneWebPanel({
   useEffect(() => saveNumber(MESSAGE_LIST_WIDTH_KEY, messageListWidth), [messageListWidth]);
   useEffect(() => saveNumber(CALL_HISTORY_WIDTH_KEY, callHistoryWidth), [callHistoryWidth]);
 
-  const connectionStatus = useMemo(() => connectionStatusFromStatus(status), [status]);
+  const bridgeMode = isAndroidPhoneBridge(status) || isLocalMobileBridgeHost(host);
+  const connectionStatus = useMemo(
+    () => bridgeMode ? bridgeStatusLabel(status, online) : connectionStatusFromStatus(status),
+    [bridgeMode, online, status]
+  );
   const callsConnectionLabel = useMemo(() => channelLabel(status?.hfp || status?.Hfp, "Calls"), [status]);
   const messagesConnectionLabel = useMemo(() => channelLabel(status?.map || status?.Map, "Messages"), [status]);
-  const showReconnectPrompt = !reconnectDismissed && !!(status?.showReconnectPrompt || status?.ShowReconnectPrompt || !online);
+  const showReconnectPrompt = !reconnectDismissed && !!(status?.showReconnectPrompt || status?.ShowReconnectPrompt || (!online && !bridgeMode));
   const effectiveBuildPrompt = !!(status?.showBuildUpdatePrompt || status?.ShowBuildUpdatePrompt || showBuildPrompt);
   const effectiveBuildIndicator = !!(status?.showBuildUpdateIndicator || status?.ShowBuildUpdateIndicator || showBuildIndicator);
   const effectiveMuted = !!(status?.isMuted ?? status?.IsMuted ?? muted);
@@ -5085,10 +5508,12 @@ export function DeskPhoneWebPanel({
   const rootClasses = [
     "dp-web-root",
     embedded ? "is-embedded" : "",
+    bridgeMode ? "is-mobile-bridge" : "",
   ].join(" ");
   const shellClasses = [
     "dp-shell",
     railCollapsed ? "is-collapsed" : "",
+    bridgeMode ? "is-mobile-bridge" : "",
   ].join(" ");
   const themeVars = useMemo(() => buildDeskPhoneWebVars(T), [T]);
 
@@ -5158,10 +5583,11 @@ export function DeskPhoneWebPanel({
             collapsed={railCollapsed}
             online={online}
             status={status}
+            bridgeMode={bridgeMode}
             connectionStatus={connectionStatus}
             callsConnectionLabel={callsConnectionLabel}
             messagesConnectionLabel={messagesConnectionLabel}
-            onReconnect={() => runCommand("/connect", "connect")}
+            onReconnect={() => runCommand(bridgeMode ? "/phone/sync" : "/connect", bridgeMode ? "refresh phone data" : "connect")}
             onSettings={() => setActiveTab("settings")}
           />
 
@@ -5205,7 +5631,8 @@ export function DeskPhoneWebPanel({
             <ReconnectPrompt
               visible={showReconnectPrompt}
               status={status}
-              onConnect={() => runCommand("/connect", "connect")}
+              bridgeMode={bridgeMode}
+              onConnect={() => runCommand(bridgeMode ? "/phone/sync" : "/connect", bridgeMode ? "refresh phone data" : "connect")}
               onChooseDevice={() => {
                 setReconnectDismissed(true);
                 setActiveTab("settings");
@@ -5280,6 +5707,10 @@ export function DeskPhoneWebPanel({
               onSaveHost={handleSaveHost}
               onRefresh={refresh}
               onCommand={runCommand}
+              onOpenBridge={() => {
+                bridgeAutoOpenAttempted.current = true;
+                openAndroidBridgeApp();
+              }}
               onOpenNewMessage={openNewMessage}
               onOpenFullCalls={openFullCalls}
               onOpenContactEditor={openContactEditor}
