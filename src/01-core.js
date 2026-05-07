@@ -895,6 +895,7 @@ const DEF_PRI = [
 const DEF_AGE_THRESHOLDS = {shaila: 24, now: 48, today: 120, eventually: 336};
 
 const SCHEMES = {
+  googleVoice:{name:"Google Voice",     bg:"#FFFFFF",bgW:"#F8F9FA",card:"#FFFFFF",text:"#202124",tSoft:"#5F6368",tFaint:"#9AA0A6",brd:"#DADCE0",brdS:"#E8EAED",grad:["#FFFFFF","#F8F9FA","#F1F3F4"],primary:"#00796B",onPrimary:"#FFFFFF",tonal:"#E0F2F1",onTonal:"#00695C",success:"#1E8E3E",danger:"#D93025",warning:"#F9AB00"},
   material:  {name:"Material Light",  bg:"#F8FAFD",bgW:"#EEF3FA",card:"#FFFFFF",text:"#182230",tSoft:"#465568",tFaint:"#66758A",brd:"#D6DDE8",brdS:"#E8EDF5",grad:["#F8FAFD","#EEF3FA","#E3EAF5"],primary:"#0B57D0",onPrimary:"#FFFFFF",tonal:"#D3E3FD",onTonal:"#041E49"},
   materialDark:{name:"Material Dark", bg:"#0F141B",bgW:"#18202B",card:"#1E2733",text:"#EEF3FA",tSoft:"#C4CCD8",tFaint:"#98A4B3",brd:"#3B4756",brdS:"#293441",grad:["#0F141B","#141B24","#1E2733"],primary:"#A8C7FA",onPrimary:"#062E6F",tonal:"#1F3B63",onTonal:"#D3E3FD",glow:true},
   claude:    {name:"Claude Cream",    bg:"#FAF9F6",bgW:"#F0EDE6",card:"#FFFFFF",text:"#1F1A15",tSoft:"#51443A",tFaint:"#73665B",brd:"#DCD6CB",brdS:"#EEE9E1",grad:["#FAF9F6","#F2EFE8","#E8E1D7"],primary:"#C96442",onPrimary:"#FFFFFF",tonal:"#F7E4DA",onTonal:"#71331F"},

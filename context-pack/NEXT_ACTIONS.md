@@ -1,6 +1,6 @@
 # Next Actions
 
-Last updated: 2026-05-06
+Last updated: 2026-05-07
 
 Immediate / blocking:
 
@@ -16,6 +16,8 @@ Known rough edges to watch for next session:
 
 Active product queue:
 
+- Resume from the local NerveCenter/WebPhone theme-sync slice before adding new parity work. Inspect the UI locally across at least `Google Voice` plus one older scheme, confirm the Appearance selector still feels good, confirm WebPhone follows the selected scheme, then build/audit again before push/deploy.
+- Current local changed files to review first: `src/01-core.js`, `src/07-settings.jsx`, `src/08-app.jsx`, `src/10-deskphone-web.jsx`, `context-pack/CURRENT_STATE.md`, `context-pack/RECENT_CHANGES.md`, `context-pack/NEXT_ACTIONS.md`, and `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3\brief.txt`.
 - Continue DeskPhone Web parity from the existing DeskPhone native inventory.
 - Split `src/08-app.jsx` (5,500+ lines) into feature modules — proposed order: shell chrome, NerveCenter panels, phone mini surface, Shailos/iframe shell, Google connector hook, conversation capture, then App-state helpers. Do one slice per session with a build verification after each.
 - Mobile localhost lane: document iOS localhost test path first, then Android.

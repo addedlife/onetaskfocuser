@@ -48,6 +48,35 @@ const COLORS = {
   border: "#DADCE0",
 };
 
+function buildDeskPhoneWebVars(theme = {}) {
+  const bg = theme.card || theme.bg || COLORS.bgMain;
+  const bgSoft = theme.bgW || COLORS.bgInput;
+  const selected = theme.tonal || theme.bgW || COLORS.bgSelected;
+  const accent = theme.primary || COLORS.accentBlue;
+  return {
+    "--dp-bg-main": bg,
+    "--dp-bg-sidebar": bg,
+    "--dp-bg-hover": selected,
+    "--dp-bg-input": bgSoft,
+    "--dp-bg-selected": selected,
+    "--dp-blue": accent,
+    "--dp-blue-dark": theme.onTonal || accent,
+    "--dp-blue-light": theme.tonal || selected,
+    "--dp-green": theme.success || COLORS.accentGreen,
+    "--dp-green-dark": theme.successDark || COLORS.accentGreenDark,
+    "--dp-green-light": theme.successLight || COLORS.accentGreenLight,
+    "--dp-red": theme.danger || COLORS.accentRed,
+    "--dp-red-light": theme.dangerLight || COLORS.accentRedLight,
+    "--dp-text": theme.text || COLORS.textPrimary,
+    "--dp-text-second": theme.tSoft || COLORS.textSecond,
+    "--dp-muted": theme.tSoft || COLORS.textMuted,
+    "--dp-disabled": theme.tFaint || COLORS.textDisabled,
+    "--dp-border": theme.brdS || theme.brd || COLORS.border,
+    "--dp-border-strong": theme.brd || "#BDC1C6",
+    "--dp-bg-surface": bg,
+  };
+}
+
 const SHELL_PARITY_ROWS = [
   ["MainWindow.xaml:359", "RootShellGrid", "Root frame, rounded text rendering, scaled shell"],
   ["MainWindow.xaml:373", "RootNavigationColumn", "Navigation rail width 292, runtime 268, min 224, max 360"],
@@ -4871,6 +4900,7 @@ const css = `
 `;
 
 export function DeskPhoneWebPanel({
+  T,
   onOnlineChange,
   onClose,
   embedded = false,
@@ -5060,9 +5090,10 @@ export function DeskPhoneWebPanel({
     "dp-shell",
     railCollapsed ? "is-collapsed" : "",
   ].join(" ");
+  const themeVars = useMemo(() => buildDeskPhoneWebVars(T), [T]);
 
   return (
-    <main className={rootClasses}>
+    <main className={rootClasses} style={themeVars}>
       <style>{css}</style>
       <div
         className={shellClasses}
@@ -5258,7 +5289,7 @@ export function DeskPhoneWebPanel({
             />
           </div>
 
-          <ParityLedgerPanel rows={[...SHELL_PARITY_ROWS, ...MESSAGE_PARITY_ROWS]} />
+          {activeTab === "developer" ? <ParityLedgerPanel rows={[...SHELL_PARITY_ROWS, ...MESSAGE_PARITY_ROWS]} /> : null}
 
           {notice ? <div className="dp-action-toast">{notice}</div> : null}
           {error ? <div className="dp-error-toast">{error}</div> : null}

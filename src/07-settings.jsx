@@ -103,6 +103,24 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   const knob = (on) => ({width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:on?23:3,transition:"left 0.25s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)"});
   const rowSB = {display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14};
   const actionBtn = {width:"100%",padding:"10px 14px",borderRadius:10,border:`1px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:12,fontFamily:"system-ui",color:T.tSoft,display:"flex",alignItems:"center",gap:8,marginBottom:8};
+  const schemeButtonStyle = (id, scheme, hasDelete = false) => {
+    const active = AS.colorScheme === id;
+    const bg = scheme.card || scheme.bg || "#FFFFFF";
+    const accent = scheme.primary || scheme.brd || "#00796B";
+    return {
+      minHeight: 34,
+      padding: hasDelete ? "7px 30px 7px 12px" : "7px 12px",
+      borderRadius: 999,
+      border: `1px solid ${active ? accent : (scheme.brd || T.brd)}`,
+      background: active ? (scheme.tonal || scheme.bgW || bg) : bg,
+      cursor: "pointer",
+      fontSize: 12,
+      fontWeight: active ? 600 : 500,
+      fontFamily: "system-ui",
+      color: scheme.text || T.text,
+      boxShadow: active ? `inset 0 0 0 1px ${accent}` : "none",
+    };
+  };
 
   return (
     <div style={{position:"fixed",inset:0,zIndex:8500,background:sTab==="appearance"?"rgba(0,0,0,0.08)":"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto",padding:20,transition:"background 0.3s"}} onClick={onClose}>
@@ -169,25 +187,14 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
           <div>
             <h4 style={sh}>Theme</h4>
             <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:10}}>
-              {Object.entries(SCHEMES).map(([k,v]) => {
-                // Auto-contrast: pick white or dark text based on gradient luminance
-                const hex = v.grad?.[0] || v.bg || "#888";
-                const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-                const lum = (r*299+g*587+b*114)/1000;
-                const btnText = lum < 140 ? "#F0F0F0" : "#2A2A2A";
-                const brdC = AS.colorScheme===k ? btnText : (lum<140?"#ffffff30":"#00000020");
-                return <button key={k} onClick={()=>setAS(p=>({...p,colorScheme:k}))} style={{padding:"8px 14px",borderRadius:10,border:`2px solid ${brdC}`,background:`linear-gradient(135deg,${v.grad[0]},${v.grad[2]})`,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"system-ui",color:btnText,textShadow:lum<140?"0 1px 3px rgba(0,0,0,0.5)":"none"}}>{v.name}</button>;
-              })}
+              {Object.entries(SCHEMES).map(([k,v]) => (
+                <button key={k} onClick={()=>setAS(p=>({...p,colorScheme:k}))} style={schemeButtonStyle(k, v)}>{v.name}</button>
+              ))}
               {Object.entries(AS.customSchemes || {}).map(([k,v]) => {
-                const hex = v.grad?.[0] || v.bg || "#888";
-                const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-                const lum = (r*299+g*587+b*114)/1000;
-                const btnText = lum < 140 ? "#F0F0F0" : "#2A2A2A";
-                const brdC = AS.colorScheme===k ? btnText : (lum<140?"#ffffff30":"#00000020");
                 return (
                 <div key={k} style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
-                  <button onClick={()=>setAS(p=>({...p,colorScheme:k}))} style={{padding:"8px 14px",borderRadius:10,border:`2px solid ${brdC}`,background:`linear-gradient(135deg,${v.grad[0]},${v.grad[2]})`,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"system-ui",color:btnText,textShadow:lum<140?"0 1px 3px rgba(0,0,0,0.5)":"none",paddingRight:28}}>{v.name}</button>
-                  <button onClick={e=>{e.stopPropagation();setAS(p=>{const c={...(p.customSchemes||{})};delete c[k];return {...p,customSchemes:c,colorScheme:p.colorScheme===k?"claude":p.colorScheme};});}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:12,color:btnText,lineHeight:1,padding:0,opacity:0.6}}>✕</button>
+                  <button onClick={()=>setAS(p=>({...p,colorScheme:k}))} style={schemeButtonStyle(k, v, true)}>{v.name}</button>
+                  <button onClick={e=>{e.stopPropagation();setAS(p=>{const c={...(p.customSchemes||{})};delete c[k];return {...p,customSchemes:c,colorScheme:p.colorScheme===k?"claude":p.colorScheme};});}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:12,color:v.tSoft || T.tSoft,lineHeight:1,padding:0,opacity:0.6}}>✕</button>
                 </div>);
               })}
             </div>

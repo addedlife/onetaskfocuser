@@ -16,6 +16,69 @@ const suiteIcon = (name, size = 20) => (
   <span className="material-symbols-rounded" style={{ fontSize: size }}>{name}</span>
 );
 
+const GV_CLEAN = {
+  bg: "#FFFFFF",
+  bgSoft: "#F8F9FA",
+  hover: "#F1F3F4",
+  divider: "#DADCE0",
+  text: "#202124",
+  muted: "#5F6368",
+  faint: "#9AA0A6",
+  accent: "#00796B",
+  accentDark: "#00695C",
+  success: "#1E8E3E",
+  danger: "#D93025",
+  warning: "#F9AB00",
+};
+
+const cleanTheme = (theme = {}) => ({
+  bg: theme.card || GV_CLEAN.bg,
+  bgSoft: theme.bgW || GV_CLEAN.bgSoft,
+  hover: theme.tonal || theme.bgW || GV_CLEAN.hover,
+  divider: theme.brdS || theme.brd || GV_CLEAN.divider,
+  text: theme.text || GV_CLEAN.text,
+  muted: theme.tSoft || GV_CLEAN.muted,
+  faint: theme.tFaint || GV_CLEAN.faint,
+  accent: theme.primary || GV_CLEAN.accent,
+  accentDark: theme.onTonal || theme.primary || GV_CLEAN.accentDark,
+  success: theme.success || GV_CLEAN.success,
+  danger: theme.danger || GV_CLEAN.danger,
+  warning: theme.warning || GV_CLEAN.warning,
+});
+
+const gvIconButton = (overrides = {}, C = GV_CLEAN) => ({
+  width: 40,
+  height: 40,
+  borderRadius: 20,
+  border: "none",
+  background: "transparent",
+  color: C.muted,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+  ...overrides,
+});
+
+const gvTextButton = (overrides = {}, C = GV_CLEAN) => ({
+  height: 36,
+  padding: "0 12px",
+  borderRadius: 4,
+  border: `1px solid ${C.divider}`,
+  background: "transparent",
+  color: C.muted,
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 500,
+  fontFamily: "system-ui",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+  ...overrides,
+});
+
 function buildDeskPhoneThemeQuery(palette, theme = {}) {
   const qs = new URLSearchParams({ palette });
   const keys = ["bg", "bgW", "card", "text", "tSoft", "tFaint", "brd", "brdS", "primary", "onPrimary", "tonal", "onTonal"];
@@ -211,6 +274,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   const [composeIsNew, setComposeIsNew] = useState(false);  // opened as "new message" (has contact search)
   const [composeSearch, setComposeSearch] = useState("");   // contact search in new-compose mode
   const [composeFocused, setComposeFocused] = useState(false);
+  const C = cleanTheme(T);
 
   const refresh = useCallback(async () => {
     try {
@@ -395,6 +459,20 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, 10);
   const hasMessages = threads.length > 0;
   const hasCalls = recentCalls.length > 0;
+  const phoneIconButton = (active = false) => gvIconButton({
+    width: 36,
+    height: 36,
+    background: active ? C.hover : "transparent",
+    color: active ? C.text : C.muted,
+  }, C);
+  const phoneRowStyle = {
+    display: "grid",
+    gridTemplateColumns: "32px minmax(0,1fr) 36px 36px",
+    gap: 6,
+    alignItems: "start",
+    padding: "8px 4px",
+    borderRadius: 8,
+  };
 
   const fmtTime = val => {
     if (!val) return "";
@@ -411,7 +489,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
     const typeNum = typeof (c.type || c.callType || c.Type || c.CallType) === "number"
       ? (c.type || c.callType || c.Type || c.CallType)
       : null;
-    if (c.missed || c.Missed || typeNum === 3) return { icon: "call_missed", color: "#BA2A2A" };
+    if (c.missed || c.Missed || typeNum === 3) return { icon: "call_missed", color: C.danger };
     const dir = (c.direction || c.Direction || (typeof c.type === "string" ? c.type : "") || (typeof c.callType === "string" ? c.callType : "") || "").toLowerCase();
     if (dir.includes("miss")) return { icon: "call_missed", color: "#BA2A2A" };
     // Check outgoing BEFORE checking incoming so "outgoing" (contains "in") doesn't misfire
@@ -439,21 +517,21 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   // Small neutral action button (white/card background) — used on each row
   const AB = ({ icon, title, onClick }) => (
     <button onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); onClick(); }} title={title}
-      style={{ width: 28, height: 28, borderRadius: 99, border: `1px solid ${T.brdS || T.brd}`, background: T.bgW, color: T.tSoft, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      style={phoneIconButton(false)}>
       {suiteIcon(icon, 14)}
     </button>
   );
 
   // Suggestion list — shared between dialer and compose-new modes
   const SuggestionList = ({ onPick, style = {} }) => suggestions.length === 0 ? null : (
-    <div style={{ background: T.card, border: `1px solid ${T.brd}`, borderRadius: 14, overflow: "hidden", boxShadow: "0 6px 20px rgba(0,0,0,0.14)", ...style }}>
+    <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, overflow: "hidden", boxShadow: "0 6px 20px rgba(60,64,67,0.18)", ...style }}>
       {suggestions.map((s, i) => (
         <button key={i} onMouseDown={e => e.preventDefault()} onClick={() => onPick(s)}
-          style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: "none", borderBottom: i < suggestions.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none", background: "transparent", cursor: "pointer" }}>
-          <span style={{ width: 26, height: 26, borderRadius: 99, background: T.bgW, border: `1px solid ${T.brd}`, display: "flex", alignItems: "center", justifyContent: "center", color: T.tSoft, flexShrink: 0 }}>{suiteIcon("person", 13)}</span>
+          style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer" }}>
+          <span style={{ width: 28, height: 28, borderRadius: 99, background: C.hover, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, flexShrink: 0 }}>{suiteIcon("person", 13)}</span>
           <span style={{ minWidth: 0 }}>
-            <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
-            <span style={{ display: "block", fontSize: 11, color: T.tSoft }}>{s.num}</span>
+            <span style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+            <span style={{ display: "block", fontSize: 12, color: C.muted }}>{s.num}</span>
           </span>
         </button>
       ))}
@@ -461,32 +539,32 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden", color: C.text }}>
 
       {/* ── Status bar ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, paddingBottom: 8, borderBottom: `1px solid ${T.brdS || T.brd}` }}>
-        <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: isIncoming ? "#2E7D32" : statusOnline ? (isOnCall ? "#E0A030" : "#2E7D32") : T.tFaint }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: 40 }}>
+        <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: isIncoming ? C.success : statusOnline ? (isOnCall ? C.warning : C.success) : C.faint }} />
         <span style={{ flex: 1, minWidth: 0 }}>
           {callerDisplay && (isIncoming || isOnCall) ? (
             <span>
-              <span style={{ display: "block", fontSize: 13, fontWeight: 800, color: isIncoming ? "#2E7D32" : T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{callerDisplay}</span>
-              <span style={{ display: "block", fontSize: 10, color: T.tFaint, fontWeight: 600 }}>{isIncoming ? "Incoming call" : "On call"}</span>
+              <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: isIncoming ? C.success : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{callerDisplay}</span>
+              <span style={{ display: "block", fontSize: 12, color: C.muted, fontWeight: 400 }}>{isIncoming ? "Incoming call" : "On call"}</span>
             </span>
           ) : (
-            <span style={{ fontSize: 12, fontWeight: 700, color: statusOnline ? T.tSoft : T.tFaint }}>{statusText}</span>
+            <span style={{ fontSize: 13, fontWeight: 400, color: statusOnline ? C.muted : C.faint }}>{statusText}</span>
           )}
         </span>
         {vmCount > 0 && (
-          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 800, color: "#fff", background: "#BA2A2A", borderRadius: 99, padding: "2px 7px", flexShrink: 0 }} title="Voicemail">
+          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 500, color: "#fff", background: C.danger, borderRadius: 99, padding: "2px 7px", flexShrink: 0 }} title="Voicemail">
             {suiteIcon("voicemail", 13)} {vmCount}
           </span>
         )}
-        <button onClick={refresh} disabled={!!busy} title="Refresh" style={{ width: 26, height: 26, borderRadius: 99, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("refresh", 15)}</button>
+        <button onClick={refresh} disabled={!!busy} title="Refresh" style={phoneIconButton(false)}>{suiteIcon("refresh", 16)}</button>
       </div>
 
       {/* ── Compose area — at TOP, above lists ── */}
       {composeOpen && (
-        <div style={{ background: T.bgW, border: `1.5px solid ${T.brd}`, borderRadius: 16, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 8, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
           {/* New message mode: contact search */}
           {composeIsNew && (
             <div style={{ position: "relative" }}>
@@ -495,7 +573,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
                 onBlur={() => setTimeout(() => setComposeFocused(false), 160)}
                 placeholder="Search contact or enter number…"
                 autoFocus
-                style={{ width: "100%", height: 34, boxSizing: "border-box", padding: "0 12px", borderRadius: 17, border: `1.5px solid ${T.brd}`, background: T.bgW, color: T.text, fontFamily: "system-ui", fontSize: 13, fontWeight: 700, outline: "none" }} />
+                style={{ width: "100%", height: 36, boxSizing: "border-box", padding: "0 12px", borderRadius: 18, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: 14, fontWeight: 400, outline: "none" }} />
               {composeFocused && suggestions.length > 0 && (
                 <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 300 }}>
                   <SuggestionList onPick={s => { setSelected({ name: s.name, number: s.num }); setNumber(s.num); setComposeSearch(s.name); setComposeIsNew(false); }} />
@@ -507,8 +585,8 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
           {selected && (
             <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
               {suiteIcon("sms", 14)}
-              <span style={{ fontSize: 12, color: T.tSoft, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{selected.name || selected.number}</span>
-              <button onClick={closeCompose} style={{ width: 22, height: 22, borderRadius: 99, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("close", 13)}</button>
+              <span style={{ fontSize: 13, color: C.muted, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{selected.name || selected.number}</span>
+              <button onClick={closeCompose} style={gvIconButton({ width: 32, height: 32 }, C)}>{suiteIcon("close", 14)}</button>
             </div>
           )}
           {/* Textarea + send — shown once a contact is selected or in non-new mode */}
@@ -517,16 +595,16 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
               <textarea value={body} onChange={e => setBody(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendSms(); } }}
                 placeholder="Message…" rows={2}
-                style={{ boxSizing: "border-box", borderRadius: 14, border: `1.5px solid ${T.brd}`, background: T.bgW, color: T.text, padding: "8px 12px", fontSize: 13, fontFamily: "system-ui", resize: "none", outline: "none", width: "100%" }} />
+                style={{ boxSizing: "border-box", borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, padding: "8px 12px", fontSize: 14, fontFamily: "system-ui", resize: "none", outline: "none", width: "100%" }} />
               <button onClick={sendSms} disabled={!body.trim() || !!busy || (!selected && !number.trim())}
-                style={{ width: 36, height: 36, borderRadius: 99, border: "none", background: body.trim() ? (T.primary || "#0B57D0") : T.bgW, color: body.trim() ? (T.onPrimary || "#fff") : T.tFaint, cursor: body.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0 }}>
+                style={{ width: 40, height: 40, borderRadius: 20, border: "none", background: body.trim() ? C.accent : "transparent", color: body.trim() ? "#fff" : C.faint, cursor: body.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0 }}>
                 {suiteIcon("send", 16)}
               </button>
             </div>
           )}
           {/* Close button when searching but no contact picked yet */}
           {composeIsNew && !selected && (
-            <button onClick={closeCompose} style={{ alignSelf: "flex-end", height: 26, padding: "0 10px", borderRadius: 13, border: `1px solid ${T.brd}`, background: "transparent", color: T.tFaint, cursor: "pointer", fontSize: 12, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+            <button onClick={closeCompose} style={gvTextButton({ alignSelf: "flex-end", height: 32, fontSize: 12 }, C)}>
               {suiteIcon("close", 13)} Cancel
             </button>
           )}
@@ -534,39 +612,39 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
       )}
 
       {/* ── Control bar: answer/hangup | record | new-msg | keypad toggle ── */}
-      <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 4, alignItems: "center", minHeight: 40 }}>
         {isIncoming ? (
           <button onClick={() => post("/answer", "answer")} disabled={!!busy} title="Answer"
-            style={{ height: 30, padding: "0 12px", borderRadius: 15, border: "none", background: "#2E7D32", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 800, fontFamily: "system-ui" }}>
+            style={gvTextButton({ border: "none", background: C.success, color: "#fff" }, C)}>
             {suiteIcon("phone_callback", 14)} Answer
           </button>
         ) : isOnCall ? (
           <button onClick={() => post("/hangup", "hangup")} disabled={!!busy} title="Hang up"
-            style={{ height: 30, padding: "0 12px", borderRadius: 15, border: "none", background: "#BA2A2A", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 800, fontFamily: "system-ui" }}>
+            style={gvTextButton({ border: "none", background: C.danger, color: "#fff" }, C)}>
             {suiteIcon("call_end", 14)} Hang up
           </button>
         ) : null}
         <div style={{ flex: 1 }} />
         {/* Record general */}
         <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
-          style={{ width: 30, height: 30, borderRadius: 99, border: `1px solid ${T.brd}`, background: T.bgW, color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          style={phoneIconButton(false)}>
           {suiteIcon("mic", 15)}
         </button>
         {/* Record active call */}
         {isOnCall && (
           <button onClick={onRecordCall} title="Record this call and extract tasks/shailos"
-            style={{ width: 30, height: 30, borderRadius: 99, border: "none", background: "#BA2A2A", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            style={gvIconButton({ width: 36, height: 36, background: C.danger, color: "#fff" }, C)}>
             {suiteIcon("fiber_manual_record", 14)}
           </button>
         )}
         {/* New message button */}
         <button onClick={openNewMessage} title="New message"
-          style={{ width: 30, height: 30, borderRadius: 99, border: `1px solid ${T.brd}`, background: composeOpen && composeIsNew ? (T.tonal || T.bgW) : T.bgW, color: composeOpen && composeIsNew ? (T.onTonal || T.tSoft) : T.tSoft, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          style={phoneIconButton(composeOpen && composeIsNew)}>
           {suiteIcon("edit", 15)}
         </button>
         {/* Keypad toggle */}
         <button onClick={() => setShowDialer(v => !v)} title="Keypad"
-          style={{ width: 30, height: 30, borderRadius: 99, border: `1px solid ${T.brd}`, background: showDialer ? (T.tonal || T.bgW) : T.bgW, color: showDialer ? (T.onTonal || T.text) : T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          style={phoneIconButton(showDialer)}>
           {suiteIcon("dialpad", 15)}
         </button>
       </div>
@@ -582,9 +660,9 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
               onBlur={() => setTimeout(() => setInputFocused(false), 160)}
               onKeyDown={e => e.key === "Enter" && dial()}
               placeholder="Name or number"
-              style={{ width: "100%", height: 36, boxSizing: "border-box", padding: "0 44px 0 30px", borderRadius: 18, border: `1.5px solid ${T.brd}`, background: T.bgW, color: T.text, fontFamily: "system-ui", fontSize: 13, fontWeight: 700, outline: "none" }} />
+              style={{ width: "100%", height: 40, boxSizing: "border-box", padding: "0 46px 0 32px", borderRadius: 20, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: 14, fontWeight: 400, outline: "none" }} />
             <button onClick={dial} disabled={!number.trim() || !!busy} title="Call"
-              style={{ position: "absolute", right: 4, top: 4, width: 28, height: 28, borderRadius: 99, border: "none", background: number.trim() ? "#2E7D32" : "transparent", color: number.trim() ? "#fff" : T.tFaint, cursor: number.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              style={{ position: "absolute", right: 4, top: 4, width: 32, height: 32, borderRadius: 99, border: "none", background: number.trim() ? C.success : "transparent", color: number.trim() ? "#fff" : C.faint, cursor: number.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {suiteIcon("call", 14)}
             </button>
           </div>
@@ -596,7 +674,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 4 }}>
             {DIALER_KEYS.map(k => (
               <button key={k} onClick={() => setNumber(prev => prev + k)}
-                style={{ height: 36, borderRadius: 10, border: `1px solid ${T.brd}`, background: T.bgW, color: T.text, cursor: "pointer", fontSize: 15, fontWeight: 700, fontFamily: "system-ui" }}>
+                style={{ height: 40, borderRadius: 4, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, cursor: "pointer", fontSize: 15, fontWeight: 400, fontFamily: "system-ui" }}>
                 {k}
               </button>
             ))}
@@ -611,21 +689,21 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
           {/* TEXTS section */}
           {hasMessages && (
             <div style={{ flex: "1 1 0", minHeight: 60, overflowY: "auto", paddingRight: 1 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: T.tFaint, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 4, paddingLeft: 2, paddingTop: 2, position: "sticky", top: 0, background: T.bg, zIndex: 1 }}>Messages</div>
+              <div style={{ fontSize: 12, fontWeight: 500, color: C.muted, letterSpacing: 0, marginBottom: 4, paddingLeft: 4, paddingTop: 2, position: "sticky", top: 0, background: C.bg, zIndex: 1 }}>Messages</div>
               {threads.map((m, idx) => {
                 const { icon: msgIcon, color: msgColor } = msgDirIcon(m);
                 const isUnread = !!(m.unread || m.isUnread || m.read === false || m.status === "unread");
                 const preview = m.body || m.text || m.message || m.content || "";
                 const time = fmtTime(m.timestamp || m.date || m.time);
                 return (
-                  <div key={`${m._who}-${idx}`} style={{ display: "grid", gridTemplateColumns: "30px minmax(0,1fr) 28px 28px", gap: 6, alignItems: "start", padding: "7px 2px", borderBottom: idx < threads.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
-                    <span style={{ width: 28, height: 28, borderRadius: 99, background: T.bgW, border: `1px solid ${T.brd}`, display: "flex", alignItems: "center", justifyContent: "center", color: msgColor, flexShrink: 0, marginTop: 2 }}>{suiteIcon(msgIcon, 15)}</span>
+                  <div key={`${m._who}-${idx}`} style={phoneRowStyle}>
+                    <span style={{ width: 32, height: 32, borderRadius: 99, background: isUnread ? C.hover : C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color: isUnread ? C.accent : msgColor, flexShrink: 0, marginTop: 2 }}>{suiteIcon(msgIcon, 15)}</span>
                     <button onClick={() => openCompose(m._name, m._who)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: T.text }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
-                        <span style={{ flex: 1, fontSize: 13, fontWeight: isUnread ? 900 : 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m._name}</span>
-                        {time && <span style={{ fontSize: 10, color: T.tFaint, flexShrink: 0, fontWeight: 600 }}>{time}</span>}
+                        <span style={{ flex: 1, fontSize: 14, fontWeight: isUnread ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m._name}</span>
+                        {time && <span style={{ fontSize: 12, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
                       </div>
-                      {preview && <span style={{ display: "block", fontSize: 11, color: T.tSoft, marginTop: 1, whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4 }}>{preview}</span>}
+                      {preview && <span style={{ display: "block", fontSize: 13, color: C.muted, marginTop: 1, whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4 }}>{preview}</span>}
                     </button>
                     <AB icon="call" title="Call" onClick={() => dialNum(m._who)} />
                     <AB icon="sms" title="Text" onClick={() => openCompose(m._name, m._who)} />
@@ -634,7 +712,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
               })}
               {onMoreHistory && (
                 <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
-                  <button onClick={onMoreHistory} style={{ height: 26, padding: "0 14px", borderRadius: 13, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+                  <button onClick={onMoreHistory} style={gvTextButton({ height: 32, fontSize: 12 }, C)}>
                     {suiteIcon("history", 13)} More history
                   </button>
                 </div>
@@ -644,27 +722,27 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
 
           {/* Divider between sections */}
           {hasMessages && hasCalls && (
-            <div style={{ height: 1, background: T.brdS || T.brd, flexShrink: 0, margin: "2px 0" }} />
+            <div style={{ height: 1, background: C.divider, flexShrink: 0, margin: "4px 0" }} />
           )}
 
           {/* CALLS section */}
           {hasCalls && (
             <div style={{ flex: "1 1 0", minHeight: 60, overflowY: "auto", paddingRight: 1 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: T.tFaint, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 4, paddingLeft: 2, paddingTop: 2, position: "sticky", top: 0, background: T.bg, zIndex: 1 }}>Recent calls</div>
+              <div style={{ fontSize: 12, fontWeight: 500, color: C.muted, letterSpacing: 0, marginBottom: 4, paddingLeft: 4, paddingTop: 2, position: "sticky", top: 0, background: C.bg, zIndex: 1 }}>Recent calls</div>
               {recentCalls.map((c, idx) => {
                 const num = c.number || c.phoneNumber || c.from || c.Number || c.PhoneNumber || "";
                 const name = lookupName(num) || c.name || c.displayName || c.Name || c.DisplayName || c.from || num || "Unknown";
                 const { icon, color } = callDirIcon(c);
                 const time = fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime);
                 return (
-                  <div key={`call-${idx}`} style={{ display: "grid", gridTemplateColumns: "30px minmax(0,1fr) 28px 28px", gap: 6, alignItems: "start", padding: "7px 2px", borderBottom: idx < recentCalls.length - 1 ? `1px solid ${T.brdS || T.brd}` : "none" }}>
-                    <span style={{ width: 28, height: 28, borderRadius: 99, background: T.bgW, border: `1px solid ${T.brd}`, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0, marginTop: 2 }}>{suiteIcon(icon, 14)}</span>
+                  <div key={`call-${idx}`} style={phoneRowStyle}>
+                    <span style={{ width: 32, height: 32, borderRadius: 99, background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0, marginTop: 2 }}>{suiteIcon(icon, 14)}</span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
-                        <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
-                        {time && <span style={{ fontSize: 10, color: T.tFaint, flexShrink: 0, fontWeight: 600 }}>{time}</span>}
+                        <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                        {time && <span style={{ fontSize: 12, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
                       </div>
-                      {num && num !== name && <span style={{ display: "block", fontSize: 11, color: T.tSoft, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{num}</span>}
+                      {num && num !== name && <span style={{ display: "block", fontSize: 13, color: C.muted, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{num}</span>}
                     </div>
                     <AB icon="call" title="Call back" onClick={() => dialNum(num)} />
                     <AB icon="sms" title="Text back" onClick={() => openCompose(name, num)} />
@@ -673,7 +751,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
               })}
               {onMoreHistory && (
                 <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
-                  <button onClick={onMoreHistory} style={{ height: 26, padding: "0 14px", borderRadius: 13, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+                  <button onClick={onMoreHistory} style={gvTextButton({ height: 32, fontSize: 12 }, C)}>
                     {suiteIcon("history", 13)} More history
                   </button>
                 </div>
@@ -683,8 +761,8 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
         </div>
       )}
 
-      {!statusOnline && !error && <div style={{ fontSize: 12, color: T.tFaint, padding: "6px 2px" }}>Open DeskPhone to connect calls and texts.</div>}
-      {error && <div style={{ fontSize: 12, color: T.tSoft, background: T.bgW, borderRadius: 10, padding: "7px 10px", marginTop: 2 }}>{error}</div>}
+      {!statusOnline && !error && <div style={{ fontSize: 13, color: C.muted, padding: "6px 2px" }}>Open DeskPhone to connect calls and texts.</div>}
+      {error && <div style={{ fontSize: 13, color: C.danger, background: C.bgSoft, borderRadius: 8, padding: "8px 10px", marginTop: 2 }}>{error}</div>}
     </div>
   );
 }
@@ -743,6 +821,12 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const GOLD = "#C9923C";
   const GOLD_BG = "rgba(201,146,60,0.07)";
   const GOLD_BRD = "rgba(201,146,60,0.18)";
+  const C = cleanTheme(T);
+  const ncPanel = { background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", boxShadow: "none" };
+  const ncHeader = { padding: "12px 14px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 };
+  const ncTitle = { fontSize: 16, fontWeight: 500, color: C.text, fontFamily: "system-ui" };
+  const ncSectionIcon = (accent = C.accent) => ({ width: 32, height: 32, borderRadius: 16, background: C.hover, color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
+  const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 36, height: 36, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
 
   const shailaPriorityIds = new Set(priorities.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
   const isShailaWork = t => t?.type === "shailo-research" || t?.type === "shaila-research" || !!t?.shailaId || !!t?.isGetBackStep || shailaPriorityIds.has(t?.priority);
@@ -777,24 +861,24 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   };
 
   return (
-    <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7600, background: T.bg, overflow: "hidden", borderLeft: `1px solid ${T.brdS || T.brd}` }}>
+    <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: "hidden", borderLeft: `1px solid ${C.divider}` }}>
       <div style={{ height: "100%", maxWidth: 1400, margin: "0 auto", padding: "clamp(10px,1.6vw,18px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 10 }}>
 
         {/* Three-panel grid — fills all remaining height */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 10, flex: 1, minHeight: 0, alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
-          <section style={{ background: T.card, border: `1px solid ${T.brd}`, borderRadius: 20, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", boxShadow: T.shadow || "none" }}>
-            <div style={{ padding: "13px 14px 10px", borderBottom: `1px solid ${T.brdS || T.brd}`, flexShrink: 0 }}>
+          <section style={ncPanel}>
+            <div style={{ ...ncHeader, display: "block" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ width: 32, height: 32, borderRadius: 10, background: T.tonal || T.bgW, color: T.onTonal || T.text, display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("task_alt", 17)}</span>
-                  <span style={{ fontSize: 15, fontWeight: 950, color: T.text, fontFamily: "system-ui" }}>Tasks</span>
+                  <span style={ncSectionIcon()}>{suiteIcon("task_alt", 17)}</span>
+                  <span style={ncTitle}>Tasks</span>
                 </div>
                 <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                  {onOpenZen && <button onClick={onOpenZen} title="Enter Zen mode" style={{ height: 28, padding: "0 10px", borderRadius: 14, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>{suiteIcon("self_improvement", 13)} Zen</button>}
-                  <button onClick={onOpenQueue} style={{ height: 28, padding: "0 10px", borderRadius: 14, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>{suiteIcon("list_alt", 13)} Queue</button>
-                  <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="Task actions" style={{ width: 28, height: 28, borderRadius: 99, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("apps", 14)}</button>
+                  {onOpenZen && <button onClick={onOpenZen} title="Enter Zen mode" style={gvTextButton({}, C)}>{suiteIcon("self_improvement", 13)} Zen</button>}
+                  <button onClick={onOpenQueue} style={gvTextButton({}, C)}>{suiteIcon("list_alt", 13)} Queue</button>
+                  <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="Task actions" style={ncSmallIconButton()}>{suiteIcon("apps", 15)}</button>
                 </div>
               </div>
               {/* Quick add — input + equal-width priority pills + add FAB, all inline */}
@@ -803,12 +887,12 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                   onChange={e => { setTaskDraft(e.target.value); e.target.style.height = "36px"; e.target.style.height = Math.min(e.target.scrollHeight, 108) + "px"; }}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(); } }}
                   placeholder="Add a task…"
-                  style={{ flex: 1, minWidth: 0, height: 36, maxHeight: 108, boxSizing: "border-box", borderRadius: 18, border: `1.5px solid ${T.brd}`, background: T.bgW, color: T.text, padding: "8px 13px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui", outline: "none", resize: "none", overflowY: "hidden", lineHeight: 1.45 }} />
+                  style={{ flex: 1, minWidth: 0, height: 36, maxHeight: 108, boxSizing: "border-box", borderRadius: 18, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "8px 13px", fontSize: 14, fontWeight: 400, fontFamily: "system-ui", outline: "none", resize: "none", overflowY: "hidden", lineHeight: 1.45 }} />
                 {ncCorePills.map(p => {
                   const active = taskPriority === p.id;
                   return (
                     <button key={p.id} onClick={() => setTaskPriority(p.id)}
-                      style={{ width: 46, height: 32, flexShrink: 0, borderRadius: 16, border: `1.5px solid ${p.color}`, background: active ? p.color : "transparent", color: active ? textOnColor(p.color) : p.color, cursor: "pointer", fontSize: 12, fontWeight: 800, fontFamily: "system-ui", transition: "background 0.12s, color 0.12s" }}>
+                      style={{ width: 46, height: 32, flexShrink: 0, borderRadius: 4, border: `1px solid ${active ? p.color : C.divider}`, background: active ? p.color : "transparent", color: active ? textOnColor(p.color) : C.muted, cursor: "pointer", fontSize: 12, fontWeight: 500, fontFamily: "system-ui", transition: "background 0.12s, color 0.12s" }}>
                       {p.ncLabel}
                     </button>
                   );
@@ -824,7 +908,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 const priColor = pri?.color || T.primary || "#7EB0DE";
                 const isEditing = editingTaskId === t.id;
                 return (
-                  <div key={t.id} style={{ display: "flex", alignItems: "start", padding: "8px 10px 8px 0", borderBottom: `1px solid ${T.brdS || T.brd}`, gap: 6 }}>
+                  <div key={t.id} style={{ display: "flex", alignItems: "start", padding: "9px 10px 9px 0", gap: 6 }}>
                     {/* Priority color bar */}
                     <span style={{ width: 8, alignSelf: "stretch", minHeight: 20, borderRadius: "0 4px 4px 0", background: priColor, flexShrink: 0 }} />
                     {/* Text — click to edit inline */}
@@ -834,26 +918,26 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                           onChange={e => setEditText(e.target.value)}
                           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (editText.trim()) onEditTask?.(t.id, editText.trim()); setEditingTaskId(null); } if (e.key === "Escape") setEditingTaskId(null); }}
                           onBlur={() => { if (editText.trim() && editText !== t.text) onEditTask?.(t.id, editText.trim()); setEditingTaskId(null); }}
-                          style={{ width: "100%", boxSizing: "border-box", borderRadius: 10, border: `1.5px solid ${priColor}`, background: T.bgW, color: T.text, padding: "5px 8px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui", resize: "none", outline: "none" }} />
+                          style={{ width: "100%", boxSizing: "border-box", borderRadius: 8, border: `1px solid ${priColor}`, background: C.bgSoft, color: C.text, padding: "5px 8px", fontSize: 14, fontWeight: 400, fontFamily: "system-ui", resize: "none", outline: "none" }} />
                       ) : (
                         <span onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }}
                           title="Click to edit"
-                          style={{ display: "block", fontSize: 13, fontWeight: 700, lineHeight: 1.45, color: T.text, wordBreak: "break-word", cursor: "text" }}>{t.text}</span>
+                          style={{ display: "block", fontSize: 14, fontWeight: 400, lineHeight: 1.45, color: C.text, wordBreak: "break-word", cursor: "text" }}>{t.text}</span>
                       )}
                     </div>
                     {/* Checkmark — plain icon, no pill */}
                     {!isEditing && <button onClick={() => onCompleteTask?.(t.id)} title="Mark done"
-                      style={{ width: 22, height: 22, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                      style={gvIconButton({ width: 32, height: 32, marginTop: -2 }, C)}>
                       {suiteIcon("check", 16)}
                     </button>}
                     {/* Delete */}
                     <button onClick={() => onDeleteTask?.(t.id)} title="Delete task"
-                      style={{ width: 22, height: 22, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                      style={gvIconButton({ width: 32, height: 32, marginTop: -2 }, C)}>
                       {suiteIcon("close", 13)}
                     </button>
                   </div>
                 );
-              }) : <div style={{ padding: "16px 14px", fontSize: 13, color: T.tFaint }}>No open tasks.</div>}
+              }) : <div style={{ padding: "16px 14px", fontSize: 13, color: C.faint }}>No open tasks.</div>}
 
               {shailaWorkTasks.length > 0 && (
                 <div>
@@ -884,20 +968,20 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           </section>
 
           {/* ── Shailos ── */}
-          <section style={{ background: T.card, border: `1px solid ${T.brd}`, borderRadius: 20, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", boxShadow: T.shadow || "none" }}>
-            <div style={{ padding: "13px 14px 12px", borderBottom: `1px solid ${T.brdS || T.brd}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <section style={ncPanel}>
+            <div style={ncHeader}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(201,146,60,0.14)", color: GOLD, display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("rule", 17)}</span>
-                <span style={{ fontSize: 15, fontWeight: 950, color: T.text, fontFamily: "system-ui" }}>Shailos</span>
+                <span style={ncSectionIcon(GOLD)}>{suiteIcon("rule", 17)}</span>
+                <span style={ncTitle}>Shailos</span>
               </div>
               <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                <button onClick={onOpenShailaAdd} style={{ height: 28, padding: "0 10px", borderRadius: 14, border: "none", background: GOLD, color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 800, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+                <button onClick={onOpenShailaAdd} style={gvTextButton({ border: "none", background: GOLD, color: "#fff" }, C)}>
                   {suiteIcon("add", 13)} Add
                 </button>
-                <button onClick={onOpenShailos} style={{ height: 28, padding: "0 10px", borderRadius: 14, border: `1px solid ${GOLD_BRD}`, background: "transparent", color: GOLD, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+                <button onClick={onOpenShailos} style={gvTextButton({ borderColor: GOLD_BRD, color: GOLD }, C)}>
                   {suiteIcon("open_in_full", 13)} Open
                 </button>
-                <button onClick={() => { setActionCategoryId("shailos"); setActionsOpen(true); }} title="Shailos actions" style={{ width: 28, height: 28, borderRadius: 99, border: `1px solid ${GOLD_BRD}`, background: "transparent", color: GOLD, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("apps", 14)}</button>
+                <button onClick={() => { setActionCategoryId("shailos"); setActionsOpen(true); }} title="Shailos actions" style={ncSmallIconButton(false, GOLD)}>{suiteIcon("apps", 14)}</button>
               </div>
             </div>
             <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0 }}>
@@ -943,17 +1027,17 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           </section>
 
           {/* ── Phone ── */}
-          <section style={{ background: T.card, border: `1px solid ${T.brd}`, borderRadius: 20, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", boxShadow: T.shadow || "none" }}>
-            <div style={{ padding: "13px 14px 12px", borderBottom: `1px solid ${T.brdS || T.brd}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <section style={ncPanel}>
+            <div style={ncHeader}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 32, height: 32, borderRadius: 10, background: T.tonal || T.bgW, color: T.onTonal || T.text, display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("phone_in_talk", 17)}</span>
-                <span style={{ fontSize: 15, fontWeight: 950, color: T.text, fontFamily: "system-ui" }}>Phone</span>
+                <span style={ncSectionIcon()}>{suiteIcon("phone_in_talk", 17)}</span>
+                <span style={ncTitle}>Phone</span>
               </div>
               <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                <button onClick={onOpenPhone} style={{ height: 28, padding: "0 10px", borderRadius: 14, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "system-ui", display: "flex", alignItems: "center", gap: 4 }}>
+                <button onClick={onOpenPhone} style={gvTextButton({}, C)}>
                   {suiteIcon("open_in_full", 13)} Open
                 </button>
-                <button onClick={() => { setActionCategoryId("phone"); setActionsOpen(true); }} title="Phone actions" style={{ width: 28, height: 28, borderRadius: 99, border: `1px solid ${T.brd}`, background: "transparent", color: T.tSoft, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{suiteIcon("apps", 14)}</button>
+                <button onClick={() => { setActionCategoryId("phone"); setActionsOpen(true); }} title="Phone actions" style={ncSmallIconButton()}>{suiteIcon("apps", 14)}</button>
               </div>
             </div>
             <div style={{ overflow: "hidden", flex: "1 1 auto", minHeight: 0, padding: "10px 14px", display: "flex", flexDirection: "column" }}>
@@ -964,15 +1048,15 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
         {/* ── Google Calendar + Gmail strip ── fixed height, cards scroll internally */}
         {(() => {
-          const accentBlue = T.isDark ? '#7EB0DE' : '#4A80CC';
+          const accentBlue = C.accent;
 
           if (!googleClientId) {
             return (
               <div style={{ display: "flex", flex: "0 0 58px", minHeight: 0 }}>
                 <button onClick={onOpenGoogleSettings}
-                  style={{ width: "100%", borderRadius: 16, border: `1px dashed ${T.brd}`, background: T.card, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tSoft, fontFamily: "system-ui", fontSize: 13, fontWeight: 700 }}
+                  style={{ width: "100%", borderRadius: 8, border: `1px dashed ${C.divider}`, background: C.bg, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: C.muted, fontFamily: "system-ui", fontSize: 13, fontWeight: 500 }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = accentBlue; e.currentTarget.style.color = accentBlue; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = T.brd; e.currentTarget.style.color = T.tSoft; }}>
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.divider; e.currentTarget.style.color = C.muted; }}>
                   {suiteIcon("add_link", 16)}
                   Set up Google Calendar &amp; Gmail
                 </button>
@@ -1001,10 +1085,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           };
 
           // Each card: header (fixed) + content (scrollable)
-          const cardWrap = { background: T.card, borderRadius: 16, border: `1px solid ${T.brd}`, flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" };
-          const cardHead = { padding: "8px 12px 6px", borderBottom: `1px solid ${T.brdS || T.brd}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 };
+          const cardWrap = { background: C.bg, borderRadius: 8, border: `1px solid ${C.divider}`, flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" };
+          const cardHead = { padding: "8px 12px 6px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 };
           const cardBody = { flex: 1, overflow: "auto", padding: "0 12px" };
-          const headLabel = { fontSize: 11, fontWeight: 800, color: T.tSoft, fontFamily: "system-ui", letterSpacing: 0.3 };
+          const headLabel = { fontSize: 12, fontWeight: 500, color: C.muted, fontFamily: "system-ui", letterSpacing: 0 };
 
           return (
             <React.Fragment>
