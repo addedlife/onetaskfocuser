@@ -1,7 +1,12 @@
 # Recent Changes
 
-Last updated: 2026-05-06
+Last updated: 2026-05-07
 
+- `397c00b`: Reconnect spinner timeout — after 6s of failed silent re-auth, spinner is replaced by a clickable "Reconnect Google" button so users are never stuck.
+- `3cdd983`: Gmail query broadened — personal (all) + promotions/updates (important only), no read/unread filter, 20 most recent. Subject line removed from row; AI batch call summarizes email body content in one sentence (≤10 words); falls back to decoded snippet.
+- `a72c359`: iOS-style AI batch email summaries + calendar all-day sort. `sortCalEvents()` helper: timed events first, all-day pushed to bottom.
+- `7d7b8ee`: Fixed calendarList URL (`users/me/calendarList` was missing `/users/me/`). Added graceful fallback to `primary` if calendarList fails. Gmail rows: HTML entity decoding, iOS 3-line layout with 2-line snippet.
+- `b6022bd`: NerveCenter Google connector — 8 improvements applied cleanly on reverted file: auth persistence (3300s expiry, 401 clears localStorage, `googleWasConnected` flag, silent reconnect useEffect), no phantom Connect box (`notConnected` requires `calendarEvents===null`), whole row is clickable link (per-row ↗ removed), Gmail hover tooltip (400ms delay, full from/subject/snippet), all subscribed calendars (calendarList + parallel per-calendar events), 20-item limit with scroll, Add Event modal (natural language → AI parse → Calendar POST via `calendar` scope).
 - `2026-05-06 session`: Google token persisted to localStorage — survives page refresh/restart. Silent re-auth fires on load if token expired. Disconnect clears stored token.
 - `2026-05-06 session`: iPhone Google fix — API errors now set data to `[]` instead of keeping `null`, so Calendar/Gmail cards always render after successful auth.
 - `2026-05-06 session`: Calendar card gets "+" (Add Event) and "↗" (Open Calendar) header buttons plus per-event "↗" open links.
@@ -25,6 +30,7 @@ Latest verified deploy:
 
 Local parity progress:
 
+- 2026-05-07: DeskPhone Web no-op/native-redirect defect pass completed locally. Visible parity controls now avoid native `/handoff`: conversation read/unread/pin/mute/block, call-history block/delete/delete-all, contact Text/New/Edit, full Calls text/call/block/delete, Settings tools/toggles, and Developer Tools buttons were verified by `node artifacts/deskphone-web-button-audit.cjs` with zero handoff requests. Native host support for the direct endpoints shipped in DeskPhone b261.
 - 2026-05-06: DeskPhone Web now handles the final four host/API-needed attachment rows in-browser. Native b260 exposes `/send-with-attachments`; browser reply compose and full New Message compose can attach files, remove staged attachment chips, and send attachments through the native MAP MMS send path. Ledger moved to 193 implemented-web, 0 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web now handles five contact/call-undo parity rows in-browser. Native b259 exposes `/save-contact`, `/delete-contact`, `/undo-call-history-delete`, and call-history undo status fields; the browser contact editor saves/deletes through the host, and thread/full Calls undo bars call the host. Ledger moved to 189 implemented-web, 4 host-api-needed, 6 native-only, 0 not-yet-reviewed.
 - 2026-05-06: DeskPhone Web now handles six Settings device-control parity rows in-browser. Native b258 exposes saved/scanned device lists plus scan, connect saved, set default, forget, and connect scanned-device host endpoints. Ledger moved to 184 implemented-web, 9 host-api-needed, 6 native-only, 0 not-yet-reviewed.

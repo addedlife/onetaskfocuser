@@ -368,35 +368,6 @@ function ComposeAttachmentTray({ attachments, onRemove, removeSource }) {
   );
 }
 
-function handoffPath(target, value = "") {
-  const params = new URLSearchParams({ target });
-  if (value) params.set("value", value);
-  return `/handoff?${params.toString()}`;
-}
-
-function nativeHandoffTarget(label, source = "") {
-  const text = `${label || ""} ${source || ""}`.toLowerCase();
-  if (text.includes("new message") || text.includes("message this number") || source.includes("MainWindow.xaml:455") || source.includes("MainWindow.xaml:1078") || source.includes("MainWindow.xaml:2826") || source.includes("MainWindow.xaml:2931")) return "new-message";
-  if (text.includes("make call") || source.includes("MainWindow.xaml:525")) return "make-call";
-  if (text.includes("live log") || source.includes("MainWindow.xaml:620")) return "live-log";
-  if (text.includes("developer") || source.includes("MainWindow.xaml:603")) return "developer-tools";
-  if (text.includes("connection settings") || text.includes("choose device") || source.includes("MainWindow.xaml:701") || source.includes("MainWindow.xaml:745") || source.includes("MainWindow.xaml:812")) return "settings-connection";
-  if (text.includes("build")) return "build-update";
-  if (text.includes("mark unread")) return "mark-unread";
-  if (text.includes("mark read")) return "mark-read";
-  if (text.includes("pin / unpin") || text.includes("pin conversation")) return "toggle-pin";
-  if (text.includes("mute / unmute") || text.includes("mute alerts")) return "toggle-mute";
-  if (text.includes("block / unblock") || text.includes("block locally")) return "toggle-block";
-  if (text.includes("delete all call history") || source.includes("MainWindow.xaml:2592")) return "delete-all-calls";
-  if (text.includes("delete call entry") || source.includes("MainWindow.xaml:2841")) return "delete-call-entry";
-  if (text.includes("edit contact")) return "edit-contact";
-  if (text.includes("new contact") || text.includes("add contact") || text.includes("save as contact")) return "new-contact";
-  if (text.includes("contact") || source.includes("MainWindow.xaml:562")) return "contacts";
-  if (text.includes("call") || source.includes("MainWindow.xaml:544")) return "calls";
-  if (source.includes("MainWindow.xaml:")) return "messages";
-  return "show";
-}
-
 function includesConnected(value) {
   return String(value || "").toLowerCase().includes("connected");
 }
@@ -619,9 +590,9 @@ function attachmentLabel(attachment) {
   return attachment?.contentType || "Attachment";
 }
 
-function saveDataUrlAttachment(attachment, onNativeHandoff) {
+function saveDataUrlAttachment(attachment, onNotice) {
   if (!attachment?.dataUrl) {
-    onNativeHandoff("Save attachment", "MainWindow.xaml:2006");
+    onNotice?.("Attachment data is not available in the browser yet.");
     return;
   }
 
@@ -1032,7 +1003,7 @@ function DeskPhoneIconButton({
   );
 }
 
-function ConversationRow({ conversation, selected, onSelect, onNativeHandoff }) {
+function ConversationRow({ conversation, selected, onSelect, onConversationAction }) {
   const rowClass = [
     "dp-conversation-row",
     selected ? "is-selected" : "",
@@ -1068,11 +1039,11 @@ function ConversationRow({ conversation, selected, onSelect, onNativeHandoff }) 
       <details className="dp-conversation-menu" onClick={(event) => event.stopPropagation()}>
         <summary aria-label="Conversation actions">{icon("more_vert", 18)}</summary>
         <div className="dp-floating-menu" data-native-source="MainWindow.xaml:1299">
-          <button type="button" data-native-source="MainWindow.xaml:1299" onClick={() => onNativeHandoff("Mark read", "MainWindow.xaml:1299", conversation.number)}>Mark read</button>
-          <button type="button" data-native-source="MainWindow.xaml:1302" onClick={() => onNativeHandoff("Mark unread", "MainWindow.xaml:1302", conversation.number)}>Mark unread</button>
-          <button type="button" data-native-source="MainWindow.xaml:1306" onClick={() => onNativeHandoff("Pin / unpin", "MainWindow.xaml:1306", conversation.number)}>Pin / unpin</button>
-          <button type="button" data-native-source="MainWindow.xaml:1309" onClick={() => onNativeHandoff("Mute / unmute alerts", "MainWindow.xaml:1309", conversation.number)}>Mute / unmute alerts</button>
-          <button type="button" data-native-source="MainWindow.xaml:1312" onClick={() => onNativeHandoff("Block / unblock locally", "MainWindow.xaml:1312", conversation.number)}>Block / unblock locally</button>
+          <button type="button" data-native-source="MainWindow.xaml:1299" onClick={() => onConversationAction("mark-conversation-read", "mark read", conversation.number)}>Mark read</button>
+          <button type="button" data-native-source="MainWindow.xaml:1302" onClick={() => onConversationAction("mark-conversation-unread", "mark unread", conversation.number)}>Mark unread</button>
+          <button type="button" data-native-source="MainWindow.xaml:1306" onClick={() => onConversationAction("toggle-conversation-pin", "toggle conversation pin", conversation.number)}>Pin / unpin</button>
+          <button type="button" data-native-source="MainWindow.xaml:1309" onClick={() => onConversationAction("toggle-conversation-mute", "toggle conversation mute", conversation.number)}>Mute / unmute alerts</button>
+          <button type="button" data-native-source="MainWindow.xaml:1312" onClick={() => onConversationAction("toggle-conversation-block", "toggle conversation block", conversation.number)}>Block / unblock locally</button>
         </div>
       </details>
     </div>
@@ -1126,7 +1097,7 @@ function ImageLightbox({ image, rotation, onClose, onRotate }) {
   );
 }
 
-function MessageAttachments({ message, onNativeHandoff, onOpenImage }) {
+function MessageAttachments({ message, onNotice, onOpenImage }) {
   if (!message.attachments.length) return null;
   return (
     <div className="dp-attachment-stack">
@@ -1163,7 +1134,7 @@ function MessageAttachments({ message, onNativeHandoff, onOpenImage }) {
               <strong>{attachment.fileName || "Attachment"}</strong>
               <span>{attachmentLabel(attachment)}{attachment.size ? ` - ${Math.round(attachment.size / 1024)} KB` : ""}</span>
             </div>
-            <button type="button" onClick={() => saveDataUrlAttachment(attachment, onNativeHandoff)}>Save</button>
+            <button type="button" onClick={() => saveDataUrlAttachment(attachment, onNotice)}>Save</button>
             </div>
           ) : null}
           </React.Fragment>
@@ -1185,7 +1156,7 @@ function MessageBubble({
   onForward,
   onTogglePin,
   onDelete,
-  onNativeHandoff,
+  onNotice,
   onOpenImage,
 }) {
   const currentDivider = formatDateDivider(message.timestamp);
@@ -1230,7 +1201,7 @@ function MessageBubble({
       >
         {message.body ? <div className="dp-message-body">{message.body}</div> : null}
         {!message.body && message.isMms && !hasVisibleImage ? <div className="dp-message-body dp-muted-body">MMS message</div> : null}
-        <MessageAttachments message={message} onNativeHandoff={onNativeHandoff} onOpenImage={onOpenImage} />
+        <MessageAttachments message={message} onNotice={onNotice} onOpenImage={onOpenImage} />
         <div className="dp-message-meta">
           {message.isSent ? (
             <span
@@ -1246,10 +1217,11 @@ function MessageBubble({
         </div>
         {open ? (
           <div className="dp-bubble-actions" data-native-source={message.isSent ? "MainWindow.xaml:2248" : "MainWindow.xaml:2032"}>
-            <button type="button" title="Copy" onClick={(event) => { event.stopPropagation(); onCopy(message); }}>{icon("content_copy", 17)}</button>
+            <button type="button" title="Copy" aria-label="Copy" onClick={(event) => { event.stopPropagation(); onCopy(message); }}>{icon("content_copy", 17)}</button>
             <button
               type="button"
               title="Forward"
+              aria-label="Forward"
               data-native-source={message.isSent ? "MainWindow.xaml:2260" : "MainWindow.xaml:2040"}
               onClick={(event) => {
                 event.stopPropagation();
@@ -1258,10 +1230,11 @@ function MessageBubble({
             >
               {icon("forward", 17)}
             </button>
-            <button type="button" title="Call" onClick={(event) => { event.stopPropagation(); onCall(message.number); }}>{icon("call", 17)}</button>
+            <button type="button" title="Call" aria-label="Call" onClick={(event) => { event.stopPropagation(); onCall(message.number); }}>{icon("call", 17)}</button>
             <button
               type="button"
               title="Delete"
+              aria-label="Delete"
               data-native-source={message.isSent ? "MainWindow.xaml:2268" : "MainWindow.xaml:2048"}
               onClick={(event) => {
                 event.stopPropagation();
@@ -1273,6 +1246,7 @@ function MessageBubble({
             <button
               type="button"
               title={message.pinActionLabel || "Pin"}
+              aria-label={message.pinActionLabel || "Pin"}
               data-native-source={message.isSent ? "MainWindow.xaml:2272" : "MainWindow.xaml:2052"}
               onClick={(event) => {
                 event.stopPropagation();
@@ -1300,7 +1274,10 @@ function ConversationCallHistory({
   onCall,
   onText,
   onDial,
-  onNativeHandoff,
+  onOpenFullCalls,
+  onDeleteAllCalls,
+  onToggleCallBlock,
+  onDeleteCall,
 }) {
   const [callFilter, setCallFilter] = useState("All");
   const [dialerOpen, setDialerOpen] = useState(dialerDefaultOpen);
@@ -1331,12 +1308,12 @@ function ConversationCallHistory({
         <div className="dp-thread-calls-header-actions">
           <button type="button" title="Show keypad" aria-label="Show keypad" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3236" : "MainWindow.xaml:2573"} onClick={() => setDialerOpen(true)}>{icon("dialpad", 18)}</button>
           {!isFullCallsSurface ? (
-            <button type="button" title="Open full call history" aria-label="Open full call history" onClick={() => onNativeHandoff("Open full call history", "MainWindow.xaml:2459")}>{icon("open_in_new", 18)}</button>
+            <button type="button" title="Open full call history" aria-label="Open full call history" onClick={onOpenFullCalls}>{icon("open_in_new", 18)}</button>
           ) : null}
           {isFullCallsSurface && showRecents ? (
             <button type="button" title="Hide recents" aria-label="Hide recents" data-native-source="MainWindow.xaml:3259" onClick={() => setShowRecents(false)}>{icon("close", 18)}</button>
           ) : null}
-          <button type="button" title="Delete all call history" aria-label="Delete all call history" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3271" : "MainWindow.xaml:2592"} onClick={() => onNativeHandoff("Delete all call history", isFullCallsSurface ? "MainWindow.xaml:3271" : "MainWindow.xaml:2592")}>{icon("delete", 18)}</button>
+          <button type="button" title="Delete all call history" aria-label="Delete all call history" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3271" : "MainWindow.xaml:2592"} onClick={onDeleteAllCalls}>{icon("delete", 18)}</button>
         </div>
       </div>
       {isFullCallsSurface && !showRecents ? (
@@ -1369,8 +1346,8 @@ function ConversationCallHistory({
                 <div className="dp-thread-call-actions">
                   <button type="button" title="Message this number" aria-label="Message this number" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3513" : "MainWindow.xaml:2826"} onClick={() => onText(call.number)}>{icon("sms", 17)}</button>
                   <button type="button" title="Call this number" aria-label="Call this number" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3518" : "MainWindow.xaml:2831"} onClick={() => onCall(call.number)}>{icon("call", 17)}</button>
-                  <button type="button" title="Block / unblock locally" aria-label="Block / unblock locally" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3522" : "MainWindow.xaml:2836"} onClick={() => onNativeHandoff("Block / unblock call record", isFullCallsSurface ? "MainWindow.xaml:3522" : "MainWindow.xaml:2836", call.number)}>{icon("block", 17)}</button>
-                  <button type="button" title="Delete call entry" aria-label="Delete call entry" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3527" : "MainWindow.xaml:2841"} onClick={() => onNativeHandoff("Delete call entry", isFullCallsSurface ? "MainWindow.xaml:3527" : "MainWindow.xaml:2841", call.number)}>{icon("delete", 17)}</button>
+                  <button type="button" title="Block / unblock locally" aria-label="Block / unblock locally" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3522" : "MainWindow.xaml:2836"} onClick={() => onToggleCallBlock(call)}>{icon("block", 17)}</button>
+                  <button type="button" title="Delete call entry" aria-label="Delete call entry" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3527" : "MainWindow.xaml:2841"} onClick={() => onDeleteCall(call)}>{icon("delete", 17)}</button>
                 </div>
               </div>
             ))}
@@ -1449,8 +1426,9 @@ function MessagesSlice({
   draft,
   setDraft,
   onCommand,
-  onNativeHandoff,
   onOpenNewMessage,
+  onOpenFullCalls,
+  onOpenContactEditor,
   onNotice,
 }) {
   const [threadSearch, setThreadSearch] = useState("");
@@ -1538,11 +1516,11 @@ function MessagesSlice({
   const callNumber = useCallback((number) => {
     const normalized = normalizePhoneKey(number);
     if (!normalized) {
-      onNativeHandoff("Call", "MainWindow.xaml:1776", number);
+      onNotice("Call needs a phone number.");
       return;
     }
     onCommand(`/dial?n=${encodeURIComponent(normalized)}`, "call");
-  }, [onCommand, onNativeHandoff]);
+  }, [onCommand, onNotice]);
 
   const dialRawNumber = useCallback((number) => {
     const cleaned = String(number || "").replace(/[^\d+*#]/g, "");
@@ -1553,12 +1531,13 @@ function MessagesSlice({
   const textNumber = useCallback((number) => {
     const normalized = normalizePhoneKey(number);
     if (!normalized || normalized !== selectedConversation?.key) {
-      onNativeHandoff("Message this number", "MainWindow.xaml:2826", normalized || number);
+      setDraft("");
+      onOpenNewMessage(normalized || number);
       return;
     }
     composeRef.current?.focus();
     onNotice("Reply box ready for this number.");
-  }, [onNativeHandoff, onNotice, selectedConversation?.key]);
+  }, [onNotice, onOpenNewMessage, selectedConversation?.key, setDraft]);
 
   const copyMessage = useCallback(async (message) => {
     const text = message.body || message.preview || "";
@@ -1566,9 +1545,9 @@ function MessagesSlice({
       await navigator.clipboard.writeText(text);
       onNotice("Copied message text.");
     } catch {
-      onNativeHandoff("Copy message", "MainWindow.xaml:2032", message.number);
+      onNotice("Copy is blocked by this browser session.");
     }
-  }, [onNativeHandoff, onNotice]);
+  }, [onNotice]);
 
   const forwardMessage = useCallback((message) => {
     setDraft(message.body || message.preview || "");
@@ -1602,21 +1581,66 @@ function MessagesSlice({
     item?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, []);
 
+  const revealMessageActions = useCallback((messageId) => {
+    setOpenActionMessageId((current) => current === messageId ? "" : messageId);
+  }, []);
+
+  useEffect(() => {
+    if (!openActionMessageId) return;
+    window.requestAnimationFrame(() => {
+      const scrollBox = messageScrollRef.current;
+      const item = Array.from(scrollBox?.querySelectorAll?.("[data-message-id]") || [])
+        .find((node) => node.getAttribute("data-message-id") === openActionMessageId);
+      item?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }, [openActionMessageId]);
+
   const toggleMessagePin = useCallback(async (message) => {
     if (!message?.id) {
-      onNativeHandoff("Pin message", message?.isSent ? "MainWindow.xaml:2272" : "MainWindow.xaml:2052", message?.number || "");
+      onNotice("Pin needs a message id from DeskPhone.");
       return;
     }
     await onCommand(`/toggle-message-pin?id=${encodeURIComponent(message.id)}`, "toggle message pin");
-  }, [onCommand, onNativeHandoff]);
+  }, [onCommand, onNotice]);
 
   const deleteMessage = useCallback(async (message) => {
     if (!message?.id) {
-      onNativeHandoff("Delete message", message?.isSent ? "MainWindow.xaml:2268" : "MainWindow.xaml:2048", message?.number || "");
+      onNotice("Delete needs a message id from DeskPhone.");
       return;
     }
     await onCommand(`/delete-message?id=${encodeURIComponent(message.id)}`, "delete message");
-  }, [onCommand, onNativeHandoff]);
+  }, [onCommand, onNotice]);
+
+  const runConversationAction = useCallback((endpoint, label, number) => {
+    const normalized = normalizePhoneKey(number);
+    if (!normalized) {
+      onNotice("That action needs a phone number.");
+      return;
+    }
+    onCommand(`/${endpoint}?phone=${encodeURIComponent(normalized)}`, label);
+  }, [onCommand, onNotice]);
+
+  const deleteAllCalls = useCallback(() => {
+    if (!window.confirm("Delete all call history from DeskPhone Web?")) return;
+    onCommand("/delete-all-call-history", "delete all call history");
+  }, [onCommand]);
+
+  const toggleCallBlock = useCallback((call) => {
+    const normalized = normalizePhoneKey(call?.number);
+    if (!normalized) {
+      onNotice("Block needs a phone number.");
+      return;
+    }
+    onCommand(`/toggle-call-block?phone=${encodeURIComponent(normalized)}`, "toggle call block");
+  }, [onCommand, onNotice]);
+
+  const deleteCall = useCallback((call) => {
+    if (!call?.id) {
+      onNotice("Delete needs a call id from DeskPhone.");
+      return;
+    }
+    onCommand(`/delete-call-entry?id=${encodeURIComponent(call.id)}`, "delete call entry");
+  }, [onCommand, onNotice]);
 
   const openImageViewer = useCallback((attachment) => {
     setActiveImage(attachment);
@@ -1654,6 +1678,10 @@ function MessagesSlice({
     showMessagesList ? "" : "is-list-hidden",
   ].join(" ");
   const emptyText = conversationSearch ? "No conversations match this search" : "No conversations yet";
+  const closeThreadActionMenu = (event) => {
+    event.stopPropagation();
+    event.currentTarget.closest("details")?.removeAttribute("open");
+  };
 
   return (
     <div
@@ -1722,7 +1750,7 @@ function MessagesSlice({
               conversation={conversation}
               selected={selectedConversation?.key === conversation.key}
               onSelect={setSelectedConversationKey}
-              onNativeHandoff={onNativeHandoff}
+              onConversationAction={runConversationAction}
             />
           ))}
         </div>
@@ -1766,19 +1794,112 @@ function MessagesSlice({
                 onNext={() => stepThreadSearchMatch("next")}
               />
               <div className="dp-thread-actions" data-native-source="MainWindow.xaml:1738">
-                {!showMessagesList ? (
-                  <ShellButton className="dp-tonal dp-show-threads-button" iconName="menu_open" nativeSource="MainWindow.xaml:1831" onClick={() => setShowMessagesList(true)}>
-                    Show threads
-                  </ShellButton>
-                ) : null}
-                <DeskPhoneIconButton iconName="block" label="Block / unblock locally" nativeSource="MainWindow.xaml:1738" nativeGlyph="E14B" onClick={() => onNativeHandoff("Block / unblock locally", "MainWindow.xaml:1738", selectedConversation.number)} />
-                <DeskPhoneIconButton iconName="push_pin" label="Pin / unpin conversation" nativeSource="MainWindow.xaml:1742" nativeGlyph="F10D" onClick={() => onNativeHandoff("Pin / unpin conversation", "MainWindow.xaml:1742", selectedConversation.number)} />
-                <DeskPhoneIconButton iconName="notifications_off" label="Mute / unmute alerts" nativeSource="MainWindow.xaml:1746" nativeGlyph="E7F6" onClick={() => onNativeHandoff("Mute / unmute alerts", "MainWindow.xaml:1746", selectedConversation.number)} />
-                <DeskPhoneIconButton iconName="mark_email_read" label="Mark read" nativeSource="MainWindow.xaml:1750" nativeGlyph="E151" onClick={() => onNativeHandoff("Mark read", "MainWindow.xaml:1750", selectedConversation.number)} />
-                <DeskPhoneIconButton iconName="mark_email_unread" label="Mark unread" nativeSource="MainWindow.xaml:1755" nativeGlyph="F18A" onClick={() => onNativeHandoff("Mark unread", "MainWindow.xaml:1755", selectedConversation.number)} />
-                <DeskPhoneIconButton iconName="person_add" label="Add contact" nativeSource="MainWindow.xaml:1760" nativeGlyph="E7FE" onClick={() => onNativeHandoff("Add contact", "MainWindow.xaml:1760", selectedConversation.number)} />
-                <DeskPhoneIconButton iconName="edit" label="Edit contact" nativeSource="MainWindow.xaml:1766" nativeGlyph="E3C9" onClick={() => onNativeHandoff("Edit contact", "MainWindow.xaml:1766", selectedConversation.number)} />
-                <DeskPhoneIconButton iconName="call" label="Call" nativeSource="MainWindow.xaml:1776" nativeGlyph="E0B0" onClick={() => callNumber(selectedConversation.number)} />
+                <details className="dp-thread-actions-menu" onClick={(event) => event.stopPropagation()}>
+                  <summary title="Conversation actions" aria-label="Conversation actions">{icon("more_vert", 20)}</summary>
+                  <div className="dp-floating-menu">
+                    {!showMessagesList ? (
+                      <button
+                        type="button"
+                        data-native-source="MainWindow.xaml:1831"
+                        onClick={(event) => {
+                          closeThreadActionMenu(event);
+                          setShowMessagesList(true);
+                        }}
+                      >
+                        {icon("menu_open", 18)}
+                        <span>Show threads</span>
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      data-native-source="MainWindow.xaml:1738"
+                      onClick={(event) => {
+                        closeThreadActionMenu(event);
+                        runConversationAction("toggle-conversation-block", "toggle conversation block", selectedConversation.number);
+                      }}
+                    >
+                      {icon("block", 18)}
+                      <span>Block / unblock locally</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-native-source="MainWindow.xaml:1742"
+                      onClick={(event) => {
+                        closeThreadActionMenu(event);
+                        runConversationAction("toggle-conversation-pin", "toggle conversation pin", selectedConversation.number);
+                      }}
+                    >
+                      {icon("push_pin", 18)}
+                      <span>Pin / unpin conversation</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-native-source="MainWindow.xaml:1746"
+                      onClick={(event) => {
+                        closeThreadActionMenu(event);
+                        runConversationAction("toggle-conversation-mute", "toggle conversation mute", selectedConversation.number);
+                      }}
+                    >
+                      {icon("notifications_off", 18)}
+                      <span>Mute / unmute alerts</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-native-source="MainWindow.xaml:1750"
+                      onClick={(event) => {
+                        closeThreadActionMenu(event);
+                        runConversationAction("mark-conversation-read", "mark read", selectedConversation.number);
+                      }}
+                    >
+                      {icon("mark_email_read", 18)}
+                      <span>Mark read</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-native-source="MainWindow.xaml:1755"
+                      onClick={(event) => {
+                        closeThreadActionMenu(event);
+                        runConversationAction("mark-conversation-unread", "mark unread", selectedConversation.number);
+                      }}
+                    >
+                      {icon("mark_email_unread", 18)}
+                      <span>Mark unread</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-native-source="MainWindow.xaml:1760"
+                      onClick={(event) => {
+                        closeThreadActionMenu(event);
+                        onOpenContactEditor(selectedConversation.number, "new");
+                      }}
+                    >
+                      {icon("person_add", 18)}
+                      <span>Add contact</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-native-source="MainWindow.xaml:1766"
+                      onClick={(event) => {
+                        closeThreadActionMenu(event);
+                        onOpenContactEditor(selectedConversation.number, "edit");
+                      }}
+                    >
+                      {icon("edit", 18)}
+                      <span>Edit contact</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-native-source="MainWindow.xaml:1776"
+                      onClick={(event) => {
+                        closeThreadActionMenu(event);
+                        callNumber(selectedConversation.number);
+                      }}
+                    >
+                      {icon("call", 18)}
+                      <span>Call</span>
+                    </button>
+                  </div>
+                </details>
               </div>
             </header>
 
@@ -1814,13 +1935,13 @@ function MessagesSlice({
                       open={openActionMessageId === message.id}
                       searchMatch={threadMatchIdSet.has(message.id)}
                       searchCurrent={threadMatchIds[activeThreadSearchCursor] === message.id}
-                      onToggleOpen={(id) => setOpenActionMessageId((current) => current === id ? "" : id)}
+                      onToggleOpen={revealMessageActions}
                       onCopy={copyMessage}
                       onCall={callNumber}
                       onForward={forwardMessage}
                       onTogglePin={toggleMessagePin}
                       onDelete={deleteMessage}
-                      onNativeHandoff={onNativeHandoff}
+                      onNotice={onNotice}
                       onOpenImage={openImageViewer}
                     />
                   ))}
@@ -1916,7 +2037,10 @@ function MessagesSlice({
                 onCall={callNumber}
                 onText={textNumber}
                 onDial={dialRawNumber}
-                onNativeHandoff={onNativeHandoff}
+                onOpenFullCalls={onOpenFullCalls}
+                onDeleteAllCalls={deleteAllCalls}
+                onToggleCallBlock={toggleCallBlock}
+                onDeleteCall={deleteCall}
               />
             </div>
           </div>
@@ -1959,7 +2083,7 @@ function contactKey(contact, index) {
   return contact?.id || contact?.Id || contact?.contactId || contact?.ContactId || `${contactDisplayName(contact)}-${index}`;
 }
 
-function ContactsSlice({ contacts, onCommand, onNativeHandoff }) {
+function ContactsSlice({ contacts, contactDraft, onContactDraftConsumed, onCommand, onOpenNewMessage, onNotice }) {
   const sortedContacts = useMemo(
     () => [...contacts].sort((a, b) => contactDisplayName(a).localeCompare(contactDisplayName(b))),
     [contacts]
@@ -1968,37 +2092,70 @@ function ContactsSlice({ contacts, onCommand, onNativeHandoff }) {
   const [editorName, setEditorName] = useState("");
   const [editorPhone, setEditorPhone] = useState("");
   const [editorId, setEditorId] = useState("");
+  const [isCreatingContact, setIsCreatingContact] = useState(false);
+  const editorNameRef = useRef(null);
   const selectedContact = useMemo(
-    () => sortedContacts.find((contact, index) => contactKey(contact, index) === selectedKey) || sortedContacts[0] || null,
+    () => sortedContacts.find((contact, index) => contactKey(contact, index) === selectedKey) || null,
     [selectedKey, sortedContacts]
   );
-  const selectedPhones = contactPhoneOptions(selectedContact);
+  const selectedPhones = isCreatingContact ? [] : contactPhoneOptions(selectedContact);
   const selectedPhone = selectedPhones[0] || "";
   const canSave = editorName.trim() && editorPhone.trim();
 
   useEffect(() => {
     if (!sortedContacts.length) {
-      setSelectedKey("");
+      if (!isCreatingContact) setSelectedKey("");
       return;
     }
-    if (!sortedContacts.some((contact, index) => contactKey(contact, index) === selectedKey)) {
+    if (isCreatingContact) return;
+    if (!selectedKey || !sortedContacts.some((contact, index) => contactKey(contact, index) === selectedKey)) {
       setSelectedKey(contactKey(sortedContacts[0], 0));
     }
-  }, [selectedKey, sortedContacts]);
+  }, [isCreatingContact, selectedKey, sortedContacts]);
 
   useEffect(() => {
     if (!selectedContact) return;
-    setEditorId(contactKey(selectedContact, 0));
+    setIsCreatingContact(false);
+    setEditorId(selectedKey);
     setEditorName(contactDisplayName(selectedContact));
     setEditorPhone(contactPhoneOptions(selectedContact)[0] || "");
-  }, [selectedContact]);
+  }, [selectedContact, selectedKey]);
+
+  useEffect(() => {
+    if (!contactDraft?.phone) return;
+    const normalized = normalizePhoneKey(contactDraft.phone);
+    const matchIndex = sortedContacts.findIndex((contact) =>
+      contactPhoneOptions(contact).some((phone) => normalizePhoneKey(phone) === normalized)
+    );
+    if (contactDraft.mode === "edit" && matchIndex >= 0) {
+      const match = sortedContacts[matchIndex];
+      setIsCreatingContact(false);
+      setSelectedKey(contactKey(match, matchIndex));
+      setEditorId(contactKey(match, matchIndex));
+      setEditorName(contactDisplayName(match));
+      setEditorPhone(contactPhoneOptions(match).find((phone) => normalizePhoneKey(phone) === normalized) || contactDraft.phone);
+      onNotice?.("Contact editor ready.");
+    } else {
+      setIsCreatingContact(true);
+      setSelectedKey("");
+      setEditorId("");
+      setEditorName("");
+      setEditorPhone(contactDraft.phone);
+      onNotice?.("New contact ready.");
+    }
+    onContactDraftConsumed?.();
+    window.requestAnimationFrame(() => editorNameRef.current?.focus());
+  }, [contactDraft, onContactDraftConsumed, onNotice, sortedContacts]);
 
   const startNewContact = useCallback(() => {
+    setIsCreatingContact(true);
     setSelectedKey("");
     setEditorId("");
     setEditorName("");
     setEditorPhone("");
-  }, []);
+    onNotice?.("New contact ready.");
+    window.requestAnimationFrame(() => editorNameRef.current?.focus());
+  }, [onNotice]);
 
   const saveContact = useCallback(() => {
     if (!canSave) return;
@@ -2007,7 +2164,7 @@ function ContactsSlice({ contacts, onCommand, onNativeHandoff }) {
 
   const deleteContact = useCallback(() => {
     const phone = editorPhone.trim() || selectedPhone;
-    if (!editorId && !phone) return;
+    if (!editorId) return;
     onCommand(`/delete-contact?id=${encodeURIComponent(editorId)}&phone=${encodeURIComponent(phone)}`, "delete contact");
   }, [editorId, editorPhone, onCommand, selectedPhone]);
 
@@ -2017,8 +2174,7 @@ function ContactsSlice({ contacts, onCommand, onNativeHandoff }) {
         <SourceTag>MainWindow.xaml:3368</SourceTag>
         <h2>Contacts</h2>
         <div className="dp-settings-actions">
-          <ShellButton className="dp-tonal" iconName="open_in_new" nativeSource="MainWindow.xaml:3766" onClick={() => onNativeHandoff("New Contact", "MainWindow.xaml:3766")}>Open Native</ShellButton>
-          <ShellButton className="dp-primary" iconName="person_add" nativeSource="MainWindow.xaml:3948" onClick={startNewContact}>New</ShellButton>
+          <ShellButton className="dp-primary" iconName="person_add" nativeSource="MainWindow.xaml:3766" onClick={startNewContact}>New Contact</ShellButton>
         </div>
       </div>
       <div className="dp-contacts-grid">
@@ -2032,7 +2188,10 @@ function ContactsSlice({ contacts, onCommand, onNativeHandoff }) {
                 type="button"
                 className={selectedContact === contact ? "is-selected" : ""}
                 data-native-source="MainWindow.xaml:3784"
-                onClick={() => setSelectedKey(key)}
+                onClick={() => {
+                  setIsCreatingContact(false);
+                  setSelectedKey(key);
+                }}
               >
                 <strong>{contactDisplayName(contact)}</strong>
                 <span>{phones[0] || "No phone number"}</span>
@@ -2041,16 +2200,16 @@ function ContactsSlice({ contacts, onCommand, onNativeHandoff }) {
           })}
         </div>
         <section className="dp-contact-detail" data-native-source="MainWindow.xaml:3840">
-          {selectedContact || editorId === "" ? (
+          {selectedContact || isCreatingContact ? (
             <>
               <h3>{selectedContact ? contactDisplayName(selectedContact) : "New contact"}</h3>
               <div className="dp-contact-phone-list">
-                {selectedPhones.length ? selectedPhones.map((phone) => <span key={phone}>{phone}</span>) : <span>No phone number</span>}
+                {selectedPhones.length ? selectedPhones.map((phone) => <span key={phone}>{phone}</span>) : editorPhone.trim() ? <span>{editorPhone.trim()}</span> : <span>No phone number</span>}
               </div>
               <div className="dp-contact-editor" data-native-source="MainWindow.xaml:3933">
                 <label>
                   <span>Name</span>
-                  <input value={editorName} onChange={(event) => setEditorName(event.target.value)} data-automation-id="ContactEditorName" />
+                  <input ref={editorNameRef} value={editorName} onChange={(event) => setEditorName(event.target.value)} data-automation-id="ContactEditorName" />
                 </label>
                 <label>
                   <span>Phone</span>
@@ -2058,10 +2217,10 @@ function ContactsSlice({ contacts, onCommand, onNativeHandoff }) {
                 </label>
               </div>
               <div className="dp-settings-actions dp-contact-actions">
-                <ShellButton className="dp-tonal" iconName="sms" nativeSource="MainWindow.xaml:3888" onClick={() => onNativeHandoff("Message this number", "MainWindow.xaml:3888", selectedPhone)} disabled={!selectedPhone}>Text</ShellButton>
+                <ShellButton className="dp-tonal" iconName="sms" nativeSource="MainWindow.xaml:3888" onClick={() => onOpenNewMessage(selectedPhone)} disabled={!selectedPhone}>Text</ShellButton>
                 <ShellButton className="dp-tonal" iconName="call" nativeSource="MainWindow.xaml:3895" onClick={() => onCommand(`/dial?n=${encodeURIComponent(selectedPhone)}`, "call contact")} disabled={!selectedPhone}>Call</ShellButton>
-                <ShellButton className="dp-tonal" iconName="edit" nativeSource="MainWindow.xaml:3919" onClick={() => onNativeHandoff("Edit contact", "MainWindow.xaml:3919", selectedPhone)}>Edit Details</ShellButton>
-                <ShellButton className="dp-tonal" iconName="delete" nativeSource="MainWindow.xaml:3953" onClick={deleteContact} disabled={!editorId && !editorPhone.trim()}>Delete</ShellButton>
+                <ShellButton className="dp-tonal" iconName="edit" nativeSource="MainWindow.xaml:3919" onClick={() => { editorNameRef.current?.focus(); onNotice?.("Contact editor ready."); }}>Edit Details</ShellButton>
+                <ShellButton className="dp-tonal" iconName="delete" nativeSource="MainWindow.xaml:3953" onClick={deleteContact} disabled={!editorId}>Delete</ShellButton>
                 <ShellButton className="dp-primary" iconName="save" nativeSource="MainWindow.xaml:3959" onClick={saveContact} disabled={!canSave}>Save Contact</ShellButton>
               </div>
             </>
@@ -2074,9 +2233,9 @@ function ContactsSlice({ contacts, onCommand, onNativeHandoff }) {
   );
 }
 
-function NewMessageComposer({ contacts, initialBody = "", onCommand, onCancel, onNotice }) {
+function NewMessageComposer({ contacts, initialTo = "", initialBody = "", onCommand, onCancel, onNotice }) {
   const [query, setQuery] = useState("");
-  const [selectedPhone, setSelectedPhone] = useState("");
+  const [selectedPhone, setSelectedPhone] = useState(initialTo);
   const [body, setBody] = useState(initialBody);
   const [attachments, setAttachments] = useState([]);
   const attachmentInputRef = useRef(null);
@@ -2091,6 +2250,14 @@ function NewMessageComposer({ contacts, initialBody = "", onCommand, onCancel, o
       }))
     )).filter((option) => !search || option.searchable.includes(search)).slice(0, 12);
   }, [contacts, query]);
+
+  useEffect(() => {
+    setSelectedPhone(initialTo || "");
+  }, [initialTo]);
+
+  useEffect(() => {
+    setBody(initialBody || "");
+  }, [initialBody]);
 
   const send = useCallback(async () => {
     const sent = await sendComposeMessage({
@@ -2206,15 +2373,18 @@ function SimpleTabContent({
   setCallHistoryWidth,
   draft,
   setDraft,
+  newMessageTo,
+  contactDraft,
   host,
   hostInput,
   setHostInput,
   onSaveHost,
   onRefresh,
-  onShowNative,
   onCommand,
-  onNativeHandoff,
   onOpenNewMessage,
+  onOpenFullCalls,
+  onOpenContactEditor,
+  onContactDraftConsumed,
   onCancelNewMessage,
   onNotice,
 }) {
@@ -2243,8 +2413,9 @@ function SimpleTabContent({
         draft={draft}
         setDraft={setDraft}
         onCommand={onCommand}
-        onNativeHandoff={onNativeHandoff}
         onOpenNewMessage={onOpenNewMessage}
+        onOpenFullCalls={onOpenFullCalls}
+        onOpenContactEditor={onOpenContactEditor}
         onNotice={onNotice}
       />
     );
@@ -2253,6 +2424,7 @@ function SimpleTabContent({
     return (
       <NewMessageComposer
         contacts={contacts}
+        initialTo={newMessageTo}
         initialBody={draft}
         onCommand={onCommand}
         onCancel={onCancelNewMessage}
@@ -2264,8 +2436,11 @@ function SimpleTabContent({
     return (
       <ContactsSlice
         contacts={contacts}
+        contactDraft={contactDraft}
+        onContactDraftConsumed={onContactDraftConsumed}
         onCommand={onCommand}
-        onNativeHandoff={onNativeHandoff}
+        onOpenNewMessage={onOpenNewMessage}
+        onNotice={onNotice}
       />
     );
   }
@@ -2283,17 +2458,36 @@ function SimpleTabContent({
           onCall={(number) => {
             const normalized = normalizePhoneKey(number);
             if (!normalized) {
-              onNativeHandoff("Call", "MainWindow.xaml:3518", number);
+              onNotice("Call needs a phone number.");
               return;
             }
             onCommand(`/dial?n=${encodeURIComponent(normalized)}`, "call");
           }}
-          onText={(number) => onNativeHandoff("Message this number", "MainWindow.xaml:3513", normalizePhoneKey(number) || number)}
+          onText={(number) => onOpenNewMessage(normalizePhoneKey(number) || number)}
           onDial={(number) => {
             const cleaned = String(number || "").replace(/[^\d+*#]/g, "");
             if (cleaned) onCommand(`/dial?n=${encodeURIComponent(cleaned)}`, "call");
           }}
-          onNativeHandoff={onNativeHandoff}
+          onOpenFullCalls={() => {}}
+          onDeleteAllCalls={() => {
+            if (!window.confirm("Delete all call history from DeskPhone Web?")) return;
+            onCommand("/delete-all-call-history", "delete all call history");
+          }}
+          onToggleCallBlock={(call) => {
+            const normalized = normalizePhoneKey(call?.number);
+            if (!normalized) {
+              onNotice("Block needs a phone number.");
+              return;
+            }
+            onCommand(`/toggle-call-block?phone=${encodeURIComponent(normalized)}`, "toggle call block");
+          }}
+          onDeleteCall={(call) => {
+            if (!call?.id) {
+              onNotice("Delete needs a call id from DeskPhone.");
+              return;
+            }
+            onCommand(`/delete-call-entry?id=${encodeURIComponent(call.id)}`, "delete call entry");
+          }}
         />
       </div>
     );
@@ -2343,7 +2537,6 @@ function SimpleTabContent({
             <div className="dp-settings-actions">
               <ShellButton className="dp-primary" iconName="save" onClick={onSaveHost}>Save</ShellButton>
               <ShellButton className="dp-tonal" iconName="refresh" onClick={onRefresh}>Test</ShellButton>
-              <ShellButton className="dp-tonal" iconName="open_in_new" onClick={onShowNative}>Show native app</ShellButton>
             </div>
             <div className="dp-settings-actions dp-settings-tools">
               <ShellButton className="dp-tonal" iconName="bluetooth" nativeSource="MainWindow.xaml:4140" onClick={() => onCommand("/open-bluetooth-settings", "open Bluetooth settings")}>Bluetooth Settings</ShellButton>
@@ -2445,8 +2638,7 @@ function SimpleTabContent({
   return (
     <div className="dp-tab-placeholder" data-native-source="MainWindow.xaml:3920">
       <SourceTag>MainWindow.xaml:3920</SourceTag>
-      <h2>Developer Tools shell</h2>
-      <p>The native shell contains build, log, UI-auditor, and theme-sync actions here. The safest host-backed controls are exposed below first.</p>
+      <h2>Developer Tools</h2>
       <div className="dp-settings-actions dp-settings-tools">
         <ShellButton className="dp-tonal" iconName="article" nativeSource="MainWindow.xaml:620" onClick={() => onCommand("/open-live-log", "open live log")}>Live Log</ShellButton>
         <ShellButton className="dp-tonal" iconName="ink_eraser" nativeSource="LogWindow.xaml:45" onClick={() => onCommand("/clear-log", "clear log")}>Clear Log</ShellButton>
@@ -3453,8 +3645,44 @@ const css = `
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 4px;
+}
+.dp-thread-actions-menu {
+  position: relative;
+}
+.dp-thread-actions-menu summary {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: var(--dp-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  list-style: none;
+  cursor: pointer;
+}
+.dp-thread-actions-menu summary::-webkit-details-marker {
+  display: none;
+}
+.dp-thread-actions-menu[open] summary,
+.dp-thread-actions-menu summary:hover {
+  background: var(--dp-blue-light);
+  color: var(--dp-blue);
+}
+.dp-thread-actions-menu .dp-floating-menu {
+  top: 40px;
+  right: 0;
+  min-width: 230px;
+}
+.dp-thread-actions-menu .dp-floating-menu button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dp-thread-actions-menu .dp-floating-menu button span:last-child {
+  font-size: 13px;
 }
 .dp-show-threads-button {
   height: 34px;
@@ -3535,10 +3763,12 @@ const css = `
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 12px 24px 84px;
+  scroll-padding-block: 16px 112px;
+  padding: 12px 24px 112px;
 }
 .dp-message-item {
   display: grid;
+  scroll-margin-block: 16px 104px;
 }
 .dp-message-item.is-outgoing {
   justify-items: end;
@@ -3705,19 +3935,27 @@ const css = `
   cursor: pointer;
 }
 .dp-bubble-actions {
-  margin-top: 8px;
-  border-radius: 10px;
-  padding: 6px 8px;
-  background: var(--dp-bg-input);
+  margin-top: 4px;
   color: var(--dp-blue);
-  display: grid;
-  grid-template-columns: repeat(5, 28px);
-  justify-content: space-between;
-  gap: 4px;
+  display: flex;
+  justify-content: flex-start;
+  gap: 6px;
 }
 .dp-message-bubble.is-outgoing .dp-bubble-actions {
-  background: rgba(255, 255, 255, 0.14);
   color: white;
+}
+.dp-bubble-actions button {
+  width: 24px;
+  height: 24px;
+  opacity: 0.82;
+}
+.dp-bubble-actions button:hover {
+  background: transparent;
+  opacity: 1;
+  transform: translateY(-1px);
+}
+.dp-message-bubble.is-outgoing .dp-bubble-actions button {
+  color: inherit;
 }
 .dp-scroll-bottom {
   position: absolute;
@@ -4621,7 +4859,6 @@ const css = `
 export function DeskPhoneWebPanel({
   onOnlineChange,
   onClose,
-  onLaunchNative,
   embedded = false,
 }) {
   const [hostInput, setHostInput] = useState(() => readSavedHost());
@@ -4655,6 +4892,8 @@ export function DeskPhoneWebPanel({
   const [callHistoryWidth, setCallHistoryWidth] = useState(() => readSavedNumber(CALL_HISTORY_WIDTH_KEY, 360, 260, 480));
   const [callDialerSignal, setCallDialerSignal] = useState(0);
   const [draft, setDraft] = useState("");
+  const [newMessageTo, setNewMessageTo] = useState("");
+  const [contactDraft, setContactDraft] = useState(null);
 
   const showNotice = useCallback((message) => {
     setNotice(message);
@@ -4713,42 +4952,10 @@ export function DeskPhoneWebPanel({
       setError("");
     } catch (err) {
       setError(err?.message || "DeskPhone did not accept the command.");
-      if (path === "/show" && onLaunchNative) onLaunchNative();
     } finally {
       setBusy("");
     }
-  }, [host, refresh, onLaunchNative]);
-
-  const showNativeApp = useCallback(() => {
-    if (onLaunchNative) {
-      onLaunchNative();
-      return;
-    }
-    runCommand("/show", "show");
-  }, [onLaunchNative, runCommand]);
-
-  const nativeHandoff = useCallback(async (label, source, value = "") => {
-    setBusy(source ? `${label} (${source})` : label);
-    const target = nativeHandoffTarget(label, source);
-    try {
-      try {
-        await postJson(host, handoffPath(target, value));
-      } catch (handoffError) {
-        await postJson(host, "/show");
-      }
-      setError("");
-      showNotice(`${label} is opening in desktop DeskPhone for now.`);
-    } catch (err) {
-      if (onLaunchNative) {
-        onLaunchNative();
-        showNotice(`${label} is opening in desktop DeskPhone for now.`);
-      } else {
-        setError(`${label} needs desktop DeskPhone until the web action is fully built. ${err?.message || ""}`.trim());
-      }
-    } finally {
-      setBusy("");
-    }
-  }, [host, onLaunchNative, showNotice]);
+  }, [host, refresh]);
 
   const toggleRail = useCallback(() => {
     setRailCollapsed((current) => {
@@ -4796,8 +5003,18 @@ export function DeskPhoneWebPanel({
     setHost(normalized);
   }, [hostInput]);
 
-  const openNewMessage = useCallback(() => {
+  const openNewMessage = useCallback((to = "") => {
+    setNewMessageTo(String(to || ""));
     setActiveTab("new-message");
+  }, []);
+
+  const openFullCalls = useCallback(() => {
+    setActiveTab("calls");
+  }, []);
+
+  const openContactEditor = useCallback((phone = "", mode = "new") => {
+    setContactDraft({ phone: String(phone || ""), mode });
+    setActiveTab("contacts");
   }, []);
 
   const handleNavSelect = useCallback((id) => {
@@ -4807,7 +5024,7 @@ export function DeskPhoneWebPanel({
       return;
     }
     if (id === "live-log") {
-      runCommand("/show", "show log");
+      runCommand("/open-live-log", "open live log");
       return;
     }
     if (id === "contacts") {
@@ -4816,11 +5033,10 @@ export function DeskPhoneWebPanel({
     }
     if (id === "developer") {
       setActiveTab("developer");
-      nativeHandoff("Developer Tools", "MainWindow.xaml:603");
       return;
     }
     setActiveTab(id);
-  }, [nativeHandoff, runCommand]);
+  }, [runCommand]);
 
   const rootClasses = [
     "dp-web-root",
@@ -5011,15 +5227,18 @@ export function DeskPhoneWebPanel({
               setCallHistoryWidth={setCallHistoryWidth}
               draft={draft}
               setDraft={setDraft}
+              newMessageTo={newMessageTo}
+              contactDraft={contactDraft}
               host={host}
               hostInput={hostInput}
               setHostInput={setHostInput}
               onSaveHost={handleSaveHost}
               onRefresh={refresh}
-              onShowNative={showNativeApp}
               onCommand={runCommand}
-              onNativeHandoff={nativeHandoff}
               onOpenNewMessage={openNewMessage}
+              onOpenFullCalls={openFullCalls}
+              onOpenContactEditor={openContactEditor}
+              onContactDraftConsumed={() => setContactDraft(null)}
               onCancelNewMessage={() => setActiveTab("messages")}
               onNotice={showNotice}
             />

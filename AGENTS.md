@@ -4,7 +4,7 @@ Read this file before product changes in this repo.
 
 ## Operating Rule
 
-- Start every session with `codex-briefing/README.md`, then check live git status and only open deeper files needed for the specific task.
+- Start every session with `context-pack/README.md`, then check live git status and only open deeper files needed for the specific task.
 - This repo is the active OneTask / Switchboard / NerveCenter deploy root.
 - Standing user approval for DeskPhone Web clone/parity work: when a slice is verified and ready, ship it through build, commit, push, and Netlify deploy instead of stopping at a local checkpoint.
 - Do not deploy or push without explicit user approval unless the user has clearly asked for deploy/push work in the current task.
@@ -14,7 +14,7 @@ Read this file before product changes in this repo.
 ## Source Of Truth
 
 - Live app handoff: `HANDOFF.md`
-- Fast session pack: `codex-briefing/`
+- Fast session pack: `context-pack/`
 - Main app source: `src/`
 - Netlify functions: `netlify/functions/`
 - Build/deploy config: `package.json`, `netlify.toml`, `vite.config.js`
