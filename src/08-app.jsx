@@ -769,7 +769,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, aiOpts = null }) {
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [editingTaskId, setEditingTaskId] = useState(null);
@@ -782,6 +782,20 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [hoverEmail, setHoverEmail] = useState(null);
   const hoverTimerRef = useRef(null);
   const [reconnectTimedOut, setReconnectTimedOut] = useState(false);
+  const [chiefBrief, setChiefBrief] = useState(null);
+  const [chiefSweepLoading, setChiefSweepLoading] = useState(false);
+  const [chiefSweepError, setChiefSweepError] = useState("");
+  const chiefAutoRanRef = useRef(false);
+  const chiefLogRef = useRef([]);
+  const CHIEF_LOG_KEY = "ot_chief_of_staff_log";
+  if (chiefLogRef.current.length === 0) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CHIEF_LOG_KEY) || "[]");
+      chiefLogRef.current = Array.isArray(saved) ? saved : [];
+    } catch {
+      chiefLogRef.current = [];
+    }
+  }
   // Give silent reconnect 6 seconds; if still not connected, surface the button
   useEffect(() => {
     if (!googleWasConnected || googleToken) { setReconnectTimedOut(false); return; }
@@ -800,7 +814,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     try {
       const today = new Date().toISOString().slice(0, 10);
       const prompt = `Parse this natural language event description into a Google Calendar event JSON object. Today is ${today}. Return ONLY valid JSON with fields: summary (string), start (object with dateTime in RFC3339 or date in YYYY-MM-DD for all-day), end (same format), reminders (object with useDefault false and overrides array of {method,minutes}). Description: "${addEventText}"`;
-      const raw = await callAI(prompt, { maxTokens: 500 });
+      const raw = await callAI(prompt, aiOpts, { maxOutputTokens: 500 });
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('Could not parse event — try rephrasing.');
       const eventBody = JSON.parse(jsonMatch[0]);
@@ -859,6 +873,104 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     { id: "setup",   title: "Setup",   icon: "settings",     actions: [...(bySection.record?.actions || []).filter(a => !["record-shaila","record-call"].includes(a.id)), ...collectActions("system")] },
   ].filter(c => c.actions.length);
   const activeActionCategory = actionCategories.find(c => c.id === actionCategoryId) || actionCategories[0];
+  const chiefHasData = primaryTasks.length > 0 || visibleShailos.length > 0 || (Array.isArray(calendarEvents) && calendarEvents.length > 0) || (Array.isArray(gmailMessages) && gmailMessages.length > 0);
+
+  const runChiefSweep = useCallback(async () => {
+    if (!aiOpts || chiefSweepLoading) return;
+    setChiefSweepLoading(true);
+    setChiefSweepError("");
+    try {
+      const taskLines = primaryTasks.slice(0, 8).map((t, i) => `${i + 1}. [${gP(priorities, t.priority)?.label || t.priority}] ${t.text}`).join("\n") || "(none)";
+      const shailaLines = visibleShailos.slice(0, 6).map((s, i) => `${i + 1}. ${s.synopsis || s.question || s.content || s.text || "Open shaila"}`).join("\n") || "(none)";
+      const calendarLines = Array.isArray(calendarEvents) && calendarEvents.length
+        ? calendarEvents.slice(0, 6).map((evt, i) => {
+            const start = evt.start?.dateTime || evt.start?.date || "";
+            const when = start ? new Date(start).toLocaleString([], { month: "short", day: "numeric", hour: evt.start?.dateTime ? "numeric" : undefined, minute: evt.start?.dateTime ? "2-digit" : undefined }) : "No time";
+            return `${i + 1}. ${evt.summary || "(no title)"} — ${when}`;
+          }).join("\n")
+        : "(none)";
+      const gmailLines = Array.isArray(gmailMessages) && gmailMessages.length
+        ? gmailMessages.slice(0, 6).map((msg, i) => {
+            const from = fmtFrom(gmailHeader(msg, "From"));
+            const subject = gmailHeader(msg, "Subject") || "(no subject)";
+            const snippet = decodeSnippet(msg.snippet || "").slice(0, 120);
+            return `${i + 1}. ${from} — ${subject}${snippet ? ` — ${snippet}` : ""}`;
+          }).join("\n")
+        : "(none)";
+      const priorNotes = chiefLogRef.current.slice(0, 6).map((entry, i) => `${i + 1}. Immediate: ${entry.rightNow} | Work note: ${entry.workStyleNote}`).join("\n") || "(none yet)";
+      const now = new Date();
+      const prompt = `You are YCD's sharp, practical chief of staff. Look across his current dashboard and decide the single best next move right now.
+
+Date/time: ${now.toLocaleString()}
+
+CURRENT TASKS:
+${taskLines}
+
+OPEN SHAILOS:
+${shailaLines}
+
+CALENDAR:
+${calendarLines}
+
+EMAIL:
+${gmailLines}
+
+PRIOR WORK-STYLE NOTES ABOUT YCD:
+${priorNotes}
+
+Rules:
+- Be decisive, brief, and concrete.
+- Prefer the smallest real next move that unlocks momentum.
+- If an existing task should clearly come first, say so plainly in rightNow.
+- taskSuggestions are ONLY for new tasks worth creating from email, calendar, or shaila follow-up. Do not duplicate tasks already in the queue.
+- Keep workStyleNote to one sentence about how YCD is most likely to work best right now.
+
+Return ONLY valid JSON:
+{
+  "rightNow":"short imperative sentence",
+  "reasoning":["reason 1","reason 2","reason 3"],
+  "taskSuggestions":[
+    {"text":"task to create","priority":"now|today|eventually","source":"email|calendar|shaila|task","reason":"why this is worth creating"}
+  ],
+  "workStyleNote":"one sentence"
+}`;
+      const raw = await callAI(prompt, aiOpts, { temperature: 0.2, maxOutputTokens: 1400 });
+      const match = raw?.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error("Chief of staff sweep came back empty.");
+      const parsed = JSON.parse(match[0]);
+      const validPriIds = new Set(priorities.filter(p => !p.deleted).map(p => p.id));
+      const safeTaskSuggestions = Array.isArray(parsed.taskSuggestions) ? parsed.taskSuggestions
+        .filter(item => item?.text?.trim())
+        .slice(0, 3)
+        .map(item => ({
+          text: item.text.trim(),
+          priority: validPriIds.has(item.priority) ? item.priority : "today",
+          source: ["email", "calendar", "shaila", "task"].includes(item.source) ? item.source : "task",
+          reason: (item.reason || "").trim(),
+        })) : [];
+      const safeBrief = {
+        rightNow: (parsed.rightNow || "Pick one clear next move.").trim(),
+        reasoning: Array.isArray(parsed.reasoning) ? parsed.reasoning.filter(Boolean).map(x => String(x).trim()).slice(0, 3) : [],
+        taskSuggestions: safeTaskSuggestions,
+        workStyleNote: (parsed.workStyleNote || "").trim(),
+        createdAt: Date.now(),
+      };
+      setChiefBrief(safeBrief);
+      chiefLogRef.current = [{ rightNow: safeBrief.rightNow, workStyleNote: safeBrief.workStyleNote, createdAt: safeBrief.createdAt }, ...chiefLogRef.current].slice(0, 12);
+      try { localStorage.setItem(CHIEF_LOG_KEY, JSON.stringify(chiefLogRef.current)); } catch {}
+    } catch (err) {
+      setChiefSweepError(err?.message || "Chief of staff sweep failed.");
+    } finally {
+      setChiefSweepLoading(false);
+    }
+  }, [aiOpts, chiefSweepLoading, primaryTasks, visibleShailos, calendarEvents, gmailMessages, priorities]);
+
+  useEffect(() => {
+    if (!chiefAutoRanRef.current && aiOpts && chiefHasData) {
+      chiefAutoRanRef.current = true;
+      runChiefSweep();
+    }
+  }, [aiOpts, chiefHasData, runChiefSweep]);
 
   const addDraft = () => {
     const text = taskDraft.trim();
@@ -871,6 +983,120 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   return (
     <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: "hidden", borderLeft: `1px solid ${C.divider}` }}>
       <div style={{ height: "100%", maxWidth: 1520, margin: "0 auto", padding: "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 20 }}>
+
+        <section style={{ ...ncPanel, flex: "0 0 auto" }}>
+          <div style={{ padding: "22px 24px", display: "flex", flexWrap: "wrap", gap: 22, alignItems: "stretch" }}>
+            <div style={{ flex: "1 1 560px", minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ ...ncSectionIcon(C.accent), background: C.hover }}>{suiteIcon("psychology_alt", 20)}</span>
+                  <div>
+                    <div style={{ ...ncTitle, fontSize: 20 }}>Chief of Staff</div>
+                    <div style={{ fontSize: 13, color: C.muted, fontFamily: "system-ui", marginTop: 2 }}>One clear next move from your live dashboard</div>
+                  </div>
+                </div>
+                <button onClick={runChiefSweep} disabled={!aiOpts || chiefSweepLoading}
+                  style={{ ...cleanToolbarButton(false, C), opacity: (!aiOpts || chiefSweepLoading) ? 0.5 : 1 }}>
+                  {chiefSweepLoading ? suiteIcon("progress_activity", 15) : suiteIcon("auto_awesome", 15)}
+                  {chiefSweepLoading ? "Sweeping..." : "Refresh sweep"}
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+                {[
+                  { label: "Tasks", count: primaryTasks.length },
+                  { label: "Shailos", count: visibleShailos.length },
+                  { label: "Calendar", count: Array.isArray(calendarEvents) ? calendarEvents.length : 0 },
+                  { label: "Gmail", count: Array.isArray(gmailMessages) ? gmailMessages.length : 0 },
+                ].map(source => (
+                  <span key={source.label} style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", border: `1px solid ${C.divider}`, borderRadius: 999, padding: "5px 10px", background: C.bgSoft }}>
+                    {source.label}: {source.count}
+                  </span>
+                ))}
+              </div>
+
+              {chiefSweepError && (
+                <div style={{ fontSize: 13, color: C.danger, background: C.bgSoft, borderRadius: 8, padding: "10px 12px", marginBottom: 12 }}>
+                  {chiefSweepError}
+                </div>
+              )}
+
+              {!chiefBrief && !chiefSweepLoading && (
+                <div style={{ border: `1px dashed ${C.divider}`, borderRadius: 12, padding: "18px 20px", background: C.bgSoft }}>
+                  <div style={{ fontSize: 18, fontWeight: 500, color: C.text, lineHeight: 1.45, marginBottom: 6 }}>Ready to sweep your tasks, shailos, calendar, and email.</div>
+                  <div style={{ fontSize: 13, color: C.muted, fontFamily: "system-ui", lineHeight: 1.55 }}>This will pick the best next move and suggest any missing follow-up tasks worth creating.</div>
+                </div>
+              )}
+
+              {chiefSweepLoading && (
+                <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "18px 20px", background: C.bgSoft }}>
+                  <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Sweeping now</div>
+                  <div style={{ fontSize: 18, fontWeight: 500, color: C.text, lineHeight: 1.45 }}>Reading the dashboard and choosing the smartest next move.</div>
+                </div>
+              )}
+
+              {chiefBrief && !chiefSweepLoading && (
+                <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "18px 20px", background: C.bgSoft }}>
+                  <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Do this now</div>
+                  <div style={{ fontSize: 24, fontWeight: 500, color: C.text, lineHeight: 1.35, marginBottom: 14 }}>{chiefBrief.rightNow}</div>
+                  {chiefBrief.reasoning?.length > 0 && (
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {chiefBrief.reasoning.map((line, idx) => (
+                        <div key={`${line}-${idx}`} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                          <span style={{ width: 6, height: 6, marginTop: 8, borderRadius: 99, background: C.accent, flexShrink: 0 }} />
+                          <span style={{ fontSize: 14, color: C.muted, lineHeight: 1.55, fontFamily: "system-ui" }}>{line}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div style={{ flex: "0 1 360px", minWidth: 280, display: "grid", gap: 12 }}>
+              <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "16px 18px", background: C.bg }}>
+                <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Learning YCD</div>
+                <div style={{ fontSize: 15, color: C.text, lineHeight: 1.55, fontFamily: "system-ui" }}>
+                  {chiefBrief?.workStyleNote || "As this box runs more sweeps, it will keep building a better sense of how YCD works best."}
+                </div>
+              </div>
+
+              <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "16px 18px", background: C.bg }}>
+                <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Worth turning into tasks</div>
+                {chiefBrief?.taskSuggestions?.length ? (
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {chiefBrief.taskSuggestions.map((item, idx) => (
+                      <div key={`${item.text}-${idx}`} style={{ border: `1px solid ${C.divider}`, borderRadius: 10, padding: "12px 12px 10px", background: C.bgSoft }}>
+                        <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.45, marginBottom: 6 }}>{item.text}</div>
+                        <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", lineHeight: 1.45, marginBottom: 10 }}>
+                          {item.reason || `Pulled from ${item.source}.`}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                          <span style={{ fontSize: 11, color: C.muted, fontFamily: "system-ui", border: `1px solid ${C.divider}`, borderRadius: 999, padding: "4px 8px" }}>
+                            {item.source} · {gP(priorities, item.priority)?.label || item.priority}
+                          </span>
+                          <button
+                            onClick={() => {
+                              onAddTask?.(item.text, item.priority);
+                              setChiefBrief(prev => prev ? { ...prev, taskSuggestions: prev.taskSuggestions.filter((_, suggestionIdx) => suggestionIdx !== idx) } : prev);
+                            }}
+                            style={{ ...cleanToolbarButton(false, C, { minHeight: 34, padding: "0 12px", color: C.accent }) }}
+                          >
+                            {suiteIcon("add_task", 14)} Add task
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: C.muted, fontFamily: "system-ui", lineHeight: 1.55 }}>
+                    No extra tasks to create right now. The box will place follow-up ideas here when email, calendar, or shaila work deserves its own task.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* Three-panel grid — fills all remaining height */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 20, flex: 1, minHeight: 0, alignItems: "stretch" }}>
@@ -4385,6 +4611,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onDisconnectGoogle={disconnectGoogle}
           googleWasConnected={googleWasConnected}
           onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
+          aiOpts={aiOpts}
         />
       )}
 
