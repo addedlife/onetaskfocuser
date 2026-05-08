@@ -980,7 +980,7 @@ function ConnectionRail({
             {icon("sync", 20)}
           </button>
         </div>
-        <div className="dp-rail-subtitle">{isBridge ? bridgeConnectSummary(status, online) : quickConnectSummary(status, online)}</div>
+        {isBridge ? <div className="dp-rail-subtitle">{bridgeConnectSummary(status, online)}</div> : null}
         {bridgeRows.length ? (
           <div className="dp-bridge-indicators is-compact">
             {bridgeRows.map((row) => (
@@ -2330,7 +2330,6 @@ function ContactsSlice({ contacts, contactDraft, onContactDraftConsumed, onComma
   return (
     <div className="dp-contacts-shell" data-native-source="MainWindow.xaml:3368">
       <div className="dp-contacts-header">
-        <SourceTag>MainWindow.xaml:3368</SourceTag>
         <h2>Contacts</h2>
         <div className="dp-settings-actions">
           <ShellButton className="dp-primary" iconName="person_add" nativeSource="MainWindow.xaml:3766" onClick={startNewContact}>New Contact</ShellButton>
@@ -2435,7 +2434,6 @@ function NewMessageComposer({ contacts, initialTo = "", initialBody = "", onComm
   return (
     <div className="dp-new-compose-shell" data-native-source="MainWindow.xaml:2999">
       <div className="dp-new-compose-header">
-        <SourceTag>MainWindow.xaml:2999</SourceTag>
         <h2>New message</h2>
         <ShellButton className="dp-tonal" iconName="close" nativeSource="MainWindow.xaml:3036" onClick={onCancel}>Cancel</ShellButton>
       </div>
@@ -2680,7 +2678,6 @@ function SimpleTabContent({
 
     return (
       <div className="dp-settings-shell" data-native-source="MainWindow.xaml:3847">
-        <SourceTag>MainWindow.xaml:3847</SourceTag>
         <div className="dp-settings-heading">
           <h2>{settingSections.find(([id]) => id === settingsSection)?.[1] || "Settings"}</h2>
           <div className="dp-settings-sections" data-native-source="MainWindow.xaml:3995">
@@ -2846,7 +2843,6 @@ function SimpleTabContent({
   }
   return (
     <div className="dp-tab-placeholder" data-native-source="MainWindow.xaml:3920">
-      <SourceTag>MainWindow.xaml:3920</SourceTag>
       <h2>Developer Tools</h2>
       <div className="dp-settings-actions dp-settings-tools">
         <ShellButton className="dp-tonal" iconName="article" nativeSource="MainWindow.xaml:620" onClick={() => onCommand("/open-live-log", "open live log")}>Live Log</ShellButton>
