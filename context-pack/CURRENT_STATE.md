@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-05-07
+Last updated: 2026-05-09
 
 This is the active OneTask / Switchboard / NerveCenter repo and Netlify deploy root.
 
@@ -36,10 +36,14 @@ Current product truth:
 - The GV clean-design rulebook is at `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3\docs\GV_CLEAN_DESIGN_RULES.md`, not under `sandbox\docs`. Use that control-folder doc as the design source while editing sandbox code.
 - WebPhone screen layout is now cleaner: removed redundant "Make Call" and "Calls" navigation buttons (left rail now shows only Phone/Messages, Contacts, Settings). Call history in the message view now always displays the full call list (not filtered by contact), creating a unified "Messages & Calls" surface. The "Open full call history" button is removed from the call pane header. Dialer remains always accessible in the right pane.
 - WebPhone connection status UI is now professional and free of technical cruft. Removed all SourceTag components that exposed MainWindow.xaml references. Hidden the "Preferred Phone [...]" subtitle in non-bridge mode to reduce clutter. Two clear status lines show: (1) "Phone to phone (via Bluetooth): Connected/Not available" with guidance, and (2) "[Device Name, OS Type] to phone (via Bluetooth): Connected/Can't reach" with actionable messages (device name and OS auto-populate from host API). Device list in Settings shows friendly names instead of raw Bluetooth hex addresses; "Saved phones" renamed to "Paired phones". Verified locally by `npm run build`.
+- A disconnected `src/08-app-split/` lab now exists for the large `src/08-app.jsx` split. The live app still imports `src/08-app.jsx`; the lab exports the same `App` shape through `src/08-app-split/index.jsx` for future temporary-link testing. First extracted modules: `ui-tokens.jsx`, `components/AppSuiteChrome.jsx`, `components/NerveCenterPanel.jsx`, `components/NerveCenterPhoneSurface.jsx`, `components/SuitePanels.jsx`, `components/DeskPhoneMiniDock.jsx`, and `components/ConvCapture.jsx`. The lab bundle compiles with `npx esbuild src/08-app-split/index.jsx --bundle --format=esm --jsx=automatic`, and the normal live-path `npm run build` still passes.
+
+- Call history now displays contact names by matching phone numbers against the contacts list. The `enrichCallWithContactName()` function normalizes call numbers and finds matching contacts, populating display names. Fallback is phone number if no contact match. Applied system-wide to all call history views (message pane right panel, full calls tab, call actions). Verified locally by `npm run build`.
 
 Current repo condition:
 
 - The current local source includes WebPhone screen layout and connection settings UI fixes: removed redundant call buttons, unified call history display in message view, and replaced technical connection labels with plain English. Build passes; button audit cannot run due to deleted nav items (expected). Ready for deployment after visual QA in the browser.
+- The `08-app` split work is isolated in `src/08-app-split/` and has not been linked into the live app. Current reduction: split lab `App.jsx` is about 4,000 lines versus the live `src/08-app.jsx` at about 5,800 lines. Next step is to keep extracting feature modules, then temporarily point `src/00-auth.jsx` to `./08-app-split/index.jsx` for a full Vite/browser test only when the split is complete enough to evaluate.
 - The current local source includes a verified auto-collapse timer repair for both app rails; next push triggers Netlify deployment.
 - The current local DeskPhone Web source includes browser-parity fixes for no-op/native-redirect buttons and is ready for web release now that native DeskPhone `b261` is released and the focused button audit passes with zero `/handoff` calls.
 - The current local DeskPhone Web source includes the first GV-style visual pass. The production build passes, and the focused WebPhone button audit still passes with zero `/handoff` calls. The older broad parity smoke harness timed out during this session and should be treated as a harness follow-up before relying on it for this visual lane.
@@ -51,7 +55,7 @@ Current repo condition:
 
 High-risk areas:
 
-- `src/08-app.jsx` is large and central; touch it narrowly.
+- `src/08-app.jsx` is large and central; touch it narrowly. Prefer continuing inside the disconnected `src/08-app-split/` lab until temporary-link testing is intentionally scheduled.
 - The latest NerveCenter clean-style work is partial by design: it covers the visible NerveCenter panel shell, phone mini-surface, theme selector, and WebPhone theme variable bridge. Next session should visually inspect NerveCenter and WebPhone across at least Google Voice plus one existing color scheme before pushing/deploying.
 - Google connector behavior depends on Netlify environment variables and Google OAuth setup, not just UI code.
 - Firebase writes in local dev hit the real account.
