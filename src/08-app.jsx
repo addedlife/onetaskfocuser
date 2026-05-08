@@ -258,7 +258,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRec
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 
-function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
+function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordConversation, onRecordCall, onMoreHistory, onSummaryChange }) {
   const api = "http://127.0.0.1:8765";
   const [status, setStatus] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -447,17 +447,19 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   const callerDisplay = callerName || (callerNumber ? (lookupName(callerNumber) || callerNumber) : "");
   const vmCount = parseInt(status?.voicemailCount || status?.VoicemailCount || status?.voicemail?.count || 0, 10) || 0;
 
-  const threadMap = new Map();
-  messages.forEach(m => {
-    const who = m.from || m.sender || m.address || m.phoneNumber || m.number || m.to || "Unknown";
-    // directName: name embedded right on the message object by DeskPhone
-    const directName = m.name || m.displayName || m.contactName || m.fromName || m.senderName || m.contact ||
-      m.Name || m.DisplayName || m.ContactName || m.FromName || m.SenderName || m.Contact || "";
-    const resolvedName = directName || lookupName(who) || who;
-    if (!threadMap.has(who)) threadMap.set(who, { ...m, _who: who, _name: resolvedName });
-  });
-  const threads = Array.from(threadMap.values()).slice(0, 10);
-  const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, 10);
+  const threads = useMemo(() => {
+    const threadMap = new Map();
+    messages.forEach(m => {
+      const who = m.from || m.sender || m.address || m.phoneNumber || m.number || m.to || "Unknown";
+      // directName: name embedded right on the message object by DeskPhone
+      const directName = m.name || m.displayName || m.contactName || m.fromName || m.senderName || m.contact ||
+        m.Name || m.DisplayName || m.ContactName || m.FromName || m.SenderName || m.Contact || "";
+      const resolvedName = directName || lookupName(who) || who;
+      if (!threadMap.has(who)) threadMap.set(who, { ...m, _who: who, _name: resolvedName });
+    });
+    return Array.from(threadMap.values()).slice(0, 10);
+  }, [messages, lookupName]);
+  const recentCalls = useMemo(() => (Array.isArray(calls) ? calls : []).slice(0, 10), [calls]);
   const hasMessages = threads.length > 0;
   const hasCalls = recentCalls.length > 0;
   const phoneIconButton = (active = false) => gvIconButton({
@@ -499,6 +501,29 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
     if (typeNum === 1 || dir.includes("incoming") || dir.includes("inbound") || dir.includes("receiv") || dir === "in") return { icon: "call_received", color: T.tSoft };
     return { icon: "call", color: T.tSoft };
   };
+
+  useEffect(() => {
+    const summaryCalls = recentCalls.slice(0, 5).map(c => {
+      const num = c.number || c.phoneNumber || c.from || c.Number || c.PhoneNumber || "";
+      const name = lookupName(num) || c.name || c.displayName || c.Name || c.DisplayName || c.from || num || "Call";
+      const iconMeta = callDirIcon(c);
+      const isMissed = iconMeta.icon === "call_missed";
+      return {
+        name,
+        number: num,
+        isMissed,
+        when: fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime),
+      };
+    });
+    onSummaryChange?.({
+      online: statusOnline,
+      callState,
+      voicemailCount: vmCount,
+      messageThreads: threads.length,
+      missedCount: summaryCalls.filter(c => c.isMissed).length,
+      recentCalls: summaryCalls,
+    });
+  }, [onSummaryChange, recentCalls, lookupName, statusOnline, callState, vmCount, threads.length]);
 
   // Incoming SMS = sms icon; outgoing = outgoing_mail icon
   // Android SMS type codes: 1=inbox/received, 2=sent, 4=outbox/pending, 5=failed, 6=queued
@@ -785,6 +810,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [chiefBrief, setChiefBrief] = useState(null);
   const [chiefSweepLoading, setChiefSweepLoading] = useState(false);
   const [chiefSweepError, setChiefSweepError] = useState("");
+  const [chiefPhoneSummary, setChiefPhoneSummary] = useState({ online: false, recentCalls: [], missedCount: 0, voicemailCount: 0, messageThreads: 0, callState: "" });
   const chiefAutoRanRef = useRef(false);
   const chiefLogRef = useRef([]);
   const CHIEF_LOG_KEY = "ot_chief_of_staff_log";
@@ -873,7 +899,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     { id: "setup",   title: "Setup",   icon: "settings",     actions: [...(bySection.record?.actions || []).filter(a => !["record-shaila","record-call"].includes(a.id)), ...collectActions("system")] },
   ].filter(c => c.actions.length);
   const activeActionCategory = actionCategories.find(c => c.id === actionCategoryId) || actionCategories[0];
-  const chiefHasData = primaryTasks.length > 0 || visibleShailos.length > 0 || (Array.isArray(calendarEvents) && calendarEvents.length > 0) || (Array.isArray(gmailMessages) && gmailMessages.length > 0);
+  const chiefHasData = primaryTasks.length > 0 || visibleShailos.length > 0 || (Array.isArray(calendarEvents) && calendarEvents.length > 0) || (Array.isArray(gmailMessages) && gmailMessages.length > 0) || chiefPhoneSummary.recentCalls.length > 0;
 
   const runChiefSweep = useCallback(async () => {
     if (!aiOpts || chiefSweepLoading) return;
@@ -889,6 +915,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
             return `${i + 1}. ${evt.summary || "(no title)"} — ${when}`;
           }).join("\n")
         : "(none)";
+      const phoneLines = chiefPhoneSummary.recentCalls?.length
+        ? chiefPhoneSummary.recentCalls.map((call, i) => `${i + 1}. ${call.isMissed ? "MISSED" : "Recent"} call — ${call.name}${call.when ? ` — ${call.when}` : ""}`).join("\n")
+        : chiefPhoneSummary.online
+          ? "(connected, but no recent call rows)"
+          : "(not connected)";
       const gmailLines = Array.isArray(gmailMessages) && gmailMessages.length
         ? gmailMessages.slice(0, 6).map((msg, i) => {
             const from = fmtFrom(gmailHeader(msg, "From"));
@@ -911,6 +942,9 @@ ${shailaLines}
 
 CALENDAR:
 ${calendarLines}
+
+PHONE:
+${phoneLines}
 
 EMAIL:
 ${gmailLines}
@@ -963,7 +997,7 @@ Return ONLY valid JSON:
     } finally {
       setChiefSweepLoading(false);
     }
-  }, [aiOpts, chiefSweepLoading, primaryTasks, visibleShailos, calendarEvents, gmailMessages, priorities]);
+  }, [aiOpts, chiefSweepLoading, primaryTasks, visibleShailos, calendarEvents, chiefPhoneSummary, gmailMessages, priorities]);
 
   useEffect(() => {
     if (!chiefAutoRanRef.current && aiOpts && chiefHasData) {
@@ -1006,6 +1040,7 @@ Return ONLY valid JSON:
                 {[
                   { label: "Tasks", count: primaryTasks.length },
                   { label: "Shailos", count: visibleShailos.length },
+                  { label: "Phone", count: chiefPhoneSummary.missedCount ? `${chiefPhoneSummary.missedCount} missed` : chiefPhoneSummary.recentCalls.length },
                   { label: "Calendar", count: Array.isArray(calendarEvents) ? calendarEvents.length : 0 },
                   { label: "Gmail", count: Array.isArray(gmailMessages) ? gmailMessages.length : 0 },
                 ].map(source => (
@@ -1250,7 +1285,7 @@ Return ONLY valid JSON:
               </div>
             </div>
             <div style={{ overflow: "hidden", flex: "1 1 auto", minHeight: 0, padding: "18px 20px 20px", display: "flex", flexDirection: "column" }}>
-              <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
+              <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} onSummaryChange={setChiefPhoneSummary} />
             </div>
           </section>
         </div>
