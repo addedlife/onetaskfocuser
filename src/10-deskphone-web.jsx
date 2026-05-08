@@ -132,28 +132,6 @@ const NAV_ITEMS = [
     visible: true,
   },
   {
-    id: "make-call",
-    label: "Make Call",
-    icon: "call",
-    nativeGlyph: "E0B0",
-    source: "MainWindow.xaml:525",
-    automationId: "NavMakeCall",
-    tooltip: "Make a call",
-    kind: "button",
-    visible: true,
-  },
-  {
-    id: "calls",
-    label: "Calls",
-    icon: "call",
-    nativeGlyph: "E0B0",
-    source: "MainWindow.xaml:544",
-    automationId: "NavCalls",
-    tooltip: "Calls",
-    kind: "radio",
-    visible: true,
-  },
-  {
     id: "contacts",
     label: "Contacts",
     icon: "contacts",
@@ -1470,15 +1448,13 @@ function ConversationCallHistory({
   const [dialerNumber, setDialerNumber] = useState("");
   const [showRecents, setShowRecents] = useState(true);
   const isFullCallsSurface = mode === "full";
-  const selectedCalls = isFullCallsSurface
-    ? getSortedCalls(calls)
-    : selectedConversation ? groupCallsByNumber(calls, selectedConversation.key) : [];
+  const selectedCalls = getSortedCalls(calls);
   const visibleCalls = selectedCalls.filter((call) => callMatchesFilter(call, callFilter));
   const callSummary = selectedCalls.length
     ? callFilter === "All"
-      ? isFullCallsSurface ? `${selectedCalls.length} total` : `${selectedCalls.length} with this number`
+      ? `${selectedCalls.length} total`
       : `${visibleCalls.length} of ${selectedCalls.length} ${callFilter.toLowerCase()}`
-    : "No recent calls";
+    : "No calls";
 
   useEffect(() => {
     if (dialerOpenSignal) setDialerOpen(true);
@@ -1488,14 +1464,11 @@ function ConversationCallHistory({
     <aside className={`dp-thread-calls ${isFullCallsSurface ? "is-full-calls" : ""}`} data-native-source={isFullCallsSurface ? "MainWindow.xaml:3246" : "MainWindow.xaml:2459"}>
       <div className="dp-thread-calls-header">
         <div>
-          <strong>{isFullCallsSurface ? "Calls" : "Call history"}</strong>
+          <strong>Calls</strong>
           <span>{callSummary}</span>
         </div>
         <div className="dp-thread-calls-header-actions">
-          <button type="button" title="Show keypad" aria-label="Show keypad" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3236" : "MainWindow.xaml:2573"} onClick={() => setDialerOpen(true)}>{icon("dialpad", 18)}</button>
-          {!isFullCallsSurface ? (
-            <button type="button" title="Open full call history" aria-label="Open full call history" onClick={onOpenFullCalls}>{icon("open_in_new", 18)}</button>
-          ) : null}
+          <button type="button" title="Show keypad" aria-label="Show keypad" data-native-source="MainWindow.xaml:2573" onClick={() => setDialerOpen(true)}>{icon("dialpad", 18)}</button>
           {isFullCallsSurface && showRecents ? (
             <button type="button" title="Hide recents" aria-label="Hide recents" data-native-source="MainWindow.xaml:3259" onClick={() => setShowRecents(false)}>{icon("close", 18)}</button>
           ) : null}
@@ -2777,18 +2750,20 @@ function SimpleTabContent({
               <>
                 <div className="dp-device-manager" data-native-source="MainWindow.xaml:4052">
                   <div className="dp-device-manager-head">
-                    <h3>Saved phones</h3>
+                    <h3>Paired phones</h3>
                     <ShellButton className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4052" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Scan for new device</ShellButton>
                   </div>
                   {bluetoothStatus ? <div className="dp-device-status">{bluetoothStatus}</div> : null}
                   <div className="dp-device-list">
                     {knownDevices.length ? knownDevices.map((device) => {
                       const address = deviceAddress(device);
+                      const name = deviceName(device);
+                      const isDefault = device?.isDefault || device?.IsDefault;
                       return (
-                        <div className="dp-device-row" key={`known-${address || deviceName(device)}`}>
+                        <div className="dp-device-row" key={`known-${address || name}`}>
                           <div>
-                            <strong>{deviceName(device)}</strong>
-                            <span>{address}{device?.isDefault || device?.IsDefault ? " - default" : ""}</span>
+                            <strong>{name}{isDefault ? " (default)" : ""}</strong>
+                            {address ? <span className="dp-device-address" title={address}>Paired</span> : <span className="dp-device-status-text">Not found</span>}
                           </div>
                           <div className="dp-device-row-actions">
                             <ShellButton className="dp-tonal" iconName="link" nativeSource="MainWindow.xaml:4083" onClick={() => onCommand(`/connect-saved-device?addr=${encodeURIComponent(address)}`, "connect saved device")} disabled={!address}>Connect</ShellButton>
@@ -5414,8 +5389,44 @@ export function DeskPhoneWebPanel({
     () => bridgeMode ? bridgeStatusLabel(status, online) : connectionStatusFromStatus(status),
     [bridgeMode, online, status]
   );
-  const callsConnectionLabel = useMemo(() => channelLabel(status?.hfp || status?.Hfp, "Calls"), [status]);
-  const messagesConnectionLabel = useMemo(() => channelLabel(status?.map || status?.Map, "Messages"), [status]);
+  const callsConnectionLabel = useMemo(() => {
+    const hfpStatus = status?.hfp || status?.Hfp || "";
+    const isConnected = String(hfpStatus).toLowerCase().includes("connected");
+    return (
+      <div className="dp-channel-row">
+        <div className="dp-channel-status">
+          <span className={`dp-status-dot ${isConnected ? "is-online" : ""}`} />
+          <strong>Phone to phone (via Bluetooth)</strong>
+        </div>
+        <div className="dp-channel-guide">
+          {isConnected ? "Connected" : "Not available. Phone may not be paired or Bluetooth is off."}
+        </div>
+      </div>
+    );
+  }, [status]);
+  const messagesConnectionLabel = useMemo(() => {
+    const mapStatus = status?.map || status?.Map || "";
+    const isConnected = String(mapStatus).toLowerCase().includes("connected");
+
+    // Build device descriptor: "Device Name, OS Type"
+    const deviceName = status?.hostDeviceName || status?.HostDeviceName || "This device";
+    const osType = status?.hostOsType || status?.HostOsType ||
+      (navigator.userAgent.includes("Windows") ? "Windows" :
+       navigator.userAgent.includes("Mac") ? "macOS" : "");
+    const deviceDescriptor = osType ? `${deviceName}, ${osType}` : deviceName;
+
+    return (
+      <div className="dp-channel-row">
+        <div className="dp-channel-status">
+          <span className={`dp-status-dot ${isConnected ? "is-online" : ""}`} />
+          <strong>{deviceDescriptor} to phone (via Bluetooth)</strong>
+        </div>
+        <div className="dp-channel-guide">
+          {isConnected ? "Connected" : "Can't reach phone app. Make sure it's running."}
+        </div>
+      </div>
+    );
+  }, [status]);
   const showReconnectPrompt = !reconnectDismissed && !!(status?.showReconnectPrompt || status?.ShowReconnectPrompt || (!online && !bridgeMode));
   const effectiveBuildPrompt = !!(status?.showBuildUpdatePrompt || status?.ShowBuildUpdatePrompt || showBuildPrompt);
   const effectiveBuildIndicator = !!(status?.showBuildUpdateIndicator || status?.ShowBuildUpdateIndicator || showBuildIndicator);
