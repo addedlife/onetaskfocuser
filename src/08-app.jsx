@@ -902,6 +902,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   ].filter(c => c.actions.length);
   const activeActionCategory = actionCategories.find(c => c.id === actionCategoryId) || actionCategories[0];
   const chiefHasData = primaryTasks.length > 0 || visibleShailos.length > 0 || (Array.isArray(calendarEvents) && calendarEvents.length > 0) || (Array.isArray(gmailMessages) && gmailMessages.length > 0) || chiefPhoneSummary.recentCalls.length > 0;
+  const chiefRecentLearningNotes = Array.from(new Set(
+    chiefLogRef.current
+      .map(entry => (entry?.workStyleNote || "").trim())
+      .filter(Boolean)
+  )).filter(note => note !== (chiefBrief?.workStyleNote || "")).slice(0, 2);
   const chiefPhoneSignalSignature = useMemo(() => JSON.stringify({
     missedCount: chiefPhoneSummary.missedCount || 0,
     voicemailCount: chiefPhoneSummary.voicemailCount || 0,
@@ -1127,6 +1132,17 @@ Return ONLY valid JSON:
                 <div style={{ fontSize: 15, color: C.text, lineHeight: 1.55, fontFamily: "system-ui" }}>
                   {chiefBrief?.workStyleNote || "As this box runs more sweeps, it will keep building a better sense of how YCD works best."}
                 </div>
+                {chiefRecentLearningNotes.length > 0 && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.divider}`, display: "grid", gap: 8 }}>
+                    <div style={{ fontSize: 11, color: C.muted, fontFamily: "system-ui", textTransform: "uppercase", letterSpacing: 0.5 }}>Recent pattern notes</div>
+                    {chiefRecentLearningNotes.map((note, idx) => (
+                      <div key={`${note}-${idx}`} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <span style={{ width: 5, height: 5, marginTop: 8, borderRadius: 99, background: C.accent, flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, fontFamily: "system-ui" }}>{note}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "16px 18px", background: C.bg }}>
