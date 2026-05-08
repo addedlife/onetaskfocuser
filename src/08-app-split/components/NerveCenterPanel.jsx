@@ -67,7 +67,6 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const shailaPriorityIds = new Set(priorities.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
   const isShailaWork = t => t?.type === "shailo-research" || t?.type === "shaila-research" || !!t?.shailaId || !!t?.isGetBackStep || shailaPriorityIds.has(t?.priority);
   const primaryTasks = tasks.filter(t => !isShailaWork(t)).slice(0, 8);
-  const shailaWorkTasks = tasks.filter(isShailaWork).slice(0, 8);
   // Exclude research-type shaila tasks — they're not actionable get-backs until research is done
   const visibleShailos = shailos.filter(s => s.type !== "shaila-research" && s.type !== "shailo-research").slice(0, 10);
 
@@ -175,31 +174,6 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 );
               }) : <div style={{ padding: "16px 14px", fontSize: 13, color: C.faint }}>No open tasks.</div>}
 
-              {shailaWorkTasks.length > 0 && (
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px 6px", borderTop: `1px solid ${T.brdS || T.brd}` }}>
-                    <span style={{ color: GOLD }}>{suiteIcon("rule", 13)}</span>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: GOLD, letterSpacing: 0.5, textTransform: "uppercase" }}>Shaila tasks</span>
-                  </div>
-                  {shailaWorkTasks.map(t => {
-                    const isGetBack = !!t.isGetBackStep;
-                    const isResearch = t.type === "shaila-research" || t.type === "shailo-research";
-                    const label = isGetBack ? "Get back" : isResearch ? "Research" : "Open";
-                    return (
-                      <div key={t.id} style={{ display: "flex", alignItems: "center", padding: "8px 10px 8px 0", borderBottom: `1px solid ${GOLD_BRD}`, background: GOLD_BG, gap: 6 }}>
-                        <span style={{ width: 3, alignSelf: "stretch", minHeight: 24, borderRadius: 2, background: GOLD, flexShrink: 0 }} />
-                        <button onClick={() => onCompleteTask?.(t.id)} title="Mark done"
-                          style={{ width: 22, height: 22, borderRadius: 99, border: `1.5px solid ${GOLD}`, background: "transparent", color: GOLD, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          {suiteIcon("check", 12)}
-                        </button>
-                        <span style={{ flex: 1, minWidth: 0, paddingLeft: 3, fontSize: 13, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.text}</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: GOLD, background: "rgba(201,146,60,0.12)", border: `1px solid ${GOLD_BRD}`, borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>{label}</span>
-                        <button onClick={() => onDeleteTask?.(t.id)} title="Delete" style={{ width: 20, height: 20, borderRadius: 99, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("close", 12)}</button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           </section>
 

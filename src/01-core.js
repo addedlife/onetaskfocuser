@@ -1552,6 +1552,14 @@ NEVER copy raw transcript text — write clean concise summaries (5-15 words). P
 === SHAILA RULE (HIGHEST PRIORITY) ===
 If ANYTHING sounds like a halachic question — "shaila", "shailos", "is it mutar/assur", "can I", "is there a problem with", kashrus, Shabbos, niddah, tefillin, bracha, eruv, kitniyos, borer, bishul, etc. — it MUST go in "shailos". NEVER put a halacha question in tasks.
 
+=== TASK-QUEUE OPERATION RULE ===
+Requests to move, bump, reorder, resurface, prioritize, or "move up" a task belong in "tasks", not "shailos", unless the speaker is actually asking a halachic question.
+Examples:
+- "move up the payroll task" -> tasks
+- "make the Camp HASC email now" -> tasks
+- "put the dentist call back on top" -> tasks
+- "should I move up this halacha shaila?" -> shailos
+
 === CATEGORIES ===
 1. tasks — Action items NOT in the queue already. NOT shailos. Priority: "now" (urgent/today), "today" (this week), "eventually" (someday), "shaila" (halachic task — rare, only if it's a task around a shaila, not the shaila itself).
 2. completions — Things mentioned as already done. matchedTask = queue number if it matches.

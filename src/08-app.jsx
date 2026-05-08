@@ -840,7 +840,6 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const shailaPriorityIds = new Set(priorities.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
   const isShailaWork = t => t?.type === "shailo-research" || t?.type === "shaila-research" || !!t?.shailaId || !!t?.isGetBackStep || shailaPriorityIds.has(t?.priority);
   const primaryTasks = tasks.filter(t => !isShailaWork(t)).slice(0, 8);
-  const shailaWorkTasks = tasks.filter(isShailaWork).slice(0, 8);
   // Exclude research-type shaila tasks — they're not actionable get-backs until research is done
   const visibleShailos = shailos.filter(s => s.type !== "shaila-research" && s.type !== "shailo-research").slice(0, 10);
 
@@ -948,31 +947,6 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No open tasks.</div>}
 
-              {shailaWorkTasks.length > 0 && (
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 20px 8px", borderTop: `1px solid ${C.divider}` }}>
-                    <span style={{ color: GOLD }}>{suiteIcon("rule", 15)}</span>
-                    <span style={{ fontSize: ncType.label, fontWeight: 500, color: GOLD, letterSpacing: 0, textTransform: "uppercase" }}>Shaila tasks</span>
-                  </div>
-                  {shailaWorkTasks.map(t => {
-                    const isGetBack = !!t.isGetBackStep;
-                    const isResearch = t.type === "shaila-research" || t.type === "shailo-research";
-                    const label = isGetBack ? "Get back" : isResearch ? "Research" : "Open";
-                    return (
-                      <div key={t.id} style={{ display: "flex", alignItems: "center", padding: "13px 18px 13px 0", background: GOLD_BG, gap: 12, minHeight: 54 }}>
-                        <span style={{ width: 3, alignSelf: "stretch", minHeight: 24, borderRadius: 2, background: GOLD, flexShrink: 0 }} />
-                        <button onClick={() => onCompleteTask?.(t.id)} title="Mark done"
-                          style={{ width: 22, height: 22, borderRadius: 99, border: `1.5px solid ${GOLD}`, background: "transparent", color: GOLD, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          {suiteIcon("check", 12)}
-                        </button>
-                        <span style={{ flex: 1, minWidth: 0, paddingLeft: 3, fontSize: ncType.meta, fontWeight: 500, lineHeight: ncType.line, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.text}</span>
-                        <span style={{ fontSize: 12, fontWeight: 500, color: GOLD, background: "rgba(201,146,60,0.10)", border: `1px solid ${GOLD_BRD}`, borderRadius: 999, padding: "4px 9px", whiteSpace: "nowrap", flexShrink: 0 }}>{label}</span>
-                        <button onClick={() => onDeleteTask?.(t.id)} title="Delete" style={{ width: 20, height: 20, borderRadius: 99, border: "none", background: "transparent", color: T.tFaint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{suiteIcon("close", 12)}</button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           </section>
 
@@ -5655,6 +5629,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
   function toggleApproved(id) { setItems(prev => prev.map(it => it.id === id ? {...it, approved: !it.approved} : it)); }
   function updateText(id, text) { setItems(prev => prev.map(it => it.id === id ? {...it, text} : it)); }
   function updatePriority(id, priority) { setItems(prev => prev.map(it => it.id === id ? {...it, priority} : it)); }
+  function updateCategory(id, cat) { setItems(prev => prev.map(it => it.id === id ? {...it, cat} : it)); }
 
   function applyApproved() {
     items.filter(it => it.approved).forEach(it => {
@@ -5801,17 +5776,29 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
                         onChange={e => updateText(it.id, e.target.value)}
                         style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${T.brdS}`, color: T.t, fontSize: 13, fontFamily: 'system-ui', padding: '2px 0', outline: 'none', boxSizing: 'border-box' }}
                       />
-                      {cat === 'tasks' && (
+                      {!['completions', 'gotBacks'].includes(cat) && (
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+                          <select value={it.cat} onChange={e => updateCategory(it.id, e.target.value)}
+                            style={{ fontSize: 11, background: T.bgW, border: `1px solid ${T.brd}`, borderRadius: 6, color: T.tSoft, padding: '2px 6px', cursor: 'pointer', fontFamily: 'system-ui' }}>
+                            <option value="tasks">Task</option>
+                            <option value="shailos">Shaila</option>
+                            <option value="scheduleItems">Schedule</option>
+                            <option value="reminders">Reminder</option>
+                          </select>
+                          <span style={{ fontSize: 10, color: T.tFaint, fontFamily: 'system-ui' }}>Save as</span>
+                        </div>
+                      )}
+                      {it.cat === 'tasks' && (
                         <select value={it.priority || 'eventually'} onChange={e => updatePriority(it.id, e.target.value)}
                           style={{ marginTop: 5, fontSize: 11, background: T.bgW, border: `1px solid ${T.brd}`, borderRadius: 6, color: T.tSoft, padding: '2px 6px', cursor: 'pointer', fontFamily: 'system-ui' }}>
                           {pris.filter(p => !p.deleted).map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                           <option value="shaila">Shaila</option>
                         </select>
                       )}
-                      {cat === 'scheduleItems' && it.when && (
+                      {it.cat === 'scheduleItems' && it.when && (
                         <div style={{ fontSize: 11, color: T.tFaint, fontFamily: 'system-ui', marginTop: 3 }}>When: {it.when}</div>
                       )}
-                      {(cat === 'completions' || cat === 'gotBacks') && (
+                      {(it.cat === 'completions' || it.cat === 'gotBacks') && (
                         <div style={{ fontSize: 11, color: T.tFaint, fontFamily: 'system-ui', marginTop: 2, fontStyle: 'italic' }}>Info only — no action taken</div>
                       )}
                     </div>
