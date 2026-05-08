@@ -1426,8 +1426,22 @@ function MessageBubble({
   );
 }
 
+function enrichCallWithContactName(call, contacts) {
+  if (call.contactName) return call;
+  const callNumber = normalizePhoneKey(call?.number);
+  if (!callNumber) return call;
+  const matchingContact = getApiList(contacts).find((contact) =>
+    contactPhoneOptions(contact).some((phone) => normalizePhoneKey(phone) === callNumber)
+  );
+  return {
+    ...call,
+    contactName: matchingContact ? contactDisplayName(matchingContact) : call.contactName,
+  };
+}
+
 function ConversationCallHistory({
   calls,
+  contacts = [],
   selectedConversation,
   mode = "thread",
   dialerDefaultOpen = false,
@@ -1448,7 +1462,7 @@ function ConversationCallHistory({
   const [dialerNumber, setDialerNumber] = useState("");
   const [showRecents, setShowRecents] = useState(true);
   const isFullCallsSurface = mode === "full";
-  const selectedCalls = getSortedCalls(calls);
+  const selectedCalls = getSortedCalls(calls).map((call) => enrichCallWithContactName(call, contacts));
   const visibleCalls = selectedCalls.filter((call) => callMatchesFilter(call, callFilter));
   const callSummary = selectedCalls.length
     ? callFilter === "All"
@@ -2189,6 +2203,7 @@ function MessagesSlice({
               />
               <ConversationCallHistory
                 calls={calls}
+                contacts={contacts}
                 selectedConversation={selectedConversation}
                 hasUndoCallHistoryDelete={hasUndoCallHistoryDelete}
                 undoCallHistoryDeleteText={undoCallHistoryDeleteText}
@@ -2607,6 +2622,7 @@ function SimpleTabContent({
       <div className="dp-calls-shell" data-native-source="MainWindow.xaml:3204">
         <ConversationCallHistory
           calls={calls}
+          contacts={contacts}
           mode="full"
           dialerDefaultOpen={true}
           dialerOpenSignal={callDialerSignal}
