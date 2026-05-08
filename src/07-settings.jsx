@@ -98,44 +98,51 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
     {id:"google",     label:"Google"},
   ];
 
-  const sh = {fontSize:11,fontWeight:700,color:T.tFaint,margin:"0 0 10px",fontFamily:"system-ui",textTransform:"uppercase",letterSpacing:1};
+  const settingsType = {
+    section: 13,
+    body: 14,
+    help: 13,
+    control: 14,
+    line: 1.55,
+  };
+  const sh = {fontSize:settingsType.section,fontWeight:500,color:T.tFaint,margin:"0 0 14px",fontFamily:"system-ui",textTransform:"uppercase",letterSpacing:0};
   const tog = (on) => ({width:44,height:24,borderRadius:12,background:on?ap[0]?.color:T.brd,border:"none",cursor:"pointer",position:"relative",flexShrink:0});
   const knob = (on) => ({width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:on?23:3,transition:"left 0.25s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)"});
-  const rowSB = {display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14};
-  const actionBtn = {width:"100%",padding:"10px 14px",borderRadius:10,border:`1px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:12,fontFamily:"system-ui",color:T.tSoft,display:"flex",alignItems:"center",gap:8,marginBottom:8};
+  const rowSB = {display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,marginBottom:18};
+  const actionBtn = {width:"100%",minHeight:44,padding:"12px 16px",borderRadius:8,border:`1px solid ${T.brdS || T.brd}`,background:T.card,cursor:"pointer",fontSize:settingsType.control,fontWeight:400,fontFamily:"system-ui",color:T.tSoft,display:"flex",alignItems:"center",gap:12,marginBottom:10};
   const schemeButtonStyle = (id, scheme, hasDelete = false) => {
     const active = AS.colorScheme === id;
     const bg = scheme.card || scheme.bg || "#FFFFFF";
     const accent = scheme.primary || scheme.brd || "#00796B";
     return {
-      minHeight: 34,
-      padding: hasDelete ? "7px 30px 7px 12px" : "7px 12px",
+      minHeight: 40,
+      padding: hasDelete ? "8px 34px 8px 14px" : "8px 14px",
       borderRadius: 999,
       border: `1px solid ${active ? accent : (scheme.brd || T.brd)}`,
       background: active ? (scheme.tonal || scheme.bgW || bg) : bg,
       cursor: "pointer",
-      fontSize: 12,
-      fontWeight: active ? 600 : 500,
+      fontSize: settingsType.control,
+      fontWeight: 500,
       fontFamily: "system-ui",
       color: scheme.text || T.text,
-      boxShadow: active ? `inset 0 0 0 1px ${accent}` : "none",
+      boxShadow: "none",
     };
   };
 
   return (
-    <div style={{position:"fixed",inset:0,zIndex:8500,background:sTab==="appearance"?"rgba(0,0,0,0.08)":"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto",padding:20,transition:"background 0.3s"}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:sTab==="appearance"?T.card+"ee":T.card,borderRadius:22,padding:"24px 20px",maxWidth:460,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:`0 6px 24px rgba(0,0,0,0.15)`,transition:"background 0.3s"}}>
+    <div style={{position:"fixed",inset:0,zIndex:8500,background:sTab==="appearance"?"rgba(0,0,0,0.08)":"rgba(0,0,0,0.32)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto",padding:24,transition:"background 0.3s"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:sTab==="appearance"?T.card+"f7":T.card,borderRadius:8,border:`1px solid ${T.brdS || T.brd}`,padding:"28px 26px",maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:`0 12px 32px rgba(60,64,67,0.22)`,transition:"background 0.3s"}}>
 
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <h3 style={{fontSize:16,fontWeight:600,margin:0}}>Settings</h3>
-          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft}}>✕</button>
+          <h3 style={{fontSize:20,fontWeight:500,margin:0}}>Settings</h3>
+          <button onClick={onClose} style={{width:40,height:40,background:"none",border:"none",cursor:"pointer",fontSize:20,color:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
 
         {/* Tab bar */}
-        <div style={{display:"flex",gap:3,background:T.bgW,borderRadius:12,padding:3,marginBottom:20}}>
+        <div style={{display:"flex",gap:6,background:T.bgW,borderRadius:8,padding:4,marginBottom:24}}>
           {TABS.map(t => (
-            <button key={t.id} onClick={()=>setSTab(t.id)} style={{flex:1,padding:"6px 4px",borderRadius:9,border:"none",background:sTab===t.id?T.card:"transparent",cursor:"pointer",fontSize:10,fontWeight:sTab===t.id?700:400,fontFamily:"system-ui",color:sTab===t.id?T.text:T.tSoft,transition:"background 0.15s",boxShadow:sTab===t.id?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>
+            <button key={t.id} onClick={()=>setSTab(t.id)} style={{flex:1,minHeight:40,padding:"8px 8px",borderRadius:4,border:"none",background:sTab===t.id?T.card:"transparent",cursor:"pointer",fontSize:13,fontWeight:sTab===t.id?500:400,fontFamily:"system-ui",color:sTab===t.id?T.text:T.tSoft,transition:"background 0.15s",boxShadow:"none"}}>
               {t.label}
             </button>
           ))}
@@ -147,7 +154,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             <h4 style={sh}>Energy Filter</h4>
             <div style={{display:"flex",gap:6,marginBottom:18}}>
               {["high","low",null].map(e => (
-                <button key={String(e)} onClick={()=>onSetEnergy(e)} style={{flex:1,padding:"7px 0",borderRadius:9,border:`1px solid ${e==="high"?"#E07040":e==="low"?"#7EB0DE":T.brd}`,background:curEnergy===e?(e==="high"?"#E0704020":e==="low"?"#7EB0DE20":T.bgW):T.bgW,cursor:"pointer",fontSize:11,fontFamily:"system-ui",fontWeight:curEnergy===e?700:400,color:e==="high"?"#B85030":e==="low"?"#4A7898":T.tSoft}}>
+                <button key={String(e)} onClick={()=>onSetEnergy(e)} style={{flex:1,minHeight:40,padding:"8px 0",borderRadius:8,border:`1px solid ${e==="high"?"#E07040":e==="low"?"#7EB0DE":T.brd}`,background:curEnergy===e?(e==="high"?"#E0704020":e==="low"?"#7EB0DE20":T.bgW):T.bgW,cursor:"pointer",fontSize:settingsType.control,fontFamily:"system-ui",fontWeight:curEnergy===e?500:400,color:e==="high"?"#B85030":e==="low"?"#4A7898":T.tSoft}}>
                   {e==="high"?"⚡ High":e==="low"?"🌊 Low":"All"}
                 </button>
               ))}
@@ -173,8 +180,8 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               <div style={{height:1,background:T.brdS,margin:"10px 0 14px"}}/>
               <div style={rowSB}>
                 <div>
-                  <span style={{fontSize:12,fontFamily:"system-ui",color:T.text}}>Focus mode</span>
-                  <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",margin:0}}>Show only top {overwhelmThreshold} tasks (queue has {effectiveCount})</p>
+                  <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Focus mode</span>
+                  <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Show only top {overwhelmThreshold} tasks (queue has {effectiveCount})</p>
                 </div>
                 <button onClick={onToggleFocusMode} style={tog(focusModeActive)}><div style={knob(focusModeActive)}/></button>
               </div>
@@ -199,25 +206,25 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               })}
             </div>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <button onClick={handleGenSchemes} disabled={schemeGenLoading} style={{fontSize:11,color:T.tSoft,background:"none",border:`1px dashed ${T.brd}`,borderRadius:8,padding:"6px 14px",cursor:schemeGenLoading?"default":"pointer",fontFamily:"system-ui",opacity:schemeGenLoading?0.6:1}}>
+              <button onClick={handleGenSchemes} disabled={schemeGenLoading} style={{minHeight:40,fontSize:settingsType.control,color:T.tSoft,background:"none",border:`1px dashed ${T.brd}`,borderRadius:8,padding:"8px 16px",cursor:schemeGenLoading?"default":"pointer",fontFamily:"system-ui",opacity:schemeGenLoading?0.6:1}}>
                 {schemeGenLoading ? "Generating…" : "✦ Generate more themes"}
               </button>
-              {schemeGenErr && <span style={{fontSize:10,color:"#C94040",fontFamily:"system-ui"}}>{schemeGenErr}</span>}
+              {schemeGenErr && <span style={{fontSize:settingsType.help,color:"#C94040",fontFamily:"system-ui",lineHeight:settingsType.line}}>{schemeGenErr}</span>}
             </div>
             <div style={{height:1,background:T.brdS,margin:"18px 0 14px"}}/>
             <h4 style={sh}>DeskPhone Link</h4>
             <div style={{...rowSB,alignItems:"flex-start",marginBottom:10}}>
               <div style={{paddingRight:12}}>
-                <span style={{fontSize:12,fontFamily:"system-ui",color:T.text,fontWeight:700}}>Link DeskPhone to this app's theme</span>
-                <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",margin:"3px 0 0",lineHeight:1.45}}>When on, OneTask/Shamash pushes its active color scheme to DeskPhone. DeskPhone must also allow this in its Appearance settings.</p>
+                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text,fontWeight:500}}>Link DeskPhone to this app's theme</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"4px 0 0",lineHeight:settingsType.line}}>When on, OneTask/Shamash pushes its active color scheme to DeskPhone. DeskPhone must also allow this in its Appearance settings.</p>
               </div>
               <button onClick={onToggleDeskPhoneThemeSync} style={tog(deskPhoneThemeSync)} title={deskPhoneThemeSync ? "DeskPhone theme sync is on" : "DeskPhone theme sync is off"}><div style={knob(deskPhoneThemeSync)}/></button>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-              <button onClick={handleDeskPhoneThemeRefresh} disabled={!deskPhoneThemeSync || deskPhoneSyncBusy} style={{fontSize:11,color:T.tSoft,background:T.bgW,border:`1px solid ${T.brd}`,borderRadius:8,padding:"7px 12px",cursor:(!deskPhoneThemeSync || deskPhoneSyncBusy)?"default":"pointer",fontFamily:"system-ui",opacity:(!deskPhoneThemeSync || deskPhoneSyncBusy)?0.55:1}}>
+              <button onClick={handleDeskPhoneThemeRefresh} disabled={!deskPhoneThemeSync || deskPhoneSyncBusy} style={{minHeight:40,fontSize:settingsType.control,color:T.tSoft,background:T.bgW,border:`1px solid ${T.brd}`,borderRadius:8,padding:"8px 14px",cursor:(!deskPhoneThemeSync || deskPhoneSyncBusy)?"default":"pointer",fontFamily:"system-ui",opacity:(!deskPhoneThemeSync || deskPhoneSyncBusy)?0.55:1}}>
                 {deskPhoneSyncBusy ? "Refreshing..." : "Refresh sync"}
               </button>
-              <span style={{fontSize:10,color:deskPhoneOnline?"#2E7D32":T.tFaint,fontFamily:"system-ui"}}>
+              <span style={{fontSize:settingsType.help,color:deskPhoneOnline?"#2E7D32":T.tFaint,fontFamily:"system-ui",lineHeight:settingsType.line}}>
                 {deskPhoneSyncNote || (deskPhoneOnline ? "DeskPhone linked." : "DeskPhone not confirmed.")}
               </span>
             </div>
@@ -232,28 +239,28 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               {ap.map(p => (
                 <div key={p.id} style={{display:"flex",alignItems:"center",gap:6,background:T.bgW,borderRadius:8,padding:"6px 10px"}}>
                   <div style={{width:14,height:14,borderRadius:"50%",background:p.color}}/>
-                  <span style={{fontSize:12,fontFamily:"system-ui"}}>{p.label}{p.isShaila?" ⚡":""}</span>
+                  <span style={{fontSize:settingsType.body,fontFamily:"system-ui"}}>{p.label}{p.isShaila?" ⚡":""}</span>
                   {p.id !== "shaila" && ap.length > 1 && <button onClick={()=>remPri(p.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:14,color:T.tFaint}}>✕</button>}
                 </div>
               ))}
             </div>
-            <button onClick={()=>setShowPE(true)} style={{fontSize:12,color:T.tSoft,background:"none",border:`1px dashed ${T.brd}`,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontFamily:"system-ui",marginBottom:4}}>+ Add Priority</button>
+            <button onClick={()=>setShowPE(true)} style={{minHeight:40,fontSize:settingsType.control,color:T.tSoft,background:"none",border:`1px dashed ${T.brd}`,borderRadius:8,padding:"8px 14px",cursor:"pointer",fontFamily:"system-ui",marginBottom:4}}>+ Add Priority</button>
             {showPE && <PriEditor T={T} onAdd={(l,c)=>{addPri(l,c);setShowPE(false);}} onClose={()=>setShowPE(false)}/>}
 
             <div style={{height:1,background:T.brdS,margin:"16px 0"}}/>
 
             <h4 style={sh}>Task Age Thresholds</h4>
-            <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 10px"}}>Show age indicator after this many hours:</p>
+            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 12px",lineHeight:settingsType.line}}>Show age indicator after this many hours:</p>
             {ap.map(p => (
-              <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+              <div key={p.id} style={{display:"flex",alignItems:"center",gap:12,marginBottom:10,minHeight:40}}>
                 <div style={{width:10,height:10,borderRadius:"50%",background:p.color,flexShrink:0}}/>
-                <span style={{flex:1,fontSize:12,fontFamily:"system-ui"}}>{p.label}</span>
+                <span style={{flex:1,fontSize:settingsType.body,fontFamily:"system-ui"}}>{p.label}</span>
                 <input type="number" min="1" max="720"
                   value={ageThresholds[p.id] ?? DEF_AGE_THRESHOLDS[p.id] ?? 72}
                   onChange={e=>setAS(prev=>({...prev,ageThresholds:{...(prev.ageThresholds||DEF_AGE_THRESHOLDS),[p.id]:parseInt(e.target.value)||24}}))}
-                  style={{width:70,padding:"4px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:12,fontFamily:"system-ui",outline:"none",textAlign:"right"}}
+                  style={{width:76,minHeight:36,padding:"6px 10px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:settingsType.control,fontFamily:"system-ui",outline:"none",textAlign:"right"}}
                 />
-                <span style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",width:20}}>h</span>
+                <span style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",width:24}}>h</span>
               </div>
             ))}
 
@@ -261,26 +268,26 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
 
             <div style={rowSB}>
               <div>
-                <span style={{fontSize:12,fontFamily:"system-ui",color:T.text}}>Overwhelm threshold</span>
-                <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",margin:0}}>Collapse queue above this count</p>
+                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Overwhelm threshold</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Collapse queue above this count</p>
               </div>
-              <select value={AS.overwhelmThreshold||7} onChange={e=>setAS(p=>({...p,overwhelmThreshold:parseInt(e.target.value)}))} style={{padding:"4px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:12,fontFamily:"system-ui",outline:"none"}}>
+              <select value={AS.overwhelmThreshold||7} onChange={e=>setAS(p=>({...p,overwhelmThreshold:parseInt(e.target.value)}))} style={{minHeight:40,padding:"6px 10px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:settingsType.control,fontFamily:"system-ui",outline:"none"}}>
                 {[5,6,7,8,10,15,20].map(n=><option key={n} value={n}>{n} tasks</option>)}
               </select>
             </div>
 
             <div style={rowSB}>
               <div>
-                <span style={{fontSize:12,fontFamily:"system-ui",color:T.text}}>Completion sound</span>
-                <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",margin:0}}>Chime + haptic when task done</p>
+                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Completion sound</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Chime + haptic when task done</p>
               </div>
               <button onClick={()=>setAS(p=>({...p,completionSound:!p.completionSound}))} style={tog(AS.completionSound)}><div style={knob(AS.completionSound)}/></button>
             </div>
 
             <div style={rowSB}>
               <div>
-                <span style={{fontSize:12,fontFamily:"system-ui",color:T.text}}>Legacy Complete UI</span>
-                <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",margin:0}}>Dedicated icon for completions without timestamps</p>
+                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Legacy Complete UI</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Dedicated icon for completions without timestamps</p>
               </div>
               <button onClick={()=>setAS(p=>({...p,legacyCompleteUI:!p.legacyCompleteUI}))} style={tog(AS.legacyCompleteUI)}><div style={knob(AS.legacyCompleteUI)}/></button>
             </div>
@@ -291,31 +298,31 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
         {sTab === "schedule" && (
           <div>
             <h4 style={sh}>Mrs. W Time Windows</h4>
-            <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 14px"}}>High-priority window (outside = lowest priority)</p>
+            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 16px",lineHeight:settingsType.line}}>High-priority window (outside = lowest priority)</p>
 
             <div style={{marginBottom:12}}>
-              <span style={{fontSize:11,fontFamily:"system-ui",color:T.tSoft,display:"block",marginBottom:6}}>Mon–Thu:</span>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <span style={{fontSize:settingsType.help,fontFamily:"system-ui",color:T.tSoft,display:"block",marginBottom:8}}>Mon–Thu:</span>
+              <div style={{display:"flex",gap:10,alignItems:"center"}}>
                 <input type="time" value={mrsWWindows.monThu.start}
                   onChange={e=>setAS(p=>({...p,mrsWWindows:{...mrsWWindows,monThu:{...mrsWWindows.monThu,start:e.target.value}}}))}
-                  style={{padding:"4px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:12,fontFamily:"system-ui",outline:"none"}}/>
-                <span style={{fontSize:11,color:T.tFaint}}>to</span>
+                  style={{minHeight:40,padding:"6px 10px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:settingsType.control,fontFamily:"system-ui",outline:"none"}}/>
+                <span style={{fontSize:settingsType.help,color:T.tFaint}}>to</span>
                 <input type="time" value={mrsWWindows.monThu.end}
                   onChange={e=>setAS(p=>({...p,mrsWWindows:{...mrsWWindows,monThu:{...mrsWWindows.monThu,end:e.target.value}}}))}
-                  style={{padding:"4px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:12,fontFamily:"system-ui",outline:"none"}}/>
+                  style={{minHeight:40,padding:"6px 10px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:settingsType.control,fontFamily:"system-ui",outline:"none"}}/>
               </div>
             </div>
 
             <div style={{marginBottom:20}}>
-              <span style={{fontSize:11,fontFamily:"system-ui",color:T.tSoft,display:"block",marginBottom:6}}>Friday:</span>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <span style={{fontSize:settingsType.help,fontFamily:"system-ui",color:T.tSoft,display:"block",marginBottom:8}}>Friday:</span>
+              <div style={{display:"flex",gap:10,alignItems:"center"}}>
                 <input type="time" value={mrsWWindows.fri.start}
                   onChange={e=>setAS(p=>({...p,mrsWWindows:{...mrsWWindows,fri:{...mrsWWindows.fri,start:e.target.value}}}))}
-                  style={{padding:"4px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:12,fontFamily:"system-ui",outline:"none"}}/>
-                <span style={{fontSize:11,color:T.tFaint}}>to</span>
+                  style={{minHeight:40,padding:"6px 10px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:settingsType.control,fontFamily:"system-ui",outline:"none"}}/>
+                <span style={{fontSize:settingsType.help,color:T.tFaint}}>to</span>
                 <input type="time" value={mrsWWindows.fri.end}
                   onChange={e=>setAS(p=>({...p,mrsWWindows:{...mrsWWindows,fri:{...mrsWWindows.fri,end:e.target.value}}}))}
-                  style={{padding:"4px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:12,fontFamily:"system-ui",outline:"none"}}/>
+                  style={{minHeight:40,padding:"6px 10px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:settingsType.control,fontFamily:"system-ui",outline:"none"}}/>
               </div>
             </div>
 
@@ -323,8 +330,8 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
 
             <div style={rowSB}>
               <div>
-                <span style={{fontSize:12,fontFamily:"system-ui",color:T.text}}>Hourly auto-optimize</span>
-                <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",margin:0}}>Silent background reprioritize every hour</p>
+                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Hourly auto-optimize</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Silent background reprioritize every hour</p>
               </div>
               <button onClick={()=>setAS(p=>({...p,autoOptimize:!p.autoOptimize}))} style={tog(AS.autoOptimize)}><div style={knob(AS.autoOptimize)}/></button>
             </div>
@@ -336,23 +343,23 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
           <div>
             <h4 style={sh}>AI Model</h4>
             <div style={{marginBottom:16}}>
-              <label style={{fontSize:11,color:T.tSoft,fontFamily:"system-ui",fontWeight:600,display:"block",marginBottom:4}}>Gemini model</label>
-              <select value={AS.aiModel||""} onChange={e=>setAS(p=>({...p,aiModel:e.target.value}))} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:12,fontFamily:"system-ui",background:T.bgW,color:T.text,boxSizing:"border-box"}}>
+              <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",fontWeight:500,display:"block",marginBottom:6}}>Gemini model</label>
+              <select value={AS.aiModel||""} onChange={e=>setAS(p=>({...p,aiModel:e.target.value}))} style={{width:"100%",minHeight:42,padding:"8px 12px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:settingsType.control,fontFamily:"system-ui",background:T.bgW,color:T.text,boxSizing:"border-box"}}>
                 <option value="">Server default ({aiConfig?.model || aiConfig?.textModel || "auto"})</option>
                 {geminiModels.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
-              <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",margin:"8px 0 0"}}>Gateway: {settingsHasAI ? "online" : "not configured"}</p>
+              <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"8px 0 0",lineHeight:settingsType.line}}>Gateway: {settingsHasAI ? "online" : "not configured"}</p>
             </div>
 
             <div style={{height:1,background:T.brdS,margin:"0 0 16px"}}/>
-            <h4 style={{fontSize:11,fontWeight:700,color:T.tSoft,fontFamily:"system-ui",margin:"0 0 8px",textTransform:"uppercase",letterSpacing:1}}>Backup</h4>
-            <p style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 10px",lineHeight:1.5}}>
+            <h4 style={{...sh, color:T.tSoft, margin:"0 0 10px"}}>Backup</h4>
+            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 12px",lineHeight:settingsType.line}}>
               Weekly backups save automatically. Set a folder and they'll appear there silently — no download prompt.
             </p>
             <button
               onClick={handleSetBackupFolder}
               disabled={backupFolderSetting}
-              style={{width:"100%",padding:"10px",borderRadius:10,border:`1px solid ${T.brd}`,background:backupFolderSet?"rgba(80,180,100,0.08)":"none",color:backupFolderSet?"#4caf50":T.tSoft,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"system-ui",marginBottom:16}}
+              style={{width:"100%",minHeight:44,padding:"10px 14px",borderRadius:8,border:`1px solid ${T.brd}`,background:backupFolderSet?"rgba(80,180,100,0.08)":"none",color:backupFolderSet?"#4caf50":T.tSoft,fontSize:settingsType.control,fontWeight:500,cursor:"pointer",fontFamily:"system-ui",marginBottom:16}}
             >
               {backupFolderSetting ? "Opening…" : backupFolderSet ? "✓ Backup folder set — click to change" : "Set backup folder…"}
             </button>
@@ -360,7 +367,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             {onSignOut && (
               <>
                 <div style={{height:1,background:T.brdS,margin:"0 0 16px"}}/>
-                <button onClick={()=>{onClose();onSignOut();}} style={{width:"100%",padding:"10px",borderRadius:10,border:`1px solid ${T.brd}`,background:"none",color:T.tSoft,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"system-ui"}}>
+                <button onClick={()=>{onClose();onSignOut();}} style={{width:"100%",minHeight:44,padding:"10px 14px",borderRadius:8,border:`1px solid ${T.brd}`,background:"none",color:T.tSoft,fontSize:settingsType.control,fontWeight:500,cursor:"pointer",fontFamily:"system-ui"}}>
                   Sign out
                 </button>
               </>
@@ -372,12 +379,12 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
         {sTab === "google" && (
           <div>
             <h4 style={sh}>Google Calendar & Gmail</h4>
-            <p style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 14px",lineHeight:1.6}}>
+            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 16px",lineHeight:settingsType.line}}>
               Shows today's calendar events and important unread emails on your launchpad. Requires a Google OAuth Client ID — takes ~5 minutes to set up.
             </p>
-            <div style={{background:T.bgW,borderRadius:10,border:`1px solid ${T.brd}`,padding:"12px 14px",marginBottom:16}}>
-              <p style={{fontSize:11,fontWeight:700,color:T.tSoft,fontFamily:"system-ui",margin:"0 0 8px"}}>One-time setup:</p>
-              <ol style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",margin:0,paddingLeft:16,lineHeight:2}}>
+            <div style={{background:T.bgW,borderRadius:8,border:`1px solid ${T.brd}`,padding:"14px 16px",marginBottom:16}}>
+              <p style={{fontSize:settingsType.help,fontWeight:500,color:T.tSoft,fontFamily:"system-ui",margin:"0 0 10px"}}>One-time setup:</p>
+              <ol style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,paddingLeft:18,lineHeight:1.8}}>
                 <li>Go to <span style={{fontWeight:700}}>console.cloud.google.com</span> → select your project</li>
                 <li>APIs & Services → Enable <span style={{fontWeight:700}}>Google Calendar API</span> + <span style={{fontWeight:700}}>Gmail API</span></li>
                 <li>Credentials → Create → OAuth 2.0 Client ID → Web Application</li>
@@ -386,19 +393,19 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               </ol>
             </div>
             <div style={{marginBottom:16}}>
-              <label style={{fontSize:11,color:T.tSoft,fontFamily:"system-ui",fontWeight:600,display:"block",marginBottom:4}}>OAuth 2.0 Client ID</label>
+              <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",fontWeight:500,display:"block",marginBottom:6}}>OAuth 2.0 Client ID</label>
               <input
                 value={AS.googleClientId||""}
                 onChange={e=>setAS(p=>({...p,googleClientId:e.target.value.trim()}))}
                 placeholder="1234567890-abc….apps.googleusercontent.com"
-                style={{width:"100%",padding:"8px 12px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:11,fontFamily:"monospace",background:T.bgW,color:T.text,boxSizing:"border-box"}}
+                style={{width:"100%",minHeight:42,padding:"8px 12px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:13,fontFamily:"monospace",background:T.bgW,color:T.text,boxSizing:"border-box"}}
               />
-              <p style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",marginTop:4}}>Stored only in your account — never sent to any server.</p>
+              <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",marginTop:6,lineHeight:settingsType.line}}>Stored only in your account — never sent to any server.</p>
             </div>
             {AS.googleClientId && (
-              <div style={{padding:"10px 14px",borderRadius:10,border:`1px solid #4CAF5040`,background:"rgba(76,175,80,0.06)",display:"flex",gap:8,alignItems:"center"}}>
-                <span style={{fontSize:13}}>✓</span>
-                <span style={{fontSize:11,color:T.tSoft,fontFamily:"system-ui"}}>Client ID saved. Go to your launchpad and tap <strong>Connect Google</strong> to authorize.</span>
+              <div style={{padding:"12px 14px",borderRadius:8,border:`1px solid #4CAF5040`,background:"rgba(76,175,80,0.06)",display:"flex",gap:10,alignItems:"center"}}>
+                <span style={{fontSize:14}}>✓</span>
+                <span style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",lineHeight:settingsType.line}}>Client ID saved. Go to your launchpad and tap <strong>Connect Google</strong> to authorize.</span>
               </div>
             )}
           </div>

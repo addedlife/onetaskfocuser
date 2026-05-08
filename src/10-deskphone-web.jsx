@@ -459,15 +459,7 @@ function isBridgeApiReady(status, online) {
 }
 
 function connectionStatusFromStatus(status) {
-  if (!status) return "Not connected";
-  const remote = remotePhoneStatus(status);
-  if (remote.contacts || remote.calls || remote.messages) return "Phone data connected";
-  const callsOk = includesConnected(status.hfp || status.Hfp || status.calls);
-  const msgsOk = includesConnected(status.map || status.Map || status.messages);
-  if (callsOk && msgsOk) return "Connected";
-  if (callsOk) return "Calls only (messages reconnecting...)";
-  if (msgsOk) return "Messages only (calls reconnecting...)";
-  return "Not connected";
+  return status ? "Connected to this device" : "This device is not reachable";
 }
 
 function webVersionLabel() {
@@ -480,15 +472,15 @@ function hostBuildNumber(status) {
 }
 
 function hostBuildLabel(status) {
-  if (isAndroidPhoneBridge(status)) return hostBuildNumber(status) || "Android Bridge";
+  if (isAndroidPhoneBridge(status)) return hostBuildNumber(status) || "Phone service";
   const numberOnly = hostBuildNumber(status);
-  return numberOnly ? `Windows Host: ${numberOnly}` : "Windows Host: unknown";
+  return numberOnly ? `This device: ${numberOnly}` : "This device";
 }
 
 function hostBuildDetailLabel(status) {
   const build = status?.build || status?.Build || status?.buildNumber || status?.BuildNumber || "";
-  if (isAndroidPhoneBridge(status)) return build || "Android Bridge";
-  return build ? `Windows Host: ${build}` : "Windows Host: not reporting build details";
+  if (isAndroidPhoneBridge(status)) return build || "Phone service";
+  return build ? `This device: ${build}` : "This device";
 }
 
 function webVersionBadge() {
@@ -524,12 +516,12 @@ function bridgeConnectSummary(status, online) {
   if (hasRemotePhoneRows(status)) {
     return `${remote.contacts || 0} contacts, ${remote.calls || 0} calls, ${remote.messages || 0} texts`;
   }
-  return isBridgeApiReady(status, online) ? "Bridge API connected" : online ? "Local bridge is ready" : "Open the bridge app";
+  return isBridgeApiReady(status, online) ? "This device is ready" : online ? "Waiting for phone data" : "This device is not reachable";
 }
 
 function bridgeStatusLabel(status, online) {
-  if (isBridgeApiReady(status, online)) return "Local bridge connected";
-  return online ? "Local bridge ready" : "Bridge app not reached";
+  if (isBridgeApiReady(status, online)) return "Connected to this device";
+  return online ? "This device is ready" : "This device is not reachable";
 }
 
 function bridgeIndicatorRows(status, online) {
@@ -538,7 +530,7 @@ function bridgeIndicatorRows(status, online) {
   return [
     {
       key: "display",
-      label: "Local bridge",
+      label: "This screen to this device",
       value: displayConnected ? "Connected" : "Not connected",
       ok: displayConnected,
     },
@@ -555,6 +547,26 @@ function bridgeIndicatorRows(status, online) {
       ok: !!(remote.messages || status?.messages || status?.Messages),
     },
   ];
+}
+
+function hostDeviceDescriptor(status) {
+  const name =
+    status?.hostDeviceName ||
+    status?.HostDeviceName ||
+    status?.computerName ||
+    status?.ComputerName ||
+    status?.hostConnector ||
+    status?.HostConnector ||
+    "this device";
+  const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const osType =
+    status?.hostOsType ||
+    status?.HostOsType ||
+    (userAgent.includes("Windows") ? "Windows" :
+     userAgent.includes("Android") ? "Android" :
+     userAgent.includes("iPad") || userAgent.includes("iPhone") ? "iOS" :
+     userAgent.includes("Mac") ? "macOS" : "");
+  return osType ? `${name}, ${osType}` : name;
 }
 
 function callBannerText(status) {
@@ -917,14 +929,14 @@ function ConnectionRail({
   connectionStatus,
   callsConnectionLabel,
   messagesConnectionLabel,
-  onReconnect,
+  onRefreshStatus,
   onSettings,
 }) {
   const isBridge = bridgeMode || isAndroidPhoneBridge(status);
   const bridgeRows = isBridge ? bridgeIndicatorRows(status, online) : [];
-  const reconnectLabel = isBridge ? "Refresh phone data" : "Reconnect";
-  const settingsLabel = isBridge ? "Bridge settings" : "Connection settings";
-  const collapsedCode = isBridge ? "API" : "BT";
+  const refreshLabel = "Check now";
+  const settingsLabel = "Connection";
+  const collapsedCode = online ? "ON" : "OFF";
   if (collapsed) {
     return (
       <div className="dp-rail-connection-collapsed" data-native-source="MainWindow.xaml:710">
@@ -934,12 +946,11 @@ function ConnectionRail({
         </div>
         <button
           className="dp-collapsed-icon-button"
-          aria-label={reconnectLabel}
-          title={reconnectLabel}
+          aria-label={refreshLabel}
+          title={refreshLabel}
           data-native-source="MainWindow.xaml:737"
           data-native-glyph="E627"
-          onClick={onReconnect}
-          disabled={!online}
+          onClick={onRefreshStatus}
         >
           {icon("sync", 20)}
         </button>
@@ -970,17 +981,16 @@ function ConnectionRail({
           </div>
           <button
             className="dp-compact-icon-button"
-            aria-label={reconnectLabel}
-            title={reconnectLabel}
+            aria-label={refreshLabel}
+            title={refreshLabel}
             data-native-source="MainWindow.xaml:665"
             data-native-glyph="E627"
-            onClick={onReconnect}
-            disabled={!online}
+            onClick={onRefreshStatus}
           >
             {icon("sync", 20)}
           </button>
         </div>
-        {isBridge ? <div className="dp-rail-subtitle">{bridgeConnectSummary(status, online)}</div> : null}
+        <div className="dp-rail-subtitle">{isBridge ? bridgeConnectSummary(status, online) : "Status refreshes automatically"}</div>
         {bridgeRows.length ? (
           <div className="dp-bridge-indicators is-compact">
             {bridgeRows.map((row) => (
@@ -997,14 +1007,6 @@ function ConnectionRail({
           </>
         )}
       </div>
-      <ShellButton
-        className="dp-tonal dp-rail-wide-button"
-        nativeSource="MainWindow.xaml:692"
-        onClick={onReconnect}
-        disabled={!online}
-      >
-        {reconnectLabel}
-      </ShellButton>
       <ShellButton
         className="dp-tonal dp-rail-wide-button"
         nativeSource="MainWindow.xaml:701"
@@ -1030,14 +1032,14 @@ function ReconnectPrompt({ visible, status, bridgeMode, onConnect, onChooseDevic
   return (
     <div className="dp-prompt dp-reconnect-prompt" data-native-source="MainWindow.xaml:788">
       <div className="dp-prompt-text">
-        <div className="dp-prompt-title">{isBridge ? "Refresh phone data?" : `Reconnect to ${hostDeviceName(status)}?`}</div>
-        <div className="dp-prompt-subtitle">{isBridge ? "The local Android bridge is the active phone source." : "Your phone was connected last session."}</div>
+        <div className="dp-prompt-title">{isBridge ? "Refresh phone status?" : `Refresh ${hostDeviceName(status)}?`}</div>
+        <div className="dp-prompt-subtitle">{isBridge ? "This screen uses the phone service on this device." : "This screen will ask this device for the latest phone status."}</div>
       </div>
       <ShellButton className="dp-primary" nativeSource="MainWindow.xaml:808" onClick={onConnect}>
-        {isBridge ? "Refresh" : "Connect"}
+        Refresh
       </ShellButton>
       <ShellButton className="dp-tonal" nativeSource="MainWindow.xaml:812" onClick={onChooseDevice}>
-        {isBridge ? "Bridge settings" : "Choose device"}
+        Connection
       </ShellButton>
       <button
         className="dp-compact-icon-button"
@@ -1610,6 +1612,7 @@ function MessagesSlice({
   const [activeImage, setActiveImage] = useState(null);
   const [imageRotation, setImageRotation] = useState(0);
   const [replyAttachments, setReplyAttachments] = useState([]);
+  const [phoneView, setPhoneView] = useState(false);
   const messageScrollRef = useRef(null);
   const composeRef = useRef(null);
   const replyAttachmentInputRef = useRef(null);
@@ -1634,6 +1637,20 @@ function MessagesSlice({
     conversations.find((conversation) => conversation.key === selectedConversationKey) ||
     visibleConversations[0] ||
     null;
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const query = window.matchMedia("(max-width: 760px), (pointer: coarse) and (max-width: 920px)");
+    const update = () => setPhoneView(query.matches);
+    update();
+    query.addEventListener?.("change", update);
+    return () => query.removeEventListener?.("change", update);
+  }, []);
+
+  const selectConversation = useCallback((key) => {
+    setSelectedConversationKey(key);
+    if (phoneView) setShowMessagesList(false);
+  }, [phoneView, setSelectedConversationKey, setShowMessagesList]);
 
   useEffect(() => {
     setReplyAttachments([]);
@@ -1922,7 +1939,7 @@ function MessagesSlice({
               key={conversation.key}
               conversation={conversation}
               selected={selectedConversation?.key === conversation.key}
-              onSelect={setSelectedConversationKey}
+              onSelect={selectConversation}
               onConversationAction={runConversationAction}
             />
           ))}
@@ -2548,6 +2565,7 @@ function SimpleTabContent({
   newMessageTo,
   contactDraft,
   host,
+  online,
   hostInput,
   setHostInput,
   onSaveHost,
@@ -2680,9 +2698,23 @@ function SimpleTabContent({
     const remotePhone = remotePhoneStatus(status);
     const phoneDataReady = isBridgeApiReady(status, true);
     const bridgeRows = isAndroidBridge ? bridgeIndicatorRows(status, true) : [];
+    const canManagePhoneConnection = Boolean(
+      online &&
+      !isAndroidBridge &&
+      status &&
+      (
+        Object.prototype.hasOwnProperty.call(status, "knownDevices") ||
+        Object.prototype.hasOwnProperty.call(status, "KnownDevices") ||
+        Object.prototype.hasOwnProperty.call(status, "scannedDevices") ||
+        Object.prototype.hasOwnProperty.call(status, "ScannedDevices") ||
+        Object.prototype.hasOwnProperty.call(status, "isScanning") ||
+        Object.prototype.hasOwnProperty.call(status, "IsScanning") ||
+        bluetoothStatus
+      )
+    );
     const settingSections = isAndroidBridge
       ? [
-          ["connection", "Bridge", "MainWindow.xaml:3995"],
+          ["connection", "Connection", "MainWindow.xaml:3995"],
           ["appearance", "Appearance", "MainWindow.xaml:4000"],
         ]
       : [
@@ -2712,31 +2744,48 @@ function SimpleTabContent({
         </div>
         {settingsSection === "connection" && (
           <section className="dp-settings-panel" data-native-source="MainWindow.xaml:3995">
-            <label className="dp-host-label">
-              Host URL
-              <input value={hostInput} onChange={(event) => setHostInput(event.target.value)} spellCheck={false} />
-            </label>
-            <div className="dp-settings-actions">
-              <ShellButton className="dp-primary" iconName="save" onClick={onSaveHost}>Save</ShellButton>
-              <ShellButton className="dp-tonal" iconName="refresh" onClick={onRefresh}>Test</ShellButton>
-              {isLocalMobileBridgeHost(hostInput) ? <ShellButton className="dp-tonal" iconName="open_in_new" onClick={onOpenBridge}>Open bridge app</ShellButton> : null}
+            <div className="dp-device-manager dp-phone-bridge-card">
+              <div className="dp-device-manager-head">
+                <h3>This screen</h3>
+                <span className={`dp-bridge-state ${online ? "is-ready" : "needs-attention"}`}>
+                  {online ? "Connected to this device" : "This device is not reachable"}
+                </span>
+              </div>
+              <div className="dp-device-status">
+                {online
+                  ? `Using ${hostDeviceDescriptor(status)}. Status refreshes automatically.`
+                  : "Open the phone service on this device, then refresh."}
+              </div>
             </div>
-            {!isAndroidBridge ? (
+            <div className="dp-settings-actions">
+              <ShellButton className="dp-primary" iconName="refresh" onClick={onRefresh}>Check now</ShellButton>
+              {isLocalMobileBridgeHost(hostInput) ? <ShellButton className="dp-tonal" iconName="open_in_new" onClick={onOpenBridge}>Open phone service</ShellButton> : null}
+            </div>
+            <details className="dp-bridge-details">
+              <summary>Device address</summary>
+              <label className="dp-host-label">
+                Address
+                <input value={hostInput} onChange={(event) => setHostInput(event.target.value)} spellCheck={false} />
+              </label>
+              <div className="dp-settings-actions">
+                <ShellButton className="dp-tonal" iconName="save" onClick={onSaveHost}>Save</ShellButton>
+              </div>
+            </details>
+            {canManagePhoneConnection ? (
               <div className="dp-settings-actions dp-settings-tools">
-                <ShellButton className="dp-tonal" iconName="bluetooth" nativeSource="MainWindow.xaml:4140" onClick={() => onCommand("/open-bluetooth-settings", "open Bluetooth settings")}>Bluetooth Settings</ShellButton>
-                <ShellButton className="dp-tonal" iconName="folder_open" nativeSource="MainWindow.xaml:4627" onClick={() => onCommand("/open-builds-folder", "open builds folder")}>Builds Folder</ShellButton>
-                <ShellButton className="dp-tonal" iconName="article" nativeSource="MainWindow.xaml:4633" onClick={() => onCommand("/open-event-log", "open event log")}>Event Log</ShellButton>
+                <ShellButton className="dp-tonal" iconName="sync" nativeSource="MainWindow.xaml:808" onClick={() => onCommand("/connect", "reconnect phone")}>Reconnect phone</ShellButton>
+                <ShellButton className="dp-tonal" iconName="bluetooth" nativeSource="MainWindow.xaml:4140" onClick={() => onCommand("/open-bluetooth-settings", "open Bluetooth settings")}>Open Bluetooth on this device</ShellButton>
               </div>
             ) : null}
             {isAndroidBridge ? (
               <div className="dp-device-manager dp-phone-bridge-card" data-native-source="MainWindow.xaml:4052">
                 <div className="dp-device-manager-head">
-                  <h3>Local bridge</h3>
+                  <h3>This device to phone</h3>
                   <span className={`dp-bridge-state ${phoneDataReady ? "is-ready" : "needs-attention"}`}>
-                    {phoneDataReady ? "Bridge connected" : "Bridge needs attention"}
+                    {phoneDataReady ? "Ready" : "Needs attention"}
                   </span>
                 </div>
-                <div className="dp-device-status">Endpoint: {normalizeHost(hostInput)}</div>
+                <div className="dp-device-status">{phoneDataReady ? "Phone data is available on this device." : "Phone data is not available yet."}</div>
                 <div className="dp-bridge-metrics" aria-label="Bridge data available">
                   <div><strong>{remotePhone.contacts || 0}</strong><span>Contacts</span></div>
                   <div><strong>{remotePhone.calls || 0}</strong><span>Calls</span></div>
@@ -2755,16 +2804,18 @@ function SimpleTabContent({
                   ))}
                 </div>
                 <div className="dp-settings-actions">
-                  <ShellButton className="dp-primary" iconName="sync" nativeSource="MainWindow.xaml:4083" onClick={() => onCommand("/phone/sync", "refresh phone data")}>Refresh phone data</ShellButton>
-                  {isLocalMobileBridgeHost(hostInput) ? <ShellButton className="dp-tonal" iconName="open_in_new" onClick={onOpenBridge}>Open bridge app</ShellButton> : null}
+                  <ShellButton className="dp-primary" iconName="sync" nativeSource="MainWindow.xaml:4083" onClick={() => onCommand("/phone/sync", "refresh phone data")}>Check now</ShellButton>
+                  {isLocalMobileBridgeHost(hostInput) ? <ShellButton className="dp-tonal" iconName="open_in_new" onClick={onOpenBridge}>Open phone service</ShellButton> : null}
                 </div>
               </div>
-            ) : (
-              <>
+            ) : canManagePhoneConnection ? (
+              <details className="dp-bridge-details">
+                <summary>Pair or switch phones</summary>
+                <div className="dp-device-status">These controls use the phone service on this device. They are not browser Bluetooth controls.</div>
                 <div className="dp-device-manager" data-native-source="MainWindow.xaml:4052">
                   <div className="dp-device-manager-head">
                     <h3>Paired phones</h3>
-                    <ShellButton className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4052" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Scan for new device</ShellButton>
+                    <ShellButton className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4052" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Find another phone</ShellButton>
                   </div>
                   {bluetoothStatus ? <div className="dp-device-status">{bluetoothStatus}</div> : null}
                   <div className="dp-device-list">
@@ -2790,8 +2841,8 @@ function SimpleTabContent({
                 </div>
                 <div className="dp-device-manager" data-native-source="MainWindow.xaml:4135">
                   <div className="dp-device-manager-head">
-                    <h3>Scanned phones</h3>
-                    <ShellButton className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4135" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Scan for devices</ShellButton>
+                    <h3>Available phones</h3>
+                    <ShellButton className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4135" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Look again</ShellButton>
                   </div>
                   <div className="dp-device-list">
                     {scannedDevices.length ? scannedDevices.map((device) => {
@@ -2807,11 +2858,11 @@ function SimpleTabContent({
                           </div>
                         </div>
                       );
-                    }) : <div className="dp-device-empty">No scanned phones shown.</div>}
+                    }) : <div className="dp-device-empty">No other phones shown.</div>}
                   </div>
                 </div>
-              </>
-            )}
+              </details>
+            ) : null}
           </section>
         )}
         {settingsSection === "appearance" && (
@@ -2915,6 +2966,8 @@ const css = `
   background: var(--dp-bg-main);
   color: var(--dp-text);
   font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
   padding-top: 64px;
 }
 .dp-web-root.is-embedded {
@@ -3026,10 +3079,10 @@ const css = `
   white-space: nowrap;
 }
 .dp-app-build {
-  font-size: 11px;
+  font-size: 12px;
 }
 .dp-app-time {
-  font-size: 10px;
+  font-size: 12px;
 }
 .dp-compact-icon-button {
   width: 40px;
@@ -3095,7 +3148,7 @@ const css = `
   align-items: center;
   justify-content: flex-start;
   gap: 0;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   text-align: left;
 }
@@ -3160,7 +3213,7 @@ const css = `
   background: var(--dp-green);
 }
 .dp-rail-status-text {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--dp-muted);
   overflow: hidden;
@@ -3169,13 +3222,13 @@ const css = `
 }
 .dp-rail-subtitle {
   margin: 7px 0 0 16px;
-  font-size: 10px;
-  line-height: 15px;
+  font-size: 12px;
+  line-height: 18px;
   color: var(--dp-muted);
 }
 .dp-rail-channel {
   margin: 9px 0 0 16px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dp-muted);
 }
 .dp-rail-channel + .dp-rail-channel {
@@ -3359,13 +3412,13 @@ const css = `
   align-items: center;
 }
 .dp-md-button {
-  min-width: 38px;
-  height: 38px;
+  min-width: 40px;
+  height: 40px;
   border: 0;
   border-radius: 4px;
   padding: 0 18px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   display: inline-flex;
@@ -3565,7 +3618,7 @@ const css = `
 .dp-filter-grid {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   margin-top: 8px;
   overflow-x: auto;
   scrollbar-width: none;
@@ -3574,14 +3627,14 @@ const css = `
   display: none;
 }
 .dp-filter-grid button {
-  height: 32px;
+  height: 36px;
   min-width: fit-content;
   border: 0;
   border-radius: 4px;
-  padding: 0 8px;
+  padding: 0 10px;
   background: transparent;
   color: var(--dp-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -3613,7 +3666,8 @@ const css = `
   position: relative;
   min-width: 0;
   border: 0;
-  padding: 13px 12px 13px 16px;
+  min-height: 68px;
+  padding: 14px 14px 14px 18px;
   background: transparent;
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr) auto;
@@ -3669,7 +3723,7 @@ const css = `
   display: none;
   gap: 8px;
   color: var(--dp-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 .dp-conversation-badges .is-danger {
@@ -4338,7 +4392,7 @@ const css = `
 }
 .dp-thread-calls-header {
   border-bottom: 1px solid var(--dp-border);
-  padding: 14px 16px;
+  padding: 16px 18px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -4350,23 +4404,23 @@ const css = `
 }
 .dp-thread-calls-header strong {
   color: var(--dp-text);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
 }
 .dp-thread-calls-header span {
   margin-top: 2px;
   color: var(--dp-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .dp-thread-calls-header-actions,
 .dp-thread-call-actions {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
 }
 .dp-call-filter-grid {
   border-bottom: 1px solid var(--dp-border);
-  padding: 8px 12px;
+  padding: 10px 14px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -4377,14 +4431,14 @@ const css = `
   display: none;
 }
 .dp-call-filter-grid button {
-  height: 30px;
+  height: 36px;
   min-width: fit-content;
   border: 0;
   border-radius: 4px;
   padding: 0 10px;
   background: transparent;
   color: var(--dp-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   border-bottom: 2px solid transparent;
   cursor: pointer;
@@ -4396,7 +4450,7 @@ const css = `
 }
 .dp-thread-dialer {
   border-bottom: 1px solid var(--dp-border);
-  padding: 10px 12px 12px;
+  padding: 12px 14px 14px;
   background: white;
 }
 .dp-thread-dialer-top {
@@ -4412,7 +4466,7 @@ const css = `
 .dp-thread-dialer-top span {
   margin-bottom: 4px;
   color: var(--dp-muted);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
 }
 .dp-thread-dialer-top input {
@@ -4420,19 +4474,20 @@ const css = `
   box-sizing: border-box;
   border: 1px solid var(--dp-border);
   border-radius: 4px;
-  padding: 8px 9px;
+  min-height: 42px;
+  padding: 9px 11px;
   color: var(--dp-text);
-  font: 400 14px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font: 400 15px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
 }
 .dp-thread-dialer-keys {
-  margin-top: 8px;
+  margin-top: 10px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+  gap: 8px;
 }
 .dp-thread-dialer-keys button {
   width: 100%;
-  height: 32px;
+  height: 40px;
   border-radius: 4px;
   color: var(--dp-text);
   font-size: 15px;
@@ -4440,10 +4495,10 @@ const css = `
   background: var(--dp-bg-input);
 }
 .dp-thread-dialer-actions {
-  margin-top: 8px;
+  margin-top: 10px;
   display: grid;
   grid-template-columns: auto 1fr 1fr 1fr;
-  gap: 6px;
+  gap: 8px;
 }
 .dp-thread-dialer-actions button {
   width: auto;
@@ -4458,10 +4513,11 @@ const css = `
   overflow: auto;
 }
 .dp-thread-call-row {
-  padding: 12px 14px;
+  min-height: 58px;
+  padding: 14px 16px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
 }
 .dp-thread-call-row > div:first-child {
@@ -4481,19 +4537,19 @@ const css = `
 }
 .dp-thread-call-row strong {
   color: var(--dp-text);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
 }
 .dp-thread-call-row span {
   margin-top: 2px;
   color: var(--dp-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .dp-thread-call-empty {
-  padding: 18px 16px;
+  padding: 20px 18px;
   color: var(--dp-muted);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.5;
 }
 .dp-contacts-shell {
   min-height: 360px;
@@ -5026,18 +5082,34 @@ const css = `
 }
 @media (max-width: 760px), (pointer: coarse) and (max-width: 920px) {
   .dp-web-root.is-mobile-bridge {
+    width: 100vw;
+    max-width: 100vw;
     min-height: 100dvh;
     padding-top: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: manipulation;
   }
   .dp-shell.is-mobile-bridge,
   .dp-shell.is-mobile-bridge.is-collapsed {
     height: 100dvh;
+    width: 100%;
+    max-width: 100vw;
     min-height: 0;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: max-content minmax(0, 1fr);
+    overflow: hidden;
+  }
+  .dp-shell.is-mobile-bridge *,
+  .dp-shell.is-mobile-bridge *::before,
+  .dp-shell.is-mobile-bridge *::after {
+    box-sizing: border-box;
   }
   .dp-shell.is-mobile-bridge .dp-rail {
-    min-height: 58px;
+    width: 100%;
+    max-width: 100vw;
+    min-height: calc(58px + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
     border-bottom: 1px solid var(--dp-border);
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -5046,8 +5118,9 @@ const css = `
     overflow: hidden;
   }
   .dp-shell.is-mobile-bridge .dp-app-identity {
-    margin: 8px 6px 8px 10px;
+    margin: 7px 4px 7px 10px;
     grid-template-columns: 1fr;
+    min-width: 44px;
   }
   .dp-shell.is-mobile-bridge .dp-app-copy,
   .dp-shell.is-mobile-bridge .dp-new-message-slot,
@@ -5061,6 +5134,8 @@ const css = `
     margin: 0 4px;
     flex-direction: row;
     overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
   .dp-shell.is-mobile-bridge .dp-nav-list::-webkit-scrollbar {
@@ -5084,8 +5159,10 @@ const css = `
     display: flex;
     flex-direction: row;
     align-items: center;
-    padding: 0 8px 0 0;
+    padding: 0 max(8px, env(safe-area-inset-right, 0px)) 0 0;
     gap: 2px;
+    min-width: 86px;
+    justify-content: flex-end;
   }
   .dp-shell.is-mobile-bridge .dp-collapsed-status-tile,
   .dp-shell.is-mobile-bridge .dp-collapsed-icon-button,
@@ -5097,28 +5174,53 @@ const css = `
   .dp-shell.is-mobile-bridge .dp-build-badge {
     display: none;
   }
+  .dp-shell.is-mobile-bridge [data-automation-id="DeskPhoneRailAutoCollapseToggle"] {
+    display: none !important;
+  }
   .dp-shell.is-mobile-bridge .dp-splitter {
     display: none;
   }
   .dp-shell.is-mobile-bridge .dp-content {
     min-height: 0;
+    width: 100%;
+    max-width: 100vw;
     grid-template-rows: auto auto auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+  .dp-shell.is-mobile-bridge .dp-prompts,
+  .dp-shell.is-mobile-bridge .dp-tab-area,
+  .dp-shell.is-mobile-bridge .dp-tab-area.is-messages,
+  .dp-shell.is-mobile-bridge .dp-message-shell,
+  .dp-shell.is-mobile-bridge .dp-thread-pane,
+  .dp-shell.is-mobile-bridge .dp-thread-layout,
+  .dp-shell.is-mobile-bridge .dp-thread-detail-grid,
+  .dp-shell.is-mobile-bridge .dp-thread-messages,
+  .dp-shell.is-mobile-bridge .dp-conversation-pane {
+    min-width: 0;
+    max-width: 100%;
   }
   .dp-shell.is-mobile-bridge .dp-tab-area {
     min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .dp-shell.is-mobile-bridge .dp-tab-area.is-messages {
     min-height: 0;
+    overflow: hidden;
   }
   .dp-shell.is-mobile-bridge .dp-message-shell,
   .dp-shell.is-mobile-bridge .dp-message-shell.is-list-hidden {
     height: 100%;
     min-height: 0;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(190px, 42%) minmax(0, 1fr);
+    grid-template-rows: minmax(180px, 40dvh) minmax(0, 1fr);
+    overflow: hidden;
   }
   .dp-shell.is-mobile-bridge .dp-message-shell.is-list-hidden {
     grid-template-rows: minmax(0, 1fr);
+  }
+  .dp-shell.is-mobile-bridge .dp-message-shell.is-list-hidden .dp-thread-pane {
+    grid-row: 1;
   }
   .dp-shell.is-mobile-bridge .dp-message-splitter,
   .dp-shell.is-mobile-bridge .dp-thread-inner-splitter {
@@ -5134,6 +5236,155 @@ const css = `
   }
   .dp-shell.is-mobile-bridge .dp-thread-calls {
     display: none;
+  }
+  .dp-shell.is-mobile-bridge .dp-message-list-header {
+    padding: 10px 10px 8px;
+  }
+  .dp-shell.is-mobile-bridge .dp-message-header-top {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    margin-left: 0;
+  }
+  .dp-shell.is-mobile-bridge .dp-history-status {
+    display: none;
+  }
+  .dp-shell.is-mobile-bridge .dp-message-header-actions {
+    flex: 0 0 auto;
+    gap: 2px;
+  }
+  .dp-shell.is-mobile-bridge .dp-message-search {
+    height: 42px;
+    border-radius: 21px;
+  }
+  .dp-shell.is-mobile-bridge .dp-filter-grid,
+  .dp-shell.is-mobile-bridge .dp-call-filter-grid,
+  .dp-shell.is-mobile-bridge .dp-settings-sections {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .dp-shell.is-mobile-bridge .dp-conversation-row {
+    grid-template-columns: 40px minmax(0, 1fr) 36px;
+    padding: 11px 8px 11px 10px;
+    min-height: 64px;
+    overflow: hidden;
+  }
+  .dp-shell.is-mobile-bridge .dp-conversation-copy,
+  .dp-shell.is-mobile-bridge .dp-conversation-topline,
+  .dp-shell.is-mobile-bridge .dp-conversation-preview {
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .dp-shell.is-mobile-bridge .dp-conversation-time {
+    font-size: 11px;
+  }
+  .dp-shell.is-mobile-bridge .dp-conversation-menu {
+    margin-left: 0;
+  }
+  .dp-shell.is-mobile-bridge .dp-thread-header {
+    padding: 8px 8px 8px 10px;
+    grid-template-columns: 34px minmax(0, 1fr) 40px;
+    gap: 8px;
+  }
+  .dp-shell.is-mobile-bridge .dp-thread-search {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-height: 38px;
+    grid-template-columns: auto minmax(0, 1fr) repeat(3, 32px);
+  }
+  .dp-shell.is-mobile-bridge .dp-thread-search > span {
+    display: none;
+  }
+  .dp-shell.is-mobile-bridge .dp-thread-actions {
+    grid-column: 3;
+  }
+  .dp-shell.is-mobile-bridge .dp-floating-menu {
+    position: fixed;
+    top: auto;
+    right: max(10px, env(safe-area-inset-right, 0px));
+    left: max(10px, env(safe-area-inset-left, 0px));
+    bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    min-width: 0;
+    max-width: calc(100vw - 20px);
+  }
+  .dp-shell.is-mobile-bridge .dp-floating-menu button,
+  .dp-shell.is-mobile-bridge .dp-thread-actions-menu .dp-floating-menu button {
+    min-height: 44px;
+    white-space: normal;
+  }
+  .dp-shell.is-mobile-bridge .dp-pinned-message-strip {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .dp-shell.is-mobile-bridge .dp-message-scroll {
+    padding: 10px 10px calc(96px + env(safe-area-inset-bottom, 0px));
+    scroll-padding-block: 12px calc(116px + env(safe-area-inset-bottom, 0px));
+  }
+  .dp-shell.is-mobile-bridge .dp-message-bubble {
+    max-width: min(88%, 34ch);
+  }
+  .dp-shell.is-mobile-bridge .dp-message-bubble.is-media-only,
+  .dp-shell.is-mobile-bridge .dp-message-bubble.is-media-only .dp-mms-image {
+    max-width: min(84vw, 320px);
+  }
+  .dp-shell.is-mobile-bridge .dp-compose-bar {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    padding: 10px max(10px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
+    gap: 8px;
+  }
+  .dp-shell.is-mobile-bridge .dp-compose-bar textarea {
+    min-height: 46px;
+    max-height: 112px;
+  }
+  .dp-shell.is-mobile-bridge .dp-compose-bar .dp-compose-attachments {
+    grid-column: 1 / -1;
+  }
+  .dp-shell.is-mobile-bridge .dp-scroll-bottom {
+    right: max(12px, env(safe-area-inset-right, 0px));
+    bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+  }
+  .dp-shell.is-mobile-bridge .dp-action-toast,
+  .dp-shell.is-mobile-bridge .dp-error-toast {
+    left: max(10px, env(safe-area-inset-left, 0px));
+    right: max(10px, env(safe-area-inset-right, 0px));
+    bottom: max(10px, env(safe-area-inset-bottom, 0px));
+  }
+  .dp-shell.is-mobile-bridge .dp-call-actions,
+  .dp-shell.is-mobile-bridge .dp-settings-actions,
+  .dp-shell.is-mobile-bridge .dp-device-row-actions,
+  .dp-shell.is-mobile-bridge .dp-thread-dialer-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    width: 100%;
+  }
+  .dp-shell.is-mobile-bridge .dp-md-button {
+    min-width: 0;
+    width: 100%;
+    min-height: 42px;
+    padding: 0 10px;
+    white-space: normal;
+  }
+  .dp-shell.is-mobile-bridge .dp-bridge-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .dp-shell.is-mobile-bridge .dp-device-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dp-shell.is-mobile-bridge .dp-calls-shell,
+  .dp-shell.is-mobile-bridge .dp-new-compose-shell,
+  .dp-shell.is-mobile-bridge .dp-contacts-shell,
+  .dp-shell.is-mobile-bridge .dp-settings-shell,
+  .dp-shell.is-mobile-bridge .dp-tab-placeholder {
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    padding: 14px max(12px, env(safe-area-inset-right, 0px)) max(18px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  }
+  .dp-shell.is-mobile-bridge .dp-contacts-grid,
+  .dp-shell.is-mobile-bridge .dp-new-compose-grid,
+  .dp-shell.is-mobile-bridge .dp-thread-dialer-top {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 980px) {
@@ -5401,39 +5652,37 @@ export function DeskPhoneWebPanel({
     [bridgeMode, online, status]
   );
   const callsConnectionLabel = useMemo(() => {
-    const hfpStatus = status?.hfp || status?.Hfp || "";
-    const isConnected = String(hfpStatus).toLowerCase().includes("connected");
+    const deviceDescriptor = hostDeviceDescriptor(status);
     return (
       <div className="dp-channel-row">
         <div className="dp-channel-status">
-          <span className={`dp-status-dot ${isConnected ? "is-online" : ""}`} />
-          <strong>Phone to phone (via Bluetooth)</strong>
+          <span className={`dp-status-dot ${online ? "is-online" : ""}`} />
+          <strong>This screen to {deviceDescriptor}</strong>
         </div>
         <div className="dp-channel-guide">
-          {isConnected ? "Connected" : "Not available. Phone may not be paired or Bluetooth is off."}
+          {online ? "Connected. Status refreshes automatically." : "Not reachable. Open the phone service on this device."}
         </div>
       </div>
     );
-  }, [status]);
+  }, [online, status]);
   const messagesConnectionLabel = useMemo(() => {
     const mapStatus = status?.map || status?.Map || "";
-    const isConnected = String(mapStatus).toLowerCase().includes("connected");
-
-    // Build device descriptor: "Device Name, OS Type"
-    const deviceName = status?.hostDeviceName || status?.HostDeviceName || "This device";
-    const osType = status?.hostOsType || status?.HostOsType ||
-      (navigator.userAgent.includes("Windows") ? "Windows" :
-       navigator.userAgent.includes("Mac") ? "macOS" : "");
-    const deviceDescriptor = osType ? `${deviceName}, ${osType}` : deviceName;
+    const hfpStatus = status?.hfp || status?.Hfp || "";
+    const callsConnected = String(hfpStatus).toLowerCase().includes("connected");
+    const textsConnected = String(mapStatus).toLowerCase().includes("connected");
+    const isConnected = callsConnected || textsConnected;
+    const deviceDescriptor = hostDeviceDescriptor(status);
 
     return (
       <div className="dp-channel-row">
         <div className="dp-channel-status">
           <span className={`dp-status-dot ${isConnected ? "is-online" : ""}`} />
-          <strong>{deviceDescriptor} to phone (via Bluetooth)</strong>
+          <strong>{deviceDescriptor} to phone</strong>
         </div>
         <div className="dp-channel-guide">
-          {isConnected ? "Connected" : "Can't reach phone app. Make sure it's running."}
+          {isConnected
+            ? `Connected for ${callsConnected && textsConnected ? "calls and texts" : callsConnected ? "calls" : "texts"} by Bluetooth.`
+            : "Phone not available. Make sure the phone is nearby, paired, and Bluetooth is on."}
         </div>
       </div>
     );
@@ -5619,7 +5868,7 @@ export function DeskPhoneWebPanel({
             connectionStatus={connectionStatus}
             callsConnectionLabel={callsConnectionLabel}
             messagesConnectionLabel={messagesConnectionLabel}
-            onReconnect={() => runCommand(bridgeMode ? "/phone/sync" : "/connect", bridgeMode ? "refresh phone data" : "connect")}
+            onRefreshStatus={refresh}
             onSettings={() => setActiveTab("settings")}
           />
 
@@ -5734,6 +5983,7 @@ export function DeskPhoneWebPanel({
               newMessageTo={newMessageTo}
               contactDraft={contactDraft}
               host={host}
+              online={online}
               hostInput={hostInput}
               setHostInput={setHostInput}
               onSaveHost={handleSaveHost}
