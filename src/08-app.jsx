@@ -1341,6 +1341,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     { id: "setup",   title: "Setup",   icon: "settings",     actions: [...(bySection.record?.actions || []).filter(a => !["record-shaila","record-call"].includes(a.id)), ...collectActions("system")] },
   ].filter(c => c.actions.length);
   const activeActionCategory = actionCategories.find(c => c.id === actionCategoryId) || actionCategories[0];
+  const chiefHasPhoneSignal = false;
+  const chiefPhoneChipCount = 0;
+  const chiefHasData = false;
+  const chiefRecentLearningNotes = [];
+  const chiefPhoneSignalSignature = "";
   const runChiefSweep = useCallback(async () => {
     if (!aiOpts || chiefSweepLoading) return;
     setChiefSweepLoading(true);
