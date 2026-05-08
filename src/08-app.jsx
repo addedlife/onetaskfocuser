@@ -812,6 +812,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [chiefSweepError, setChiefSweepError] = useState("");
   const [chiefPhoneSummary, setChiefPhoneSummary] = useState({ online: false, recentCalls: [], missedCount: 0, voicemailCount: 0, messageThreads: 0, callState: "" });
   const chiefAutoRanRef = useRef(false);
+  const chiefPhoneResweepRef = useRef("");
   const chiefLogRef = useRef([]);
   const CHIEF_LOG_KEY = "ot_chief_of_staff_log";
   if (chiefLogRef.current.length === 0) {
@@ -900,6 +901,12 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   ].filter(c => c.actions.length);
   const activeActionCategory = actionCategories.find(c => c.id === actionCategoryId) || actionCategories[0];
   const chiefHasData = primaryTasks.length > 0 || visibleShailos.length > 0 || (Array.isArray(calendarEvents) && calendarEvents.length > 0) || (Array.isArray(gmailMessages) && gmailMessages.length > 0) || chiefPhoneSummary.recentCalls.length > 0;
+  const chiefPhoneSignalSignature = useMemo(() => JSON.stringify({
+    missedCount: chiefPhoneSummary.missedCount || 0,
+    voicemailCount: chiefPhoneSummary.voicemailCount || 0,
+    callState: chiefPhoneSummary.callState || "",
+    recentCalls: (chiefPhoneSummary.recentCalls || []).slice(0, 4).map(call => `${call.name || ""}|${call.number || ""}|${call.isMissed ? 1 : 0}|${call.when || ""}`),
+  }), [chiefPhoneSummary]);
 
   const runChiefSweep = useCallback(async () => {
     if (!aiOpts || chiefSweepLoading) return;
@@ -1002,9 +1009,28 @@ Return ONLY valid JSON:
   useEffect(() => {
     if (!chiefAutoRanRef.current && aiOpts && chiefHasData) {
       chiefAutoRanRef.current = true;
+      const hasMeaningfulPhoneSignal =
+        !!chiefPhoneSummary.callState ||
+        (chiefPhoneSummary.missedCount || 0) > 0 ||
+        (chiefPhoneSummary.voicemailCount || 0) > 0 ||
+        (chiefPhoneSummary.recentCalls?.length || 0) > 0;
+      if (hasMeaningfulPhoneSignal) chiefPhoneResweepRef.current = chiefPhoneSignalSignature;
       runChiefSweep();
     }
-  }, [aiOpts, chiefHasData, runChiefSweep]);
+  }, [aiOpts, chiefHasData, chiefPhoneSignalSignature, chiefPhoneSummary, runChiefSweep]);
+
+  useEffect(() => {
+    if (!aiOpts || chiefSweepLoading || !chiefAutoRanRef.current) return;
+    const hasMeaningfulPhoneSignal =
+      !!chiefPhoneSummary.callState ||
+      (chiefPhoneSummary.missedCount || 0) > 0 ||
+      (chiefPhoneSummary.voicemailCount || 0) > 0 ||
+      (chiefPhoneSummary.recentCalls?.length || 0) > 0;
+    if (!hasMeaningfulPhoneSignal) return;
+    if (chiefPhoneResweepRef.current === chiefPhoneSignalSignature) return;
+    chiefPhoneResweepRef.current = chiefPhoneSignalSignature;
+    runChiefSweep();
+  }, [aiOpts, chiefPhoneSignalSignature, chiefPhoneSummary, chiefSweepLoading, runChiefSweep]);
 
   const addDraft = () => {
     const text = taskDraft.trim();
