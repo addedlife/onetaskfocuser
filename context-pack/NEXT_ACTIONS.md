@@ -11,7 +11,6 @@ Immediate / blocking:
 Known rough edges to watch for next session:
 
 - Before deployment, open the WebPhone surface on the actual Android browser and confirm the new phone-view protocol with real browser chrome: top rail stays contained, conversation list does not extend sideways, tapping a conversation gives the thread the screen, composer remains visible above the bottom browser bar, and Settings/Contacts/New Message do not overflow.
-- Refresh `artifacts/deskphone-web-button-audit.cjs` for the current WebPhone navigation shape. The script still expects removed pre-cleanup nav items and now fails before it can evaluate the newer layout.
 - AI email summary batch call adds ~2-3 seconds to Gmail load time. If too slow in practice, consider caching summaries in sessionStorage keyed by message ID.
 - `calendarRefreshKey` increment after Add Event causes a full re-fetch including a new AI summary batch call — acceptable for now but could be optimized to only refresh calendar events.
 - The `reconnectTimedOut` state resets correctly when token arrives, but test the edge case: user has `ot_google_connected=1` in localStorage but has revoked app access in Google — in that case silent re-auth will silently fail and the button will appear after 6s, which is correct.

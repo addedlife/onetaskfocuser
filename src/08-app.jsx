@@ -1133,10 +1133,17 @@ function ChiefOfStaffPanel({ T, tasks = [], shailos = [], shailaLog = [], priori
   }, [allPrimaryTasks, chiefPhoneSummary, nonstandardCalendarEvents, openShailaLog, stalePrimaryTasks]);
 
   const runChiefSweep = useCallback(async () => {
-    if (!aiOpts || chiefSweepLoading) return;
+    if (chiefSweepLoading) return;
     setChiefSweepLoading(true);
     setChiefSweepError("");
     try {
+      if (!aiOpts) {
+        const fallbackBrief = buildChiefFallbackBrief();
+        setChiefBrief(fallbackBrief);
+        chiefLogRef.current = [{ rightNow: fallbackBrief.rightNow, workStyleNote: fallbackBrief.workStyleNote, createdAt: fallbackBrief.createdAt }, ...chiefLogRef.current].slice(0, 12);
+        try { localStorage.setItem(CHIEF_LOG_KEY, JSON.stringify(chiefLogRef.current)); } catch {}
+        return;
+      }
       const taskSummary = `Queue items: ${primaryQueueCount}; stale: ${stalePrimaryTasks.length}; blocked: ${allPrimaryTasks.filter(task => task.blocked).length}; pinned: ${allPrimaryTasks.filter(task => task.pinned).length}.`;
       const taskLines = primaryTaskEntries.map((entry, i) => {
         const flags = [
@@ -1268,26 +1275,26 @@ Return ONLY valid JSON:
   }, [aiOpts, chiefSweepLoading, primaryTaskEntries, allPrimaryTasks, openShailaLog, allShailaLog, calendarEvents, chiefPhoneSummary, gmailMessages, priorities, nonstandardCalendarEvents, primaryQueueCount, stalePrimaryTasks, buildChiefFallbackBrief]);
 
   useEffect(() => {
-    if (!chiefAutoRanRef.current && aiOpts && chiefHasData) {
+    if (!chiefAutoRanRef.current && chiefHasData) {
       chiefAutoRanRef.current = true;
       if (chiefHasPhoneSignal) chiefPhoneResweepRef.current = chiefPhoneSignalSignature;
       runChiefSweep();
     }
-  }, [aiOpts, chiefHasData, chiefHasPhoneSignal, chiefPhoneSignalSignature, runChiefSweep]);
+  }, [chiefHasData, chiefHasPhoneSignal, chiefPhoneSignalSignature, runChiefSweep]);
 
   useEffect(() => {
-    if (!aiOpts || chiefSweepLoading || !chiefAutoRanRef.current) return;
+    if (chiefSweepLoading || !chiefAutoRanRef.current) return;
     if (!chiefHasPhoneSignal) return;
     if (chiefPhoneResweepRef.current === chiefPhoneSignalSignature) return;
     chiefPhoneResweepRef.current = chiefPhoneSignalSignature;
     runChiefSweep();
-  }, [aiOpts, chiefHasPhoneSignal, chiefPhoneSignalSignature, chiefSweepLoading, runChiefSweep]);
+  }, [chiefHasPhoneSignal, chiefPhoneSignalSignature, chiefSweepLoading, runChiefSweep]);
 
   useEffect(() => {
-    if (!chiefPendingTaskRefresh || !aiOpts || chiefSweepLoading) return;
+    if (!chiefPendingTaskRefresh || chiefSweepLoading) return;
     setChiefPendingTaskRefresh(false);
     runChiefSweep();
-  }, [chiefPendingTaskRefresh, aiOpts, chiefSweepLoading, runChiefSweep, primaryTaskEntries]);
+  }, [chiefPendingTaskRefresh, chiefSweepLoading, runChiefSweep, primaryTaskEntries]);
 
   const sourceChips = [
     { label: `Tasks [${primaryQueueCount}]`, active: primaryQueueCount > 0 },
@@ -1317,7 +1324,7 @@ Return ONLY valid JSON:
               {onOpenShailos && <button onClick={onOpenShailos} style={cleanToolbarButton(false, C)}>{suiteIcon("rule", 15)} Shailos</button>}
               {onOpenPhone && <button onClick={onOpenPhone} style={cleanToolbarButton(false, C)}>{suiteIcon("smartphone", 15)} Phone</button>}
               {!googleClientId && onOpenGoogleSettings && <button onClick={onOpenGoogleSettings} style={cleanToolbarButton(false, C)}>{suiteIcon("link", 15)} Google</button>}
-              <button onClick={runChiefSweep} disabled={!aiOpts || chiefSweepLoading} style={{ ...cleanToolbarButton(false, C), opacity: (!aiOpts || chiefSweepLoading) ? 0.5 : 1 }}>
+              <button onClick={runChiefSweep} disabled={chiefSweepLoading} style={{ ...cleanToolbarButton(false, C), opacity: chiefSweepLoading ? 0.5 : 1 }}>
                 {chiefSweepLoading ? suiteIcon("progress_activity", 15) : suiteIcon("auto_awesome", 15)}
                 {chiefSweepLoading ? "Sweeping..." : "Refresh sweep"}
               </button>
