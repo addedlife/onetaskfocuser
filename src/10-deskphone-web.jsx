@@ -1499,7 +1499,7 @@ function ConversationCallHistory({
               <div className={`dp-thread-call-row ${call.isMissed ? "is-missed" : ""}`} key={call.id || `${call.number}-${call.timestamp}`}>
                 <div>{icon(call.isMissed ? "phone_missed" : call.direction === "Outgoing" ? "call_made" : "call_received", 18)}</div>
                 <div>
-                  <strong>{call.directionLabel || call.direction || "Call"}</strong>
+                  <strong>{call.contactName || call.number || "Unknown"}</strong>
                   <span>{call.timeDisplay || formatConversationTime(call.timestamp)}{call.durationDisplay ? ` - ${call.durationDisplay}` : ""}</span>
                 </div>
                 <div className="dp-thread-call-actions">
