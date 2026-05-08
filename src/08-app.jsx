@@ -901,7 +901,19 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     { id: "setup",   title: "Setup",   icon: "settings",     actions: [...(bySection.record?.actions || []).filter(a => !["record-shaila","record-call"].includes(a.id)), ...collectActions("system")] },
   ].filter(c => c.actions.length);
   const activeActionCategory = actionCategories.find(c => c.id === actionCategoryId) || actionCategories[0];
-  const chiefHasData = primaryTasks.length > 0 || visibleShailos.length > 0 || (Array.isArray(calendarEvents) && calendarEvents.length > 0) || (Array.isArray(gmailMessages) && gmailMessages.length > 0) || chiefPhoneSummary.recentCalls.length > 0;
+  const chiefHasPhoneSignal =
+    !!chiefPhoneSummary.callState ||
+    (chiefPhoneSummary.missedCount || 0) > 0 ||
+    (chiefPhoneSummary.voicemailCount || 0) > 0 ||
+    (chiefPhoneSummary.recentCalls?.length || 0) > 0;
+  const chiefPhoneChipCount = chiefPhoneSummary.callState
+    ? chiefPhoneSummary.callState
+    : (chiefPhoneSummary.missedCount || 0) > 0
+      ? `${chiefPhoneSummary.missedCount} missed`
+      : (chiefPhoneSummary.voicemailCount || 0) > 0
+        ? `${chiefPhoneSummary.voicemailCount} voicemail`
+        : chiefPhoneSummary.recentCalls.length;
+  const chiefHasData = primaryTasks.length > 0 || visibleShailos.length > 0 || (Array.isArray(calendarEvents) && calendarEvents.length > 0) || (Array.isArray(gmailMessages) && gmailMessages.length > 0) || chiefHasPhoneSignal;
   const chiefRecentLearningNotes = Array.from(new Set(
     chiefLogRef.current
       .map(entry => (entry?.workStyleNote || "").trim())
@@ -1015,28 +1027,18 @@ Return ONLY valid JSON:
   useEffect(() => {
     if (!chiefAutoRanRef.current && aiOpts && chiefHasData) {
       chiefAutoRanRef.current = true;
-      const hasMeaningfulPhoneSignal =
-        !!chiefPhoneSummary.callState ||
-        (chiefPhoneSummary.missedCount || 0) > 0 ||
-        (chiefPhoneSummary.voicemailCount || 0) > 0 ||
-        (chiefPhoneSummary.recentCalls?.length || 0) > 0;
-      if (hasMeaningfulPhoneSignal) chiefPhoneResweepRef.current = chiefPhoneSignalSignature;
+      if (chiefHasPhoneSignal) chiefPhoneResweepRef.current = chiefPhoneSignalSignature;
       runChiefSweep();
     }
-  }, [aiOpts, chiefHasData, chiefPhoneSignalSignature, chiefPhoneSummary, runChiefSweep]);
+  }, [aiOpts, chiefHasData, chiefHasPhoneSignal, chiefPhoneSignalSignature, runChiefSweep]);
 
   useEffect(() => {
     if (!aiOpts || chiefSweepLoading || !chiefAutoRanRef.current) return;
-    const hasMeaningfulPhoneSignal =
-      !!chiefPhoneSummary.callState ||
-      (chiefPhoneSummary.missedCount || 0) > 0 ||
-      (chiefPhoneSummary.voicemailCount || 0) > 0 ||
-      (chiefPhoneSummary.recentCalls?.length || 0) > 0;
-    if (!hasMeaningfulPhoneSignal) return;
+    if (!chiefHasPhoneSignal) return;
     if (chiefPhoneResweepRef.current === chiefPhoneSignalSignature) return;
     chiefPhoneResweepRef.current = chiefPhoneSignalSignature;
     runChiefSweep();
-  }, [aiOpts, chiefPhoneSignalSignature, chiefPhoneSummary, chiefSweepLoading, runChiefSweep]);
+  }, [aiOpts, chiefHasPhoneSignal, chiefPhoneSignalSignature, chiefSweepLoading, runChiefSweep]);
 
   useEffect(() => {
     if (!chiefPendingTaskRefresh || !aiOpts || chiefSweepLoading) return;
@@ -1078,7 +1080,7 @@ Return ONLY valid JSON:
                 {[
                   { label: "Tasks", count: primaryTasks.length },
                   { label: "Shailos", count: visibleShailos.length },
-                  { label: "Phone", count: chiefPhoneSummary.missedCount ? `${chiefPhoneSummary.missedCount} missed` : chiefPhoneSummary.recentCalls.length },
+                  { label: "Phone", count: chiefPhoneChipCount },
                   { label: "Calendar", count: Array.isArray(calendarEvents) ? calendarEvents.length : 0 },
                   { label: "Gmail", count: Array.isArray(gmailMessages) ? gmailMessages.length : 0 },
                 ].map(source => (
