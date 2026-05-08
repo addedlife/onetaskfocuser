@@ -4391,59 +4391,6 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       window.clearInterval(id);
     };
   }, [deskPhoneOnline, deskPhoneThemeSyncEnabled, syncDeskPhoneTheme]);
-
-  if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui",color:"#999"}}>Loading...</div>;
-
-  const isShailaPriority = (id) => id === "shaila" || !!pris.find(p => p.id === id && p.isShaila);
-  const switchboardTaskList = actT.filter(t => !t.completed);
-  const switchboardShailaAll = actT.filter(t => isShailaPriority(t.priority) && !t.completed);
-  const switchboardShailaList = switchboardShailaAll.slice(0, 12);
-  const shailaOpenCount = switchboardShailaAll.length;
-  const switchboardShailaCompleted = actT
-    .filter(t => isShailaPriority(t.priority) && t.completed)
-    .sort((a, b) => (b.completedAt || b.createdAt || 0) - (a.completedAt || a.createdAt || 0))
-    .slice(0, 5);
-  const shellHidden = !!(zen && curT);
-  const sidebarW = shellHidden ? 0 : (sidebarOpen ? 168 : 46);
-  const launchDeskPhone = (force = false) => {
-    if (!force && deskPhoneOnline) return;
-    const now = Date.now();
-    if (now - deskPhoneLaunchAtRef.current < 15000) return;
-    deskPhoneLaunchAtRef.current = now;
-    try {
-      const link = document.createElement("a");
-      link.href = "deskphone://open";
-      link.style.display = "none";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch {
-      try { window.location.href = "deskphone://open"; } catch {}
-    }
-  };
-  const bringDeskPhoneForward = async () => {
-    if (!deskPhoneOnline) {
-      launchDeskPhone(true);
-      return;
-    }
-    try {
-      const res = await fetch("http://127.0.0.1:8765/show", { method: "POST", cache: "no-store" });
-      if (!res.ok) throw new Error("show failed");
-      await syncDeskPhoneTheme(true);
-      setDeskPhoneOnline(true);
-    } catch {
-      launchDeskPhone(true);
-    }
-  };
-  const sendDeskPhoneCommand = async (path) => {
-    try {
-      const res = await fetch(`http://127.0.0.1:8765${path}`, { method: "POST", cache: "no-store" });
-      if (!res.ok) throw new Error("phone command failed");
-      setDeskPhoneOnline(true);
-    } catch {
-      launchDeskPhone(true);
-    }
-  };
   const focusChiefWindow = useCallback(() => {
     const popup = chiefPopupRef.current;
     if (!popup || popup.closed) return false;
@@ -4584,6 +4531,59 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
   }, [chiefWindowMode, openCommandView, switchTab]);
+
+  if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui",color:"#999"}}>Loading...</div>;
+
+  const isShailaPriority = (id) => id === "shaila" || !!pris.find(p => p.id === id && p.isShaila);
+  const switchboardTaskList = actT.filter(t => !t.completed);
+  const switchboardShailaAll = actT.filter(t => isShailaPriority(t.priority) && !t.completed);
+  const switchboardShailaList = switchboardShailaAll.slice(0, 12);
+  const shailaOpenCount = switchboardShailaAll.length;
+  const switchboardShailaCompleted = actT
+    .filter(t => isShailaPriority(t.priority) && t.completed)
+    .sort((a, b) => (b.completedAt || b.createdAt || 0) - (a.completedAt || a.createdAt || 0))
+    .slice(0, 5);
+  const shellHidden = !!(zen && curT);
+  const sidebarW = shellHidden ? 0 : (sidebarOpen ? 168 : 46);
+  const launchDeskPhone = (force = false) => {
+    if (!force && deskPhoneOnline) return;
+    const now = Date.now();
+    if (now - deskPhoneLaunchAtRef.current < 15000) return;
+    deskPhoneLaunchAtRef.current = now;
+    try {
+      const link = document.createElement("a");
+      link.href = "deskphone://open";
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch {
+      try { window.location.href = "deskphone://open"; } catch {}
+    }
+  };
+  const bringDeskPhoneForward = async () => {
+    if (!deskPhoneOnline) {
+      launchDeskPhone(true);
+      return;
+    }
+    try {
+      const res = await fetch("http://127.0.0.1:8765/show", { method: "POST", cache: "no-store" });
+      if (!res.ok) throw new Error("show failed");
+      await syncDeskPhoneTheme(true);
+      setDeskPhoneOnline(true);
+    } catch {
+      launchDeskPhone(true);
+    }
+  };
+  const sendDeskPhoneCommand = async (path) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8765${path}`, { method: "POST", cache: "no-store" });
+      if (!res.ok) throw new Error("phone command failed");
+      setDeskPhoneOnline(true);
+    } catch {
+      launchDeskPhone(true);
+    }
+  };
   const askLegacyOpen = (target) => setLegacyPrompt(target);
   const openLegacyTarget = () => {
     const target = legacyPrompt;
