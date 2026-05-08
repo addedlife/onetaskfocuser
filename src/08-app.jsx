@@ -811,6 +811,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [chiefSweepLoading, setChiefSweepLoading] = useState(false);
   const [chiefSweepError, setChiefSweepError] = useState("");
   const [chiefPhoneSummary, setChiefPhoneSummary] = useState({ online: false, recentCalls: [], missedCount: 0, voicemailCount: 0, messageThreads: 0, callState: "" });
+  const [chiefPendingTaskRefresh, setChiefPendingTaskRefresh] = useState(false);
   const chiefAutoRanRef = useRef(false);
   const chiefPhoneResweepRef = useRef("");
   const chiefLogRef = useRef([]);
@@ -1032,6 +1033,12 @@ Return ONLY valid JSON:
     runChiefSweep();
   }, [aiOpts, chiefPhoneSignalSignature, chiefPhoneSummary, chiefSweepLoading, runChiefSweep]);
 
+  useEffect(() => {
+    if (!chiefPendingTaskRefresh || !aiOpts || chiefSweepLoading) return;
+    setChiefPendingTaskRefresh(false);
+    runChiefSweep();
+  }, [chiefPendingTaskRefresh, aiOpts, chiefSweepLoading, runChiefSweep, primaryTasks]);
+
   const addDraft = () => {
     const text = taskDraft.trim();
     if (!text) return;
@@ -1139,6 +1146,7 @@ Return ONLY valid JSON:
                           <button
                             onClick={() => {
                               onAddTask?.(item.text, item.priority);
+                              setChiefPendingTaskRefresh(true);
                               setChiefBrief(prev => prev ? { ...prev, taskSuggestions: prev.taskSuggestions.filter((_, suggestionIdx) => suggestionIdx !== idx) } : prev);
                             }}
                             style={{ ...cleanToolbarButton(false, C, { minHeight: 34, padding: "0 12px", color: C.accent }) }}
