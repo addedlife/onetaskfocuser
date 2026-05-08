@@ -114,14 +114,14 @@ function getInitialSuiteView() {
     const params = new URLSearchParams(window.location.search);
     const view = (params.get("suite") || params.get("view") || "").toLowerCase();
     if (view === "switchboard" || view === "nervecenter") return "nervecenter";
-    if (view === "focus" || view === "shailos" || view === "deskphone" || view === "phone" || view === "chief") return view === "phone" ? "deskphone" : view;
+    if (view === "focus" || view === "shailos" || view === "deskphone" || view === "phone") return view === "phone" ? "deskphone" : view;
     return "nervecenter";
   } catch {
     return "nervecenter";
   }
 }
 
-function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRecord, onMoreActions, autoCollapseEnabled = true, onToggleAutoCollapse, topOffset = 0 }) {
+function AppSuiteChrome({ T, active, overlayActiveIds = [], onSelect, open, onToggle, onCollapse, onRecord, onMoreActions, autoCollapseEnabled = true, onToggleAutoCollapse, topOffset = 0 }) {
   const screenApps = [
     { id: "chief",     label: "Chief",   icon: "psychology_alt" },
     { id: "focus",     label: "Tasks",   icon: "task_alt"   },
@@ -194,7 +194,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRec
 
       {/* Three app-screen buttons */}
       {screenApps.map(app => {
-        const isActive = active === app.id;
+        const isActive = active === app.id || overlayActiveIds.includes(app.id);
         return (
           <button key={app.id} onClick={() => onSelect(app.id)} title={app.label}
             style={navButton(isActive)}>
@@ -915,7 +915,7 @@ function useChiefDeskPhoneSummary(pollMs = 6500) {
   return summary;
 }
 
-function ChiefOfStaffPanel({ T, tasks = [], shailos = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenPhone, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, calendarEvents = null, gmailMessages = null, googleClientId = null, aiOpts = null, onClose }) {
+function ChiefOfStaffPanel({ T, tasks = [], shailos = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenPhone, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, calendarEvents = null, gmailMessages = null, googleClientId = null, aiOpts = null, onClose, onMinimize, standalone = false }) {
   const [chiefBrief, setChiefBrief] = useState(null);
   const [chiefSweepLoading, setChiefSweepLoading] = useState(false);
   const [chiefSweepError, setChiefSweepError] = useState("");
@@ -971,6 +971,29 @@ function ChiefOfStaffPanel({ T, tasks = [], shailos = [], priorities = [], onAdd
   const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || "";
   const fmtFrom = (raw) => { const m = raw?.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : (raw || "").split("@")[0]; };
   const decodeSnippet = s => (s || "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ").trim();
+  const parseChiefSweepPayload = raw => {
+    const text = String(raw || "").trim();
+    if (!text) return null;
+    const candidates = [];
+    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced?.[1]) candidates.push(fenced[1].trim());
+    candidates.push(text);
+    const firstBrace = text.indexOf("{");
+    const lastBrace = text.lastIndexOf("}");
+    if (firstBrace >= 0 && lastBrace > firstBrace) candidates.push(text.slice(firstBrace, lastBrace + 1));
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      try { return JSON.parse(candidate); } catch {}
+    }
+    const lines = text.split(/\n+/).map(line => line.replace(/^[-*]\s*/, "").trim()).filter(Boolean);
+    if (!lines.length) return null;
+    return {
+      rightNow: lines[0],
+      reasoning: lines.slice(1, 4),
+      taskSuggestions: [],
+      workStyleNote: "",
+    };
+  };
 
   const runChiefSweep = useCallback(async () => {
     if (!aiOpts || chiefSweepLoading) return;
@@ -1040,9 +1063,8 @@ Return ONLY valid JSON:
   "workStyleNote":"one sentence"
 }`;
       const raw = await callAI(prompt, aiOpts, { temperature: 0.2, maxOutputTokens: 1400 });
-      const match = raw?.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error("Chief of staff sweep came back empty.");
-      const parsed = JSON.parse(match[0]);
+      const parsed = parseChiefSweepPayload(raw);
+      if (!parsed) throw new Error("Sweep could not read a usable answer.");
       const validPriIds = new Set(priorities.filter(p => !p.deleted).map(p => p.id));
       const safeTaskSuggestions = Array.isArray(parsed.taskSuggestions) ? parsed.taskSuggestions
         .filter(item => item?.text?.trim())
@@ -1064,7 +1086,7 @@ Return ONLY valid JSON:
       chiefLogRef.current = [{ rightNow: safeBrief.rightNow, workStyleNote: safeBrief.workStyleNote, createdAt: safeBrief.createdAt }, ...chiefLogRef.current].slice(0, 12);
       try { localStorage.setItem(CHIEF_LOG_KEY, JSON.stringify(chiefLogRef.current)); } catch {}
     } catch (err) {
-      setChiefSweepError(err?.message || "Chief of staff sweep failed.");
+      setChiefSweepError(err?.message || "Sweep failed.");
     } finally {
       setChiefSweepLoading(false);
     }
@@ -1099,17 +1121,21 @@ Return ONLY valid JSON:
     { label: `Calendar${!googleClientId ? " - setup needed" : Array.isArray(calendarEvents) ? "" : " - waiting"}`, active: Array.isArray(calendarEvents) },
     { label: `Email${!googleClientId ? " - setup needed" : Array.isArray(gmailMessages) ? "" : " - waiting"}`, active: Array.isArray(gmailMessages) },
   ];
+  const shellStyle = standalone
+    ? { height: "100%", padding: 16, boxSizing: "border-box", display: "flex", flexDirection: "column" }
+    : { position: "fixed", top: topOffset + 16, right: 16, bottom: 16, width: `min(580px, calc(100vw - ${sidebarW + 32}px))`, zIndex: 8900, display: "flex", flexDirection: "column", pointerEvents: "auto" };
+  const contentGridColumns = "repeat(auto-fit, minmax(280px, 1fr))";
 
   return (
-    <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: "hidden", borderLeft: `1px solid ${C.divider}` }}>
-      <div style={{ height: "100%", maxWidth: 1320, margin: "0 auto", padding: "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 20 }}>
-        <section style={{ ...ncPanel, flex: "1 1 auto" }}>
+    <div style={shellStyle}>
+      <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
+        <section style={{ ...ncPanel, flex: "1 1 auto", boxShadow: "0 20px 56px rgba(0,0,0,0.18)" }}>
           <div style={{ padding: "22px 24px 18px", borderBottom: `1px solid ${C.divider}`, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
               <span style={{ ...ncSectionIcon(C.accent), background: C.hover }}>{suiteIcon("psychology_alt", 20)}</span>
               <div style={{ minWidth: 0 }}>
                 <div style={ncTitle}>Chief of Staff</div>
-                <div style={{ fontSize: 13, color: C.muted, fontFamily: "system-ui", marginTop: 2 }}>One place for the smartest next move, without cluttering the dashboard.</div>
+                <div style={{ fontSize: 13, color: C.muted, fontFamily: "system-ui", marginTop: 2 }}>Live next-step view across tasks, shailos, phone, calendar, and email.</div>
               </div>
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -1121,6 +1147,7 @@ Return ONLY valid JSON:
                 {chiefSweepLoading ? suiteIcon("progress_activity", 15) : suiteIcon("auto_awesome", 15)}
                 {chiefSweepLoading ? "Sweeping..." : "Refresh sweep"}
               </button>
+              {!standalone && onMinimize && <button onClick={onMinimize} style={cleanToolbarButton(false, C)}>{suiteIcon("minimize", 15)} Minimize</button>}
               <button onClick={onClose} style={cleanToolbarButton(false, C)}>{suiteIcon("close", 15)} Close</button>
             </div>
           </div>
@@ -1133,7 +1160,7 @@ Return ONLY valid JSON:
             ))}
           </div>
 
-          <div style={{ flex: "1 1 auto", minHeight: 0, padding: "18px 24px 24px", display: "grid", gridTemplateColumns: "minmax(0,1.35fr) minmax(300px,0.85fr)", gap: 18, alignItems: "start", overflow: "auto" }}>
+          <div style={{ flex: "1 1 auto", minHeight: 0, padding: "18px 24px 24px", display: "grid", gridTemplateColumns: contentGridColumns, gap: 18, alignItems: "start", overflow: "auto" }}>
             <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
               {chiefSweepError && (
                 <div style={{ fontSize: 13, color: C.danger, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 12, padding: "12px 14px" }}>
@@ -2339,6 +2366,31 @@ function App({ user, onSignOut }) {
   const [selPri, setSelPri] = useState(null);
   const [tab, setTab] = useState("focus");
   const [suiteView, setSuiteView] = useState(getInitialSuiteView);
+  const chiefWindowMode = useMemo(() => {
+    try { return new URLSearchParams(window.location.search).get("chiefWindow") === "1"; } catch { return false; }
+  }, []);
+  const isMobileWindowMode = useMemo(() => {
+    try {
+      return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "") || window.matchMedia("(pointer: coarse)").matches;
+    } catch {
+      return false;
+    }
+  }, []);
+  const [chiefWindowOpen, setChiefWindowOpen] = useState(false);
+  const [chiefWindowMinimized, setChiefWindowMinimized] = useState(false);
+  const chiefPopupRef = useRef(null);
+  const chiefWindowUrl = useMemo(() => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("suite");
+      url.searchParams.delete("view");
+      url.searchParams.delete("chiefWindow");
+      url.searchParams.set("chiefWindow", "1");
+      return url.toString();
+    } catch {
+      return "?chiefWindow=1";
+    }
+  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarAutoCollapse, setSidebarAutoCollapse] = useState(() => {
     try { return localStorage.getItem('ot_sidebar_autocollapse') !== 'false'; } catch { return true; }
@@ -4282,7 +4334,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
   }, [aiChatHistory, aiChatLoading]);
 
   // Helper: change tab and close any open menus
-  const switchTab = (t) => { setTab(t); setShowLM(false); setNavExp(false); setShowAides(false); setShowEntryTools(false); };
+  const switchTab = useCallback((t) => { setTab(t); setShowLM(false); setNavExp(false); setShowAides(false); setShowEntryTools(false); }, []);
 
   const syncDeskPhoneTheme = useCallback(async (force = false) => {
     if (!deskPhoneThemeSyncEnabled) return false;
@@ -4392,7 +4444,66 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       launchDeskPhone(true);
     }
   };
-  const openCommandView = (view) => {
+  const focusChiefWindow = useCallback(() => {
+    const popup = chiefPopupRef.current;
+    if (!popup || popup.closed) return false;
+    try {
+      popup.focus();
+      setChiefWindowOpen(true);
+      setChiefWindowMinimized(false);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+  const openChiefWindow = useCallback(() => {
+    if (chiefWindowMode) return;
+    if (isMobileWindowMode) {
+      setChiefWindowOpen(true);
+      setChiefWindowMinimized(false);
+      return;
+    }
+    if (focusChiefWindow()) return;
+    try {
+      const width = Math.min(780, Math.max(660, window.outerWidth - 120));
+      const height = Math.min(940, Math.max(720, window.outerHeight - 80));
+      const left = Math.max((window.screenX || window.screenLeft || 0) + Math.max(24, window.outerWidth - width - 40), 0);
+      const top = Math.max((window.screenY || window.screenTop || 0) + 40, 0);
+      const popup = window.open(
+        chiefWindowUrl,
+        "onetask-chief-of-staff",
+        `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+      );
+      if (!popup) {
+        showToast("Allow popups to open Chief of Staff in its own window.", 7000, "#B65A00");
+        return;
+      }
+      chiefPopupRef.current = popup;
+      setChiefWindowOpen(true);
+      setChiefWindowMinimized(false);
+      try { popup.focus(); } catch {}
+    } catch {
+      showToast("Chief of Staff could not open its window.", 7000, "#B65A00");
+    }
+  }, [chiefWindowMode, chiefWindowUrl, focusChiefWindow, isMobileWindowMode]);
+  const closeChiefWindow = useCallback(() => {
+    if (chiefWindowMode) {
+      try { window.close(); } catch {}
+      return;
+    }
+    const popup = chiefPopupRef.current;
+    if (popup && !popup.closed) {
+      try { popup.close(); } catch {}
+    }
+    chiefPopupRef.current = null;
+    setChiefWindowOpen(false);
+    setChiefWindowMinimized(false);
+  }, [chiefWindowMode]);
+  const openCommandView = useCallback((view) => {
+    if (view === "chief") {
+      openChiefWindow();
+      return;
+    }
     if (view === "deskphone") {
       setSuiteView("deskphone");
       setShailosAction(null);
@@ -4403,7 +4514,76 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
     setSuiteView(view);
     if (view !== "shailos") setShailosAction(null);
     if (view !== "shailos") setShowShailos(false);
-  };
+  }, [openChiefWindow, syncDeskPhoneTheme]);
+  const postChiefNavigation = useCallback((payload) => {
+    try {
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage({ type: "chief:navigate", ...payload }, window.location.origin);
+        try { window.opener.focus(); } catch {}
+        return true;
+      }
+    } catch {}
+    return false;
+  }, []);
+  const openChiefQueue = useCallback(() => {
+    if (!postChiefNavigation({ view: "focus", tab: "queue" })) {
+      openCommandView("focus");
+      switchTab("queue");
+    }
+  }, [openCommandView, postChiefNavigation, switchTab]);
+  const openChiefShailos = useCallback(() => {
+    if (!postChiefNavigation({ view: "shailos" })) {
+      setShailosAction(null);
+      openCommandView("shailos");
+    }
+  }, [openCommandView, postChiefNavigation]);
+  const openChiefPhone = useCallback(() => {
+    if (!postChiefNavigation({ view: "deskphone" })) {
+      openCommandView("deskphone");
+    }
+  }, [openCommandView, postChiefNavigation]);
+  const openChiefGoogleSettings = useCallback(() => {
+    if (!postChiefNavigation({ view: "settings", tab: "google" })) {
+      setSettingsInitialTab("google");
+      setShowSet(true);
+    }
+  }, [postChiefNavigation]);
+  useEffect(() => {
+    if (chiefWindowMode || !chiefWindowOpen || isMobileWindowMode) return undefined;
+    const id = setInterval(() => {
+      const popup = chiefPopupRef.current;
+      if (!popup || popup.closed) {
+        chiefPopupRef.current = null;
+        setChiefWindowOpen(false);
+        setChiefWindowMinimized(false);
+        clearInterval(id);
+      }
+    }, 800);
+    return () => clearInterval(id);
+  }, [chiefWindowMode, chiefWindowOpen, isMobileWindowMode]);
+  useEffect(() => {
+    if (chiefWindowMode) return undefined;
+    const handler = (e) => {
+      if (e.origin !== window.location.origin) return;
+      const data = e.data;
+      if (!data || data.type !== "chief:navigate") return;
+      if (data.view === "focus") {
+        openCommandView("focus");
+        switchTab(data.tab === "queue" || data.tab === "insights" ? data.tab : "focus");
+      } else if (data.view === "shailos") {
+        setShailosAction(data.action || null);
+        openCommandView("shailos");
+      } else if (data.view === "deskphone") {
+        openCommandView("deskphone");
+      } else if (data.view === "settings" && data.tab === "google") {
+        setSettingsInitialTab("google");
+        setShowSet(true);
+      }
+      try { window.focus(); } catch {}
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [chiefWindowMode, openCommandView, switchTab]);
   const askLegacyOpen = (target) => setLegacyPrompt(target);
   const openLegacyTarget = () => {
     const target = legacyPrompt;
@@ -4509,6 +4689,32 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
     },
   ];
   const noticeTopOffset = (networkOffline && !offlineNoticeDismissed ? 48 : 0) + (fbOffline ? 48 : 0);
+  const chiefOverlayVisible = !chiefWindowMode && isMobileWindowMode && chiefWindowOpen && !chiefWindowMinimized;
+  const chiefOverlayMinimized = !chiefWindowMode && isMobileWindowMode && chiefWindowOpen && chiefWindowMinimized;
+
+  if (chiefWindowMode) {
+    return (
+      <div ref={appRef} style={{height:"100vh",overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:"'Google Sans','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif",color:T.text,display:"flex",flexDirection:"column"}}>
+        <ChiefOfStaffPanel
+          standalone
+          T={T}
+          tasks={switchboardTaskList}
+          shailos={switchboardShailaList}
+          priorities={ap}
+          onAddTask={addVT}
+          onOpenQueue={openChiefQueue}
+          onOpenShailos={openChiefShailos}
+          onOpenPhone={openChiefPhone}
+          onOpenGoogleSettings={openChiefGoogleSettings}
+          calendarEvents={calendarEvents}
+          gmailMessages={gmailMessages}
+          googleClientId={effectiveGoogleClientId || null}
+          aiOpts={aiOpts}
+          onClose={closeChiefWindow}
+        />
+      </div>
+    );
+  }
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -5060,6 +5266,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         <AppSuiteChrome
           T={T}
           active={suiteView}
+          overlayActiveIds={chiefWindowOpen ? ["chief"] : []}
           onSelect={openCommandView}
           open={sidebarOpen}
           onToggle={() => setSidebarOpen(v => !v)}
@@ -5123,25 +5330,35 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         />
       )}
 
-      {!shellHidden && suiteView === "chief" && (
+      {!shellHidden && chiefOverlayVisible && (
         <ChiefOfStaffPanel
           T={T}
           tasks={switchboardTaskList}
           shailos={switchboardShailaList}
           priorities={ap}
           onAddTask={addVT}
-          onOpenQueue={()=>{openCommandView("focus"); switchTab("queue");}}
-          onOpenShailos={()=>{setShailosAction(null); openCommandView("shailos");}}
-          onOpenPhone={()=>openCommandView("deskphone")}
-          onOpenGoogleSettings={()=>{setSettingsInitialTab("google"); setShowSet(true);}}
+          onOpenQueue={openChiefQueue}
+          onOpenShailos={openChiefShailos}
+          onOpenPhone={openChiefPhone}
+          onOpenGoogleSettings={openChiefGoogleSettings}
           sidebarW={sidebarW}
           topOffset={noticeTopOffset}
           calendarEvents={calendarEvents}
           gmailMessages={gmailMessages}
           googleClientId={effectiveGoogleClientId || null}
           aiOpts={aiOpts}
-          onClose={()=>openCommandView("nervecenter")}
+          onClose={closeChiefWindow}
+          onMinimize={() => setChiefWindowMinimized(true)}
         />
+      )}
+
+      {!shellHidden && chiefOverlayMinimized && (
+        <button
+          onClick={() => setChiefWindowMinimized(false)}
+          style={{ position:"fixed", right:16, bottom:16, zIndex:8900, minHeight:44, padding:"0 16px", borderRadius:999, border:`1px solid ${T.brdS || T.brd}`, background:T.bgW, color:T.text, cursor:"pointer", boxShadow:T.shadow || "0 10px 28px rgba(0,0,0,0.16)", display:"flex", alignItems:"center", gap:8, fontFamily:"system-ui", fontSize:13, fontWeight:600 }}
+        >
+          {suiteIcon("psychology_alt", 16)} Chief of Staff
+        </button>
       )}
 
       {!shellHidden && suiteView === "shailos" && (
