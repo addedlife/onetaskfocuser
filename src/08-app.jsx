@@ -1309,8 +1309,8 @@ Return ONLY valid JSON:
         top: `calc(${topOffset}px + 50%)`,
         left: `calc(${sidebarW}px + ((100vw - ${sidebarW}px) / 2))`,
         transform: "translate(-50%, -50%)",
-        width: `min(720px, calc(100vw - ${sidebarW + 48}px))`,
-        height: `min(560px, calc(100vh - ${topOffset + 180}px))`,
+        width: `min(640px, calc(100vw - ${sidebarW + 48}px))`,
+        height: `min(500px, calc(100vh - ${topOffset + 180}px))`,
         zIndex: 8900,
         display: "flex",
         flexDirection: "column",
@@ -1545,7 +1545,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const boardGridStyle = chiefOpen && !chiefLayoutCompact
     ? {
         display: "grid",
-        gridTemplateColumns: "minmax(230px,1fr) minmax(520px,720px) minmax(230px,1fr)",
+        gridTemplateColumns: "minmax(230px,1fr) minmax(480px,640px) minmax(230px,1fr)",
         gridTemplateRows: "128px minmax(0,1fr)",
         gap: 20,
         flex: 1,
