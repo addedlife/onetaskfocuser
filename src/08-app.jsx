@@ -5634,7 +5634,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
   function applyApproved() {
     items.filter(it => it.approved).forEach(it => {
       if (it.cat === 'tasks')         onApply(it.text, it.priority || 'eventually');
-      else if (it.cat === 'shailos') onApply(it.synopsis || it.content || it.text || 'Shaila', 'shaila');
+      else if (it.cat === 'shailos') onApply(it.text || it.synopsis || it.content || 'Shaila', 'shaila');
       else if (it.cat === 'scheduleItems') onApply(it.when ? `${it.text} (${it.when})` : it.text, 'today');
       else if (it.cat === 'reminders') onApply(it.text, 'eventually');
       // completions + gotBacks are info-only for now
