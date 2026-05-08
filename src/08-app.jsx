@@ -915,7 +915,7 @@ function useChiefDeskPhoneSummary(pollMs = 6500) {
   return summary;
 }
 
-function ChiefOfStaffPanel({ T, tasks = [], shailos = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenPhone, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, calendarEvents = null, gmailMessages = null, googleClientId = null, aiOpts = null, onClose, onMinimize, standalone = false }) {
+function ChiefOfStaffPanel({ T, tasks = [], shailos = [], shailaLog = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenPhone, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, calendarEvents = null, gmailMessages = null, googleClientId = null, aiOpts = null, onClose, onMinimize, standalone = false }) {
   const [chiefBrief, setChiefBrief] = useState(null);
   const [chiefSweepLoading, setChiefSweepLoading] = useState(false);
   const [chiefSweepError, setChiefSweepError] = useState("");
@@ -938,10 +938,71 @@ function ChiefOfStaffPanel({ T, tasks = [], shailos = [], priorities = [], onAdd
   const ncPanel = { background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", boxShadow: "none" };
   const ncTitle = { fontSize: 20, fontWeight: 500, color: C.text, fontFamily: "system-ui", lineHeight: 1.35 };
   const ncSectionIcon = (accent = C.accent) => ({ width: 40, height: 40, borderRadius: 20, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
+  const toMillis = value => {
+    if (!value) return 0;
+    if (typeof value === "number") return value;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value?.toDate === "function") return value.toDate().getTime();
+    if (typeof value?.seconds === "number") return value.seconds * 1000;
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+  const fmtAgeCompact = value => {
+    const ms = toMillis(value);
+    if (!ms) return "";
+    const hours = Math.max(0, Math.round((Date.now() - ms) / 36e5));
+    if (hours < 1) return "new";
+    if (hours < 24) return `${hours}h waiting`;
+    const days = Math.floor(hours / 24);
+    return `${days}d waiting`;
+  };
+  const parshaRegex = /\b(bereshis|bereishis|noach|lech lecha|vayera|chayei sara|toldos|vayetzei|vayishlach|vayeshev|miketz|vayigash|vayechi|shemos|vaera|bo|beshalach|yisro|mishpatim|terumah|tetzaveh|ki tisa|vayakhel|pekudei|vayikra|tzav|shemini|tazria|metzora|acharei mos|kedoshim|emor|behar|bechukosai|bamidbar|naso|behaaloscha|shelach|korach|chukas|balak|pinchas|matos|masei|devarim|vaeschanan|eikev|reeh|shoftim|ki seitzei|ki savo|nitzavim|vayeilech|haazinu|vezos habracha)\b/i;
+  const routineCalendarRegex = /\b(shacharis|shachris|mincha|maariv|ma'ariv|davening|daf yomi|parsha|seder)\b/i;
+  const isRoutineCalendarEvent = evt => {
+    const title = String(evt?.summary || evt?.title || "").trim();
+    if (!title) return false;
+    return routineCalendarRegex.test(title) || parshaRegex.test(title);
+  };
   const shailaPriorityIds = new Set(priorities.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
   const isShailaWork = t => t?.type === "shailo-research" || t?.type === "shaila-research" || !!t?.shailaId || !!t?.isGetBackStep || shailaPriorityIds.has(t?.priority);
-  const primaryTasks = tasks.filter(t => !isShailaWork(t)).slice(0, 8);
-  const visibleShailos = shailos.filter(s => s.type !== "shaila-research" && s.type !== "shailo-research").slice(0, 10);
+  const allPrimaryTasks = tasks.filter(t => !isShailaWork(t));
+  const primaryTaskGroups = new Map();
+  allPrimaryTasks.filter(t => t.parentTask).forEach(t => {
+    if (!primaryTaskGroups.has(t.parentTask)) primaryTaskGroups.set(t.parentTask, []);
+    primaryTaskGroups.get(t.parentTask).push(t);
+  });
+  primaryTaskGroups.forEach(group => group.sort((a, b) => (a.stepIndex || 0) - (b.stepIndex || 0)));
+  const primaryStandaloneTasks = allPrimaryTasks.filter(t => !t.parentTask);
+  const primaryQueueCount = primaryStandaloneTasks.length + primaryTaskGroups.size;
+  const primaryTaskEntries = [
+    ...primaryStandaloneTasks.map(task => ({
+      text: `[${gP(priorities, task.priority)?.label || task.priority}] ${task.text}`,
+      age: fmtAgeCompact(task.createdAt),
+      blocked: !!task.blocked,
+      pinned: !!task.pinned,
+    })),
+    ...[...primaryTaskGroups.entries()].map(([parentTask, steps]) => ({
+      text: `[${gP(priorities, steps[0]?.priority)?.label || steps[0]?.priority || "Task"}] ${parentTask} -> next: ${steps[0]?.text || "step"}`,
+      age: fmtAgeCompact(steps[0]?.createdAt),
+      blocked: steps.some(step => step.blocked),
+      pinned: steps.some(step => step.pinned),
+      detail: `${steps.length} open steps`,
+    })),
+  ];
+  const allShailaLog = (Array.isArray(shailaLog) && shailaLog.length ? shailaLog : shailos)
+    .filter(Boolean)
+    .sort((a, b) => {
+      const aTime = toMillis(a.updatedAt || a.createdAt || a.date);
+      const bTime = toMillis(b.updatedAt || b.createdAt || b.date);
+      return bTime - aTime;
+    });
+  const getShailaStatus = shaila => String(shaila?.status || (shaila?.completed ? "answered" : "pending") || "pending").toLowerCase();
+  const getShailaTitle = shaila => shaila?.synopsis || shaila?.question || shaila?.content || shaila?.parsedShaila || shaila?.text || "Open shaila";
+  const openShailaLog = allShailaLog.filter(shaila => !["answered", "got_back", "done", "closed"].includes(getShailaStatus(shaila)));
+  const visibleShailos = openShailaLog.slice(0, 10);
+  const recentClosedShailos = allShailaLog.filter(shaila => ["answered", "got_back"].includes(getShailaStatus(shaila))).slice(0, 12);
+  const nonstandardCalendarEvents = Array.isArray(calendarEvents) ? calendarEvents.filter(evt => !isRoutineCalendarEvent(evt)) : [];
+  const stalePrimaryTasks = allPrimaryTasks.filter(task => isTaskAged(task, DEF_AGE_THRESHOLDS));
   const chiefHasPhoneSignal =
     !!chiefPhoneSummary.callState ||
     (chiefPhoneSummary.missedCount || 0) > 0 ||
@@ -956,7 +1017,7 @@ function ChiefOfStaffPanel({ T, tasks = [], shailos = [], priorities = [], onAdd
         : chiefPhoneSummary.online
           ? "connected"
           : "offline";
-  const chiefHasData = primaryTasks.length > 0 || visibleShailos.length > 0 || (Array.isArray(calendarEvents) && calendarEvents.length > 0) || (Array.isArray(gmailMessages) && gmailMessages.length > 0) || chiefHasPhoneSignal;
+  const chiefHasData = primaryTaskEntries.length > 0 || allShailaLog.length > 0 || (Array.isArray(calendarEvents) && calendarEvents.length > 0) || (Array.isArray(gmailMessages) && gmailMessages.length > 0) || chiefHasPhoneSignal;
   const chiefRecentLearningNotes = Array.from(new Set(
     chiefLogRef.current
       .map(entry => (entry?.workStyleNote || "").trim())
@@ -987,28 +1048,120 @@ function ChiefOfStaffPanel({ T, tasks = [], shailos = [], priorities = [], onAdd
     }
     const lines = text.split(/\n+/).map(line => line.replace(/^[-*]\s*/, "").trim()).filter(Boolean);
     if (!lines.length) return null;
+    const rightNowLine = lines.find(line => /^right\s*now[:\-]/i.test(line)) || lines[0];
+    const workStyleLine = lines.find(line => /^work\s*style\s*note[:\-]/i.test(line)) || "";
     return {
-      rightNow: lines[0],
-      reasoning: lines.slice(1, 4),
+      rightNow: rightNowLine.replace(/^right\s*now[:\-]\s*/i, "").trim(),
+      reasoning: lines.filter(line => line !== rightNowLine && line !== workStyleLine).slice(0, 3),
       taskSuggestions: [],
-      workStyleNote: "",
+      workStyleNote: workStyleLine.replace(/^work\s*style\s*note[:\-]\s*/i, "").trim(),
     };
   };
+  const buildChiefFallbackBrief = useCallback(() => {
+    const missedCalls = chiefPhoneSummary.missedCount || 0;
+    const upcomingEvent = nonstandardCalendarEvents[0];
+    const oldestStaleTask = stalePrimaryTasks[0] || allPrimaryTasks[0];
+    if (missedCalls > 0) {
+      return {
+        rightNow: missedCalls === 1 ? "Check the missed call and decide the callback." : `Sort the ${missedCalls} missed calls and pick the first callback.`,
+        reasoning: [
+          "Phone misses age badly and can turn into loose ends fast.",
+          "A quick callback choice creates clarity even if the call itself waits.",
+          chiefPhoneSummary.callState ? `Phone status also shows ${chiefPhoneSummary.callState}.` : "The phone feed is showing real activity."
+        ],
+        taskSuggestions: [],
+        workStyleNote: "YCD usually benefits from clearing live human obligations before quieter backlog work.",
+        createdAt: Date.now(),
+      };
+    }
+    if (upcomingEvent) {
+      return {
+        rightNow: `Prep for ${upcomingEvent.summary || "the next calendar item"}.`,
+        reasoning: [
+          "This is a non-routine event, so it is more likely to need preparation.",
+          "Calendar work becomes easier when converted into one concrete prep step.",
+          "Getting ahead of an event prevents it from colliding with the queue later."
+        ],
+        taskSuggestions: [{
+          text: `Prep for ${upcomingEvent.summary || "upcoming event"}`,
+          priority: "today",
+          source: "calendar",
+          reason: "Non-routine calendar event detected."
+        }],
+        workStyleNote: "YCD tends to do better when calendar obligations become explicit prep actions.",
+        createdAt: Date.now(),
+      };
+    }
+    if (oldestStaleTask) {
+      return {
+        rightNow: `Move ${oldestStaleTask.text} one step forward.`,
+        reasoning: [
+          `${fmtAgeCompact(oldestStaleTask.createdAt) || "This task has been waiting"} and is still sitting in the queue.`,
+          "Reducing stale debt usually creates more relief than starting a brand-new item.",
+          "One concrete step is better than rethinking the whole queue."
+        ],
+        taskSuggestions: [],
+        workStyleNote: "YCD usually regains momentum when an older hanging task is made smaller and concrete.",
+        createdAt: Date.now(),
+      };
+    }
+    if (openShailaLog.length > 0) {
+      const shaila = openShailaLog[0];
+      return {
+        rightNow: `Push the next shaila forward: ${getShailaTitle(shaila)}.`,
+        reasoning: [
+          "Open shailos tend to stay mentally noisy until they clearly move forward.",
+          "A research or follow-up step now reduces background drag.",
+          "The shaila log is showing pending items that still need closure."
+        ],
+        taskSuggestions: [],
+        workStyleNote: "YCD often benefits when open questions are turned into the next visible step instead of left abstract.",
+        createdAt: Date.now(),
+      };
+    }
+    return {
+      rightNow: "Choose one current task and make the next step explicit.",
+      reasoning: [
+        "The board is active even if the AI answer came back blank.",
+        "Small concrete next moves beat broad re-planning.",
+        "Once one item is moving, the rest of the board becomes easier to judge."
+      ],
+      taskSuggestions: [],
+      workStyleNote: "YCD works best when the next move is concrete, visible, and small enough to start immediately.",
+      createdAt: Date.now(),
+    };
+  }, [allPrimaryTasks, chiefPhoneSummary, nonstandardCalendarEvents, openShailaLog, stalePrimaryTasks]);
 
   const runChiefSweep = useCallback(async () => {
     if (!aiOpts || chiefSweepLoading) return;
     setChiefSweepLoading(true);
     setChiefSweepError("");
     try {
-      const taskLines = primaryTasks.slice(0, 8).map((t, i) => `${i + 1}. [${gP(priorities, t.priority)?.label || t.priority}] ${t.text}`).join("\n") || "(none)";
-      const shailaLines = visibleShailos.slice(0, 6).map((s, i) => `${i + 1}. ${s.synopsis || s.question || s.content || s.text || "Open shaila"}`).join("\n") || "(none)";
+      const taskSummary = `Queue items: ${primaryQueueCount}; stale: ${stalePrimaryTasks.length}; blocked: ${allPrimaryTasks.filter(task => task.blocked).length}; pinned: ${allPrimaryTasks.filter(task => task.pinned).length}.`;
+      const taskLines = primaryTaskEntries.map((entry, i) => {
+        const flags = [
+          entry.age,
+          entry.detail || "",
+          entry.blocked ? "blocked" : "",
+          entry.pinned ? "pinned" : "",
+        ].filter(Boolean).join("; ");
+        return `${i + 1}. ${entry.text}${flags ? ` (${flags})` : ""}`;
+      }).join("\n") || "(none)";
+      const shailaStatusSummary = `Open: ${openShailaLog.length}; answered: ${allShailaLog.filter(s => getShailaStatus(s) === "answered").length}; got back: ${allShailaLog.filter(s => getShailaStatus(s) === "got_back").length}.`;
+      const shailaLines = allShailaLog.map((shaila, i) => {
+        const status = getShailaStatus(shaila);
+        const title = getShailaTitle(shaila);
+        const age = fmtAgeCompact(shaila.updatedAt || shaila.createdAt || shaila.date);
+        return `${i + 1}. [${status}] ${title}${age ? ` (${age})` : ""}`;
+      }).join("\n") || "(none)";
+      const calendarSummary = `All calendar items today: ${Array.isArray(calendarEvents) ? calendarEvents.length : 0}; nonstandard items: ${nonstandardCalendarEvents.length}.`;
       const calendarLines = Array.isArray(calendarEvents) && calendarEvents.length
-        ? calendarEvents.slice(0, 6).map((evt, i) => {
+        ? nonstandardCalendarEvents.map((evt, i) => {
             const start = evt.start?.dateTime || evt.start?.date || "";
             const when = start ? new Date(start).toLocaleString([], { month: "short", day: "numeric", hour: evt.start?.dateTime ? "numeric" : undefined, minute: evt.start?.dateTime ? "2-digit" : undefined }) : "No time";
             return `${i + 1}. ${evt.summary || "(no title)"} - ${when}`;
           }).join("\n")
-        : "(none)";
+        : "(none nonstandard)";
       const phoneLines = chiefPhoneSummary.recentCalls?.length
         ? chiefPhoneSummary.recentCalls.map((call, i) => `${i + 1}. ${call.isMissed ? "MISSED" : "Recent"} call - ${call.name}${call.when ? ` - ${call.when}` : ""}`).join("\n")
         : chiefPhoneSummary.online
@@ -1028,13 +1181,22 @@ function ChiefOfStaffPanel({ T, tasks = [], shailos = [], priorities = [], onAdd
 
 Date/time: ${now.toLocaleString()}
 
-CURRENT TASKS:
+TASK QUEUE SUMMARY:
+${taskSummary}
+
+FULL TASK QUEUE:
 ${taskLines}
 
-OPEN SHAILOS:
+SHAILA LOG SUMMARY:
+${shailaStatusSummary}
+
+FULL SHAILA LOG:
 ${shailaLines}
 
-CALENDAR:
+CALENDAR SUMMARY:
+${calendarSummary}
+
+NONSTANDARD CALENDAR ITEMS:
 ${calendarLines}
 
 PHONE:
@@ -1050,6 +1212,7 @@ Rules:
 - Be decisive, brief, and concrete.
 - Prefer the smallest real next move that unlocks momentum.
 - If an existing task should clearly come first, say so plainly in rightNow.
+- Never return blank output. If the board is sparse or ambiguous, still return your best single next move.
 - taskSuggestions are ONLY for new tasks worth creating from email, calendar, missed calls, or shaila follow-up. Do not duplicate tasks already in the queue.
 - Keep workStyleNote to one sentence about how YCD is most likely to work best right now.
 
@@ -1064,7 +1227,13 @@ Return ONLY valid JSON:
 }`;
       const raw = await callAI(prompt, aiOpts, { temperature: 0.2, maxOutputTokens: 1400 });
       const parsed = parseChiefSweepPayload(raw);
-      if (!parsed) throw new Error("Sweep could not read a usable answer.");
+      if (!parsed) {
+        const fallbackBrief = buildChiefFallbackBrief();
+        setChiefBrief(fallbackBrief);
+        chiefLogRef.current = [{ rightNow: fallbackBrief.rightNow, workStyleNote: fallbackBrief.workStyleNote, createdAt: fallbackBrief.createdAt }, ...chiefLogRef.current].slice(0, 12);
+        try { localStorage.setItem(CHIEF_LOG_KEY, JSON.stringify(chiefLogRef.current)); } catch {}
+        return;
+      }
       const validPriIds = new Set(priorities.filter(p => !p.deleted).map(p => p.id));
       const safeTaskSuggestions = Array.isArray(parsed.taskSuggestions) ? parsed.taskSuggestions
         .filter(item => item?.text?.trim())
@@ -1086,11 +1255,17 @@ Return ONLY valid JSON:
       chiefLogRef.current = [{ rightNow: safeBrief.rightNow, workStyleNote: safeBrief.workStyleNote, createdAt: safeBrief.createdAt }, ...chiefLogRef.current].slice(0, 12);
       try { localStorage.setItem(CHIEF_LOG_KEY, JSON.stringify(chiefLogRef.current)); } catch {}
     } catch (err) {
-      setChiefSweepError(err?.message || "Sweep failed.");
+      const fallbackBrief = buildChiefFallbackBrief();
+      if (fallbackBrief) {
+        setChiefBrief(fallbackBrief);
+        setChiefSweepError("");
+      } else {
+        setChiefSweepError(err?.message || "Sweep failed.");
+      }
     } finally {
       setChiefSweepLoading(false);
     }
-  }, [aiOpts, chiefSweepLoading, primaryTasks, visibleShailos, calendarEvents, chiefPhoneSummary, gmailMessages, priorities]);
+  }, [aiOpts, chiefSweepLoading, primaryTaskEntries, allPrimaryTasks, openShailaLog, allShailaLog, calendarEvents, chiefPhoneSummary, gmailMessages, priorities, nonstandardCalendarEvents, primaryQueueCount, stalePrimaryTasks, buildChiefFallbackBrief]);
 
   useEffect(() => {
     if (!chiefAutoRanRef.current && aiOpts && chiefHasData) {
@@ -1112,14 +1287,13 @@ Return ONLY valid JSON:
     if (!chiefPendingTaskRefresh || !aiOpts || chiefSweepLoading) return;
     setChiefPendingTaskRefresh(false);
     runChiefSweep();
-  }, [chiefPendingTaskRefresh, aiOpts, chiefSweepLoading, runChiefSweep, primaryTasks]);
+  }, [chiefPendingTaskRefresh, aiOpts, chiefSweepLoading, runChiefSweep, primaryTaskEntries]);
 
   const sourceChips = [
-    { label: "Tasks", active: primaryTasks.length > 0 },
-    { label: "Shailos", active: visibleShailos.length > 0 },
-    { label: `Phone${chiefPhoneChipLabel ? ` - ${chiefPhoneChipLabel}` : ""}`, active: chiefHasPhoneSignal || chiefPhoneSummary.online },
-    { label: `Calendar${!googleClientId ? " - setup needed" : Array.isArray(calendarEvents) ? "" : " - waiting"}`, active: Array.isArray(calendarEvents) },
-    { label: `Email${!googleClientId ? " - setup needed" : Array.isArray(gmailMessages) ? "" : " - waiting"}`, active: Array.isArray(gmailMessages) },
+    { label: `Tasks [${primaryQueueCount}]`, active: primaryQueueCount > 0 },
+    { label: `Missed calls [${chiefPhoneSummary.missedCount || 0}]`, active: (chiefPhoneSummary.missedCount || 0) > 0 },
+    { label: `Shailos [${openShailaLog.length}]`, active: openShailaLog.length > 0 },
+    { label: !googleClientId ? "Nonstandard calendar [setup]" : Array.isArray(calendarEvents) ? `Nonstandard calendar [${nonstandardCalendarEvents.length}]` : "Nonstandard calendar [...]", active: Array.isArray(calendarEvents) && nonstandardCalendarEvents.length > 0 },
   ];
   const shellStyle = standalone
     ? { height: "100%", padding: 16, boxSizing: "border-box", display: "flex", flexDirection: "column" }
@@ -1302,6 +1476,8 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || '';
   const fmtFrom = (raw) => { const m = raw?.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : (raw || '').split('@')[0]; };
   const decodeSnippet = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ').trim();
+  const calendarPreviewEvents = Array.isArray(calendarEvents) ? calendarEvents.slice(0, 20) : calendarEvents;
+  const gmailPreviewMessages = Array.isArray(gmailMessages) ? gmailMessages.slice(0, 20) : gmailMessages;
 
   async function handleAddEvent() {
     if (!addEventText.trim() || addEventLoading) return;
@@ -1884,7 +2060,7 @@ Return ONLY valid JSON:
               )}
 
               {/* ── Calendar card ── */}
-              {(calendarEvents !== null || (googleLoading && googleToken)) && (
+              {(calendarPreviewEvents !== null || (googleLoading && googleToken)) && (
                 <div style={cardWrap}>
                   <div style={cardHead}>
                     <span style={headLabel}>📅 Today</span>
@@ -1901,14 +2077,14 @@ Return ONLY valid JSON:
                     </div>
                   </div>
                   <div style={cardBody}>
-                    {!calendarEvents ? (
+                    {!calendarPreviewEvents ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: 7 }}>
                         <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
                         <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui" }}>Loading calendar…</span>
                       </div>
-                    ) : calendarEvents.length === 0 ? (
+                    ) : calendarPreviewEvents.length === 0 ? (
                       <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: "12px 0", textAlign: "center" }}>Nothing today</p>
-                    ) : calendarEvents.map((evt, i) => {
+                    ) : calendarPreviewEvents.map((evt, i) => {
                       const now = isNow(evt);
                       const rowStyle = { display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 4px", textDecoration: "none", color: "inherit", borderRadius: 4 };
                       const inner = (
@@ -1931,7 +2107,7 @@ Return ONLY valid JSON:
               )}
 
               {/* ── Gmail card ── */}
-              {(gmailMessages !== null || (googleLoading && googleToken)) && (
+              {(gmailPreviewMessages !== null || (googleLoading && googleToken)) && (
                 <div style={cardWrap}>
                   <div style={cardHead}>
                     <span style={headLabel}>✉️ Important &amp; Unread</span>
@@ -1943,14 +2119,14 @@ Return ONLY valid JSON:
                     </div>
                   </div>
                   <div style={cardBody}>
-                    {!gmailMessages ? (
+                    {!gmailPreviewMessages ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: 7 }}>
                         <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
                         <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui" }}>Loading mail…</span>
                       </div>
-                    ) : gmailMessages.length === 0 ? (
+                    ) : gmailPreviewMessages.length === 0 ? (
                       <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: "12px 0", textAlign: "center" }}>Inbox zero 🎉</p>
-                    ) : gmailMessages.map((msg, i) => {
+                    ) : gmailPreviewMessages.map((msg, i) => {
                       const subject = gmailHeader(msg, 'Subject') || '(no subject)';
                       const from = fmtFrom(gmailHeader(msg, 'From'));
                       const date = fmtTime(gmailHeader(msg, 'Date'));
@@ -2826,7 +3002,7 @@ function App({ user, onSignOut }) {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
-    const eventsUrl = (calId) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=25`;
+    const eventsUrl = (calId) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=100`;
 
     // Step 1: try to get all subscribed calendars via calendarList
     let cals = null;
@@ -2851,7 +3027,7 @@ function App({ user, onSignOut }) {
       if (r.status === 401) throw new Error('token_expired');
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + r.status}`); }
       const d = await r.json();
-      return sortCalEvents(d.items || []).slice(0, 20);
+      return sortCalEvents(d.items || []);
     }
 
     // Step 2: fetch events from each calendar in parallel
@@ -2864,11 +3040,11 @@ function App({ user, onSignOut }) {
     );
     // Re-throw token_expired if any calendar hit it
     for (const r of results) { if (r.reason?.message === 'token_expired') throw new Error('token_expired'); }
-    // Merge, dedupe by event id, sort (timed first, all-day last), cap at 20
+    // Merge, dedupe by event id, sort (timed first, all-day last)
     const seen = new Set();
     const all = results.flatMap(r => r.status === 'fulfilled' ? r.value : []).filter(evt => { if (seen.has(evt.id)) return false; seen.add(evt.id); return true; });
     console.log('[Google] Total calendar events after merge:', all.length);
-    return sortCalEvents(all).slice(0, 20);
+    return sortCalEvents(all);
   }
 
   async function fetchGmailData(token) {
@@ -4700,6 +4876,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           T={T}
           tasks={switchboardTaskList}
           shailos={switchboardShailaList}
+          shailaLog={shailosRef.current}
           priorities={ap}
           onAddTask={addVT}
           onOpenQueue={openChiefQueue}
@@ -5335,6 +5512,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           T={T}
           tasks={switchboardTaskList}
           shailos={switchboardShailaList}
+          shailaLog={shailosRef.current}
           priorities={ap}
           onAddTask={addVT}
           onOpenQueue={openChiefQueue}
