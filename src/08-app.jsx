@@ -956,7 +956,7 @@ Rules:
 - Be decisive, brief, and concrete.
 - Prefer the smallest real next move that unlocks momentum.
 - If an existing task should clearly come first, say so plainly in rightNow.
-- taskSuggestions are ONLY for new tasks worth creating from email, calendar, or shaila follow-up. Do not duplicate tasks already in the queue.
+- taskSuggestions are ONLY for new tasks worth creating from email, calendar, missed calls, or shaila follow-up. Do not duplicate tasks already in the queue.
 - Keep workStyleNote to one sentence about how YCD is most likely to work best right now.
 
 Return ONLY valid JSON:
@@ -964,7 +964,7 @@ Return ONLY valid JSON:
   "rightNow":"short imperative sentence",
   "reasoning":["reason 1","reason 2","reason 3"],
   "taskSuggestions":[
-    {"text":"task to create","priority":"now|today|eventually","source":"email|calendar|shaila|task","reason":"why this is worth creating"}
+    {"text":"task to create","priority":"now|today|eventually","source":"email|calendar|phone|shaila|task","reason":"why this is worth creating"}
   ],
   "workStyleNote":"one sentence"
 }`;
@@ -979,7 +979,7 @@ Return ONLY valid JSON:
         .map(item => ({
           text: item.text.trim(),
           priority: validPriIds.has(item.priority) ? item.priority : "today",
-          source: ["email", "calendar", "shaila", "task"].includes(item.source) ? item.source : "task",
+          source: ["email", "calendar", "phone", "shaila", "task"].includes(item.source) ? item.source : "task",
           reason: (item.reason || "").trim(),
         })) : [];
       const safeBrief = {
@@ -1058,7 +1058,7 @@ Return ONLY valid JSON:
 
               {!chiefBrief && !chiefSweepLoading && (
                 <div style={{ border: `1px dashed ${C.divider}`, borderRadius: 12, padding: "18px 20px", background: C.bgSoft }}>
-                  <div style={{ fontSize: 18, fontWeight: 500, color: C.text, lineHeight: 1.45, marginBottom: 6 }}>Ready to sweep your tasks, shailos, calendar, and email.</div>
+                  <div style={{ fontSize: 18, fontWeight: 500, color: C.text, lineHeight: 1.45, marginBottom: 6 }}>Ready to sweep your tasks, shailos, calendar, email, and phone activity.</div>
                   <div style={{ fontSize: 13, color: C.muted, fontFamily: "system-ui", lineHeight: 1.55 }}>This will pick the best next move and suggest any missing follow-up tasks worth creating.</div>
                 </div>
               )}
@@ -1125,7 +1125,7 @@ Return ONLY valid JSON:
                   </div>
                 ) : (
                   <div style={{ fontSize: 13, color: C.muted, fontFamily: "system-ui", lineHeight: 1.55 }}>
-                    No extra tasks to create right now. The box will place follow-up ideas here when email, calendar, or shaila work deserves its own task.
+                    No extra tasks to create right now. The box will place follow-up ideas here when email, calendar, phone activity, or shaila work deserves its own task.
                   </div>
                 )}
               </div>
