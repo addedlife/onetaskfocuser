@@ -922,7 +922,7 @@ function ConnectionRail({
 }) {
   const isBridge = bridgeMode || isAndroidPhoneBridge(status);
   const bridgeRows = isBridge ? bridgeIndicatorRows(status, online) : [];
-  const reconnectLabel = isBridge ? "Refresh phone data" : "Reconnect saved phone";
+  const reconnectLabel = isBridge ? "Refresh phone data" : "Reconnect";
   const settingsLabel = isBridge ? "Bridge settings" : "Connection settings";
   const collapsedCode = isBridge ? "API" : "BT";
   if (collapsed) {
@@ -2853,7 +2853,6 @@ function SimpleTabContent({
             </div>
           </section>
         )}
-        <div className="dp-host-note">Active endpoint: {host}</div>
       </div>
     );
   }
