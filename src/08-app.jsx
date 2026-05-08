@@ -114,7 +114,7 @@ function getInitialSuiteView() {
     const params = new URLSearchParams(window.location.search);
     const view = (params.get("suite") || params.get("view") || "").toLowerCase();
     if (view === "switchboard" || view === "nervecenter") return "nervecenter";
-    if (view === "focus" || view === "shailos" || view === "deskphone" || view === "phone") return view === "phone" ? "deskphone" : view;
+    if (view === "focus" || view === "shailos" || view === "deskphone" || view === "phone" || view === "chief") return view === "phone" ? "deskphone" : view;
     return "nervecenter";
   } catch {
     return "nervecenter";
@@ -123,6 +123,7 @@ function getInitialSuiteView() {
 
 function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRecord, onMoreActions, autoCollapseEnabled = true, onToggleAutoCollapse, topOffset = 0 }) {
   const screenApps = [
+    { id: "chief",     label: "Chief",   icon: "psychology_alt" },
     { id: "focus",     label: "Tasks",   icon: "task_alt"   },
     { id: "shailos",   label: "Shailos", icon: "rule"       },
     { id: "deskphone", label: "Phone",   icon: "smartphone" },
@@ -445,6 +446,9 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   const callerName = status?.callerName || status?.CallerName || status?.callerDisplay || status?.CallerDisplay || status?.callerID || status?.CallerID || "";
   const callerNumber = status?.callerNumber || status?.CallerNumber || status?.incomingNumber || status?.IncomingNumber || "";
   const callerDisplay = callerName || (callerNumber ? (lookupName(callerNumber) || callerNumber) : "");
+  const compactStatusText = callerDisplay && (isIncoming || isOnCall)
+    ? `${callerDisplay} · ${isIncoming ? "Incoming call" : "On call"}`
+    : statusText;
   const vmCount = parseInt(status?.voicemailCount || status?.VoicemailCount || status?.voicemail?.count || 0, 10) || 0;
 
   const threads = useMemo(() => {
@@ -569,10 +573,12 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
     <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden", color: C.text }}>
 
       {/* ── Status bar ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, minHeight: 44 }}>
-        <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: isIncoming ? C.success : statusOnline ? (isOnCall ? C.warning : C.success) : C.faint }} />
+      <div style={{ display: "flex", alignItems: "center", gap: compact ? 8 : 10, minWidth: 0, minHeight: compact ? 28 : 44 }}>
+        <span style={{ width: compact ? 7 : 8, height: compact ? 7 : 8, borderRadius: 99, flexShrink: 0, background: isIncoming ? C.success : statusOnline ? (isOnCall ? C.warning : C.success) : C.faint }} />
         <span style={{ flex: 1, minWidth: 0 }}>
-          {callerDisplay && (isIncoming || isOnCall) ? (
+          {compact ? (
+            <span style={{ display: "block", fontSize: 12, fontWeight: 500, color: statusOnline ? (isIncoming ? C.success : C.muted) : C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{compactStatusText}</span>
+          ) : callerDisplay && (isIncoming || isOnCall) ? (
             <span>
               <span style={{ display: "block", fontSize: 16, fontWeight: 500, color: isIncoming ? C.success : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{callerDisplay}</span>
               <span style={{ display: "block", fontSize: 14, color: C.muted, fontWeight: 400 }}>{isIncoming ? "Incoming call" : "On call"}</span>
@@ -582,11 +588,11 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
           )}
         </span>
         {vmCount > 0 && (
-          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 500, color: "#fff", background: C.danger, borderRadius: 99, padding: "2px 7px", flexShrink: 0 }} title="Voicemail">
+          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: compact ? 10 : 11, fontWeight: 500, color: "#fff", background: C.danger, borderRadius: 99, padding: compact ? "1px 6px" : "2px 7px", flexShrink: 0 }} title="Voicemail">
             {suiteIcon("voicemail", 13)} {vmCount}
           </span>
         )}
-        <button onClick={refresh} disabled={!!busy} title="Refresh" style={phoneIconButton(false)}>{suiteIcon("refresh", 16)}</button>
+        <button onClick={refresh} disabled={!!busy} title="Refresh" style={compact ? gvIconButton({ width: 32, height: 32, background: "transparent", color: C.muted }, C) : phoneIconButton(false)}>{suiteIcon("refresh", 16)}</button>
       </div>
 
       {/* ── Compose area — at TOP, above lists ── */}
@@ -794,6 +800,440 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 }
 
+function useChiefDeskPhoneSummary(pollMs = 6500) {
+  const api = "http://127.0.0.1:8765";
+  const emptySummary = useMemo(() => ({
+    online: false,
+    recentCalls: [],
+    missedCount: 0,
+    voicemailCount: 0,
+    messageThreads: 0,
+    callState: "",
+  }), []);
+
+  const refresh = useCallback(async () => {
+    try {
+      const [statusRes, messagesRes, contactsRes] = await Promise.all([
+        fetch(`${api}/status`, { cache: "no-store" }),
+        fetch(`${api}/messages`, { cache: "no-store" }),
+        fetch(`${api}/contacts`, { cache: "no-store" }).catch(() => null),
+      ]);
+      const nextStatus = await statusRes.json();
+      const parsedMessages = await messagesRes.json().catch(() => []);
+      const nextMessages = Array.isArray(parsedMessages) ? parsedMessages : (parsedMessages?.messages || []);
+      const contactsParsed = contactsRes ? await contactsRes.json().catch(() => []) : [];
+      const nextContacts = Array.isArray(contactsParsed) ? contactsParsed : (contactsParsed?.contacts || []);
+
+      const contactMap = new Map();
+      nextContacts.forEach(c => {
+        const name = c.name || c.Name || c.displayName || c.DisplayName || c.fullName || c.FullName || "";
+        if (!name) return;
+        const phones = [
+          c.phone, c.phoneNumber, c.number, c.Phone, c.PhoneNumber,
+          c.mobilePhone, c.MobilePhone, c.mobile, c.Mobile,
+          c.PhoneHome, c.PhoneMobile, c.PhoneWork,
+          c.phoneHome, c.phoneMobile, c.phoneWork,
+          c.Telephone, c.TelephoneNumber, c.CellPhone,
+          c.WorkPhone, c.HomePhone, c.ContactPhone,
+        ].filter(Boolean);
+        phones.forEach(p => {
+          const digits = String(p).replace(/\D/g, "");
+          if (!digits) return;
+          contactMap.set(digits, name);
+          if (digits.length > 10) contactMap.set(digits.slice(-10), name);
+          if (digits.length > 7) contactMap.set(digits.slice(-7), name);
+        });
+      });
+
+      const lookupName = num => {
+        if (!num) return null;
+        const digits = String(num).replace(/\D/g, "");
+        if (!digits) return null;
+        return (
+          contactMap.get(digits) ||
+          (digits.length > 10 ? contactMap.get(digits.slice(-10)) : null) ||
+          (digits.length > 7 ? contactMap.get(digits.slice(-7)) : null) ||
+          null
+        );
+      };
+
+      const fmtTime = val => {
+        if (!val) return "";
+        const d = new Date(typeof val === "number" ? val : val);
+        if (isNaN(d.getTime())) return typeof val === "string" ? val.slice(0, 8) : "";
+        const diff = Date.now() - d.getTime();
+        if (diff < 3600000) return `${Math.round(diff / 60000)}m`;
+        if (diff < 86400000) return `${Math.round(diff / 3600000)}h`;
+        return d.toLocaleDateString(undefined, { weekday: "short" });
+      };
+
+      const callStateRaw = nextStatus?.CallState || nextStatus?.callState || nextStatus?.CurrentCallState || nextStatus?.currentCallState || "";
+      const callState = /^(idle|none|available|ready|standby|free|disconnected|inactive)$/i.test(callStateRaw.trim()) ? "" : callStateRaw.trim();
+      const vmCount = parseInt(nextStatus?.voicemailCount || nextStatus?.VoicemailCount || nextStatus?.voicemail?.count || 0, 10) || 0;
+      const recentCalls = Array.isArray(nextStatus?.recentCalls) ? nextStatus.recentCalls : [];
+      const summaryCalls = recentCalls.slice(0, 5).map(c => {
+        const num = c.number || c.phoneNumber || c.from || c.Number || c.PhoneNumber || "";
+        const typeNum = typeof (c.type || c.callType || c.Type || c.CallType) === "number"
+          ? (c.type || c.callType || c.Type || c.CallType)
+          : null;
+        const dir = (c.direction || c.Direction || (typeof c.type === "string" ? c.type : "") || (typeof c.callType === "string" ? c.callType : "") || "").toLowerCase();
+        const isMissed = !!(c.missed || c.Missed || typeNum === 3 || dir.includes("miss"));
+        return {
+          name: lookupName(num) || c.name || c.displayName || c.Name || c.DisplayName || c.from || num || "Call",
+          number: num,
+          isMissed,
+          when: fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime),
+        };
+      });
+
+      const threadMap = new Map();
+      nextMessages.forEach(m => {
+        const who = m.from || m.sender || m.address || m.phoneNumber || m.number || m.to || "Unknown";
+        if (!threadMap.has(who)) threadMap.set(who, true);
+      });
+
+      setSummary({
+        online: true,
+        recentCalls: summaryCalls,
+        missedCount: summaryCalls.filter(call => call.isMissed).length,
+        voicemailCount: vmCount,
+        messageThreads: threadMap.size,
+        callState,
+      });
+    } catch {
+      setSummary(emptySummary);
+    }
+  }, [emptySummary]);
+
+  const [summary, setSummary] = useState(emptySummary);
+  useEffect(() => {
+    refresh();
+    const id = setInterval(refresh, pollMs);
+    return () => clearInterval(id);
+  }, [pollMs, refresh]);
+
+  return summary;
+}
+
+function ChiefOfStaffPanel({ T, tasks = [], shailos = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenPhone, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, calendarEvents = null, gmailMessages = null, googleClientId = null, aiOpts = null, onClose }) {
+  const [chiefBrief, setChiefBrief] = useState(null);
+  const [chiefSweepLoading, setChiefSweepLoading] = useState(false);
+  const [chiefSweepError, setChiefSweepError] = useState("");
+  const [chiefPendingTaskRefresh, setChiefPendingTaskRefresh] = useState(false);
+  const chiefPhoneSummary = useChiefDeskPhoneSummary();
+  const chiefAutoRanRef = useRef(false);
+  const chiefPhoneResweepRef = useRef("");
+  const chiefLogRef = useRef([]);
+  const CHIEF_LOG_KEY = "ot_chief_of_staff_log";
+  if (chiefLogRef.current.length === 0) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CHIEF_LOG_KEY) || "[]");
+      chiefLogRef.current = Array.isArray(saved) ? saved : [];
+    } catch {
+      chiefLogRef.current = [];
+    }
+  }
+
+  const C = cleanTheme(T);
+  const ncPanel = { background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", boxShadow: "none" };
+  const ncTitle = { fontSize: 20, fontWeight: 500, color: C.text, fontFamily: "system-ui", lineHeight: 1.35 };
+  const ncSectionIcon = (accent = C.accent) => ({ width: 40, height: 40, borderRadius: 20, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
+  const shailaPriorityIds = new Set(priorities.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
+  const isShailaWork = t => t?.type === "shailo-research" || t?.type === "shaila-research" || !!t?.shailaId || !!t?.isGetBackStep || shailaPriorityIds.has(t?.priority);
+  const primaryTasks = tasks.filter(t => !isShailaWork(t)).slice(0, 8);
+  const visibleShailos = shailos.filter(s => s.type !== "shaila-research" && s.type !== "shailo-research").slice(0, 10);
+  const chiefHasPhoneSignal =
+    !!chiefPhoneSummary.callState ||
+    (chiefPhoneSummary.missedCount || 0) > 0 ||
+    (chiefPhoneSummary.voicemailCount || 0) > 0 ||
+    (chiefPhoneSummary.recentCalls?.length || 0) > 0;
+  const chiefPhoneChipLabel = chiefPhoneSummary.callState
+    ? chiefPhoneSummary.callState
+    : (chiefPhoneSummary.missedCount || 0) > 0
+      ? `${chiefPhoneSummary.missedCount} missed`
+      : (chiefPhoneSummary.voicemailCount || 0) > 0
+        ? `${chiefPhoneSummary.voicemailCount} voicemail`
+        : chiefPhoneSummary.online
+          ? "connected"
+          : "offline";
+  const chiefHasData = primaryTasks.length > 0 || visibleShailos.length > 0 || (Array.isArray(calendarEvents) && calendarEvents.length > 0) || (Array.isArray(gmailMessages) && gmailMessages.length > 0) || chiefHasPhoneSignal;
+  const chiefRecentLearningNotes = Array.from(new Set(
+    chiefLogRef.current
+      .map(entry => (entry?.workStyleNote || "").trim())
+      .filter(Boolean)
+  )).filter(note => note !== (chiefBrief?.workStyleNote || "")).slice(0, 2);
+  const chiefPhoneSignalSignature = useMemo(() => JSON.stringify({
+    missedCount: chiefPhoneSummary.missedCount || 0,
+    voicemailCount: chiefPhoneSummary.voicemailCount || 0,
+    callState: chiefPhoneSummary.callState || "",
+    recentCalls: (chiefPhoneSummary.recentCalls || []).slice(0, 4).map(call => `${call.name || ""}|${call.number || ""}|${call.isMissed ? 1 : 0}|${call.when || ""}`),
+  }), [chiefPhoneSummary]);
+  const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || "";
+  const fmtFrom = (raw) => { const m = raw?.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : (raw || "").split("@")[0]; };
+  const decodeSnippet = s => (s || "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ").trim();
+
+  const runChiefSweep = useCallback(async () => {
+    if (!aiOpts || chiefSweepLoading) return;
+    setChiefSweepLoading(true);
+    setChiefSweepError("");
+    try {
+      const taskLines = primaryTasks.slice(0, 8).map((t, i) => `${i + 1}. [${gP(priorities, t.priority)?.label || t.priority}] ${t.text}`).join("\n") || "(none)";
+      const shailaLines = visibleShailos.slice(0, 6).map((s, i) => `${i + 1}. ${s.synopsis || s.question || s.content || s.text || "Open shaila"}`).join("\n") || "(none)";
+      const calendarLines = Array.isArray(calendarEvents) && calendarEvents.length
+        ? calendarEvents.slice(0, 6).map((evt, i) => {
+            const start = evt.start?.dateTime || evt.start?.date || "";
+            const when = start ? new Date(start).toLocaleString([], { month: "short", day: "numeric", hour: evt.start?.dateTime ? "numeric" : undefined, minute: evt.start?.dateTime ? "2-digit" : undefined }) : "No time";
+            return `${i + 1}. ${evt.summary || "(no title)"} - ${when}`;
+          }).join("\n")
+        : "(none)";
+      const phoneLines = chiefPhoneSummary.recentCalls?.length
+        ? chiefPhoneSummary.recentCalls.map((call, i) => `${i + 1}. ${call.isMissed ? "MISSED" : "Recent"} call - ${call.name}${call.when ? ` - ${call.when}` : ""}`).join("\n")
+        : chiefPhoneSummary.online
+          ? "(connected, but no recent call rows)"
+          : "(not connected)";
+      const gmailLines = Array.isArray(gmailMessages) && gmailMessages.length
+        ? gmailMessages.slice(0, 6).map((msg, i) => {
+            const from = fmtFrom(gmailHeader(msg, "From"));
+            const subject = gmailHeader(msg, "Subject") || "(no subject)";
+            const snippet = decodeSnippet(msg.snippet || "").slice(0, 120);
+            return `${i + 1}. ${from} - ${subject}${snippet ? ` - ${snippet}` : ""}`;
+          }).join("\n")
+        : "(none)";
+      const priorNotes = chiefLogRef.current.slice(0, 6).map((entry, i) => `${i + 1}. Immediate: ${entry.rightNow} | Work note: ${entry.workStyleNote}`).join("\n") || "(none yet)";
+      const now = new Date();
+      const prompt = `You are YCD's sharp, practical chief of staff. Look across his current dashboard and decide the single best next move right now.
+
+Date/time: ${now.toLocaleString()}
+
+CURRENT TASKS:
+${taskLines}
+
+OPEN SHAILOS:
+${shailaLines}
+
+CALENDAR:
+${calendarLines}
+
+PHONE:
+${phoneLines}
+
+EMAIL:
+${gmailLines}
+
+PRIOR WORK-STYLE NOTES ABOUT YCD:
+${priorNotes}
+
+Rules:
+- Be decisive, brief, and concrete.
+- Prefer the smallest real next move that unlocks momentum.
+- If an existing task should clearly come first, say so plainly in rightNow.
+- taskSuggestions are ONLY for new tasks worth creating from email, calendar, missed calls, or shaila follow-up. Do not duplicate tasks already in the queue.
+- Keep workStyleNote to one sentence about how YCD is most likely to work best right now.
+
+Return ONLY valid JSON:
+{
+  "rightNow":"short imperative sentence",
+  "reasoning":["reason 1","reason 2","reason 3"],
+  "taskSuggestions":[
+    {"text":"task to create","priority":"now|today|eventually","source":"email|calendar|phone|shaila|task","reason":"why this is worth creating"}
+  ],
+  "workStyleNote":"one sentence"
+}`;
+      const raw = await callAI(prompt, aiOpts, { temperature: 0.2, maxOutputTokens: 1400 });
+      const match = raw?.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error("Chief of staff sweep came back empty.");
+      const parsed = JSON.parse(match[0]);
+      const validPriIds = new Set(priorities.filter(p => !p.deleted).map(p => p.id));
+      const safeTaskSuggestions = Array.isArray(parsed.taskSuggestions) ? parsed.taskSuggestions
+        .filter(item => item?.text?.trim())
+        .slice(0, 3)
+        .map(item => ({
+          text: item.text.trim(),
+          priority: validPriIds.has(item.priority) ? item.priority : "today",
+          source: ["email", "calendar", "phone", "shaila", "task"].includes(item.source) ? item.source : "task",
+          reason: (item.reason || "").trim(),
+        })) : [];
+      const safeBrief = {
+        rightNow: (parsed.rightNow || "Pick one clear next move.").trim(),
+        reasoning: Array.isArray(parsed.reasoning) ? parsed.reasoning.filter(Boolean).map(x => String(x).trim()).slice(0, 3) : [],
+        taskSuggestions: safeTaskSuggestions,
+        workStyleNote: (parsed.workStyleNote || "").trim(),
+        createdAt: Date.now(),
+      };
+      setChiefBrief(safeBrief);
+      chiefLogRef.current = [{ rightNow: safeBrief.rightNow, workStyleNote: safeBrief.workStyleNote, createdAt: safeBrief.createdAt }, ...chiefLogRef.current].slice(0, 12);
+      try { localStorage.setItem(CHIEF_LOG_KEY, JSON.stringify(chiefLogRef.current)); } catch {}
+    } catch (err) {
+      setChiefSweepError(err?.message || "Chief of staff sweep failed.");
+    } finally {
+      setChiefSweepLoading(false);
+    }
+  }, [aiOpts, chiefSweepLoading, primaryTasks, visibleShailos, calendarEvents, chiefPhoneSummary, gmailMessages, priorities]);
+
+  useEffect(() => {
+    if (!chiefAutoRanRef.current && aiOpts && chiefHasData) {
+      chiefAutoRanRef.current = true;
+      if (chiefHasPhoneSignal) chiefPhoneResweepRef.current = chiefPhoneSignalSignature;
+      runChiefSweep();
+    }
+  }, [aiOpts, chiefHasData, chiefHasPhoneSignal, chiefPhoneSignalSignature, runChiefSweep]);
+
+  useEffect(() => {
+    if (!aiOpts || chiefSweepLoading || !chiefAutoRanRef.current) return;
+    if (!chiefHasPhoneSignal) return;
+    if (chiefPhoneResweepRef.current === chiefPhoneSignalSignature) return;
+    chiefPhoneResweepRef.current = chiefPhoneSignalSignature;
+    runChiefSweep();
+  }, [aiOpts, chiefHasPhoneSignal, chiefPhoneSignalSignature, chiefSweepLoading, runChiefSweep]);
+
+  useEffect(() => {
+    if (!chiefPendingTaskRefresh || !aiOpts || chiefSweepLoading) return;
+    setChiefPendingTaskRefresh(false);
+    runChiefSweep();
+  }, [chiefPendingTaskRefresh, aiOpts, chiefSweepLoading, runChiefSweep, primaryTasks]);
+
+  const sourceChips = [
+    { label: "Tasks", active: primaryTasks.length > 0 },
+    { label: "Shailos", active: visibleShailos.length > 0 },
+    { label: `Phone${chiefPhoneChipLabel ? ` - ${chiefPhoneChipLabel}` : ""}`, active: chiefHasPhoneSignal || chiefPhoneSummary.online },
+    { label: `Calendar${!googleClientId ? " - setup needed" : Array.isArray(calendarEvents) ? "" : " - waiting"}`, active: Array.isArray(calendarEvents) },
+    { label: `Email${!googleClientId ? " - setup needed" : Array.isArray(gmailMessages) ? "" : " - waiting"}`, active: Array.isArray(gmailMessages) },
+  ];
+
+  return (
+    <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: "hidden", borderLeft: `1px solid ${C.divider}` }}>
+      <div style={{ height: "100%", maxWidth: 1320, margin: "0 auto", padding: "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 20 }}>
+        <section style={{ ...ncPanel, flex: "1 1 auto" }}>
+          <div style={{ padding: "22px 24px 18px", borderBottom: `1px solid ${C.divider}`, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+              <span style={{ ...ncSectionIcon(C.accent), background: C.hover }}>{suiteIcon("psychology_alt", 20)}</span>
+              <div style={{ minWidth: 0 }}>
+                <div style={ncTitle}>Chief of Staff</div>
+                <div style={{ fontSize: 13, color: C.muted, fontFamily: "system-ui", marginTop: 2 }}>One place for the smartest next move, without cluttering the dashboard.</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {onOpenQueue && <button onClick={onOpenQueue} style={cleanToolbarButton(false, C)}>{suiteIcon("list_alt", 15)} Queue</button>}
+              {onOpenShailos && <button onClick={onOpenShailos} style={cleanToolbarButton(false, C)}>{suiteIcon("rule", 15)} Shailos</button>}
+              {onOpenPhone && <button onClick={onOpenPhone} style={cleanToolbarButton(false, C)}>{suiteIcon("smartphone", 15)} Phone</button>}
+              {!googleClientId && onOpenGoogleSettings && <button onClick={onOpenGoogleSettings} style={cleanToolbarButton(false, C)}>{suiteIcon("link", 15)} Google</button>}
+              <button onClick={runChiefSweep} disabled={!aiOpts || chiefSweepLoading} style={{ ...cleanToolbarButton(false, C), opacity: (!aiOpts || chiefSweepLoading) ? 0.5 : 1 }}>
+                {chiefSweepLoading ? suiteIcon("progress_activity", 15) : suiteIcon("auto_awesome", 15)}
+                {chiefSweepLoading ? "Sweeping..." : "Refresh sweep"}
+              </button>
+              <button onClick={onClose} style={cleanToolbarButton(false, C)}>{suiteIcon("close", 15)} Close</button>
+            </div>
+          </div>
+
+          <div style={{ padding: "16px 24px 0", display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {sourceChips.map(source => (
+              <span key={source.label} style={{ fontSize: 12, color: source.active ? C.text : C.muted, fontFamily: "system-ui", border: `1px solid ${source.active ? C.accent : C.divider}`, borderRadius: 999, padding: "6px 11px", background: source.active ? C.hover : C.bgSoft }}>
+                {source.label}
+              </span>
+            ))}
+          </div>
+
+          <div style={{ flex: "1 1 auto", minHeight: 0, padding: "18px 24px 24px", display: "grid", gridTemplateColumns: "minmax(0,1.35fr) minmax(300px,0.85fr)", gap: 18, alignItems: "start", overflow: "auto" }}>
+            <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
+              {chiefSweepError && (
+                <div style={{ fontSize: 13, color: C.danger, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 12, padding: "12px 14px" }}>
+                  {chiefSweepError}
+                </div>
+              )}
+
+              {!chiefBrief && !chiefSweepLoading && (
+                <div style={{ border: `1px dashed ${C.divider}`, borderRadius: 12, padding: "18px 20px", background: C.bgSoft }}>
+                  <div style={{ fontSize: 18, fontWeight: 500, color: C.text, lineHeight: 1.45, marginBottom: 6 }}>Ready to sweep your tasks, shailos, calendar, email, and phone activity.</div>
+                  <div style={{ fontSize: 13, color: C.muted, fontFamily: "system-ui", lineHeight: 1.55 }}>This will pick the best next move and suggest any missing follow-up tasks worth creating.</div>
+                </div>
+              )}
+
+              {chiefSweepLoading && (
+                <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "18px 20px", background: C.bgSoft }}>
+                  <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Sweeping now</div>
+                  <div style={{ fontSize: 20, fontWeight: 500, color: C.text, lineHeight: 1.4 }}>Reading the board and picking the smartest immediate move.</div>
+                </div>
+              )}
+
+              {chiefBrief && !chiefSweepLoading && (
+                <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "20px 22px", background: C.bgSoft }}>
+                  <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Do this now</div>
+                  <div style={{ fontSize: 28, fontWeight: 500, color: C.text, lineHeight: 1.3, marginBottom: 14 }}>{chiefBrief.rightNow}</div>
+                  {chiefBrief.reasoning?.length > 0 && (
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {chiefBrief.reasoning.map((line, idx) => (
+                        <div key={`${line}-${idx}`} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                          <span style={{ width: 6, height: 6, marginTop: 8, borderRadius: 99, background: C.accent, flexShrink: 0 }} />
+                          <span style={{ fontSize: 14, color: C.muted, lineHeight: 1.55, fontFamily: "system-ui" }}>{line}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "grid", gap: 12, minWidth: 0 }}>
+              <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "16px 18px", background: C.bg }}>
+                <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Learning YCD</div>
+                <div style={{ fontSize: 15, color: C.text, lineHeight: 1.55, fontFamily: "system-ui" }}>
+                  {chiefBrief?.workStyleNote || "As this screen runs more sweeps, it will build a sharper sense of how YCD works best."}
+                </div>
+                {chiefRecentLearningNotes.length > 0 && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.divider}`, display: "grid", gap: 8 }}>
+                    <div style={{ fontSize: 11, color: C.muted, fontFamily: "system-ui", textTransform: "uppercase", letterSpacing: 0.5 }}>Recent pattern notes</div>
+                    {chiefRecentLearningNotes.map((note, idx) => (
+                      <div key={`${note}-${idx}`} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <span style={{ width: 5, height: 5, marginTop: 8, borderRadius: 99, background: C.accent, flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, fontFamily: "system-ui" }}>{note}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "16px 18px", background: C.bg }}>
+                <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Worth turning into tasks</div>
+                {chiefBrief?.taskSuggestions?.length ? (
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {chiefBrief.taskSuggestions.map((item, idx) => (
+                      <div key={`${item.text}-${idx}`} style={{ border: `1px solid ${C.divider}`, borderRadius: 10, padding: "12px 12px 10px", background: C.bgSoft }}>
+                        <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.45, marginBottom: 6 }}>{item.text}</div>
+                        <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", lineHeight: 1.45, marginBottom: 10 }}>
+                          {item.reason || `Pulled from ${item.source}.`}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                          <span style={{ fontSize: 11, color: C.muted, fontFamily: "system-ui", border: `1px solid ${C.divider}`, borderRadius: 999, padding: "4px 8px" }}>
+                            {item.source} · {gP(priorities, item.priority)?.label || item.priority}
+                          </span>
+                          <button
+                            onClick={() => {
+                              onAddTask?.(item.text, item.priority);
+                              setChiefPendingTaskRefresh(true);
+                              setChiefBrief(prev => prev ? { ...prev, taskSuggestions: prev.taskSuggestions.filter((_, suggestionIdx) => suggestionIdx !== idx) } : prev);
+                            }}
+                            style={{ ...cleanToolbarButton(false, C, { minHeight: 34, padding: "0 12px", color: C.accent }) }}
+                          >
+                            {suiteIcon("add_task", 14)} Add task
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: C.muted, fontFamily: "system-ui", lineHeight: 1.55 }}>
+                    No extra tasks to create right now. The screen will place follow-up ideas here when email, calendar, phone activity, or shaila work deserves its own task.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, aiOpts = null }) {
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
@@ -901,31 +1341,6 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     { id: "setup",   title: "Setup",   icon: "settings",     actions: [...(bySection.record?.actions || []).filter(a => !["record-shaila","record-call"].includes(a.id)), ...collectActions("system")] },
   ].filter(c => c.actions.length);
   const activeActionCategory = actionCategories.find(c => c.id === actionCategoryId) || actionCategories[0];
-  const chiefHasPhoneSignal =
-    !!chiefPhoneSummary.callState ||
-    (chiefPhoneSummary.missedCount || 0) > 0 ||
-    (chiefPhoneSummary.voicemailCount || 0) > 0 ||
-    (chiefPhoneSummary.recentCalls?.length || 0) > 0;
-  const chiefPhoneChipCount = chiefPhoneSummary.callState
-    ? chiefPhoneSummary.callState
-    : (chiefPhoneSummary.missedCount || 0) > 0
-      ? `${chiefPhoneSummary.missedCount} missed`
-      : (chiefPhoneSummary.voicemailCount || 0) > 0
-        ? `${chiefPhoneSummary.voicemailCount} voicemail`
-        : chiefPhoneSummary.recentCalls.length;
-  const chiefHasData = primaryTasks.length > 0 || visibleShailos.length > 0 || (Array.isArray(calendarEvents) && calendarEvents.length > 0) || (Array.isArray(gmailMessages) && gmailMessages.length > 0) || chiefHasPhoneSignal;
-  const chiefRecentLearningNotes = Array.from(new Set(
-    chiefLogRef.current
-      .map(entry => (entry?.workStyleNote || "").trim())
-      .filter(Boolean)
-  )).filter(note => note !== (chiefBrief?.workStyleNote || "")).slice(0, 2);
-  const chiefPhoneSignalSignature = useMemo(() => JSON.stringify({
-    missedCount: chiefPhoneSummary.missedCount || 0,
-    voicemailCount: chiefPhoneSummary.voicemailCount || 0,
-    callState: chiefPhoneSummary.callState || "",
-    recentCalls: (chiefPhoneSummary.recentCalls || []).slice(0, 4).map(call => `${call.name || ""}|${call.number || ""}|${call.isMissed ? 1 : 0}|${call.when || ""}`),
-  }), [chiefPhoneSummary]);
-
   const runChiefSweep = useCallback(async () => {
     if (!aiOpts || chiefSweepLoading) return;
     setChiefSweepLoading(true);
@@ -1057,7 +1472,7 @@ Return ONLY valid JSON:
   return (
     <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: "hidden", borderLeft: `1px solid ${C.divider}` }}>
       <div style={{ height: "100%", maxWidth: 1520, margin: "0 auto", padding: "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 20 }}>
-
+        {false && (<>
         <section style={{ ...ncPanel, flex: "0 0 auto" }}>
           <div style={{ padding: "22px 24px", display: "flex", flexWrap: "wrap", gap: 22, alignItems: "stretch" }}>
             <div style={{ flex: "1 1 560px", minWidth: 0 }}>
@@ -1186,6 +1601,7 @@ Return ONLY valid JSON:
         </section>
 
         {/* Three-panel grid — fills all remaining height */}
+        </>)}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 20, flex: 1, minHeight: 0, alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
@@ -3981,7 +4397,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
     }
     setSuiteView(view);
     if (view !== "shailos") setShailosAction(null);
-    if (view === "focus") setShowShailos(false);
+    if (view !== "shailos") setShowShailos(false);
   };
   const askLegacyOpen = (target) => setLegacyPrompt(target);
   const openLegacyTarget = () => {
@@ -4699,6 +5115,27 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           googleWasConnected={googleWasConnected}
           onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
           aiOpts={aiOpts}
+        />
+      )}
+
+      {!shellHidden && suiteView === "chief" && (
+        <ChiefOfStaffPanel
+          T={T}
+          tasks={switchboardTaskList}
+          shailos={switchboardShailaList}
+          priorities={ap}
+          onAddTask={addVT}
+          onOpenQueue={()=>{openCommandView("focus"); switchTab("queue");}}
+          onOpenShailos={()=>{setShailosAction(null); openCommandView("shailos");}}
+          onOpenPhone={()=>openCommandView("deskphone")}
+          onOpenGoogleSettings={()=>{setSettingsInitialTab("google"); setShowSet(true);}}
+          sidebarW={sidebarW}
+          topOffset={noticeTopOffset}
+          calendarEvents={calendarEvents}
+          gmailMessages={gmailMessages}
+          googleClientId={effectiveGoogleClientId || null}
+          aiOpts={aiOpts}
+          onClose={()=>openCommandView("nervecenter")}
         />
       )}
 
@@ -5731,7 +6168,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       </div>
 
       {/* ── Floating capture buttons — always visible except during Zen ── */}
-      {!zen && !["nervecenter","deskphone"].includes(suiteView) && (()=>{
+      {!zen && !["nervecenter","chief","deskphone"].includes(suiteView) && (()=>{
         const outC = T.isDark ? T.tFaint : T.tSoft;
         const icS = {width:19,height:19,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
         const icSm = {width:14,height:14,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
