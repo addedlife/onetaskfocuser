@@ -1304,7 +1304,20 @@ Return ONLY valid JSON:
   ];
   const shellStyle = standalone
     ? { height: "100%", padding: 16, boxSizing: "border-box", display: "flex", flexDirection: "column" }
-    : { position: "fixed", top: topOffset + 16, right: 16, bottom: 16, width: `min(580px, calc(100vw - ${sidebarW + 32}px))`, zIndex: 8900, display: "flex", flexDirection: "column", pointerEvents: "auto" };
+    : {
+        position: "fixed",
+        top: `calc(${topOffset}px + 50%)`,
+        left: `calc(${sidebarW}px + ((100vw - ${sidebarW}px) / 2))`,
+        transform: "translate(-50%, -50%)",
+        width: `min(720px, calc(100vw - ${sidebarW + 48}px))`,
+        height: `min(560px, calc(100vh - ${topOffset + 180}px))`,
+        zIndex: 8900,
+        display: "flex",
+        flexDirection: "column",
+        pointerEvents: "auto",
+        boxSizing: "border-box",
+        animation: "ot-fade 0.18s ease-out",
+      };
   const contentGridColumns = "repeat(auto-fit, minmax(280px, 1fr))";
 
   return (
@@ -1442,7 +1455,7 @@ Return ONLY valid JSON:
   );
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, aiOpts = null }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, aiOpts = null, chiefOpen = false }) {
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [editingTaskId, setEditingTaskId] = useState(null);
@@ -1528,6 +1541,22 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const ncTitle = { fontSize: ncType.title, fontWeight: 500, color: C.text, fontFamily: "system-ui", lineHeight: 1.35 };
   const ncSectionIcon = (accent = C.accent) => ({ width: 40, height: 40, borderRadius: 20, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
   const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 40, height: 40, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
+  const chiefLayoutCompact = chiefOpen && (typeof window !== "undefined" ? window.innerWidth < 1180 : false);
+  const boardGridStyle = chiefOpen && !chiefLayoutCompact
+    ? {
+        display: "grid",
+        gridTemplateColumns: "minmax(230px,1fr) minmax(520px,720px) minmax(230px,1fr)",
+        gridTemplateRows: "128px minmax(0,1fr)",
+        gap: 20,
+        flex: 1,
+        minHeight: 0,
+        alignItems: "stretch",
+        transition: "grid-template-columns 0.18s ease, grid-template-rows 0.18s ease",
+      }
+    : { display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 20, flex: 1, minHeight: 0, alignItems: "stretch" };
+  const taskPanelStyle = chiefOpen && !chiefLayoutCompact ? { ...ncPanel, gridColumn: "1", gridRow: "1 / span 2", minWidth: 0 } : ncPanel;
+  const shailaPanelStyle = chiefOpen && !chiefLayoutCompact ? { ...ncPanel, gridColumn: "3", gridRow: "1 / span 2", minWidth: 0 } : ncPanel;
+  const phonePanelStyle = chiefOpen && !chiefLayoutCompact ? { ...ncPanel, gridColumn: "2", gridRow: "1", minWidth: 0, maxHeight: 128, alignSelf: "start" } : ncPanel;
 
   const shailaPriorityIds = new Set(priorities.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
   const isShailaWork = t => t?.type === "shailo-research" || t?.type === "shaila-research" || !!t?.shailaId || !!t?.isGetBackStep || shailaPriorityIds.has(t?.priority);
@@ -1817,10 +1846,10 @@ Return ONLY valid JSON:
 
         {/* Three-panel grid — fills all remaining height */}
         </>)}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 20, flex: 1, minHeight: 0, alignItems: "stretch" }}>
+        <div style={boardGridStyle}>
 
           {/* ── Tasks ── */}
-          <section style={ncPanel}>
+          <section style={taskPanelStyle}>
             <div style={{ ...ncHeader, display: "block" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, marginBottom: 18 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -1895,7 +1924,7 @@ Return ONLY valid JSON:
           </section>
 
           {/* ── Shailos ── */}
-          <section style={ncPanel}>
+          <section style={shailaPanelStyle}>
             <div style={ncHeader}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={ncSectionIcon(GOLD)}>{suiteIcon("rule", 19)}</span>
@@ -1954,7 +1983,7 @@ Return ONLY valid JSON:
           </section>
 
           {/* ── Phone ── */}
-          <section style={ncPanel}>
+          <section style={phonePanelStyle}>
             <div style={ncHeader}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={ncSectionIcon()}>{suiteIcon("phone_in_talk", 19)}</span>
@@ -1967,7 +1996,7 @@ Return ONLY valid JSON:
                 <button onClick={() => { setActionCategoryId("phone"); setActionsOpen(true); }} title="Phone actions" style={ncSmallIconButton()}>{suiteIcon("apps", 17)}</button>
               </div>
             </div>
-            <div style={{ overflow: "hidden", flex: "1 1 auto", minHeight: 0, padding: "18px 20px 20px", display: "flex", flexDirection: "column" }}>
+            <div style={{ overflow: "hidden", flex: "1 1 auto", minHeight: 0, padding: "18px 20px 20px", display: chiefOpen && !chiefLayoutCompact ? "none" : "flex", flexDirection: "column" }}>
               <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} onSummaryChange={setChiefPhoneSummary} />
             </div>
           </section>
@@ -2549,31 +2578,11 @@ function App({ user, onSignOut }) {
   const [selPri, setSelPri] = useState(null);
   const [tab, setTab] = useState("focus");
   const [suiteView, setSuiteView] = useState(getInitialSuiteView);
-  const chiefWindowMode = useMemo(() => {
+  const chiefUrlRequested = useMemo(() => {
     try { return new URLSearchParams(window.location.search).get("chiefWindow") === "1"; } catch { return false; }
   }, []);
-  const isMobileWindowMode = useMemo(() => {
-    try {
-      return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "") || window.matchMedia("(pointer: coarse)").matches;
-    } catch {
-      return false;
-    }
-  }, []);
-  const [chiefWindowOpen, setChiefWindowOpen] = useState(false);
+  const [chiefWindowOpen, setChiefWindowOpen] = useState(chiefUrlRequested);
   const [chiefWindowMinimized, setChiefWindowMinimized] = useState(false);
-  const chiefPopupRef = useRef(null);
-  const chiefWindowUrl = useMemo(() => {
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("suite");
-      url.searchParams.delete("view");
-      url.searchParams.delete("chiefWindow");
-      url.searchParams.set("chiefWindow", "1");
-      return url.toString();
-    } catch {
-      return "?chiefWindow=1";
-    }
-  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarAutoCollapse, setSidebarAutoCollapse] = useState(() => {
     try { return localStorage.getItem('ot_sidebar_autocollapse') !== 'false'; } catch { return true; }
@@ -4574,61 +4583,21 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       window.clearInterval(id);
     };
   }, [deskPhoneOnline, deskPhoneThemeSyncEnabled, syncDeskPhoneTheme]);
-  const focusChiefWindow = useCallback(() => {
-    const popup = chiefPopupRef.current;
-    if (!popup || popup.closed) return false;
-    try {
-      popup.focus();
-      setChiefWindowOpen(true);
-      setChiefWindowMinimized(false);
-      return true;
-    } catch {
-      return false;
-    }
-  }, []);
   const openChiefWindow = useCallback(() => {
-    if (chiefWindowMode) return;
-    if (isMobileWindowMode) {
-      setChiefWindowOpen(true);
-      setChiefWindowMinimized(false);
-      return;
-    }
-    if (focusChiefWindow()) return;
-    try {
-      const width = Math.min(780, Math.max(660, window.outerWidth - 120));
-      const height = Math.min(940, Math.max(720, window.outerHeight - 80));
-      const left = Math.max((window.screenX || window.screenLeft || 0) + Math.max(24, window.outerWidth - width - 40), 0);
-      const top = Math.max((window.screenY || window.screenTop || 0) + 40, 0);
-      const popup = window.open(
-        chiefWindowUrl,
-        "onetask-chief-of-staff",
-        `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-      );
-      if (!popup) {
-        showToast("Allow popups to open Chief of Staff in its own window.", 7000, "#B65A00");
-        return;
-      }
-      chiefPopupRef.current = popup;
-      setChiefWindowOpen(true);
-      setChiefWindowMinimized(false);
-      try { popup.focus(); } catch {}
-    } catch {
-      showToast("Chief of Staff could not open its window.", 7000, "#B65A00");
-    }
-  }, [chiefWindowMode, chiefWindowUrl, focusChiefWindow, isMobileWindowMode]);
+    setChiefWindowOpen(true);
+    setChiefWindowMinimized(false);
+  }, []);
   const closeChiefWindow = useCallback(() => {
-    if (chiefWindowMode) {
-      try { window.close(); } catch {}
-      return;
-    }
-    const popup = chiefPopupRef.current;
-    if (popup && !popup.closed) {
-      try { popup.close(); } catch {}
-    }
-    chiefPopupRef.current = null;
     setChiefWindowOpen(false);
     setChiefWindowMinimized(false);
-  }, [chiefWindowMode]);
+    if (chiefUrlRequested) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("chiefWindow");
+        window.history.replaceState({}, "", url.toString());
+      } catch {}
+    }
+  }, [chiefUrlRequested]);
   const openCommandView = useCallback((view) => {
     if (view === "chief") {
       openChiefWindow();
@@ -4679,20 +4648,6 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
     }
   }, [postChiefNavigation]);
   useEffect(() => {
-    if (chiefWindowMode || !chiefWindowOpen || isMobileWindowMode) return undefined;
-    const id = setInterval(() => {
-      const popup = chiefPopupRef.current;
-      if (!popup || popup.closed) {
-        chiefPopupRef.current = null;
-        setChiefWindowOpen(false);
-        setChiefWindowMinimized(false);
-        clearInterval(id);
-      }
-    }, 800);
-    return () => clearInterval(id);
-  }, [chiefWindowMode, chiefWindowOpen, isMobileWindowMode]);
-  useEffect(() => {
-    if (chiefWindowMode) return undefined;
     const handler = (e) => {
       if (e.origin !== window.location.origin) return;
       const data = e.data;
@@ -4713,7 +4668,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [chiefWindowMode, openCommandView, switchTab]);
+  }, [openCommandView, switchTab]);
 
   if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui",color:"#999"}}>Loading...</div>;
 
@@ -4872,33 +4827,8 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
     },
   ];
   const noticeTopOffset = (networkOffline && !offlineNoticeDismissed ? 48 : 0) + (fbOffline ? 48 : 0);
-  const chiefOverlayVisible = !chiefWindowMode && isMobileWindowMode && chiefWindowOpen && !chiefWindowMinimized;
-  const chiefOverlayMinimized = !chiefWindowMode && isMobileWindowMode && chiefWindowOpen && chiefWindowMinimized;
-
-  if (chiefWindowMode) {
-    return (
-      <div ref={appRef} style={{height:"100vh",overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:"'Google Sans','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif",color:T.text,display:"flex",flexDirection:"column"}}>
-        <ChiefOfStaffPanel
-          standalone
-          T={T}
-          tasks={switchboardTaskList}
-          shailos={switchboardShailaList}
-          shailaLog={shailosRef.current}
-          priorities={ap}
-          onAddTask={addVT}
-          onOpenQueue={openChiefQueue}
-          onOpenShailos={openChiefShailos}
-          onOpenPhone={openChiefPhone}
-          onOpenGoogleSettings={openChiefGoogleSettings}
-          calendarEvents={calendarEvents}
-          gmailMessages={gmailMessages}
-          googleClientId={effectiveGoogleClientId || null}
-          aiOpts={aiOpts}
-          onClose={closeChiefWindow}
-        />
-      </div>
-    );
-  }
+  const chiefOverlayVisible = chiefWindowOpen && !chiefWindowMinimized;
+  const chiefOverlayMinimized = chiefWindowOpen && chiefWindowMinimized;
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -5511,6 +5441,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           googleWasConnected={googleWasConnected}
           onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
           aiOpts={aiOpts}
+          chiefOpen={chiefOverlayVisible}
         />
       )}
 
