@@ -935,7 +935,18 @@ function ChiefOfStaffPanel({ T, tasks = [], shailos = [], shailaLog = [], priori
     }
   }
 
-  const C = cleanTheme(T);
+  const C = {
+    bg: "#24211C",
+    bgSoft: "#302B24",
+    card: "#1E1C18",
+    divider: "rgba(255,244,226,0.16)",
+    text: "#FFF8EA",
+    muted: "rgba(255,248,234,0.74)",
+    faint: "rgba(255,248,234,0.52)",
+    accent: "#F4B860",
+    hover: "rgba(244,184,96,0.16)",
+    danger: "#FFB4AB",
+  };
   const ncPanel = { background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", boxShadow: "none" };
   const ncTitle = { fontSize: 20, fontWeight: 500, color: C.text, fontFamily: "system-ui", lineHeight: 1.35 };
   const ncSectionIcon = (accent = C.accent) => ({ width: 40, height: 40, borderRadius: 20, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
@@ -4833,6 +4844,31 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
   const chiefOverlayMinimized = chiefWindowOpen && chiefWindowMinimized;
 
   // ─── Render ───────────────────────────────────────────────────────────────
+  if (chiefUrlRequested && chiefWindowOpen) {
+    return (
+      <div ref={appRef} style={{ height: "100vh", overflow: "hidden", background: "#171512", fontFamily: "'Google Sans','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif", color: "#FFF8EA", display: "flex", flexDirection: "column" }}>
+        <ChiefOfStaffPanel
+          standalone
+          T={T}
+          tasks={switchboardTaskList}
+          shailos={switchboardShailaList}
+          shailaLog={shailosRef.current}
+          priorities={ap}
+          onAddTask={addVT}
+          onOpenQueue={openChiefQueue}
+          onOpenShailos={openChiefShailos}
+          onOpenPhone={openChiefPhone}
+          onOpenGoogleSettings={openChiefGoogleSettings}
+          calendarEvents={calendarEvents}
+          gmailMessages={gmailMessages}
+          googleClientId={effectiveGoogleClientId || null}
+          aiOpts={aiOpts}
+          onClose={closeChiefWindow}
+        />
+      </div>
+    );
+  }
+
   return (
     <div ref={appRef} style={{height:"100vh",overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:"'Google Sans','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif",color:T.text,display:"flex",flexDirection:"column",alignItems:"center"}}>
 
@@ -5444,6 +5480,20 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
           aiOpts={aiOpts}
           chiefOpen={false}
+        />
+      )}
+
+      {!shellHidden && chiefOverlayVisible && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            inset: `${noticeTopOffset}px 0 0 0`,
+            zIndex: 8840,
+            background: "rgba(20,18,15,0.58)",
+            backdropFilter: "blur(2px)",
+            pointerEvents: "none",
+          }}
         />
       )}
 
