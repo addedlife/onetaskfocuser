@@ -113,6 +113,7 @@ function getInitialSuiteView() {
   try {
     const params = new URLSearchParams(window.location.search);
     const view = (params.get("suite") || params.get("view") || "").toLowerCase();
+    if (params.get("chiefWindow") === "1" && !view) return "focus";
     if (view === "switchboard" || view === "nervecenter") return "nervecenter";
     if (view === "focus" || view === "shailos" || view === "deskphone" || view === "phone") return view === "phone" ? "deskphone" : view;
     return "nervecenter";
@@ -1306,11 +1307,12 @@ Return ONLY valid JSON:
     ? { height: "100%", padding: 16, boxSizing: "border-box", display: "flex", flexDirection: "column" }
     : {
         position: "fixed",
-        top: `calc(${topOffset}px + 50%)`,
-        left: `calc(${sidebarW}px + ((100vw - ${sidebarW}px) / 2))`,
-        transform: "translate(-50%, -50%)",
-        width: `min(640px, calc(100vw - ${sidebarW + 48}px))`,
-        height: `min(500px, calc(100vh - ${topOffset + 180}px))`,
+        top: `calc(${topOffset}px + 76px)`,
+        left: `max(${sidebarW + 16}px, calc(100vw - 536px))`,
+        right: 16,
+        width: "auto",
+        maxWidth: 520,
+        maxHeight: `calc(100vh - ${topOffset + 104}px)`,
         zIndex: 8900,
         display: "flex",
         flexDirection: "column",
@@ -1318,21 +1320,21 @@ Return ONLY valid JSON:
         boxSizing: "border-box",
         animation: "ot-fade 0.18s ease-out",
       };
-  const contentGridColumns = "repeat(auto-fit, minmax(280px, 1fr))";
+  const contentGridColumns = standalone ? "repeat(auto-fit, minmax(280px, 1fr))" : "1fr";
 
   return (
     <div style={shellStyle}>
-      <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
-        <section style={{ ...ncPanel, flex: "1 1 auto", boxShadow: "0 20px 56px rgba(0,0,0,0.18)" }}>
-          <div style={{ padding: "22px 24px 18px", borderBottom: `1px solid ${C.divider}`, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
+      <div style={{ maxHeight: "inherit", display: "flex", flexDirection: "column", gap: 14 }}>
+        <section style={{ ...ncPanel, flex: "1 1 auto", maxHeight: "inherit", boxShadow: "0 18px 48px rgba(15,23,42,0.18)" }}>
+          <div style={{ padding: "14px 16px 12px", borderBottom: `1px solid ${C.divider}`, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-              <span style={{ ...ncSectionIcon(C.accent), background: C.hover }}>{suiteIcon("psychology_alt", 20)}</span>
+              <span style={{ ...ncSectionIcon(C.accent), width: 34, height: 34, borderRadius: 17, background: C.hover }}>{suiteIcon("psychology_alt", 18)}</span>
               <div style={{ minWidth: 0 }}>
-                <div style={ncTitle}>Chief of Staff</div>
-                <div style={{ fontSize: 13, color: C.muted, fontFamily: "system-ui", marginTop: 2 }}>Live next-step view across tasks, shailos, phone, calendar, and email.</div>
+                <div style={{ ...ncTitle, fontSize: 18 }}>Chief of Staff</div>
+                <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", marginTop: 1 }}>Live next move across the board.</div>
               </div>
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {onOpenQueue && <button onClick={onOpenQueue} style={cleanToolbarButton(false, C)}>{suiteIcon("list_alt", 15)} Queue</button>}
               {onOpenShailos && <button onClick={onOpenShailos} style={cleanToolbarButton(false, C)}>{suiteIcon("rule", 15)} Shailos</button>}
               {onOpenPhone && <button onClick={onOpenPhone} style={cleanToolbarButton(false, C)}>{suiteIcon("smartphone", 15)} Phone</button>}
@@ -1346,7 +1348,7 @@ Return ONLY valid JSON:
             </div>
           </div>
 
-          <div style={{ padding: "16px 24px 0", display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <div style={{ padding: "12px 16px 0", display: "flex", flexWrap: "wrap", gap: 7 }}>
             {sourceChips.map(source => (
               <span key={source.label} style={{ fontSize: 12, color: source.active ? C.text : C.muted, fontFamily: "system-ui", border: `1px solid ${source.active ? C.accent : C.divider}`, borderRadius: 999, padding: "6px 11px", background: source.active ? C.hover : C.bgSoft }}>
                 {source.label}
@@ -1354,8 +1356,8 @@ Return ONLY valid JSON:
             ))}
           </div>
 
-          <div style={{ flex: "1 1 auto", minHeight: 0, padding: "18px 24px 24px", display: "grid", gridTemplateColumns: contentGridColumns, gap: 18, alignItems: "start", overflow: "auto" }}>
-            <div style={{ display: "grid", gap: 14, minWidth: 0 }}>
+          <div style={{ flex: "1 1 auto", minHeight: 0, padding: "14px 16px 16px", display: "grid", gridTemplateColumns: contentGridColumns, gap: 12, alignItems: "start", overflow: "auto" }}>
+            <div style={{ display: "grid", gap: 12, minWidth: 0 }}>
               {chiefSweepError && (
                 <div style={{ fontSize: 13, color: C.danger, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 12, padding: "12px 14px" }}>
                   {chiefSweepError}
@@ -1363,23 +1365,23 @@ Return ONLY valid JSON:
               )}
 
               {!chiefBrief && !chiefSweepLoading && (
-                <div style={{ border: `1px dashed ${C.divider}`, borderRadius: 12, padding: "18px 20px", background: C.bgSoft }}>
-                  <div style={{ fontSize: 18, fontWeight: 500, color: C.text, lineHeight: 1.45, marginBottom: 6 }}>Ready to sweep your tasks, shailos, calendar, email, and phone activity.</div>
+                <div style={{ border: `1px dashed ${C.divider}`, borderRadius: 12, padding: "16px 18px", background: C.bgSoft }}>
+                  <div style={{ fontSize: 17, fontWeight: 500, color: C.text, lineHeight: 1.45, marginBottom: 6 }}>Ready to sweep your tasks, shailos, calendar, email, and phone activity.</div>
                   <div style={{ fontSize: 13, color: C.muted, fontFamily: "system-ui", lineHeight: 1.55 }}>This will pick the best next move and suggest any missing follow-up tasks worth creating.</div>
                 </div>
               )}
 
               {chiefSweepLoading && (
-                <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "18px 20px", background: C.bgSoft }}>
+                <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "16px 18px", background: C.bgSoft }}>
                   <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Sweeping now</div>
-                  <div style={{ fontSize: 20, fontWeight: 500, color: C.text, lineHeight: 1.4 }}>Reading the board and picking the smartest immediate move.</div>
+                  <div style={{ fontSize: 18, fontWeight: 500, color: C.text, lineHeight: 1.4 }}>Reading the board and picking the smartest immediate move.</div>
                 </div>
               )}
 
               {chiefBrief && !chiefSweepLoading && (
-                <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "20px 22px", background: C.bgSoft }}>
+                <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "16px 18px", background: C.bgSoft }}>
                   <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Do this now</div>
-                  <div style={{ fontSize: 28, fontWeight: 500, color: C.text, lineHeight: 1.3, marginBottom: 14 }}>{chiefBrief.rightNow}</div>
+                  <div style={{ fontSize: 22, fontWeight: 500, color: C.text, lineHeight: 1.3, marginBottom: 12 }}>{chiefBrief.rightNow}</div>
                   {chiefBrief.reasoning?.length > 0 && (
                     <div style={{ display: "grid", gap: 8 }}>
                       {chiefBrief.reasoning.map((line, idx) => (
@@ -1395,7 +1397,7 @@ Return ONLY valid JSON:
             </div>
 
             <div style={{ display: "grid", gap: 12, minWidth: 0 }}>
-              <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "16px 18px", background: C.bg }}>
+              <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "14px 16px", background: C.bg }}>
                 <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Learning YCD</div>
                 <div style={{ fontSize: 15, color: C.text, lineHeight: 1.55, fontFamily: "system-ui" }}>
                   {chiefBrief?.workStyleNote || "As this screen runs more sweeps, it will build a sharper sense of how YCD works best."}
@@ -1413,7 +1415,7 @@ Return ONLY valid JSON:
                 )}
               </div>
 
-              <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "16px 18px", background: C.bg }}>
+              <div style={{ border: `1px solid ${C.divider}`, borderRadius: 12, padding: "14px 16px", background: C.bg }}>
                 <div style={{ fontSize: 12, color: C.muted, fontFamily: "system-ui", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Worth turning into tasks</div>
                 {chiefBrief?.taskSuggestions?.length ? (
                   <div style={{ display: "grid", gap: 10 }}>
@@ -5441,7 +5443,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           googleWasConnected={googleWasConnected}
           onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
           aiOpts={aiOpts}
-          chiefOpen={chiefOverlayVisible}
+          chiefOpen={false}
         />
       )}
 
