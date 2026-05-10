@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import firebase from 'firebase/compat/app';
-import { App } from './08-app.jsx';
+import { App } from './08-app-split/index.jsx';
 // AuthGate: Listens to Firebase Auth state.
 // Shows LoginScreen when signed out; renders <App user={...} onSignOut={...} /> when signed in.
 //

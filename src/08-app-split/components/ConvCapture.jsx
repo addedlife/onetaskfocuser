@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { aiParseConversation, fmtMs, uid } from '../../01-core.js';
+import { NC_FONT_STACK } from '../ui-tokens.jsx';
 
 function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMode=false }) {
   // callMode starts in 'ready' phase (waiting for user to share screen)
@@ -166,11 +167,12 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
   function toggleApproved(id) { setItems(prev => prev.map(it => it.id === id ? {...it, approved: !it.approved} : it)); }
   function updateText(id, text) { setItems(prev => prev.map(it => it.id === id ? {...it, text} : it)); }
   function updatePriority(id, priority) { setItems(prev => prev.map(it => it.id === id ? {...it, priority} : it)); }
+  function updateCategory(id, cat) { setItems(prev => prev.map(it => it.id === id ? {...it, cat} : it)); }
 
   function applyApproved() {
     items.filter(it => it.approved).forEach(it => {
       if (it.cat === 'tasks')         onApply(it.text, it.priority || 'eventually');
-      else if (it.cat === 'shailos') onApply(it.synopsis || it.content || it.text || 'Shaila', 'shaila');
+      else if (it.cat === 'shailos') onApply(it.text || it.synopsis || it.content || 'Shaila', 'shaila');
       else if (it.cat === 'scheduleItems') onApply(it.when ? `${it.text} (${it.when})` : it.text, 'today');
       else if (it.cat === 'reminders') onApply(it.text, 'eventually');
       // completions + gotBacks are info-only for now
@@ -194,7 +196,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
 
   const overlayS = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 };
   const cardS    = { background: T.card, borderRadius: 16, maxWidth: 560, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', fontFamily: 'inherit' };
-  const btnClose = { background: 'none', border: 'none', cursor: 'pointer', color: T.tFaint, fontSize: 22, lineHeight: 1, padding: 4, fontFamily: 'system-ui' };
+  const btnClose = { background: 'none', border: 'none', cursor: 'pointer', color: T.tFaint, fontSize: 22, lineHeight: 1, padding: 4, fontFamily: NC_FONT_STACK };
 
   // ── Call mode: waiting for user to share screen ───────────────────────────
   if (phase === 'ready') return (
@@ -202,21 +204,21 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
       <div style={cardS} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '22px 24px 18px', borderBottom: `1px solid ${T.brd}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: T.t }}>Capture Call Audio</span>
+            <span style={{ fontSize: 18, fontWeight: 500, color: T.t }}>Capture Call Audio</span>
             <button style={btnClose} onClick={onClose}>×</button>
           </div>
-          <div style={{ fontSize: 13, color: T.tSoft, fontFamily: 'system-ui', lineHeight: 1.6, marginBottom: 14 }}>
+          <div style={{ fontSize: 14, color: T.tSoft, fontFamily: NC_FONT_STACK, lineHeight: 1.55, marginBottom: 14 }}>
             Click <strong>Start capturing</strong>, then in the browser dialog:<br/>
             1. Select the tab or window playing the call<br/>
             2. Check <em>"Share tab audio"</em> before clicking Share
           </div>
-          {err && <div style={{ fontSize: 12, color: '#E74C3C', fontFamily: 'system-ui', marginBottom: 8 }}>{err}</div>}
+          {err && <div style={{ fontSize: 13, color: '#E74C3C', fontFamily: NC_FONT_STACK, marginBottom: 8 }}>{err}</div>}
         </div>
         <div style={{ padding: '18px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
-          <button onClick={startCallCapture} style={{ background: '#5B7BE8', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 28px', fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'system-ui' }}>
+          <button onClick={startCallCapture} style={{ background: '#5B7BE8', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 28px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Start capturing
           </button>
-          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: 'system-ui' }}>
+          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Cancel
           </button>
         </div>
@@ -230,26 +232,26 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
       <div style={cardS} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '22px 24px 18px', borderBottom: `1px solid ${T.brd}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: T.t }}>{callMode ? 'Capturing Call Audio' : 'Recording Conversation'}</span>
+            <span style={{ fontSize: 18, fontWeight: 500, color: T.t }}>{callMode ? 'Capturing Call Audio' : 'Recording Conversation'}</span>
             <button style={btnClose} onClick={onClose}>×</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#E74C3C', animation: 'conv-pulse 1.4s ease infinite' }}/>
-            <span style={{ fontSize: 13, color: T.tSoft, fontFamily: 'system-ui', fontVariantNumeric: 'tabular-nums' }}>{fmtElapsed}</span>
-            <span style={{ fontSize: 12, color: T.tFaint, fontFamily: 'system-ui' }}>Speak freely — AI will extract everything</span>
+            <span style={{ fontSize: 13, color: T.tSoft, fontFamily: NC_FONT_STACK, fontVariantNumeric: 'tabular-nums' }}>{fmtElapsed}</span>
+            <span style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Speak freely — AI will extract everything</span>
           </div>
           {liveText && (
-            <div style={{ fontSize: 12, color: T.tFaint, fontFamily: 'system-ui', lineHeight: 1.5, maxHeight: 72, overflowY: 'auto', background: T.bgW, borderRadius: 8, padding: '8px 12px', border: `1px solid ${T.brdS}` }}>
+            <div style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK, lineHeight: 1.5, maxHeight: 72, overflowY: 'auto', background: T.bgW, borderRadius: 8, padding: '8px 12px', border: `1px solid ${T.brdS}` }}>
               {liveText}
             </div>
           )}
-          {err && <div style={{ fontSize: 12, color: '#E74C3C', fontFamily: 'system-ui', marginTop: 8 }}>{err}</div>}
+          {err && <div style={{ fontSize: 13, color: '#E74C3C', fontFamily: NC_FONT_STACK, marginTop: 8 }}>{err}</div>}
         </div>
         <div style={{ padding: '20px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
-          <button onClick={stopAndProcess} style={{ background: '#E74C3C', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 30px', fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'system-ui' }}>
+          <button onClick={stopAndProcess} style={{ background: '#E74C3C', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 30px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Stop &amp; Process
           </button>
-          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: 'system-ui' }}>
+          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Cancel
           </button>
         </div>
@@ -261,8 +263,8 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
     <div style={overlayS}>
       <div style={{ ...cardS, alignItems: 'center', justifyContent: 'center', padding: '56px 32px', textAlign: 'center' }}>
         <div style={{ fontSize: 38, marginBottom: 16 }}>🎙️</div>
-        <div style={{ fontSize: 16, fontWeight: 600, color: T.t, marginBottom: 8, fontFamily: 'system-ui' }}>Processing conversation…</div>
-        <div style={{ fontSize: 13, color: T.tFaint, fontFamily: 'system-ui' }}>Transcribing and extracting items</div>
+        <div style={{ fontSize: 18, fontWeight: 500, color: T.t, marginBottom: 8, fontFamily: NC_FONT_STACK }}>Processing conversation…</div>
+        <div style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Transcribing and extracting items</div>
       </div>
     </div>
   );
@@ -275,20 +277,20 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
         <div style={{ padding: '20px 24px 14px', borderBottom: `1px solid ${T.brd}`, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: T.t }}>Found in this conversation</div>
-              <div style={{ fontSize: 12, color: T.tFaint, fontFamily: 'system-ui', marginTop: 3 }}>
+              <div style={{ fontSize: 18, fontWeight: 500, color: T.t }}>Found in this conversation</div>
+              <div style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK, marginTop: 3 }}>
                 {items.length} item{items.length !== 1 ? 's' : ''} — check what to add
               </div>
             </div>
             <button style={btnClose} onClick={onClose}>×</button>
           </div>
-          {err && <div style={{ fontSize: 12, color: '#E74C3C', fontFamily: 'system-ui', marginTop: 8 }}>{err}</div>}
+          {err && <div style={{ fontSize: 13, color: '#E74C3C', fontFamily: NC_FONT_STACK, marginTop: 8 }}>{err}</div>}
         </div>
 
         {/* Scrollable body */}
         <div style={{ overflowY: 'auto', flex: 1, padding: '12px 24px 4px' }}>
           {items.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '36px 0', color: T.tFaint, fontFamily: 'system-ui', fontSize: 14 }}>
+            <div style={{ textAlign: 'center', padding: '36px 0', color: T.tFaint, fontFamily: NC_FONT_STACK, fontSize: 14 }}>
               No actionable items found in this conversation.
             </div>
           )}
@@ -299,8 +301,8 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
               <div key={cat} style={{ marginBottom: 18 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
                   <div style={{ width: 3, height: 18, background: color, borderRadius: 2, flexShrink: 0 }}/>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: T.t, fontFamily: 'system-ui', letterSpacing: '.3px' }}>{emoji} {label}</span>
-                  <span style={{ fontSize: 11, background: color + '22', color: color, borderRadius: 10, padding: '1px 7px', fontFamily: 'system-ui', fontWeight: 600 }}>{sItems.length}</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: T.t, fontFamily: NC_FONT_STACK, letterSpacing: 0 }}>{emoji} {label}</span>
+                  <span style={{ fontSize: 12, background: color + '22', color: color, borderRadius: 10, padding: '1px 7px', fontFamily: NC_FONT_STACK, fontWeight: 500 }}>{sItems.length}</span>
                 </div>
                 {sItems.map(it => (
                   <div key={it.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '7px 0', borderBottom: `1px solid ${T.brdS}` }}>
@@ -310,20 +312,32 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
                       <input
                         value={it.text || it.synopsis || ''}
                         onChange={e => updateText(it.id, e.target.value)}
-                        style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${T.brdS}`, color: T.t, fontSize: 13, fontFamily: 'system-ui', padding: '2px 0', outline: 'none', boxSizing: 'border-box' }}
+                        style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${T.brdS}`, color: T.t, fontSize: 14, fontFamily: NC_FONT_STACK, padding: '2px 0', outline: 'none', boxSizing: 'border-box' }}
                       />
-                      {cat === 'tasks' && (
+                      {!['completions', 'gotBacks'].includes(cat) && (
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+                          <select value={it.cat} onChange={e => updateCategory(it.id, e.target.value)}
+                            style={{ fontSize: 13, background: T.bgW, border: `1px solid ${T.brd}`, borderRadius: 6, color: T.tSoft, padding: '2px 6px', cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+                            <option value="tasks">Task</option>
+                            <option value="shailos">Shaila</option>
+                            <option value="scheduleItems">Schedule</option>
+                            <option value="reminders">Reminder</option>
+                          </select>
+                          <span style={{ fontSize: 12, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Save as</span>
+                        </div>
+                      )}
+                      {it.cat === 'tasks' && (
                         <select value={it.priority || 'eventually'} onChange={e => updatePriority(it.id, e.target.value)}
-                          style={{ marginTop: 5, fontSize: 11, background: T.bgW, border: `1px solid ${T.brd}`, borderRadius: 6, color: T.tSoft, padding: '2px 6px', cursor: 'pointer', fontFamily: 'system-ui' }}>
+                          style={{ marginTop: 5, fontSize: 13, background: T.bgW, border: `1px solid ${T.brd}`, borderRadius: 6, color: T.tSoft, padding: '2px 6px', cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
                           {pris.filter(p => !p.deleted).map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                           <option value="shaila">Shaila</option>
                         </select>
                       )}
-                      {cat === 'scheduleItems' && it.when && (
-                        <div style={{ fontSize: 11, color: T.tFaint, fontFamily: 'system-ui', marginTop: 3 }}>When: {it.when}</div>
+                      {it.cat === 'scheduleItems' && it.when && (
+                        <div style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK, marginTop: 3 }}>When: {it.when}</div>
                       )}
-                      {(cat === 'completions' || cat === 'gotBacks') && (
-                        <div style={{ fontSize: 11, color: T.tFaint, fontFamily: 'system-ui', marginTop: 2, fontStyle: 'italic' }}>Info only — no action taken</div>
+                      {(it.cat === 'completions' || it.cat === 'gotBacks') && (
+                        <div style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK, marginTop: 2, fontStyle: 'italic' }}>Info only — no action taken</div>
                       )}
                     </div>
                   </div>
@@ -336,11 +350,11 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
         {/* Footer */}
         <div style={{ padding: '14px 24px 18px', borderTop: `1px solid ${T.brd}`, display: 'flex', gap: 10, flexShrink: 0 }}>
           <button onClick={applyApproved} disabled={approvedCount === 0}
-            style={{ flex: 1, background: approvedCount > 0 ? '#5B7BE8' : T.brdS, color: approvedCount > 0 ? '#fff' : T.tFaint, border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, cursor: approvedCount > 0 ? 'pointer' : 'default', fontFamily: 'system-ui', transition: 'background 0.15s' }}>
+            style={{ flex: 1, background: approvedCount > 0 ? '#5B7BE8' : T.brdS, color: approvedCount > 0 ? '#fff' : T.tFaint, border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 500, cursor: approvedCount > 0 ? 'pointer' : 'default', fontFamily: NC_FONT_STACK, transition: 'background 0.15s' }}>
             Add {approvedCount > 0 ? approvedCount : 0} item{approvedCount !== 1 ? 's' : ''}
           </button>
           <button onClick={onClose}
-            style={{ padding: '12px 18px', background: 'none', border: `1px solid ${T.brd}`, borderRadius: 10, fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: 'system-ui' }}>
+            style={{ padding: '12px 18px', background: 'none', border: `1px solid ${T.brd}`, borderRadius: 10, fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Cancel
           </button>
         </div>

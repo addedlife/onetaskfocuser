@@ -1,21 +1,20 @@
-// === 08-app.js ===
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, PROMPTS, textOnColor, pBg, uid, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, suggestFirstStep, aiParseBrainDump, aiSummarizeAnswer, gG, db, _lum, priText, textOnPastel } from '../01-core.js';
+import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callAI, suggestFirstStep, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer, gG, fmtMs, db, _lum, priText, textOnPastel } from '../01-core.js';
 import { IC } from '../02-icons.jsx';
 import { VoiceInput } from '../03-voice.jsx';
 import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from '../04-components.jsx';
 import { BulkAdd, TaskBD, BlockedModal, ContextTagPicker, ListManager } from '../05-modals.jsx';
 import { ShelfView, SubtaskGroup } from '../06-shelf.jsx';
 import { SettingsModal } from '../07-settings.jsx';
-import { formatPendingAge } from '../09-transcription-pen.js';
+import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, listPendingRecordings, PENDING_EVENT, formatPendingAge } from '../09-transcription-pen.js';
 import { DeskPhoneWebPanel } from '../10-deskphone-web.jsx';
-import { suiteIcon } from './ui-tokens.jsx';
+import { isOfflineShellReady } from '../offline-support.js';
+import { buildDeskPhoneThemeQuery, getInitialSuiteView, NC_FONT_STACK, NC_GLOBAL_CSS, suiteIcon, useViewportWidth } from './ui-tokens.jsx';
 import { AppSuiteChrome } from './components/AppSuiteChrome.jsx';
 import { DeskPhoneSuitePanel, SuiteShailosPanel } from './components/SuitePanels.jsx';
 import { NerveCenterPhoneSurface } from './components/NerveCenterPhoneSurface.jsx';
 import { DeskPhoneMiniDock } from './components/DeskPhoneMiniDock.jsx';
-import { NerveCenterPanel } from './components/NerveCenterPanel.jsx';
+import { compactNerveSummary, nerveSummarySource, NerveCenterPanel } from './components/NerveCenterPanel.jsx';
 import { ConvCapture } from './components/ConvCapture.jsx';
 import { useAppConfig } from './hooks/useAppConfig.js';
 import { useAppTheme } from './hooks/useAppTheme.js';
@@ -40,14 +39,24 @@ import { useToastNotifier } from './hooks/useToastNotifier.js';
 
 function App({ user, onSignOut }) {
   Store.setUid(canonicalUid(user));
+  const viewportW = useViewportWidth();
   // ─── State ───────────────────────────────────────────────────────────────
   const [AS, setAS] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [newTask, setNewTask] = useState("");
   const [selPri, setSelPri] = useState(null);
   const [tab, setTab] = useState("focus");
+  const [suiteView, setSuiteView] = useState(getInitialSuiteView);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarAutoCollapse, setSidebarAutoCollapse] = useState(() => {
+    try { return localStorage.getItem('ot_sidebar_autocollapse') !== 'false'; } catch { return true; }
+  });
   const [ncActionsOpen, setNcActionsOpen] = useState(false);
   const [ncActionCatId, setNcActionCatId] = useState("tasks");
+  const [deskPhoneOnline, setDeskPhoneOnline] = useState(false);
+  const deskPhoneLaunchAtRef = useRef(0);
+  const lastDeskPhoneThemeRef = useRef("");
+  const [legacyPrompt, setLegacyPrompt] = useState(null);
   const [justComp, setJustComp] = useState(false);
   const [showRip, setShowRip] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -58,6 +67,7 @@ function App({ user, onSignOut }) {
   const [settingsInitialTab, setSettingsInitialTab] = useState("queue");
   const [showLM, setShowLM] = useState(false);
   const [showListMgr, setShowListMgr] = useState(false);
+  // tipIdx/dailyTip removed — replaced by carousel (tipViewIdx)
   const [delConf, setDelConf] = useState(null);
   const [navExp, setNavExp] = useState(false);
   const [chgPri, setChgPri] = useState(null);         // task id being re-prioritized
@@ -69,7 +79,7 @@ function App({ user, onSignOut }) {
   const [openGroups, setOpenGroups] = useState(new Set());
   const [groupAdding, setGroupAdding] = useState(null);
   const [optLoading, setOptLoading] = useState(false);
-  const { dismissToast, showToast, toast } = useToastNotifier();
+  const [toast, setToast] = useState(null);
   const [blockedModal, setBlockedModal] = useState(null);
   const [ctxPicker, setCtxPicker] = useState(null);
   const [firstStepModal, setFirstStepModal] = useState(null); // {task, step, loading, edited}
@@ -78,14 +88,48 @@ function App({ user, onSignOut }) {
   const [bdMinimized, setBdMinimized] = useState(false);
   const [jsMinimized, setJsMinimized] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
+  const [showShailos, setShowShailos] = useState(false);
   const [lpMenu, setLpMenu] = useState(false);
+  const [shailosAction, setShailosAction] = useState(null); // null | "record-shaila" | "record-call"
   const [justStartId, setJustStartId] = useState(null);
+  const [tipCat, setTipCat] = useState("All");
   const [showOverwhelm, setShowOverwhelm] = useState(false);
   const [focusModeActive, setFocusModeActive] = useState(false);
+  const [mrsWPriLive, setMrsWPriLive] = useState(null); // live Mrs. W priority
+  const [blockedResume, setBlockedResume] = useState(null); // task id to show nudge for
+  const [staleNudge, setStaleNudge] = useState(null);       // task object that's been waiting 7+ days
+  // Google Calendar + Gmail integration
+  const [googleToken, setGoogleToken] = useState(() => {
+    try {
+      const tok = localStorage.getItem('ot_google_token');
+      const exp = Number(localStorage.getItem('ot_google_token_expiry') || 0);
+      if (tok && exp > Date.now()) return tok;
+      localStorage.removeItem('ot_google_token');
+      localStorage.removeItem('ot_google_token_expiry');
+    } catch {}
+    return null;
+  });
+  const [googleWasConnected, setGoogleWasConnected] = useState(() => {
+    try { return localStorage.getItem('ot_google_connected') === '1'; } catch { return false; }
+  });
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
+  const [calendarEvents, setCalendarEvents] = useState(null); // null=not loaded, []= loaded empty
+  const [gmailMessages, setGmailMessages]   = useState(null);
+  const [googleLoading, setGoogleLoading]   = useState(false);
+  const [googleError, setGoogleError]       = useState(null);
+  const gTokenClientRef = useRef(null);
 
-  const { setTipCat, setTipViewIdx, TIP_CATS, tipCarouselIdx, tipCarouselItem, tipCarouselList, tipCat } = useTipCarousel();
+  // Insights tab state
+  const [tipViewIdx, setTipViewIdx] = useState(() => tipOfDay(dayKey())); // init to today's daily tip
+  const [aiInsight, setAiInsight] = useState(null);       // AI-generated insight string
+  const [aiInsightLoading, setAiInsightLoading] = useState(false);
   const [chartRange, setChartRange] = useState('week'); // 'day'|'week'|'month'|'alltime'
   const [chartSecondary, setChartSecondary] = useState('dow'); // 'dow'|'speed'|'trend'|'cumulative'
+  // AI Chat dialog state
+  const [aiChatOpen, setAiChatOpen] = useState(false);
+  const [aiChatHistory, setAiChatHistory] = useState([]);
+  const [aiChatInput, setAiChatInput] = useState("");
+  const [aiChatLoading, setAiChatLoading] = useState(false);
   // Queue overflow menu (removed — merged into gear settings modal)
   // Drawer menus on main entry screen
   const [showAides, setShowAides] = useState(false);     // start/sustain aides (body double, just start)
@@ -108,46 +152,68 @@ function App({ user, onSignOut }) {
   const [zenDumpParsing, setZenDumpParsing] = useState(false);
   const [showZenReview, setShowZenReview] = useState(false);
   const [entryEnergy, setEntryEnergy] = useState(null); // energy level for new task: null | "high" | "low"
-  const { clockTime, minTick } = useClockTicks();
-  const { queueToast, queueToastKey, showQueueToast } = useQueueToast();
-  const { clearUndo: clearDeletedUndo, showUndo: showDeletedUndo, undo: deletedUndo } = useTimedUndo();
-  const { clearUndo: clearParkedUndo, showUndo: showParkedUndo, undo: parkedUndo } = useTimedUndo();
+  const [clockTime, setClockTime] = useState(() => new Date());
+  const [queueToast, setQueueToast] = useState(null); // {color, tmr} for "Added to queue" notice
+  const [queueToastKey, setQueueToastKey] = useState(0);
+  const queueToastTmr = useRef(null);
+  const toastTmrRef   = useRef(null);
+  const [deletedUndo, setDeletedUndo] = useState(null); // {task, listId} for undo
+  const deletedTmr = useRef(null);
+  const [parkedUndo, setParkedUndo] = useState(null); // {task, listId} for undo park
+  const parkedTmr = useRef(null);
   // ─── New feature state ───────────────────────────────────────────────────
   const [compFlash, setCompFlash] = useState(false);      // brief ✓ overlay on card
   const [showStreak, setShowStreak] = useState(false);    // "On a roll!" celebration
   const [showBlockReflect, setShowBlockReflect] = useState(false); // what's in the way modal
   const [showShailaManager, setShowShailaManager] = useState(false); // shaila log panel
+  const [minTick, setMinTick] = useState(0);              // ticks every 60s for snooze auto-wake
   const sessionCompCount = useRef(0);                     // session completions (no re-render needed)
   const pendingShailaIds = useRef(new Set());              // shailaIds assigned but not yet in state (prevents listener dupes)
-  const { aiConfig, serverGoogleClientId, serverKeyAvailable } = useAppConfig();
-  const { fbOffline, networkOffline, offlineNoticeDismissed, offlineShellReady, setFbOffline, setOfflineNoticeDismissed } = useOfflineStatus();
+  const [serverKeyAvailable, setServerKeyAvailable] = useState(false); // true = Netlify AI is configured
+  const [aiConfig, setAiConfig] = useState(null);
+  const [serverGoogleClientId, setServerGoogleClientId] = useState("");
+  const [pendingRecordings, setPendingRecordings] = useState([]);
+  const [pendingRetryId, setPendingRetryId] = useState(null);
+  const [pendingTranscripts, setPendingTranscripts] = useState({});
+  const [networkOffline, setNetworkOffline] = useState(() => typeof navigator !== "undefined" ? !navigator.onLine : false);
+  const [offlineShellReady, setOfflineShellReady] = useState(isOfflineShellReady);
+  const [offlineNoticeDismissed, setOfflineNoticeDismissed] = useState(false);
+  const [fbOffline, setFbOffline] = useState(false);      // Firebase unreachable on load — warn user
   // ─── Conversation Capture ────────────────────────────────────────────────
   const [showConvCapture, setShowConvCapture] = useState(false);
   const [convCallMode, setConvCallMode] = useState(false); // true = getDisplayMedia (phone call)
-
-  const {
-    calendarEvents,
-    connectGoogle,
-    disconnectGoogle,
-    effectiveGoogleClientId,
-    gmailMessages,
-    googleError,
-    googleLoading,
-    googleToken,
-    googleWasConnected,
-    refreshCalendar,
-  } = useGoogleWorkspace(AS?.googleClientId || serverGoogleClientId);
 
   const inRef = useRef(null);
   const edRef = useRef(null);
   const idleTmr = useRef(null);
   const navTmr = useRef(null);
   const priTmr = useRef(null);
+  const inputTmr = useRef(null);
   const inter = useRef(false);
   const appRef = useRef(null);
   const saveTmr = useRef(null);
+  const autoOptTmr = useRef(null);
+  const mrsWTmr = useRef(null);
+  const blockedTmr = useRef({});
+  const chatEndRef = useRef(null);
 
   const [ph] = useState(() => PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
+
+  useEffect(() => {
+    const updateNetworkState = () => {
+      setNetworkOffline(!navigator.onLine);
+      if (navigator.onLine) setOfflineNoticeDismissed(false);
+    };
+    const markOfflineReady = () => setOfflineShellReady(true);
+    window.addEventListener("online", updateNetworkState);
+    window.addEventListener("offline", updateNetworkState);
+    window.addEventListener("onetask-offline-ready", markOfflineReady);
+    return () => {
+      window.removeEventListener("online", updateNetworkState);
+      window.removeEventListener("offline", updateNetworkState);
+      window.removeEventListener("onetask-offline-ready", markOfflineReady);
+    };
+  }, []);
 
   const defS = {
     lists: [{id:"default", name:"My Tasks", tasks:[]}],
@@ -166,6 +232,9 @@ function App({ user, onSignOut }) {
     mrsWWindows: {monThu:{start:"08:30",end:"13:00"}, fri:{start:"08:30",end:"10:00"}},
     autoOptimize: false,
     currentEnergy: null, // "high" | "low" | null
+    fontWeightScale: 400,
+    nerveCenterPaneWeights: { tasks: 1, shailos: 1, phone: 1 },
+    nerveCenterGooglePaneHeight: 244,
   };
 
   // ─── Load / Save ─────────────────────────────────────────────────────────
@@ -188,6 +257,9 @@ function App({ user, onSignOut }) {
         if (!s.mrsWWindows) s.mrsWWindows = defS.mrsWWindows;
         if (s.completionSound === undefined) s.completionSound = true;
         if (!s.overwhelmThreshold) s.overwhelmThreshold = 7;
+        if (!s.fontWeightScale) s.fontWeightScale = 400;
+        if (!s.nerveCenterPaneWeights) s.nerveCenterPaneWeights = { tasks: 1, shailos: 1, phone: 1 };
+        if (!s.nerveCenterGooglePaneHeight) s.nerveCenterGooglePaneHeight = 244;
         // Permanent: strip "home" custom priority on every load AND directly patch Firestore settings doc.
         // Direct patch bypasses the debounced save (which gets skipped when _listenV5 sets adoptedRemote=true),
         // so the Firestore settings doc is fixed immediately and future snapshots arrive clean.
@@ -287,6 +359,33 @@ function App({ user, onSignOut }) {
 
   // (beforeunload/pagehide flushing is consolidated in the effect below with the periodic sync)
 
+  // ─── Shared Gemini gateway config ─────────────────────────────────────────
+  useEffect(() => {
+    fetch("/.netlify/functions/app-config")
+      .then(r => r.json())
+      .then(d => {
+        const cfg = d.ai || null;
+        const googleId = d?.integrations?.googleClientId || d?.googleClientId || "";
+        setAiConfig(cfg);
+        setServerKeyAvailable(!!(cfg?.available?.gemini || d.geminiKey));
+        setServerGoogleClientId(typeof googleId === "string" ? googleId.trim() : "");
+      })
+      .catch(() => {});
+  }, []);
+
+  const refreshPendingRecordings = useCallback(() => {
+    listPendingRecordings()
+      .then(setPendingRecordings)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshPendingRecordings();
+    window.addEventListener(PENDING_EVENT, refreshPendingRecordings);
+    return () => window.removeEventListener(PENDING_EVENT, refreshPendingRecordings);
+  }, [refreshPendingRecordings]);
+
+
   // ─── Auto-aging: nudge stale tasks up one priority tier on load ─────────────
   useEffect(() => {
     if (!loaded || !pris.length) return;
@@ -309,6 +408,245 @@ function App({ user, onSignOut }) {
     uT(() => aged);
     if (count > 0) showToast(`↑ ${count} task${count!==1?"s":""} nudged up — been sitting too long`, 8000);
   }, [loaded]); // eslint-disable-line
+
+  // ─── Google Calendar + Gmail via GIS OAuth ───────────────────────────────
+  const effectiveGoogleClientId = (AS?.googleClientId || serverGoogleClientId || "").trim();
+
+  useEffect(() => {
+    const clientId = effectiveGoogleClientId;
+    if (!clientId) { gTokenClientRef.current = null; return; }
+    function initClient() {
+      if (!window.google?.accounts?.oauth2) { console.warn('[Google] GIS loaded but oauth2 not ready'); return; }
+      console.log('[Google] initTokenClient');
+      gTokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly',
+        callback: (resp) => {
+          console.log('[Google] OAuth callback error:', resp.error || 'none', '| has token:', !!resp.access_token);
+          if (resp.error) {
+            if (resp.error === 'popup_closed_by_user') return;
+            if (resp.error === 'access_denied') { setGoogleError('Access denied — please approve Calendar and Gmail access in the Google popup.'); return; }
+            setGoogleError(resp.error_description || resp.error);
+            return;
+          }
+          console.log('[Google] Token received, length:', resp.access_token?.length);
+          setGoogleToken(resp.access_token);
+          try {
+            localStorage.setItem('ot_google_token', resp.access_token);
+            localStorage.setItem('ot_google_token_expiry', String(Date.now() + 3300 * 1000));
+            localStorage.setItem('ot_google_connected', '1');
+            setGoogleWasConnected(true);
+          } catch {}
+          setGoogleError(null);
+        },
+      });
+      console.log('[Google] Token client ready:', !!gTokenClientRef.current);
+      // Auto-reconnect silently if user was previously connected and token is expired
+      if (localStorage.getItem('ot_google_connected') === '1') {
+        const exp = Number(localStorage.getItem('ot_google_token_expiry') || 0);
+        if (exp <= Date.now()) {
+          setTimeout(() => { gTokenClientRef.current?.requestAccessToken({ prompt: '' }); }, 600);
+        }
+      }
+    }
+    if (window.google?.accounts?.oauth2) { initClient(); return; }
+    if (document.querySelector('script[src*="accounts.google.com/gsi"]')) {
+      const t = setInterval(() => { if (window.google?.accounts?.oauth2) { clearInterval(t); initClient(); } }, 200);
+      return () => clearInterval(t);
+    }
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.onload = () => { console.log('[Google] GIS script loaded'); initClient(); };
+    s.onerror = () => { console.error('[Google] GIS script failed to load'); setGoogleError('Could not load Google sign-in script.'); };
+    document.head.appendChild(s);
+    console.log('[Google] Loading GIS script…');
+  }, [effectiveGoogleClientId]); // eslint-disable-line
+
+  // Silent reconnect: if token drops to null and user was previously connected, re-auth without prompt
+  useEffect(() => {
+    if (googleToken !== null) return;
+    try { if (localStorage.getItem('ot_google_connected') !== '1') return; } catch { return; }
+    if (!gTokenClientRef.current) return;
+    const t = setTimeout(() => { gTokenClientRef.current?.requestAccessToken({ prompt: '' }); }, 800);
+    return () => clearTimeout(t);
+  }, [googleToken]); // eslint-disable-line
+
+  // These throw 'token_expired' on 401 but do NOT call setGoogleToken themselves —
+  // the effect handles token clearing to avoid cancelling its own load mid-flight.
+  function sortCalEvents(evts) {
+    return [...evts].sort((a, b) => {
+      const aAllDay = !a.start?.dateTime;
+      const bAllDay = !b.start?.dateTime;
+      if (aAllDay !== bAllDay) return aAllDay ? 1 : -1; // timed first, all-day last
+      const aKey = a.start?.dateTime || a.start?.date || '';
+      const bKey = b.start?.dateTime || b.start?.date || '';
+      return aKey < bKey ? -1 : aKey > bKey ? 1 : 0;
+    });
+  }
+  async function fetchCalendarData(token) {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
+    const eventsUrl = (calId) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=25`;
+
+    // Step 1: try to get all subscribed calendars via calendarList
+    let cals = null;
+    try {
+      console.log('[Google] Fetching calendar list…');
+      const listR = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?showHidden=false&maxResults=50', { headers: { Authorization: `Bearer ${token}` } });
+      console.log('[Google] CalendarList status:', listR.status);
+      if (listR.status === 401) throw new Error('token_expired');
+      if (listR.ok) {
+        const listD = await listR.json();
+        cals = (listD.items || []).filter(c => c.selected !== false && c.accessRole !== 'none');
+        console.log('[Google] Subscribed calendars:', cals.length);
+      }
+    } catch (e) {
+      if (e.message === 'token_expired') throw e;
+      console.warn('[Google] calendarList failed, falling back to primary:', e.message);
+    }
+
+    // If calendarList failed or returned nothing, fall back to primary
+    if (!cals || cals.length === 0) {
+      const r = await fetch(eventsUrl('primary'), { headers: { Authorization: `Bearer ${token}` } });
+      if (r.status === 401) throw new Error('token_expired');
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + r.status}`); }
+      const d = await r.json();
+      return sortCalEvents(d.items || []).slice(0, 20);
+    }
+
+    // Step 2: fetch events from each calendar in parallel
+    const results = await Promise.allSettled(
+      cals.map(cal =>
+        fetch(eventsUrl(cal.id), { headers: { Authorization: `Bearer ${token}` } })
+          .then(r => { if (r.status === 401) throw new Error('token_expired'); return r.json(); })
+          .then(d => (d.items || []))
+      )
+    );
+    // Re-throw token_expired if any calendar hit it
+    for (const r of results) { if (r.reason?.message === 'token_expired') throw new Error('token_expired'); }
+    // Merge, dedupe by event id, sort (timed first, all-day last), cap at 20
+    const seen = new Set();
+    const all = results.flatMap(r => r.status === 'fulfilled' ? r.value : []).filter(evt => { if (seen.has(evt.id)) return false; seen.add(evt.id); return true; });
+    console.log('[Google] Total calendar events after merge:', all.length);
+    return sortCalEvents(all).slice(0, 20);
+  }
+
+  async function fetchGmailData(token) {
+    console.log('[Google] Fetching Gmail…');
+    // Personal = all; Promotions + Updates = important only; most recent 20 combined
+    const q = encodeURIComponent('(category:primary) OR (category:promotions is:important) OR (category:updates is:important)');
+    const listR = await fetch(
+      `https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=${q}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    console.log('[Google] Gmail list status:', listR.status);
+    if (listR.status === 401) throw new Error('token_expired');
+    if (!listR.ok) { const d = await listR.json().catch(() => ({})); throw new Error(`Gmail: ${d?.error?.message || 'HTTP ' + listR.status}`); }
+    const list = await listR.json();
+    console.log('[Google] Gmail message count:', list.messages?.length ?? 0);
+    if (!list.messages?.length) return [];
+    const msgs = await Promise.all(
+      list.messages.slice(0, 20).map(m =>
+        fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
+          { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
+      )
+    );
+    // Batch AI: generate one-sentence summaries for all emails in a single call
+    try {
+      const lines = msgs.map((m, i) => {
+        const subj = m?.payload?.headers?.find(h => h.name === 'Subject')?.value || '';
+        const snip = (m.snippet || '').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
+        return `${i + 1}. Subject: "${subj}" | Body: "${snip}"`;
+      }).join('\n');
+      const prompt = `For each email below, summarize what the body is actually saying in ONE sentence of 10 words or fewer. Focus on the body content — do not just restate the subject line. Return ONLY a valid JSON array of strings, one per email, in order.\n\n${lines}`;
+      const raw = await callAI(prompt, { maxTokens: 400 });
+      const match = raw.match(/\[[\s\S]*?\]/);
+      if (match) {
+        const summaries = JSON.parse(match[0]);
+        return msgs.map((m, i) => ({ ...m, aiSummary: typeof summaries[i] === 'string' ? summaries[i].replace(/^"|"$/g, '') : '' }));
+      }
+    } catch (e) {
+      console.warn('[Google] AI email summary failed:', e.message);
+    }
+    return msgs;
+  }
+
+  // Auto-fetch when token arrives; re-fetch every 15 min
+  useEffect(() => {
+    if (!googleToken) return;
+    let cancelled = false;
+    const load = () => {
+      if (cancelled) return;
+      console.log('[Google] Starting load, token length:', googleToken?.length);
+      setGoogleLoading(true);
+      Promise.allSettled([fetchCalendarData(googleToken), fetchGmailData(googleToken)])
+        .then(([calR, mailR]) => {
+          console.log('[Google] Results: cal=', calR.status, 'mail=', mailR.status);
+          if (cancelled) { console.log('[Google] cancelled — skipping state update'); return; }
+          const errs = [];
+          if (calR.status === 'fulfilled') {
+            setCalendarEvents(calR.value);
+          } else if (calR.reason?.message === 'token_expired') {
+            try { localStorage.removeItem('ot_google_token'); localStorage.removeItem('ot_google_token_expiry'); } catch {}
+            setGoogleToken(null); return;
+          } else {
+            console.error('[Google] cal error:', calR.reason?.message);
+            errs.push(calR.reason?.message || 'Calendar error');
+            setCalendarEvents(prev => prev ?? []); // still show card on error
+          }
+          if (mailR.status === 'fulfilled') {
+            setGmailMessages(mailR.value);
+          } else if (mailR.reason?.message === 'token_expired') {
+            try { localStorage.removeItem('ot_google_token'); localStorage.removeItem('ot_google_token_expiry'); } catch {}
+            setGoogleToken(null); return;
+          } else {
+            console.error('[Google] mail error:', mailR.reason?.message);
+            errs.push(mailR.reason?.message || 'Gmail error');
+            setGmailMessages(prev => prev ?? []); // still show card on error
+          }
+          if (errs.length) setGoogleError(errs.join(' · '));
+        })
+        .finally(() => { if (!cancelled) setGoogleLoading(false); });
+    };
+    load();
+    const t = setInterval(load, 15 * 60000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [googleToken, calendarRefreshKey]); // eslint-disable-line
+
+  function connectGoogle() {
+    if (!effectiveGoogleClientId) {
+      setGoogleError('Google connector needs a Google OAuth Client ID in Settings > Google.');
+      return;
+    }
+    if (!gTokenClientRef.current) {
+      console.warn('[Google] connectGoogle: token client not ready');
+      setGoogleError('Google sign-in not ready — wait a moment and try again.');
+      return;
+    }
+    console.log('[Google] Requesting access token…');
+    setGoogleError(null);
+    gTokenClientRef.current.requestAccessToken();
+  }
+  function disconnectGoogle() {
+    setGoogleToken(null); setCalendarEvents(null); setGmailMessages(null); setGoogleError(null);
+    setGoogleWasConnected(false);
+    try { localStorage.removeItem('ot_google_token'); localStorage.removeItem('ot_google_token_expiry'); localStorage.removeItem('ot_google_connected'); } catch {}
+  }
+
+  // ─── Listen for shailos iframe "close" message ───────────────────────────
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.data === 'shailos:close') { setShowShailos(false); setShailosAction(null); }
+      if (e.data === 'shailos:open-conv-capture') {
+        setShowShailos(false); setShailosAction(null);
+        setConvCallMode(true); setShowConvCapture(true);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
   // ─── Shaila ↔ Task real-time sync ───────────────────────────────────────
   // Uses setAS directly (not uT) so it can check ALL lists for existing shailaId links.
@@ -547,25 +885,55 @@ function App({ user, onSignOut }) {
   } : null;
   const hasAI = !!(rawAiOpts && selectedProviderAvailable);
   const aiOpts = hasAI ? rawAiOpts : null;
-  const {
-    deleteHeldTranscription,
-    pendingRecordings,
-    pendingRetryId,
-    pendingTranscripts,
-    retryHeldTranscription,
-  } = usePendingRecordings(aiOpts);
-  const { deskPhoneThemeQuery, deskPhoneThemeSyncEnabled, isDark, sc, softBorderC, T } = useAppTheme(AS);
-  const {
-    bringDeskPhoneForward,
-    deskPhoneOnline,
-    sendDeskPhoneCommand,
-    setDeskPhoneOnline,
-    syncDeskPhoneTheme,
-  } = useDeskPhoneBridge({
-    themeQuery: deskPhoneThemeQuery,
-    themeSyncEnabled: deskPhoneThemeSyncEnabled,
-  });
-  useShailosSharedState({ aiOpts, theme: sc });
+  async function retryHeldTranscription(rec) {
+    if (!aiOpts || pendingRetryId) return;
+    setPendingRetryId(rec.id);
+    try {
+      const txt = await transcribePendingRecording(
+        rec.id,
+        aiOpts,
+        "Transcribe this audio exactly and faithfully. The speaker may use Yeshivish English, Hebrew, Yiddish, and halachic terms. Do not summarize or classify. Return only the transcript.",
+        { maxOutputTokens: 8192 }
+      );
+      setPendingTranscripts(p => ({ ...p, [rec.id]: txt }));
+      await updatePendingRecordingError(rec.id, "");
+    } catch(e) {
+      await updatePendingRecordingError(rec.id, e.message || String(e)).catch(() => {});
+    } finally {
+      setPendingRetryId(null);
+      refreshPendingRecordings();
+    }
+  }
+
+  async function deleteHeldTranscription(rec) {
+    if (pendingRetryId === rec.id) return;
+    await deletePendingRecording(rec.id);
+    setPendingTranscripts(p => {
+      const next = { ...p };
+      delete next[rec.id];
+      return next;
+    });
+    refreshPendingRecordings();
+  }
+
+  const sc = SCHEMES[AS?.colorScheme] || AS?.customSchemes?.[AS?.colorScheme] || SCHEMES.claude;
+  // Detect dark theme by checking bg luminance
+  const isDark = (()=>{const h=sc.bg||"#EDE5D8";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000<128;})();
+  const T = {...sc, isDark, glow:!!sc.glow, shadow: isDark?"0 2px 12px rgba(0,0,0,0.3)":"0 2px 12px rgba(0,0,0,0.06)", shadowLg: isDark?"0 6px 24px rgba(0,0,0,0.4)":"0 6px 24px rgba(0,0,0,0.09)"};
+  const fontWeightNormal = Math.max(320, Math.min(560, Number(AS?.fontWeightScale || 400)));
+  const fontWeightStrong = Math.max(420, Math.min(700, fontWeightNormal + 110));
+  const deskPhoneThemePalette = AS?.colorScheme === "material"
+    ? "material"
+    : isDark
+      ? "navyGold"
+      : "claude";
+  const deskPhoneThemeSyncEnabled = AS?.deskPhoneThemeSync !== false;
+  const deskPhoneThemeQuery = useMemo(() => buildDeskPhoneThemeQuery(deskPhoneThemePalette, T), [deskPhoneThemePalette, T]);
+  // Share theme with Shaila sub-app via localStorage
+  try { localStorage.setItem('onetask_theme', JSON.stringify(sc)); } catch(e) {}
+  // Share the selected AI route with the Shaila sub-app; both still call the same server gateway.
+  try { if (aiOpts) localStorage.setItem('onetask_ai_config', JSON.stringify(aiOpts)); } catch(e) {}
+  const softBorderC = isDark ? "#7A78A8" : "#B8A88E";
   const pris = (AS?.priorities || DEF_PRI).filter(p => !p.deleted);
   const aList = AS ? AS.lists.find(l => l.id === AS.activeListId) || AS.lists[0] : null;
   const tasks = aList?.tasks || [];
@@ -575,56 +943,75 @@ function App({ user, onSignOut }) {
   const allComp = AS ? AS.lists.flatMap(l => l.tasks.filter(t => t.completed)) : [];
   const ap = pris.filter(p => !p.deleted);
 
-  const {
-    curT,
-    displayedActT,
-    effectiveCount,
-    isOverwhelmed,
-    overwhelmThreshold,
-    queueT,
-    queueTFiltered,
-    shailaNumberMap,
-    shailaStatusMap,
-    snoozedT,
-  } = useQueueDerivations({
-    AS,
-    actT,
-    focusModeActive,
-    minTick,
-    pris,
-    searchQ,
+  // Shaila number map: shailaId → 1-based number by createdAt (stable, for queue + mini pill)
+  const shailaNumberMap = useMemo(() => {
+    const shailaPriIds = new Set(pris.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
+    const allShailaTasks = (AS?.lists || []).flatMap(l =>
+      (l.tasks || []).filter(t => shailaPriIds.has(t.priority) && !t.isGetBackStep && !t.completed)
+    ).sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    const m = {};
+    allShailaTasks.forEach((t, i) => { if (t.shailaId) m[t.shailaId] = i + 1; });
+    return m;
+  }, [AS?.lists, pris]);
+
+  // Shaila status map: shailaId → "researching"|"have_answer"|"got_back"
+  // Derived from task fields so SubtaskGroup can show the right pill color
+  const shailaStatusMap = useMemo(() => {
+    const shailaPriIds = new Set(pris.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
+    const allT = (AS?.lists || []).flatMap(l => l.tasks || []);
+    const m = {};
+    allT.filter(t => shailaPriIds.has(t.priority) && !t.isGetBackStep && t.shailaId).forEach(t => {
+      // Check if got-back step is completed
+      const gb = allT.find(x => x.shailaId === t.shailaId && x.isGetBackStep);
+      if (t.gotBackToAsker || gb?.completed) { m[t.shailaId] = "got_back"; }
+      else if (t.shailaAnswer?.trim()) { m[t.shailaId] = "have_answer"; }
+      else { m[t.shailaId] = "researching"; }
+    });
+    return m;
+  }, [AS?.lists, pris]);
+
+  // Energy-filtered + snooze-filtered queue
+  const curEnergy = AS?.currentEnergy;
+  const displayedActT = useMemo(() => {
+    const now = Date.now();
+    const unsnooze = actT.filter(t => !t.snoozedUntil || t.snoozedUntil <= now);
+    if (!curEnergy) return unsnooze;
+    return unsnooze.filter(t => !t.energy || t.energy === curEnergy);
+  }, [actT, curEnergy, minTick]);
+
+  // Overwhelm: focus mode is now OPT-IN (not auto-triggered)
+  // C06: subtask groups count as 1 item for effective count
+  const parentGroups = [...new Set(actT.filter(t=>t.parentTask).map(t=>t.parentTask))];
+  const standaloneCount = actT.filter(t => !t.parentTask).length;
+  const effectiveCount = standaloneCount + parentGroups.length; // groups count as 1
+  const overwhelmThreshold = AS?.overwhelmThreshold || 7;
+  const isOverwhelmed = focusModeActive; // now opt-in only
+  const queueT = isOverwhelmed ? displayedActT.slice(0, 3) : displayedActT;
+  const snoozedT = useMemo(() => {
+    const now = Date.now();
+    return actT.filter(t => t.snoozedUntil && t.snoozedUntil > now);
+  }, [actT, minTick]);
+  // Queue filter: for groups, show only the first subtask as a position marker (rendered as SubtaskGroup)
+  const seenGroupsInQueue = new Set();
+  const queueTFiltered = queueT.filter(t => {
+    if (!t.parentTask) {
+      // Regular task: filter by search
+      if (!searchQ.trim()) return true;
+      return t.text.toLowerCase().includes(searchQ.toLowerCase());
+    }
+    // Subtask: show only the first one per group (as position marker for SubtaskGroup)
+    if (seenGroupsInQueue.has(t.parentTask)) return false;
+    // Check if this group matches search
+    if (searchQ.trim()) {
+      const groupSubs = actT.filter(s => s.parentTask === t.parentTask);
+      const matches = t.parentTask.toLowerCase().includes(searchQ.toLowerCase()) ||
+                      groupSubs.some(s => s.text.toLowerCase().includes(searchQ.toLowerCase()));
+      if (!matches) return false;
+    }
+    seenGroupsInQueue.add(t.parentTask);
+    return true;
   });
-  const { blockedResume, clearBlockedTimer, setBlockedResume } = useBlockedResumeNudge(actT);
-  const { setStaleNudge, staleNudge } = useStaleTaskNudge({ actT, loaded, pris });
-  const {
-    askLegacyOpen,
-    legacyPrompt,
-    openCommandView,
-    openLegacyInCommandCenter,
-    openLegacyTarget,
-    setShailosAction,
-    setShowShailos,
-    setSidebarOpen,
-    setSuiteView,
-    shailosAction,
-    shellHidden,
-    showShailos,
-    sidebarAutoCollapse,
-    sidebarOpen,
-    sidebarW,
-    suiteView,
-    toggleSidebarAutoCollapse,
-  } = useSuiteNavigation({
-    curTask: curT,
-    syncDeskPhoneTheme,
-    zen,
-  });
-  useShailosFrameMessages({
-    setConvCallMode,
-    setShailosAction,
-    setShowConvCapture,
-    setShowShailos,
-  });
+  const curT = displayedActT[0] || null;
 
   // Priority picker: pre-compute whether the task being re-prioritized is a subtask.
   // Kept outside JSX so Babel standalone doesn't have to parse it inside an expression.
@@ -636,7 +1023,26 @@ function App({ user, onSignOut }) {
     const s = new Date(); s.setHours(0,0,0,0);
     return compT.filter(t => t.completedAt && t.completedAt >= s.getTime()).length;
   }, [compT]);
-  const mrsWPriLive = useMrsWLivePriority({ pris, windows: AS?.mrsWWindows });
+
+  // ─── Mrs. W live priority refresh (S11) ──────────────────────────────────
+  useEffect(() => {
+    const refresh = () => setMrsWPriLive(getMrsWPriority(pris, AS?.mrsWWindows));
+    refresh();
+    mrsWTmr.current = setInterval(refresh, 60000);
+    return () => clearInterval(mrsWTmr.current);
+  }, [pris, AS?.mrsWWindows]);
+
+  // ─── Clock tick ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    const iv = setInterval(() => setClockTime(new Date()), 1000);
+    return () => clearInterval(iv);
+  }, []);
+
+  // ─── Minute tick (snooze auto-wake) ──────────────────────────────────────
+  useEffect(() => {
+    const iv = setInterval(() => setMinTick(t => t + 1), 60000);
+    return () => clearInterval(iv);
+  }, []);
 
   // ─── One-time shaila restore (via ?restoreShailos=1 URL param) ─────────
   useEffect(() => {
@@ -684,7 +1090,43 @@ function App({ user, onSignOut }) {
   }, [loaded]);
 
   // ─── Blocked task resume nudge ────────────────────────────────────────────
+  useEffect(() => {
+    actT.filter(t => t.blocked && t.blockedUntil).forEach(t => {
+      if (blockedTmr.current[t.id]) return; // already scheduled
+      const remaining = Math.max(0, t.blockedUntil - Date.now());
+      blockedTmr.current[t.id] = setTimeout(() => {
+        setBlockedResume(t.id);
+        delete blockedTmr.current[t.id];
+      }, remaining);
+    });
+    // Clean up timers for tasks no longer blocked
+    Object.keys(blockedTmr.current).forEach(id => {
+      if (!actT.find(t => t.id === id && t.blocked)) {
+        clearTimeout(blockedTmr.current[id]);
+        delete blockedTmr.current[id];
+      }
+    });
+  }, [actT]);
+
   // ─── Stale task nudge — fires once per session, 3s after load ───────────
+  useEffect(() => {
+    if (!loaded || !pris.length) return;
+    const now = Date.now();
+    const WEEK   = 7  * 86400000;
+    const RESNOOZE = 3 * 86400000; // don't re-nudge same task for 3 days after "Later"
+    const candidate = actT
+      .filter(t =>
+        !t.completed && !t.blocked && !t.parentTask &&
+        (now - (t.createdAt || 0)) > WEEK &&
+        (!t.staleNudgedAt || (now - t.staleNudgedAt) > RESNOOZE)
+      )
+      .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))[0]; // oldest first
+    if (candidate) {
+      const tmr = setTimeout(() => setStaleNudge(candidate), 3000);
+      return () => clearTimeout(tmr);
+    }
+  }, [loaded]); // eslint-disable-line
+
   // Auto-optimize interval removed — AI prioritizes every 5 events instead
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -692,6 +1134,16 @@ function App({ user, onSignOut }) {
   function doOpt(t) { return optTasks(t, pris); }
   function flashOpt() { setJustOpt(true); setTimeout(() => setJustOpt(false), 800); }
   const zenOn = AS?.zenEnabled === true;
+
+  function showToast(msg, dur=10000, color) {
+    clearTimeout(toastTmrRef.current);
+    setToast({msg, color});
+    toastTmrRef.current = setTimeout(() => setToast(null), dur);
+  }
+  function dismissToast() {
+    clearTimeout(toastTmrRef.current);
+    setToast(null);
+  }
 
   // ─── Manual launchpad AI prioritization ──────────────────────────────────
   async function launchpadOptimize() {
@@ -830,8 +1282,11 @@ function App({ user, onSignOut }) {
       setTimeout(() => pendingShailaIds.current.delete(newT.shailaId), 3000);
     }
     // Show "Added to queue" toast in priority color
+    clearTimeout(queueToastTmr.current);
     const priColor = gP(pris, newT.priority).color;
-    showQueueToast(priColor);
+    setQueueToast(priColor);
+    setQueueToastKey(k => k + 1);
+    queueToastTmr.current = setTimeout(() => setQueueToast(null), 5000);
   }
 
   function addVT(text, pri) {
@@ -868,6 +1323,35 @@ function App({ user, onSignOut }) {
     const newT = {id:uid(), text:text.trim(), completed:false, priority:pri, createdAt:Date.now()};
     uT(ts => doOpt([...ts, newT]));
     flashOpt();
+  }
+
+  function polishNerveItems(items) {
+    if (!hasAI || !aiOpts || !Array.isArray(items) || items.length === 0) return;
+    const cleanItems = items
+      .map(item => ({ id: item.id, kind: item.kind || "task", source: String(item.source || "").trim() }))
+      .filter(item => item.id && item.source)
+      .slice(0, 8);
+    if (!cleanItems.length) return;
+    const ids = new Set(cleanItems.map(item => item.id));
+    setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => ids.has(t.id) ? {...t, ncSummaryPending: true} : t)}))}));
+    const prompt = `You polish hurried personal task and shaila notes for a compact executive dashboard. Preserve meaning exactly. Do not add facts, names, dates, or rulings. Make each item clear, calm, and short. Max 12 words each. Return ONLY valid JSON array: [{"id":"same id","summary":"polished display text"}].\n\nItems:\n${cleanItems.map((item, i) => `${i + 1}. id=${item.id} kind=${item.kind} raw=${JSON.stringify(item.source)}`).join("\n")}`;
+    callAI(prompt, aiOpts, { temperature: 0, maxOutputTokens: 900 }).then(raw => {
+      const match = String(raw || "").match(/\[[\s\S]*\]/);
+      if (!match) throw new Error("No JSON summary array");
+      const parsed = JSON.parse(match[0]);
+      const byId = new Map((Array.isArray(parsed) ? parsed : []).map(row => [row.id, compactNerveSummary(row.summary || "", "")]).filter(([, summary]) => summary));
+      setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => {
+        const item = cleanItems.find(x => x.id === t.id);
+        if (!item) return t;
+        const summary = byId.get(t.id);
+        return {...t, ncSummaryPending: false, ncSummary: summary || t.ncSummary, ncSummarySource: item.source, ncSummaryFailedSource: undefined, ncSummaryFailedAt: undefined};
+      })}))}));
+    }).catch(() => {
+      setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => {
+        const item = cleanItems.find(x => x.id === t.id);
+        return item ? {...t, ncSummaryPending: false, ncSummaryFailedSource: item.source, ncSummaryFailedAt: Date.now()} : t;
+      })}))}));
+    });
   }
 
   function compTask(id, goodEnough=false, isLegacy=false) {
@@ -993,7 +1477,9 @@ function App({ user, onSignOut }) {
     const task = tasks.find(t => t.id === id);
     uT(ts => ts.filter(t => t.id !== id));
     if (task) {
-      showDeletedUndo({task, listId: AS.activeListId});
+      clearTimeout(deletedTmr.current);
+      setDeletedUndo({task, listId: AS.activeListId});
+      deletedTmr.current = setTimeout(() => setDeletedUndo(null), 6000);
       // If shaila task with a linked shaila doc, prompt user
       if (task.shailaId && task.priority === "shaila") {
         setShailaDelPrompt({ shailaId: task.shailaId, taskText: task.text });
@@ -1006,7 +1492,9 @@ function App({ user, onSignOut }) {
     const tom = new Date(); tom.setDate(tom.getDate() + 1); tom.setHours(9, 0, 0, 0);
     uT(ts => ts.map(t => t.id === id ? {...t, snoozedUntil: tom.getTime()} : t));
     if (task) {
-      showParkedUndo({task, listId: AS.activeListId});
+      clearTimeout(parkedTmr.current);
+      setParkedUndo({task, listId: AS.activeListId});
+      parkedTmr.current = setTimeout(() => setParkedUndo(null), 6000);
     }
   }
 
@@ -1317,26 +1805,285 @@ function App({ user, onSignOut }) {
     });
   }
 
-  const { advice, chartData, metrics } = useInsightsMetrics({ allComp, pris });
-  const {
-    aiChatHistory,
-    aiChatInput,
-    aiChatLoading,
-    aiChatOpen,
-    aiInsight,
-    aiInsightLoading,
-    chatBoxRef,
-    genAiInsight,
-    sendAiChat,
-    setAiChatInput,
-    setAiChatOpen,
-  } = useInsightsAi({ actT, aiOpts, hasAI, metrics, pris });
+  const metrics = useMemo(() => {
+    const c = allComp.filter(t => t.completedAt && t.createdAt);
+    if (!c.length) return null;
+    const byP = {};
+    pris.forEach(p => { byP[p.id] = {ts:[], c:p.color, l:p.label}; });
+    let tot = 0;
+    c.forEach(t => { const ms = t.completedAt - t.createdAt; tot += ms; if (byP[t.priority]) byP[t.priority].ts.push(ms); });
+    const pS = Object.entries(byP).filter(([,v])=>v.ts.length>0).map(([k,v])=>({id:k,l:v.l,c:v.c,n:v.ts.length,a:fmtMs(v.ts.reduce((a,b)=>a+b,0)/v.ts.length)}));
+    const byH = {};
+    c.forEach(t => { const h = new Date(t.completedAt).getHours(); byH[h]=(byH[h]||0)+1; });
+    const bH = Object.entries(byH).sort((a,b)=>b[1]-a[1])[0];
+    // B8 fix: midnight = 12:00 AM not 0:00 AM
+    const pT = bH ? (parseInt(bH[0])===0?"12:00 AM":parseInt(bH[0])<12?`${bH[0]}:00 AM`:parseInt(bH[0])===12?"12:00 PM":`${parseInt(bH[0])-12}:00 PM`) : null;
+    const byD = {};
+    c.forEach(t => { const d = new Date(t.completedAt).toLocaleDateString("en-US",{weekday:"long"}); byD[d]=(byD[d]||0)+1; });
+    const bD = Object.entries(byD).sort((a,b)=>b[1]-a[1])[0];
+    const ds = new Set(c.map(t=>new Date(t.completedAt).toDateString()));
+    let sk = 0; const td = new Date();
+    for (let i=0; i<365; i++) { const d=new Date(td); d.setDate(d.getDate()-i); if(ds.has(d.toDateString()))sk++;else break; }
+    const goodEnoughCount = c.filter(t => t.goodEnough).length;
+    return {total:c.length, avg:fmtMs(tot/c.length), pS, bD, pT, sk, cL:c.sort((a,b)=>b.completedAt-a.completedAt), goodEnoughCount};
+  }, [allComp, pris]);
+
+  // Chart data derived from metrics.cL — used by the visual charts in the Insights tab
+  const chartData = useMemo(() => {
+    if (!metrics) return null;
+    const cL = metrics.cL;
+    const now = Date.now();
+    const DAY = 86400000;
+    const fmtH = h => h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h-12}p`;
+
+    // 24h: by hour-of-day, completions in the last 24 hours
+    const h24 = Array.from({length:24}, (_,i) => ({h:i, n:0, label:fmtH(i)}));
+    cL.filter(t => now - t.completedAt < DAY).forEach(t => { h24[new Date(t.completedAt).getHours()].n++; });
+
+    // 7d: by calendar date, last 7 days
+    const days7 = Array.from({length:7}, (_,i) => {
+      const d = new Date(now - (6-i)*DAY);
+      return {date:d.toDateString(), label:d.toLocaleDateString('en-US',{weekday:'short'}).slice(0,2), n:0};
+    });
+    cL.filter(t => now - t.completedAt < 7*DAY).forEach(t => {
+      const entry = days7.find(d => d.date === new Date(t.completedAt).toDateString());
+      if (entry) entry.n++;
+    });
+
+    // 30d: by calendar date, last 30 days
+    const days30 = Array.from({length:30}, (_,i) => {
+      const d = new Date(now - (29-i)*DAY);
+      return {date:d.toDateString(), label:i%5===0?String(d.getDate()):'', n:0, dow:d.getDay()};
+    });
+    cL.filter(t => now - t.completedAt < 30*DAY).forEach(t => {
+      const entry = days30.find(d => d.date === new Date(t.completedAt).toDateString());
+      if (entry) entry.n++;
+    });
+
+    // All-time: by hour-of-day across all completions
+    const allHours = Array.from({length:24}, (_,i) => ({h:i, n:0, label:fmtH(i)}));
+    cL.forEach(t => { allHours[new Date(t.completedAt).getHours()].n++; });
+
+    // Priority breakdown for donut (from metrics.pS, already computed)
+    const donut = metrics.pS.filter(p => p.n > 0);
+
+    // Day-of-week pattern (all-time)
+    const DOW_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const dow = Array.from({length:7}, (_,i) => ({h:i, n:0, label:DOW_NAMES[i]}));
+    cL.forEach(t => { dow[new Date(t.completedAt).getDay()].n++; });
+
+    // Completion speed buckets (creation → completion)
+    const speedBuckets = [
+      {label:'< 1h',  max:3600000,      n:0},
+      {label:'< 1d',  max:86400000,     n:0},
+      {label:'< 1w',  max:7*86400000,   n:0},
+      {label:'< 1mo', max:30*86400000,  n:0},
+      {label:'1mo+',  max:Infinity,     n:0},
+    ];
+    cL.filter(t => t.createdAt).forEach(t => {
+      const ms = t.completedAt - t.createdAt;
+      const b = speedBuckets.find(b => ms < b.max);
+      if (b) b.n++;
+    });
+
+    // 30-day trend (by day, same as days30 — used for line chart)
+    const trend30 = days30.map(d => ({...d})); // copy
+
+    // Cumulative completions over time (last 90 days)
+    const cum90raw = Array.from({length:90}, (_,i) => {
+      const d = new Date(now - (89-i)*DAY);
+      return {date:d.toDateString(), label: i%15===0 ? `${d.getMonth()+1}/${d.getDate()}` : '', n:0, cum:0};
+    });
+    cL.filter(t => now - t.completedAt < 90*DAY).forEach(t => {
+      const entry = cum90raw.find(d => d.date === new Date(t.completedAt).toDateString());
+      if (entry) entry.n++;
+    });
+    let running = 0;
+    cum90raw.forEach(d => { running += d.n; d.cum = running; });
+    // Normalise for chart: use cum as the bar height
+    const cum90 = cum90raw.map(d => ({...d, n: d.cum}));
+
+    return {h24, days7, days30, allHours, donut, dow, speedBuckets, trend30, cum90};
+  }, [metrics]);
+
+  const advice = useMemo(() => {
+    if (!metrics) return [];
+    const a = [];
+    if (metrics.pT) a.push(`Your peak hour is ${metrics.pT} — schedule your hardest tasks then.`);
+    if (metrics.bD) a.push(`Best day: ${metrics.bD[0]}s (${metrics.bD[1]} tasks). Try to batch difficult work then.`);
+    if (metrics.sk >= 3) a.push(`${metrics.sk}-day streak! That's real momentum.`);
+    if (!metrics.sk) a.push("No completions today. Try the 5-minute rule: just start for five minutes.");
+    if (metrics.goodEnoughCount > 0) a.push(`${metrics.goodEnoughCount} task${metrics.goodEnoughCount!==1?"s":""} marked "good enough" — that's smart ADHD energy management.`);
+    if (!a.length) a.push("Keep going!");
+    return a;
+  }, [metrics]);
 
   // dailyTip removed — tipCarouselItem is now the single source of truth
   const dateStr = new Date().toLocaleDateString("en-US", {weekday:"long", month:"long", day:"numeric"});
 
+  const TIP_CATS = ["All", ...new Set(TIPS.map(t => t.cat))];
+  const filteredTips = tipCat === "All" ? TIPS : TIPS.filter(t => t.cat === tipCat);
+
+  // Carousel helpers
+  const tipCarouselList = filteredTips;
+  const tipCarouselIdx = Math.min(tipViewIdx, tipCarouselList.length - 1);
+  const tipCarouselItem = tipCarouselList[tipCarouselIdx] || TIPS[0];
+
+  // Reset carousel index when category changes
+  useEffect(() => { setTipViewIdx(0); }, [tipCat]);
+
+  // AI insight generator
+  const genAiInsight = async () => {
+    if (!hasAI || !metrics) return;
+    setAiInsightLoading(true);
+    setAiInsight(null);
+    const recentDone = metrics.cL.slice(0,10).map(t=>t.text).join("; ");
+    const priTiers = pris.filter(p=>!p.deleted).sort((a,b)=>b.weight-a.weight).map(p=>p.label).join(" → ");
+    const priBreakdownDetailed = metrics.pS.map(p=>`${p.l}: ${p.n} done, avg ${p.a}`).join("; ");
+    const prompt = `You are a professional productivity analyst. Analyze this user's task completion data and provide a structured, data-driven summary.
+
+CRITICAL RULES:
+- NEVER compare completion times across priority tiers. "Eventually" tasks take longer than "Now" tasks BY DESIGN — different categories entirely. Treat each tier independently.
+- Tone: professional and direct. Not critical or judgmental. Not overly enthusiastic or cheerleader-ish. Just clear, honest, useful.
+- Surface real patterns from the data. If something is genuinely working well, note it factually.
+- Each bullet must reference specific numbers or task names from the data.
+
+Priority tiers (high urgency → low urgency): ${priTiers}
+Each tier has fundamentally different expected timeframes — this is by design.
+
+Data:
+- Total completed: ${metrics.total} tasks
+- Current streak: ${metrics.sk} days
+- Peak hour: ${metrics.pT || "unknown"}
+- Best day: ${metrics.bD ? metrics.bD[0] : "unknown"} (${metrics.bD ? metrics.bD[1] + " tasks" : ""})
+- By priority tier (completed): ${priBreakdownDetailed}
+- Overall avg completion time: ${metrics.avg}
+- Good enough completions: ${metrics.goodEnoughCount || 0}
+- Recent completions: ${recentDone}
+
+REQUIRED OUTPUT FORMAT — use this exact structure, no preamble, no extra text:
+• [First observation — a specific pattern grounded in the data]
+• [Second observation — a different angle, e.g. timing, energy, or tier consistency]
+• [Third observation — something actionable or forward-looking]
+TAKEAWAY: [The single most useful thing to know. One sentence. Specific.]`;
+    const result = await callAI(prompt, aiOpts);
+    setAiInsight(result || "Complete more tasks to generate a personalized insight.");
+    setAiInsightLoading(false);
+  };
+
+  // AI Chat — ask questions about task data
+  const sendAiChat = async (msg) => {
+    if (!hasAI || !metrics || !msg.trim()) return;
+    const userMsg = msg.trim();
+    setAiChatHistory(h => {
+      const updated = [...h, {role:"user", text:userMsg}];
+      return updated.slice(-60); // Archive limit: keep last 60 messages
+    });
+    setAiChatInput("");
+    setAiChatLoading(true);
+    const recentDone = metrics.cL.slice(0,20).map(t => `"${t.text}" (${t.priority}, ${t.completedAt?Math.round((t.completedAt-t.createdAt)/60000)+"min":"?"})`).join("; ");
+    const priBreakdown = metrics.pS.map(p=>`${p.l}:${p.n} done, avg ${p.a}`).join("; ");
+    const activeBreakdown = actT.map(t => `"${t.text}" [${gP(pris,t.priority).label}]${t.blocked?" BLOCKED":""}${t.pinned?" PINNED":""}`).join("; ");
+    const prevChat = aiChatHistory.slice(-6).map(m => `${m.role}: ${m.text}`).join("\n");
+    const priTiersChat = pris.filter(p=>!p.deleted).sort((a,b)=>b.weight-a.weight).map(p=>p.label).join(" → ");
+    const sysPrompt = `You are a warm, expert ADHD productivity analyst. Give detailed, data-driven answers with specific numbers and patterns — always from a supportive, non-critical perspective.
+
+CRITICAL RULES:
+- NEVER compare completion times across priority tiers. "Eventually" tasks take longer than "Now" tasks BY DESIGN — they are a completely different category, like comparing a sprint to a marathon. Treat each tier independently and never present the difference as a problem.
+- Never be critical, judgmental, or frame anything as a failure.
+- Ground every insight in the user's actual data.
+- Priority tiers (high urgency → low): ${priTiersChat}
+
+Data snapshot:
+- Total completed: ${metrics.total} tasks
+- Active queue: ${actT.length} tasks (${actT.filter(t=>t.pinned).length} pinned, ${actT.filter(t=>t.blocked).length} blocked)
+- Current streak: ${metrics.sk} days
+- Peak completion hour: ${metrics.pT||"unknown"}
+- Best completion day: ${metrics.bD ? metrics.bD[0]+" ("+metrics.bD[1]+" tasks)" : "unknown"}
+- Priority breakdown completed: ${priBreakdown}
+- Overall avg completion time: ${metrics.avg}
+- Good enough completions: ${metrics.goodEnoughCount || 0} of ${metrics.total} (${metrics.total?Math.round((metrics.goodEnoughCount||0)/metrics.total*100):0}%)
+- Active tasks: ${activeBreakdown}
+- Recent completions: ${recentDone}
+
+${prevChat ? "Previous chat:\n" + prevChat + "\n" : ""}User question: ${userMsg}
+
+Give a thorough, analytical response (4-8 sentences) with specific numbers and actionable insights. No bullet points or headers.`;
+    const result = await callAI(sysPrompt, aiOpts);
+    setAiChatHistory(h => {
+      const updated = [...h, {role:"ai", text:result || "I couldn't analyze that. Try a different question."}];
+      return updated.slice(-60);
+    });
+    setAiChatLoading(false);
+  };
+
+  const chatBoxRef = useRef(null);
+
+  // Autoscroll chat to bottom — scrolls the CHAT BOX only, never the page
+  useEffect(() => {
+    if (chatBoxRef.current) {
+      chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
+    }
+  }, [aiChatHistory, aiChatLoading]);
+
   // Helper: change tab and close any open menus
   const switchTab = (t) => { setTab(t); setShowLM(false); setNavExp(false); setShowAides(false); setShowEntryTools(false); };
+
+  const syncDeskPhoneTheme = useCallback(async (force = false) => {
+    if (!deskPhoneThemeSyncEnabled) return false;
+    if (!force && lastDeskPhoneThemeRef.current === deskPhoneThemeQuery) return true;
+    try {
+      const res = await fetch(`http://127.0.0.1:8765/theme?${deskPhoneThemeQuery}`, {
+        method: "POST",
+        cache: "no-store"
+      });
+      if (!res.ok) throw new Error("theme sync failed");
+      lastDeskPhoneThemeRef.current = deskPhoneThemeQuery;
+      setDeskPhoneOnline(true);
+      return true;
+    } catch {
+      // DeskPhone may be closed; the next Open Phone action will launch it.
+      setDeskPhoneOnline(false);
+      return false;
+    }
+  }, [deskPhoneThemeQuery, deskPhoneThemeSyncEnabled]);
+  useEffect(() => {
+    syncDeskPhoneTheme();
+  }, [syncDeskPhoneTheme]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("deskphoneThemeRefresh")) return;
+    syncDeskPhoneTheme(true);
+    params.delete("deskphoneThemeRefresh");
+    const query = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash || ""}`);
+  }, [syncDeskPhoneTheme]);
+
+  useEffect(() => {
+    if (!deskPhoneThemeSyncEnabled) return;
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const res = await fetch("http://127.0.0.1:8765/status", { cache: "no-store" });
+        if (!res.ok) throw new Error("DeskPhone status failed");
+        if (stopped) return;
+        if (!deskPhoneOnline) {
+          await syncDeskPhoneTheme(true);
+        } else {
+          setDeskPhoneOnline(true);
+        }
+      } catch {
+        if (!stopped) setDeskPhoneOnline(false);
+      }
+    };
+    poll();
+    const id = window.setInterval(poll, 2500);
+    return () => {
+      stopped = true;
+      window.clearInterval(id);
+    };
+  }, [deskPhoneOnline, deskPhoneThemeSyncEnabled, syncDeskPhoneTheme]);
 
   if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui",color:"#999"}}>Loading...</div>;
 
@@ -1349,6 +2096,87 @@ function App({ user, onSignOut }) {
     .filter(t => isShailaPriority(t.priority) && t.completed)
     .sort((a, b) => (b.completedAt || b.createdAt || 0) - (a.completedAt || a.createdAt || 0))
     .slice(0, 5);
+  const shellHidden = !!(zen && curT);
+  const sidebarForceCompact = viewportW < 760;
+  const sidebarW = shellHidden ? 0 : (sidebarForceCompact ? 64 : (sidebarOpen ? 184 : 64));
+  const launchDeskPhone = (force = false) => {
+    if (!force && deskPhoneOnline) return;
+    const now = Date.now();
+    if (now - deskPhoneLaunchAtRef.current < 15000) return;
+    deskPhoneLaunchAtRef.current = now;
+    try {
+      const link = document.createElement("a");
+      link.href = "deskphone://open";
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch {
+      try { window.location.href = "deskphone://open"; } catch {}
+    }
+  };
+  const bringDeskPhoneForward = async () => {
+    if (!deskPhoneOnline) {
+      launchDeskPhone(true);
+      return;
+    }
+    try {
+      const res = await fetch("http://127.0.0.1:8765/show", { method: "POST", cache: "no-store" });
+      if (!res.ok) throw new Error("show failed");
+      await syncDeskPhoneTheme(true);
+      setDeskPhoneOnline(true);
+    } catch {
+      launchDeskPhone(true);
+    }
+  };
+  const sendDeskPhoneCommand = async (path) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8765${path}`, { method: "POST", cache: "no-store" });
+      if (!res.ok) throw new Error("phone command failed");
+      setDeskPhoneOnline(true);
+    } catch {
+      launchDeskPhone(true);
+    }
+  };
+  const openCommandView = (view) => {
+    if (view === "deskphone") {
+      setSuiteView("deskphone");
+      setShailosAction(null);
+      setShowShailos(false);
+      syncDeskPhoneTheme(true);
+      return;
+    }
+    setSuiteView(view);
+    if (view !== "shailos") setShailosAction(null);
+    if (view === "focus") setShowShailos(false);
+  };
+  const askLegacyOpen = (target) => setLegacyPrompt(target);
+  const openLegacyTarget = () => {
+    const target = legacyPrompt;
+    setLegacyPrompt(null);
+    if (!target) return;
+    if (target.id === "shailos") {
+      setShailosAction(target.action || null);
+      setShowShailos(true);
+    } else if (target.id === "tasks") {
+      openCommandView("focus");
+    } else if (target.id === "deskphone") {
+      openCommandView("deskphone");
+    }
+  };
+  const openLegacyInCommandCenter = () => {
+    const target = legacyPrompt;
+    setLegacyPrompt(null);
+    if (!target) return;
+    if (target.id === "shailos") {
+      setShailosAction(target.action || null);
+      openCommandView("shailos");
+    } else if (target.id === "tasks") {
+      openCommandView("nervecenter");
+    } else if (target.id === "deskphone") {
+      openCommandView("deskphone");
+    }
+  };
   const switchboardSections = [
     {
       id: "priority",
@@ -1426,10 +2254,12 @@ function App({ user, onSignOut }) {
       ],
     },
   ];
+  const noticeTopOffset = (networkOffline && !offlineNoticeDismissed ? 48 : 0) + (fbOffline ? 48 : 0);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div ref={appRef} style={{height:"100vh",overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:"'Google Sans','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif",color:T.text,display:"flex",flexDirection:"column",alignItems:"center"}}>
+    <div ref={appRef} className="nc-suite-root" style={{height:"100vh",overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:NC_FONT_STACK,color:T.text,display:"flex",flexDirection:"column",alignItems:"center","--nc-font-weight-normal":fontWeightNormal,"--nc-font-weight-strong":fontWeightStrong}}>
+      <style>{NC_GLOBAL_CSS}</style>
 
       {/* Overlays */}
       {zen && curT && <ZenMode task={curT} pris={pris} T={T} onExit={exitZen} onDone={(isl)=>isl?legacyCompTask(curT.id):compTask(curT.id)}
@@ -1535,13 +2365,13 @@ function App({ user, onSignOut }) {
       {deletedUndo && (
         <div style={{position:"fixed",bottom:"clamp(55px,9vh,80px)",left:"50%",transform:"translateX(-50%)",background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,padding:"8px 14px",fontSize:12,fontFamily:"system-ui",color:T.tSoft,whiteSpace:"nowrap",boxShadow:T.shadowLg,display:"flex",alignItems:"center",gap:10,zIndex:9800,animation:"ot-fade 0.2s"}}>
           <span style={{color:T.tFaint}}>Task deleted</span>
-          <button onClick={()=>{clearDeletedUndo();setAS(p=>({...p,lists:p.lists.map(l=>l.id===deletedUndo.listId?{...l,tasks:[...l.tasks,deletedUndo.task]}:l)}));}} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 10px",cursor:"pointer",fontSize:11,fontWeight:600,color:T.text,fontFamily:"system-ui"}}>Undo</button>
+          <button onClick={()=>{clearTimeout(deletedTmr.current);setAS(p=>({...p,lists:p.lists.map(l=>l.id===deletedUndo.listId?{...l,tasks:[...l.tasks,deletedUndo.task]}:l)}));setDeletedUndo(null);}} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 10px",cursor:"pointer",fontSize:13,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK}}>Undo</button>
         </div>
       )}
       {parkedUndo && (
         <div style={{position:"fixed",bottom:"clamp(55px,9vh,80px)",left:"50%",transform:"translateX(-50%)",background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,padding:"8px 14px",fontSize:12,fontFamily:"system-ui",color:T.tSoft,whiteSpace:"nowrap",boxShadow:T.shadowLg,display:"flex",alignItems:"center",gap:10,zIndex:9800,animation:"ot-fade 0.2s"}}>
           <span style={{color:T.tFaint}}>☀️ Parked until tomorrow</span>
-          <button onClick={()=>{clearParkedUndo();setAS(p=>({...p,lists:p.lists.map(l=>l.id===parkedUndo.listId?{...l,tasks:l.tasks.map(t=>t.id===parkedUndo.task.id?{...t,snoozedUntil:parkedUndo.task.snoozedUntil}:t)}:l)}));}} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 10px",cursor:"pointer",fontSize:11,fontWeight:600,color:T.text,fontFamily:"system-ui"}}>Undo</button>
+          <button onClick={()=>{clearTimeout(parkedTmr.current);setAS(p=>({...p,lists:p.lists.map(l=>l.id===parkedUndo.listId?{...l,tasks:l.tasks.map(t=>t.id===parkedUndo.task.id?{...t,snoozedUntil:parkedUndo.task.snoozedUntil}:t)}:l)}));setParkedUndo(null);}} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 10px",cursor:"pointer",fontSize:13,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK}}>Undo</button>
         </div>
       )}
 
@@ -1622,7 +2452,7 @@ function App({ user, onSignOut }) {
       {justStartId && jsMinimized && (
         <div onClick={()=>setJsMinimized(false)} style={{position:"fixed",bottom:16,right:16,zIndex:9200,background:curT?gP(pris,curT.priority).color:"#7EB0DE",borderRadius:20,padding:"6px 12px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.2)",animation:"ot-fade 0.2s"}}>
           <IC.Timer s={12} c="#fff"/>
-          <span style={{fontSize:11,color:"#fff",fontFamily:"system-ui",fontWeight:700}}>Just Start</span>
+          <span style={{fontSize:13,color:"#fff",fontFamily:NC_FONT_STACK,fontWeight:500}}>Just Start</span>
         </div>
       )}
       {/* Voice input — root level so it survives tab switches */}
@@ -1651,9 +2481,9 @@ function App({ user, onSignOut }) {
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",borderBottom:`1px solid ${T.brd}`,background:T.card,flexShrink:0}}>
             <span style={{fontSize:14,fontWeight:600,color:T.text,fontFamily:"system-ui"}}>Shaila Transcriber</span>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <button onClick={doFullBackup} disabled={backupLoading} title="Download full backup (tasks + shailos)" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500,opacity:backupLoading ? .5 : 1}}>{backupLoading?"⏳":"💾"} Backup</button>
-              <button onClick={doLoadBackup} title="Restore from backup file" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500}}>📂 Restore</button>
-              <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500,opacity:reconcileLoading ? .5 : 1}}>{reconcileLoading?"⏳":"🔄"}</button>
+              <button onClick={doFullBackup} disabled={backupLoading} title="Download full backup (tasks + shailos)" style={{fontSize:13,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,opacity:backupLoading ? .5 : 1}}>{backupLoading?"⏳":"💾"} Backup</button>
+              <button onClick={doLoadBackup} title="Restore from backup file" style={{fontSize:13,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500}}>📂 Restore</button>
+              <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check" style={{fontSize:13,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,opacity:reconcileLoading ? .5 : 1}}>{reconcileLoading?"⏳":"🔄"}</button>
               <button onClick={()=>{setShowShailos(false);setShailosAction(null);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft,padding:4}}>✕</button>
             </div>
           </div>
@@ -1702,7 +2532,7 @@ function App({ user, onSignOut }) {
                     uT(ts=>[...ts, ...newTasks]);
                     setShailaReconcile(prev=>({...prev, missingTasks:[]}));
                     showToast(`Added ${shailaReconcile.missingTasks.length} shaila${shailaReconcile.missingTasks.length!==1?"s":""} to queue`,3000);
-                  }} style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600,whiteSpace:"nowrap"}}>+ Add all ({shailaReconcile.missingTasks.length})</button>
+                  }} style={{fontSize:13,padding:"4px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,whiteSpace:"nowrap"}}>+ Add all ({shailaReconcile.missingTasks.length})</button>
                 </div>
                 <div style={{maxHeight:240,overflowY:"auto"}}>
                 {shailaReconcile.missingTasks.map(s => (
@@ -1720,10 +2550,10 @@ function App({ user, onSignOut }) {
                         uT(ts=>[...ts, ...newTasks]);
                         setShailaReconcile(prev=>({...prev, missingTasks:prev.missingTasks.filter(x=>x.id!==s.id)}));
                         showToast("Added to queue",2000);
-                      }} style={{fontSize:11,padding:"5px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600}}>+ Add</button>
+                      }} style={{fontSize:13,padding:"5px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500}}>+ Add</button>
                       <button onClick={()=>{
                         setShailaReconcile(prev=>({...prev, missingTasks:prev.missingTasks.filter(x=>x.id!==s.id)}));
-                      }} style={{fontSize:11,padding:"5px 8px",borderRadius:8,border:`1px solid ${T.brd}`,background:"none",color:T.tFaint,cursor:"pointer",fontFamily:"system-ui"}}>Skip</button>
+                      }} style={{fontSize:13,padding:"5px 8px",borderRadius:8,border:`1px solid ${T.brd}`,background:"none",color:T.tFaint,cursor:"pointer",fontFamily:NC_FONT_STACK}}>Skip</button>
                     </div>
                   </div>
                 ))}
@@ -1744,7 +2574,7 @@ function App({ user, onSignOut }) {
                         setShailaReconcile(prev=>({...prev, missingShailos:prev.missingShailos.filter(x=>x.id!==t.id)}));
                         showToast("Added to transcriber",2000);
                       });
-                    }} style={{fontSize:11,padding:"5px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600,whiteSpace:"nowrap"}}>+ Add record</button>
+                    }} style={{fontSize:13,padding:"5px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,whiteSpace:"nowrap"}}>+ Add record</button>
                   </div>
                 ))}
               </div>
@@ -1758,13 +2588,13 @@ function App({ user, onSignOut }) {
                   <div key={m.task.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",background:T.bgW,borderRadius:10,marginBottom:4}}>
                     <div style={{flex:1,marginRight:8}}>
                       <span style={{fontSize:13,color:T.text,fontFamily:"Georgia,serif"}}>{m.task.text?.substring(0,50)}</span>
-                      <span style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",marginLeft:6}}>— answered in transcriber, still active in queue</span>
+                      <span style={{fontSize:13,color:T.tFaint,fontFamily:NC_FONT_STACK,marginLeft:6}}>— answered in transcriber, still active in queue</span>
                     </div>
                     <button onClick={()=>{
                       uT(ts=>ts.map(x=>x.id===m.task.id?{...x,completed:true,completedAt:Date.now()}:x));
                       setShailaReconcile(prev=>({...prev, statusMismatches:prev.statusMismatches.filter(x=>x.task.id!==m.task.id)}));
                       showToast("Task completed",2000);
-                    }} style={{fontSize:11,padding:"5px 10px",borderRadius:8,border:"none",background:"#4A8040",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600,whiteSpace:"nowrap"}}>Complete ✓</button>
+                    }} style={{fontSize:13,padding:"5px 10px",borderRadius:8,border:"none",background:"#4A8040",color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,whiteSpace:"nowrap"}}>Complete ✓</button>
                   </div>
                 ))}
               </div>
@@ -1803,10 +2633,10 @@ function App({ user, onSignOut }) {
         <div style={{position:"fixed",right:16,bottom:16,zIndex:9400,width:"min(380px,calc(100vw - 32px))",background:T.card,border:`1.5px solid ${T.brd}`,borderRadius:14,boxShadow:T.shadowLg,padding:12,fontFamily:"system-ui",animation:"ot-fade 0.2s"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
             <div>
-              <div style={{fontSize:12,fontWeight:800,color:T.text,letterSpacing:.2}}>Transcription Holding Pen</div>
-              <div style={{fontSize:10,color:T.tFaint,marginTop:2}}>Saved audio from any recorder in this app</div>
+              <div style={{fontSize:15,fontWeight:500,color:T.text,letterSpacing:0}}>Transcription Holding Pen</div>
+              <div style={{fontSize:13,color:T.tFaint,marginTop:2}}>Saved audio from any recorder in this app</div>
             </div>
-            <span style={{fontSize:10,fontWeight:800,color:"#9A6A20",background:"#C8A84C22",border:"1px solid #C8A84C55",borderRadius:999,padding:"2px 7px",whiteSpace:"nowrap"}}>{pendingRecordings.length} saved</span>
+            <span style={{fontSize:12,fontWeight:500,color:"#9A6A20",background:"#C8A84C22",border:"1px solid #C8A84C55",borderRadius:999,padding:"2px 7px",whiteSpace:"nowrap"}}>{pendingRecordings.length} saved</span>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:300,overflowY:"auto"}}>
             {pendingRecordings.slice(0,5).map(rec => {
@@ -1818,18 +2648,18 @@ function App({ user, onSignOut }) {
                   <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}>
                     <div style={{minWidth:0}}>
                       <div style={{fontSize:12,fontWeight:700,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
-                      <div style={{fontSize:10,color:T.tFaint,marginTop:1}}>{formatPendingAge(rec.createdAt)} · {(rec.size/1024/1024).toFixed(1)} MB</div>
+                      <div style={{fontSize:12,color:T.tFaint,marginTop:1}}>{formatPendingAge(rec.createdAt)} · {(rec.size/1024/1024).toFixed(1)} MB</div>
                     </div>
                     <div style={{display:"flex",gap:5,flexShrink:0}}>
-                      <button onClick={()=>retryHeldTranscription(rec)} disabled={!hasAI || !!pendingRetryId} style={{fontSize:10,padding:"5px 8px",borderRadius:7,border:"none",background:hasAI&&!pendingRetryId?"#5B7BE8":T.brdS,color:hasAI&&!pendingRetryId?"#fff":T.tFaint,cursor:hasAI&&!pendingRetryId?"pointer":"default",fontWeight:700}}>{busy?"Retrying...":"Retry"}</button>
-                      <button onClick={()=>deleteHeldTranscription(rec)} disabled={busy} style={{fontSize:10,padding:"5px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:"none",color:T.tFaint,cursor:busy?"default":"pointer"}}>Delete</button>
+                      <button onClick={()=>retryHeldTranscription(rec)} disabled={!hasAI || !!pendingRetryId} style={{fontSize:12,padding:"5px 8px",borderRadius:7,border:"none",background:hasAI&&!pendingRetryId?"#5B7BE8":T.brdS,color:hasAI&&!pendingRetryId?"#fff":T.tFaint,cursor:hasAI&&!pendingRetryId?"pointer":"default",fontWeight:500}}>{busy?"Retrying...":"Retry"}</button>
+                      <button onClick={()=>deleteHeldTranscription(rec)} disabled={busy} style={{fontSize:12,padding:"5px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:"none",color:T.tFaint,cursor:busy?"default":"pointer"}}>Delete</button>
                     </div>
                   </div>
-                  {rec.error && <div style={{fontSize:10,color:"#C94040",marginTop:6,lineHeight:1.35,maxHeight:38,overflow:"hidden"}}>{rec.error}</div>}
+                  {rec.error && <div style={{fontSize:12,color:"#C94040",marginTop:6,lineHeight:1.35,maxHeight:38,overflow:"hidden"}}>{rec.error}</div>}
                   {transcript && (
                     <div style={{marginTop:7}}>
-                      <textarea value={transcript} readOnly rows={3} style={{width:"100%",boxSizing:"border-box",resize:"vertical",border:`1px solid ${T.brd}`,borderRadius:8,background:T.card,color:T.text,fontSize:11,lineHeight:1.45,padding:7,fontFamily:"Georgia,serif"}}/>
-                      <button onClick={()=>navigator.clipboard?.writeText(transcript)} style={{marginTop:5,width:"100%",fontSize:10,padding:"5px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.card,color:T.tSoft,cursor:"pointer",fontWeight:700}}>Copy transcript</button>
+                      <textarea value={transcript} readOnly rows={3} style={{width:"100%",boxSizing:"border-box",resize:"vertical",border:`1px solid ${T.brd}`,borderRadius:8,background:T.card,color:T.text,fontSize:13,lineHeight:1.45,padding:7,fontFamily:NC_FONT_STACK}}/>
+                      <button onClick={()=>navigator.clipboard?.writeText(transcript)} style={{marginTop:5,width:"100%",fontSize:12,padding:"5px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.card,color:T.tSoft,cursor:"pointer",fontWeight:500}}>Copy transcript</button>
                     </div>
                   )}
                 </div>
@@ -1850,10 +2680,10 @@ function App({ user, onSignOut }) {
               const task = actT.find(t=>t.id===blockedResume);
               const dur = task?.blockedDuration || 3*3600000;
               uT(ts=>ts.map(t=>t.id===blockedResume?{...t,blockedUntil:Date.now()+dur}:t));
-              clearBlockedTimer(blockedResume);
+              if(blockedTmr.current[blockedResume]){clearTimeout(blockedTmr.current[blockedResume]);delete blockedTmr.current[blockedResume];}
               setBlockedResume(null);
-            }} style={{flex:1,padding:"7px",borderRadius:8,border:`1px solid ${T.brd}`,background:"none",cursor:"pointer",fontSize:11,fontFamily:"system-ui",color:T.tSoft}}>Later</button>
-            <button onClick={()=>resumeBlocked(blockedResume)} style={{flex:1,padding:"7px",borderRadius:8,border:"none",background:ap[0]?.color,color:textOnColor(ap[0]?.color||"#5A9E7C"),cursor:"pointer",fontSize:11,fontFamily:"system-ui",fontWeight:600}}>Resume</button>
+            }} style={{flex:1,padding:"7px",borderRadius:8,border:`1px solid ${T.brd}`,background:"none",cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.tSoft}}>Later</button>
+            <button onClick={()=>resumeBlocked(blockedResume)} style={{flex:1,padding:"7px",borderRadius:8,border:"none",background:ap[0]?.color,color:textOnColor(ap[0]?.color||"#5A9E7C"),cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,fontWeight:500}}>Resume</button>
           </div>
         </div>
       )}
@@ -1861,25 +2691,25 @@ function App({ user, onSignOut }) {
       {/* Stale task nudge — fires 3s after load for tasks waiting 7+ days */}
       {staleNudge && actT.find(t => t.id === staleNudge.id) && (
         <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",background:T.card,border:`1.5px solid ${T.brd}`,borderRadius:14,padding:"14px 16px",boxShadow:T.shadowLg,zIndex:9490,maxWidth:360,width:"90%",animation:"ot-fade 0.3s"}}>
-          <p style={{fontSize:11,fontWeight:700,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 3px",textTransform:"uppercase",letterSpacing:.5}}>
+          <p style={{fontSize:13,fontWeight:500,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 3px",textTransform:"uppercase",letterSpacing:0}}>
             ⏳ Waiting {Math.floor((Date.now()-(staleNudge.createdAt||Date.now()))/86400000)} days
           </p>
           <p style={{fontSize:13,color:T.text,margin:"0 0 10px",fontFamily:"Georgia,serif",lineHeight:1.4}}>{staleNudge.text}</p>
-          <p style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 10px"}}>Prioritize it now, or break it into smaller steps?</p>
+          <p style={{fontSize:13,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 10px"}}>Prioritize it now, or break it into smaller steps?</p>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             <button onClick={()=>{
               uT(ts => ts.map(t => t.id===staleNudge.id ? {...t, staleNudgedAt:Date.now()} : t));
               setStaleNudge(null);
-            }} style={{flex:1,padding:"7px",borderRadius:8,border:`1px solid ${T.brd}`,background:"none",cursor:"pointer",fontSize:11,fontFamily:"system-ui",color:T.tSoft,minWidth:60}}>Later</button>
+            }} style={{flex:1,padding:"7px",borderRadius:8,border:`1px solid ${T.brd}`,background:"none",cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.tSoft,minWidth:60}}>Later</button>
             <button onClick={()=>{
               const topPri = [...pris].filter(p=>!p.deleted).sort((a,b)=>b.weight-a.weight)[0];
               if (topPri) chgPriority(staleNudge.id, topPri.id, 'one');
               setStaleNudge(null);
-            }} style={{flex:1,padding:"7px",borderRadius:8,border:"none",background:"#C49040",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"system-ui",minWidth:80}}>Make it Now</button>
+            }} style={{flex:1,padding:"7px",borderRadius:8,border:"none",background:"#C49040",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:500,fontFamily:NC_FONT_STACK,minWidth:80}}>Make it Now</button>
             <button onClick={()=>{
               setShowBD(staleNudge);
               setStaleNudge(null);
-            }} style={{flex:1,padding:"7px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:11,fontFamily:"system-ui",color:T.text,minWidth:90}}>Break it down</button>
+            }} style={{flex:1,padding:"7px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.text,minWidth:90}}>Break it down</button>
           </div>
         </div>
       )}
@@ -1891,7 +2721,7 @@ function App({ user, onSignOut }) {
             {chgPriIsSubtask && (
               <div style={{display:"flex",gap:6,marginBottom:14,background:T.bg,borderRadius:10,padding:4}}>
                 {[{v:'one',label:'This step only'},{v:'group',label:'All remaining steps'}].map(opt => (
-                  <button key={opt.v} onClick={()=>setChgPriScope(opt.v)} style={{flex:1,padding:"6px 0",borderRadius:8,border:"none",background:chgPriScope===opt.v?T.card:"transparent",fontWeight:chgPriScope===opt.v?700:400,color:chgPriScope===opt.v?T.text:T.tFaint,fontSize:11,cursor:"pointer",fontFamily:"system-ui",boxShadow:chgPriScope===opt.v?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>
+                  <button key={opt.v} onClick={()=>setChgPriScope(opt.v)} style={{flex:1,padding:"6px 0",borderRadius:8,border:"none",background:chgPriScope===opt.v?T.card:"transparent",fontWeight:chgPriScope===opt.v?500:400,color:chgPriScope===opt.v?T.text:T.tFaint,fontSize:13,cursor:"pointer",fontFamily:NC_FONT_STACK,boxShadow:chgPriScope===opt.v?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>
                     {opt.label}
                   </button>
                 ))}
@@ -1963,12 +2793,12 @@ function App({ user, onSignOut }) {
         <div style={{position:"fixed",top:76,left:"50%",transform:"translateX(-50%)",zIndex:9100,width:"min(520px,calc(100vw - 24px))",background:T.card,border:`1px solid ${T.brd}`,borderRadius:18,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.24)",padding:12,fontFamily:"system-ui",display:"grid",gridTemplateColumns:"32px minmax(0,1fr) auto",gap:10,alignItems:"center"}}>
           <span style={{width:32,height:32,borderRadius:12,background:T.tonal || T.bgW,color:T.onTonal || T.text,display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("dashboard_customize", 18)}</span>
           <div style={{minWidth:0}}>
-            <div style={{fontSize:13,fontWeight:900,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Open this in Command Center?</div>
-            <div style={{fontSize:11,fontWeight:700,color:T.tFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{legacyPrompt.label || "Legacy app"} is still available if you want the old environment.</div>
+            <div style={{fontSize:15,fontWeight:500,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Open this in Command Center?</div>
+            <div style={{fontSize:13,fontWeight:400,color:T.tFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{legacyPrompt.label || "Legacy app"} is still available if you want the old environment.</div>
           </div>
           <div style={{display:"flex",gap:6}}>
-            <button onClick={openLegacyInCommandCenter} style={{height:34,padding:"0 11px",borderRadius:11,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:900}}>Yes</button>
-            <button onClick={openLegacyTarget} style={{height:34,padding:"0 11px",borderRadius:11,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900}}>No</button>
+            <button onClick={openLegacyInCommandCenter} style={{height:34,padding:"0 11px",borderRadius:11,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:500,fontSize:14}}>Yes</button>
+            <button onClick={openLegacyTarget} style={{height:34,padding:"0 11px",borderRadius:11,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:500,fontSize:14}}>No</button>
           </div>
         </div>
       )}
@@ -1984,7 +2814,13 @@ function App({ user, onSignOut }) {
           onRecord={() => { setConvCallMode(false); setShowConvCapture(true); }}
           onMoreActions={() => setNcActionsOpen(true)}
           autoCollapseEnabled={sidebarAutoCollapse}
-          onToggleAutoCollapse={toggleSidebarAutoCollapse}
+          topOffset={noticeTopOffset}
+          forceCompact={sidebarForceCompact}
+          onToggleAutoCollapse={() => setSidebarAutoCollapse(v => {
+            const next = !v;
+            try { localStorage.setItem('ot_sidebar_autocollapse', String(next)); } catch {}
+            return next;
+          })}
         />
       )}
 
@@ -1999,7 +2835,7 @@ function App({ user, onSignOut }) {
           onAddTask={addVT}
           onCompleteTask={id => compTask(id)}
           onDeleteTask={id => delTask(id)}
-          onEditTask={(id, text) => uT(ts => ts.map(t => t.id === id ? {...t, text: text.trim()} : t))}
+          onEditTask={(id, text) => uT(ts => ts.map(t => t.id === id ? {...t, text: text.trim(), ncSummary: undefined, ncSummarySource: undefined, ncSummaryPending: false, ncSummaryFailedSource: undefined, ncSummaryFailedAt: undefined} : t))}
           onOpenTasks={()=>{openCommandView("focus"); switchTab("focus");}}
           onOpenQueue={()=>{openCommandView("focus"); switchTab("queue");}}
           onOpenZen={()=>{if(curT)setZen(true); else {openCommandView("focus"); switchTab("focus");}}}
@@ -2016,6 +2852,7 @@ function App({ user, onSignOut }) {
           onOpenGoogleSettings={()=>{setSettingsInitialTab("google"); setShowSet(true);}}
           onOnlineChange={setDeskPhoneOnline}
           sidebarW={sidebarW}
+          topOffset={noticeTopOffset}
           actionsOpen={ncActionsOpen}
           setActionsOpen={setNcActionsOpen}
           actionCategoryId={ncActionCatId}
@@ -2029,7 +2866,12 @@ function App({ user, onSignOut }) {
           onConnectGoogle={connectGoogle}
           onDisconnectGoogle={disconnectGoogle}
           googleWasConnected={googleWasConnected}
-          onRefreshCalendar={refreshCalendar}
+          onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
+          paneWeights={AS.nerveCenterPaneWeights}
+          onPaneWeightsChange={weights => setAS(p => ({...p, nerveCenterPaneWeights: weights}))}
+          googlePaneHeight={AS.nerveCenterGooglePaneHeight}
+          onGooglePaneHeightChange={height => setAS(p => ({...p, nerveCenterGooglePaneHeight: height}))}
+          onPolishNerveItems={polishNerveItems}
         />
       )}
 
@@ -2424,7 +3266,7 @@ function App({ user, onSignOut }) {
               </div>
               {/* Text input — shown once priority selected */}
               {qAddPri && (
-                <form onSubmit={e=>{e.preventDefault();const t=qAddText.trim();if(!t)return;const newQT={id:uid(),text:t,completed:false,priority:qAddPri,createdAt:Date.now()};uT(ts=>doOpt([...ts,newQT]));setQAddText("");setQAddPri(null);const clr=gP(pris,newQT.priority).isShaila?"#2ECC71":gP(pris,newQT.priority).color;showQueueToast(clr);triggerAIPrioritize();}} style={{display:"flex",gap:6,animation:"ot-fade 0.15s"}}>
+                <form onSubmit={e=>{e.preventDefault();const t=qAddText.trim();if(!t)return;const newQT={id:uid(),text:t,completed:false,priority:qAddPri,createdAt:Date.now()};uT(ts=>doOpt([...ts,newQT]));setQAddText("");setQAddPri(null);clearTimeout(queueToastTmr.current);const clr=gP(pris,newQT.priority).isShaila?"#2ECC71":gP(pris,newQT.priority).color;setQueueToast(clr);setQueueToastKey(k=>k+1);queueToastTmr.current=setTimeout(()=>setQueueToast(null),5000);triggerAIPrioritize();}} style={{display:"flex",gap:6,animation:"ot-fade 0.15s"}}>
                   <input autoFocus value={qAddText} onChange={e=>setQAddText(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Escape"){setQAddPri(null);setQAddText("");}}}
                     placeholder={qAddPri==="shaila"?"Who + what shaila?":"What needs doing?"}
@@ -2719,6 +3561,7 @@ function App({ user, onSignOut }) {
                           <span style={{fontSize:12,color:T.tFaint,fontFamily:"system-ui"}}>Analyzing...</span>
                         </div>
                       )}
+                      <div ref={chatEndRef}/>
                     </div>
                     {/* Chat input */}
                     <div style={{display:"flex",gap:6}}>
@@ -3108,4 +3951,5 @@ function App({ user, onSignOut }) {
 // callMode=false (mic button): records your own voice via getUserMedia
 // callMode=true  (phone button): captures system audio via getDisplayMedia
 //   — user shares the tab/window playing the call; Web Speech is skipped
+
 export { App };

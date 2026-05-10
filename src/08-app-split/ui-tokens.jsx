@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 export const suiteIcon = (name, size = 20) => (
   <span className="material-symbols-rounded" style={{ fontSize: size }}>{name}</span>
@@ -18,6 +18,118 @@ export const GV_CLEAN = {
   danger: "#D93025",
   warning: "#F9AB00",
 };
+
+export const NC_FONT_STACK = '"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
+
+export const NC_TYPE = {
+  title: 18,
+  body: 15,
+  meta: 13,
+  label: 13,
+  small: 12,
+  control: 14,
+  line: 1.5,
+};
+
+export function useViewportWidth() {
+  const [width, setWidth] = useState(() => (
+    typeof window === "undefined" ? 1440 : window.innerWidth
+  ));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const onResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  return width;
+}
+
+export const NC_GLOBAL_CSS = `
+.nc-suite-root,
+.nc-suite-root :where(button, input, textarea, select, p, span, div, a, label, h1, h2, h3, h4, h5, h6, li, summary) {
+  font-family: ${NC_FONT_STACK} !important;
+  letter-spacing: 0 !important;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.nc-suite-root .material-symbols-rounded {
+  font-family: "Material Symbols Rounded" !important;
+  font-weight: normal !important;
+  font-style: normal !important;
+  line-height: 1 !important;
+}
+.nc-suite-root :where(button, input, textarea, select) {
+  line-height: 1.45;
+}
+.nc-suite-root :where(button, input, textarea, select, p, div, a, label, li, summary) {
+  font-weight: var(--nc-font-weight-normal, 400) !important;
+}
+.nc-suite-root :where(h1, h2, h3, h4, h5, h6, strong, b) {
+  font-weight: var(--nc-font-weight-strong, 500) !important;
+}
+.nc-suite-root * {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.nc-suite-root *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.nc-suite-root *::-webkit-scrollbar-track {
+  background: transparent;
+}
+.nc-suite-root *::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+.nc-suite-root *:hover,
+.nc-suite-root *:focus-within,
+.nc-suite-root *:active {
+  scrollbar-color: rgba(95, 99, 104, 0.34) transparent;
+}
+.nc-suite-root *:hover::-webkit-scrollbar-thumb,
+.nc-suite-root *:focus-within::-webkit-scrollbar-thumb,
+.nc-suite-root *:active::-webkit-scrollbar-thumb {
+  background-color: rgba(95, 99, 104, 0.38);
+}
+.nc-suite-root *:hover::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(95, 99, 104, 0.58);
+}
+.nc-suite-root button {
+  touch-action: manipulation;
+}
+.nc-suite-root :where(button, a, input, textarea, select):focus-visible {
+  outline: 2px solid rgba(0, 121, 107, 0.38);
+  outline-offset: 2px;
+}
+.nc-action-row {
+  position: relative;
+}
+.nc-hover-actions {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(4px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+.nc-action-row:hover .nc-hover-actions,
+.nc-action-row:focus-within .nc-hover-actions,
+.nc-hover-actions[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+@media (hover: none) {
+  .nc-hover-actions {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+}
+`;
 
 export const cleanTheme = (theme = {}) => ({
   bg: theme.card || GV_CLEAN.bg,
@@ -50,20 +162,38 @@ export const gvIconButton = (overrides = {}, C = GV_CLEAN) => ({
 });
 
 export const gvTextButton = (overrides = {}, C = GV_CLEAN) => ({
-  height: 36,
-  padding: "0 12px",
+  minHeight: 40,
+  padding: "0 16px",
   borderRadius: 4,
   border: `1px solid ${C.divider}`,
   background: "transparent",
   color: C.muted,
   cursor: "pointer",
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 500,
-  fontFamily: "system-ui",
+  fontFamily: NC_FONT_STACK,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   gap: 6,
+  ...overrides,
+});
+
+export const cleanToolbarButton = (active = false, C = GV_CLEAN, overrides = {}) => ({
+  minHeight: 40,
+  padding: "0 14px",
+  borderRadius: 4,
+  border: "1px solid transparent",
+  background: active ? C.hover : "transparent",
+  color: active ? C.text : C.muted,
+  cursor: "pointer",
+  fontSize: 14,
+  fontWeight: 500,
+  fontFamily: NC_FONT_STACK,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
   ...overrides,
 });
 

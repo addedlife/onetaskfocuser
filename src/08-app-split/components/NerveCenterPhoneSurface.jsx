@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { cleanTheme, suiteIcon } from '../ui-tokens.jsx';
+import { cleanTheme, gvIconButton, gvTextButton, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 
 function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
   const api = "http://127.0.0.1:8765";
+  const viewportW = useViewportWidth();
+  const touchActions = viewportW < 980;
   const [status, setStatus] = useState(null);
   const [messages, setMessages] = useState([]);
   const [calls, setCalls] = useState([]);
@@ -20,6 +22,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   const [composeIsNew, setComposeIsNew] = useState(false);  // opened as "new message" (has contact search)
   const [composeSearch, setComposeSearch] = useState("");   // contact search in new-compose mode
   const [composeFocused, setComposeFocused] = useState(false);
+  const [openPhoneActionId, setOpenPhoneActionId] = useState(null);
   const C = cleanTheme(T);
 
   const refresh = useCallback(async () => {
@@ -213,11 +216,21 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   }, C);
   const phoneRowStyle = {
     display: "grid",
-    gridTemplateColumns: "32px minmax(0,1fr) 36px 36px",
-    gap: 6,
+    gridTemplateColumns: touchActions ? "36px minmax(0,1fr) 36px" : "36px minmax(0,1fr)",
+    gap: touchActions ? "8px 10px" : 8,
     alignItems: "start",
-    padding: "8px 4px",
+    padding: "10px 4px",
     borderRadius: 8,
+    minHeight: 56,
+  };
+  const phoneActionGroupStyle = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: touchActions ? "flex-start" : "flex-end",
+    gap: 4,
+    gridColumn: touchActions ? "2 / 4" : "auto",
+    marginTop: touchActions ? -4 : 0,
+    ...(touchActions ? {} : { position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", zIndex: 2, background: C.bg, borderRadius: 8, boxShadow: "0 1px 8px rgba(60,64,67,0.12)", padding: 2 }),
   };
 
   const fmtTime = val => {
@@ -263,8 +276,10 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   // Small neutral action button (white/card background) — used on each row
   const AB = ({ icon, title, onClick }) => (
     <button onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); onClick(); }} title={title}
-      style={phoneIconButton(false)}>
+      aria-label={title}
+      style={gvTextButton({ minHeight: 34, height: 34, padding: touchActions ? "0 10px" : "0 9px", fontSize: NC_TYPE.small, gap: 5, border: "none", background: C.bgSoft }, C)}>
       {suiteIcon(icon, 14)}
+      <span>{title.replace(" back", "")}</span>
     </button>
   );
 
@@ -276,8 +291,8 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
           style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer" }}>
           <span style={{ width: 28, height: 28, borderRadius: 99, background: C.hover, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, flexShrink: 0 }}>{suiteIcon("person", 13)}</span>
           <span style={{ minWidth: 0 }}>
-            <span style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
-            <span style={{ display: "block", fontSize: 12, color: C.muted }}>{s.num}</span>
+            <span style={{ display: "block", fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+            <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted }}>{s.num}</span>
           </span>
         </button>
       ))}
@@ -285,23 +300,23 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden", color: C.text }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden", color: C.text }}>
 
       {/* ── Status bar ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: 40 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, minHeight: 44 }}>
         <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: isIncoming ? C.success : statusOnline ? (isOnCall ? C.warning : C.success) : C.faint }} />
         <span style={{ flex: 1, minWidth: 0 }}>
           {callerDisplay && (isIncoming || isOnCall) ? (
             <span>
-              <span style={{ display: "block", fontSize: 14, fontWeight: 500, color: isIncoming ? C.success : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{callerDisplay}</span>
-              <span style={{ display: "block", fontSize: 12, color: C.muted, fontWeight: 400 }}>{isIncoming ? "Incoming call" : "On call"}</span>
+              <span style={{ display: "block", fontSize: 16, fontWeight: 500, color: isIncoming ? C.success : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{callerDisplay}</span>
+              <span style={{ display: "block", fontSize: 14, color: C.muted, fontWeight: 400 }}>{isIncoming ? "Incoming call" : "On call"}</span>
             </span>
           ) : (
-            <span style={{ fontSize: 13, fontWeight: 400, color: statusOnline ? C.muted : C.faint }}>{statusText}</span>
+            <span style={{ fontSize: 14, fontWeight: 400, color: statusOnline ? C.muted : C.faint }}>{statusText}</span>
           )}
         </span>
         {vmCount > 0 && (
-          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 500, color: "#fff", background: C.danger, borderRadius: 99, padding: "2px 7px", flexShrink: 0 }} title="Voicemail">
+          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: NC_TYPE.small, fontWeight: 500, color: "#fff", background: C.danger, borderRadius: 99, padding: "2px 7px", flexShrink: 0 }} title="Voicemail">
             {suiteIcon("voicemail", 13)} {vmCount}
           </span>
         )}
@@ -350,7 +365,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
           )}
           {/* Close button when searching but no contact picked yet */}
           {composeIsNew && !selected && (
-            <button onClick={closeCompose} style={gvTextButton({ alignSelf: "flex-end", height: 32, fontSize: 12 }, C)}>
+            <button onClick={closeCompose} style={gvTextButton({ alignSelf: "flex-end", height: 32, fontSize: NC_TYPE.meta }, C)}>
               {suiteIcon("close", 13)} Cancel
             </button>
           )}
@@ -358,7 +373,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
       )}
 
       {/* ── Control bar: answer/hangup | record | new-msg | keypad toggle ── */}
-      <div style={{ display: "flex", gap: 4, alignItems: "center", minHeight: 40 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}>
         {isIncoming ? (
           <button onClick={() => post("/answer", "answer")} disabled={!!busy} title="Answer"
             style={gvTextButton({ border: "none", background: C.success, color: "#fff" }, C)}>
@@ -435,30 +450,41 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
           {/* TEXTS section */}
           {hasMessages && (
             <div style={{ flex: "1 1 0", minHeight: 60, overflowY: "auto", paddingRight: 1 }}>
-              <div style={{ fontSize: 12, fontWeight: 500, color: C.muted, letterSpacing: 0, marginBottom: 4, paddingLeft: 4, paddingTop: 2, position: "sticky", top: 0, background: C.bg, zIndex: 1 }}>Messages</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: C.muted, letterSpacing: 0, marginBottom: 6, paddingLeft: 4, paddingTop: 2, position: "sticky", top: 0, background: C.bg, zIndex: 1 }}>Messages</div>
               {threads.map((m, idx) => {
                 const { icon: msgIcon, color: msgColor } = msgDirIcon(m);
                 const isUnread = !!(m.unread || m.isUnread || m.read === false || m.status === "unread");
                 const preview = m.body || m.text || m.message || m.content || "";
                 const time = fmtTime(m.timestamp || m.date || m.time);
+                const actionId = `msg-${m._who}-${idx}`;
+                const actionsOpen = openPhoneActionId === actionId;
                 return (
-                  <div key={`${m._who}-${idx}`} style={phoneRowStyle}>
-                    <span style={{ width: 32, height: 32, borderRadius: 99, background: isUnread ? C.hover : C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color: isUnread ? C.accent : msgColor, flexShrink: 0, marginTop: 2 }}>{suiteIcon(msgIcon, 15)}</span>
+                  <div key={`${m._who}-${idx}`} className="nc-action-row" style={phoneRowStyle}>
+                    <span style={{ width: 36, height: 36, borderRadius: 99, background: isUnread ? C.hover : C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color: isUnread ? C.accent : msgColor, flexShrink: 0, marginTop: 2 }}>{suiteIcon(msgIcon, 16)}</span>
                     <button onClick={() => openCompose(m._name, m._who)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: T.text }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
-                        <span style={{ flex: 1, fontSize: 14, fontWeight: isUnread ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m._name}</span>
-                        {time && <span style={{ fontSize: 12, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
+                        <span style={{ flex: 1, fontSize: 15, fontWeight: isUnread ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m._name}</span>
+                        {time && <span style={{ fontSize: 13, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
                       </div>
-                      {preview && <span style={{ display: "block", fontSize: 13, color: C.muted, marginTop: 1, whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.4 }}>{preview}</span>}
+                      {preview && <span style={{ display: "block", fontSize: 14, color: C.muted, marginTop: 2, whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.5 }}>{preview}</span>}
                     </button>
-                    <AB icon="call" title="Call" onClick={() => dialNum(m._who)} />
-                    <AB icon="sms" title="Text" onClick={() => openCompose(m._name, m._who)} />
+                    {touchActions && (
+                      <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
+                        {suiteIcon("more_horiz", 17)}
+                      </button>
+                    )}
+                    {(!touchActions || actionsOpen) && (
+                      <div className={touchActions ? "" : "nc-hover-actions"} data-open={actionsOpen ? "true" : undefined} style={phoneActionGroupStyle}>
+                        <AB icon="call" title="Call" onClick={() => { setOpenPhoneActionId(null); dialNum(m._who); }} />
+                        <AB icon="sms" title="Text" onClick={() => { setOpenPhoneActionId(null); openCompose(m._name, m._who); }} />
+                      </div>
+                    )}
                   </div>
                 );
               })}
               {onMoreHistory && (
                 <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
-                  <button onClick={onMoreHistory} style={gvTextButton({ height: 32, fontSize: 12 }, C)}>
+                  <button onClick={onMoreHistory} style={gvTextButton({ height: 32, fontSize: NC_TYPE.meta }, C)}>
                     {suiteIcon("history", 13)} More history
                   </button>
                 </div>
@@ -474,30 +500,41 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
           {/* CALLS section */}
           {hasCalls && (
             <div style={{ flex: "1 1 0", minHeight: 60, overflowY: "auto", paddingRight: 1 }}>
-              <div style={{ fontSize: 12, fontWeight: 500, color: C.muted, letterSpacing: 0, marginBottom: 4, paddingLeft: 4, paddingTop: 2, position: "sticky", top: 0, background: C.bg, zIndex: 1 }}>Recent calls</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: C.muted, letterSpacing: 0, marginBottom: 6, paddingLeft: 4, paddingTop: 2, position: "sticky", top: 0, background: C.bg, zIndex: 1 }}>Recent calls</div>
               {recentCalls.map((c, idx) => {
                 const num = c.number || c.phoneNumber || c.from || c.Number || c.PhoneNumber || "";
                 const name = lookupName(num) || c.name || c.displayName || c.Name || c.DisplayName || c.from || num || "Unknown";
                 const { icon, color } = callDirIcon(c);
                 const time = fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime);
+                const actionId = `call-${idx}`;
+                const actionsOpen = openPhoneActionId === actionId;
                 return (
-                  <div key={`call-${idx}`} style={phoneRowStyle}>
-                    <span style={{ width: 32, height: 32, borderRadius: 99, background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0, marginTop: 2 }}>{suiteIcon(icon, 14)}</span>
+                  <div key={`call-${idx}`} className="nc-action-row" style={phoneRowStyle}>
+                    <span style={{ width: 36, height: 36, borderRadius: 99, background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0, marginTop: 2 }}>{suiteIcon(icon, 16)}</span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
-                        <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
-                        {time && <span style={{ fontSize: 12, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
+                        <span style={{ flex: 1, fontSize: 15, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                        {time && <span style={{ fontSize: 13, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
                       </div>
-                      {num && num !== name && <span style={{ display: "block", fontSize: 13, color: C.muted, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{num}</span>}
+                      {num && num !== name && <span style={{ display: "block", fontSize: 14, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{num}</span>}
                     </div>
-                    <AB icon="call" title="Call back" onClick={() => dialNum(num)} />
-                    <AB icon="sms" title="Text back" onClick={() => openCompose(name, num)} />
+                    {touchActions && (
+                      <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
+                        {suiteIcon("more_horiz", 17)}
+                      </button>
+                    )}
+                    {(!touchActions || actionsOpen) && (
+                      <div className={touchActions ? "" : "nc-hover-actions"} data-open={actionsOpen ? "true" : undefined} style={phoneActionGroupStyle}>
+                        <AB icon="call" title="Call back" onClick={() => { setOpenPhoneActionId(null); dialNum(num); }} />
+                        <AB icon="sms" title="Text back" onClick={() => { setOpenPhoneActionId(null); openCompose(name, num); }} />
+                      </div>
+                    )}
                   </div>
                 );
               })}
               {onMoreHistory && (
                 <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
-                  <button onClick={onMoreHistory} style={gvTextButton({ height: 32, fontSize: 12 }, C)}>
+                  <button onClick={onMoreHistory} style={gvTextButton({ height: 32, fontSize: NC_TYPE.meta }, C)}>
                     {suiteIcon("history", 13)} More history
                   </button>
                 </div>
