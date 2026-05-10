@@ -226,19 +226,18 @@ async function runAudit() {
       for (const source of ['MainWindow.xaml:1299','MainWindow.xaml:1302','MainWindow.xaml:1306','MainWindow.xaml:1309','MainWindow.xaml:1312']) await clickSource(source, conversationMenu);
       conversationMenu.open = false;
 
-      const sideCallPane = document.querySelector('.dp-thread-calls:not(.is-full-calls)');
-      const unifiedCallsPaneVisible = !!sideCallPane && sideCallPane.querySelectorAll('.dp-thread-call-row').length >= ${calls.length};
-      const oldFullCallsButtonRemoved = !document.querySelector('[aria-label="Open full call history"]');
-      const callTextButtons = Array.from(document.querySelectorAll('[data-native-source="MainWindow.xaml:2826"]'));
-      (callTextButtons[1] || callTextButtons[0]).click();
+      document.querySelector('[aria-label="Open full call history"]').click();
       await sleep(140);
-      const callPaneTextOpenedComposer = !!document.querySelector('.dp-new-compose-shell');
+      const fullCallsOpened = !!document.querySelector('.dp-calls-shell .dp-thread-calls.is-full-calls');
+      await clickSource('MainWindow.xaml:3513');
+      const fullCallsTextOpenedComposer = !!document.querySelector('.dp-new-compose-shell');
       document.querySelector('.dp-new-compose-shell [data-native-source="MainWindow.xaml:3036"]')?.click();
       await sleep(100);
-      await clickSource('MainWindow.xaml:2831');
-      await clickSource('MainWindow.xaml:2836');
-      await clickSource('MainWindow.xaml:2841');
-      await clickSource('MainWindow.xaml:2592');
+      await clickSource('MainWindow.xaml:544');
+      await clickSource('MainWindow.xaml:3518');
+      await clickSource('MainWindow.xaml:3522');
+      await clickSource('MainWindow.xaml:3527');
+      await clickSource('MainWindow.xaml:3271');
 
       await clickSource('MainWindow.xaml:562');
       await wait('.dp-contacts-shell');
@@ -304,9 +303,8 @@ async function runAudit() {
       const handoffs = await fetch('http://127.0.0.1:${hostPort}/handoff-log').then((response) => response.json());
       return {
         initialNoNativeText,
-        unifiedCallsPaneVisible,
-        oldFullCallsButtonRemoved,
-        callPaneTextOpenedComposer,
+        fullCallsOpened,
+        fullCallsTextOpenedComposer,
         contactTextOpenedComposer,
         editFocused,
         newContactTitle,
@@ -354,9 +352,8 @@ async function runAudit() {
 
     const checks = {
       initialNoNativeText: "native text removed",
-      unifiedCallsPaneVisible: "unified call pane visible",
-      oldFullCallsButtonRemoved: "old full call-history button removed",
-      callPaneTextOpenedComposer: "call pane text opens composer",
+      fullCallsOpened: "full calls opens",
+      fullCallsTextOpenedComposer: "full calls text opens composer",
       contactTextOpenedComposer: "contact text opens composer",
       editFocused: "edit focuses editor",
       newContactDeleteDisabled: "new contact delete disabled",

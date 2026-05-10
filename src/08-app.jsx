@@ -258,7 +258,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRec
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 
-function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordConversation, onRecordCall, onMoreHistory, onSummaryChange }) {
+function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
   const api = "http://127.0.0.1:8765";
   const [status, setStatus] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -445,24 +445,19 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   const callerName = status?.callerName || status?.CallerName || status?.callerDisplay || status?.CallerDisplay || status?.callerID || status?.CallerID || "";
   const callerNumber = status?.callerNumber || status?.CallerNumber || status?.incomingNumber || status?.IncomingNumber || "";
   const callerDisplay = callerName || (callerNumber ? (lookupName(callerNumber) || callerNumber) : "");
-  const compactStatusText = callerDisplay && (isIncoming || isOnCall)
-    ? `${callerDisplay} · ${isIncoming ? "Incoming call" : "On call"}`
-    : statusText;
   const vmCount = parseInt(status?.voicemailCount || status?.VoicemailCount || status?.voicemail?.count || 0, 10) || 0;
 
-  const threads = useMemo(() => {
-    const threadMap = new Map();
-    messages.forEach(m => {
-      const who = m.from || m.sender || m.address || m.phoneNumber || m.number || m.to || "Unknown";
-      // directName: name embedded right on the message object by DeskPhone
-      const directName = m.name || m.displayName || m.contactName || m.fromName || m.senderName || m.contact ||
-        m.Name || m.DisplayName || m.ContactName || m.FromName || m.SenderName || m.Contact || "";
-      const resolvedName = directName || lookupName(who) || who;
-      if (!threadMap.has(who)) threadMap.set(who, { ...m, _who: who, _name: resolvedName });
-    });
-    return Array.from(threadMap.values()).slice(0, 10);
-  }, [messages, lookupName]);
-  const recentCalls = useMemo(() => (Array.isArray(calls) ? calls : []).slice(0, 10), [calls]);
+  const threadMap = new Map();
+  messages.forEach(m => {
+    const who = m.from || m.sender || m.address || m.phoneNumber || m.number || m.to || "Unknown";
+    // directName: name embedded right on the message object by DeskPhone
+    const directName = m.name || m.displayName || m.contactName || m.fromName || m.senderName || m.contact ||
+      m.Name || m.DisplayName || m.ContactName || m.FromName || m.SenderName || m.Contact || "";
+    const resolvedName = directName || lookupName(who) || who;
+    if (!threadMap.has(who)) threadMap.set(who, { ...m, _who: who, _name: resolvedName });
+  });
+  const threads = Array.from(threadMap.values()).slice(0, 10);
+  const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, 10);
   const hasMessages = threads.length > 0;
   const hasCalls = recentCalls.length > 0;
   const phoneIconButton = (active = false) => gvIconButton({
@@ -504,29 +499,6 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
     if (typeNum === 1 || dir.includes("incoming") || dir.includes("inbound") || dir.includes("receiv") || dir === "in") return { icon: "call_received", color: T.tSoft };
     return { icon: "call", color: T.tSoft };
   };
-
-  useEffect(() => {
-    const summaryCalls = recentCalls.slice(0, 5).map(c => {
-      const num = c.number || c.phoneNumber || c.from || c.Number || c.PhoneNumber || "";
-      const name = lookupName(num) || c.name || c.displayName || c.Name || c.DisplayName || c.from || num || "Call";
-      const iconMeta = callDirIcon(c);
-      const isMissed = iconMeta.icon === "call_missed";
-      return {
-        name,
-        number: num,
-        isMissed,
-        when: fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime),
-      };
-    });
-    onSummaryChange?.({
-      online: statusOnline,
-      callState,
-      voicemailCount: vmCount,
-      messageThreads: threads.length,
-      missedCount: summaryCalls.filter(c => c.isMissed).length,
-      recentCalls: summaryCalls,
-    });
-  }, [onSummaryChange, recentCalls, lookupName, statusOnline, callState, vmCount, threads.length]);
 
   // Incoming SMS = sms icon; outgoing = outgoing_mail icon
   // Android SMS type codes: 1=inbox/received, 2=sent, 4=outbox/pending, 5=failed, 6=queued
@@ -572,12 +544,10 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
     <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden", color: C.text }}>
 
       {/* ── Status bar ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: compact ? 8 : 10, minWidth: 0, minHeight: compact ? 28 : 44 }}>
-        <span style={{ width: compact ? 7 : 8, height: compact ? 7 : 8, borderRadius: 99, flexShrink: 0, background: isIncoming ? C.success : statusOnline ? (isOnCall ? C.warning : C.success) : C.faint }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, minHeight: 44 }}>
+        <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: isIncoming ? C.success : statusOnline ? (isOnCall ? C.warning : C.success) : C.faint }} />
         <span style={{ flex: 1, minWidth: 0 }}>
-          {compact ? (
-            <span style={{ display: "block", fontSize: 12, fontWeight: 500, color: statusOnline ? (isIncoming ? C.success : C.muted) : C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{compactStatusText}</span>
-          ) : callerDisplay && (isIncoming || isOnCall) ? (
+          {callerDisplay && (isIncoming || isOnCall) ? (
             <span>
               <span style={{ display: "block", fontSize: 16, fontWeight: 500, color: isIncoming ? C.success : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{callerDisplay}</span>
               <span style={{ display: "block", fontSize: 14, color: C.muted, fontWeight: 400 }}>{isIncoming ? "Incoming call" : "On call"}</span>
@@ -587,11 +557,11 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
           )}
         </span>
         {vmCount > 0 && (
-          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: compact ? 10 : 11, fontWeight: 500, color: "#fff", background: C.danger, borderRadius: 99, padding: compact ? "1px 6px" : "2px 7px", flexShrink: 0 }} title="Voicemail">
+          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 500, color: "#fff", background: C.danger, borderRadius: 99, padding: "2px 7px", flexShrink: 0 }} title="Voicemail">
             {suiteIcon("voicemail", 13)} {vmCount}
           </span>
         )}
-        <button onClick={refresh} disabled={!!busy} title="Refresh" style={compact ? gvIconButton({ width: 32, height: 32, background: "transparent", color: C.muted }, C) : phoneIconButton(false)}>{suiteIcon("refresh", 16)}</button>
+        <button onClick={refresh} disabled={!!busy} title="Refresh" style={phoneIconButton(false)}>{suiteIcon("refresh", 16)}</button>
       </div>
 
       {/* ── Compose area — at TOP, above lists ── */}
@@ -799,7 +769,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, aiOpts = null }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar }) {
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [editingTaskId, setEditingTaskId] = useState(null);
@@ -823,8 +793,6 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || '';
   const fmtFrom = (raw) => { const m = raw?.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : (raw || '').split('@')[0]; };
   const decodeSnippet = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ').trim();
-  const calendarPreviewEvents = Array.isArray(calendarEvents) ? calendarEvents.slice(0, 20) : calendarEvents;
-  const gmailPreviewMessages = Array.isArray(gmailMessages) ? gmailMessages.slice(0, 20) : gmailMessages;
 
   async function handleAddEvent() {
     if (!addEventText.trim() || addEventLoading) return;
@@ -832,7 +800,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     try {
       const today = new Date().toISOString().slice(0, 10);
       const prompt = `Parse this natural language event description into a Google Calendar event JSON object. Today is ${today}. Return ONLY valid JSON with fields: summary (string), start (object with dateTime in RFC3339 or date in YYYY-MM-DD for all-day), end (same format), reminders (object with useDefault false and overrides array of {method,minutes}). Description: "${addEventText}"`;
-      const raw = await callAI(prompt, aiOpts, { maxOutputTokens: 500 });
+      const raw = await callAI(prompt, { maxTokens: 500 });
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('Could not parse event — try rephrasing.');
       const eventBody = JSON.parse(jsonMatch[0]);
@@ -868,10 +836,6 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const ncTitle = { fontSize: ncType.title, fontWeight: 500, color: C.text, fontFamily: "system-ui", lineHeight: 1.35 };
   const ncSectionIcon = (accent = C.accent) => ({ width: 40, height: 40, borderRadius: 20, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
   const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 40, height: 40, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
-  const boardGridStyle = { display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 20, flex: 1, minHeight: 0, alignItems: "stretch" };
-  const taskPanelStyle = ncPanel;
-  const shailaPanelStyle = ncPanel;
-  const phonePanelStyle = ncPanel;
 
   const shailaPriorityIds = new Set(priorities.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
   const isShailaWork = t => t?.type === "shailo-research" || t?.type === "shaila-research" || !!t?.shailaId || !!t?.isGetBackStep || shailaPriorityIds.has(t?.priority);
@@ -895,6 +859,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     { id: "setup",   title: "Setup",   icon: "settings",     actions: [...(bySection.record?.actions || []).filter(a => !["record-shaila","record-call"].includes(a.id)), ...collectActions("system")] },
   ].filter(c => c.actions.length);
   const activeActionCategory = actionCategories.find(c => c.id === actionCategoryId) || actionCategories[0];
+
   const addDraft = () => {
     const text = taskDraft.trim();
     if (!text) return;
@@ -906,10 +871,12 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   return (
     <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: "hidden", borderLeft: `1px solid ${C.divider}` }}>
       <div style={{ height: "100%", maxWidth: 1520, margin: "0 auto", padding: "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 20 }}>
-        <div style={boardGridStyle}>
+
+        {/* Three-panel grid — fills all remaining height */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 20, flex: 1, minHeight: 0, alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
-          <section style={taskPanelStyle}>
+          <section style={ncPanel}>
             <div style={{ ...ncHeader, display: "block" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, marginBottom: 18 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -984,7 +951,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           </section>
 
           {/* ── Shailos ── */}
-          <section style={shailaPanelStyle}>
+          <section style={ncPanel}>
             <div style={ncHeader}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={ncSectionIcon(GOLD)}>{suiteIcon("rule", 19)}</span>
@@ -1043,7 +1010,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           </section>
 
           {/* ── Phone ── */}
-          <section style={phonePanelStyle}>
+          <section style={ncPanel}>
             <div style={ncHeader}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={ncSectionIcon()}>{suiteIcon("phone_in_talk", 19)}</span>
@@ -1156,7 +1123,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               )}
 
               {/* ── Calendar card ── */}
-              {(calendarPreviewEvents !== null || (googleLoading && googleToken)) && (
+              {(calendarEvents !== null || (googleLoading && googleToken)) && (
                 <div style={cardWrap}>
                   <div style={cardHead}>
                     <span style={headLabel}>📅 Today</span>
@@ -1173,14 +1140,14 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     </div>
                   </div>
                   <div style={cardBody}>
-                    {!calendarPreviewEvents ? (
+                    {!calendarEvents ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: 7 }}>
                         <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
                         <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui" }}>Loading calendar…</span>
                       </div>
-                    ) : calendarPreviewEvents.length === 0 ? (
+                    ) : calendarEvents.length === 0 ? (
                       <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: "12px 0", textAlign: "center" }}>Nothing today</p>
-                    ) : calendarPreviewEvents.map((evt, i) => {
+                    ) : calendarEvents.map((evt, i) => {
                       const now = isNow(evt);
                       const rowStyle = { display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 4px", textDecoration: "none", color: "inherit", borderRadius: 4 };
                       const inner = (
@@ -1203,7 +1170,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               )}
 
               {/* ── Gmail card ── */}
-              {(gmailPreviewMessages !== null || (googleLoading && googleToken)) && (
+              {(gmailMessages !== null || (googleLoading && googleToken)) && (
                 <div style={cardWrap}>
                   <div style={cardHead}>
                     <span style={headLabel}>✉️ Important &amp; Unread</span>
@@ -1215,14 +1182,14 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     </div>
                   </div>
                   <div style={cardBody}>
-                    {!gmailPreviewMessages ? (
+                    {!gmailMessages ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: 7 }}>
                         <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
                         <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui" }}>Loading mail…</span>
                       </div>
-                    ) : gmailPreviewMessages.length === 0 ? (
+                    ) : gmailMessages.length === 0 ? (
                       <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: "12px 0", textAlign: "center" }}>Inbox zero 🎉</p>
-                    ) : gmailPreviewMessages.map((msg, i) => {
+                    ) : gmailMessages.map((msg, i) => {
                       const subject = gmailHeader(msg, 'Subject') || '(no subject)';
                       const from = fmtFrom(gmailHeader(msg, 'From'));
                       const date = fmtTime(gmailHeader(msg, 'Date'));
@@ -2073,7 +2040,7 @@ function App({ user, onSignOut }) {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
-    const eventsUrl = (calId) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=100`;
+    const eventsUrl = (calId) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=25`;
 
     // Step 1: try to get all subscribed calendars via calendarList
     let cals = null;
@@ -2098,7 +2065,7 @@ function App({ user, onSignOut }) {
       if (r.status === 401) throw new Error('token_expired');
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + r.status}`); }
       const d = await r.json();
-      return sortCalEvents(d.items || []);
+      return sortCalEvents(d.items || []).slice(0, 20);
     }
 
     // Step 2: fetch events from each calendar in parallel
@@ -2111,11 +2078,11 @@ function App({ user, onSignOut }) {
     );
     // Re-throw token_expired if any calendar hit it
     for (const r of results) { if (r.reason?.message === 'token_expired') throw new Error('token_expired'); }
-    // Merge, dedupe by event id, sort (timed first, all-day last)
+    // Merge, dedupe by event id, sort (timed first, all-day last), cap at 20
     const seen = new Set();
     const all = results.flatMap(r => r.status === 'fulfilled' ? r.value : []).filter(evt => { if (seen.has(evt.id)) return false; seen.add(evt.id); return true; });
     console.log('[Google] Total calendar events after merge:', all.length);
-    return sortCalEvents(all);
+    return sortCalEvents(all).slice(0, 20);
   }
 
   async function fetchGmailData(token) {
@@ -3581,7 +3548,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
   }, [aiChatHistory, aiChatLoading]);
 
   // Helper: change tab and close any open menus
-  const switchTab = useCallback((t) => { setTab(t); setShowLM(false); setNavExp(false); setShowAides(false); setShowEntryTools(false); }, []);
+  const switchTab = (t) => { setTab(t); setShowLM(false); setNavExp(false); setShowAides(false); setShowEntryTools(false); };
 
   const syncDeskPhoneTheme = useCallback(async (force = false) => {
     if (!deskPhoneThemeSyncEnabled) return false;
@@ -3638,6 +3605,71 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       window.clearInterval(id);
     };
   }, [deskPhoneOnline, deskPhoneThemeSyncEnabled, syncDeskPhoneTheme]);
+
+  if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui",color:"#999"}}>Loading...</div>;
+
+  const isShailaPriority = (id) => id === "shaila" || !!pris.find(p => p.id === id && p.isShaila);
+  const switchboardTaskList = actT.filter(t => !t.completed);
+  const switchboardShailaAll = actT.filter(t => isShailaPriority(t.priority) && !t.completed);
+  const switchboardShailaList = switchboardShailaAll.slice(0, 12);
+  const shailaOpenCount = switchboardShailaAll.length;
+  const switchboardShailaCompleted = actT
+    .filter(t => isShailaPriority(t.priority) && t.completed)
+    .sort((a, b) => (b.completedAt || b.createdAt || 0) - (a.completedAt || a.createdAt || 0))
+    .slice(0, 5);
+  const shellHidden = !!(zen && curT);
+  const sidebarW = shellHidden ? 0 : (sidebarOpen ? 168 : 46);
+  const launchDeskPhone = (force = false) => {
+    if (!force && deskPhoneOnline) return;
+    const now = Date.now();
+    if (now - deskPhoneLaunchAtRef.current < 15000) return;
+    deskPhoneLaunchAtRef.current = now;
+    try {
+      const link = document.createElement("a");
+      link.href = "deskphone://open";
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch {
+      try { window.location.href = "deskphone://open"; } catch {}
+    }
+  };
+  const bringDeskPhoneForward = async () => {
+    if (!deskPhoneOnline) {
+      launchDeskPhone(true);
+      return;
+    }
+    try {
+      const res = await fetch("http://127.0.0.1:8765/show", { method: "POST", cache: "no-store" });
+      if (!res.ok) throw new Error("show failed");
+      await syncDeskPhoneTheme(true);
+      setDeskPhoneOnline(true);
+    } catch {
+      launchDeskPhone(true);
+    }
+  };
+  const sendDeskPhoneCommand = async (path) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8765${path}`, { method: "POST", cache: "no-store" });
+      if (!res.ok) throw new Error("phone command failed");
+      setDeskPhoneOnline(true);
+    } catch {
+      launchDeskPhone(true);
+    }
+  };
+  const openCommandView = (view) => {
+    if (view === "deskphone") {
+      setSuiteView("deskphone");
+      setShailosAction(null);
+      setShowShailos(false);
+      syncDeskPhoneTheme(true);
+      return;
+    }
+    setSuiteView(view);
+    if (view !== "shailos") setShailosAction(null);
+    if (view === "focus") setShowShailos(false);
+  };
   const askLegacyOpen = (target) => setLegacyPrompt(target);
   const openLegacyTarget = () => {
     const target = legacyPrompt;
@@ -4353,7 +4385,6 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onDisconnectGoogle={disconnectGoogle}
           googleWasConnected={googleWasConnected}
           onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
-          aiOpts={aiOpts}
         />
       )}
 
