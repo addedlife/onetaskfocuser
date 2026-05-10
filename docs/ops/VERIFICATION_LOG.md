@@ -125,3 +125,27 @@ Current source-grade file count after cleanup: 162 files.
 - Public `/shailos/` route returned HTTP 200.
 - Public `/.netlify/functions/app-config` route returned HTTP 200.
 - Production URL remains unchanged.
+
+## 2026-05-10 Draft Preview Hotfix
+
+### Issue Found In Preview
+
+- AI functions were reachable locally but blocked from Netlify branch deploy URLs by the function CORS allowlist.
+- Conversation recording buttons could open a blank screen because the capture component referenced recording helpers that were not imported.
+- Gemini default model `gemini-2.5-flash` is currently returning quota/rate-limit errors on the configured key.
+
+### Fixes Applied
+
+- Allowed Netlify branch deploy origins ending in `--onetaskfocuser.netlify.app` for AI and Serper functions.
+- Added the missing conversation recording imports in `ConvCapture.jsx`.
+- Added a controlled Gemini quota fallback from `gemini-2.5-flash` to `gemini-2.5-flash-lite`.
+
+### Latest Draft Preview
+
+- Preview URL: `https://6a010ab82d99e0fff8c159c9--onetaskfocuser.netlify.app`
+- Public root route returned HTTP 200.
+- Public `/shailos/` route returned HTTP 200.
+- Public `/.netlify/functions/app-config` route returned HTTP 200.
+- Public `/.netlify/functions/ai-proxy` returned HTTP 200 from the preview origin with model `gemini-2.5-flash-lite` and response `OK`.
+- `npm run build` passed after the hotfix.
+- Production URL remains unchanged.

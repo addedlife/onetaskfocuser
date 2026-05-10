@@ -5,7 +5,20 @@ const ALLOWED_ORIGINS = [
   "http://localhost:4173",
 ];
 
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+
+  try {
+    const { protocol, hostname } = new URL(origin);
+    return protocol === "https:" && hostname.endsWith("--onetaskfocuser.netlify.app");
+  } catch {
+    return false;
+  }
+}
+
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+const QUOTA_FALLBACK_GEMINI_MODEL = "gemini-2.5-flash-lite";
 
 const GEMINI_MODELS = [
   "gemini-2.5-flash",
@@ -59,7 +72,7 @@ function modelFor(provider, kind, task, requestedModel) {
 
 function corsFor(event, methods = "POST, OPTIONS") {
   const origin = (event.headers.origin || event.headers.Origin || "").trim();
-  const isAllowed = !origin || ALLOWED_ORIGINS.includes(origin);
+  const isAllowed = isAllowedOrigin(origin);
   return {
     isAllowed,
     headers: {
@@ -150,7 +163,7 @@ function buildAudioGeminiBody(base64, mimeType, prompt, genConfig = {}) {
   };
 }
 
-async function callGemini({ body, prompt, base64, mimeType, model, genConfig }) {
+async function callGemini({ body, prompt, base64, mimeType, model, genConfig, allowQuotaFallback = true }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw httpError(500, "GEMINI_API_KEY not configured in Netlify env vars");
 
@@ -175,7 +188,19 @@ async function callGemini({ body, prompt, base64, mimeType, model, genConfig }) 
 
   const data = await r.json().catch(() => ({}));
   if (!r.ok || data.error) {
-    throw httpError(r.status || 502, data?.error?.message || r.statusText || "Gemini API error");
+    const message = data?.error?.message || r.statusText || "Gemini API error";
+    if (allowQuotaFallback && r.status === 429 && model !== QUOTA_FALLBACK_GEMINI_MODEL) {
+      return callGemini({
+        body: requestBody,
+        prompt,
+        base64,
+        mimeType,
+        model: QUOTA_FALLBACK_GEMINI_MODEL,
+        genConfig,
+        allowQuotaFallback: false,
+      });
+    }
+    throw httpError(r.status || 502, message);
   }
 
   return { provider: "gemini", model, text: extractGeminiText(data), raw: data };

@@ -1,5 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseConversation, fmtMs, uid } from '../../01-core.js';
+import { deletePendingRecording, savePendingRecording, transcribePendingRecording, updatePendingRecordingError } from '../../09-transcription-pen.js';
 import { NC_FONT_STACK } from '../ui-tokens.jsx';
 
 function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMode=false }) {

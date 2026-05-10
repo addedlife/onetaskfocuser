@@ -27,6 +27,8 @@ This workspace becomes live only after every gate below passes.
 
 ## Current Status
 
-Ready for CEO public draft-preview test at `https://6a0107f21f09b1f505a3e7da--onetaskfocuser.netlify.app`.
+Ready for CEO public draft-preview test at `https://6a010ab82d99e0fff8c159c9--onetaskfocuser.netlify.app`.
+
+Latest preview hotfix passed external HTTP checks for the main app, Shailos, app config, and AI proxy. AI currently falls back to `gemini-2.5-flash-lite` when `gemini-2.5-flash` is quota-limited.
 
 Not ready for old-folder deprecation.

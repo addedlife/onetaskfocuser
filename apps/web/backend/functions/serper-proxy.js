@@ -10,9 +10,21 @@ const ALLOWED_ORIGINS = [
   "http://localhost:4173",
 ];
 
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+
+  try {
+    const { protocol, hostname } = new URL(origin);
+    return protocol === "https:" && hostname.endsWith("--onetaskfocuser.netlify.app");
+  } catch {
+    return false;
+  }
+}
+
 exports.handler = async (event) => {
   const origin = (event.headers.origin || event.headers.Origin || "").trim();
-  const isAllowed = !origin || ALLOWED_ORIGINS.includes(origin);
+  const isAllowed = isAllowedOrigin(origin);
 
   const cors = {
     "Access-Control-Allow-Origin":  isAllowed ? (origin || ALLOWED_ORIGINS[0]) : ALLOWED_ORIGINS[0],
