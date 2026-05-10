@@ -149,3 +149,15 @@ Current source-grade file count after cleanup: 162 files.
 - Public `/.netlify/functions/ai-proxy` returned HTTP 200 from the preview origin with model `gemini-2.5-flash-lite` and response `OK`.
 - `npm run build` passed after the hotfix.
 - Production URL remains unchanged.
+
+## 2026-05-10 Production Promotion
+
+- Promoted Shamash Pro 4 to production with Netlify deploy `6a01194dc5d71bfed30a76ea`.
+- Live URL: `https://onetaskfocuser.netlify.app`
+- Build command passed during production deploy.
+- Functions bundled from `apps/web/backend/functions`.
+- Production root route returned HTTP 200.
+- Production `/shailos/` route returned HTTP 200.
+- Production `/.netlify/functions/app-config` route returned HTTP 200.
+- Production `/.netlify/functions/ai-proxy` returned HTTP 200 from the production origin with model `gemini-2.5-flash-lite` and response `OK`.
+- Legacy web, Shailos, and DeskPhone folders were preserved and marked as rollback sources, not deleted.

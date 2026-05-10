@@ -27,8 +27,10 @@ This workspace becomes live only after every gate below passes.
 
 ## Current Status
 
-Ready for CEO public draft-preview test at `https://6a010ab82d99e0fff8c159c9--onetaskfocuser.netlify.app`.
+Promoted to production at `https://onetaskfocuser.netlify.app`.
 
-Latest preview hotfix passed external HTTP checks for the main app, Shailos, app config, and AI proxy. AI currently falls back to `gemini-2.5-flash-lite` when `gemini-2.5-flash` is quota-limited.
+Production deploy: `6a01194dc5d71bfed30a76ea`.
 
-Not ready for old-folder deprecation.
+Latest production check passed external HTTP checks for the main app, Shailos, app config, and AI proxy. AI currently falls back to `gemini-2.5-flash-lite` when `gemini-2.5-flash` is quota-limited.
+
+Old folders are deprecated as rollback sources, not deleted.
