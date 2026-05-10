@@ -13,7 +13,7 @@ This workspace becomes live only after every gate below passes.
 - Web app opens locally.
 - NerveCenter renders Tasks, Shailos, and Phone sections. CEO browser review pending.
 - `/shailos/` route opens from the web build. First HTTP check passed on 2026-05-10.
-- Netlify functions route from `apps/web/backend/functions`. Syntax check passed on 2026-05-10; local Netlify runtime test still pending.
+- Netlify functions route from `apps/web/backend/functions`. Syntax check and local Netlify runtime test passed on 2026-05-10.
 - DeskPhone host starts and exposes the local phone API. First pass passed on 2026-05-10.
 - DeskPhone Web can read host status/messages/calls/contacts. Raw host endpoints passed on 2026-05-10; browser UI review pending.
 
@@ -24,3 +24,9 @@ This workspace becomes live only after every gate below passes.
 - Link/deploy only after local gates pass.
 - Rename old folders with a clear deprecated marker only after production is verified.
 - Keep rollback notes pointing to the old live folders until at least one stable production cycle has passed.
+
+## Current Status
+
+Ready for CEO local browser test and, after approval, a Netlify draft deploy for a public live-preview URL.
+
+Not ready for old-folder deprecation.

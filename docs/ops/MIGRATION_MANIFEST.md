@@ -54,3 +54,7 @@ The Phone lane still includes a native Windows host because browser-only code ca
 ## Correction Logged 2026-05-10
 
 The first copy pass missed `apps/web/backend/functions` because the old wildcard copy did not materialize the directory correctly. This was corrected during runtime testing by copying the old `sandbox/netlify/functions` files into `apps/web/backend/functions`, then syntax-checking every function file.
+
+## Efficiency Correction Logged 2026-05-10
+
+The copied phone host initially returned about 18.9 MB from `/messages` because it embedded MMS image data for thousands of messages. Pro 4 now defaults to a 1,200-message window and omits attachment data unless `includeAttachmentData=1` is requested. This keeps the normal browser refresh light while preserving an explicit diagnostic/full-media path.

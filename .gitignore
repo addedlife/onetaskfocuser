@@ -6,6 +6,7 @@ obj/
 .claude/
 .launcher/
 artifacts/
+deno.lock
 *.log
 *.tmp
 Thumbs.db

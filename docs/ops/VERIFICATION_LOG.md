@@ -66,6 +66,7 @@ Current source-grade file count after cleanup: 162 files.
 ### Backend functions
 
 - Restored missed Netlify functions into `apps/web/backend/functions`.
+- Added `apps/web/backend/functions/package.json` with `type: commonjs` so CommonJS Netlify functions are explicit inside the Vite app's `type: module` package.
 - `node --check` passed for:
   - `ai-proxy.js`
   - `app-config.js`
@@ -78,6 +79,38 @@ Current source-grade file count after cleanup: 162 files.
 ### Remaining before go-live
 
 - CEO visual pass in the browser.
-- Netlify-function runtime test under a Netlify-like local server, not just syntax check.
 - Dependency/security audit triage.
 - Performance cleanup for large bundles and large phone `/messages` payload.
+
+## 2026-05-10 Final Pre-Live Pass
+
+### Netlify local runtime
+
+- `npx netlify dev --offline --no-open --dir dist --functions backend/functions --port 4310 --functions-port 4311` started successfully.
+- `http://127.0.0.1:4310/?suite=nervecenter` returned HTTP 200.
+- `http://127.0.0.1:4310/.netlify/functions/app-config` returned HTTP 200 and valid AI/config JSON.
+
+### Phone payload optimization
+
+- Changed the Pro 4 phone host `/messages` endpoint to default to `limit=1200`.
+- Added `includeAttachmentData=1` as an explicit opt-in for embedded MMS image data.
+- Updated DeskPhone Web to request `/messages?limit=1200`.
+- Rebuilt the phone host successfully.
+- Measured payloads after relaunch:
+  - `GET /messages`: about 0.69 MB.
+  - `GET /messages?limit=1200`: about 0.69 MB.
+  - `GET /messages?limit=1200&includeAttachmentData=1`: about 10.1 MB.
+  - Previous default was about 18.9 MB.
+
+### Final local test URLs
+
+- Netlify-style local preview: `http://127.0.0.1:4310/?suite=nervecenter`
+- Static production preview: `http://127.0.0.1:4305/?suite=nervecenter`
+- Shailos route: `http://127.0.0.1:4305/shailos/`
+- Phone host: `http://127.0.0.1:8765/status`
+
+### Remaining before public live preview
+
+- Visual approval in the local browser.
+- Decide whether to create a Netlify draft deploy for a public test URL.
+- Do not deprecate old folders until the public test URL passes and rollback has been confirmed.
