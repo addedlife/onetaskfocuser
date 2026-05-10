@@ -31,6 +31,65 @@ const GV_CLEAN = {
   warning: "#F9AB00",
 };
 
+const NC_FONT_STACK = '"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
+const NC_TYPE = {
+  title: 18,
+  body: 15,
+  meta: 13,
+  label: 13,
+  small: 12,
+  control: 14,
+  line: 1.5,
+};
+const NC_GLOBAL_CSS = `
+.nc-suite-root,
+.nc-suite-root :where(button, input, textarea, select, p, span, div, a, label, h1, h2, h3, h4, h5, h6, li, summary) {
+  font-family: ${NC_FONT_STACK} !important;
+  letter-spacing: 0 !important;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.nc-suite-root .material-symbols-rounded {
+  font-family: "Material Symbols Rounded" !important;
+  font-weight: normal !important;
+  font-style: normal !important;
+  line-height: 1 !important;
+}
+.nc-suite-root :where(button, input, textarea, select) {
+  line-height: 1.45;
+}
+.nc-suite-root * {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.nc-suite-root *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.nc-suite-root *::-webkit-scrollbar-track {
+  background: transparent;
+}
+.nc-suite-root *::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+.nc-suite-root *:hover,
+.nc-suite-root *:focus-within,
+.nc-suite-root *:active {
+  scrollbar-color: rgba(95, 99, 104, 0.34) transparent;
+}
+.nc-suite-root *:hover::-webkit-scrollbar-thumb,
+.nc-suite-root *:focus-within::-webkit-scrollbar-thumb,
+.nc-suite-root *:active::-webkit-scrollbar-thumb {
+  background-color: rgba(95, 99, 104, 0.38);
+}
+.nc-suite-root *:hover::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(95, 99, 104, 0.58);
+}
+`;
+
 const cleanTheme = (theme = {}) => ({
   bg: theme.card || GV_CLEAN.bg,
   bgSoft: theme.bgW || GV_CLEAN.bgSoft,
@@ -71,7 +130,7 @@ const gvTextButton = (overrides = {}, C = GV_CLEAN) => ({
   cursor: "pointer",
   fontSize: 14,
   fontWeight: 500,
-  fontFamily: "system-ui",
+  fontFamily: NC_FONT_STACK,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -89,7 +148,7 @@ const cleanToolbarButton = (active = false, C = GV_CLEAN, overrides = {}) => ({
   cursor: "pointer",
   fontSize: 14,
   fontWeight: 500,
-  fontFamily: "system-ui",
+  fontFamily: NC_FONT_STACK,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -137,7 +196,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRec
     border: "none",
     background: isActive ? C.hover : "transparent",
     color: isActive ? C.text : C.muted,
-    fontFamily: "system-ui",
+    fontFamily: NC_FONT_STACK,
     fontWeight: 500,
     fontSize: 14,
     display: "flex",
@@ -234,7 +293,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRec
           cursor: "pointer", display: "flex", alignItems: "center",
           justifyContent: open ? "flex-start" : "center",
           padding: open ? "0 8px" : "0", gap: open ? 6 : 0, flexShrink: 0, marginBottom: 3,
-          fontFamily: "system-ui", fontSize: 11, fontWeight: 500, overflow: "hidden", whiteSpace: "nowrap",
+          fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.small, fontWeight: 500, overflow: "hidden", whiteSpace: "nowrap",
         }}>
         {suiteIcon("timer", 13)}
         {open && (autoCollapseEnabled ? "Auto-collapse: on" : "Auto-collapse: off")}
@@ -532,8 +591,8 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
           style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer" }}>
           <span style={{ width: 28, height: 28, borderRadius: 99, background: C.hover, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, flexShrink: 0 }}>{suiteIcon("person", 13)}</span>
           <span style={{ minWidth: 0 }}>
-            <span style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
-            <span style={{ display: "block", fontSize: 12, color: C.muted }}>{s.num}</span>
+            <span style={{ display: "block", fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+            <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted }}>{s.num}</span>
           </span>
         </button>
       ))}
@@ -557,7 +616,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
           )}
         </span>
         {vmCount > 0 && (
-          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 500, color: "#fff", background: C.danger, borderRadius: 99, padding: "2px 7px", flexShrink: 0 }} title="Voicemail">
+          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: NC_TYPE.small, fontWeight: 500, color: "#fff", background: C.danger, borderRadius: 99, padding: "2px 7px", flexShrink: 0 }} title="Voicemail">
             {suiteIcon("voicemail", 13)} {vmCount}
           </span>
         )}
@@ -606,7 +665,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
           )}
           {/* Close button when searching but no contact picked yet */}
           {composeIsNew && !selected && (
-            <button onClick={closeCompose} style={gvTextButton({ alignSelf: "flex-end", height: 32, fontSize: 12 }, C)}>
+            <button onClick={closeCompose} style={gvTextButton({ alignSelf: "flex-end", height: 32, fontSize: NC_TYPE.meta }, C)}>
               {suiteIcon("close", 13)} Cancel
             </button>
           )}
@@ -714,7 +773,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
               })}
               {onMoreHistory && (
                 <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
-                  <button onClick={onMoreHistory} style={gvTextButton({ height: 32, fontSize: 12 }, C)}>
+                  <button onClick={onMoreHistory} style={gvTextButton({ height: 32, fontSize: NC_TYPE.meta }, C)}>
                     {suiteIcon("history", 13)} More history
                   </button>
                 </div>
@@ -753,7 +812,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
               })}
               {onMoreHistory && (
                 <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
-                  <button onClick={onMoreHistory} style={gvTextButton({ height: 32, fontSize: 12 }, C)}>
+                  <button onClick={onMoreHistory} style={gvTextButton({ height: 32, fontSize: NC_TYPE.meta }, C)}>
                     {suiteIcon("history", 13)} More history
                   </button>
                 </div>
@@ -824,16 +883,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const GOLD_BG = "rgba(201,146,60,0.055)";
   const GOLD_BRD = "rgba(201,146,60,0.16)";
   const C = cleanTheme(T);
-  const ncType = {
-    title: 18,
-    body: 16,
-    meta: 14,
-    label: 13,
-    line: 1.5,
-  };
+  const ncType = NC_TYPE;
   const ncPanel = { background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", boxShadow: "none" };
   const ncHeader = { minHeight: 72, padding: "18px 20px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 };
-  const ncTitle = { fontSize: ncType.title, fontWeight: 500, color: C.text, fontFamily: "system-ui", lineHeight: 1.35 };
+  const ncTitle = { fontSize: ncType.title, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35 };
   const ncSectionIcon = (accent = C.accent) => ({ width: 40, height: 40, borderRadius: 20, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
   const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 40, height: 40, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
 
@@ -1037,7 +1090,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
             return (
               <div style={{ display: "flex", flex: "0 0 64px", minHeight: 0 }}>
                 <button onClick={onOpenGoogleSettings}
-                  style={{ width: "100%", borderRadius: 8, border: `1px dashed ${C.divider}`, background: C.bg, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: C.muted, fontFamily: "system-ui", fontSize: 13, fontWeight: 500 }}
+                  style={{ width: "100%", borderRadius: 8, border: `1px dashed ${C.divider}`, background: C.bg, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: C.muted, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.control, fontWeight: 500 }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = accentBlue; e.currentTarget.style.color = accentBlue; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = C.divider; e.currentTarget.style.color = C.muted; }}>
                   {suiteIcon("add_link", 16)}
@@ -1071,7 +1124,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           const cardWrap = { background: C.bg, borderRadius: 8, border: `1px solid ${C.divider}`, flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" };
           const cardHead = { padding: "11px 14px 8px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 };
           const cardBody = { flex: 1, overflow: "auto", padding: "4px 14px 8px" };
-          const headLabel = { fontSize: 12, fontWeight: 500, color: C.muted, fontFamily: "system-ui", letterSpacing: 0 };
+          const headLabel = { fontSize: NC_TYPE.label, fontWeight: 500, color: C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0 };
 
           return (
             <React.Fragment>
@@ -1081,7 +1134,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               {/* Not connected — never been connected: show connect button */}
               {notConnected && !googleError && !googleWasConnected && (
                 <button onClick={onConnectGoogle}
-                  style={{ flex: 1, borderRadius: 16, border: `1px dashed ${T.brd}`, background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tSoft, fontFamily: "system-ui", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
+                  style={{ flex: 1, borderRadius: 16, border: `1px dashed ${T.brd}`, background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tSoft, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.control, fontWeight: 500, transition: "all 0.15s" }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = accentBlue; e.currentTarget.style.color = accentBlue; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = T.brd; e.currentTarget.style.color = T.tSoft; }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -1090,14 +1143,14 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               )}
               {/* Was connected before — spinner until timeout, then show reconnect button */}
               {notConnected && !googleError && googleWasConnected && !reconnectTimedOut && (
-                <div style={{ flex: 1, borderRadius: 16, border: `1px solid ${T.brd}`, background: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tFaint, fontFamily: "system-ui", fontSize: 12 }}>
+                <div style={{ flex: 1, borderRadius: 16, border: `1px solid ${T.brd}`, background: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tFaint, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.meta }}>
                   <div style={{ width: 11, height: 11, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
                   Reconnecting…
                 </div>
               )}
               {notConnected && !googleError && googleWasConnected && reconnectTimedOut && (
                 <button onClick={onConnectGoogle}
-                  style={{ flex: 1, borderRadius: 16, border: `1px dashed ${T.brd}`, background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tSoft, fontFamily: "system-ui", fontSize: 13, fontWeight: 600, transition: "all 0.15s" }}
+                  style={{ flex: 1, borderRadius: 16, border: `1px dashed ${T.brd}`, background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tSoft, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.control, fontWeight: 500, transition: "all 0.15s" }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = accentBlue; e.currentTarget.style.color = accentBlue; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = T.brd; e.currentTarget.style.color = T.tSoft; }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
@@ -1108,9 +1161,9 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               {/* Error banner */}
               {googleError && (
                 <div style={{ ...cardWrap, borderColor: "#E07040", flexDirection: "row", alignItems: "center", padding: "0 14px", gap: 10 }}>
-                  <span style={{ fontSize: 12, color: "#E07040", fontFamily: "system-ui", flex: 1 }}>{googleError}</span>
-                  <button onClick={onConnectGoogle} style={{ fontSize: 11, fontFamily: "system-ui", fontWeight: 700, color: accentBlue, background: "none", border: `1px solid ${accentBlue}`, borderRadius: 8, padding: "5px 12px", cursor: "pointer", flexShrink: 0 }}>Retry</button>
-                  <button onClick={onDisconnectGoogle} style={{ fontSize: 12, fontFamily: "system-ui", color: T.tFaint, background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: 0 }}>✕</button>
+                  <span style={{ fontSize: NC_TYPE.meta, color: "#E07040", fontFamily: NC_FONT_STACK, flex: 1 }}>{googleError}</span>
+                  <button onClick={onConnectGoogle} style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: 500, color: accentBlue, background: "none", border: `1px solid ${accentBlue}`, borderRadius: 8, padding: "5px 12px", cursor: "pointer", flexShrink: 0 }}>Retry</button>
+                  <button onClick={onDisconnectGoogle} style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: T.tFaint, background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: 0 }}>✕</button>
                 </div>
               )}
 
@@ -1118,7 +1171,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               {googleLoading && !calendarEvents && !gmailMessages && !googleError && (
                 <div style={{ ...cardWrap, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
                   <div style={{ width: 13, height: 13, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
-                  <span style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui" }}>Loading…</span>
+                  <span style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Loading…</span>
                 </div>
               )}
 
@@ -1133,30 +1186,30 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                          style={{ fontSize: 16, color: T.tFaint, background: "none", border: "none", cursor: "pointer", lineHeight: 1, opacity: .5, padding: 0, display: "flex" }}
                          onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>+</button>
                       <a href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer" title="Open Google Calendar"
-                         style={{ fontSize: 11, color: T.tFaint, textDecoration: "none", lineHeight: 1, opacity: .5, display: "flex" }}
+                         style={{ fontSize: 14, color: T.tFaint, textDecoration: "none", lineHeight: 1, opacity: .5, display: "flex" }}
                          onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↗</a>
-                      <button onClick={onConnectGoogle} title="Refresh" style={{ fontSize: 11, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .5, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↺</button>
-                      <button onClick={onDisconnectGoogle} title="Disconnect" style={{ fontSize: 11, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .35, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = .85} onMouseLeave={e => e.currentTarget.style.opacity = .35}>✕</button>
+                      <button onClick={onConnectGoogle} title="Refresh" style={{ fontSize: 14, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .5, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↺</button>
+                      <button onClick={onDisconnectGoogle} title="Disconnect" style={{ fontSize: 14, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .35, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = .85} onMouseLeave={e => e.currentTarget.style.opacity = .35}>✕</button>
                     </div>
                   </div>
                   <div style={cardBody}>
                     {!calendarEvents ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: 7 }}>
                         <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
-                        <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui" }}>Loading calendar…</span>
+                        <span style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Loading calendar…</span>
                       </div>
                     ) : calendarEvents.length === 0 ? (
-                      <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: "12px 0", textAlign: "center" }}>Nothing today</p>
+                      <p style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK, margin: "12px 0", textAlign: "center" }}>Nothing today</p>
                     ) : calendarEvents.map((evt, i) => {
                       const now = isNow(evt);
                       const rowStyle = { display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 4px", textDecoration: "none", color: "inherit", borderRadius: 4 };
                       const inner = (
                         <>
-                          <span style={{ fontSize: 10, fontFamily: "system-ui", color: now ? accentBlue : T.tFaint, fontWeight: now ? 700 : 400, flexShrink: 0, width: 52, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
+                          <span style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: now ? accentBlue : T.tFaint, fontWeight: now ? 500 : 400, flexShrink: 0, width: 66, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                               {now && <span style={{ width: 5, height: 5, borderRadius: "50%", background: accentBlue, flexShrink: 0 }} />}
-                              <span style={{ fontSize: 12, color: now ? C.text : C.muted, fontWeight: now ? 500 : 400, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evt.summary || "(no title)"}</span>
+                              <span style={{ fontSize: NC_TYPE.control, color: now ? C.text : C.muted, fontWeight: now ? 500 : 400, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evt.summary || "(no title)"}</span>
                             </div>
                           </div>
                         </>
@@ -1177,7 +1230,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                       {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
                       <a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" title="Open Gmail"
-                         style={{ fontSize: 11, color: T.tFaint, textDecoration: "none", opacity: .5, lineHeight: 1 }}
+                         style={{ fontSize: 14, color: T.tFaint, textDecoration: "none", opacity: .5, lineHeight: 1 }}
                          onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↗</a>
                     </div>
                   </div>
@@ -1185,10 +1238,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     {!gmailMessages ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: 7 }}>
                         <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
-                        <span style={{ fontSize: 11, color: T.tFaint, fontFamily: "system-ui" }}>Loading mail…</span>
+                        <span style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Loading mail…</span>
                       </div>
                     ) : gmailMessages.length === 0 ? (
-                      <p style={{ fontSize: 12, color: T.tFaint, fontFamily: "system-ui", margin: "12px 0", textAlign: "center" }}>Inbox zero 🎉</p>
+                      <p style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK, margin: "12px 0", textAlign: "center" }}>Inbox zero 🎉</p>
                     ) : gmailMessages.map((msg, i) => {
                       const subject = gmailHeader(msg, 'Subject') || '(no subject)';
                       const from = fmtFrom(gmailHeader(msg, 'From'));
@@ -1212,10 +1265,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                           }}
                         >
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6, marginBottom: 2 }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: C.text, fontFamily: "system-ui", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
-                            <span style={{ fontSize: 10, color: C.faint, fontFamily: "system-ui", flexShrink: 0 }}>{date}</span>
+                            <span style={{ fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
+                            <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, flexShrink: 0 }}>{date}</span>
                           </div>
-                          <span style={{ fontSize: 11, color: C.muted, fontFamily: "system-ui", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
+                          <span style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
                         </a>
                       );
                     })}
@@ -1227,33 +1280,33 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
             {/* ── Gmail hover tooltip ── */}
             {hoverEmail && (
-              <div style={{ position: "fixed", top: hoverEmail.top, left: hoverEmail.left, zIndex: 9999, background: T.card, border: `1px solid ${T.brd}`, borderRadius: 10, padding: "10px 14px", maxWidth: 320, boxShadow: "0 8px 28px rgba(0,0,0,0.22)", fontFamily: "system-ui", pointerEvents: "none" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: T.tSoft, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fmtFrom(hoverEmail.from)}</div>
-                <div style={{ fontSize: 12, color: T.text, fontWeight: 600, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{hoverEmail.subject}</div>
-                {hoverEmail.snippet && <div style={{ fontSize: 11, color: T.tFaint, lineHeight: 1.5 }}>{hoverEmail.snippet}</div>}
+              <div style={{ position: "fixed", top: hoverEmail.top, left: hoverEmail.left, zIndex: 9999, background: T.card, border: `1px solid ${T.brd}`, borderRadius: 10, padding: "10px 14px", maxWidth: 320, boxShadow: "0 8px 28px rgba(0,0,0,0.22)", fontFamily: NC_FONT_STACK, pointerEvents: "none" }}>
+                <div style={{ fontSize: NC_TYPE.meta, fontWeight: 500, color: T.tSoft, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fmtFrom(hoverEmail.from)}</div>
+                <div style={{ fontSize: NC_TYPE.control, color: T.text, fontWeight: 500, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{hoverEmail.subject}</div>
+                {hoverEmail.snippet && <div style={{ fontSize: NC_TYPE.meta, color: T.tFaint, lineHeight: NC_TYPE.line }}>{hoverEmail.snippet}</div>}
               </div>
             )}
 
             {/* ── Add Event modal ── */}
             {showAddEvent && (
               <div style={{ position: "fixed", inset: 0, zIndex: 9990, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)" }} onClick={() => { setShowAddEvent(false); setAddEventText(''); setAddEventError(null); }}>
-                <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, padding: "24px 22px 18px", width: "min(460px,92vw)", boxShadow: "0 12px 32px rgba(60,64,67,0.22)", fontFamily: "system-ui" }} onClick={e => e.stopPropagation()}>
-                  <div style={{ fontSize: 16, fontWeight: 500, color: C.text, marginBottom: 12 }}>Add Event</div>
+                <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, padding: "24px 22px 18px", width: "min(460px,92vw)", boxShadow: "0 12px 32px rgba(60,64,67,0.22)", fontFamily: NC_FONT_STACK }} onClick={e => e.stopPropagation()}>
+                  <div style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text, marginBottom: 12 }}>Add Event</div>
                   <textarea autoFocus rows={4}
                     placeholder='e.g. "Speech at BYHSI on Thu May 14 at 12:55pm – 2pm, remind me 30 mins and 1 hr before"'
                     value={addEventText}
                     onChange={e => setAddEventText(e.target.value)}
                     onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleAddEvent(); } }}
-                    style={{ width: "100%", boxSizing: "border-box", borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, fontSize: 13, padding: "12px 14px", resize: "none", fontFamily: "system-ui", outline: "none", lineHeight: 1.5 }}
+                    style={{ width: "100%", boxSizing: "border-box", borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, fontSize: NC_TYPE.control, padding: "12px 14px", resize: "none", fontFamily: NC_FONT_STACK, outline: "none", lineHeight: NC_TYPE.line }}
                   />
-                  {addEventError && <div style={{ fontSize: 12, color: "#E07040", marginTop: 6 }}>{addEventError}</div>}
+                  {addEventError && <div style={{ fontSize: NC_TYPE.meta, color: "#E07040", marginTop: 6 }}>{addEventError}</div>}
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-                    <button onClick={() => { setShowAddEvent(false); setAddEventText(''); setAddEventError(null); }} style={{ padding: "8px 16px", borderRadius: 4, border: `1px solid ${C.divider}`, background: "none", color: C.muted, cursor: "pointer", fontSize: 13, fontWeight: 500 }}>Cancel</button>
-                    <button onClick={handleAddEvent} disabled={addEventLoading || !addEventText.trim()} style={{ padding: "8px 18px", borderRadius: 4, border: "none", background: accentBlue, color: "#fff", cursor: addEventLoading ? "wait" : "pointer", fontSize: 13, fontWeight: 500, opacity: (!addEventText.trim() || addEventLoading) ? 0.55 : 1 }}>
+                    <button onClick={() => { setShowAddEvent(false); setAddEventText(''); setAddEventError(null); }} style={{ padding: "8px 16px", borderRadius: 4, border: `1px solid ${C.divider}`, background: "none", color: C.muted, cursor: "pointer", fontSize: NC_TYPE.control, fontWeight: 500 }}>Cancel</button>
+                    <button onClick={handleAddEvent} disabled={addEventLoading || !addEventText.trim()} style={{ padding: "8px 18px", borderRadius: 4, border: "none", background: accentBlue, color: "#fff", cursor: addEventLoading ? "wait" : "pointer", fontSize: NC_TYPE.control, fontWeight: 500, opacity: (!addEventText.trim() || addEventLoading) ? 0.55 : 1 }}>
                       {addEventLoading ? "Adding…" : "Add Event"}
                     </button>
                   </div>
-                  <div style={{ fontSize: 11, color: C.faint, marginTop: 8, textAlign: "right" }}>Cmd/Ctrl+Enter to submit</div>
+                  <div style={{ fontSize: NC_TYPE.small, color: C.faint, marginTop: 8, textAlign: "right" }}>Cmd/Ctrl+Enter to submit</div>
                 </div>
               </div>
             )}
@@ -1266,7 +1319,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7800, display: "flex", justifyContent: "flex-end", background: "rgba(0,0,0,0.28)" }} onClick={() => setActionsOpen(false)}>
             <aside onClick={e => e.stopPropagation()} style={{ width: "min(540px,94vw)", height: "100%", background: C.bg, borderLeft: `1px solid ${C.divider}`, boxShadow: "-10px 0 28px rgba(60,64,67,0.18)", display: "flex", flexDirection: "column" }}>
               <div style={{ height: 64, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 17, fontWeight: 500, fontFamily: "system-ui", color: C.text }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: NC_TYPE.title, fontWeight: 500, fontFamily: NC_FONT_STACK, color: C.text }}>
                   {suiteIcon("apps", 20)} More Actions
                 </div>
                 <button onClick={() => setActionsOpen(false)} style={gvIconButton({}, C)}>
@@ -1279,7 +1332,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     const isActive = activeActionCategory?.id === cat.id;
                     return (
                       <button key={cat.id} onClick={() => setActionCategoryId(cat.id)}
-                        style={{ height: 40, borderRadius: 20, border: "none", background: isActive ? C.hover : "transparent", color: isActive ? C.text : C.muted, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: "0 12px", fontWeight: 500, fontFamily: "system-ui", fontSize: 13, textAlign: "left" }}>
+                        style={{ height: 40, borderRadius: 20, border: "none", background: isActive ? C.hover : "transparent", color: isActive ? C.text : C.muted, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: "0 12px", fontWeight: 500, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.control, textAlign: "left" }}>
                         {suiteIcon(cat.icon, 17)} {cat.title}
                       </button>
                     );
@@ -1288,9 +1341,9 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 <div style={{ padding: 14, overflow: "auto", display: "grid", alignContent: "start", gap: 8 }}>
                   {(activeActionCategory?.actions || []).map(action => (
                     <button key={action.id || action.label} onClick={() => { if (action.disabled) return; setActionsOpen(false); action.run?.(); }} disabled={action.disabled}
-                      style={{ minHeight: 48, borderRadius: 8, border: `1px solid ${action.primary ? "transparent" : C.divider}`, background: action.primary ? C.accent : C.bg, color: action.primary ? "#fff" : C.text, cursor: action.disabled ? "default" : "pointer", opacity: action.disabled ? 0.5 : 1, padding: "0 14px", display: "grid", gridTemplateColumns: "32px minmax(0,1fr)", gap: 10, alignItems: "center", fontFamily: "system-ui", textAlign: "left" }}>
+                      style={{ minHeight: 48, borderRadius: 8, border: `1px solid ${action.primary ? "transparent" : C.divider}`, background: action.primary ? C.accent : C.bg, color: action.primary ? "#fff" : C.text, cursor: action.disabled ? "default" : "pointer", opacity: action.disabled ? 0.5 : 1, padding: "0 14px", display: "grid", gridTemplateColumns: "32px minmax(0,1fr)", gap: 10, alignItems: "center", fontFamily: NC_FONT_STACK, textAlign: "left" }}>
                       <span style={{ width: 32, height: 32, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", background: action.primary ? "rgba(255,255,255,0.16)" : C.hover, color: action.primary ? "#fff" : C.muted, flexShrink: 0 }}>{suiteIcon(action.icon, 16)}</span>
-                      <span style={{ fontSize: 13, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{action.label}</span>
+                      <span style={{ fontSize: NC_TYPE.control, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{action.label}</span>
                     </button>
                   ))}
                 </div>
@@ -1310,8 +1363,8 @@ function SuiteShailosPanel({ T, action, onClose, sidebarW = 0 }) {
         <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
           {suiteIcon("rule", 21)}
           <div style={{minWidth:0}}>
-            <div style={{fontSize:14,fontWeight:800,color:T.text,fontFamily:"system-ui"}}>Shailos Tracker</div>
-            <div style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui"}}>Questions, answers, and follow-up</div>
+            <div style={{fontSize:15,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK}}>Shailos Tracker</div>
+            <div style={{fontSize:13,color:T.tFaint,fontFamily:NC_FONT_STACK}}>Questions, answers, and follow-up</div>
           </div>
         </div>
         <button onClick={onClose} title="Back to tasks" style={{width:36,height:36,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("close", 19)}</button>
@@ -1429,29 +1482,29 @@ function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch,
   }, [docked, pulseStage, releaseStage]);
 
   return (
-    <div style={{position:"fixed",inset:`0 0 0 ${sidebarW}px`,zIndex:7600,overflow:"hidden",background:`linear-gradient(160deg, ${T.bg} 0%, ${T.bgW} 100%)`,borderLeft:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"grid",gridTemplateRows:"auto 1fr",padding:"clamp(12px,2vw,18px)",boxSizing:"border-box",gap:12}}>
+    <div style={{position:"fixed",inset:`0 0 0 ${sidebarW}px`,zIndex:7600,overflow:"hidden",background:`linear-gradient(160deg, ${T.bg} 0%, ${T.bgW} 100%)`,borderLeft:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"grid",gridTemplateRows:"auto 1fr",padding:"clamp(12px,2vw,18px)",boxSizing:"border-box",gap:12,fontFamily:NC_FONT_STACK}}>
       <div style={{height:52,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"0 14px",border:`1px solid ${T.brd}`,borderRadius:16,background:T.card}}>
         <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
           {suiteIcon("smartphone", 22)}
           <div style={{minWidth:0}}>
-            <div style={{fontSize:14,fontWeight:900,color:T.text,fontFamily:"system-ui"}}>Phone</div>
-            <div style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui"}}>{status ? `${status.build || "DeskPhone"} - ${status.hfp || "Phone"} - ${status.map || "Messages"}` : "Waiting for DeskPhone"}</div>
+            <div style={{fontSize:15,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK}}>Phone</div>
+            <div style={{fontSize:13,color:T.tFaint,fontFamily:NC_FONT_STACK}}>{status ? `${status.build || "DeskPhone"} - ${status.hfp || "Phone"} - ${status.map || "Messages"}` : "Waiting for DeskPhone"}</div>
           </div>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <button onClick={()=>{if (!status) onLaunch?.(); syncStage(); setTimeout(syncStage, 900);}} title={status ? "Dock DeskPhone" : "Open DeskPhone"} style={{height:36,padding:"0 12px",borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",gap:6}}>{suiteIcon("open_in_new",17)} {status ? "Dock" : "Open"}</button>
-          <button onClick={syncStage} disabled={!!busy} title="Move DeskPhone to the dock position" style={{height:36,padding:"0 12px",borderRadius:12,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",gap:6}}>{suiteIcon("fit_screen",17)} Position</button>
+          <button onClick={()=>{if (!status) onLaunch?.(); syncStage(); setTimeout(syncStage, 900);}} title={status ? "Dock DeskPhone" : "Open DeskPhone"} style={{height:36,padding:"0 12px",borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:500,fontSize:14,display:"flex",alignItems:"center",gap:6}}>{suiteIcon("open_in_new",17)} {status ? "Dock" : "Open"}</button>
+          <button onClick={syncStage} disabled={!!busy} title="Move DeskPhone to the dock position" style={{height:36,padding:"0 12px",borderRadius:12,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:500,fontSize:14,display:"flex",alignItems:"center",gap:6}}>{suiteIcon("fit_screen",17)} Position</button>
           <button onClick={()=>releaseStage()} disabled={!!busy} title="Release DeskPhone sizing" style={{width:36,height:36,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("close_fullscreen", 18)}</button>
           <button onClick={refresh} title="Refresh status" style={{width:36,height:36,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("refresh", 18)}</button>
         </div>
       </div>
       <div ref={stageRef} style={{position:"relative",minHeight:0,border:`1px solid ${T.brd}`,borderRadius:18,background:T.card,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.18)",overflow:"auto",padding:"clamp(16px,2.4vw,28px)",boxSizing:"border-box",display:"grid",gridTemplateColumns:"minmax(280px,420px) minmax(320px,1fr)",gap:18,alignItems:"start"}}>
         <div style={{display:"grid",gap:12}}>
-          <div style={{fontSize:22,fontWeight:950,color:T.text,fontFamily:"system-ui",display:"flex",alignItems:"center",gap:10}}>{suiteIcon("phone_in_talk",28)} Phone</div>
-          {error && <div style={{fontSize:12,lineHeight:1.4,color:"#BA2A2A",background:"#FFE1E1",border:"1px solid #F0B5B5",borderRadius:12,padding:10}}>{error}</div>}
+          <div style={{fontSize:20,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK,display:"flex",alignItems:"center",gap:10}}>{suiteIcon("phone_in_talk",28)} Phone</div>
+          {error && <div style={{fontSize:13,lineHeight:1.45,color:"#BA2A2A",background:"#FFE1E1",border:"1px solid #F0B5B5",borderRadius:12,padding:10}}>{error}</div>}
           <div style={{display:"grid",gap:8}}>
-            <button onClick={()=>{if (!status) onLaunch?.(); syncStage(); setTimeout(syncStage, 900);}} style={{height:44,borderRadius:14,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:950,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>{suiteIcon("desktop_windows",19)} Dock DeskPhone</button>
-            <button onClick={()=>releaseStage()} style={{height:40,borderRadius:13,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>{suiteIcon("open_in_full",18)} Release</button>
+            <button onClick={()=>{if (!status) onLaunch?.(); syncStage(); setTimeout(syncStage, 900);}} style={{height:44,borderRadius:14,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:500,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>{suiteIcon("desktop_windows",19)} Dock DeskPhone</button>
+            <button onClick={()=>releaseStage()} style={{height:40,borderRadius:13,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:500,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>{suiteIcon("open_in_full",18)} Release</button>
           </div>
         </div>
         <DeskPhoneWebPanel T={T} onOnlineChange={onOnlineChange} onLaunchNative={onLaunch} embedded />
@@ -1534,13 +1587,13 @@ function DeskPhoneMiniDock({ T, onOnlineChange, onOpenDeskPhone }) {
   const threads = Array.from(threadMap.values()).slice(0, 4);
 
   return (
-    <div style={{position:"fixed",right:"clamp(10px,2vw,18px)",bottom:"clamp(12px,2vh,18px)",zIndex:8550,fontFamily:"system-ui",pointerEvents:"none"}}>
+    <div style={{position:"fixed",right:"clamp(10px,2vw,18px)",bottom:"clamp(12px,2vh,18px)",zIndex:8550,fontFamily:NC_FONT_STACK,pointerEvents:"none"}}>
       {!open && (
-        <button onClick={()=>setOpen(true)} title="Calls and texts" style={{pointerEvents:"auto",height:54,minWidth:54,borderRadius:16,border:`1px solid ${T.brd}`,background:T.primary || T.text,color:T.onPrimary || T.bg,boxShadow:T.shadowLg || "0 10px 32px rgba(0,0,0,0.22)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"0 14px",fontWeight:900}}>
+        <button onClick={()=>setOpen(true)} title="Calls and texts" style={{pointerEvents:"auto",height:54,minWidth:54,borderRadius:16,border:`1px solid ${T.brd}`,background:T.primary || T.text,color:T.onPrimary || T.bg,boxShadow:T.shadowLg || "0 10px 32px rgba(0,0,0,0.22)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"0 14px",fontWeight:500,fontSize:14}}>
           {suiteIcon("phone_in_talk", 22)}
           <span style={{display:"flex",flexDirection:"column",alignItems:"flex-start",lineHeight:1.05}}>
-            <span style={{fontSize:12}}>Calls/Text</span>
-            <span style={{fontSize:9,opacity:.72}}>{status ? (callState || "ready") : "open"}</span>
+            <span style={{fontSize:13}}>Calls/Text</span>
+            <span style={{fontSize:12,opacity:.72}}>{status ? (callState || "ready") : "open"}</span>
           </span>
         </button>
       )}
@@ -1550,8 +1603,8 @@ function DeskPhoneMiniDock({ T, onOnlineChange, onOpenDeskPhone }) {
             <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
               {suiteIcon("phone_in_talk", 20)}
               <div style={{minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:900,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Calls and texts</div>
-                <div style={{fontSize:10,fontWeight:750,color:status ? "#0B8043" : T.tFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{status ? (callState || "Ready") : "Open DeskPhone"}</div>
+                <div style={{fontSize:15,fontWeight:500,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Calls and texts</div>
+                <div style={{fontSize:13,fontWeight:400,color:status ? "#0B8043" : T.tFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{status ? (callState || "Ready") : "Open DeskPhone"}</div>
               </div>
             </div>
             <div style={{display:"flex",gap:4}}>
@@ -1561,34 +1614,34 @@ function DeskPhoneMiniDock({ T, onOnlineChange, onOpenDeskPhone }) {
           </div>
           <div style={{padding:12,display:"grid",gap:10}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <button onClick={()=>post("/answer","answer")} disabled={!!busy} style={{height:38,borderRadius:12,border:"none",background:"#0B8043",color:"#fff",cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("phone_callback",17)} Answer</button>
-              <button onClick={()=>post("/hangup","hangup")} disabled={!!busy} style={{height:38,borderRadius:12,border:"none",background:"#BA2A2A",color:"#fff",cursor:"pointer",fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("call_end",17)} Hang up</button>
+              <button onClick={()=>post("/answer","answer")} disabled={!!busy} style={{height:38,borderRadius:12,border:"none",background:"#0B8043",color:"#fff",cursor:"pointer",fontWeight:500,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("phone_callback",17)} Answer</button>
+              <button onClick={()=>post("/hangup","hangup")} disabled={!!busy} style={{height:38,borderRadius:12,border:"none",background:"#BA2A2A",color:"#fff",cursor:"pointer",fontWeight:500,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("call_end",17)} Hang up</button>
             </div>
-            <input value={number} onChange={e=>setNumber(e.target.value)} placeholder="Number" style={{height:38,boxSizing:"border-box",borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,padding:"0 11px",fontSize:13}}/>
-            <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Text message" rows={3} style={{boxSizing:"border-box",borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,padding:"9px 11px",fontSize:13,resize:"vertical"}}/>
+            <input value={number} onChange={e=>setNumber(e.target.value)} placeholder="Number" style={{height:38,boxSizing:"border-box",borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,padding:"0 11px",fontSize:14}}/>
+            <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Text message" rows={3} style={{boxSizing:"border-box",borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,padding:"9px 11px",fontSize:14,resize:"vertical"}}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <button onClick={dial} disabled={!number.trim() || !!busy} style={{height:38,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900,opacity:!number.trim() ? .5 : 1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("call",17)} Call</button>
-              <button onClick={sendSms} disabled={!number.trim() || !body.trim() || !!busy} style={{height:38,borderRadius:12,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:900,opacity:(!number.trim() || !body.trim()) ? .5 : 1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("send",17)} Send</button>
+              <button onClick={dial} disabled={!number.trim() || !!busy} style={{height:38,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:500,fontSize:14,opacity:!number.trim() ? .5 : 1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("call",17)} Call</button>
+              <button onClick={sendSms} disabled={!number.trim() || !body.trim() || !!busy} style={{height:38,borderRadius:12,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:500,fontSize:14,opacity:(!number.trim() || !body.trim()) ? .5 : 1,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("send",17)} Send</button>
             </div>
             <div style={{display:"grid",gap:6}}>
-              <div style={{fontSize:10,fontWeight:900,color:T.tFaint,textTransform:"uppercase",letterSpacing:.7}}>Recent text threads</div>
+              <div style={{fontSize:13,fontWeight:500,color:T.tFaint,textTransform:"uppercase",letterSpacing:0}}>Recent text threads</div>
               {threads.length ? threads.map((m, idx) => (
                 <button key={`${m._who}-${idx}`} onClick={()=>{setNumber(m._who); setOpen(true);}} style={{textAlign:"left",borderRadius:12,border:`1px solid ${T.brdS || T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",padding:"8px 9px"}}>
-                  <div style={{fontSize:12,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m._who}</div>
-                  <div style={{fontSize:11,color:T.tSoft,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{m.body || m.text || m.message || m.content || "Message"}</div>
+                  <div style={{fontSize:14,fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m._who}</div>
+                  <div style={{fontSize:13,color:T.tSoft,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{m.body || m.text || m.message || m.content || "Message"}</div>
                 </button>
-              )) : <div style={{fontSize:12,color:T.tFaint,border:`1px solid ${T.brdS || T.brd}`,borderRadius:12,padding:9,background:T.bgW}}>No message threads loaded.</div>}
+              )) : <div style={{fontSize:13,color:T.tFaint,border:`1px solid ${T.brdS || T.brd}`,borderRadius:12,padding:9,background:T.bgW}}>No message threads loaded.</div>}
             </div>
             <div style={{display:"grid",gap:6}}>
-              <div style={{fontSize:10,fontWeight:900,color:T.tFaint,textTransform:"uppercase",letterSpacing:.7}}>Recent calls</div>
+              <div style={{fontSize:13,fontWeight:500,color:T.tFaint,textTransform:"uppercase",letterSpacing:0}}>Recent calls</div>
               {Array.isArray(recentCalls) && recentCalls.length ? recentCalls.slice(0,3).map((c, idx) => (
                 <button key={idx} onClick={()=>setNumber(c.number || c.phoneNumber || c.from || "")} style={{textAlign:"left",borderRadius:12,border:`1px solid ${T.brdS || T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",padding:"8px 9px"}}>
-                  <div style={{fontSize:12,fontWeight:900,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.name || c.number || c.phoneNumber || c.from || "Call"}</div>
-                  <div style={{fontSize:11,color:T.tSoft,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{c.direction || c.status || c.time || "Recent call"}</div>
+                  <div style={{fontSize:14,fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.name || c.number || c.phoneNumber || c.from || "Call"}</div>
+                  <div style={{fontSize:13,color:T.tSoft,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{c.direction || c.status || c.time || "Recent call"}</div>
                 </button>
-              )) : <div style={{fontSize:12,color:T.tFaint,border:`1px solid ${T.brdS || T.brd}`,borderRadius:12,padding:9,background:T.bgW}}>Recent calls will appear here when DeskPhone provides them.</div>}
+              )) : <div style={{fontSize:13,color:T.tFaint,border:`1px solid ${T.brdS || T.brd}`,borderRadius:12,padding:9,background:T.bgW}}>Recent calls will appear here when DeskPhone provides them.</div>}
             </div>
-            {error && <div style={{fontSize:12,lineHeight:1.35,color:"#BA2A2A",background:"#FFE1E1",border:"1px solid #F0B5B5",borderRadius:12,padding:9}}>{error}</div>}
+            {error && <div style={{fontSize:13,lineHeight:1.45,color:"#BA2A2A",background:"#FFE1E1",border:"1px solid #F0B5B5",borderRadius:12,padding:9}}>{error}</div>}
           </div>
         </div>
       )}
@@ -3778,7 +3831,8 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div ref={appRef} style={{height:"100vh",overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:"'Google Sans','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif",color:T.text,display:"flex",flexDirection:"column",alignItems:"center"}}>
+    <div ref={appRef} className="nc-suite-root" style={{height:"100vh",overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:NC_FONT_STACK,color:T.text,display:"flex",flexDirection:"column",alignItems:"center"}}>
+      <style>{NC_GLOBAL_CSS}</style>
 
       {/* Overlays */}
       {zen && curT && <ZenMode task={curT} pris={pris} T={T} onExit={exitZen} onDone={(isl)=>isl?legacyCompTask(curT.id):compTask(curT.id)}
@@ -3884,13 +3938,13 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       {deletedUndo && (
         <div style={{position:"fixed",bottom:"clamp(55px,9vh,80px)",left:"50%",transform:"translateX(-50%)",background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,padding:"8px 14px",fontSize:12,fontFamily:"system-ui",color:T.tSoft,whiteSpace:"nowrap",boxShadow:T.shadowLg,display:"flex",alignItems:"center",gap:10,zIndex:9800,animation:"ot-fade 0.2s"}}>
           <span style={{color:T.tFaint}}>Task deleted</span>
-          <button onClick={()=>{clearTimeout(deletedTmr.current);setAS(p=>({...p,lists:p.lists.map(l=>l.id===deletedUndo.listId?{...l,tasks:[...l.tasks,deletedUndo.task]}:l)}));setDeletedUndo(null);}} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 10px",cursor:"pointer",fontSize:11,fontWeight:600,color:T.text,fontFamily:"system-ui"}}>Undo</button>
+          <button onClick={()=>{clearTimeout(deletedTmr.current);setAS(p=>({...p,lists:p.lists.map(l=>l.id===deletedUndo.listId?{...l,tasks:[...l.tasks,deletedUndo.task]}:l)}));setDeletedUndo(null);}} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 10px",cursor:"pointer",fontSize:13,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK}}>Undo</button>
         </div>
       )}
       {parkedUndo && (
         <div style={{position:"fixed",bottom:"clamp(55px,9vh,80px)",left:"50%",transform:"translateX(-50%)",background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,padding:"8px 14px",fontSize:12,fontFamily:"system-ui",color:T.tSoft,whiteSpace:"nowrap",boxShadow:T.shadowLg,display:"flex",alignItems:"center",gap:10,zIndex:9800,animation:"ot-fade 0.2s"}}>
           <span style={{color:T.tFaint}}>☀️ Parked until tomorrow</span>
-          <button onClick={()=>{clearTimeout(parkedTmr.current);setAS(p=>({...p,lists:p.lists.map(l=>l.id===parkedUndo.listId?{...l,tasks:l.tasks.map(t=>t.id===parkedUndo.task.id?{...t,snoozedUntil:parkedUndo.task.snoozedUntil}:t)}:l)}));setParkedUndo(null);}} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 10px",cursor:"pointer",fontSize:11,fontWeight:600,color:T.text,fontFamily:"system-ui"}}>Undo</button>
+          <button onClick={()=>{clearTimeout(parkedTmr.current);setAS(p=>({...p,lists:p.lists.map(l=>l.id===parkedUndo.listId?{...l,tasks:l.tasks.map(t=>t.id===parkedUndo.task.id?{...t,snoozedUntil:parkedUndo.task.snoozedUntil}:t)}:l)}));setParkedUndo(null);}} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 10px",cursor:"pointer",fontSize:13,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK}}>Undo</button>
         </div>
       )}
 
@@ -3971,7 +4025,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       {justStartId && jsMinimized && (
         <div onClick={()=>setJsMinimized(false)} style={{position:"fixed",bottom:16,right:16,zIndex:9200,background:curT?gP(pris,curT.priority).color:"#7EB0DE",borderRadius:20,padding:"6px 12px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.2)",animation:"ot-fade 0.2s"}}>
           <IC.Timer s={12} c="#fff"/>
-          <span style={{fontSize:11,color:"#fff",fontFamily:"system-ui",fontWeight:700}}>Just Start</span>
+          <span style={{fontSize:13,color:"#fff",fontFamily:NC_FONT_STACK,fontWeight:500}}>Just Start</span>
         </div>
       )}
       {/* Voice input — root level so it survives tab switches */}
@@ -4000,9 +4054,9 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",borderBottom:`1px solid ${T.brd}`,background:T.card,flexShrink:0}}>
             <span style={{fontSize:14,fontWeight:600,color:T.text,fontFamily:"system-ui"}}>Shaila Transcriber</span>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <button onClick={doFullBackup} disabled={backupLoading} title="Download full backup (tasks + shailos)" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500,opacity:backupLoading ? .5 : 1}}>{backupLoading?"⏳":"💾"} Backup</button>
-              <button onClick={doLoadBackup} title="Restore from backup file" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500}}>📂 Restore</button>
-              <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check" style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:"system-ui",fontWeight:500,opacity:reconcileLoading ? .5 : 1}}>{reconcileLoading?"⏳":"🔄"}</button>
+              <button onClick={doFullBackup} disabled={backupLoading} title="Download full backup (tasks + shailos)" style={{fontSize:13,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,opacity:backupLoading ? .5 : 1}}>{backupLoading?"⏳":"💾"} Backup</button>
+              <button onClick={doLoadBackup} title="Restore from backup file" style={{fontSize:13,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500}}>📂 Restore</button>
+              <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check" style={{fontSize:13,padding:"4px 10px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,opacity:reconcileLoading ? .5 : 1}}>{reconcileLoading?"⏳":"🔄"}</button>
               <button onClick={()=>{setShowShailos(false);setShailosAction(null);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft,padding:4}}>✕</button>
             </div>
           </div>
@@ -4051,7 +4105,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                     uT(ts=>[...ts, ...newTasks]);
                     setShailaReconcile(prev=>({...prev, missingTasks:[]}));
                     showToast(`Added ${shailaReconcile.missingTasks.length} shaila${shailaReconcile.missingTasks.length!==1?"s":""} to queue`,3000);
-                  }} style={{fontSize:11,padding:"4px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600,whiteSpace:"nowrap"}}>+ Add all ({shailaReconcile.missingTasks.length})</button>
+                  }} style={{fontSize:13,padding:"4px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,whiteSpace:"nowrap"}}>+ Add all ({shailaReconcile.missingTasks.length})</button>
                 </div>
                 <div style={{maxHeight:240,overflowY:"auto"}}>
                 {shailaReconcile.missingTasks.map(s => (
@@ -4069,10 +4123,10 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                         uT(ts=>[...ts, ...newTasks]);
                         setShailaReconcile(prev=>({...prev, missingTasks:prev.missingTasks.filter(x=>x.id!==s.id)}));
                         showToast("Added to queue",2000);
-                      }} style={{fontSize:11,padding:"5px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600}}>+ Add</button>
+                      }} style={{fontSize:13,padding:"5px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500}}>+ Add</button>
                       <button onClick={()=>{
                         setShailaReconcile(prev=>({...prev, missingTasks:prev.missingTasks.filter(x=>x.id!==s.id)}));
-                      }} style={{fontSize:11,padding:"5px 8px",borderRadius:8,border:`1px solid ${T.brd}`,background:"none",color:T.tFaint,cursor:"pointer",fontFamily:"system-ui"}}>Skip</button>
+                      }} style={{fontSize:13,padding:"5px 8px",borderRadius:8,border:`1px solid ${T.brd}`,background:"none",color:T.tFaint,cursor:"pointer",fontFamily:NC_FONT_STACK}}>Skip</button>
                     </div>
                   </div>
                 ))}
@@ -4093,7 +4147,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                         setShailaReconcile(prev=>({...prev, missingShailos:prev.missingShailos.filter(x=>x.id!==t.id)}));
                         showToast("Added to transcriber",2000);
                       });
-                    }} style={{fontSize:11,padding:"5px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600,whiteSpace:"nowrap"}}>+ Add record</button>
+                    }} style={{fontSize:13,padding:"5px 10px",borderRadius:8,border:"none",background:"#C8A84C",color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,whiteSpace:"nowrap"}}>+ Add record</button>
                   </div>
                 ))}
               </div>
@@ -4107,13 +4161,13 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                   <div key={m.task.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",background:T.bgW,borderRadius:10,marginBottom:4}}>
                     <div style={{flex:1,marginRight:8}}>
                       <span style={{fontSize:13,color:T.text,fontFamily:"Georgia,serif"}}>{m.task.text?.substring(0,50)}</span>
-                      <span style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",marginLeft:6}}>— answered in transcriber, still active in queue</span>
+                      <span style={{fontSize:13,color:T.tFaint,fontFamily:NC_FONT_STACK,marginLeft:6}}>— answered in transcriber, still active in queue</span>
                     </div>
                     <button onClick={()=>{
                       uT(ts=>ts.map(x=>x.id===m.task.id?{...x,completed:true,completedAt:Date.now()}:x));
                       setShailaReconcile(prev=>({...prev, statusMismatches:prev.statusMismatches.filter(x=>x.task.id!==m.task.id)}));
                       showToast("Task completed",2000);
-                    }} style={{fontSize:11,padding:"5px 10px",borderRadius:8,border:"none",background:"#4A8040",color:"#fff",cursor:"pointer",fontFamily:"system-ui",fontWeight:600,whiteSpace:"nowrap"}}>Complete ✓</button>
+                    }} style={{fontSize:13,padding:"5px 10px",borderRadius:8,border:"none",background:"#4A8040",color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,whiteSpace:"nowrap"}}>Complete ✓</button>
                   </div>
                 ))}
               </div>
@@ -4152,10 +4206,10 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         <div style={{position:"fixed",right:16,bottom:16,zIndex:9400,width:"min(380px,calc(100vw - 32px))",background:T.card,border:`1.5px solid ${T.brd}`,borderRadius:14,boxShadow:T.shadowLg,padding:12,fontFamily:"system-ui",animation:"ot-fade 0.2s"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
             <div>
-              <div style={{fontSize:12,fontWeight:800,color:T.text,letterSpacing:.2}}>Transcription Holding Pen</div>
-              <div style={{fontSize:10,color:T.tFaint,marginTop:2}}>Saved audio from any recorder in this app</div>
+              <div style={{fontSize:15,fontWeight:500,color:T.text,letterSpacing:0}}>Transcription Holding Pen</div>
+              <div style={{fontSize:13,color:T.tFaint,marginTop:2}}>Saved audio from any recorder in this app</div>
             </div>
-            <span style={{fontSize:10,fontWeight:800,color:"#9A6A20",background:"#C8A84C22",border:"1px solid #C8A84C55",borderRadius:999,padding:"2px 7px",whiteSpace:"nowrap"}}>{pendingRecordings.length} saved</span>
+            <span style={{fontSize:12,fontWeight:500,color:"#9A6A20",background:"#C8A84C22",border:"1px solid #C8A84C55",borderRadius:999,padding:"2px 7px",whiteSpace:"nowrap"}}>{pendingRecordings.length} saved</span>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:300,overflowY:"auto"}}>
             {pendingRecordings.slice(0,5).map(rec => {
@@ -4167,18 +4221,18 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                   <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}>
                     <div style={{minWidth:0}}>
                       <div style={{fontSize:12,fontWeight:700,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
-                      <div style={{fontSize:10,color:T.tFaint,marginTop:1}}>{formatPendingAge(rec.createdAt)} · {(rec.size/1024/1024).toFixed(1)} MB</div>
+                      <div style={{fontSize:12,color:T.tFaint,marginTop:1}}>{formatPendingAge(rec.createdAt)} · {(rec.size/1024/1024).toFixed(1)} MB</div>
                     </div>
                     <div style={{display:"flex",gap:5,flexShrink:0}}>
-                      <button onClick={()=>retryHeldTranscription(rec)} disabled={!hasAI || !!pendingRetryId} style={{fontSize:10,padding:"5px 8px",borderRadius:7,border:"none",background:hasAI&&!pendingRetryId?"#5B7BE8":T.brdS,color:hasAI&&!pendingRetryId?"#fff":T.tFaint,cursor:hasAI&&!pendingRetryId?"pointer":"default",fontWeight:700}}>{busy?"Retrying...":"Retry"}</button>
-                      <button onClick={()=>deleteHeldTranscription(rec)} disabled={busy} style={{fontSize:10,padding:"5px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:"none",color:T.tFaint,cursor:busy?"default":"pointer"}}>Delete</button>
+                      <button onClick={()=>retryHeldTranscription(rec)} disabled={!hasAI || !!pendingRetryId} style={{fontSize:12,padding:"5px 8px",borderRadius:7,border:"none",background:hasAI&&!pendingRetryId?"#5B7BE8":T.brdS,color:hasAI&&!pendingRetryId?"#fff":T.tFaint,cursor:hasAI&&!pendingRetryId?"pointer":"default",fontWeight:500}}>{busy?"Retrying...":"Retry"}</button>
+                      <button onClick={()=>deleteHeldTranscription(rec)} disabled={busy} style={{fontSize:12,padding:"5px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:"none",color:T.tFaint,cursor:busy?"default":"pointer"}}>Delete</button>
                     </div>
                   </div>
-                  {rec.error && <div style={{fontSize:10,color:"#C94040",marginTop:6,lineHeight:1.35,maxHeight:38,overflow:"hidden"}}>{rec.error}</div>}
+                  {rec.error && <div style={{fontSize:12,color:"#C94040",marginTop:6,lineHeight:1.35,maxHeight:38,overflow:"hidden"}}>{rec.error}</div>}
                   {transcript && (
                     <div style={{marginTop:7}}>
-                      <textarea value={transcript} readOnly rows={3} style={{width:"100%",boxSizing:"border-box",resize:"vertical",border:`1px solid ${T.brd}`,borderRadius:8,background:T.card,color:T.text,fontSize:11,lineHeight:1.45,padding:7,fontFamily:"Georgia,serif"}}/>
-                      <button onClick={()=>navigator.clipboard?.writeText(transcript)} style={{marginTop:5,width:"100%",fontSize:10,padding:"5px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.card,color:T.tSoft,cursor:"pointer",fontWeight:700}}>Copy transcript</button>
+                      <textarea value={transcript} readOnly rows={3} style={{width:"100%",boxSizing:"border-box",resize:"vertical",border:`1px solid ${T.brd}`,borderRadius:8,background:T.card,color:T.text,fontSize:13,lineHeight:1.45,padding:7,fontFamily:NC_FONT_STACK}}/>
+                      <button onClick={()=>navigator.clipboard?.writeText(transcript)} style={{marginTop:5,width:"100%",fontSize:12,padding:"5px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.card,color:T.tSoft,cursor:"pointer",fontWeight:500}}>Copy transcript</button>
                     </div>
                   )}
                 </div>
@@ -4201,8 +4255,8 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
               uT(ts=>ts.map(t=>t.id===blockedResume?{...t,blockedUntil:Date.now()+dur}:t));
               if(blockedTmr.current[blockedResume]){clearTimeout(blockedTmr.current[blockedResume]);delete blockedTmr.current[blockedResume];}
               setBlockedResume(null);
-            }} style={{flex:1,padding:"7px",borderRadius:8,border:`1px solid ${T.brd}`,background:"none",cursor:"pointer",fontSize:11,fontFamily:"system-ui",color:T.tSoft}}>Later</button>
-            <button onClick={()=>resumeBlocked(blockedResume)} style={{flex:1,padding:"7px",borderRadius:8,border:"none",background:ap[0]?.color,color:textOnColor(ap[0]?.color||"#5A9E7C"),cursor:"pointer",fontSize:11,fontFamily:"system-ui",fontWeight:600}}>Resume</button>
+            }} style={{flex:1,padding:"7px",borderRadius:8,border:`1px solid ${T.brd}`,background:"none",cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.tSoft}}>Later</button>
+            <button onClick={()=>resumeBlocked(blockedResume)} style={{flex:1,padding:"7px",borderRadius:8,border:"none",background:ap[0]?.color,color:textOnColor(ap[0]?.color||"#5A9E7C"),cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,fontWeight:500}}>Resume</button>
           </div>
         </div>
       )}
@@ -4210,25 +4264,25 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       {/* Stale task nudge — fires 3s after load for tasks waiting 7+ days */}
       {staleNudge && actT.find(t => t.id === staleNudge.id) && (
         <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",background:T.card,border:`1.5px solid ${T.brd}`,borderRadius:14,padding:"14px 16px",boxShadow:T.shadowLg,zIndex:9490,maxWidth:360,width:"90%",animation:"ot-fade 0.3s"}}>
-          <p style={{fontSize:11,fontWeight:700,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 3px",textTransform:"uppercase",letterSpacing:.5}}>
+          <p style={{fontSize:13,fontWeight:500,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 3px",textTransform:"uppercase",letterSpacing:0}}>
             ⏳ Waiting {Math.floor((Date.now()-(staleNudge.createdAt||Date.now()))/86400000)} days
           </p>
           <p style={{fontSize:13,color:T.text,margin:"0 0 10px",fontFamily:"Georgia,serif",lineHeight:1.4}}>{staleNudge.text}</p>
-          <p style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 10px"}}>Prioritize it now, or break it into smaller steps?</p>
+          <p style={{fontSize:13,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 10px"}}>Prioritize it now, or break it into smaller steps?</p>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             <button onClick={()=>{
               uT(ts => ts.map(t => t.id===staleNudge.id ? {...t, staleNudgedAt:Date.now()} : t));
               setStaleNudge(null);
-            }} style={{flex:1,padding:"7px",borderRadius:8,border:`1px solid ${T.brd}`,background:"none",cursor:"pointer",fontSize:11,fontFamily:"system-ui",color:T.tSoft,minWidth:60}}>Later</button>
+            }} style={{flex:1,padding:"7px",borderRadius:8,border:`1px solid ${T.brd}`,background:"none",cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.tSoft,minWidth:60}}>Later</button>
             <button onClick={()=>{
               const topPri = [...pris].filter(p=>!p.deleted).sort((a,b)=>b.weight-a.weight)[0];
               if (topPri) chgPriority(staleNudge.id, topPri.id, 'one');
               setStaleNudge(null);
-            }} style={{flex:1,padding:"7px",borderRadius:8,border:"none",background:"#C49040",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"system-ui",minWidth:80}}>Make it Now</button>
+            }} style={{flex:1,padding:"7px",borderRadius:8,border:"none",background:"#C49040",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:500,fontFamily:NC_FONT_STACK,minWidth:80}}>Make it Now</button>
             <button onClick={()=>{
               setShowBD(staleNudge);
               setStaleNudge(null);
-            }} style={{flex:1,padding:"7px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:11,fontFamily:"system-ui",color:T.text,minWidth:90}}>Break it down</button>
+            }} style={{flex:1,padding:"7px",borderRadius:8,border:`1px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.text,minWidth:90}}>Break it down</button>
           </div>
         </div>
       )}
@@ -4240,7 +4294,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
             {chgPriIsSubtask && (
               <div style={{display:"flex",gap:6,marginBottom:14,background:T.bg,borderRadius:10,padding:4}}>
                 {[{v:'one',label:'This step only'},{v:'group',label:'All remaining steps'}].map(opt => (
-                  <button key={opt.v} onClick={()=>setChgPriScope(opt.v)} style={{flex:1,padding:"6px 0",borderRadius:8,border:"none",background:chgPriScope===opt.v?T.card:"transparent",fontWeight:chgPriScope===opt.v?700:400,color:chgPriScope===opt.v?T.text:T.tFaint,fontSize:11,cursor:"pointer",fontFamily:"system-ui",boxShadow:chgPriScope===opt.v?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>
+                  <button key={opt.v} onClick={()=>setChgPriScope(opt.v)} style={{flex:1,padding:"6px 0",borderRadius:8,border:"none",background:chgPriScope===opt.v?T.card:"transparent",fontWeight:chgPriScope===opt.v?500:400,color:chgPriScope===opt.v?T.text:T.tFaint,fontSize:13,cursor:"pointer",fontFamily:NC_FONT_STACK,boxShadow:chgPriScope===opt.v?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>
                     {opt.label}
                   </button>
                 ))}
@@ -4312,12 +4366,12 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
         <div style={{position:"fixed",top:76,left:"50%",transform:"translateX(-50%)",zIndex:9100,width:"min(520px,calc(100vw - 24px))",background:T.card,border:`1px solid ${T.brd}`,borderRadius:18,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.24)",padding:12,fontFamily:"system-ui",display:"grid",gridTemplateColumns:"32px minmax(0,1fr) auto",gap:10,alignItems:"center"}}>
           <span style={{width:32,height:32,borderRadius:12,background:T.tonal || T.bgW,color:T.onTonal || T.text,display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("dashboard_customize", 18)}</span>
           <div style={{minWidth:0}}>
-            <div style={{fontSize:13,fontWeight:900,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Open this in Command Center?</div>
-            <div style={{fontSize:11,fontWeight:700,color:T.tFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{legacyPrompt.label || "Legacy app"} is still available if you want the old environment.</div>
+            <div style={{fontSize:15,fontWeight:500,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Open this in Command Center?</div>
+            <div style={{fontSize:13,fontWeight:400,color:T.tFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{legacyPrompt.label || "Legacy app"} is still available if you want the old environment.</div>
           </div>
           <div style={{display:"flex",gap:6}}>
-            <button onClick={openLegacyInCommandCenter} style={{height:34,padding:"0 11px",borderRadius:11,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:900}}>Yes</button>
-            <button onClick={openLegacyTarget} style={{height:34,padding:"0 11px",borderRadius:11,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:900}}>No</button>
+            <button onClick={openLegacyInCommandCenter} style={{height:34,padding:"0 11px",borderRadius:11,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:500,fontSize:14}}>Yes</button>
+            <button onClick={openLegacyTarget} style={{height:34,padding:"0 11px",borderRadius:11,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:500,fontSize:14}}>No</button>
           </div>
         </div>
       )}
@@ -5658,7 +5712,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
 
   const overlayS = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 };
   const cardS    = { background: T.card, borderRadius: 16, maxWidth: 560, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', fontFamily: 'inherit' };
-  const btnClose = { background: 'none', border: 'none', cursor: 'pointer', color: T.tFaint, fontSize: 22, lineHeight: 1, padding: 4, fontFamily: 'system-ui' };
+  const btnClose = { background: 'none', border: 'none', cursor: 'pointer', color: T.tFaint, fontSize: 22, lineHeight: 1, padding: 4, fontFamily: NC_FONT_STACK };
 
   // ── Call mode: waiting for user to share screen ───────────────────────────
   if (phase === 'ready') return (
@@ -5666,21 +5720,21 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
       <div style={cardS} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '22px 24px 18px', borderBottom: `1px solid ${T.brd}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: T.t }}>Capture Call Audio</span>
+            <span style={{ fontSize: 18, fontWeight: 500, color: T.t }}>Capture Call Audio</span>
             <button style={btnClose} onClick={onClose}>×</button>
           </div>
-          <div style={{ fontSize: 13, color: T.tSoft, fontFamily: 'system-ui', lineHeight: 1.6, marginBottom: 14 }}>
+          <div style={{ fontSize: 14, color: T.tSoft, fontFamily: NC_FONT_STACK, lineHeight: 1.55, marginBottom: 14 }}>
             Click <strong>Start capturing</strong>, then in the browser dialog:<br/>
             1. Select the tab or window playing the call<br/>
             2. Check <em>"Share tab audio"</em> before clicking Share
           </div>
-          {err && <div style={{ fontSize: 12, color: '#E74C3C', fontFamily: 'system-ui', marginBottom: 8 }}>{err}</div>}
+          {err && <div style={{ fontSize: 13, color: '#E74C3C', fontFamily: NC_FONT_STACK, marginBottom: 8 }}>{err}</div>}
         </div>
         <div style={{ padding: '18px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
-          <button onClick={startCallCapture} style={{ background: '#5B7BE8', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 28px', fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'system-ui' }}>
+          <button onClick={startCallCapture} style={{ background: '#5B7BE8', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 28px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Start capturing
           </button>
-          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: 'system-ui' }}>
+          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Cancel
           </button>
         </div>
@@ -5694,26 +5748,26 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
       <div style={cardS} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '22px 24px 18px', borderBottom: `1px solid ${T.brd}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: T.t }}>{callMode ? 'Capturing Call Audio' : 'Recording Conversation'}</span>
+            <span style={{ fontSize: 18, fontWeight: 500, color: T.t }}>{callMode ? 'Capturing Call Audio' : 'Recording Conversation'}</span>
             <button style={btnClose} onClick={onClose}>×</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#E74C3C', animation: 'conv-pulse 1.4s ease infinite' }}/>
-            <span style={{ fontSize: 13, color: T.tSoft, fontFamily: 'system-ui', fontVariantNumeric: 'tabular-nums' }}>{fmtElapsed}</span>
-            <span style={{ fontSize: 12, color: T.tFaint, fontFamily: 'system-ui' }}>Speak freely — AI will extract everything</span>
+            <span style={{ fontSize: 13, color: T.tSoft, fontFamily: NC_FONT_STACK, fontVariantNumeric: 'tabular-nums' }}>{fmtElapsed}</span>
+            <span style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Speak freely — AI will extract everything</span>
           </div>
           {liveText && (
-            <div style={{ fontSize: 12, color: T.tFaint, fontFamily: 'system-ui', lineHeight: 1.5, maxHeight: 72, overflowY: 'auto', background: T.bgW, borderRadius: 8, padding: '8px 12px', border: `1px solid ${T.brdS}` }}>
+            <div style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK, lineHeight: 1.5, maxHeight: 72, overflowY: 'auto', background: T.bgW, borderRadius: 8, padding: '8px 12px', border: `1px solid ${T.brdS}` }}>
               {liveText}
             </div>
           )}
-          {err && <div style={{ fontSize: 12, color: '#E74C3C', fontFamily: 'system-ui', marginTop: 8 }}>{err}</div>}
+          {err && <div style={{ fontSize: 13, color: '#E74C3C', fontFamily: NC_FONT_STACK, marginTop: 8 }}>{err}</div>}
         </div>
         <div style={{ padding: '20px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
-          <button onClick={stopAndProcess} style={{ background: '#E74C3C', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 30px', fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'system-ui' }}>
+          <button onClick={stopAndProcess} style={{ background: '#E74C3C', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 30px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Stop &amp; Process
           </button>
-          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: 'system-ui' }}>
+          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Cancel
           </button>
         </div>
@@ -5725,8 +5779,8 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
     <div style={overlayS}>
       <div style={{ ...cardS, alignItems: 'center', justifyContent: 'center', padding: '56px 32px', textAlign: 'center' }}>
         <div style={{ fontSize: 38, marginBottom: 16 }}>🎙️</div>
-        <div style={{ fontSize: 16, fontWeight: 600, color: T.t, marginBottom: 8, fontFamily: 'system-ui' }}>Processing conversation…</div>
-        <div style={{ fontSize: 13, color: T.tFaint, fontFamily: 'system-ui' }}>Transcribing and extracting items</div>
+        <div style={{ fontSize: 18, fontWeight: 500, color: T.t, marginBottom: 8, fontFamily: NC_FONT_STACK }}>Processing conversation…</div>
+        <div style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Transcribing and extracting items</div>
       </div>
     </div>
   );
@@ -5739,20 +5793,20 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
         <div style={{ padding: '20px 24px 14px', borderBottom: `1px solid ${T.brd}`, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: T.t }}>Found in this conversation</div>
-              <div style={{ fontSize: 12, color: T.tFaint, fontFamily: 'system-ui', marginTop: 3 }}>
+              <div style={{ fontSize: 18, fontWeight: 500, color: T.t }}>Found in this conversation</div>
+              <div style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK, marginTop: 3 }}>
                 {items.length} item{items.length !== 1 ? 's' : ''} — check what to add
               </div>
             </div>
             <button style={btnClose} onClick={onClose}>×</button>
           </div>
-          {err && <div style={{ fontSize: 12, color: '#E74C3C', fontFamily: 'system-ui', marginTop: 8 }}>{err}</div>}
+          {err && <div style={{ fontSize: 13, color: '#E74C3C', fontFamily: NC_FONT_STACK, marginTop: 8 }}>{err}</div>}
         </div>
 
         {/* Scrollable body */}
         <div style={{ overflowY: 'auto', flex: 1, padding: '12px 24px 4px' }}>
           {items.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '36px 0', color: T.tFaint, fontFamily: 'system-ui', fontSize: 14 }}>
+            <div style={{ textAlign: 'center', padding: '36px 0', color: T.tFaint, fontFamily: NC_FONT_STACK, fontSize: 14 }}>
               No actionable items found in this conversation.
             </div>
           )}
@@ -5763,8 +5817,8 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
               <div key={cat} style={{ marginBottom: 18 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
                   <div style={{ width: 3, height: 18, background: color, borderRadius: 2, flexShrink: 0 }}/>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: T.t, fontFamily: 'system-ui', letterSpacing: '.3px' }}>{emoji} {label}</span>
-                  <span style={{ fontSize: 11, background: color + '22', color: color, borderRadius: 10, padding: '1px 7px', fontFamily: 'system-ui', fontWeight: 600 }}>{sItems.length}</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: T.t, fontFamily: NC_FONT_STACK, letterSpacing: 0 }}>{emoji} {label}</span>
+                  <span style={{ fontSize: 12, background: color + '22', color: color, borderRadius: 10, padding: '1px 7px', fontFamily: NC_FONT_STACK, fontWeight: 500 }}>{sItems.length}</span>
                 </div>
                 {sItems.map(it => (
                   <div key={it.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '7px 0', borderBottom: `1px solid ${T.brdS}` }}>
@@ -5774,32 +5828,32 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
                       <input
                         value={it.text || it.synopsis || ''}
                         onChange={e => updateText(it.id, e.target.value)}
-                        style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${T.brdS}`, color: T.t, fontSize: 13, fontFamily: 'system-ui', padding: '2px 0', outline: 'none', boxSizing: 'border-box' }}
+                        style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${T.brdS}`, color: T.t, fontSize: 14, fontFamily: NC_FONT_STACK, padding: '2px 0', outline: 'none', boxSizing: 'border-box' }}
                       />
                       {!['completions', 'gotBacks'].includes(cat) && (
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
                           <select value={it.cat} onChange={e => updateCategory(it.id, e.target.value)}
-                            style={{ fontSize: 11, background: T.bgW, border: `1px solid ${T.brd}`, borderRadius: 6, color: T.tSoft, padding: '2px 6px', cursor: 'pointer', fontFamily: 'system-ui' }}>
+                            style={{ fontSize: 13, background: T.bgW, border: `1px solid ${T.brd}`, borderRadius: 6, color: T.tSoft, padding: '2px 6px', cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
                             <option value="tasks">Task</option>
                             <option value="shailos">Shaila</option>
                             <option value="scheduleItems">Schedule</option>
                             <option value="reminders">Reminder</option>
                           </select>
-                          <span style={{ fontSize: 10, color: T.tFaint, fontFamily: 'system-ui' }}>Save as</span>
+                          <span style={{ fontSize: 12, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Save as</span>
                         </div>
                       )}
                       {it.cat === 'tasks' && (
                         <select value={it.priority || 'eventually'} onChange={e => updatePriority(it.id, e.target.value)}
-                          style={{ marginTop: 5, fontSize: 11, background: T.bgW, border: `1px solid ${T.brd}`, borderRadius: 6, color: T.tSoft, padding: '2px 6px', cursor: 'pointer', fontFamily: 'system-ui' }}>
+                          style={{ marginTop: 5, fontSize: 13, background: T.bgW, border: `1px solid ${T.brd}`, borderRadius: 6, color: T.tSoft, padding: '2px 6px', cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
                           {pris.filter(p => !p.deleted).map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                           <option value="shaila">Shaila</option>
                         </select>
                       )}
                       {it.cat === 'scheduleItems' && it.when && (
-                        <div style={{ fontSize: 11, color: T.tFaint, fontFamily: 'system-ui', marginTop: 3 }}>When: {it.when}</div>
+                        <div style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK, marginTop: 3 }}>When: {it.when}</div>
                       )}
                       {(it.cat === 'completions' || it.cat === 'gotBacks') && (
-                        <div style={{ fontSize: 11, color: T.tFaint, fontFamily: 'system-ui', marginTop: 2, fontStyle: 'italic' }}>Info only — no action taken</div>
+                        <div style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK, marginTop: 2, fontStyle: 'italic' }}>Info only — no action taken</div>
                       )}
                     </div>
                   </div>
@@ -5812,11 +5866,11 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
         {/* Footer */}
         <div style={{ padding: '14px 24px 18px', borderTop: `1px solid ${T.brd}`, display: 'flex', gap: 10, flexShrink: 0 }}>
           <button onClick={applyApproved} disabled={approvedCount === 0}
-            style={{ flex: 1, background: approvedCount > 0 ? '#5B7BE8' : T.brdS, color: approvedCount > 0 ? '#fff' : T.tFaint, border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, cursor: approvedCount > 0 ? 'pointer' : 'default', fontFamily: 'system-ui', transition: 'background 0.15s' }}>
+            style={{ flex: 1, background: approvedCount > 0 ? '#5B7BE8' : T.brdS, color: approvedCount > 0 ? '#fff' : T.tFaint, border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 500, cursor: approvedCount > 0 ? 'pointer' : 'default', fontFamily: NC_FONT_STACK, transition: 'background 0.15s' }}>
             Add {approvedCount > 0 ? approvedCount : 0} item{approvedCount !== 1 ? 's' : ''}
           </button>
           <button onClick={onClose}
-            style={{ padding: '12px 18px', background: 'none', border: `1px solid ${T.brd}`, borderRadius: 10, fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: 'system-ui' }}>
+            style={{ padding: '12px 18px', background: 'none', border: `1px solid ${T.brd}`, borderRadius: 10, fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Cancel
           </button>
         </div>

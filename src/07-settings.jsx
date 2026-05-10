@@ -5,6 +5,8 @@ import { Store, aiGenSchemes, uid, DEF_AGE_THRESHOLDS, DEF_PRI, SCHEMES } from '
 import { IC } from './02-icons.jsx';
 import { PriEditor } from './04-components.jsx';
 
+const NC_FONT_STACK = '"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
+
 function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   onOptimize, optLoading, onBulkAdd, onShatter, onDedup,
   curEnergy, onSetEnergy, focusModeActive, onToggleFocusMode,
@@ -100,16 +102,16 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
 
   const settingsType = {
     section: 13,
-    body: 14,
+    body: 15,
     help: 13,
     control: 14,
     line: 1.55,
   };
-  const sh = {fontSize:settingsType.section,fontWeight:500,color:T.tFaint,margin:"0 0 14px",fontFamily:"system-ui",textTransform:"uppercase",letterSpacing:0};
+  const sh = {fontSize:settingsType.section,fontWeight:500,color:T.tFaint,margin:"0 0 14px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:0};
   const tog = (on) => ({width:44,height:24,borderRadius:12,background:on?ap[0]?.color:T.brd,border:"none",cursor:"pointer",position:"relative",flexShrink:0});
   const knob = (on) => ({width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:on?23:3,transition:"left 0.25s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)"});
   const rowSB = {display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,marginBottom:18};
-  const actionBtn = {width:"100%",minHeight:44,padding:"12px 16px",borderRadius:8,border:`1px solid ${T.brdS || T.brd}`,background:T.card,cursor:"pointer",fontSize:settingsType.control,fontWeight:400,fontFamily:"system-ui",color:T.tSoft,display:"flex",alignItems:"center",gap:12,marginBottom:10};
+  const actionBtn = {width:"100%",minHeight:44,padding:"12px 16px",borderRadius:8,border:`1px solid ${T.brdS || T.brd}`,background:T.card,cursor:"pointer",fontSize:settingsType.control,fontWeight:400,fontFamily:NC_FONT_STACK,color:T.tSoft,display:"flex",alignItems:"center",gap:12,marginBottom:10};
   const schemeButtonStyle = (id, scheme, hasDelete = false) => {
     const active = AS.colorScheme === id;
     const bg = scheme.card || scheme.bg || "#FFFFFF";
@@ -123,26 +125,26 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
       cursor: "pointer",
       fontSize: settingsType.control,
       fontWeight: 500,
-      fontFamily: "system-ui",
+      fontFamily: NC_FONT_STACK,
       color: scheme.text || T.text,
       boxShadow: "none",
     };
   };
 
   return (
-    <div style={{position:"fixed",inset:0,zIndex:8500,background:sTab==="appearance"?"rgba(0,0,0,0.08)":"rgba(0,0,0,0.32)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto",padding:24,transition:"background 0.3s"}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:sTab==="appearance"?T.card+"f7":T.card,borderRadius:8,border:`1px solid ${T.brdS || T.brd}`,padding:"28px 26px",maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:`0 12px 32px rgba(60,64,67,0.22)`,transition:"background 0.3s"}}>
+    <div style={{position:"fixed",inset:0,zIndex:8500,background:sTab==="appearance"?"rgba(0,0,0,0.08)":"rgba(0,0,0,0.32)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto",padding:24,transition:"background 0.3s",fontFamily:NC_FONT_STACK}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:sTab==="appearance"?T.card+"f7":T.card,borderRadius:8,border:`1px solid ${T.brdS || T.brd}`,padding:"28px 26px",maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:`0 12px 32px rgba(60,64,67,0.22)`,transition:"background 0.3s",fontFamily:NC_FONT_STACK}}>
 
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <h3 style={{fontSize:20,fontWeight:500,margin:0}}>Settings</h3>
+          <h3 style={{fontSize:20,fontWeight:500,margin:0,fontFamily:NC_FONT_STACK}}>Settings</h3>
           <button onClick={onClose} style={{width:40,height:40,background:"none",border:"none",cursor:"pointer",fontSize:20,color:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
 
         {/* Tab bar */}
         <div style={{display:"flex",gap:6,background:T.bgW,borderRadius:8,padding:4,marginBottom:24}}>
           {TABS.map(t => (
-            <button key={t.id} onClick={()=>setSTab(t.id)} style={{flex:1,minHeight:40,padding:"8px 8px",borderRadius:4,border:"none",background:sTab===t.id?T.card:"transparent",cursor:"pointer",fontSize:13,fontWeight:sTab===t.id?500:400,fontFamily:"system-ui",color:sTab===t.id?T.text:T.tSoft,transition:"background 0.15s",boxShadow:"none"}}>
+            <button key={t.id} onClick={()=>setSTab(t.id)} style={{flex:1,minHeight:40,padding:"8px 8px",borderRadius:4,border:"none",background:sTab===t.id?T.card:"transparent",cursor:"pointer",fontSize:14,fontWeight:sTab===t.id?500:400,fontFamily:NC_FONT_STACK,color:sTab===t.id?T.text:T.tSoft,transition:"background 0.15s",boxShadow:"none"}}>
               {t.label}
             </button>
           ))}
@@ -164,7 +166,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             <h4 style={sh}>Queue Actions</h4>
 
             <button onClick={()=>{onOptimize();onClose();}} disabled={optLoading} style={{...actionBtn,opacity:optLoading?0.5:1}}>
-              <IC.Sparkle s={13} c={T.tSoft}/>{optLoading?"Optimizing…":"Optimize order"}{hasAI&&!optLoading&&<span style={{fontSize:10,opacity:.5,marginLeft:2}}>AI</span>}
+              <IC.Sparkle s={13} c={T.tSoft}/>{optLoading?"Optimizing…":"Optimize order"}{hasAI&&!optLoading&&<span style={{fontSize:12,opacity:.6,marginLeft:2}}>AI</span>}
             </button>
             <button onClick={()=>{onBulkAdd();onClose();}} style={actionBtn}>
               <IC.Bulk s={13} c={T.tSoft}/>Bulk add tasks
