@@ -606,7 +606,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   }, C);
   const phoneRowStyle = {
     display: "grid",
-    gridTemplateColumns: touchActions ? "36px minmax(0,1fr) 36px" : "36px minmax(0,1fr) auto",
+    gridTemplateColumns: touchActions ? "36px minmax(0,1fr) 36px" : "36px minmax(0,1fr)",
     gap: touchActions ? "8px 10px" : 8,
     alignItems: "start",
     padding: "10px 4px",
@@ -620,6 +620,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
     gap: 4,
     gridColumn: touchActions ? "2 / 4" : "auto",
     marginTop: touchActions ? -4 : 0,
+    ...(touchActions ? {} : { position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", zIndex: 2, background: C.bg, borderRadius: 8, boxShadow: "0 1px 8px rgba(60,64,67,0.12)", padding: 2 }),
   };
 
   const fmtTime = val => {
@@ -939,7 +940,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onPolishNerveItems }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, googlePaneWeights = { calendar: 1, mail: 1 }, onGooglePaneWeightsChange, onPolishNerveItems }) {
   const viewportW = useViewportWidth();
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
@@ -1006,7 +1007,12 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     shailos: Math.max(0.55, Number(paneWeights?.shailos || 1)),
     phone: Math.max(0.55, Number(paneWeights?.phone || 1)),
   };
-  const gridColumns = isStacked ? "1fr" : isTablet ? "repeat(2,minmax(0,1fr))" : `minmax(280px,${paneW.tasks}fr) 10px minmax(280px,${paneW.shailos}fr) 10px minmax(280px,${paneW.phone}fr)`;
+  const gridColumns = isStacked ? "1fr" : isTablet ? "repeat(2,minmax(0,1fr))" : `minmax(240px,${paneW.tasks}fr) 10px minmax(240px,${paneW.shailos}fr) 10px minmax(240px,${paneW.phone}fr)`;
+  const googleH = Math.max(150, Math.min(420, Number(googlePaneHeight || 244)));
+  const googleW = {
+    calendar: Math.max(0.5, Number(googlePaneWeights?.calendar || 1)),
+    mail: Math.max(0.5, Number(googlePaneWeights?.mail || 1)),
+  };
   const ncPanel = { background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: isStacked ? 360 : isTablet ? 420 : 0, overflow: "hidden", boxShadow: "none" };
   const ncHeader = { minHeight: 72, padding: "18px 20px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 };
   const ncTitle = { fontSize: ncType.title, fontWeight: "var(--nc-font-weight-strong, 500)", color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35 };
@@ -1018,10 +1024,16 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const primaryTasks = tasks.filter(t => !isShailaWork(t)).slice(0, 8);
   // Exclude research-type shaila tasks — they're not actionable get-backs until research is done
   const visibleShailos = shailos.filter(s => s.type !== "shaila-research" && s.type !== "shailo-research").slice(0, 10);
+  const needsNervePolish = item => {
+    const source = nerveSummarySource(item);
+    const summary = String(item?.ncSummary || "").trim();
+    const failedRecently = item?.ncSummaryFailedSource === source && Date.now() - Number(item?.ncSummaryFailedAt || 0) < 10 * 60 * 1000;
+    return item.id && source && !item.ncSummaryPending && !failedRecently && !(summary && item.ncSummarySource === source);
+  };
   const polishQueueKey = [...primaryTasks, ...visibleShailos]
     .map(item => {
       const source = nerveSummarySource(item);
-      if (!source || item.ncSummaryPending || item.ncSummarySource === source) return "";
+      if (!needsNervePolish(item)) return "";
       return `${item.id}:${source}`;
     })
     .filter(Boolean)
@@ -1029,10 +1041,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   useEffect(() => {
     if (!onPolishNerveItems || !polishQueueKey) return;
     const items = [...primaryTasks, ...visibleShailos]
-      .filter(item => {
-        const source = nerveSummarySource(item);
-        return item.id && source && !item.ncSummaryPending && item.ncSummarySource !== source;
-      })
+      .filter(needsNervePolish)
       .map(item => ({ id: item.id, kind: isShailaWork(item) ? "shaila" : "task", source: nerveSummarySource(item) }))
       .slice(0, 8);
     if (items.length) onPolishNerveItems(items);
@@ -1047,8 +1056,15 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     const pxPerUnit = Math.max(180, availableW / 8);
     const move = ev => {
       const delta = (ev.clientX - startX) / pxPerUnit;
-      const nextLeft = Math.max(0.55, Math.min(pairTotal - 0.55, start[leftKey] + delta));
-      onPaneWeightsChange({ ...start, [leftKey]: nextLeft, [rightKey]: pairTotal - nextLeft });
+      let nextLeft = Math.max(0.55, Math.min(pairTotal - 0.55, start[leftKey] + delta));
+      const equalLeft = pairTotal / 2;
+      if (Math.abs(nextLeft - equalLeft) < 0.08) nextLeft = equalLeft;
+      const next = { ...start, [leftKey]: nextLeft, [rightKey]: pairTotal - nextLeft };
+      if (["tasks", "shailos", "phone"].every(key => Math.abs(next[key] - 1) < 0.08)) {
+        onPaneWeightsChange({ tasks: 1, shailos: 1, phone: 1 });
+      } else {
+        onPaneWeightsChange(next);
+      }
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
@@ -1058,9 +1074,64 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     window.addEventListener("pointerup", up);
   };
   const paneResizeHandle = (leftKey, rightKey) => (
-    <button type="button" aria-label="Resize panes" title="Drag to resize panes" onPointerDown={e => startPaneResize(leftKey, rightKey, e)}
+    <button type="button" aria-label="Resize panes" title="Drag to resize panes. Double-click to equalize." onPointerDown={e => startPaneResize(leftKey, rightKey, e)} onDoubleClick={() => onPaneWeightsChange?.({ tasks: 1, shailos: 1, phone: 1 })}
       style={{ display: touchLayout ? "none" : "flex", alignItems: "center", justifyContent: "center", minWidth: 10, width: 10, border: "none", padding: 0, cursor: "col-resize", background: "transparent", touchAction: "none" }}>
       <span style={{ width: 2, height: 54, borderRadius: 2, background: C.divider }} />
+    </button>
+  );
+  const startGoogleResize = e => {
+    if (touchLayout || !onGooglePaneHeightChange) return;
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = googleH;
+    const move = ev => {
+      let nextH = Math.max(150, Math.min(420, startH - (ev.clientY - startY)));
+      if (Math.abs(nextH - 244) < 12) nextH = 244;
+      onGooglePaneHeightChange(nextH);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  const googleResizeHandle = !touchLayout && (
+    <button type="button" aria-label="Resize Google pane" title="Drag to resize calendar and mail. Double-click to reset." onPointerDown={startGoogleResize} onDoubleClick={() => onGooglePaneHeightChange?.(244)}
+      style={{ height: 10, minHeight: 10, width: "100%", border: "none", padding: 0, cursor: "row-resize", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none" }}>
+      <span style={{ width: 62, height: 2, borderRadius: 2, background: C.divider }} />
+    </button>
+  );
+  const startGoogleSplitResize = e => {
+    if (touchLayout || !onGooglePaneWeightsChange) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const start = { ...googleW };
+    const pairTotal = start.calendar + start.mail;
+    const pxPerUnit = Math.max(180, availableW / 8);
+    const move = ev => {
+      const delta = (ev.clientX - startX) / pxPerUnit;
+      let nextCalendar = Math.max(0.5, Math.min(pairTotal - 0.5, start.calendar + delta));
+      const equal = pairTotal / 2;
+      if (Math.abs(nextCalendar - equal) < 0.08) nextCalendar = equal;
+      const next = { calendar: nextCalendar, mail: pairTotal - nextCalendar };
+      if (Math.abs(next.calendar - 1) < 0.08 && Math.abs(next.mail - 1) < 0.08) {
+        onGooglePaneWeightsChange({ calendar: 1, mail: 1 });
+      } else {
+        onGooglePaneWeightsChange(next);
+      }
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  const googleSplitHandle = !touchLayout && (
+    <button type="button" aria-label="Resize Calendar and Gmail" title="Drag to resize Calendar and Gmail. Double-click to equalize." onPointerDown={startGoogleSplitResize} onDoubleClick={() => onGooglePaneWeightsChange?.({ calendar: 1, mail: 1 })}
+      style={{ display: "flex", alignItems: "center", justifyContent: "center", minWidth: 10, width: 10, border: "none", padding: 0, cursor: "col-resize", background: "transparent", touchAction: "none" }}>
+      <span style={{ width: 2, height: 46, borderRadius: 2, background: C.divider }} />
     </button>
   );
 
@@ -1094,7 +1165,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       <div style={{ minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: isStacked ? "16px" : "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: isStacked ? 16 : 20 }}>
 
         {/* Three-panel grid — fills all remaining height */}
-        <div style={{ display: "grid", gridTemplateColumns: gridColumns, gap: isStacked ? 14 : touchLayout ? 20 : 8, flex: touchLayout ? "0 0 auto" : 1, minHeight: 0, alignItems: "stretch" }}>
+        <div style={{ display: "grid", gridTemplateColumns: gridColumns, gap: isStacked ? 14 : touchLayout ? 20 : 8, flex: touchLayout ? "0 0 auto" : "1 1 0", minHeight: 0, alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
           <section style={ncPanel}>
@@ -1139,7 +1210,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 const actionsOpen = openTaskActionsId === t.id;
                 const displayText = nerveDisplaySummary(t, "Untitled task");
                 return (
-                  <div key={t.id} className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? "3px minmax(0,1fr) 40px" : "3px minmax(0,1fr) auto", alignItems: "start", padding: "14px 18px 14px 0", gap: 14, minHeight: 56 }}>
+                  <div key={t.id} className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? "3px minmax(0,1fr) 40px" : "3px minmax(0,1fr)", alignItems: "start", padding: "14px 18px 14px 0", gap: 14, minHeight: 56 }}>
                     {/* Priority color bar */}
                     <span style={{ width: 3, alignSelf: "stretch", minHeight: 24, borderRadius: "0 3px 3px 0", background: priColor, flexShrink: 0 }} />
                     {/* Text — click to edit inline */}
@@ -1163,7 +1234,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       </button>
                     )}
                     {(!touchLayout || actionsOpen) && !isEditing && (
-                      <div className={touchLayout ? "" : "nc-hover-actions"} data-open={actionsOpen ? "true" : undefined} style={{ display: "flex", gap: 4, justifyContent: touchLayout ? "flex-start" : "flex-end", gridColumn: touchLayout ? "2 / 4" : "auto", marginTop: touchLayout ? -4 : 0 }}>
+                      <div className={touchLayout ? "" : "nc-hover-actions"} data-open={actionsOpen ? "true" : undefined} style={{ display: "flex", gap: 4, justifyContent: touchLayout ? "flex-start" : "flex-end", gridColumn: touchLayout ? "2 / 4" : "auto", marginTop: touchLayout ? -4 : 0, ...(touchLayout ? {} : { position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", zIndex: 2, background: C.bg, borderRadius: 8, boxShadow: "0 1px 8px rgba(60,64,67,0.12)", padding: 2 }) }}>
                         <button onClick={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }} title="Mark done" aria-label="Mark done" style={gvTextButton({ minHeight: 34, height: 34, padding: "0 10px", fontSize: NC_TYPE.small, border: "none", background: C.bgSoft, color: C.success }, C)}>
                           {suiteIcon("check", 17)} <span>Done</span>
                         </button>
@@ -1260,7 +1331,9 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           </section>
         </div>
 
-        {/* ── Google Calendar + Gmail strip ── fixed height, cards scroll internally */}
+        {googleResizeHandle}
+
+        {/* ── Google Calendar + Gmail strip ── resizable height, cards scroll internally */}
         {(() => {
           const accentBlue = C.accent;
 
@@ -1307,7 +1380,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           return (
             <React.Fragment>
             <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", gap: 6, minHeight: 0 }}>
-              <div style={{ display: "flex", flexDirection: isStacked ? "column" : "row", gap: isStacked ? 12 : 16, flex: isStacked ? "0 0 auto" : "0 0 244px", minHeight: 0 }}>
+              <div style={{ display: "flex", flexDirection: isStacked ? "column" : "row", gap: isStacked ? 12 : 16, flex: isStacked ? "0 0 auto" : `0 0 ${googleH}px`, minHeight: 0 }}>
 
               {/* Not connected — never been connected: show connect button */}
               {notConnected && !googleError && !googleWasConnected && (
@@ -2024,6 +2097,7 @@ function App({ user, onSignOut }) {
     currentEnergy: null, // "high" | "low" | null
     fontWeightScale: 400,
     nerveCenterPaneWeights: { tasks: 1, shailos: 1, phone: 1 },
+    nerveCenterGooglePaneHeight: 244,
   };
 
   // ─── Load / Save ─────────────────────────────────────────────────────────
@@ -2048,6 +2122,7 @@ function App({ user, onSignOut }) {
         if (!s.overwhelmThreshold) s.overwhelmThreshold = 7;
         if (!s.fontWeightScale) s.fontWeightScale = 400;
         if (!s.nerveCenterPaneWeights) s.nerveCenterPaneWeights = { tasks: 1, shailos: 1, phone: 1 };
+        if (!s.nerveCenterGooglePaneHeight) s.nerveCenterGooglePaneHeight = 244;
         // Permanent: strip "home" custom priority on every load AND directly patch Firestore settings doc.
         // Direct patch bypasses the debounced save (which gets skipped when _listenV5 sets adoptedRemote=true),
         // so the Firestore settings doc is fixed immediately and future snapshots arrive clean.
@@ -3132,10 +3207,13 @@ function App({ user, onSignOut }) {
         const item = cleanItems.find(x => x.id === t.id);
         if (!item) return t;
         const summary = byId.get(t.id);
-        return {...t, ncSummaryPending: false, ncSummary: summary || t.ncSummary, ncSummarySource: item.source};
+        return {...t, ncSummaryPending: false, ncSummary: summary || t.ncSummary, ncSummarySource: item.source, ncSummaryFailedSource: undefined, ncSummaryFailedAt: undefined};
       })}))}));
     }).catch(() => {
-      setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => ids.has(t.id) ? {...t, ncSummaryPending: false, ncSummarySource: nerveSummarySource(t)} : t)}))}));
+      setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => {
+        const item = cleanItems.find(x => x.id === t.id);
+        return item ? {...t, ncSummaryPending: false, ncSummaryFailedSource: item.source, ncSummaryFailedAt: Date.now()} : t;
+      })}))}));
     });
   }
 
@@ -4620,7 +4698,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onAddTask={addVT}
           onCompleteTask={id => compTask(id)}
           onDeleteTask={id => delTask(id)}
-          onEditTask={(id, text) => uT(ts => ts.map(t => t.id === id ? {...t, text: text.trim(), ncSummary: undefined, ncSummarySource: undefined, ncSummaryPending: false} : t))}
+          onEditTask={(id, text) => uT(ts => ts.map(t => t.id === id ? {...t, text: text.trim(), ncSummary: undefined, ncSummarySource: undefined, ncSummaryPending: false, ncSummaryFailedSource: undefined, ncSummaryFailedAt: undefined} : t))}
           onOpenTasks={()=>{openCommandView("focus"); switchTab("focus");}}
           onOpenQueue={()=>{openCommandView("focus"); switchTab("queue");}}
           onOpenZen={()=>{if(curT)setZen(true); else {openCommandView("focus"); switchTab("focus");}}}
@@ -4654,6 +4732,8 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
           paneWeights={AS.nerveCenterPaneWeights}
           onPaneWeightsChange={weights => setAS(p => ({...p, nerveCenterPaneWeights: weights}))}
+          googlePaneHeight={AS.nerveCenterGooglePaneHeight}
+          onGooglePaneHeightChange={height => setAS(p => ({...p, nerveCenterGooglePaneHeight: height}))}
           onPolishNerveItems={polishNerveItems}
         />
       )}
