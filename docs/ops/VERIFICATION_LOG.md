@@ -114,3 +114,14 @@ Current source-grade file count after cleanup: 162 files.
 - Visual approval in the local browser.
 - Decide whether to create a Netlify draft deploy for a public test URL.
 - Do not deprecate old folders until the public test URL passes and rollback has been confirmed.
+
+## 2026-05-10 Draft Deploy
+
+- Created Netlify draft deploy only, not production.
+- Preview URL: `https://6a0107f21f09b1f505a3e7da--onetaskfocuser.netlify.app`
+- Build logs: `https://app.netlify.com/projects/onetaskfocuser/deploys/6a0107f21f09b1f505a3e7da`
+- Function logs: `https://app.netlify.com/projects/onetaskfocuser/logs/functions?scope=deploy:6a0107f21f09b1f505a3e7da`
+- Public root route returned HTTP 200.
+- Public `/shailos/` route returned HTTP 200.
+- Public `/.netlify/functions/app-config` route returned HTTP 200.
+- Production URL remains unchanged.

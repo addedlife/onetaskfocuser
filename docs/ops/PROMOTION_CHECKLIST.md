@@ -27,6 +27,6 @@ This workspace becomes live only after every gate below passes.
 
 ## Current Status
 
-Ready for CEO local browser test and, after approval, a Netlify draft deploy for a public live-preview URL.
+Ready for CEO public draft-preview test at `https://6a0107f21f09b1f505a3e7da--onetaskfocuser.netlify.app`.
 
 Not ready for old-folder deprecation.
