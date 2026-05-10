@@ -1,0 +1,5 @@
+{
+  "name": "Shaila Transcriber",
+  "description": "Transcribe and parse Halachic queries (Shailos) with support for Yeshivish, Yiddish, and Hebrew dialects.",
+  "requestFramePermissions": ["microphone", "display-capture"]
+}

@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+/* OneTask / Pure Material theme variables (defaults = Claude Cream). */
+/* These get overwritten at runtime by reading onetask_theme from localStorage */
+:root {
+  --ot-bg:         #EDE5D8;
+  --ot-card:       #F5EFE5;
+  --ot-text:       #3D3633;
+  --ot-text-soft:  #6E5848;
+  --ot-text-faint: #7E6858;
+  --ot-border:     #D8CEBC;
+  --ot-border-s:   #E4DBCE;
+  --ot-primary:    #C96442;
+  --ot-on-primary: #FFFFFF;
+  --ot-tonal:      #F7E4DA;
+  --ot-on-tonal:   #71331F;
+  --ot-radius-sm:  8px;
+  --ot-radius:     12px;
+  --ot-radius-lg:  16px;
+  --ot-radius-xl:  20px;
+}
+
+body {
+  font-family: 'Google Sans', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  background-color: var(--ot-bg);
+  color: var(--ot-text);
+}
+
+button {
+  min-height: 36px;
+  border-radius: var(--ot-radius) !important;
+  font-weight: 650;
+  letter-spacing: 0;
+  background-clip: padding-box;
+  transition: background-color .18s cubic-bezier(.2,0,0,1),
+              border-color .18s cubic-bezier(.2,0,0,1),
+              box-shadow .18s cubic-bezier(.2,0,0,1),
+              transform .12s cubic-bezier(.2,0,0,1);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+input, select, textarea {
+  border-radius: var(--ot-radius) !important;
+}
+
+.rounded-md { border-radius: var(--ot-radius-sm) !important; }
+.rounded-lg { border-radius: var(--ot-radius) !important; }
+.rounded-xl { border-radius: var(--ot-radius-lg) !important; }
+.rounded-2xl { border-radius: var(--ot-radius-xl) !important; }
+button.rounded-full {
+  border-radius: var(--ot-radius) !important;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ot-primary) 34%, transparent);
+  outline-offset: 2px;
+}
+
+.material-symbols-rounded {
+  font-family: 'Material Symbols Rounded';
+  font-weight: 500;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+  display: inline-flex;
+  white-space: nowrap;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+svg {
+  shape-rendering: geometricPrecision;
+}
+
+button svg,
+[role="button"] svg {
+  flex-shrink: 0;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.25;
+}
+
+/* Map Tailwind slate neutrals → theme vars */
+.bg-slate-50   { background-color: var(--ot-bg)    !important; }
+.bg-slate-100  { background-color: var(--ot-border-s) !important; }
+.bg-white      { background-color: var(--ot-card)  !important; }
+.min-h-screen  { background-color: var(--ot-bg)    !important; }
+
+.border-slate-200, .border-slate-100 { border-color: var(--ot-border) !important; }
+.border-slate-300 { border-color: var(--ot-text-faint) !important; }
+
+.text-slate-900 { color: var(--ot-text)       !important; }
+.text-slate-700 { color: var(--ot-text-soft)  !important; }
+.text-slate-600 { color: var(--ot-text-soft)  !important; }
+.text-slate-500 { color: var(--ot-text-faint) !important; }
+.text-slate-400 { color: var(--ot-text-faint) !important; }
+
+/* Map Tailwind indigo → theme primary (text-on-bg, matches task app button pattern) */
+.bg-indigo-600                  { background-color: var(--ot-primary)    !important; color: var(--ot-on-primary) !important; }
+.hover\:bg-indigo-700:hover     { background-color: color-mix(in srgb, var(--ot-primary) 86%, black) !important; color: var(--ot-on-primary) !important; }
+.bg-indigo-50                   { background-color: var(--ot-tonal)  !important; }
+.bg-indigo-100                  { background-color: var(--ot-tonal)  !important; }
+.text-indigo-600                { color: var(--ot-primary) !important; }
+.text-indigo-700                { color: var(--ot-on-tonal) !important; }
+.text-indigo-900                { color: var(--ot-text)      !important; }
+.border-indigo-200              { border-color: var(--ot-border)   !important; }
+.border-indigo-300              { border-color: var(--ot-text-faint) !important; }
+.ring-indigo-200                { --tw-ring-color: var(--ot-border) !important; }
+.focus\:ring-indigo-500\/20:focus { --tw-ring-color: color-mix(in srgb, var(--ot-primary) 24%, transparent) !important; }
+.focus\:border-indigo-500:focus { border-color: var(--ot-primary) !important; }
+
+/* Hover states for ghost buttons */
+.hover\:bg-slate-100:hover { background-color: var(--ot-border-s) !important; }
+.hover\:bg-slate-50:hover  { background-color: var(--ot-border-s) !important; }

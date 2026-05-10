@@ -1,0 +1,76 @@
+<Window x:Class="DeskPhone.LogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DeskPhone Live Log"
+        Height="760" Width="680" MinHeight="420" MinWidth="420"
+        Background="{DynamicResource BgSidebar}"
+        WindowStartupLocation="Manual"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        ShowInTaskbar="True"
+        FontFamily="Google Sans, Segoe UI Variable Text, Segoe UI">
+
+    <Grid Margin="16">
+        <Grid.LayoutTransform>
+            <ScaleTransform ScaleX="{Binding UiScale}" ScaleY="{Binding UiScale}"/>
+        </Grid.LayoutTransform>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                Background="{DynamicResource BgMain}"
+                BorderBrush="{DynamicResource Border}"
+                BorderThickness="1"
+                CornerRadius="16"
+                Padding="18,16"
+                Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Live Log"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimary}"/>
+                    <TextBlock Text="Open this when you need connection detail or release diagnostics. Closing it leaves the main DeskPhone window alone."
+                               Margin="0,4,0,0"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextMuted}"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Content="Clear"
+                        Style="{StaticResource TonalButton}"
+                        Height="30"
+                        Padding="14,0"
+                        Margin="12,0,0,0"
+                        Click="ClearDebugButton_Click"/>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1"
+                Background="{DynamicResource BgMain}"
+                BorderBrush="{DynamicResource Border}"
+                BorderThickness="1"
+                CornerRadius="16"
+                Padding="0">
+            <TextBox x:Name="DebugTextBox"
+                     Text="{Binding DebugText, Mode=OneWay}"
+                     IsReadOnly="True"
+                     TextWrapping="NoWrap"
+                     AcceptsReturn="True"
+                     FontFamily="Cascadia Code, Consolas, Courier New"
+                     FontSize="11"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Padding="14"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     TextChanged="DebugTextBox_TextChanged"/>
+        </Border>
+    </Grid>
+</Window>

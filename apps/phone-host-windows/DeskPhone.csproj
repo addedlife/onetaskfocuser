@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>DeskPhone</RootNamespace>
+    <Version>1.1.0</Version>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <Platforms>ARM64;x64</Platforms>
+    <!-- deploy.ps1 writes build-info.json during Release deploy so the visible
+         build label stays clear while the EXE keeps a stable product name. -->
+    <_BuildNum>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/build.num').Trim())</_BuildNum>
+    <AssemblyName>DeskPhone</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="InTheHand.Net.Bluetooth" Version="4.1.0" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="changelog.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\Fonts\MaterialIconsRound-Regular.otf" />
+    <None Update="Assets\Fonts\MaterialIconsRound-Regular.codepoints" />
+    <None Update="Assets\Fonts\MaterialSymbols-LICENSE.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Keep scratch probes, archives, and ad-hoc exports out of the app build. -->
+    <Compile Remove="scratch\**\*;artifacts\**\*;Tools\**\*;Messsages Backup\**\*;backup - before antigrav run -- of net8.0-windows10.0.19041.0\**\*" />
+    <Content Remove="scratch\**\*;artifacts\**\*;Tools\**\*;Messsages Backup\**\*;backup - before antigrav run -- of net8.0-windows10.0.19041.0\**\*" />
+    <EmbeddedResource Remove="scratch\**\*;artifacts\**\*;Tools\**\*;Messsages Backup\**\*;backup - before antigrav run -- of net8.0-windows10.0.19041.0\**\*" />
+    <None Remove="scratch\**\*;artifacts\**\*;Tools\**\*;Messsages Backup\**\*;backup - before antigrav run -- of net8.0-windows10.0.19041.0\**\*" />
+    <Page Remove="scratch\**\*;artifacts\**\*;Tools\**\*;Messsages Backup\**\*;backup - before antigrav run -- of net8.0-windows10.0.19041.0\**\*" />
+    <Resource Remove="scratch\**\*;artifacts\**\*;Tools\**\*;Messsages Backup\**\*;backup - before antigrav run -- of net8.0-windows10.0.19041.0\**\*" />
+  </ItemGroup>
+
+  <!-- DeskPhoneAudioService (scratch\DeskPhoneAudioService\) is no longer published.
+       It targeted a Qualcomm scohcibypass SCO audio path that turned out to be
+       architecturally unreachable on this hardware: Microsoft's Bluetooth stack on
+       Windows ARM64 has no inbox driver for the PC-as-HFU-connecting-to-phone-AG role
+       that's needed for Bluetooth call audio to reach WASAPI.  The source remains in
+       scratch/ as research material — see scratch/option3_research/README.md for the
+       full explanation, the alternative-stack candidates (BlueSoleil + USB dongle), and
+       the reasoning behind shipping DeskPhone without an audio bridge. -->
+
+  <!-- After every Release build: increment build number, delete old shortcuts, create new one. -->
+  <Target Name="DeployDesktop" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <Exec Command="%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -File &quot;$(ProjectDir)deploy.ps1&quot; &quot;$(TargetPath)&quot;" />
+  </Target>
+
+</Project>

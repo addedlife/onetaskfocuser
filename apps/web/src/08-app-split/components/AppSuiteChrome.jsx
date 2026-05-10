@@ -1,0 +1,141 @@
+import React, { useCallback, useEffect, useRef } from 'react';
+import { cleanTheme, NC_FONT_STACK, NC_TYPE, suiteIcon } from '../ui-tokens.jsx';
+
+function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRecord, onMoreActions, autoCollapseEnabled = true, onToggleAutoCollapse, topOffset = 0, forceCompact = false }) {
+  const screenApps = [
+    { id: "focus",     label: "Tasks",   icon: "task_alt"   },
+    { id: "shailos",   label: "Shailos", icon: "rule"       },
+    { id: "deskphone", label: "Phone",   icon: "smartphone" },
+  ];
+  const C = cleanTheme(T);
+  const displayOpen = open && !forceCompact;
+  const W = displayOpen ? 184 : 64;
+  const navButton = (isActive = false, overrides = {}) => ({
+    height: 40,
+    padding: displayOpen ? "0 12px" : "0",
+    borderRadius: 20,
+    cursor: "pointer",
+    border: "none",
+    background: isActive ? C.hover : "transparent",
+    color: isActive ? C.text : C.muted,
+    fontFamily: NC_FONT_STACK,
+    fontWeight: 500,
+    fontSize: 14,
+    display: "flex",
+    alignItems: "center",
+    gap: displayOpen ? 12 : 0,
+    justifyContent: displayOpen ? "flex-start" : "center",
+    width: "100%",
+    overflow: "hidden",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+    ...overrides,
+  });
+  const chromeRef = useRef(null);
+  const acTimer = useRef(null);
+  const isChromeHovered = useCallback(() => Boolean(chromeRef.current?.matches?.(":hover")), []);
+  const clearAC = useCallback(() => {
+    if (acTimer.current) { clearTimeout(acTimer.current); acTimer.current = null; }
+  }, []);
+  const scheduleAC = useCallback(() => {
+    clearAC();
+    if (!autoCollapseEnabled || !open || isChromeHovered()) return;
+    acTimer.current = setTimeout(() => {
+      if (!isChromeHovered()) onCollapse?.();
+    }, 10000);
+  }, [autoCollapseEnabled, clearAC, isChromeHovered, onCollapse, open]);
+  useEffect(() => {
+    scheduleAC();
+    return clearAC;
+  }, [scheduleAC, clearAC]);
+  return (
+    <div
+      ref={chromeRef}
+      onMouseEnter={clearAC}
+      onMouseLeave={scheduleAC}
+      style={{
+      position: "fixed", left: 0, top: topOffset, bottom: 0, width: W, zIndex: 8600,
+      display: "flex", flexDirection: "column", alignItems: displayOpen ? "stretch" : "center",
+      boxSizing: "border-box", padding: displayOpen ? "18px 12px 16px" : "18px 10px 16px",
+      gap: 4,
+      background: C.bg,
+      backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
+      borderRight: `1px solid ${C.divider}`,
+      transition: "width 0.20s cubic-bezier(0.4,0,0.2,1)",
+      overflow: "hidden",
+    }}>
+
+      {/* NerveCenter identity button */}
+      <button onClick={() => onSelect("nervecenter")} title="NerveCenter"
+        style={navButton(active === "nervecenter", { marginBottom: 10, fontSize: 15 })}>
+        {suiteIcon("hub", 20)}
+        {displayOpen && "NerveCenter"}
+      </button>
+
+      {/* Three app-screen buttons */}
+      {screenApps.map(app => {
+        const isActive = active === app.id;
+        return (
+          <button key={app.id} onClick={() => onSelect(app.id)} title={app.label}
+            style={navButton(isActive)}>
+            {suiteIcon(app.icon, 17)}
+            {displayOpen && app.label}
+          </button>
+        );
+      })}
+
+      {/* Divider */}
+      <div style={{ height: 1, background: C.divider, margin: displayOpen ? "12px 8px" : "12px 4px", flexShrink: 0 }} />
+
+      {/* Record anything — mic */}
+      <button onClick={onRecord} title="Record anything — tasks, shailos, notes, got-backs"
+        style={navButton(false)}>
+        {suiteIcon("mic", 18)}
+        {displayOpen && "Record"}
+      </button>
+
+      {/* More Actions */}
+      <button onClick={onMoreActions} title="More Actions"
+        style={navButton(false, { color: C.accent })}>
+        {suiteIcon("apps", 18)}
+        {displayOpen && "More Actions"}
+      </button>
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
+
+      {/* Auto-collapse toggle */}
+      <button onClick={onToggleAutoCollapse} title={autoCollapseEnabled ? "Auto-collapse: ON (click to disable)" : "Auto-collapse: OFF (click to enable)"}
+        data-automation-id="AppSuiteAutoCollapseToggle"
+        style={{
+          width: displayOpen ? "100%" : 40, height: 32, borderRadius: 16,
+          border: `1px solid ${C.divider}`,
+          background: autoCollapseEnabled ? C.hover : "transparent",
+          color: autoCollapseEnabled ? C.muted : C.faint,
+          cursor: "pointer", display: "flex", alignItems: "center",
+          justifyContent: displayOpen ? "flex-start" : "center",
+          padding: displayOpen ? "0 8px" : "0", gap: displayOpen ? 6 : 0, flexShrink: 0, marginBottom: 3,
+          fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.small, fontWeight: 500, overflow: "hidden", whiteSpace: "nowrap",
+        }}>
+        {suiteIcon("timer", 13)}
+        {displayOpen && (autoCollapseEnabled ? "Auto-collapse: on" : "Auto-collapse: off")}
+      </button>
+
+      {/* Collapse / expand toggle */}
+      <button onClick={onToggle} title={displayOpen ? "Collapse sidebar" : "Expand sidebar"} disabled={forceCompact}
+        style={{
+          width: displayOpen ? "100%" : 40, height: 34, borderRadius: 17,
+          border: `1px solid ${C.divider}`,
+          background: "transparent", color: C.faint, cursor: forceCompact ? "default" : "pointer",
+          opacity: forceCompact ? 0.45 : 1,
+          display: "flex", alignItems: "center",
+          justifyContent: displayOpen ? "flex-end" : "center",
+          padding: displayOpen ? "0 8px" : "0", flexShrink: 0,
+        }}>
+        {suiteIcon(displayOpen ? "chevron_left" : "chevron_right", 15)}
+      </button>
+    </div>
+  );
+}
+
+export { AppSuiteChrome };

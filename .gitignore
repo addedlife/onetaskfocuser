@@ -1,0 +1,12 @@
+node_modules/
+dist/
+bin/
+obj/
+.netlify/
+.claude/
+.launcher/
+artifacts/
+*.log
+*.tmp
+Thumbs.db
+desktop.ini

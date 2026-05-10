@@ -1,0 +1,20 @@
+# Build output
+bin/
+obj/
+deployed-builds/
+
+# Temp project files created by WPF build (random-suffix clones of the .csproj)
+DeskPhone_*_wpftmp.csproj
+
+# User-specific VS/Rider files
+*.user
+.vs/
+*.suo
+.idea/
+
+# Runtime data — message store, logs, settings live in %LOCALAPPDATA%\DeskPhone
+# (not in the source tree at all, so nothing to ignore)
+
+# Keep these tracked:
+# build.num        — deploy script reads it
+# changelog.json   — app reads it at runtime

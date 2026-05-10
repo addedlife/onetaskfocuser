@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: shailos
+    // Document ID: auto-generated
+    // Fields:
+    //   - date: string (ISO 8601)
+    //   - askerName: string (optional)
+    //   - content: string (required)
+    //   - parsedShaila: string (optional)
+    //   - answer: string (optional)
+    //   - answererName: string (optional)
+    //   - reasons: string (optional)
+    //   - status: string (required, enum: ["pending", "answered"])
+    //   - createdAt: timestamp (required)
+    //   - updatedAt: timestamp (optional)
+    //   - userId: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (request.auth.token.email == "rabbidanziger@hocsouthbend.com" && request.auth.token.email_verified == true);
+    }
+
+    function isValidShaila(data) {
+      return data.keys().hasAll(['content', 'status', 'createdAt', 'userId']) &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 100000 &&
+             data.status in ['pending', 'answered'] &&
+             data.userId == request.auth.uid;
+    }
+
+    match /shailos/{shailaId} {
+      allow read: if isAuthenticated() && (isDocOwner() || isAdmin());
+      allow create: if isAuthenticated() && isValidShaila(request.resource.data);
+      allow update: if isAuthenticated() && (isDocOwner() || isAdmin()) && isValidShaila(request.resource.data);
+      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+    }
+  }
+}

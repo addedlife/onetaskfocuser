@@ -1,0 +1,397 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- SKIN: Material — Google Material Design 3                             -->
+    <!-- Pill buttons · rounded cards · filled inputs · state-layer hovers    -->
+    <!-- Font: Google Sans / Segoe UI Variable Text                           -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── GridSplitter ─────────────────────────────────────────────────── -->
+    <Style x:Key="MacSplitter" TargetType="GridSplitter">
+        <Setter Property="Width"               Value="5"/>
+        <Setter Property="Background"          Value="Transparent"/>
+        <Setter Property="Cursor"              Value="SizeWE"/>
+        <Setter Property="VerticalAlignment"   Value="Stretch"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GridSplitter">
+                    <Border Background="Transparent" Width="{TemplateBinding Width}">
+                        <Rectangle Width="1" Fill="{DynamicResource Border}" HorizontalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ── Navigation rail item ─────────────────────────────────────────── -->
+    <Style x:Key="NavButton" TargetType="RadioButton">
+        <Setter Property="Foreground"      Value="{DynamicResource TextSecond}"/>
+        <Setter Property="Background"      Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding"         Value="16,10"/>
+        <Setter Property="Margin"          Value="8,2"/>
+        <Setter Property="Cursor"          Value="Hand"/>
+        <Setter Property="FontFamily"      Value="Google Sans, Segoe UI Variable Text, Segoe UI"/>
+        <Setter Property="FontSize"        Value="14"/>
+        <Setter Property="FontWeight"      Value="Medium"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="bg"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="20"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="bg" Property="Background" Value="{DynamicResource BgSelected}"/>
+                            <Setter Property="Foreground"                  Value="{DynamicResource AccentBlue}"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="bg" Property="Background" Value="{DynamicResource BgHover}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ── Card surface ─────────────────────────────────────────────────── -->
+    <Style x:Key="Card" TargetType="Border">
+        <Setter Property="Background"      Value="{DynamicResource BgMain}"/>
+        <Setter Property="CornerRadius"    Value="16"/>
+        <Setter Property="Padding"         Value="20"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderBrush"     Value="{DynamicResource Border}"/>
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect BlurRadius="8" ShadowDepth="1" Direction="270"
+                                  Color="#3C4043" Opacity="0.07"/>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="TonalCard" TargetType="Border" BasedOn="{StaticResource Card}">
+        <Setter Property="Background"  Value="{DynamicResource AccentBlueLight}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderFocus}"/>
+    </Style>
+
+    <!-- ── Section label ────────────────────────────────────────────────── -->
+    <Style x:Key="SectionLabel" TargetType="TextBlock">
+        <Setter Property="FontFamily"  Value="Google Sans, Segoe UI Variable Text, Segoe UI"/>
+        <Setter Property="FontSize"    Value="11"/>
+        <Setter Property="FontWeight"  Value="SemiBold"/>
+        <Setter Property="Foreground"  Value="{DynamicResource TextMuted}"/>
+        <Setter Property="Margin"      Value="4,0,0,8"/>
+    </Style>
+
+    <!-- ── TextBox — filled pill ────────────────────────────────────────── -->
+    <Style TargetType="TextBox">
+        <Setter Property="Background"      Value="{DynamicResource BgInput}"/>
+        <Setter Property="Foreground"      Value="{DynamicResource TextPrimary}"/>
+        <Setter Property="BorderBrush"     Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding"         Value="16,10"/>
+        <Setter Property="FontFamily"      Value="Google Sans, Segoe UI Variable Text, Segoe UI"/>
+        <Setter Property="FontSize"        Value="18"/>
+        <Setter Property="CaretBrush"      Value="{DynamicResource AccentBlue}"/>
+        <Setter Property="SelectionBrush"  Value="{DynamicResource AccentBlueLight}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="bd"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="24"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="2">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      Margin="{TemplateBinding Padding}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsFocused" Value="True">
+                            <Setter TargetName="bd" Property="BorderBrush"  Value="{DynamicResource AccentBlue}"/>
+                            <Setter TargetName="bd" Property="Background"   Value="{DynamicResource BgMain}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ── ComboBox ─────────────────────────────────────────────────────── -->
+    <Style TargetType="ComboBox">
+        <Setter Property="Background"                 Value="{DynamicResource BgHover}"/>
+        <Setter Property="Foreground"                 Value="{DynamicResource TextPrimary}"/>
+        <Setter Property="BorderBrush"                Value="Transparent"/>
+        <Setter Property="BorderThickness"            Value="0"/>
+        <Setter Property="Padding"                    Value="16,10"/>
+        <Setter Property="FontFamily"                 Value="Google Sans, Segoe UI Variable Text, Segoe UI"/>
+        <Setter Property="FontSize"                   Value="14"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <Setter Property="VerticalContentAlignment"   Value="Center"/>
+        <Setter Property="ItemContainerStyle">
+            <Setter.Value>
+                <Style TargetType="ComboBoxItem">
+                    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Padding"    Value="12,8"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ComboBoxItem">
+                                <Border x:Name="bg" Background="{TemplateBinding Background}"
+                                        CornerRadius="8" Margin="4,2"
+                                        Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsHighlighted" Value="True">
+                                        <Setter TargetName="bg" Property="Background" Value="{DynamicResource BgSelected}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource AccentBlue}"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid x:Name="root">
+                        <Border x:Name="bd"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="36"/>
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter Grid.Column="0"
+                                                  Content="{TemplateBinding SelectionBoxItem}"
+                                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                  Margin="16,8,0,8"
+                                                  VerticalAlignment="Center"
+                                                  IsHitTestVisible="False"/>
+                                <TextBlock Grid.Column="1" Text="▾" FontSize="12"
+                                           Foreground="{DynamicResource TextMuted}"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Center"
+                                           IsHitTestVisible="False"/>
+                                <ToggleButton Grid.ColumnSpan="2"
+                                              Background="Transparent" BorderThickness="0"
+                                              Focusable="False"
+                                              IsChecked="{Binding IsDropDownOpen, Mode=TwoWay,
+                                                  RelativeSource={RelativeSource TemplatedParent}}"/>
+                            </Grid>
+                        </Border>
+                        <Popup x:Name="PART_Popup" Placement="Bottom"
+                               IsOpen="{TemplateBinding IsDropDownOpen}"
+                               AllowsTransparency="True" Focusable="False"
+                               PopupAnimation="Fade">
+                            <Border Background="{DynamicResource BgMain}"
+                                    CornerRadius="12" Margin="4"
+                                    BorderBrush="{DynamicResource Border}" BorderThickness="1"
+                                    MinWidth="{Binding ActualWidth, ElementName=root}"
+                                    MaxHeight="300">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.12" Direction="270"/>
+                                </Border.Effect>
+                                <ScrollViewer><ItemsPresenter/></ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource BgHover}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ── Thin scrollbar ───────────────────────────────────────────────── -->
+    <Style TargetType="ScrollBar">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Width"      Value="6"/>
+    </Style>
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- BUTTON STYLES                                                         -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+
+    <Style x:Key="MD3ButtonBase" TargetType="Button">
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Cursor"          Value="Hand"/>
+        <Setter Property="FontFamily"      Value="Google Sans, Segoe UI Variable Text, Segoe UI"/>
+        <Setter Property="FontSize"        Value="14"/>
+        <Setter Property="FontWeight"      Value="Medium"/>
+        <Setter Property="Height"          Value="40"/>
+        <Setter Property="Padding"         Value="24,0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid x:Name="OuterGrid">
+                        <Border x:Name="root"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="20"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Border x:Name="StateLayer" CornerRadius="20"
+                                Background="Black" Opacity="0" IsHitTestVisible="False"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="StateLayer"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.08" Duration="0:0:0.1"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="StateLayer"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.0" Duration="0:0:0.2"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                        <Trigger Property="IsPressed"  Value="True">
+                            <Setter TargetName="StateLayer" Property="Opacity" Value="0.12"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="root" Property="Opacity"  Value="0.38"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="PrimaryButton"     TargetType="Button" BasedOn="{StaticResource MD3ButtonBase}">
+        <Setter Property="Background" Value="{DynamicResource AccentBlue}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextOnAccent}"/>
+    </Style>
+    <Style x:Key="TonalButton"       TargetType="Button" BasedOn="{StaticResource MD3ButtonBase}">
+        <Setter Property="Background" Value="{DynamicResource AccentBlueLight}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextOnAccentBlueLight}"/>
+    </Style>
+    <Style x:Key="SuccessButton"     TargetType="Button" BasedOn="{StaticResource MD3ButtonBase}">
+        <Setter Property="Background" Value="{DynamicResource AccentGreen}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextOnAccent}"/>
+    </Style>
+    <Style x:Key="DestructiveButton" TargetType="Button" BasedOn="{StaticResource MD3ButtonBase}">
+        <Setter Property="Background" Value="{DynamicResource AccentRed}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextOnAccent}"/>
+    </Style>
+
+    <Style x:Key="OutlinedButton" TargetType="Button">
+        <Setter Property="Background"      Value="Transparent"/>
+        <Setter Property="Foreground"      Value="{DynamicResource AccentBlue}"/>
+        <Setter Property="BorderBrush"     Value="{DynamicResource Border}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Cursor"          Value="Hand"/>
+        <Setter Property="FontFamily"      Value="Google Sans, Segoe UI Variable Text, Segoe UI"/>
+        <Setter Property="FontSize"        Value="14"/>
+        <Setter Property="FontWeight"      Value="Medium"/>
+        <Setter Property="Height"          Value="40"/>
+        <Setter Property="Padding"         Value="24,0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Border x:Name="root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="20"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Border x:Name="StateLayer" CornerRadius="20"
+                                Background="{DynamicResource AccentBlue}"
+                                Opacity="0" IsHitTestVisible="False"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="StateLayer" Property="Opacity" Value="0.04"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="StateLayer" Property="Opacity" Value="0.10"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="root" Property="Opacity" Value="0.38"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ── Dial Pad Key ─────────────────────────────────────────────────── -->
+    <Style x:Key="DialKey" TargetType="Button">
+        <Setter Property="Background"      Value="{DynamicResource BgHover}"/>
+        <Setter Property="Foreground"      Value="{DynamicResource TextPrimary}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="FontFamily"      Value="Google Sans, Segoe UI Variable Text, Segoe UI"/>
+        <Setter Property="FontSize"        Value="28"/>
+        <Setter Property="FontWeight"      Value="Normal"/>
+        <Setter Property="Cursor"          Value="Hand"/>
+        <Setter Property="Width"           Value="80"/>
+        <Setter Property="Height"          Value="80"/>
+        <Setter Property="Margin"          Value="8"/>
+        <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+        <Setter Property="RenderTransform">
+            <Setter.Value><ScaleTransform ScaleX="1" ScaleY="1"/></Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="root"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="40">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="root" Property="Background" Value="{DynamicResource BgSelected}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource AccentBlueDark}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="root" Property="Background" Value="{DynamicResource AccentBlueLight}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource AccentBlueDark}"/>
+                        </Trigger>
+                        <EventTrigger RoutedEvent="PreviewMouseDown">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="0.93" Duration="0:0:0.08"/>
+                                    <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="0.93" Duration="0:0:0.08"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="PreviewMouseUp">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1" Duration="0:0:0.15"/>
+                                    <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1" Duration="0:0:0.15"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

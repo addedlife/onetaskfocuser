@@ -1,0 +1,48 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ── Dark theme colour tokens ─────────────────────────────────────── -->
+
+    <!-- Background surfaces -->
+    <SolidColorBrush x:Key="BgMain"          Color="#1E1E2E"/>
+    <SolidColorBrush x:Key="BgSidebar"       Color="#181825"/>
+    <SolidColorBrush x:Key="BgHover"         Color="#313244"/>
+    <SolidColorBrush x:Key="BgInput"         Color="#2A2A3D"/>
+    <SolidColorBrush x:Key="BgSelected"      Color="#3D59A1"/>
+
+    <!-- Brand colours -->
+    <SolidColorBrush x:Key="AccentBlue"      Color="#89B4FA"/>
+    <SolidColorBrush x:Key="AccentBlueDark"  Color="#74A3F0"/>
+    <SolidColorBrush x:Key="AccentBlueLight" Color="#1E3A5F"/>
+    <SolidColorBrush x:Key="AccentGreen"     Color="#A6E3A1"/>
+    <SolidColorBrush x:Key="AccentGreenDark" Color="#8AC885"/>
+    <SolidColorBrush x:Key="AccentGreenLight" Color="#1A3A1A"/>
+    <SolidColorBrush x:Key="AccentRed"       Color="#F38BA8"/>
+    <SolidColorBrush x:Key="AccentRedDark"   Color="#E07090"/>
+    <SolidColorBrush x:Key="AccentRedLight"  Color="#3A1A22"/>
+
+    <SolidColorBrush x:Key="AccentAmber"      Color="#F9E2AF"/>
+    <SolidColorBrush x:Key="AccentAmberDark"  Color="#E0C89A"/>
+    <SolidColorBrush x:Key="AccentAmberLight" Color="#3A2E10"/>
+
+    <!-- Text hierarchy -->
+    <SolidColorBrush x:Key="TextPrimary"     Color="#CDD6F4"/>
+    <SolidColorBrush x:Key="TextSecond"      Color="#BAC2DE"/>
+    <SolidColorBrush x:Key="TextMuted"       Color="#6C7086"/>
+    <SolidColorBrush x:Key="TextDisabled"    Color="#45475A"/>
+    <SolidColorBrush x:Key="TextOnAccent"    Color="#1E1E2E"/>
+    <SolidColorBrush x:Key="TextOnAccentBlueLight" Color="#CDD6F4"/>
+
+    <!-- Outline / dividers -->
+    <SolidColorBrush x:Key="Border"          Color="#313244"/>
+    <SolidColorBrush x:Key="BorderFocus"     Color="#89B4FA"/>
+
+    <!-- Chat bubbles -->
+    <SolidColorBrush x:Key="BubbleIn"        Color="#313244"/>
+    <SolidColorBrush x:Key="BubbleInBorder"  Color="#45475A"/>
+    <SolidColorBrush x:Key="BubbleOut"       Color="#3D59A1"/>
+    <SolidColorBrush x:Key="BubbleOutText"   Color="#CDD6F4"/>
+
+    <Color x:Key="ShadowColor">#60000000</Color>
+
+</ResourceDictionary>

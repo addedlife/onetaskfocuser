@@ -1,0 +1,29 @@
+{
+  "entities": {
+    "Shaila": {
+      "title": "Shaila",
+      "description": "A halachic query and its transcription/parsing details.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date-time", "description": "The date the shaila was asked." },
+        "askerName": { "type": "string", "description": "Name of the person asking the shaila." },
+        "content": { "type": "string", "description": "The raw transcript or pasted text." },
+        "parsedShaila": { "type": "string", "description": "The formatted shaila details." },
+        "answer": { "type": "string", "description": "The halachic answer provided." },
+        "answererName": { "type": "string", "description": "Name of the person who answered (e.g., CC, YCD)." },
+        "reasons": { "type": "string", "description": "Reasons given for the answer." },
+        "status": { "type": "string", "enum": ["pending", "answered"], "description": "Current status of the shaila." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string", "description": "The ID of the user who recorded/added the shaila." }
+      },
+      "required": ["content", "status", "createdAt", "userId"]
+    }
+  },
+  "firestore": {
+    "/shailos/{shailaId}": {
+      "schema": "Shaila",
+      "description": "Collection of shailos."
+    }
+  }
+}
