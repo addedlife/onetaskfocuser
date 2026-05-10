@@ -74,6 +74,12 @@ const NC_GLOBAL_CSS = `
 .nc-suite-root :where(button, input, textarea, select) {
   line-height: 1.45;
 }
+.nc-suite-root :where(button, input, textarea, select, p, div, a, label, li, summary) {
+  font-weight: var(--nc-font-weight-normal, 400) !important;
+}
+.nc-suite-root :where(h1, h2, h3, h4, h5, h6, strong, b) {
+  font-weight: var(--nc-font-weight-strong, 500) !important;
+}
 .nc-suite-root * {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
@@ -110,6 +116,29 @@ const NC_GLOBAL_CSS = `
 .nc-suite-root :where(button, a, input, textarea, select):focus-visible {
   outline: 2px solid rgba(0, 121, 107, 0.38);
   outline-offset: 2px;
+}
+.nc-action-row {
+  position: relative;
+}
+.nc-hover-actions {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(4px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+.nc-action-row:hover .nc-hover-actions,
+.nc-action-row:focus-within .nc-hover-actions,
+.nc-hover-actions[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+@media (hover: none) {
+  .nc-hover-actions {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
 }
 `;
 
@@ -342,6 +371,28 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRec
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 
+function nerveSummarySource(item) {
+  return String(item?.parentTask || item?.shaila || item?.question || item?.text || "").trim();
+}
+
+function compactNerveSummary(text, fallback = "Open item") {
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  if (!raw) return fallback;
+  const cleaned = raw
+    .replace(/^(research|researching|get back|get back about|follow up|todo|task)\s*[-:–—]\s*/i, "")
+    .replace(/^i\s+(need|have|got|should|want)\s+to\s+/i, "")
+    .replace(/^please\s+/i, "")
+    .trim();
+  if (!cleaned) return fallback;
+  return cleaned.length > 96 ? `${cleaned.slice(0, 93).trim()}...` : cleaned;
+}
+
+function nerveDisplaySummary(item, fallback = "Open item") {
+  const source = nerveSummarySource(item);
+  const summary = item?.ncSummary || item?.frontSummary || item?.aiSummary || item?.summary || item?.synopsis || item?.answerSummary || "";
+  return compactNerveSummary(summary || source, fallback);
+}
+
 function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
   const api = "http://127.0.0.1:8765";
   const viewportW = useViewportWidth();
@@ -361,6 +412,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   const [composeIsNew, setComposeIsNew] = useState(false);  // opened as "new message" (has contact search)
   const [composeSearch, setComposeSearch] = useState("");   // contact search in new-compose mode
   const [composeFocused, setComposeFocused] = useState(false);
+  const [openPhoneActionId, setOpenPhoneActionId] = useState(null);
   const C = cleanTheme(T);
 
   const refresh = useCallback(async () => {
@@ -554,7 +606,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   }, C);
   const phoneRowStyle = {
     display: "grid",
-    gridTemplateColumns: touchActions ? "36px minmax(0,1fr)" : "36px minmax(0,1fr) auto",
+    gridTemplateColumns: touchActions ? "36px minmax(0,1fr) 36px" : "36px minmax(0,1fr) auto",
     gap: touchActions ? "8px 10px" : 8,
     alignItems: "start",
     padding: "10px 4px",
@@ -566,7 +618,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
     alignItems: "center",
     justifyContent: touchActions ? "flex-start" : "flex-end",
     gap: 4,
-    gridColumn: touchActions ? "2 / 3" : "auto",
+    gridColumn: touchActions ? "2 / 4" : "auto",
     marginTop: touchActions ? -4 : 0,
   };
 
@@ -614,11 +666,9 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   const AB = ({ icon, title, onClick }) => (
     <button onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); onClick(); }} title={title}
       aria-label={title}
-      style={touchActions
-        ? gvTextButton({ minHeight: 34, height: 34, padding: "0 10px", fontSize: NC_TYPE.small, gap: 5, border: "none", background: C.bgSoft }, C)
-        : phoneIconButton(false)}>
+      style={gvTextButton({ minHeight: 34, height: 34, padding: touchActions ? "0 10px" : "0 9px", fontSize: NC_TYPE.small, gap: 5, border: "none", background: C.bgSoft }, C)}>
       {suiteIcon(icon, 14)}
-      {touchActions && <span>{title.replace(" back", "")}</span>}
+      <span>{title.replace(" back", "")}</span>
     </button>
   );
 
@@ -795,8 +845,10 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
                 const isUnread = !!(m.unread || m.isUnread || m.read === false || m.status === "unread");
                 const preview = m.body || m.text || m.message || m.content || "";
                 const time = fmtTime(m.timestamp || m.date || m.time);
+                const actionId = `msg-${m._who}-${idx}`;
+                const actionsOpen = openPhoneActionId === actionId;
                 return (
-                  <div key={`${m._who}-${idx}`} style={phoneRowStyle}>
+                  <div key={`${m._who}-${idx}`} className="nc-action-row" style={phoneRowStyle}>
                     <span style={{ width: 36, height: 36, borderRadius: 99, background: isUnread ? C.hover : C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color: isUnread ? C.accent : msgColor, flexShrink: 0, marginTop: 2 }}>{suiteIcon(msgIcon, 16)}</span>
                     <button onClick={() => openCompose(m._name, m._who)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: T.text }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
@@ -805,10 +857,17 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
                       </div>
                       {preview && <span style={{ display: "block", fontSize: 14, color: C.muted, marginTop: 2, whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.5 }}>{preview}</span>}
                     </button>
-                    <div style={phoneActionGroupStyle}>
-                      <AB icon="call" title="Call" onClick={() => dialNum(m._who)} />
-                      <AB icon="sms" title="Text" onClick={() => openCompose(m._name, m._who)} />
-                    </div>
+                    {touchActions && (
+                      <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
+                        {suiteIcon("more_horiz", 17)}
+                      </button>
+                    )}
+                    {(!touchActions || actionsOpen) && (
+                      <div className={touchActions ? "" : "nc-hover-actions"} data-open={actionsOpen ? "true" : undefined} style={phoneActionGroupStyle}>
+                        <AB icon="call" title="Call" onClick={() => { setOpenPhoneActionId(null); dialNum(m._who); }} />
+                        <AB icon="sms" title="Text" onClick={() => { setOpenPhoneActionId(null); openCompose(m._name, m._who); }} />
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -836,8 +895,10 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
                 const name = lookupName(num) || c.name || c.displayName || c.Name || c.DisplayName || c.from || num || "Unknown";
                 const { icon, color } = callDirIcon(c);
                 const time = fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime);
+                const actionId = `call-${idx}`;
+                const actionsOpen = openPhoneActionId === actionId;
                 return (
-                  <div key={`call-${idx}`} style={phoneRowStyle}>
+                  <div key={`call-${idx}`} className="nc-action-row" style={phoneRowStyle}>
                     <span style={{ width: 36, height: 36, borderRadius: 99, background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0, marginTop: 2 }}>{suiteIcon(icon, 16)}</span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
@@ -846,10 +907,17 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
                       </div>
                       {num && num !== name && <span style={{ display: "block", fontSize: 14, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{num}</span>}
                     </div>
-                    <div style={phoneActionGroupStyle}>
-                      <AB icon="call" title="Call back" onClick={() => dialNum(num)} />
-                      <AB icon="sms" title="Text back" onClick={() => openCompose(name, num)} />
-                    </div>
+                    {touchActions && (
+                      <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
+                        {suiteIcon("more_horiz", 17)}
+                      </button>
+                    )}
+                    {(!touchActions || actionsOpen) && (
+                      <div className={touchActions ? "" : "nc-hover-actions"} data-open={actionsOpen ? "true" : undefined} style={phoneActionGroupStyle}>
+                        <AB icon="call" title="Call back" onClick={() => { setOpenPhoneActionId(null); dialNum(num); }} />
+                        <AB icon="sms" title="Text back" onClick={() => { setOpenPhoneActionId(null); openCompose(name, num); }} />
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -871,12 +939,13 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   );
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onPolishNerveItems }) {
   const viewportW = useViewportWidth();
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editText, setEditText] = useState("");
+  const [openTaskActionsId, setOpenTaskActionsId] = useState(null);
   const taskInputRef = useRef(null);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [addEventText, setAddEventText] = useState('');
@@ -932,10 +1001,15 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const isStacked = availableW < 760;
   const isTablet = !isStacked && availableW < 1120;
   const touchLayout = isStacked || isTablet;
-  const gridColumns = isStacked ? "1fr" : isTablet ? "repeat(2,minmax(0,1fr))" : "repeat(3,minmax(0,1fr))";
+  const paneW = {
+    tasks: Math.max(0.55, Number(paneWeights?.tasks || 1)),
+    shailos: Math.max(0.55, Number(paneWeights?.shailos || 1)),
+    phone: Math.max(0.55, Number(paneWeights?.phone || 1)),
+  };
+  const gridColumns = isStacked ? "1fr" : isTablet ? "repeat(2,minmax(0,1fr))" : `minmax(280px,${paneW.tasks}fr) 10px minmax(280px,${paneW.shailos}fr) 10px minmax(280px,${paneW.phone}fr)`;
   const ncPanel = { background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: isStacked ? 360 : isTablet ? 420 : 0, overflow: "hidden", boxShadow: "none" };
   const ncHeader = { minHeight: 72, padding: "18px 20px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 };
-  const ncTitle = { fontSize: ncType.title, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35 };
+  const ncTitle = { fontSize: ncType.title, fontWeight: "var(--nc-font-weight-strong, 500)", color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35 };
   const ncSectionIcon = (accent = C.accent) => ({ width: 40, height: 40, borderRadius: 20, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
   const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 40, height: 40, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
 
@@ -944,6 +1018,51 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const primaryTasks = tasks.filter(t => !isShailaWork(t)).slice(0, 8);
   // Exclude research-type shaila tasks — they're not actionable get-backs until research is done
   const visibleShailos = shailos.filter(s => s.type !== "shaila-research" && s.type !== "shailo-research").slice(0, 10);
+  const polishQueueKey = [...primaryTasks, ...visibleShailos]
+    .map(item => {
+      const source = nerveSummarySource(item);
+      if (!source || item.ncSummaryPending || item.ncSummarySource === source) return "";
+      return `${item.id}:${source}`;
+    })
+    .filter(Boolean)
+    .join("|");
+  useEffect(() => {
+    if (!onPolishNerveItems || !polishQueueKey) return;
+    const items = [...primaryTasks, ...visibleShailos]
+      .filter(item => {
+        const source = nerveSummarySource(item);
+        return item.id && source && !item.ncSummaryPending && item.ncSummarySource !== source;
+      })
+      .map(item => ({ id: item.id, kind: isShailaWork(item) ? "shaila" : "task", source: nerveSummarySource(item) }))
+      .slice(0, 8);
+    if (items.length) onPolishNerveItems(items);
+  }, [polishQueueKey]); // eslint-disable-line
+
+  const startPaneResize = (leftKey, rightKey, e) => {
+    if (touchLayout || !onPaneWeightsChange) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const start = { ...paneW };
+    const pairTotal = start[leftKey] + start[rightKey];
+    const pxPerUnit = Math.max(180, availableW / 8);
+    const move = ev => {
+      const delta = (ev.clientX - startX) / pxPerUnit;
+      const nextLeft = Math.max(0.55, Math.min(pairTotal - 0.55, start[leftKey] + delta));
+      onPaneWeightsChange({ ...start, [leftKey]: nextLeft, [rightKey]: pairTotal - nextLeft });
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  const paneResizeHandle = (leftKey, rightKey) => (
+    <button type="button" aria-label="Resize panes" title="Drag to resize panes" onPointerDown={e => startPaneResize(leftKey, rightKey, e)}
+      style={{ display: touchLayout ? "none" : "flex", alignItems: "center", justifyContent: "center", minWidth: 10, width: 10, border: "none", padding: 0, cursor: "col-resize", background: "transparent", touchAction: "none" }}>
+      <span style={{ width: 2, height: 54, borderRadius: 2, background: C.divider }} />
+    </button>
+  );
 
   const NC_LABEL = { now: "Now", today: "Soon", eventually: "Long" };
   const ncCorePills = ["now", "today", "eventually"]
@@ -975,7 +1094,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       <div style={{ minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: isStacked ? "16px" : "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: isStacked ? 16 : 20 }}>
 
         {/* Three-panel grid — fills all remaining height */}
-        <div style={{ display: "grid", gridTemplateColumns: gridColumns, gap: isStacked ? 14 : 20, flex: touchLayout ? "0 0 auto" : 1, minHeight: 0, alignItems: "stretch" }}>
+        <div style={{ display: "grid", gridTemplateColumns: gridColumns, gap: isStacked ? 14 : touchLayout ? 20 : 8, flex: touchLayout ? "0 0 auto" : 1, minHeight: 0, alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
           <section style={ncPanel}>
@@ -1017,8 +1136,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 const pri = gP(priorities, t.priority);
                 const priColor = pri?.color || T.primary || "#7EB0DE";
                 const isEditing = editingTaskId === t.id;
+                const actionsOpen = openTaskActionsId === t.id;
+                const displayText = nerveDisplaySummary(t, "Untitled task");
                 return (
-                  <div key={t.id} style={{ display: "grid", gridTemplateColumns: touchLayout ? "3px minmax(0,1fr)" : "3px minmax(0,1fr) auto", alignItems: "start", padding: "14px 18px 14px 0", gap: 14, minHeight: 56 }}>
+                  <div key={t.id} className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? "3px minmax(0,1fr) 40px" : "3px minmax(0,1fr) auto", alignItems: "start", padding: "14px 18px 14px 0", gap: 14, minHeight: 56 }}>
                     {/* Priority color bar */}
                     <span style={{ width: 3, alignSelf: "stretch", minHeight: 24, borderRadius: "0 3px 3px 0", background: priColor, flexShrink: 0 }} />
                     {/* Text — click to edit inline */}
@@ -1032,30 +1153,32 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       ) : (
                         <span onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }}
                           title="Click to edit"
-                          style={{ display: "block", fontSize: ncType.body, fontWeight: 400, lineHeight: ncType.line, color: C.text, wordBreak: "break-word", cursor: "text" }}>{t.text}</span>
+                          style={{ display: "block", fontSize: ncType.body, fontWeight: "var(--nc-font-weight-normal, 400)", lineHeight: ncType.line, color: C.text, wordBreak: "break-word", cursor: "text" }}>{displayText}</span>
                       )}
                     </div>
                     {/* Checkmark — plain icon, no pill */}
-                    <div style={{ display: "flex", gap: 4, justifyContent: touchLayout ? "flex-start" : "flex-end", gridColumn: touchLayout ? "2 / 3" : "auto", marginTop: -4 }}>
-                      {!isEditing && <button onClick={() => onCompleteTask?.(t.id)} title="Mark done" aria-label="Mark done"
-                        style={touchLayout
-                          ? gvTextButton({ minHeight: 34, height: 34, padding: "0 10px", fontSize: NC_TYPE.small, border: "none", background: C.bgSoft, color: C.success }, C)
-                          : gvIconButton({ width: 40, height: 40 }, C)}>
-                        {suiteIcon("check", 17)} {touchLayout && <span>Done</span>}
-                      </button>}
-                      <button onClick={() => onDeleteTask?.(t.id)} title="Delete task" aria-label="Delete task"
-                        style={touchLayout
-                          ? gvTextButton({ minHeight: 34, height: 34, padding: "0 10px", fontSize: NC_TYPE.small, border: "none", background: C.bgSoft, color: C.danger }, C)
-                          : gvIconButton({ width: 40, height: 40 }, C)}>
-                        {suiteIcon("close", 15)} {touchLayout && <span>Delete</span>}
+                    {touchLayout && !isEditing && (
+                      <button onClick={e => { e.stopPropagation(); setOpenTaskActionsId(actionsOpen ? null : t.id); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={gvIconButton({ width: 40, height: 40, background: actionsOpen ? C.hover : "transparent" }, C)}>
+                        {suiteIcon("more_horiz", 17)}
                       </button>
-                    </div>
+                    )}
+                    {(!touchLayout || actionsOpen) && !isEditing && (
+                      <div className={touchLayout ? "" : "nc-hover-actions"} data-open={actionsOpen ? "true" : undefined} style={{ display: "flex", gap: 4, justifyContent: touchLayout ? "flex-start" : "flex-end", gridColumn: touchLayout ? "2 / 4" : "auto", marginTop: touchLayout ? -4 : 0 }}>
+                        <button onClick={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }} title="Mark done" aria-label="Mark done" style={gvTextButton({ minHeight: 34, height: 34, padding: "0 10px", fontSize: NC_TYPE.small, border: "none", background: C.bgSoft, color: C.success }, C)}>
+                          {suiteIcon("check", 17)} <span>Done</span>
+                        </button>
+                        <button onClick={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} title="Delete task" aria-label="Delete task" style={gvTextButton({ minHeight: 34, height: 34, padding: "0 10px", fontSize: NC_TYPE.small, border: "none", background: C.bgSoft, color: C.danger }, C)}>
+                          {suiteIcon("close", 15)} <span>Delete</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No open tasks.</div>}
 
             </div>
           </section>
+          {paneResizeHandle("tasks", "shailos")}
 
           {/* ── Shailos ── */}
           <section style={ncPanel}>
@@ -1077,7 +1200,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
             <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0 }}>
               {/* Active shailos — open + pending get-back */}
               {visibleShailos.length ? visibleShailos.map((s, idx) => {
-                const text = s.parentTask || s.text || s.shaila || s.question || "Open shaila";
+                const text = nerveDisplaySummary(s, "Open shaila");
                 const isGetBack = !!s.isGetBackStep;
                 const chipLabel = isGetBack ? "Get back" : "Open";
                 const chipBg = isGetBack ? "rgba(201,146,60,0.22)" : "rgba(201,146,60,0.10)";
@@ -1086,7 +1209,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap: 14, padding: "16px 20px 16px 0", border: "none", background: GOLD_BG, color: C.text, cursor: "pointer", alignItems: "start", minHeight: 60 }}>
                     <span style={{ width: 3, alignSelf: "stretch", minHeight: 28, borderRadius: 2, background: GOLD, flexShrink: 0 }} />
                     <span style={{ paddingLeft: 5, paddingTop: 1 }}>
-                      <span style={{ display: "block", fontSize: ncType.body, fontWeight: 500, lineHeight: ncType.line, color: C.text, wordBreak: "break-word" }}>{text}</span>
+                      <span style={{ display: "block", fontSize: ncType.body, fontWeight: "var(--nc-font-weight-strong, 500)", lineHeight: ncType.line, color: C.text, wordBreak: "break-word" }}>{text}</span>
                       {isGetBack && <span style={{ display: "block", fontSize: ncType.label, color: GOLD, fontWeight: 500, marginTop: 4 }}>{suiteIcon("schedule", 13)} waiting to reply</span>}
                     </span>
                     <span style={{ fontSize: 12, fontWeight: 500, color: GOLD, background: chipBg, border: `1px solid ${GOLD_BRD}`, borderRadius: 999, padding: "4px 9px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 2 }}>{chipLabel}</span>
@@ -1102,11 +1225,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     <span style={{ fontSize: ncType.label, fontWeight: 500, color: C.muted, letterSpacing: 0, textTransform: "uppercase" }}>Recently resolved</span>
                   </div>
                   {shailosCompleted.map(s => {
-                    const text = s.parentTask || s.text || s.shaila || s.question || "Resolved shaila";
+                    const text = nerveDisplaySummary(s, "Resolved shaila");
                     return (
                       <div key={s.id} style={{ display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap: 14, padding: "14px 20px 14px 0", alignItems: "start", opacity: 0.72, minHeight: 56 }}>
                         <span style={{ width: 3, alignSelf: "stretch", minHeight: 24, borderRadius: 2, background: "#2E7D32", flexShrink: 0 }} />
-                        <span style={{ paddingLeft: 5, paddingTop: 1, fontSize: ncType.meta, fontWeight: 400, lineHeight: ncType.line, color: C.muted, wordBreak: "break-word", textDecoration: "line-through" }}>{text}</span>
+                        <span style={{ paddingLeft: 5, paddingTop: 1, fontSize: ncType.meta, fontWeight: "var(--nc-font-weight-normal, 400)", lineHeight: ncType.line, color: C.muted, wordBreak: "break-word", textDecoration: "line-through" }}>{text}</span>
                         <span style={{ fontSize: 12, fontWeight: 500, color: "#2E7D32", background: "rgba(46,125,50,0.10)", border: "1px solid rgba(46,125,50,0.22)", borderRadius: 999, padding: "4px 9px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 2 }}>Done</span>
                       </div>
                     );
@@ -1115,6 +1238,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               )}
             </div>
           </section>
+          {paneResizeHandle("shailos", "phone")}
 
           {/* ── Phone ── */}
           <section style={ncPanel}>
@@ -1898,6 +2022,8 @@ function App({ user, onSignOut }) {
     mrsWWindows: {monThu:{start:"08:30",end:"13:00"}, fri:{start:"08:30",end:"10:00"}},
     autoOptimize: false,
     currentEnergy: null, // "high" | "low" | null
+    fontWeightScale: 400,
+    nerveCenterPaneWeights: { tasks: 1, shailos: 1, phone: 1 },
   };
 
   // ─── Load / Save ─────────────────────────────────────────────────────────
@@ -1920,6 +2046,8 @@ function App({ user, onSignOut }) {
         if (!s.mrsWWindows) s.mrsWWindows = defS.mrsWWindows;
         if (s.completionSound === undefined) s.completionSound = true;
         if (!s.overwhelmThreshold) s.overwhelmThreshold = 7;
+        if (!s.fontWeightScale) s.fontWeightScale = 400;
+        if (!s.nerveCenterPaneWeights) s.nerveCenterPaneWeights = { tasks: 1, shailos: 1, phone: 1 };
         // Permanent: strip "home" custom priority on every load AND directly patch Firestore settings doc.
         // Direct patch bypasses the debounced save (which gets skipped when _listenV5 sets adoptedRemote=true),
         // so the Firestore settings doc is fixed immediately and future snapshots arrive clean.
@@ -2580,6 +2708,8 @@ function App({ user, onSignOut }) {
   // Detect dark theme by checking bg luminance
   const isDark = (()=>{const h=sc.bg||"#EDE5D8";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000<128;})();
   const T = {...sc, isDark, glow:!!sc.glow, shadow: isDark?"0 2px 12px rgba(0,0,0,0.3)":"0 2px 12px rgba(0,0,0,0.06)", shadowLg: isDark?"0 6px 24px rgba(0,0,0,0.4)":"0 6px 24px rgba(0,0,0,0.09)"};
+  const fontWeightNormal = Math.max(320, Math.min(560, Number(AS?.fontWeightScale || 400)));
+  const fontWeightStrong = Math.max(420, Math.min(700, fontWeightNormal + 110));
   const deskPhoneThemePalette = AS?.colorScheme === "material"
     ? "material"
     : isDark
@@ -2981,6 +3111,32 @@ function App({ user, onSignOut }) {
     const newT = {id:uid(), text:text.trim(), completed:false, priority:pri, createdAt:Date.now()};
     uT(ts => doOpt([...ts, newT]));
     flashOpt();
+  }
+
+  function polishNerveItems(items) {
+    if (!hasAI || !aiOpts || !Array.isArray(items) || items.length === 0) return;
+    const cleanItems = items
+      .map(item => ({ id: item.id, kind: item.kind || "task", source: String(item.source || "").trim() }))
+      .filter(item => item.id && item.source)
+      .slice(0, 8);
+    if (!cleanItems.length) return;
+    const ids = new Set(cleanItems.map(item => item.id));
+    setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => ids.has(t.id) ? {...t, ncSummaryPending: true} : t)}))}));
+    const prompt = `You polish hurried personal task and shaila notes for a compact executive dashboard. Preserve meaning exactly. Do not add facts, names, dates, or rulings. Make each item clear, calm, and short. Max 12 words each. Return ONLY valid JSON array: [{"id":"same id","summary":"polished display text"}].\n\nItems:\n${cleanItems.map((item, i) => `${i + 1}. id=${item.id} kind=${item.kind} raw=${JSON.stringify(item.source)}`).join("\n")}`;
+    callAI(prompt, aiOpts, { temperature: 0, maxOutputTokens: 900 }).then(raw => {
+      const match = String(raw || "").match(/\[[\s\S]*\]/);
+      if (!match) throw new Error("No JSON summary array");
+      const parsed = JSON.parse(match[0]);
+      const byId = new Map((Array.isArray(parsed) ? parsed : []).map(row => [row.id, compactNerveSummary(row.summary || "", "")]).filter(([, summary]) => summary));
+      setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => {
+        const item = cleanItems.find(x => x.id === t.id);
+        if (!item) return t;
+        const summary = byId.get(t.id);
+        return {...t, ncSummaryPending: false, ncSummary: summary || t.ncSummary, ncSummarySource: item.source};
+      })}))}));
+    }).catch(() => {
+      setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => ids.has(t.id) ? {...t, ncSummaryPending: false, ncSummarySource: nerveSummarySource(t)} : t)}))}));
+    });
   }
 
   function compTask(id, goodEnough=false, isLegacy=false) {
@@ -3887,7 +4043,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div ref={appRef} className="nc-suite-root" style={{height:"100vh",overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:NC_FONT_STACK,color:T.text,display:"flex",flexDirection:"column",alignItems:"center"}}>
+    <div ref={appRef} className="nc-suite-root" style={{height:"100vh",overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:NC_FONT_STACK,color:T.text,display:"flex",flexDirection:"column",alignItems:"center","--nc-font-weight-normal":fontWeightNormal,"--nc-font-weight-strong":fontWeightStrong}}>
       <style>{NC_GLOBAL_CSS}</style>
 
       {/* Overlays */}
@@ -4464,7 +4620,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onAddTask={addVT}
           onCompleteTask={id => compTask(id)}
           onDeleteTask={id => delTask(id)}
-          onEditTask={(id, text) => uT(ts => ts.map(t => t.id === id ? {...t, text: text.trim()} : t))}
+          onEditTask={(id, text) => uT(ts => ts.map(t => t.id === id ? {...t, text: text.trim(), ncSummary: undefined, ncSummarySource: undefined, ncSummaryPending: false} : t))}
           onOpenTasks={()=>{openCommandView("focus"); switchTab("focus");}}
           onOpenQueue={()=>{openCommandView("focus"); switchTab("queue");}}
           onOpenZen={()=>{if(curT)setZen(true); else {openCommandView("focus"); switchTab("focus");}}}
@@ -4496,6 +4652,9 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onDisconnectGoogle={disconnectGoogle}
           googleWasConnected={googleWasConnected}
           onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
+          paneWeights={AS.nerveCenterPaneWeights}
+          onPaneWeightsChange={weights => setAS(p => ({...p, nerveCenterPaneWeights: weights}))}
+          onPolishNerveItems={polishNerveItems}
         />
       )}
 

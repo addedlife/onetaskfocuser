@@ -214,6 +214,23 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               {schemeGenErr && <span style={{fontSize:settingsType.help,color:"#C94040",fontFamily:"system-ui",lineHeight:settingsType.line}}>{schemeGenErr}</span>}
             </div>
             <div style={{height:1,background:T.brdS,margin:"18px 0 14px"}}/>
+            <h4 style={sh}>Readability</h4>
+            <div style={{display:"grid",gap:8,marginBottom:16}}>
+              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:12}}>
+                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text,fontWeight:500}}>Font weight</span>
+                <span style={{fontSize:settingsType.help,fontFamily:"system-ui",color:T.tFaint}}>{AS.fontWeightScale || 400}</span>
+              </div>
+              <input type="range" min="340" max="520" step="20" value={AS.fontWeightScale || 400}
+                onChange={e=>setAS(p=>({...p,fontWeightScale:Number(e.target.value)}))}
+                style={{width:"100%",accentColor:T.primary || T.text}}
+              />
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui"}}>
+                <span>lighter</span>
+                <span style={{fontWeight:AS.fontWeightScale || 400,color:T.text}}>sample text</span>
+                <span>heavier</span>
+              </div>
+            </div>
+            <div style={{height:1,background:T.brdS,margin:"18px 0 14px"}}/>
             <h4 style={sh}>DeskPhone Link</h4>
             <div style={{...rowSB,alignItems:"flex-start",marginBottom:10}}>
               <div style={{paddingRight:12}}>
