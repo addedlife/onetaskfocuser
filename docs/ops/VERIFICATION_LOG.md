@@ -161,3 +161,11 @@ Current source-grade file count after cleanup: 162 files.
 - Production `/.netlify/functions/app-config` route returned HTTP 200.
 - Production `/.netlify/functions/ai-proxy` returned HTTP 200 from the production origin with model `gemini-2.5-flash-lite` and response `OK`.
 - Legacy web, Shailos, and DeskPhone folders were preserved and marked as rollback sources, not deleted.
+
+## 2026-05-10 Legacy Mothball Pass
+
+- Moved old web source from `taskmanager app\sandbox` to `taskmanager app\_MOTHBALLED_ROLLBACK_ONLY_sandbox_2026-05-10`.
+- Moved old Shailos source from `backup\sto-src\Shaila-Trancriber-Organizer-main` to `backup\sto-src\_MOTHBALLED_ROLLBACK_ONLY_Shaila-Trancriber-Organizer-main_2026-05-10`.
+- Moved old DeskPhone source into `PC as Bluetooth call - text interface\_MOTHBALLED_ROLLBACK_ONLY_DeskPhone_2026-05-10`.
+- The old DeskPhone path remains only as a tombstone/residue folder because Windows/OneDrive protected `.git` and scratch metadata during the move.
+- Updated `BRIEF.txt` so cold-start routing points only to Shamash Pro 4 live source paths, with mothballed folders listed as rollback-only.

@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shamash Pro 4 Filetree Comparison</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #667085;
+      --line: #d6dce5;
+      --old: #8f3d38;
+      --new: #1d6f5f;
+      --old-bg: #fff5f2;
+      --new-bg: #effaf7;
+      --paper: #ffffff;
+      --page: #f6f7f9;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.35;
+    }
+
+    main {
+      width: min(1320px, calc(100vw - 48px));
+      margin: 28px auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      letter-spacing: 0;
+    }
+
+    .sub {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .metric-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(130px, 1fr));
+      gap: 10px;
+      min-width: 540px;
+    }
+
+    .metric {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+
+    .metric b {
+      display: block;
+      font-size: 18px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 8px 28px rgba(24, 32, 42, 0.08);
+    }
+
+    .panel-title {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-title h2 {
+      margin: 0 0 4px;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+
+    .panel-title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .old .panel-title {
+      background: var(--old-bg);
+      color: var(--old);
+    }
+
+    .new .panel-title {
+      background: var(--new-bg);
+      color: var(--new);
+    }
+
+    .tree {
+      padding: 16px 18px 20px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 14px;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .node {
+      position: relative;
+      min-height: 24px;
+    }
+
+    .node .label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: #f9fafb;
+      border: 1px solid #edf0f4;
+    }
+
+    .old .root > .label {
+      background: var(--old-bg);
+      border-color: #f0c8c1;
+      color: var(--old);
+      font-weight: 700;
+    }
+
+    .new .root > .label {
+      background: var(--new-bg);
+      border-color: #bfe3d9;
+      color: var(--new);
+      font-weight: 700;
+    }
+
+    .children {
+      margin-left: 20px;
+      padding-left: 18px;
+      border-left: 1px solid var(--line);
+    }
+
+    .children > .node {
+      margin-top: 5px;
+    }
+
+    .children > .node::before {
+      content: "";
+      position: absolute;
+      top: 13px;
+      left: -18px;
+      width: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .tag {
+      color: var(--muted);
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11px;
+    }
+
+    .footer {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 1050px) {
+      header {
+        display: block;
+      }
+
+      .metric-strip {
+        min-width: 0;
+        margin-top: 14px;
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .board {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Old File Piles vs Shamash Pro 4</h1>
+        <p class="sub">Pruned source view. Generated folders like node_modules, dist, bin, obj, artifacts, and scratch output are intentionally excluded.</p>
+      </div>
+      <section class="metric-strip" aria-label="Measured savings">
+        <div class="metric"><b>3 -> 1</b><span>live source roots</span></div>
+        <div class="metric"><b>245 -> 177</b><span>source-grade files</span></div>
+        <div class="metric"><b>27.8%</b><span>fewer maintained files</span></div>
+        <div class="metric"><b>21.0%</b><span>smaller source footprint</span></div>
+      </section>
+    </header>
+
+    <section class="board">
+      <article class="panel old">
+        <div class="panel-title">
+          <h2>Old Structure</h2>
+          <p>Three roots, mixed live code, context packs, old generated output, and rollback now marked explicitly.</p>
+        </div>
+        <div class="tree">
+          <div class="node root"><span class="label">OLD APP FOLDERS</span>
+            <div class="children">
+              <div class="node"><span class="label">taskmanager app/sandbox <span class="tag">web + Netlify</span></span>
+                <div class="children">
+                  <div class="node"><span class="label">context-pack</span></div>
+                  <div class="node"><span class="label">docs</span>
+                    <div class="children">
+                      <div class="node"><span class="label">backups</span></div>
+                      <div class="node"><span class="label">deskphone-parity</span></div>
+                      <div class="node"><span class="label">Rabbi Dashboard docs</span></div>
+                    </div>
+                  </div>
+                  <div class="node"><span class="label">netlify/functions</span></div>
+                  <div class="node"><span class="label">public</span></div>
+                  <div class="node"><span class="label">scripts</span></div>
+                  <div class="node"><span class="label">shailos <span class="tag">generated deploy output</span></span></div>
+                  <div class="node"><span class="label">src</span>
+                    <div class="children">
+                      <div class="node"><span class="label">08-app-split</span></div>
+                      <div class="node"><span class="label">01-core.js</span></div>
+                      <div class="node"><span class="label">10-deskphone-web.jsx</span></div>
+                    </div>
+                  </div>
+                  <div class="node"><span class="label">DEPRECATED rollback marker</span></div>
+                </div>
+              </div>
+
+              <div class="node"><span class="label">Shaila-Trancriber-Organizer-main <span class="tag">Shailos</span></span>
+                <div class="children">
+                  <div class="node"><span class="label">backups</span></div>
+                  <div class="node"><span class="label">context-pack</span></div>
+                  <div class="node"><span class="label">src</span>
+                    <div class="children">
+                      <div class="node"><span class="label">services/geminiService.ts</span></div>
+                      <div class="node"><span class="label">App.tsx</span></div>
+                      <div class="node"><span class="label">firebase.ts</span></div>
+                    </div>
+                  </div>
+                  <div class="node"><span class="label">firebase / firestore config</span></div>
+                  <div class="node"><span class="label">package / vite config</span></div>
+                  <div class="node"><span class="label">DEPRECATED rollback marker</span></div>
+                </div>
+              </div>
+
+              <div class="node"><span class="label">DeskPhone <span class="tag">native Windows host</span></span>
+                <div class="children">
+                  <div class="node"><span class="label">Assets</span></div>
+                  <div class="node"><span class="label">context-pack</span></div>
+                  <div class="node"><span class="label">docs</span></div>
+                  <div class="node"><span class="label">Helpers</span></div>
+                  <div class="node"><span class="label">Models</span></div>
+                  <div class="node"><span class="label">Services</span></div>
+                  <div class="node"><span class="label">Themes</span></div>
+                  <div class="node"><span class="label">Tools</span></div>
+                  <div class="node"><span class="label">ViewModels / Views</span></div>
+                  <div class="node"><span class="label">WPF app files</span></div>
+                  <div class="node"><span class="label">DEPRECATED rollback marker</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel new">
+        <div class="panel-title">
+          <h2>New Shamash Pro 4 Structure</h2>
+          <p>One production source root, three clean app homes, one ops ledger, preserved rollback outside the live path.</p>
+        </div>
+        <div class="tree">
+          <div class="node root"><span class="label">Shamash Pro 4 App</span>
+            <div class="children">
+              <div class="node"><span class="label">apps</span>
+                <div class="children">
+                  <div class="node"><span class="label">web <span class="tag">live Netlify source</span></span>
+                    <div class="children">
+                      <div class="node"><span class="label">backend/functions</span></div>
+                      <div class="node"><span class="label">public</span></div>
+                      <div class="node"><span class="label">scripts</span></div>
+                      <div class="node"><span class="label">shailos <span class="tag">deploy output</span></span></div>
+                      <div class="node"><span class="label">src</span></div>
+                      <div class="node"><span class="label">package / vite / netlify config</span></div>
+                    </div>
+                  </div>
+
+                  <div class="node"><span class="label">shailos <span class="tag">editable source</span></span>
+                    <div class="children">
+                      <div class="node"><span class="label">src</span></div>
+                      <div class="node"><span class="label">firebase / firestore config</span></div>
+                      <div class="node"><span class="label">package / vite config</span></div>
+                    </div>
+                  </div>
+
+                  <div class="node"><span class="label">phone-host-windows <span class="tag">native host</span></span>
+                    <div class="children">
+                      <div class="node"><span class="label">Assets</span></div>
+                      <div class="node"><span class="label">Helpers</span></div>
+                      <div class="node"><span class="label">Models</span></div>
+                      <div class="node"><span class="label">Services</span></div>
+                      <div class="node"><span class="label">Themes</span></div>
+                      <div class="node"><span class="label">Tools</span></div>
+                      <div class="node"><span class="label">ViewModels / Views</span></div>
+                      <div class="node"><span class="label">WPF app files</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="node"><span class="label">docs/ops</span>
+                <div class="children">
+                  <div class="node"><span class="label">MIGRATION_MANIFEST.md</span></div>
+                  <div class="node"><span class="label">PROMOTION_CHECKLIST.md</span></div>
+                  <div class="node"><span class="label">ROLLBACK_AND_DEPRECATION.md</span></div>
+                  <div class="node"><span class="label">VERIFICATION_LOG.md</span></div>
+                </div>
+              </div>
+              <div class="node"><span class="label">services</span></div>
+              <div class="node"><span class="label">tooling</span></div>
+              <div class="node"><span class="label">README.md / AGENTS.md</span></div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <p class="footer">Open this file in a browser and use Ctrl+plus / Ctrl+minus for normal zoom without the diagram jumping between tiny and huge.</p>
+  </main>
+</body>
+</html>
