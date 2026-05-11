@@ -398,3 +398,7 @@ Current source-grade file count after cleanup: 162 files.
 - `node scripts/copy-shailos-to-dist.cjs` passed in `apps/web`.
 - Local preview checks returned HTTP 200 for `http://127.0.0.1:4305/shailos/` and `http://127.0.0.1:4305/?suite=nervecenter`.
 - `git diff --check` passed.
+- Pushed commit `65f0855` to `origin/main`.
+- Verified production `https://onetaskfocuser.netlify.app/shailos/` returned HTTP 200 and served Shailos asset `assets/index-DLMDgD5x.js`.
+- Verified production Shailos asset contained the `manual-draft` and `Submit Shaila` code paths.
+- Verified production root `https://onetaskfocuser.netlify.app/` returned HTTP 200.
