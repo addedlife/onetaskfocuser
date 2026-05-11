@@ -339,3 +339,9 @@ Current source-grade file count after cleanup: 162 files.
 - Reconciled GitHub `main` to Pro 4 commit `00d839f81d730e96ec623bd60443c72b974b1cf9` using `git push --force-with-lease`.
 - Renamed local branch `master` to `main` and set it to track `origin/main`.
 - Going forward, normal source pushes can use `origin/main`; old main remains recoverable from the archive branch/tag.
+
+## 2026-05-11 Netlify Git Trigger Recovery
+
+- After GitHub `main` moved to Pro 4, Netlify's Git-trigger path served a 404 because the Pro 4 repo is a monorepo and the web app is under `apps/web`.
+- Restored production immediately with manual deploy `6a01667f88b9f9afe8df0a04` from `apps/web`.
+- Added root `netlify.toml` with `[build].base = "apps/web"` so future Git-triggered builds start from the web app directory and use the existing `apps/web/netlify.toml`.
