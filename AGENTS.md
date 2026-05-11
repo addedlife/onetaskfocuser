@@ -1,6 +1,6 @@
 # Shamash Pro 4 Agent Instructions
 
-Start with `BRIEF.txt`. Keep startup token use low: read the brief first, then only the specific ops log or source files needed for the task.
+Start with `BRIEF.txt`. Keep both cached and uncached token use low: read the brief, then the matching row in `docs/ops/CONTEXT_INDEX.md`, then only the specific ops log and source files needed for the task.
 
 ## Production Source
 
@@ -14,6 +14,7 @@ Start with `BRIEF.txt`. Keep startup token use low: read the brief first, then o
 
 - Before a coding fix, project, upgrade, or change, research the relevant industry-standard practice. If it conflicts with the local plan, tell the user and get confirmation before proceeding.
 - Verify current state from `docs/ops/VERIFICATION_LOG.md` before changing code.
+- Use `docs/ops/CONTEXT_INDEX.md` to target source reads; expand with `rg` only when the listed context is insufficient.
 - Commit and push verified source changes unless the current thread specifically says not to.
 - Do not deploy or relink Netlify without explicit approval.
 - Record verification results in `docs/ops/VERIFICATION_LOG.md`.

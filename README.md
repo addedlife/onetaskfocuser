@@ -2,7 +2,7 @@
 
 Unified production workspace for Tasks, Shailos, and Phone.
 
-For a new Codex session, say: `read brief`.
+For a new Codex session, say: `read brief`. For accurate low-token changes, use `BRIEF.txt` plus the matching row in `docs/ops/CONTEXT_INDEX.md`.
 
 ## Folders
 
@@ -15,7 +15,7 @@ For a new Codex session, say: `read brief`.
 
 - Active production source is this folder only.
 - Old scattered folders are rollback/archive sources only.
-- Current operational state starts in `BRIEF.txt`, then `docs/ops/VERIFICATION_LOG.md` if more detail is needed.
+- Current operational state starts in `BRIEF.txt`; task-specific file targeting lives in `docs/ops/CONTEXT_INDEX.md`; detailed release history lives in `docs/ops/VERIFICATION_LOG.md`.
 - Verified source changes should be committed and pushed unless the current thread says not to.
 - Netlify deploys require explicit approval.
 

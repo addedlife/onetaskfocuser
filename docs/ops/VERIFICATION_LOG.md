@@ -307,3 +307,9 @@ Current source-grade file count after cleanup: 162 files.
 - Trimmed `AGENTS.md` to operating law: research-before-change, production source rules, verification gates, push policy, Netlify approval policy.
 - Restored Git origin to `https://github.com/addedlife/onetaskfocuser.git`.
 - Recorded that Pro 4 local `master` is clean-history and not yet reconciled with GitHub `main`; Pro 4 work should push to `codex/...` branches until `main` reconciliation is explicitly approved.
+
+## 2026-05-11 Token-Minimal Context Map
+
+- Reduced `BRIEF.txt` from a fuller session summary to a tiny context kernel.
+- Added `docs/ops/CONTEXT_INDEX.md` as the task-area file map for accurate low-token changes.
+- Updated `README.md` and `AGENTS.md` so future sessions use `BRIEF.txt` plus only the matching context-index row instead of broad doc/code rereads.

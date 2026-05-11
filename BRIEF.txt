@@ -1,35 +1,14 @@
-Shamash Pro 4 brief
+Shamash Pro 4 context kernel
 
-Use this file for "read brief" startup.
+Read this first; then read only the matching row in docs/ops/CONTEXT_INDEX.md.
 
-Truth
 - Active source: C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App
 - Live app: https://onetaskfocuser.netlify.app
-- Netlify site: onetaskfocuser, site id c603b156-f9ee-4b67-bcf4-d4b7f64fbccd
 - Git origin: https://github.com/addedlife/onetaskfocuser.git
-- Current safe push target: codex/pro4-compact-webphone-live
-- Do not push over GitHub main until Pro 4 history is reconciled with origin/main.
-
-Source Map
-- apps/web: Tasks, NerveCenter, Switchboard, DeskPhone Web, Netlify functions.
-- apps/shailos: editable Shailos source.
-- apps/phone-host-windows: native DeskPhone host.
-- docs/ops/VERIFICATION_LOG.md: current release and verification ledger.
-
-Operating Rules
-- Treat this folder as production source.
-- Old Shamash/OneTask/DeskPhone folders are rollback/archive only.
-- Before edits, check docs/ops/VERIFICATION_LOG.md for current state.
-- Commit and push verified source changes unless the current thread says not to.
+- Safe push branch: codex/pro4-compact-webphone-live
+- Do not push over GitHub main until Pro 4 history is reconciled.
+- Production source only: apps/web, apps/shailos, apps/phone-host-windows.
+- Old folders are rollback/archive only.
+- Verify current state from docs/ops/VERIFICATION_LOG.md before edits.
+- Commit and push verified source changes unless told not to.
 - Deploy or relink Netlify only with explicit approval.
-
-Latest Release
-- 2026-05-11 live deploy: 6a015f2aafd56281e9c2b4f4.
-- Commit: 3a32349 Polish NerveCenter WebPhone compact dashboard.
-- Scope: WebPhone contact-name matching, compact NerveCenter task/phone UI, three-dot call actions, near-live Gmail/Calendar refresh.
-
-Fast Gates
-- apps/web: npm run build
-- apps/shailos: npm run build
-- apps/phone-host-windows: dotnet build
-- Phone host check: http://127.0.0.1:8765/status
