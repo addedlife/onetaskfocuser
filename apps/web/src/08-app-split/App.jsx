@@ -407,7 +407,7 @@ function App({ user, onSignOut }) {
   }, [loaded]); // eslint-disable-line
 
   // ─── Google Calendar + Gmail via GIS OAuth ───────────────────────────────
-  const effectiveGoogleClientId = (serverGoogleClientId || "").trim();
+  const effectiveGoogleClientId = (AS?.googleClientId || serverGoogleClientId || "").trim();
 
   useEffect(() => {
     const clientId = effectiveGoogleClientId;

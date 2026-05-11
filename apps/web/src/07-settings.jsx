@@ -415,12 +415,15 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             </div>
             <div style={{marginBottom:16}}>
               <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",fontWeight:500,display:"block",marginBottom:6}}>OAuth 2.0 Client ID</label>
-              <div style={{width:"100%",minHeight:42,padding:"10px 12px",borderRadius:8,border:`1px solid ${T.brd}`,fontSize:13,fontFamily:"monospace",background:T.bgW,color:T.tSoft,boxSizing:"border-box"}}>
-                Server-managed
-              </div>
-              <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",marginTop:6,lineHeight:settingsType.line}}>Users cannot override the OAuth client from account settings.</p>
+              <input
+                value={AS.googleClientId||""}
+                onChange={e=>setAS(p=>({...p,googleClientId:e.target.value.trim()}))}
+                placeholder="1234567890-abc….apps.googleusercontent.com"
+                style={{width:"100%",minHeight:42,padding:"8px 12px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:13,fontFamily:"monospace",background:T.bgW,color:T.text,boxSizing:"border-box"}}
+              />
+              <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",marginTop:6,lineHeight:settingsType.line}}>Stored only in your account — never sent to any server.</p>
             </div>
-            {false && AS.googleClientId && (
+            {AS.googleClientId && (
               <div style={{padding:"12px 14px",borderRadius:8,border:`1px solid #4CAF5040`,background:"rgba(76,175,80,0.06)",display:"flex",gap:10,alignItems:"center"}}>
                 <span style={{fontSize:14}}>✓</span>
                 <span style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",lineHeight:settingsType.line}}>Client ID saved. Go to your launchpad and tap <strong>Connect Google</strong> to authorize.</span>

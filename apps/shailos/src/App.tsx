@@ -344,11 +344,8 @@ function AppContent() {
 
   const researchRef = useRef<HTMLDivElement>(null);
 
-  const userId = user?.uid || '';
-  const shailosCol = () => {
-    if (!userId) throw new Error('Sign in before opening shailos.');
-    return collection(db, 'users', userId, 'shailos');
-  };
+  const USER_ID = 'rabbidanziger';
+  const shailosCol = () => collection(db, 'users', USER_ID, 'shailos');
 
   const refreshPendingRecordings = async () => {
     try {
@@ -677,7 +674,7 @@ function AppContent() {
           reasons: data.reasons || '',
           status: data.answer && data.answer.trim() !== "" ? 'answered' : 'pending',
           createdAt: Timestamp.now(),
-          userId
+          userId: USER_ID
         })
       );
       await Promise.all(promises);
@@ -804,7 +801,7 @@ function AppContent() {
         reasons: '',
         status: 'pending',
         createdAt: now,
-        userId,
+        userId: USER_ID,
       });
       setSelectedShaila({
         id: docRef.id,
@@ -818,7 +815,7 @@ function AppContent() {
         reasons: '',
         status: 'pending',
         createdAt: now,
-        userId,
+        userId: USER_ID,
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'shailos');
