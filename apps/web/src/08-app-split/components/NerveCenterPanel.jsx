@@ -107,10 +107,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const gridColumns = isStacked ? "1fr" : isTablet ? "repeat(2,minmax(0,1fr))" : `minmax(240px,${paneW.tasks}fr) 6px minmax(240px,${paneW.shailos}fr) 6px minmax(240px,${paneW.phone}fr)`;
   const googleH = Math.max(150, Math.min(420, Number(googlePaneHeight || 244)));
   const ncPanel = { background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: isStacked ? 360 : isTablet ? 420 : 0, overflow: "hidden", boxShadow: "none" };
-  const ncHeader = { minHeight: 58, padding: "12px 16px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 };
+  const ncHeader = { minHeight: 36, padding: "4px 12px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 };
   const ncTitle = { fontSize: ncType.title, fontWeight: "var(--nc-font-weight-strong, 500)", color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35 };
-  const ncSectionIcon = (accent = C.accent) => ({ width: 32, height: 32, borderRadius: 16, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
-  const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 32, height: 32, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
+  const ncSectionIcon = (accent = C.accent) => ({ width: 26, height: 26, borderRadius: 13, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
+  const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 26, height: 26, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
   const phoneStatusColor = phoneStatusSummary.tone === "incoming" ? C.success : phoneStatusSummary.tone === "call" ? C.warning : phoneStatusSummary.online ? C.success : C.faint;
 
   const shailaPriorityIds = new Set(priorities.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
@@ -241,73 +241,52 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
           {/* ── Tasks ── */}
           <section style={ncPanel}>
-            <div style={{ ...ncHeader, display: "block" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={ncSectionIcon()}>{suiteIcon("task_alt", 19)}</span>
+            <div style={{ ...ncHeader, display: taskComposerOpen ? "block" : "flex", ...(taskComposerOpen ? { padding: "7px 12px" } : {}) }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, ...(taskComposerOpen ? { marginBottom: 7 } : {}) }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <span style={ncSectionIcon()}>{suiteIcon("task_alt", 16)}</span>
                   <span style={ncTitle}>Tasks</span>
                 </div>
-                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                  {onOpenZen && <button onClick={onOpenZen} title="Zen mode" aria-label="Zen mode" style={ncSmallIconButton()}>{suiteIcon("self_improvement", 16)}</button>}
-                  <button onClick={onOpenQueue} title="Open full task queue" aria-label="Open full task queue" style={ncSmallIconButton()}>{suiteIcon("list_alt", 16)}</button>
-                  <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="Task actions" style={ncSmallIconButton()}>{suiteIcon("apps", 17)}</button>
+                <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                  {ncCorePills.map(p => {
+                    const active = taskPriority === p.id;
+                    return (
+                      <button key={p.id} onClick={() => openTaskComposer(p.id)}
+                        title={`Add ${p.ncLabel} task`} aria-label={`Add ${p.ncLabel} task`} aria-expanded={taskComposerOpen && active && !taskComposerMrsW}
+                        style={{ width: 24, height: 24, flexShrink: 0, borderRadius: 6, border: `1.5px solid ${active && taskComposerOpen && !taskComposerMrsW ? p.color : "transparent"}`, background: p.color, color: textOnColor(p.color), cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {suiteIcon("add", 13)}
+                      </button>
+                    );
+                  })}
+                  {onAddMrsWTask && (
+                    <button onClick={() => openTaskComposer(taskPriority, { mrsW: true })} title="Add Mrs W task" aria-label="Add Mrs W task" aria-expanded={taskComposerOpen && taskComposerMrsW}
+                      style={{ width: 24, height: 24, flexShrink: 0, borderRadius: 6, border: `1.5px solid ${taskComposerOpen && taskComposerMrsW ? "#7DB892" : "transparent"}`, background: "#A8D8B9", color: "#123D25", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {suiteIcon("add", 13)}
+                    </button>
+                  )}
+                  <span style={{ width: 1, height: 13, background: C.divider, margin: "0 3px", flexShrink: 0 }} />
+                  {onOpenZen && <button onClick={onOpenZen} title="Zen mode" aria-label="Zen mode" style={ncSmallIconButton()}>{suiteIcon("self_improvement", 14)}</button>}
+                  <button onClick={onOpenQueue} title="Open full task queue" aria-label="Open full task queue" style={ncSmallIconButton()}>{suiteIcon("list_alt", 14)}</button>
+                  <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="Task actions" style={ncSmallIconButton()}>{suiteIcon("apps", 14)}</button>
                 </div>
               </div>
-              {/* Quick add — input + equal-width priority pills + add FAB, all inline */}
-              <div style={{ display: "flex", flexDirection: "column", gap: taskComposerOpen ? 8 : 0 }}>
-                {taskComposerOpen && <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 32px 32px", gap: 6, alignItems: "start" }}>
+              {taskComposerOpen && (
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 30px 30px", gap: 6, alignItems: "start" }}>
                   <textarea ref={taskInputRef} value={taskDraft} rows={1}
                     onChange={e => { setTaskDraft(e.target.value); e.target.style.height = "34px"; e.target.style.height = Math.min(e.target.scrollHeight, 88) + "px"; }}
                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(taskPriority, { mrsW: taskComposerMrsW }); } if (e.key === "Escape") { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); } }}
                     placeholder={taskComposerMrsW ? "Mrs W task" : `${priorities.find(p => p.id === taskPriority)?.ncLabel || "Task"} task`}
                     style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: 7, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "7px 10px", fontSize: ncType.meta, fontWeight: 400, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
                   <button onClick={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })} disabled={!taskDraft.trim()} title="Save task" aria-label="Save task"
-                    style={{ width: 32, height: 32, borderRadius: 7, border: "none", background: taskComposerMrsW ? "#A8D8B9" : activePriColor, color: taskComposerMrsW ? "#123D25" : textOnColor(activePriColor), cursor: taskDraft.trim() ? "pointer" : "default", opacity: taskDraft.trim() ? 1 : 0.38, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {suiteIcon("check", 16)}
+                    style={{ width: 30, height: 30, borderRadius: 7, border: "none", background: taskComposerMrsW ? "#A8D8B9" : activePriColor, color: taskComposerMrsW ? "#123D25" : textOnColor(activePriColor), cursor: taskDraft.trim() ? "pointer" : "default", opacity: taskDraft.trim() ? 1 : 0.38, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {suiteIcon("check", 15)}
                   </button>
                   <button onClick={() => { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); }} title="Cancel" aria-label="Cancel task entry"
-                    style={gvIconButton({ width: 32, height: 32, borderRadius: 7 }, C)}>
-                    {suiteIcon("close", 15)}
+                    style={gvIconButton({ width: 30, height: 30, borderRadius: 7 }, C)}>
+                    {suiteIcon("close", 14)}
                   </button>
-                </div>}
-                <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
-                  {ncCorePills.map(p => {
-                    const active = taskPriority === p.id;
-                    return (
-                      <button key={p.id} onClick={() => openTaskComposer(p.id)}
-                        title={`Add ${p.ncLabel} task`} aria-label={`Add ${p.ncLabel} task`} aria-expanded={taskComposerOpen && active && !taskComposerMrsW}
-                        style={{ width: 30, height: 30, flexShrink: 0, borderRadius: 7, border: `1px solid ${active && taskComposerOpen && !taskComposerMrsW ? p.color : "transparent"}`, background: p.color, color: textOnColor(p.color), cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        {suiteIcon("add", 16)}
-                      </button>
-                    );
-                  })}
-                  {onAddMrsWTask && (
-                    <button onClick={() => openTaskComposer(taskPriority, { mrsW: true })} title="Add Mrs W task" aria-label="Add Mrs W task" aria-expanded={taskComposerOpen && taskComposerMrsW}
-                      style={{ width: 30, height: 30, flexShrink: 0, borderRadius: 7, border: `1px solid ${taskComposerOpen && taskComposerMrsW ? "#7DB892" : "transparent"}`, background: "#A8D8B9", color: "#123D25", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {suiteIcon("add", 16)}
-                    </button>
-                  )}
                 </div>
-              </div>
-              <div style={{ display: "none" }}>
-                <textarea value={taskDraft} rows={1}
-                  onChange={e => { setTaskDraft(e.target.value); e.target.style.height = "36px"; e.target.style.height = Math.min(e.target.scrollHeight, 108) + "px"; }}
-                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(); } }}
-                  placeholder="Add a task…"
-                  style={{ flex: "1 0 100%", minWidth: 0, height: 44, maxHeight: 112, boxSizing: "border-box", borderRadius: 22, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "10px 16px", fontSize: ncType.body, fontWeight: 400, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
-                {ncCorePills.map(p => {
-                  const active = taskPriority === p.id;
-                  return (
-                    <button key={p.id} onClick={() => setTaskPriority(p.id)}
-                      style={{ width: 58, height: 40, flexShrink: 0, borderRadius: 4, border: `1px solid ${active ? p.color : "transparent"}`, background: active ? p.color : C.bgSoft, color: active ? textOnColor(p.color) : C.muted, cursor: "pointer", fontSize: ncType.label, fontWeight: 500, fontFamily: "system-ui", transition: "background 0.12s, color 0.12s" }}>
-                      {p.ncLabel}
-                    </button>
-                  );
-                })}
-                <button onClick={addDraft} disabled={!taskDraft.trim()} style={{ width: 44, height: 44, borderRadius: 22, border: "none", background: activePriColor, color: textOnColor(activePriColor), cursor: "pointer", opacity: taskDraft.trim() ? 1 : 0.38, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  {suiteIcon("add", 20)}
-                </button>
-              </div>
+              )}
             </div>
             <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0 }}>
               {primaryTasks.length ? primaryTasks.map(t => {
@@ -354,11 +333,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No open tasks.</div>}
               {primaryTaskQueue.length > 5 && (
-                <div style={{ display: "flex", justifyContent: "center", padding: "2px 8px 5px", borderTop: `1px solid ${C.divider}` }}>
-                  <button onClick={() => setShowAllTasks(v => !v)} title={showAllTasks ? "Show fewer tasks" : `Show ${primaryTaskQueue.length - 5} more tasks`} aria-label={showAllTasks ? "Show fewer tasks" : `Show ${primaryTaskQueue.length - 5} more tasks`} style={gvIconButton({ width: 28, height: 24, borderRadius: 6 }, C)}>
-                    {suiteIcon(showAllTasks ? "expand_less" : "expand_more", 15)}
-                  </button>
-                </div>
+                <button onClick={() => setShowAllTasks(v => !v)} title={showAllTasks ? "Show fewer tasks" : `Show ${primaryTaskQueue.length - 5} more tasks`} aria-label={showAllTasks ? "Show fewer tasks" : `Show ${primaryTaskQueue.length - 5} more tasks`}
+                  style={{ width: "100%", height: 20, display: "flex", alignItems: "center", justifyContent: "center", gap: 3, border: "none", borderTop: `1px solid ${C.divider}`, background: "transparent", color: C.faint, cursor: "pointer", fontSize: 11, fontFamily: NC_FONT_STACK, flexShrink: 0 }}>
+                  {suiteIcon(showAllTasks ? "expand_less" : "expand_more", 12)}
+                  {!showAllTasks && <span>+{primaryTaskQueue.length - 5} more</span>}
+                </button>
               )}
 
             </div>
@@ -369,7 +348,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           <section style={ncPanel}>
             <div style={ncHeader}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={ncSectionIcon(GOLD)}>{suiteIcon("rule", 19)}</span>
+                <span style={ncSectionIcon(GOLD)}>{suiteIcon("rule", 16)}</span>
                 <span style={ncTitle}>Shailos</span>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -379,7 +358,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 <button onClick={onOpenShailos} style={cleanToolbarButton(false, C, { color: GOLD })}>
                   {suiteIcon("open_in_full", 15)} Open
                 </button>
-                <button onClick={() => { setActionCategoryId("shailos"); setActionsOpen(true); }} title="Shailos actions" style={ncSmallIconButton(false, GOLD)}>{suiteIcon("apps", 17)}</button>
+                <button onClick={() => { setActionCategoryId("shailos"); setActionsOpen(true); }} title="Shailos actions" style={ncSmallIconButton(false, GOLD)}>{suiteIcon("apps", 14)}</button>
               </div>
             </div>
             <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0 }}>
@@ -429,7 +408,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           <section style={ncPanel}>
             <div style={ncHeader}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                <span style={ncSectionIcon()}>{suiteIcon("phone_in_talk", 19)}</span>
+                <span style={ncSectionIcon()}>{suiteIcon("phone_in_talk", 16)}</span>
                 <span style={ncTitle}>Phone</span>
                 <span title={phoneStatusSummary.label} style={{ display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0, color: phoneStatusColor, fontSize: 12, fontWeight: 500 }}>
                   <span style={{ width: 7, height: 7, borderRadius: 99, background: phoneStatusColor, flexShrink: 0 }} />
@@ -445,7 +424,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 <button onClick={onOpenPhone} style={cleanToolbarButton(false, C)}>
                   {suiteIcon("open_in_full", 15)} Open
                 </button>
-                <button onClick={() => { setActionCategoryId("phone"); setActionsOpen(true); }} title="Phone actions" style={ncSmallIconButton()}>{suiteIcon("apps", 17)}</button>
+                <button onClick={() => { setActionCategoryId("phone"); setActionsOpen(true); }} title="Phone actions" style={ncSmallIconButton()}>{suiteIcon("apps", 14)}</button>
               </div>
             </div>
             <div style={{ overflow: "hidden", flex: "1 1 auto", minHeight: 0, padding: "10px 14px 14px", display: "flex", flexDirection: "column" }}>
