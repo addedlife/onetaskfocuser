@@ -429,3 +429,4 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` passed in `apps/web`; existing large-bundle warning remains.
 - `git diff --check` passed; line-ending normalization warnings only.
 - Browser smoke was attempted through the Codex in-app browser, but the local browser helper crashed before opening the tab; code-side verification above passed.
+- Pushed commit `6e5114b` to `origin/main`; production `https://onetaskfocuser.netlify.app/.netlify/functions/app-config` returned HTTP 200 with the new catalog entries `gemini-3.1-pro-preview`, `gpt-5.5`, and `claude-sonnet-4-6`.
