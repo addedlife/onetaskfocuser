@@ -352,3 +352,11 @@ Current source-grade file count after cleanup: 162 files.
 - Added contained overscroll behavior to the NerveCenter shell and inner task/shaila scroll panes to prevent drag momentum from chaining into empty dashboard space.
 - `npm run build` passed in `apps/web`.
 - Visual smoke captured locally at `http://127.0.0.1:4305/?suite=nervecenter` with Playwright screenshot; local Firebase was offline, so the layout was verified against local empty-state data and the same collapsed-card path.
+
+## 2026-05-11 NerveCenter Tasks Auto-Fill After Pane Resize
+
+- Researched the standard resize-aware component pattern before editing: `ResizeObserver` is the browser-native tool for responding to an element's own size changes, which matches a dragged dashboard pane better than a fixed row cap or window-only resize listener.
+- Changed the collapsed NerveCenter Tasks list to calculate how many task rows fit in the available dashboard grid height, keeping five as the minimum glance count while automatically revealing more tasks when space opens.
+- Updated the `more` affordance so its count reflects only the tasks still hidden after the auto-filled visible rows.
+- `npm run build` passed in `apps/web`.
+- Local smoke at `http://127.0.0.1:4305/?suite=nervecenter` with 18 seeded tasks: at 1440x760 the Tasks pane rendered 6 rows; after increasing available height to 1440x1040 it rendered 10 rows without clicking `See more`.

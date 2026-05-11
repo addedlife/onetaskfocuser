@@ -25,6 +25,8 @@ function nerveDisplaySummary(item, fallback = "Open item") {
   return compactNerveSummary(summary || source, fallback);
 }
 
+const MIN_COLLAPSED_TASKS = 5;
+
 function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems }) {
   const viewportW = useViewportWidth();
   const [taskDraft, setTaskDraft] = useState("");
@@ -35,6 +37,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [editText, setEditText] = useState("");
   const [openTaskActionsId, setOpenTaskActionsId] = useState(null);
   const [showAllTasks, setShowAllTasks] = useState(false);
+  const [autoTaskLimit, setAutoTaskLimit] = useState(MIN_COLLAPSED_TASKS);
+  const taskGridRef = useRef(null);
+  const taskHeaderRef = useRef(null);
+  const taskListRef = useRef(null);
+  const taskMoreButtonRef = useRef(null);
   const taskInputRef = useRef(null);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [addEventText, setAddEventText] = useState('');
@@ -120,7 +127,47 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const shailaPriorityIds = new Set(priorities.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
   const isShailaWork = t => t?.type === "shailo-research" || t?.type === "shaila-research" || !!t?.shailaId || !!t?.isGetBackStep || shailaPriorityIds.has(t?.priority);
   const primaryTaskQueue = tasks.filter(t => !isShailaWork(t));
-  const primaryTasks = (showAllTasks ? primaryTaskQueue : primaryTaskQueue.slice(0, 5));
+  useEffect(() => {
+    if (showAllTasks || !primaryTaskQueue.length || typeof ResizeObserver === "undefined") {
+      setAutoTaskLimit(MIN_COLLAPSED_TASKS);
+      return;
+    }
+
+    let frame = 0;
+    const recompute = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const gridH = taskGridRef.current?.getBoundingClientRect().height || 0;
+        if (!gridH) return;
+        const headerH = taskHeaderRef.current?.getBoundingClientRect().height || 0;
+        const moreH = primaryTaskQueue.length > MIN_COLLAPSED_TASKS ? (taskMoreButtonRef.current?.getBoundingClientRect().height || 24) : 0;
+        const rows = Array.from(taskListRef.current?.querySelectorAll("[data-nc-task-row='true']") || []);
+        const measuredRows = rows.map(row => row.getBoundingClientRect().height).filter(h => h > 0);
+        const avgRowH = Math.max(56, measuredRows.length ? measuredRows.reduce((sum, h) => sum + h, 0) / measuredRows.length : 56);
+        const nextLimit = Math.max(
+          MIN_COLLAPSED_TASKS,
+          Math.floor(Math.max(0, gridH - headerH - moreH) / avgRowH)
+        );
+        setAutoTaskLimit(prev => {
+          const bounded = Math.min(primaryTaskQueue.length, nextLimit);
+          return prev === bounded ? prev : bounded;
+        });
+      });
+    };
+
+    recompute();
+    const observer = new ResizeObserver(recompute);
+    [taskGridRef.current, taskHeaderRef.current, taskListRef.current, taskMoreButtonRef.current].filter(Boolean).forEach(el => observer.observe(el));
+    window.addEventListener("resize", recompute);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", recompute);
+    };
+  }, [primaryTaskQueue.length, showAllTasks, taskComposerOpen, touchLayout]);
+  const collapsedTaskLimit = Math.min(primaryTaskQueue.length, Math.max(MIN_COLLAPSED_TASKS, autoTaskLimit));
+  const hiddenTaskCount = Math.max(0, primaryTaskQueue.length - collapsedTaskLimit);
+  const primaryTasks = (showAllTasks ? primaryTaskQueue : primaryTaskQueue.slice(0, collapsedTaskLimit));
   // Exclude research-type shaila tasks — they're not actionable get-backs until research is done
   const visibleShailos = shailos.filter(s => s.type !== "shaila-research" && s.type !== "shailo-research").slice(0, 10);
   const needsNervePolish = item => {
@@ -241,11 +288,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       <div style={{ minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: isStacked ? "16px" : "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: isStacked ? 16 : 20 }}>
 
         {/* Three-panel grid — fills all remaining height */}
-        <div style={{ display: "grid", gridTemplateColumns: gridColumns, gap: isStacked ? 14 : touchLayout ? 20 : 4, flex: touchLayout ? "0 0 auto" : "1 1 0", minHeight: 0, alignItems: "stretch" }}>
+        <div ref={taskGridRef} style={{ display: "grid", gridTemplateColumns: gridColumns, gap: isStacked ? 14 : touchLayout ? 20 : 4, flex: touchLayout ? "0 0 auto" : "1 1 0", minHeight: 0, alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
           <section style={ncTasksPanel}>
-            <div style={{ ...ncHeader, display: taskComposerOpen ? "block" : "flex", ...(taskComposerOpen ? { padding: "7px 12px" } : {}) }}>
+            <div ref={taskHeaderRef} style={{ ...ncHeader, display: taskComposerOpen ? "block" : "flex", ...(taskComposerOpen ? { padding: "7px 12px" } : {}) }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, ...(taskComposerOpen ? { marginBottom: 7 } : {}) }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                   <span style={ncSectionIcon()}>{suiteIcon("task_alt", 16)}</span>
@@ -293,7 +340,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               )}
             </div>
             <div style={ncTaskBody}>
-              <div style={ncTaskList}>
+              <div ref={taskListRef} style={ncTaskList}>
               {primaryTasks.length ? primaryTasks.map(t => {
                 const pri = gP(priorities, t.priority);
                 const priColor = pri?.color || T.primary || "#7EB0DE";
@@ -301,7 +348,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 const actionsOpen = openTaskActionsId === t.id;
                 const displayText = nerveDisplaySummary(t, "Untitled task");
                 return (
-                  <div key={t.id} className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? "3px minmax(0,1fr) 40px" : "3px minmax(0,1fr)", alignItems: "start", padding: "14px 18px 14px 0", gap: 14, minHeight: 56 }}>
+                  <div key={t.id} data-nc-task-row="true" className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? "3px minmax(0,1fr) 40px" : "3px minmax(0,1fr)", alignItems: "start", padding: "14px 18px 14px 0", gap: 14, minHeight: 56 }}>
                     {/* Priority color bar */}
                     <span style={{ width: 3, alignSelf: "stretch", minHeight: 24, borderRadius: "0 3px 3px 0", background: priColor, flexShrink: 0 }} />
                     {/* Text — click to edit inline */}
@@ -338,11 +385,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No open tasks.</div>}
               </div>
-              {primaryTaskQueue.length > 5 && (
-                <button onClick={() => setShowAllTasks(v => !v)} title={showAllTasks ? "Show fewer tasks" : `Show ${primaryTaskQueue.length - 5} more tasks`} aria-label={showAllTasks ? "Show fewer tasks" : `Show ${primaryTaskQueue.length - 5} more tasks`}
+              {(showAllTasks || primaryTaskQueue.length > collapsedTaskLimit) && primaryTaskQueue.length > MIN_COLLAPSED_TASKS && (
+                <button ref={taskMoreButtonRef} onClick={() => setShowAllTasks(v => !v)} title={showAllTasks ? "Show fewer tasks" : `Show ${hiddenTaskCount} more tasks`} aria-label={showAllTasks ? "Show fewer tasks" : `Show ${hiddenTaskCount} more tasks`}
                   style={{ width: "100%", height: 24, flex: "0 0 24px", display: "flex", alignItems: "center", justifyContent: "center", gap: 3, border: "none", borderTop: `1px solid ${C.divider}`, background: "transparent", color: C.faint, cursor: "pointer", fontSize: 11, fontFamily: NC_FONT_STACK, flexShrink: 0 }}>
                   {suiteIcon(showAllTasks ? "expand_less" : "expand_more", 12)}
-                  {!showAllTasks && <span>+{primaryTaskQueue.length - 5} more</span>}
+                  {!showAllTasks && <span>+{hiddenTaskCount} more</span>}
                 </button>
               )}
 
