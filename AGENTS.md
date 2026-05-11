@@ -23,9 +23,9 @@ Start with `BRIEF.txt`. Keep both cached and uncached token use low: read the br
 ## Git And Release
 
 - Git origin is `https://github.com/addedlife/onetaskfocuser.git`.
-- Pro 4 local `master` was initialized as a clean history and is not yet reconciled with GitHub `main`.
-- Until reconciliation is approved, push Pro 4 work to `codex/...` branches, not directly over `main`.
-- Current safe branch: `codex/pro4-compact-webphone-live`.
+- GitHub `main` is reconciled to Pro 4 as of 2026-05-11.
+- Normal push target is `origin/main`.
+- Old GitHub main is preserved at branch `archive/pre-pro4-main-20260511-011424` and tag `archive-pre-pro4-main-20260511-011424`.
 - Netlify production should be deployed from `apps/web` with `npx netlify deploy --prod` after verified web changes unless the current thread says not to.
 
 ## Verification Gates

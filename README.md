@@ -22,5 +22,5 @@ For a new Codex session, say: `read brief`. For accurate low-token changes, use 
 ## Git
 
 - Origin: `https://github.com/addedlife/onetaskfocuser.git`
-- Pro 4 was initialized as a clean repo, so local `master` and remote `main` do not share history yet.
-- Push Pro 4 work to `codex/...` branches until `main` is intentionally reconciled.
+- GitHub `main` is reconciled to Pro 4 as of 2026-05-11.
+- The previous GitHub `main` history is preserved at `archive/pre-pro4-main-20260511-011424` and `archive-pre-pro4-main-20260511-011424`.

@@ -331,3 +331,11 @@ Current source-grade file count after cleanup: 162 files.
 - Reduced the task `See more` affordance to a small icon-only button.
 - `npm run build` passed in `apps/web`.
 - Live deploy completed with `npx netlify deploy --prod` from `apps/web`; production URL `https://onetaskfocuser.netlify.app`, deploy ID `6a0164d6afd56290d7c2b438`.
+
+## 2026-05-11 GitHub Main Reconciliation
+
+- Preserved the previous GitHub `main` commit `27e256cf1e0f3dda6e3addbfd743ac7d0bdd31c9` as branch `archive/pre-pro4-main-20260511-011424`.
+- Preserved the same old main commit as tag `archive-pre-pro4-main-20260511-011424`.
+- Reconciled GitHub `main` to Pro 4 commit `00d839f81d730e96ec623bd60443c72b974b1cf9` using `git push --force-with-lease`.
+- Renamed local branch `master` to `main` and set it to track `origin/main`.
+- Going forward, normal source pushes can use `origin/main`; old main remains recoverable from the archive branch/tag.

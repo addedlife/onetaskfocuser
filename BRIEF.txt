@@ -5,8 +5,7 @@ Read this first; then read only the matching row in docs/ops/CONTEXT_INDEX.md.
 - Active source: C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App
 - Live app: https://onetaskfocuser.netlify.app
 - Git origin: https://github.com/addedlife/onetaskfocuser.git
-- Safe push branch: codex/pro4-compact-webphone-live
-- Do not push over GitHub main until Pro 4 history is reconciled.
+- Git main is reconciled to Pro 4; normal push target is origin/main.
 - Production source only: apps/web, apps/shailos, apps/phone-host-windows.
 - Old folders are rollback/archive only.
 - Verify current state from docs/ops/VERIFICATION_LOG.md before edits.
