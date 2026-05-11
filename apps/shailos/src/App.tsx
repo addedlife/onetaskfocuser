@@ -75,6 +75,7 @@ interface Shaila {
   createdAt: Timestamp;
   updatedAt?: Timestamp;
   userId: string;
+  _manualDraft?: boolean;
 }
 
 interface PendingRecordingMeta {
@@ -107,7 +108,7 @@ function openPendingDb(): Promise<IDBDatabase> {
 
 async function withPendingStore<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T> | void): Promise<T | void> {
   const db = await openPendingDb();
-  return new Promise((resolve, reject) => {
+  return new Promise<T | void>((resolve, reject) => {
     const tx = db.transaction(PENDING_STORE, mode);
     const store = tx.objectStore(PENDING_STORE);
     const req = fn(store);
@@ -115,10 +116,9 @@ async function withPendingStore<T>(mode: IDBTransactionMode, fn: (store: IDBObje
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error || new Error('Pending audio operation failed'));
     } else {
-      tx.oncomplete = () => resolve();
+      tx.oncomplete = () => resolve(undefined);
     }
     tx.onerror = () => reject(tx.error || new Error('Pending audio transaction failed'));
-    tx.oncomplete = () => { if (!req) resolve(); };
   }).finally(() => db.close());
 }
 
@@ -787,43 +787,37 @@ function AppContent() {
 
   const handleAddManually = async () => {
     if (!user) return;
-    try {
-      const now = Timestamp.now();
-      const dateStr = format(new Date(), 'yyyy-MM-dd HH:mm');
-      const docRef = await addDoc(shailosCol(), {
-        date: dateStr,
-        askerName: '',
-        content: '',
-        parsedShaila: '',
-        synopsis: 'New Shaila',
-        answer: '',
-        answererName: '',
-        reasons: '',
-        status: 'pending',
-        createdAt: now,
-        userId: USER_ID,
-      });
-      setSelectedShaila({
-        id: docRef.id,
-        date: dateStr,
-        askerName: '',
-        content: '',
-        parsedShaila: '',
-        synopsis: 'New Shaila',
-        answer: '',
-        answererName: '',
-        reasons: '',
-        status: 'pending',
-        createdAt: now,
-        userId: USER_ID,
-      });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'shailos');
-    }
+    const now = Timestamp.now();
+    const dateStr = format(new Date(), 'yyyy-MM-dd HH:mm');
+    setSelectedShaila({
+      id: `manual-draft-${Date.now()}`,
+      date: dateStr,
+      askerName: '',
+      content: '',
+      parsedShaila: '',
+      synopsis: '',
+      answer: '',
+      answererName: '',
+      reasons: '',
+      status: 'pending',
+      createdAt: now,
+      userId: USER_ID,
+      _manualDraft: true,
+    });
   };
 
-  const saveShailaDetails = async (shaila: Shaila) => {
+  const saveShailaDetails = async (shaila: Shaila, options: { submitManualDraft?: boolean } = {}) => {
     try {
+      if (shaila._manualDraft && !options.submitManualDraft) {
+        setSelectedShaila(shaila);
+        return;
+      }
+      const questionText = (shaila.content || shaila.parsedShaila || '').trim();
+      const synopsisText = (shaila.synopsis || questionText.substring(0, 80)).trim();
+      if (shaila._manualDraft && !questionText && !synopsisText) {
+        setError("Add the shaila details before saving.");
+        return;
+      }
       const status = shaila.status === 'got_back' ? 'got_back' :
         (shaila.answer || '').trim() !== "" ? 'answered' : 'pending';
       // Regenerate answer summary whenever answer is present and has changed (or summary missing)
@@ -833,20 +827,34 @@ function AppContent() {
       if ((shaila.answer || '').trim() && (answerChanged || !answerSummary)) {
         try { answerSummary = await generateAnswerSummary(shaila.answer!); } catch (_) {}
       }
-      await updateDoc(doc(shailosCol(),shaila.id), {
+      const payload = {
         date: shaila.date,
-        content: shaila.content,
-        synopsis: shaila.synopsis,
+        content: questionText,
+        parsedShaila: shaila.parsedShaila || questionText,
+        synopsis: synopsisText,
         askerName: shaila.askerName || 'Unknown',
         answer: shaila.answer || '',
         answerSummary,
         answererName: shaila.answererName || '',
+        reasons: shaila.reasons || '',
         status,
         updatedAt: Timestamp.now()
+      };
+      if (shaila._manualDraft) {
+        const docRef = await addDoc(shailosCol(), {
+          ...payload,
+          createdAt: shaila.createdAt || Timestamp.now(),
+          userId: USER_ID,
+        });
+        setSelectedShaila({ ...shaila, ...payload, id: docRef.id, status, _manualDraft: false });
+        return;
+      }
+      await updateDoc(doc(shailosCol(),shaila.id), {
+        ...payload,
       });
       setSelectedShaila({ ...shaila, status, answerSummary });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `shailos/${shaila.id}`);
+      handleFirestoreError(err, shaila._manualDraft ? OperationType.CREATE : OperationType.UPDATE, shaila._manualDraft ? 'shailos' : `shailos/${shaila.id}`);
     }
   };
 
@@ -1152,7 +1160,9 @@ function AppContent() {
                     </div>
                     <div className="flex flex-col items-end gap-2 flex-shrink-0">
                       {isResearching(shaila.id) && (
-                        <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" title="Researching..." />
+                        <span title="Researching...">
+                          <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+                        </span>
                       )}
                       {!isResearching(shaila.id) && shaila.researchReport && (
                         <button
@@ -1213,14 +1223,16 @@ function AppContent() {
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className={cn(
                             'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider',
+                            selectedShaila._manualDraft ? 'bg-slate-100 text-slate-600' :
                             selectedShaila.status === 'got_back' ? 'bg-emerald-100 text-emerald-700' :
                             selectedShaila.status === 'answered' ? 'bg-amber-100 text-amber-700' :
                             'bg-amber-50 text-amber-600'
                           )}>
-                            {selectedShaila.status === 'pending' ? 'Researching' :
+                            {selectedShaila._manualDraft ? 'Draft' :
+                             selectedShaila.status === 'pending' ? 'Researching' :
                              selectedShaila.status === 'answered' ? 'Have Answer' : 'Got Back'}
                           </span>
-                          {selectedShaila.status === 'answered' && (
+                          {!selectedShaila._manualDraft && selectedShaila.status === 'answered' && (
                             <button
                               onClick={() => handleGotBack(selectedShaila)}
                               className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-300 bg-amber-50 hover:bg-amber-100 transition-colors text-xs font-bold text-amber-700"
@@ -1228,7 +1240,7 @@ function AppContent() {
                               Got back to asker? <CheckCircle className="w-3.5 h-3.5" />
                             </button>
                           )}
-                          {selectedShaila.status === 'got_back' && (
+                          {!selectedShaila._manualDraft && selectedShaila.status === 'got_back' && (
                             <button
                               onClick={() => handleGotBack(selectedShaila)}
                               className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 transition-colors text-xs font-bold text-emerald-700"
@@ -1304,35 +1316,49 @@ function AppContent() {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => handleResearch(selectedShaila)}
-                          disabled={isResearching(selectedShaila.id)}
-                          title="Research this shaila"
-                        >
-                          {isResearching(selectedShaila.id) ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                          ) : (
-                            <FlaskConical className="w-4 h-4 text-slate-400 hover:text-indigo-600" />
-                          )}
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => copyToClipboard(formatShailaForCopy(selectedShaila))}
-                          title="Copy to clipboard"
-                        >
-                          <Copy className="w-4 h-4 text-slate-400 hover:text-indigo-600" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => deleteShaila(selectedShaila.id)}
-                          title="Delete shaila"
-                        >
-                          <Trash2 className="w-4 h-4 text-slate-400 hover:text-red-500" />
-                        </Button>
+                        {!selectedShaila._manualDraft && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleResearch(selectedShaila)}
+                              disabled={isResearching(selectedShaila.id)}
+                              title="Research this shaila"
+                            >
+                              {isResearching(selectedShaila.id) ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                              ) : (
+                                <FlaskConical className="w-4 h-4 text-slate-400 hover:text-indigo-600" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyToClipboard(formatShailaForCopy(selectedShaila))}
+                              title="Copy to clipboard"
+                            >
+                              <Copy className="w-4 h-4 text-slate-400 hover:text-indigo-600" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteShaila(selectedShaila.id)}
+                              title="Delete shaila"
+                            >
+                              <Trash2 className="w-4 h-4 text-slate-400 hover:text-red-500" />
+                            </Button>
+                          </>
+                        )}
+                        {selectedShaila._manualDraft && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedShaila(null)}
+                            title="Cancel draft"
+                          >
+                            Cancel
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -1383,11 +1409,11 @@ function AppContent() {
                         </div>
                         <div className="mt-4 flex justify-end">
                           <Button 
-                            onClick={() => saveShailaDetails(selectedShaila)}
+                            onClick={() => saveShailaDetails(selectedShaila, { submitManualDraft: true })}
                             className="gap-2"
                           >
                             <Send className="w-4 h-4" />
-                            Save Details
+                            {selectedShaila._manualDraft ? 'Submit Shaila' : 'Save Details'}
                           </Button>
                         </div>
                       </section>

@@ -376,12 +376,14 @@ const Store = {
       snap.forEach(doc => {
         const s = doc.data();
         const linkedTask = taskByShailaId[doc.id];
+        const shailaText = String(s.synopsis || s.parsedShaila || s.content || "").trim();
+        const canCreateTask = shailaText && shailaText.toLowerCase() !== "new shaila";
 
-        if (!linkedTask && s.status === "pending") {
+        if (!linkedTask && s.status === "pending" && canCreateTask) {
           // Flow 1: new pending shaila → create task
           newTasks.push({
             id: uid(),
-            text: s.synopsis || s.content?.substring(0, 80) || "New shaila",
+            text: s.synopsis || s.content?.substring(0, 80) || s.parsedShaila?.substring(0, 80),
             completed: false,
             priority: "shaila",
             createdAt: Date.now(),

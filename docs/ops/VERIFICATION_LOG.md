@@ -384,3 +384,17 @@ Current source-grade file count after cleanup: 162 files.
 - Local headless Chrome smoke at `http://127.0.0.1:4305/?suite=nervecenter` reached the served app but stopped at the unauthenticated `Loading...` shell, matching the existing limitation noted for headless visual capture.
 - Native release commit `91f03dc` and web/UI commit `1bff672` were pushed to `origin/main`.
 - Production web deploy was triggered from `apps/web`; Netlify CLI hung after upload, but production `https://onetaskfocuser.netlify.app/` returned HTTP 200 and served the new built asset `assets/index-CSwH8QSK.js`.
+
+## 2026-05-11 Shailos Manual Draft Sync Correction
+
+- Researched form-save convention before editing: keep work-in-progress as a draft state and run cross-system side effects only after explicit submit.
+- Changed Shailos `Add Manually` so it opens a local draft instead of immediately writing a blank pending Firestore shaila.
+- Changed `Submit Shaila` to create the Firestore record only after details are entered and submitted.
+- Added a defensive task-sync guard so the task app does not create Shaila tasks from empty placeholder text such as `New Shaila`.
+- Refreshed the generated `apps/web/shailos` deploy bundle from `apps/shailos/dist`.
+- `npm run lint` passed in `apps/shailos`.
+- `npm run build` passed in `apps/shailos`; existing large-bundle warning remains.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `node scripts/copy-shailos-to-dist.cjs` passed in `apps/web`.
+- Local preview checks returned HTTP 200 for `http://127.0.0.1:4305/shailos/` and `http://127.0.0.1:4305/?suite=nervecenter`.
+- `git diff --check` passed.
