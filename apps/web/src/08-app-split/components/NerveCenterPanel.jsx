@@ -107,6 +107,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const gridColumns = isStacked ? "1fr" : isTablet ? "repeat(2,minmax(0,1fr))" : `minmax(240px,${paneW.tasks}fr) 6px minmax(240px,${paneW.shailos}fr) 6px minmax(240px,${paneW.phone}fr)`;
   const googleH = Math.max(150, Math.min(420, Number(googlePaneHeight || 244)));
   const ncPanel = { background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: isStacked ? 360 : isTablet ? 420 : 0, overflow: "hidden", boxShadow: "none" };
+  const ncScrollPane = { overflow: "auto", flex: "1 1 auto", minHeight: 0, overscrollBehavior: "contain", scrollbarGutter: "stable" };
+  const ncTaskBody = { flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", overscrollBehavior: "contain" };
+  const ncTaskList = showAllTasks ? ncScrollPane : { ...ncScrollPane, flex: "0 0 auto", overflow: "visible", maxHeight: "none" };
+  const ncTasksPanel = showAllTasks ? ncPanel : { ...ncPanel, alignSelf: "start", width: "100%" };
   const ncHeader = { minHeight: 36, padding: "4px 12px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 };
   const ncTitle = { fontSize: ncType.title, fontWeight: "var(--nc-font-weight-strong, 500)", color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35 };
   const ncSectionIcon = (accent = C.accent) => ({ width: 26, height: 26, borderRadius: 13, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
@@ -233,14 +237,14 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   };
 
   return (
-    <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: touchLayout ? "auto" : "hidden", borderLeft: `1px solid ${C.divider}` }}>
+    <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: touchLayout ? "auto" : "hidden", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}` }}>
       <div style={{ minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: isStacked ? "16px" : "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: isStacked ? 16 : 20 }}>
 
         {/* Three-panel grid — fills all remaining height */}
         <div style={{ display: "grid", gridTemplateColumns: gridColumns, gap: isStacked ? 14 : touchLayout ? 20 : 4, flex: touchLayout ? "0 0 auto" : "1 1 0", minHeight: 0, alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
-          <section style={ncPanel}>
+          <section style={ncTasksPanel}>
             <div style={{ ...ncHeader, display: taskComposerOpen ? "block" : "flex", ...(taskComposerOpen ? { padding: "7px 12px" } : {}) }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, ...(taskComposerOpen ? { marginBottom: 7 } : {}) }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -288,7 +292,8 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 </div>
               )}
             </div>
-            <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0 }}>
+            <div style={ncTaskBody}>
+              <div style={ncTaskList}>
               {primaryTasks.length ? primaryTasks.map(t => {
                 const pri = gP(priorities, t.priority);
                 const priColor = pri?.color || T.primary || "#7EB0DE";
@@ -332,9 +337,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                   </div>
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No open tasks.</div>}
+              </div>
               {primaryTaskQueue.length > 5 && (
                 <button onClick={() => setShowAllTasks(v => !v)} title={showAllTasks ? "Show fewer tasks" : `Show ${primaryTaskQueue.length - 5} more tasks`} aria-label={showAllTasks ? "Show fewer tasks" : `Show ${primaryTaskQueue.length - 5} more tasks`}
-                  style={{ width: "100%", height: 20, display: "flex", alignItems: "center", justifyContent: "center", gap: 3, border: "none", borderTop: `1px solid ${C.divider}`, background: "transparent", color: C.faint, cursor: "pointer", fontSize: 11, fontFamily: NC_FONT_STACK, flexShrink: 0 }}>
+                  style={{ width: "100%", height: 24, flex: "0 0 24px", display: "flex", alignItems: "center", justifyContent: "center", gap: 3, border: "none", borderTop: `1px solid ${C.divider}`, background: "transparent", color: C.faint, cursor: "pointer", fontSize: 11, fontFamily: NC_FONT_STACK, flexShrink: 0 }}>
                   {suiteIcon(showAllTasks ? "expand_less" : "expand_more", 12)}
                   {!showAllTasks && <span>+{primaryTaskQueue.length - 5} more</span>}
                 </button>
@@ -361,7 +367,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 <button onClick={() => { setActionCategoryId("shailos"); setActionsOpen(true); }} title="Shailos actions" style={ncSmallIconButton(false, GOLD)}>{suiteIcon("apps", 14)}</button>
               </div>
             </div>
-            <div style={{ overflow: "auto", flex: "1 1 auto", minHeight: 0 }}>
+            <div style={ncScrollPane}>
               {/* Active shailos — open + pending get-back */}
               {visibleShailos.length ? visibleShailos.map((s, idx) => {
                 const text = nerveDisplaySummary(s, "Open shaila");

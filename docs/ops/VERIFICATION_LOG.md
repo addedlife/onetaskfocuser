@@ -345,3 +345,10 @@ Current source-grade file count after cleanup: 162 files.
 - After GitHub `main` moved to Pro 4, Netlify's Git-trigger path served a 404 because the Pro 4 repo is a monorepo and the web app is under `apps/web`.
 - Restored production immediately with manual deploy `6a01667f88b9f9afe8df0a04` from `apps/web`.
 - Added root `netlify.toml` with `[build].base = "apps/web"` so future Git-triggered builds start from the web app directory and use the existing `apps/web/netlify.toml`.
+
+## 2026-05-11 NerveCenter Tasks Blank-Bottom Correction
+
+- Corrected the collapsed Tasks pane so it shrink-wraps the visible rows plus the more button instead of filling the dashboard column with a blank bordered scroll area.
+- Added contained overscroll behavior to the NerveCenter shell and inner task/shaila scroll panes to prevent drag momentum from chaining into empty dashboard space.
+- `npm run build` passed in `apps/web`.
+- Visual smoke captured locally at `http://127.0.0.1:4305/?suite=nervecenter` with Playwright screenshot; local Firebase was offline, so the layout was verified against local empty-state data and the same collapsed-card path.
