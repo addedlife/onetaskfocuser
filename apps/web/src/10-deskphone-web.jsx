@@ -1518,7 +1518,7 @@ function ConversationCallHistory({
   const [showRecents, setShowRecents] = useState(true);
   const [openCallActionKey, setOpenCallActionKey] = useState("");
   const isFullCallsSurface = mode === "full";
-  const selectedCalls = getSortedCalls(calls).map((call) => enrichCallWithContactName(call, contacts));
+  const selectedCalls = useMemo(() => getSortedCalls(calls).map((call) => enrichCallWithContactName(call, contacts)), [calls, contacts]);
   const visibleCalls = selectedCalls.filter((call) => callMatchesFilter(call, callFilter));
   const callSummary = selectedCalls.length
     ? callFilter === "All"
@@ -5735,6 +5735,7 @@ export function DeskPhoneWebPanel({
   const [contactDraft, setContactDraft] = useState(null);
   const mediaMessagesRef = useRef([]);
   const lastMediaRefreshRef = useRef(0);
+  const contactsSigRef = useRef("");
 
   const showNotice = useCallback((message) => {
     setNotice(message);
@@ -5767,7 +5768,14 @@ export function DeskPhoneWebPanel({
         setMessages(mergeMessagesWithMedia(nextMessages.data, mediaData));
       }
       if (nextCalls.ok) setCalls(getApiList(nextCalls.data));
-      if (nextContacts.ok) setContacts(getApiList(nextContacts.data));
+      if (nextContacts.ok) {
+        const list = getApiList(nextContacts.data);
+        const sig = `${list.length}|${list[0]?.id ?? ""}|${list[list.length - 1]?.id ?? ""}`;
+        if (sig !== contactsSigRef.current) {
+          contactsSigRef.current = sig;
+          setContacts(list);
+        }
+      }
       setOnline(true);
       const failed = [nextStatus, nextMessages, nextCalls, nextContacts].filter((item) => !item.ok);
       setError(failed.length ? failed.map((item) => item.error?.message || `${item.path} failed`).join(" | ") : "");
