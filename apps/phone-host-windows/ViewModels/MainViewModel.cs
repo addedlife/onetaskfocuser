@@ -2631,13 +2631,13 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         };
         _api.GetCalls = () =>
         {
-            var snapshot = GetCallHistorySnapshotForApi(100);
+            var snapshot = GetCallHistorySnapshotForApi(1000);
             return System.Text.Json.JsonSerializer.Serialize(snapshot.Select(MapCallRecordForApi));
         };
         _api.GetContacts = () =>
         {
             var snapshot = GetContactsSnapshot();
-            return System.Text.Json.JsonSerializer.Serialize(snapshot.Take(250).Select(c => new
+            return System.Text.Json.JsonSerializer.Serialize(snapshot.Select(c => new
             {
                 id = $"{c.SourceDeviceAddress}|{c.DisplayName}|{c.PrimaryPhone}",
                 displayName = c.DisplayName,

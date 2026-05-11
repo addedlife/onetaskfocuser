@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-05-10 23:19:06",
+        "version":  "b263",
+        "notes":  "DeskPhone Web data parity: contacts and call history now expose fuller host payloads.",
+        "devNotes":  "Raises the DeskPhone Web call-history API export from 100 to 1000 rows and removes the 250-contact API truncation so the browser can resolve contact names beyond the early alphabet and populate call/message surfaces from the active contact store. This is a host API parity release for WebPhone data completeness; it does not change Bluetooth transport, MAP send semantics, PBAP import behavior, or the Pro 4 launcher identity."
+    },
+    {
         "timestamp":  "2026-05-10 22:41:37",
         "version":  "b262",
         "notes":  "DeskPhone source cutover: the stable desktop launcher now comes from the Shamash Pro 4 phone host.",
