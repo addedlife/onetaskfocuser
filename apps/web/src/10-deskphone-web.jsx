@@ -4074,10 +4074,12 @@ const css = `
   height: 100%;
   min-width: 0;
   display: grid;
+  grid-template-columns: minmax(340px, 1fr) 7px minmax(260px, var(--dp-call-history-width, 360px));
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
 }
 .dp-thread-header {
+  grid-column: 1;
   min-width: 0;
   border-bottom: 1px solid var(--dp-border);
   padding: 10px 16px;
@@ -4201,6 +4203,7 @@ const css = `
   padding: 0 12px;
 }
 .dp-thread-detail-grid {
+  grid-column: 1 / -1;
   min-width: 0;
   min-height: 0;
   display: grid;
@@ -5491,6 +5494,9 @@ const css = `
     border-right: 0;
     border-bottom: 1px solid var(--dp-border);
   }
+  .dp-shell.is-mobile-bridge .dp-thread-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .dp-shell.is-mobile-bridge .dp-thread-detail-grid {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
@@ -5706,6 +5712,9 @@ const css = `
   .dp-conversation-pane {
     border-right: 0;
     border-bottom: 1px solid var(--dp-border);
+  }
+  .dp-thread-layout {
+    grid-template-columns: minmax(0, 1fr);
   }
   .dp-thread-header {
     grid-template-columns: auto minmax(0, 1fr);
