@@ -25,6 +25,381 @@ function nerveDisplaySummary(item, fallback = "Open item") {
   return compactNerveSummary(summary || source, fallback);
 }
 
+const NEXT_STEP_FEEDBACK_KEY = "nc_next_step_feedback_v1";
+const NEXT_STEP_MODEL = "claude-haiku-4-5-20251001";
+const NEXT_STEP_SYSTEM = `You are a focused, ADHD-aware "next step" picker for a busy rabbi (Yeshivish English speaker). On every call you receive a fresh, raw sweep of:
+- Open tasks
+- Open shailos (halachic questions from community members — these usually need either research or a "get-back" reply to the asker)
+- Today's calendar events
+- Recent important / unread emails
+- Recent SMS conversations
+- Recent phone calls
+
+Your job: pick ONE concrete next action. Just one.
+
+RULES:
+1. For the initial sweep, output STRICT JSON only, no prose, no markdown fence.
+2. Schema: {"next":"<one verb-first sentence, max 22 words>","why":"<5-12 words explaining what tipped the scale>","kind":"shaila|task|call|email|event|other"}
+3. Shailos that need research or a get-back beat ordinary tasks UNLESS something on the calendar or a missed call is more time-critical.
+4. Reason from CONTENT only. Ignore order, pinning, priority labels — those weren't sent on purpose.
+5. ADHD-friendly: short, decisive, verb-first ("Call Reb X about...", "Reply to Mrs. Y's shaila about..."). No "consider", "maybe", "you might want to".
+6. If literally nothing is actionable: {"next":"Nothing pressing — take a breath","why":"all clear","kind":"other"}
+7. The user may include feedback from past suggestions; respect what they didn't want to do — don't keep suggesting the same skipped item.
+8. For chat follow-up turns (not the initial sweep): answer conversationally in 1–4 short sentences. No JSON for follow-ups.`;
+
+function loadNextStepFeedback() {
+  try { return JSON.parse(localStorage.getItem(NEXT_STEP_FEEDBACK_KEY) || "[]"); }
+  catch { return []; }
+}
+function pushNextStepFeedback(entry) {
+  try {
+    const arr = loadNextStepFeedback();
+    arr.unshift({ ts: Date.now(), ...entry });
+    localStorage.setItem(NEXT_STEP_FEEDBACK_KEY, JSON.stringify(arr.slice(0, 10)));
+  } catch { /* localStorage disabled */ }
+}
+
+async function fetchNextStepPhoneSweep() {
+  const api = "http://127.0.0.1:8765";
+  let token = "";
+  try { token = localStorage.getItem("deskphone_web_pairing_token") || ""; } catch { /* noop */ }
+  const headers = token ? { "X-DeskPhone-Token": token } : {};
+  try {
+    const [mr, cr] = await Promise.all([
+      fetch(`${api}/messages?limit=80`, { cache: "no-store", headers }).catch(() => null),
+      fetch(`${api}/calls`, { cache: "no-store", headers }).catch(() => null),
+    ]);
+    const mData = mr?.ok ? await mr.json().catch(() => null) : null;
+    const cData = cr?.ok ? await cr.json().catch(() => null) : null;
+    const messages = Array.isArray(mData) ? mData : (mData?.messages || []);
+    const calls = Array.isArray(cData) ? cData : (cData?.calls || []);
+    return { messages: messages.slice(0, 30), calls: calls.slice(0, 15), online: !!(mr?.ok || cr?.ok) };
+  } catch {
+    return { messages: [], calls: [], online: false };
+  }
+}
+
+function buildNextStepSweep({ tasks, shailos, calendarEvents, gmailMessages, phone }) {
+  const safeText = (...candidates) => {
+    for (const c of candidates) {
+      const v = String(c || "").replace(/\s+/g, " ").trim();
+      if (v) return v;
+    }
+    return "";
+  };
+  const block = (label, items, formatter, max) => {
+    const lines = items.slice(0, max).map(formatter).filter(Boolean);
+    return lines.length ? `${label}:\n${lines.join("\n")}` : "";
+  };
+
+  const taskBlock = block("OPEN TASKS",
+    tasks.filter(t => !t.completed),
+    t => {
+      const text = safeText(t.text, t.ncSummary);
+      return text ? `- ${text.slice(0, 160)}` : "";
+    }, 20);
+
+  const shailoBlock = block("OPEN SHAILOS (halachic questions from community)",
+    shailos.filter(s => !s.completed),
+    s => {
+      const text = safeText(s.text, s.shaila, s.question, s.ncSummary);
+      if (!text) return "";
+      const tag = s.isGetBackStep
+        ? "[needs get-back to asker]"
+        : (s.type === "shaila-research" || s.type === "shailo-research")
+          ? "[needs research]"
+          : "[open]";
+      const asker = safeText(s.askerName, s.from);
+      return `- ${tag}${asker ? ` (from ${asker.slice(0, 40)})` : ""} ${text.slice(0, 200)}`;
+    }, 15);
+
+  const calBlock = block("CALENDAR (today + upcoming)",
+    calendarEvents || [],
+    e => {
+      const summary = safeText(e.summary).slice(0, 100);
+      const start = e.start?.dateTime || e.start?.date || "";
+      return summary ? `- ${start} ${summary}` : "";
+    }, 10);
+
+  const mailBlock = block("RECENT IMPORTANT / UNREAD EMAILS",
+    gmailMessages || [],
+    m => {
+      const headers = m?.payload?.headers || [];
+      const get = name => headers.find(h => h.name === name)?.value || "";
+      const subject = safeText(get("Subject")).slice(0, 80);
+      const from = safeText(get("From")).split("<")[0].trim().slice(0, 50);
+      const snippet = safeText(m.aiSummary, m.snippet).slice(0, 140);
+      if (!subject && !snippet) return "";
+      return `- ${from} — ${subject}${snippet ? ` — ${snippet}` : ""}`;
+    }, 10);
+
+  const msgBlock = block("RECENT SMS",
+    phone.messages,
+    m => {
+      const text = safeText(m.text, m.body, m.message).slice(0, 140);
+      const peer = safeText(m.name, m.displayName, m.contactName, m.peer, m.number, m.from).slice(0, 40);
+      if (!text) return "";
+      const dir = (m.direction === "out" || m.outgoing || m.isOutgoing) ? "->" : "<-";
+      return `- ${dir} ${peer}: ${text}`;
+    }, 15);
+
+  const callBlock = block("RECENT CALLS",
+    phone.calls,
+    c => {
+      const peer = safeText(c.name, c.displayName, c.callerName, c.peer, c.number, c.from, c.to).slice(0, 40);
+      if (!peer) return "";
+      const dir = (c.direction === "out" || c.outgoing) ? "->" : "<-";
+      const status = c.missed ? " [MISSED]" : c.answered === false ? " [missed]" : "";
+      return `- ${dir} ${peer}${status}`;
+    }, 10);
+
+  const blocks = [taskBlock, shailoBlock, calBlock, mailBlock, msgBlock, callBlock].filter(Boolean);
+  return blocks.length ? blocks.join("\n\n") : "(no open items found anywhere)";
+}
+
+function buildNextStepFeedbackBlock() {
+  const fb = loadNextStepFeedback().slice(0, 5);
+  if (!fb.length) return "";
+  const lines = fb.map(f => {
+    const note = f.note ? ` ("${String(f.note).slice(0, 60)}")` : "";
+    const rec = String(f.rec || "").slice(0, 80);
+    return `- ${f.action}: "${rec}"${note}`;
+  });
+  return `\n\nRECENT FEEDBACK ON YOUR PAST SUGGESTIONS (learn from this):\n${lines.join("\n")}`;
+}
+
+function NextStepCard({ T, C, tasks, shailos, calendarEvents, gmailMessages }) {
+  const [rec, setRec] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
+  const [thread, setThread] = useState([]);
+  const [askDraft, setAskDraft] = useState("");
+  const [askLoading, setAskLoading] = useState(false);
+  const phoneCacheRef = useRef(null);
+  const initialRunRef = useRef(false);
+
+  const accent = "#8B6FB8";
+  const accentBg = "rgba(139,111,184,0.06)";
+  const accentBrd = "rgba(139,111,184,0.18)";
+
+  const runSweep = useCallback(async () => {
+    setLoading(true); setError(null); setThread([]); setAskOpen(false);
+    try {
+      const phone = await fetchNextStepPhoneSweep();
+      phoneCacheRef.current = { ...phone, fetchedAt: Date.now() };
+      const sweep = buildNextStepSweep({ tasks, shailos, calendarEvents, gmailMessages, phone });
+      const userMsg = sweep + buildNextStepFeedbackBlock();
+      const text = await callAI(userMsg, {
+        provider: "claude",
+        model: NEXT_STEP_MODEL,
+        system: NEXT_STEP_SYSTEM,
+      }, { maxOutputTokens: 220, temperature: 0.4 });
+
+      const cleaned = String(text || "").trim();
+      if (!cleaned) throw new Error("No reply — try again");
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error("Unexpected response shape");
+      const parsed = JSON.parse(match[0]);
+      setRec({
+        next: String(parsed.next || "").trim(),
+        why: String(parsed.why || "").trim(),
+        kind: String(parsed.kind || "other").toLowerCase(),
+        when: Date.now(),
+      });
+    } catch (e) {
+      setError(e?.message || "Couldn't get a recommendation");
+    } finally {
+      setLoading(false);
+    }
+  }, [tasks, shailos, calendarEvents, gmailMessages]);
+
+  const sendAsk = useCallback(async () => {
+    const q = askDraft.trim();
+    if (!q || askLoading) return;
+    setAskLoading(true);
+    const nextThread = [...thread, { role: "user", content: q }];
+    setThread(nextThread);
+    setAskDraft("");
+    try {
+      const phone = phoneCacheRef.current || await fetchNextStepPhoneSweep();
+      const sweep = buildNextStepSweep({ tasks, shailos, calendarEvents, gmailMessages, phone });
+      const recLine = rec ? `\nCurrent recommendation: ${rec.next} — ${rec.why}` : "";
+      const messages = [
+        { role: "user", content: `Context — live sweep:\n${sweep}${recLine}\n\nThe user is asking follow-up questions about this state.` },
+        { role: "assistant", content: rec ? `Got it. Right now I'm suggesting: ${rec.next}` : "Got it, I have the sweep loaded." },
+        ...nextThread,
+      ];
+      const text = await callAI("", {
+        provider: "claude",
+        model: NEXT_STEP_MODEL,
+        system: NEXT_STEP_SYSTEM,
+        messages,
+      }, { maxOutputTokens: 500, temperature: 0.5 });
+      const reply = String(text || "").trim() || "(no reply)";
+      setThread([...nextThread, { role: "assistant", content: reply }]);
+    } catch (e) {
+      setThread([...nextThread, { role: "assistant", content: `[error: ${e?.message || "no reply"}]` }]);
+    } finally {
+      setAskLoading(false);
+    }
+  }, [askDraft, askLoading, thread, rec, tasks, shailos, calendarEvents, gmailMessages]);
+
+  useEffect(() => {
+    if (initialRunRef.current) return;
+    initialRunRef.current = true;
+    runSweep();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const kindIcon = ({
+    shaila: "rule",
+    task: "task_alt",
+    call: "phone",
+    email: "mail",
+    event: "event",
+    other: "auto_awesome",
+  })[rec?.kind] || "auto_awesome";
+
+  const recText = rec?.next || "";
+  const whyText = rec?.why || "";
+
+  return (
+    <div style={{
+      borderRadius: 8,
+      border: `1px solid ${accentBrd}`,
+      background: accentBg,
+      flex: "0 0 auto",
+      fontFamily: NC_FONT_STACK,
+      overflow: "hidden",
+    }}>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "26px minmax(0, 1fr) auto",
+        gap: 10,
+        padding: "10px 14px",
+        alignItems: "start",
+      }}>
+        <span style={{
+          width: 26, height: 26, borderRadius: 13, color: accent,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          flexShrink: 0,
+        }}>
+          {suiteIcon(kindIcon, 16)}
+        </span>
+
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+            <span style={{ fontSize: NC_TYPE.label, fontWeight: 500, color: accent, textTransform: "uppercase", letterSpacing: 0.4 }}>
+              Next
+            </span>
+            {rec?.when && !loading && !error && (
+              <span style={{ fontSize: 11, color: C.faint }}>
+                {(() => {
+                  const m = Math.max(0, Math.round((Date.now() - rec.when) / 60000));
+                  return m < 1 ? "just now" : `${m}m ago`;
+                })()}
+              </span>
+            )}
+          </div>
+          {loading ? (
+            <span style={{ fontSize: NC_TYPE.body, color: C.muted, fontWeight: 400 }}>
+              Sweeping tasks, shailos, calendar, mail, texts, calls…
+            </span>
+          ) : error ? (
+            <span style={{ fontSize: NC_TYPE.body, color: C.danger || "#E07040", fontWeight: 400 }}>{error}</span>
+          ) : rec ? (
+            <React.Fragment>
+              <span style={{ fontSize: NC_TYPE.body, fontWeight: 500, color: C.text, lineHeight: NC_TYPE.line, display: "block", wordBreak: "break-word" }}>
+                {recText}
+              </span>
+              {whyText && (
+                <span style={{ fontSize: NC_TYPE.meta, color: C.muted, marginTop: 3, display: "block" }}>
+                  {whyText}
+                </span>
+              )}
+            </React.Fragment>
+          ) : (
+            <span style={{ fontSize: NC_TYPE.body, color: C.faint }}>Tap refresh to scan.</span>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+          {rec && !loading && !error && (
+            <React.Fragment>
+              <button onClick={() => { pushNextStepFeedback({ rec: rec.next, action: "did" }); runSweep(); }}
+                title="Did it — pick next" aria-label="Did it"
+                style={gvIconButton({ width: 28, height: 28, color: C.success }, C)}>
+                {suiteIcon("check", 15)}
+              </button>
+              <button onClick={() => { pushNextStepFeedback({ rec: rec.next, action: "skip" }); runSweep(); }}
+                title="Skip — pick something else" aria-label="Skip"
+                style={gvIconButton({ width: 28, height: 28 }, C)}>
+                {suiteIcon("skip_next", 15)}
+              </button>
+            </React.Fragment>
+          )}
+          <button onClick={() => setAskOpen(v => !v)}
+            title={askOpen ? "Hide chat" : "Ask about this"} aria-label="Ask"
+            style={gvIconButton({ width: 28, height: 28, background: askOpen ? C.hover : "transparent", color: askOpen ? accent : C.muted }, C)}>
+            {suiteIcon("chat_bubble_outline", 14)}
+          </button>
+          <button onClick={runSweep} disabled={loading}
+            title="Refresh sweep" aria-label="Refresh"
+            style={gvIconButton({ width: 28, height: 28, opacity: loading ? 0.5 : 1 }, C)}>
+            {suiteIcon("refresh", 15)}
+          </button>
+        </div>
+      </div>
+
+      {askOpen && (
+        <div style={{ borderTop: `1px solid ${accentBrd}`, padding: "10px 14px 12px", display: "flex", flexDirection: "column", gap: 8, maxHeight: 240 }}>
+          {thread.length > 0 && (
+            <div style={{ overflow: "auto", maxHeight: 160, display: "flex", flexDirection: "column", gap: 6, paddingRight: 4 }}>
+              {thread.map((m, i) => (
+                <div key={i} style={{
+                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                  maxWidth: "88%",
+                  fontSize: NC_TYPE.meta, lineHeight: NC_TYPE.line,
+                  background: m.role === "user" ? C.bgSoft : "transparent",
+                  color: m.role === "user" ? C.text : C.muted,
+                  border: m.role === "assistant" ? `1px solid ${accentBrd}` : "none",
+                  padding: "6px 10px",
+                  borderRadius: 10,
+                  wordBreak: "break-word",
+                  whiteSpace: "pre-wrap",
+                }}>
+                  {m.content}
+                </div>
+              ))}
+              {askLoading && (
+                <div style={{ alignSelf: "flex-start", fontSize: NC_TYPE.meta, color: C.faint, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", border: `2px solid ${C.faint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                  thinking
+                </div>
+              )}
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 30px", gap: 6, alignItems: "center" }}>
+            <input
+              value={askDraft}
+              onChange={e => setAskDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); sendAsk(); } }}
+              placeholder="Ask about this — e.g. 'why this and not the email from X?'"
+              style={{ height: 32, boxSizing: "border-box", borderRadius: 7, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, padding: "0 10px", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, outline: "none" }}
+            />
+            <button onClick={sendAsk} disabled={!askDraft.trim() || askLoading}
+              title="Send" aria-label="Send"
+              style={{ width: 30, height: 30, borderRadius: 7, border: "none", background: accent, color: "#fff", cursor: askDraft.trim() && !askLoading ? "pointer" : "default", opacity: askDraft.trim() && !askLoading ? 1 : 0.4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {suiteIcon("send", 14)}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems }) {
   const viewportW = useViewportWidth();
   const [taskDraft, setTaskDraft] = useState("");
@@ -679,6 +1054,16 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
             </React.Fragment>
           );
         })()}
+
+        {/* ── Next Step (Claude) ── compact recommendation + ask */}
+        <NextStepCard
+          T={T}
+          C={C}
+          tasks={tasks}
+          shailos={shailos}
+          calendarEvents={calendarEvents}
+          gmailMessages={gmailMessages}
+        />
 
         {/* Actions drawer */}
         {actionsOpen && (

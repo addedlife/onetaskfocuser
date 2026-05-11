@@ -1,5 +1,26 @@
 ﻿# Verification Log
 
+## 2026-05-11
+
+### `apps/web` — NerveCenter "Next Step" panel + Claude routing
+
+- Added Claude provider support to `apps/web/backend/functions/_ai-core.cjs`:
+  - Closed the `normalizeProvider` trapdoor that previously mapped `"claude" -> "gemini"`.
+  - Added `CLAUDE_MODELS` registry (default `claude-haiku-4-5-20251001`).
+  - Added `callClaude` (raw `fetch` to Anthropic Messages API, 60s abort, prompt caching via `cache_control: ephemeral` on the system prompt).
+  - `processAiPayload` now dispatches `provider: "claude"` to `callClaude`; audio path remains Gemini-only.
+  - `publicAiConfig` exposes `available.claude` (true when `ANTHROPIC_API_KEY` is set) and `models.claude`.
+- Extended `apps/web/src/01-core.js` `callAI` to pass `system` and `messages` through to the proxy (used by new chat turns; existing Gemini callers unaffected).
+- Added `NextStepCard` to `apps/web/src/08-app-split/components/NerveCenterPanel.jsx`:
+  - Compact card inserted below the Google strip in the NerveCenter.
+  - On mount and on user-clicked refresh, builds a sweep from tasks + shailos + calendar + Gmail + local DeskPhone `/messages` + `/calls`, then asks Claude Haiku 4.5 for one verb-first next action.
+  - Inline "Ask" chat using `messages` array for multi-turn follow-ups.
+  - Stores up to 10 user feedback entries (`did` / `skip`) in `localStorage` key `nc_next_step_feedback_v1`, feeds last 5 into each new sweep so the recommendation "learns" what the user passes on.
+- `npm ci` passed.
+- `npm run build` passed. Same preexisting 1.4 MB chunk-size warning as 2026-05-10; no new warnings.
+- **Pending external configuration:** `ANTHROPIC_API_KEY` must be set in Netlify env vars for the new path to function in production. Until set, the NextStep panel will display the gateway error message; the rest of the app (including existing Gemini-backed AI calls) is unaffected.
+- Not yet verified: runtime behavior in browser, live host `/messages` and `/calls` field-name mapping inside the AI sweep. Field names were modeled on the same candidates the sibling `NerveCenterPhoneSurface` uses.
+
 ## 2026-05-10
 
 ### `apps/web`

@@ -28,6 +28,14 @@ const GEMINI_MODELS = [
   "gemini-2.5-flash-lite",
 ];
 
+const DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5-20251001";
+const CLAUDE_MODELS = [
+  "claude-haiku-4-5-20251001",
+  "claude-sonnet-4-6",
+  "claude-opus-4-7",
+];
+const ANTHROPIC_API_VERSION = "2023-06-01";
+
 const YESHIVISH_SYSTEM = `You are assisting a rabbi and Orthodox Jewish community. You understand "Yeshivish", a dialect blending English with Hebrew, Aramaic, and Yiddish Torah terms.
 
 Key vocabulary:
@@ -50,7 +58,9 @@ Interpret all content in this Torah, halachic, and Orthodox Jewish community con
 
 function normalizeProvider(value) {
   const v = String(value || "").trim().toLowerCase();
-  return v === "gemini" || v === "claude" ? "gemini" : null;
+  if (v === "claude" || v === "anthropic") return "claude";
+  if (v === "gemini" || v === "google") return "gemini";
+  return null;
 }
 
 function defaultTextProvider() {
@@ -63,6 +73,14 @@ function defaultProviderFor(kind, task) {
 
 function modelFor(provider, kind, task, requestedModel) {
   const requested = String(requestedModel || "").trim();
+
+  if (provider === "claude") {
+    if (requested && CLAUDE_MODELS.includes(requested)) return requested;
+    const envFallback = process.env.CLAUDE_MODEL || process.env.ANTHROPIC_MODEL;
+    if (envFallback && CLAUDE_MODELS.includes(envFallback)) return envFallback;
+    return DEFAULT_CLAUDE_MODEL;
+  }
+
   const fallback =
     process.env.AI_MODEL ||
     process.env.GEMINI_MODEL ||
@@ -287,6 +305,89 @@ async function callGemini({ body, prompt, base64, mimeType, model, genConfig, al
   return { provider: "gemini", model, text: extractGeminiText(data), raw: data };
 }
 
+function normalizeClaudeMessages(messages, fallbackPrompt) {
+  const safe = [];
+  const source = Array.isArray(messages) && messages.length
+    ? messages
+    : [{ role: "user", content: String(fallbackPrompt || "") }];
+  for (const m of source) {
+    const role = m?.role === "assistant" ? "assistant" : "user";
+    const content = typeof m?.content === "string"
+      ? m.content
+      : Array.isArray(m?.content)
+        ? m.content.map(part => part?.text || "").filter(Boolean).join("\n")
+        : "";
+    if (!content.trim()) continue;
+    safe.push({ role, content: content.slice(0, 200000) });
+  }
+  if (!safe.length) safe.push({ role: "user", content: String(fallbackPrompt || "").slice(0, 200000) });
+  return safe;
+}
+
+function extractClaudeText(data) {
+  if (!data || !Array.isArray(data.content)) return "";
+  return data.content
+    .filter(part => part?.type === "text")
+    .map(part => part.text || "")
+    .join("");
+}
+
+async function callClaude({ system, prompt, messages, model, genConfig }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+  if (!apiKey) throw httpError(500, "ANTHROPIC_API_KEY or CLAUDE_API_KEY not configured in Netlify env vars");
+
+  const rawMax = Number(genConfig?.maxOutputTokens ?? genConfig?.maxTokens ?? 1024);
+  const maxTokens = Math.max(1, Math.min(8192, Number.isFinite(rawMax) ? rawMax : 1024));
+  const rawTemp = Number(genConfig?.temperature);
+  const temperature = Number.isFinite(rawTemp) ? Math.max(0, Math.min(1, rawTemp)) : 0.7;
+
+  const body = {
+    model,
+    max_tokens: maxTokens,
+    temperature,
+    messages: normalizeClaudeMessages(messages, prompt),
+  };
+
+  const systemText = typeof system === "string" ? system : "";
+  if (systemText.trim()) {
+    // Mark stable system instructions as cacheable. Anthropic caches at ~10% of input cost
+    // for 5 minutes, so repeated calls (chat follow-ups) within that window are far cheaper.
+    body.system = [
+      {
+        type: "text",
+        text: systemText.slice(0, 200000),
+        cache_control: { type: "ephemeral" },
+      },
+    ];
+  }
+
+  const controller = new AbortController();
+  const fetchTimeout = setTimeout(() => controller.abort(), 60 * 1000);
+  let r;
+  try {
+    r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": ANTHROPIC_API_VERSION,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(fetchTimeout);
+  }
+
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data?.type === "error" || data?.error) {
+    const message = data?.error?.message || data?.message || r.statusText || "Claude API error";
+    throw httpError(r.status || 502, message);
+  }
+
+  return { provider: "claude", model, text: extractClaudeText(data), raw: data };
+}
+
 function normalizeKind(payload) {
   const explicit = String(payload.kind || payload.type || "").trim().toLowerCase();
   if (explicit === "audio" || explicit === "transcription" || explicit === "audio_transcription") return "audio";
@@ -306,6 +407,16 @@ async function processAiPayload(payload = {}) {
   }
 
   const model = modelFor(provider, kind, task, payload.model);
+
+  if (provider === "claude") {
+    return callClaude({
+      system: payload.system,
+      prompt: payload.prompt || payload.text || "",
+      messages: payload.messages,
+      model,
+      genConfig: payload.genConfig || {},
+    });
+  }
 
   return callGemini({
     body: payload.body,
@@ -335,10 +446,12 @@ function publicAiConfig() {
       researchModel: model,
       available: {
         gemini: !!process.env.GEMINI_API_KEY,
+        claude: !!(process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY),
         serper: !!process.env.SERPER_API_KEY,
       },
       models: {
         gemini: GEMINI_MODELS,
+        claude: CLAUDE_MODELS,
       },
     },
     integrations: {

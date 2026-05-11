@@ -1185,6 +1185,8 @@ async function callAI(prompt, aiOpts, genConfig={}) {
     provider: opts.provider || "gemini",
     model: opts.model,
     prompt,
+    system: opts.system,
+    messages: opts.messages,
     genConfig,
   });
   return d?.text || null;
