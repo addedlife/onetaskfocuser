@@ -382,3 +382,5 @@ Current source-grade file count after cleanup: 162 files.
 - `dotnet build` and `dotnet build .\DeskPhone.csproj -c Release` passed in `apps/phone-host-windows`; existing NuGet/nullable/async warnings remain.
 - Released native DeskPhone `b264`; the running host reported `build: b264` and `/status.recentCalls` included Missed, Incoming, and Outgoing rows.
 - Local headless Chrome smoke at `http://127.0.0.1:4305/?suite=nervecenter` reached the served app but stopped at the unauthenticated `Loading...` shell, matching the existing limitation noted for headless visual capture.
+- Native release commit `91f03dc` and web/UI commit `1bff672` were pushed to `origin/main`.
+- Production web deploy was triggered from `apps/web`; Netlify CLI hung after upload, but production `https://onetaskfocuser.netlify.app/` returned HTTP 200 and served the new built asset `assets/index-CSwH8QSK.js`.
