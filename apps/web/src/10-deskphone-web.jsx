@@ -810,9 +810,28 @@ function saveDataUrlAttachment(attachment, onNotice) {
   link.remove();
 }
 
+function buildContactPhoneMap(contacts) {
+  const map = new Map();
+  getApiList(contacts).forEach((contact) => {
+    contactPhoneOptions(contact).forEach((phone) => {
+      const key = normalizePhoneKey(phone);
+      if (key) map.set(key, contact);
+    });
+  });
+  return map;
+}
+
 function buildConversations(messages, contacts = []) {
+  const contactByPhone = buildContactPhoneMap(contacts);
+  const enrichFast = (message) => {
+    if (message.contactName) return message;
+    const key = normalizePhoneKey(message.number);
+    if (!key) return message;
+    const contact = contactByPhone.get(key);
+    return contact ? { ...message, contactName: contactDisplayName(contact) } : message;
+  };
   const grouped = new Map();
-  messages.map(normalizeMessage).map((message) => enrichMessageWithContact(message, contacts)).forEach((message) => {
+  messages.map(normalizeMessage).map(enrichFast).forEach((message) => {
     const displayName = message.contactName || message.formattedPhone;
     const existing = grouped.get(message.key) || {
       key: message.key,
@@ -5736,6 +5755,8 @@ export function DeskPhoneWebPanel({
   const mediaMessagesRef = useRef([]);
   const lastMediaRefreshRef = useRef(0);
   const contactsSigRef = useRef("");
+  const messagesSigRef = useRef("");
+  const callsSigRef = useRef("");
 
   const showNotice = useCallback((message) => {
     setNotice(message);
@@ -5765,9 +5786,21 @@ export function DeskPhoneWebPanel({
       if (nextStatus.ok) setStatus(nextStatus.data);
       if (nextMessages.ok) {
         const mediaData = nextMediaMessages.ok ? nextMediaMessages.data : mediaMessagesRef.current;
-        setMessages(mergeMessagesWithMedia(nextMessages.data, mediaData));
+        const merged = mergeMessagesWithMedia(nextMessages.data, mediaData);
+        const msgSig = `${merged.length}|${merged[0]?.id ?? ""}|${merged[merged.length - 1]?.id ?? ""}`;
+        if (msgSig !== messagesSigRef.current) {
+          messagesSigRef.current = msgSig;
+          setMessages(merged);
+        }
       }
-      if (nextCalls.ok) setCalls(getApiList(nextCalls.data));
+      if (nextCalls.ok) {
+        const callList = getApiList(nextCalls.data);
+        const callSig = `${callList.length}|${callList[0]?.id ?? ""}`;
+        if (callSig !== callsSigRef.current) {
+          callsSigRef.current = callSig;
+          setCalls(callList);
+        }
+      }
       if (nextContacts.ok) {
         const list = getApiList(nextContacts.data);
         const sig = `${list.length}|${list[0]?.id ?? ""}|${list[list.length - 1]?.id ?? ""}`;
