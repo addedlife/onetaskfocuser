@@ -9,4 +9,4 @@ Read this first; then read only the matching row in docs/ops/CONTEXT_INDEX.md.
 - Production source only: apps/web, apps/shailos, apps/phone-host-windows.
 - Old folders are rollback/archive only.
 - Verify current state from docs/ops/VERIFICATION_LOG.md before edits.
-- Commit, push, and deploy verified web changes unless told not to.
+- Web release standard: after verified web changes, commit and push to `origin/main`; Netlify should auto-build from `apps/web` via root `netlify.toml`. Verify production picked up the pushed commit/asset. Use manual `netlify deploy` only if Git-triggered deploy fails or the thread explicitly asks for it.
