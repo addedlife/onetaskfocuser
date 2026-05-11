@@ -402,3 +402,14 @@ Current source-grade file count after cleanup: 162 files.
 - Verified production `https://onetaskfocuser.netlify.app/shailos/` returned HTTP 200 and served Shailos asset `assets/index-DLMDgD5x.js`.
 - Verified production Shailos asset contained the `manual-draft` and `Submit Shaila` code paths.
 - Verified production root `https://onetaskfocuser.netlify.app/` returned HTTP 200.
+
+## 2026-05-11 Gemini Free-Tier Rate-Limit Guard
+
+- Researched current Gemini API limits before editing. Google AI docs last updated 2026-05-07 list rate limits as per project, not per API key, with independent RPM/TPM/RPD enforcement; current free-tier Gemini 2.5 Flash is 10 RPM, 250k TPM, 250 RPD, while Gemini 2.5 Pro is 5 RPM, 250k TPM, 100 RPD.
+- Researched retry behavior before editing. Google troubleshooting maps HTTP 429 to `RESOURCE_EXHAUSTED`, advises verifying model rate limits and retrying after waiting; Google retry guidance warns against retry storms and recommends exponential/backoff-style pacing.
+- Added a central Gemini gateway limiter in `apps/web/backend/functions/_ai-core.cjs`: default safe cap is 4 RPM, 200k estimated TPM, and 90% of model RPD. The limiter uses Firestore transactions when Firebase service-account env vars are available, with in-memory warm-instance fallback for local/dev.
+- Changed 429 fallback behavior so quota fallback to Flash-Lite waits before retrying instead of immediately doubling the burst.
+- Added `Retry-After` propagation to `ai-proxy`, `gemini-proxy`, and `claude-proxy` error responses.
+- `node -e "const core=require('./apps/web/backend/functions/_ai-core.cjs'); console.log(JSON.stringify(core.publicAiConfig().ai.rateLimit));"` returned `{"strategy":"server-side queue","safeRpm":4,"safeTpm":200000,"safeRpd":225}` for the default Gemini 2.5 Flash model.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `git diff --check` passed; line-ending normalization warnings only.

@@ -33,10 +33,11 @@ exports.handler = async (event) => {
       body: JSON.stringify({ text: result.text || "" }),
     };
   } catch (e) {
+    const retryAfter = e.retryAfterSeconds ? { "Retry-After": String(e.retryAfterSeconds) } : {};
     return {
       statusCode: e.statusCode || 502,
-      headers: { ...cors.headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ error: e.message || "AI compatibility proxy error" }),
+      headers: { ...cors.headers, ...retryAfter, "Content-Type": "application/json" },
+      body: JSON.stringify({ error: e.message || "AI compatibility proxy error", retryAfterSeconds: e.retryAfterSeconds || null }),
     };
   }
 };

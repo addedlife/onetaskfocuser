@@ -32,10 +32,14 @@ exports.handler = async (event) => {
       body: JSON.stringify(result),
     };
   } catch (e) {
+    const retryAfter = e.retryAfterSeconds ? { "Retry-After": String(e.retryAfterSeconds) } : {};
     return {
       statusCode: e.statusCode || 502,
-      headers: { ...cors.headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ error: e.message || "AI proxy error" }),
+      headers: { ...cors.headers, ...retryAfter, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        error: e.message || "AI proxy error",
+        retryAfterSeconds: e.retryAfterSeconds || null,
+      }),
     };
   }
 };
