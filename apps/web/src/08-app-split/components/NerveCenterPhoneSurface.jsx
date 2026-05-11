@@ -466,7 +466,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
 
       {/* ── Unified phone activity feed ── */}
       {statusOnline && (hasMessages || hasCalls) && (
-        <div style={{ flex: compact ? "0 1 auto" : "1 1 0", minHeight: 0, maxHeight: compact ? 360 : undefined, overflowY: "auto", paddingRight: 1 }}>
+        <div style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", paddingRight: 1 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: C.muted, letterSpacing: 0, marginBottom: 3, paddingLeft: 4, paddingTop: 1, position: "sticky", top: 0, background: C.bg, zIndex: 1 }}>Activity</div>
           {activityItems.map(entry => {
             if (entry.kind === "message") {
