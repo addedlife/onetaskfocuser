@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-05-11 10:44:23",
+        "version":  "b264",
+        "notes":  "DeskPhone Web call history now exports all recent call directions instead of inheriting the desktop filter.",
+        "devNotes":  "Changes the localhost /status recentCalls field and /calls endpoint to serialize the full CallHistory collection ordered newest-first instead of FilteredCallHistory, so DeskPhone Web receives incoming, outgoing, and missed calls even when the native call-history tab is currently filtered to Missed. This is a host API correctness release for browser call-history parity; it does not change PBAP import, HFP call control, MAP messaging, contact matching, executable naming, launcher routing, or release mechanics."
+    },
+    {
         "timestamp":  "2026-05-10 23:19:06",
         "version":  "b263",
         "notes":  "DeskPhone Web data parity: contacts and call history now expose fuller host payloads.",

@@ -2513,7 +2513,8 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             Dispatch(() =>
             {
                 conversationCount = Conversations.Count;
-                recentCalls = FilteredCallHistory
+                recentCalls = CallHistory
+                    .OrderByDescending(c => c.Time)
                     .Take(8)
                     .Select(CloneCallRecord)
                     .ToList();
@@ -3353,7 +3354,8 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         List<CallRecord> snapshot = new();
         Dispatch(() =>
         {
-            snapshot = FilteredCallHistory
+            snapshot = CallHistory
+                .OrderByDescending(c => c.Time)
                 .Take(take)
                 .Select(CloneCallRecord)
                 .ToList();
