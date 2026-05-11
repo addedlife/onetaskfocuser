@@ -16,7 +16,7 @@ Date: 2026-05-10
 - Legacy Shailos app: `C:\Users\ydanz\OneDrive\Documents\taskmanager app\backup\sto-src\_MOTHBALLED_ROLLBACK_ONLY_Shaila-Trancriber-Organizer-main_2026-05-10`
 - Legacy native DeskPhone: `C:\Users\ydanz\OneDrive\Documents\PC as Bluetooth call - text interface\_MOTHBALLED_ROLLBACK_ONLY_DeskPhone_2026-05-10`
 
-Each legacy folder now has `DEPRECATED_ROLLBACK_SOURCE_DO_NOT_USE_FOR_LIVE_WORK.md` at its root. The old DeskPhone path also has a tombstone because Windows/OneDrive left protected `.git` and scratch metadata behind during quarantine.
+Each legacy folder now has `DEPRECATED_ROLLBACK_SOURCE_DO_NOT_USE_FOR_LIVE_WORK.md` at its root. The old DeskPhone path residue was renamed to `C:\Users\ydanz\OneDrive\Documents\PC as Bluetooth call - text interface\_TOMBSTONE_DO_NOT_USE_DeskPhone_old_path_residue_2026-05-10` because Windows/OneDrive left protected `.git` and scratch metadata behind during quarantine.
 
 ## Rollback Rule
 

@@ -167,7 +167,7 @@ Current source-grade file count after cleanup: 162 files.
 - Moved old web source from `taskmanager app\sandbox` to `taskmanager app\_MOTHBALLED_ROLLBACK_ONLY_sandbox_2026-05-10`.
 - Moved old Shailos source from `backup\sto-src\Shaila-Trancriber-Organizer-main` to `backup\sto-src\_MOTHBALLED_ROLLBACK_ONLY_Shaila-Trancriber-Organizer-main_2026-05-10`.
 - Moved old DeskPhone source into `PC as Bluetooth call - text interface\_MOTHBALLED_ROLLBACK_ONLY_DeskPhone_2026-05-10`.
-- The old DeskPhone path remains only as a tombstone/residue folder because Windows/OneDrive protected `.git` and scratch metadata during the move.
+- The old DeskPhone path residue was renamed to `PC as Bluetooth call - text interface\_TOMBSTONE_DO_NOT_USE_DeskPhone_old_path_residue_2026-05-10` because Windows/OneDrive protected `.git` and scratch metadata during the move.
 - Updated `BRIEF.txt` so cold-start routing points only to Shamash Pro 4 live source paths, with mothballed folders listed as rollback-only.
 
 ## 2026-05-10 DeskPhone Shortcut Cutover
