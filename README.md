@@ -1,8 +1,8 @@
 # Shamash Pro 4 App
 
-Unified clean workspace for Tasks, Shailos, and Phone.
+Unified production workspace for Tasks, Shailos, and Phone.
 
-This folder is not live yet. It is the consolidation candidate that will replace the old scattered folders only after build and runtime checks pass.
+This folder is the active production source for Shamash as of the 2026-05-10 Netlify production promotion. The old scattered folders are deprecated rollback sources only.
 
 ## Layout
 
@@ -15,7 +15,13 @@ This folder is not live yet. It is the consolidation candidate that will replace
 
 ## Current Safety Rule
 
-Production still ships from the old live folders. Do not deploy, rename, or retire old folders until this workspace passes the promotion checklist in `docs/ops/PROMOTION_CHECKLIST.md`.
+Production now ships from this workspace. Do not resume normal feature work in the old folders. Keep old sources as rollback-only until the rollback window is intentionally closed.
+
+Operational truth lives in:
+
+- `docs/ops/VERIFICATION_LOG.md`
+- `docs/ops/PROMOTION_CHECKLIST.md`
+- `docs/ops/ROLLBACK_AND_DEPRECATION.md`
 
 ## Source Truth Brought In
 

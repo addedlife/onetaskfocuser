@@ -1,4 +1,4 @@
-# Verification Log
+﻿# Verification Log
 
 ## 2026-05-10
 
@@ -203,3 +203,99 @@ Current source-grade file count after cleanup: 162 files.
   - Calls: 148.
   - Messages with `limit=5000`: 5000.
   - Recent media rows with image data: 21.
+
+## 2026-05-10 Shamash Pro 3 Tombstone Visibility Pass
+
+- Changed `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control` from active-looking control-folder wording to explicit tombstone wording.
+- Renamed `00 START HERE` to `00 TOMBSTONED - DO NOT START HERE` so Explorer no longer presents Pro 3 as the normal startup path.
+- Renamed `01 ACTIVE APPS - WORK HERE` to `01 TOMBSTONED APP SHORTCUTS - DO NOT WORK HERE` so old app shortcuts no longer look like the active work area.
+- Replaced Pro 3 `README.md`, `PSOT.md`, `AGENTS.md`, `BRIEF.txt`, and the CEO start note with Pro 4 pointers and rollback/archive-only warnings.
+- Updated Pro 4 root `README.md` and `AGENTS.md` to match the production promotion already recorded in this log and `PROMOTION_CHECKLIST.md`.
+- Full physical relocation of the Pro 3 folder remains a separate decision because it still contains mobile bridge/reference material and old path references; the visible startup surface is now tombstoned.
+
+## 2026-05-10 Shamash Pro 3 Hard Scramble
+
+- Converted `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control` from signage-only tombstone to structurally unusable tombstone.
+- Moved 19 old top-level items into:
+  `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control\_TOMBSTONED_PAYLOAD_SCRAMBLED_UNUSABLE_UNTIL_RESTORE_2026-05-10_2338`
+- Scrambled each original item name inside that payload, so old direct paths like `Shamash Pro 3\android-webphone-bridge` and `Shamash Pro 3\00 TOMBSTONED - DO NOT START HERE` now fail.
+- Left only the root tombstone shell:
+  - `README.md`
+  - `SCRAMBLE_MANIFEST.json`
+  - `EMERGENCY_DESCRAMBLE_RESTORE.ps1`
+  - the scrambled payload folder
+- Emergency restore path is documented by `SCRAMBLE_MANIFEST.json` and executable through `EMERGENCY_DESCRAMBLE_RESTORE.ps1`; use only for explicit rollback/archive recovery.
+
+## 2026-05-10 Central Legacy Folder Hard Scramble
+
+- Hard-scrambled the remaining source-bearing old folders into central Pro 3 vaults so stale legacy paths fail instead of relying on filename warnings.
+- Central manifest:
+  `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control\CENTRAL_DESCRAMBLE_MANIFEST.json`
+- Central restore script:
+  `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control\EMERGENCY_DESCRAMBLE_ALL_LEGACY.ps1`
+- Central readme:
+  `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control\CENTRAL_DESCRAMBLE_README.md`
+- Scrambled legacy roots:
+  - `taskmanager app\_MOTHBALLED_ROLLBACK_ONLY_sandbox_2026-05-10`
+  - `taskmanager app\backup\sto-src\_MOTHBALLED_ROLLBACK_ONLY_Shaila-Trancriber-Organizer-main_2026-05-10`
+  - `PC as Bluetooth call - text interface\_MOTHBALLED_ROLLBACK_ONLY_DeskPhone_2026-05-10`
+  - `PC as Bluetooth call - text interface\_TOMBSTONE_DO_NOT_USE_DeskPhone_old_path_residue_2026-05-10`
+  - `taskmanager app\sandbox-cleanroom`
+  - `Shamash source clones\deskphone`
+  - `Shamash source clones\onetask-sandbox`
+- Verification: central restore script parses, each manifest source exists, and each original destination path is absent.
+- Note: the first DeskPhone move attempt created a partial duplicate in the long vault and hit Windows path-length/locked-exe limits. The authoritative DeskPhone restore source is `_V\L003_deskphone_legacy`; the partial is recorded in the central manifest as `ignore`.
+
+## 2026-05-11 Rabbi Dashboard Retirement
+
+- Classified `C:\Users\ydanz\OneDrive\Documents\Rabbi Dashboard` as retired/reference-only source, not active product code.
+- Stopped the old Rabbi Dashboard Vite dev server that was still running from that folder.
+- Archived source-grade material to:
+  `C:\Users\ydanz\OneDrive\Documents\Retired Source Archives\2026-05-11-rabbi-dashboard-retirement\rabbi-dashboard-reference-source-2026-05-11.tar.gz`
+- Archive manifest:
+  `C:\Users\ydanz\OneDrive\Documents\Retired Source Archives\2026-05-11-rabbi-dashboard-retirement\ARCHIVE_MANIFEST.json`
+- Archive SHA256:
+  `A4BB453E2F0197A290633850C22B82DDC5924DE1E55828BCB825A47C687C9B3E`
+- Excluded generated/local-only material from the archive: `.git`, `node_modules`, `dist`, `.launcher`, and `dev-server.log`.
+- Replaced the old `Rabbi Dashboard` folder with a one-file tombstone README pointing to Pro 4 and the archive.
+- Verification: archive lists expected source/docs/package/config/script files, and `Rabbi Dashboard` now contains only `README.md`.
+
+## 2026-05-11 Retired Head Folder Move
+
+- Moved retired Shamash-family head folders out of the top-level Documents view so they no longer look like active projects:
+  - `C:\Users\ydanz\OneDrive\Documents\taskmanager app`
+  - `C:\Users\ydanz\OneDrive\Documents\Rabbi Dashboard`
+  - `C:\Users\ydanz\OneDrive\Documents\PC as Bluetooth call - text interface`
+  - `C:\Users\ydanz\OneDrive\Documents\Shamash source clones`
+- New location:
+  `C:\Users\ydanz\OneDrive\Documents\Retired Source Archives\2026-05-11-retired-head-folders`
+- Move manifest:
+  `C:\Users\ydanz\OneDrive\Documents\Retired Source Archives\2026-05-11-retired-head-folders\HEAD_FOLDER_MOVE_MANIFEST.json`
+- Verification: top-level Documents now shows `Shamash Pro 4 App`, `Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control`, and `Retired Source Archives` for Shamash-family work; the old head folder names are no longer top-level project folders.
+- Note: `Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control` remains top-level only because it currently holds the central emergency descramble controls requested by the user.
+
+## 2026-05-11 Unscramble Control Rename
+
+- Created the clearer control-folder name requested by the user:
+  `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control`
+- Copied the emergency control payload, manifests, vaults, and restore scripts into that renamed control folder.
+- Updated `CENTRAL_DESCRAMBLE_MANIFEST.json` and `SCRAMBLE_MANIFEST.json` so their root paths point to the renamed control folder.
+- Added `LEGACY_LOCATION_RECORD.md` and `LEGACY_LOCATION_RECORD.json`.
+- The legacy location record lists where the retired head folders, scrambled vaults, and compressed Rabbi Dashboard archive now live.
+- The old `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3` folder could not be renamed directly because Windows reported an open handle. It was cleared to a redirect README and marked Hidden/System; the renamed control folder is now authoritative.
+
+## 2026-05-11 NerveCenter WebPhone Compact Pass
+
+- Restored a root `BRIEF.txt` in the Pro 4 workspace because no local brief file was present.
+- Updated WebPhone/NerveCenter phone matching to use richer contact phone fields, message peer-number selection, 10/7-digit comparison keys, `/messages?limit=5000`, and the full `/calls` endpoint.
+- Compressed the NerveCenter task input into a single compact row with colored priority add buttons plus a Mrs W add button.
+- Added a task `See more` reveal for the dashboard queue instead of forcing the full queue into the first glance.
+- Tightened NerveCenter pane-resizer handles and reduced header/status chrome.
+- Changed compact phone rows so messages and recent calls show side-by-side glance slices, with row actions hidden behind three-dot menus.
+- Changed DeskPhone Web call-history rows so text/call/block/delete are available behind a three-dot overflow instead of always visible.
+- Google Calendar/Gmail now refresh every 5 minutes while connected and also refresh on browser focus/visibility return; manual refresh buttons now refresh data instead of re-opening OAuth.
+- `npm run build` passed in `apps/web`.
+- Verified local phone host `http://127.0.0.1:8765/status` returned HTTP 200 with `connected:true`.
+- Visual smoke captured via Edge/CDP from `http://127.0.0.1:4305/?suite=nervecenter`; local screenshot was reviewed but not kept as source.
+- Remaining note: true Google push/webhook delivery would require a backend notification channel and explicit deploy/config approval; this pass implemented the safe client-side near-live refresh path.
+- Live deploy completed with `npx netlify deploy --prod --build` from `apps/web`; production URL `https://onetaskfocuser.netlify.app`, deploy ID `6a015f2aafd56281e9c2b4f4`.

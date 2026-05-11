@@ -1,4 +1,4 @@
-# Rollback And Deprecation
+﻿# Rollback And Deprecation
 
 Date: 2026-05-10
 
@@ -12,11 +12,42 @@ Date: 2026-05-10
 
 ## Deprecated Rollback Sources
 
-- Legacy web app: `C:\Users\ydanz\OneDrive\Documents\taskmanager app\_MOTHBALLED_ROLLBACK_ONLY_sandbox_2026-05-10`
-- Legacy Shailos app: `C:\Users\ydanz\OneDrive\Documents\taskmanager app\backup\sto-src\_MOTHBALLED_ROLLBACK_ONLY_Shaila-Trancriber-Organizer-main_2026-05-10`
-- Legacy native DeskPhone: `C:\Users\ydanz\OneDrive\Documents\PC as Bluetooth call - text interface\_MOTHBALLED_ROLLBACK_ONLY_DeskPhone_2026-05-10`
+- Legacy web app: hard-scrambled; restore via central Pro 3 manifest.
+- Legacy Shailos app: hard-scrambled; restore via central Pro 3 manifest.
+- Legacy native DeskPhone: hard-scrambled; restore via central Pro 3 manifest.
+- Legacy Pro 3 control folder: `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control`
 
 Each legacy folder now has `DEPRECATED_ROLLBACK_SOURCE_DO_NOT_USE_FOR_LIVE_WORK.md` at its root. The old DeskPhone path residue was renamed to `C:\Users\ydanz\OneDrive\Documents\PC as Bluetooth call - text interface\_TOMBSTONE_DO_NOT_USE_DeskPhone_old_path_residue_2026-05-10` because Windows/OneDrive left protected `.git` and scratch metadata behind during quarantine.
+
+The Pro 3 control folder remains in place only as a hard-tombstoned rollback/archive container. Its old top-level contents were moved into a scrambled payload folder:
+
+`C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control\_TOMBSTONED_PAYLOAD_SCRAMBLED_UNUSABLE_UNTIL_RESTORE_2026-05-10_2338`
+
+The original top-level paths are intentionally broken. Emergency recovery requires `SCRAMBLE_MANIFEST.json` plus `EMERGENCY_DESCRAMBLE_RESTORE.ps1` from the Pro 3 root.
+
+All remaining source-bearing old folders are also hard-scrambled. Use the central manifest and restore command:
+
+- Manifest: `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control\CENTRAL_DESCRAMBLE_MANIFEST.json`
+- Restore script: `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control\EMERGENCY_DESCRAMBLE_ALL_LEGACY.ps1`
+- Readme: `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control\CENTRAL_DESCRAMBLE_README.md`
+- Legacy location record: `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control\LEGACY_LOCATION_RECORD.md`
+
+Restore command:
+
+`powershell -ExecutionPolicy Bypass -File "C:\Users\ydanz\OneDrive\Documents\Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control\EMERGENCY_DESCRAMBLE_ALL_LEGACY.ps1"`
+
+The former Rabbi Dashboard / Shamash greenfield repo was retired using the standard compressed-archive pattern:
+
+- Tombstone path: `C:\Users\ydanz\OneDrive\Documents\Rabbi Dashboard`
+- Archive: `C:\Users\ydanz\OneDrive\Documents\Retired Source Archives\2026-05-11-rabbi-dashboard-retirement\rabbi-dashboard-reference-source-2026-05-11.tar.gz`
+- Manifest: `C:\Users\ydanz\OneDrive\Documents\Retired Source Archives\2026-05-11-rabbi-dashboard-retirement\ARCHIVE_MANIFEST.json`
+- Restore rule: extract only into a temporary restore folder for historical reference; do not restart work at the old path.
+
+The retired head folders were also moved out of the top-level Documents view:
+
+`C:\Users\ydanz\OneDrive\Documents\Retired Source Archives\2026-05-11-retired-head-folders`
+
+This includes the former `taskmanager app`, `Rabbi Dashboard`, `PC as Bluetooth call - text interface`, and `Shamash source clones` containers. `Shamash Pro 3 (Deprecated and scrambled or archived) unscramble control` remains top-level only as the central emergency descramble control folder. The old `Shamash Pro 3` path is a hidden redirect shell because Windows would not release the folder handle for direct rename.
 
 ## Rollback Rule
 

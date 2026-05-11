@@ -573,7 +573,7 @@ function App({ user, onSignOut }) {
     return msgs;
   }
 
-  // Auto-fetch when token arrives; re-fetch every 15 min
+  // Auto-fetch when token arrives; refresh while visible and on focus.
   useEffect(() => {
     if (!googleToken) return;
     let cancelled = false;
@@ -611,8 +611,18 @@ function App({ user, onSignOut }) {
         .finally(() => { if (!cancelled) setGoogleLoading(false); });
     };
     load();
-    const t = setInterval(load, 15 * 60000);
-    return () => { cancelled = true; clearInterval(t); };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    const t = setInterval(load, 5 * 60000);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", load);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", load);
+    };
   }, [googleToken, calendarRefreshKey]); // eslint-disable-line
 
   function connectGoogle() {
@@ -2833,6 +2843,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           shailosCompleted={switchboardShailaCompleted}
           priorities={ap}
           onAddTask={addVT}
+          onAddMrsWTask={addMrsWTask}
           onCompleteTask={id => compTask(id)}
           onDeleteTask={id => delTask(id)}
           onEditTask={(id, text) => uT(ts => ts.map(t => t.id === id ? {...t, text: text.trim(), ncSummary: undefined, ncSummarySource: undefined, ncSummaryPending: false, ncSummaryFailedSource: undefined, ncSummaryFailedAt: undefined} : t))}

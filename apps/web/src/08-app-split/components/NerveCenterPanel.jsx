@@ -25,13 +25,14 @@ function nerveDisplaySummary(item, fallback = "Open item") {
   return compactNerveSummary(summary || source, fallback);
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems }) {
   const viewportW = useViewportWidth();
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editText, setEditText] = useState("");
   const [openTaskActionsId, setOpenTaskActionsId] = useState(null);
+  const [showAllTasks, setShowAllTasks] = useState(false);
   const taskInputRef = useRef(null);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [addEventText, setAddEventText] = useState('');
@@ -92,17 +93,18 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     shailos: Math.max(0.55, Number(paneWeights?.shailos || 1)),
     phone: Math.max(0.55, Number(paneWeights?.phone || 1)),
   };
-  const gridColumns = isStacked ? "1fr" : isTablet ? "repeat(2,minmax(0,1fr))" : `minmax(240px,${paneW.tasks}fr) 10px minmax(240px,${paneW.shailos}fr) 10px minmax(240px,${paneW.phone}fr)`;
+  const gridColumns = isStacked ? "1fr" : isTablet ? "repeat(2,minmax(0,1fr))" : `minmax(240px,${paneW.tasks}fr) 6px minmax(240px,${paneW.shailos}fr) 6px minmax(240px,${paneW.phone}fr)`;
   const googleH = Math.max(150, Math.min(420, Number(googlePaneHeight || 244)));
   const ncPanel = { background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: isStacked ? 360 : isTablet ? 420 : 0, overflow: "hidden", boxShadow: "none" };
-  const ncHeader = { minHeight: 72, padding: "18px 20px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 };
+  const ncHeader = { minHeight: 58, padding: "12px 16px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 };
   const ncTitle = { fontSize: ncType.title, fontWeight: "var(--nc-font-weight-strong, 500)", color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35 };
-  const ncSectionIcon = (accent = C.accent) => ({ width: 40, height: 40, borderRadius: 20, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
-  const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 40, height: 40, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
+  const ncSectionIcon = (accent = C.accent) => ({ width: 32, height: 32, borderRadius: 16, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
+  const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 32, height: 32, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
 
   const shailaPriorityIds = new Set(priorities.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
   const isShailaWork = t => t?.type === "shailo-research" || t?.type === "shaila-research" || !!t?.shailaId || !!t?.isGetBackStep || shailaPriorityIds.has(t?.priority);
-  const primaryTasks = tasks.filter(t => !isShailaWork(t)).slice(0, 8);
+  const primaryTaskQueue = tasks.filter(t => !isShailaWork(t));
+  const primaryTasks = (showAllTasks ? primaryTaskQueue : primaryTaskQueue.slice(0, 5));
   // Exclude research-type shaila tasks — they're not actionable get-backs until research is done
   const visibleShailos = shailos.filter(s => s.type !== "shaila-research" && s.type !== "shailo-research").slice(0, 10);
   const needsNervePolish = item => {
@@ -156,8 +158,8 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   };
   const paneResizeHandle = (leftKey, rightKey) => (
     <button type="button" aria-label="Resize panes" title="Drag to resize panes. Double-click to equalize." onPointerDown={e => startPaneResize(leftKey, rightKey, e)} onDoubleClick={() => onPaneWeightsChange?.({ tasks: 1, shailos: 1, phone: 1 })}
-      style={{ display: touchLayout ? "none" : "flex", alignItems: "center", justifyContent: "center", minWidth: 10, width: 10, border: "none", padding: 0, cursor: "col-resize", background: "transparent", touchAction: "none" }}>
-      <span style={{ width: 2, height: 54, borderRadius: 2, background: C.divider }} />
+      style={{ display: touchLayout ? "none" : "flex", alignItems: "center", justifyContent: "center", minWidth: 6, width: 6, border: "none", padding: 0, cursor: "col-resize", background: "transparent", touchAction: "none" }}>
+      <span style={{ width: 1, height: 42, borderRadius: 2, background: C.divider }} />
     </button>
   );
   const startGoogleResize = e => {
@@ -201,10 +203,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   ].filter(c => c.actions.length);
   const activeActionCategory = actionCategories.find(c => c.id === actionCategoryId) || actionCategories[0];
 
-  const addDraft = () => {
+  const addDraft = (priorityOverride = taskPriority, opts = {}) => {
     const text = taskDraft.trim();
     if (!text) return;
-    onAddTask?.(text, taskPriority);
+    if (opts.mrsW && onAddMrsWTask) onAddMrsWTask(text, priorityOverride);
+    else onAddTask?.(text, priorityOverride);
     setTaskDraft("");
     if (taskInputRef.current) { taskInputRef.current.style.height = "36px"; }
   };
@@ -214,25 +217,53 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       <div style={{ minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: isStacked ? "16px" : "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: isStacked ? 16 : 20 }}>
 
         {/* Three-panel grid — fills all remaining height */}
-        <div style={{ display: "grid", gridTemplateColumns: gridColumns, gap: isStacked ? 14 : touchLayout ? 20 : 8, flex: touchLayout ? "0 0 auto" : "1 1 0", minHeight: 0, alignItems: "stretch" }}>
+        <div style={{ display: "grid", gridTemplateColumns: gridColumns, gap: isStacked ? 14 : touchLayout ? 20 : 4, flex: touchLayout ? "0 0 auto" : "1 1 0", minHeight: 0, alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
           <section style={ncPanel}>
             <div style={{ ...ncHeader, display: "block" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, marginBottom: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <span style={ncSectionIcon()}>{suiteIcon("task_alt", 19)}</span>
                   <span style={ncTitle}>Tasks</span>
                 </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  {onOpenZen && <button onClick={onOpenZen} title="Enter Zen mode" style={cleanToolbarButton(false, C)}>{suiteIcon("self_improvement", 15)} Zen</button>}
-                  <button onClick={onOpenQueue} style={cleanToolbarButton(false, C)}>{suiteIcon("list_alt", 15)} Queue</button>
+                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                  {onOpenZen && <button onClick={onOpenZen} title="Zen mode" aria-label="Zen mode" style={ncSmallIconButton()}>{suiteIcon("self_improvement", 16)}</button>}
+                  <button onClick={onOpenQueue} title="Open full task queue" aria-label="Open full task queue" style={ncSmallIconButton()}>{suiteIcon("list_alt", 16)}</button>
                   <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="Task actions" style={ncSmallIconButton()}>{suiteIcon("apps", 17)}</button>
                 </div>
               </div>
               {/* Quick add — input + equal-width priority pills + add FAB, all inline */}
-              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                <textarea ref={taskInputRef} value={taskDraft} rows={1}
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 8, alignItems: "center" }}>
+                <div style={{ position: "relative", minWidth: 0 }}>
+                  <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: C.faint, display: "flex", pointerEvents: "none" }}>{suiteIcon("add_task", 15)}</span>
+                  <textarea ref={taskInputRef} value={taskDraft} rows={1}
+                    onChange={e => { setTaskDraft(e.target.value); e.target.style.height = "34px"; e.target.style.height = Math.min(e.target.scrollHeight, 88) + "px"; }}
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(); } }}
+                    placeholder="Add task"
+                    style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: 17, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "6px 12px 6px 32px", fontSize: ncType.meta, fontWeight: 400, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
+                </div>
+                <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
+                  {ncCorePills.map(p => {
+                    const active = taskPriority === p.id;
+                    return (
+                      <button key={p.id} onClick={() => { setTaskPriority(p.id); addDraft(p.id); }}
+                        title={`Add as ${p.ncLabel}`} aria-label={`Add as ${p.ncLabel}`} disabled={!taskDraft.trim()}
+                        style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 16, border: `1px solid ${active ? p.color : "transparent"}`, background: p.color, color: textOnColor(p.color), cursor: taskDraft.trim() ? "pointer" : "default", opacity: taskDraft.trim() ? 1 : 0.4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {suiteIcon("add", 16)}
+                      </button>
+                    );
+                  })}
+                  {onAddMrsWTask && (
+                    <button onClick={() => addDraft(taskPriority, { mrsW: true })} title="Add as Mrs W" aria-label="Add as Mrs W" disabled={!taskDraft.trim()}
+                      style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 16, border: "1px solid transparent", background: "#A8D8B9", color: "#123D25", cursor: taskDraft.trim() ? "pointer" : "default", opacity: taskDraft.trim() ? 1 : 0.4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {suiteIcon("add", 16)}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div style={{ display: "none" }}>
+                <textarea value={taskDraft} rows={1}
                   onChange={e => { setTaskDraft(e.target.value); e.target.style.height = "36px"; e.target.style.height = Math.min(e.target.scrollHeight, 108) + "px"; }}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(); } }}
                   placeholder="Add a task…"
@@ -295,6 +326,13 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                   </div>
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No open tasks.</div>}
+              {primaryTaskQueue.length > 5 && (
+                <div style={{ display: "flex", justifyContent: "center", padding: "8px 12px 12px", borderTop: `1px solid ${C.divider}` }}>
+                  <button onClick={() => setShowAllTasks(v => !v)} title={showAllTasks ? "Show fewer tasks" : "Show full task queue"} style={gvTextButton({ height: 32, minHeight: 32, fontSize: NC_TYPE.meta, padding: "0 12px" }, C)}>
+                    {suiteIcon(showAllTasks ? "expand_less" : "expand_more", 15)} {showAllTasks ? "Show less" : `See more (${primaryTaskQueue.length - 5})`}
+                  </button>
+                </div>
+              )}
 
             </div>
           </section>
@@ -488,7 +526,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       <a href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer" title="Open Google Calendar"
                          style={{ fontSize: 14, color: T.tFaint, textDecoration: "none", lineHeight: 1, opacity: .5, display: "flex" }}
                          onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↗</a>
-                      <button onClick={onConnectGoogle} title="Refresh" style={{ fontSize: 14, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .5, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↺</button>
+                      <button onClick={onRefreshCalendar || onConnectGoogle} title="Refresh" style={{ fontSize: 14, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .5, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↺</button>
                       <button onClick={onDisconnectGoogle} title="Disconnect" style={{ fontSize: 14, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .35, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = .85} onMouseLeave={e => e.currentTarget.style.opacity = .35}>✕</button>
                     </div>
                   </div>
@@ -532,6 +570,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       <a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" title="Open Gmail"
                          style={{ fontSize: 14, color: T.tFaint, textDecoration: "none", opacity: .5, lineHeight: 1 }}
                          onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↗</a>
+                      <button onClick={onRefreshCalendar || onConnectGoogle} title="Refresh mail and calendar" style={{ fontSize: 14, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .5, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↺</button>
                     </div>
                   </div>
                   <div style={cardBody}>

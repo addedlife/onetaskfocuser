@@ -1,10 +1,10 @@
 # Shamash Pro 4 Agent Instructions
 
-This folder is the clean consolidation candidate for Tasks, Shailos, and Phone.
+This folder is the active Shamash production workspace for Tasks, Shailos, and Phone.
 
 ## Operating Rule
 
-Do not treat this folder as production until `docs/ops/PROMOTION_CHECKLIST.md` is complete.
+Treat this folder as production source. Verify current state from `docs/ops/VERIFICATION_LOG.md` before changing code.
 
 ## Layout
 
@@ -14,8 +14,9 @@ Do not treat this folder as production until `docs/ops/PROMOTION_CHECKLIST.md` i
 
 ## Safety
 
-- Do not delete or rename the old live folders from here.
-- Do not push, deploy, or relink Netlify from this folder without explicit approval.
+- Do not resume normal feature work in old folders; they are rollback-only unless the user explicitly requests rollback.
+- Always commit and push verified source changes unless the user specifically instructs otherwise in the current thread.
+- Do not deploy or relink Netlify from this folder without explicit approval.
 - Keep verification results in `docs/ops/VERIFICATION_LOG.md`.
 - Keep migration decisions in `docs/ops/MIGRATION_MANIFEST.md`.
 

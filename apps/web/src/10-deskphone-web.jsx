@@ -1516,6 +1516,7 @@ function ConversationCallHistory({
   const [dialerOpen, setDialerOpen] = useState(dialerDefaultOpen);
   const [dialerNumber, setDialerNumber] = useState("");
   const [showRecents, setShowRecents] = useState(true);
+  const [openCallActionKey, setOpenCallActionKey] = useState("");
   const isFullCallsSurface = mode === "full";
   const selectedCalls = getSortedCalls(calls).map((call) => enrichCallWithContactName(call, contacts));
   const visibleCalls = selectedCalls.filter((call) => callMatchesFilter(call, callFilter));
@@ -1564,21 +1565,30 @@ function ConversationCallHistory({
             ))}
           </div>
           <div className="dp-thread-call-list">
-            {visibleCalls.map((call) => (
-              <div className={`dp-thread-call-row ${call.isMissed ? "is-missed" : ""}`} key={call.id || `${call.number}-${call.timestamp}`}>
+            {visibleCalls.map((call) => {
+              const callKey = call.id || `${call.number}-${call.timestamp}`;
+              const actionsOpen = openCallActionKey === callKey;
+              return (
+              <div className={`dp-thread-call-row ${call.isMissed ? "is-missed" : ""}`} key={callKey}>
                 <div>{icon(call.isMissed ? "phone_missed" : call.direction === "Outgoing" ? "call_made" : "call_received", 18)}</div>
                 <div>
                   <strong>{call.contactName || call.number || "Unknown"}</strong>
                   <span>{call.timeDisplay || formatConversationTime(call.timestamp)}{call.durationDisplay ? ` - ${call.durationDisplay}` : ""}</span>
                 </div>
-                <div className="dp-thread-call-actions">
-                  <button type="button" title="Message this number" aria-label="Message this number" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3513" : "MainWindow.xaml:2826"} onClick={() => onText(call.number)}>{icon("sms", 17)}</button>
-                  <button type="button" title="Call this number" aria-label="Call this number" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3518" : "MainWindow.xaml:2831"} onClick={() => onCall(call.number)}>{icon("call", 17)}</button>
-                  <button type="button" title="Block / unblock locally" aria-label="Block / unblock locally" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3522" : "MainWindow.xaml:2836"} onClick={() => onToggleCallBlock(call)}>{icon("block", 17)}</button>
-                  <button type="button" title="Delete call entry" aria-label="Delete call entry" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3527" : "MainWindow.xaml:2841"} onClick={() => onDeleteCall(call)}>{icon("delete", 17)}</button>
+                <div className="dp-thread-call-overflow">
+                  <button type="button" className="dp-thread-call-menu-button" title={actionsOpen ? "Hide call actions" : "Show call actions"} aria-label={actionsOpen ? "Hide call actions" : "Show call actions"} onClick={() => setOpenCallActionKey(actionsOpen ? "" : callKey)}>{icon("more_horiz", 18)}</button>
+                  {actionsOpen ? (
+                    <div className="dp-thread-call-actions">
+                      <button type="button" title="Message this number" aria-label="Message this number" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3513" : "MainWindow.xaml:2826"} onClick={() => { setOpenCallActionKey(""); onText(call.number); }}>{icon("sms", 17)}</button>
+                      <button type="button" title="Call this number" aria-label="Call this number" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3518" : "MainWindow.xaml:2831"} onClick={() => { setOpenCallActionKey(""); onCall(call.number); }}>{icon("call", 17)}</button>
+                      <button type="button" title="Block / unblock locally" aria-label="Block / unblock locally" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3522" : "MainWindow.xaml:2836"} onClick={() => { setOpenCallActionKey(""); onToggleCallBlock(call); }}>{icon("block", 17)}</button>
+                      <button type="button" title="Delete call entry" aria-label="Delete call entry" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3527" : "MainWindow.xaml:2841"} onClick={() => { setOpenCallActionKey(""); onDeleteCall(call); }}>{icon("delete", 17)}</button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
-            ))}
+              );
+            })}
             {!visibleCalls.length ? (
               <div className="dp-thread-call-empty">
                 {selectedCalls.length ? `No ${callFilter.toLowerCase()} calls in this view.` : isFullCallsSurface ? "Full call history will appear here when DeskPhone reports calls." : "Calls for this conversation will appear here when DeskPhone reports them."}
@@ -2309,13 +2319,35 @@ function contactPhoneOptions(contact) {
     contact?.primaryPhone,
     contact?.PrimaryPhone,
     contact?.phone,
+    contact?.phoneNumber,
+    contact?.number,
     contact?.Phone,
+    contact?.PhoneNumber,
+    contact?.Number,
     contact?.mobile,
+    contact?.mobilePhone,
     contact?.Mobile,
+    contact?.MobilePhone,
+    contact?.PhoneHome,
+    contact?.PhoneMobile,
+    contact?.PhoneWork,
+    contact?.phoneHome,
+    contact?.phoneMobile,
+    contact?.phoneWork,
+    contact?.Telephone,
+    contact?.TelephoneNumber,
+    contact?.CellPhone,
+    contact?.WorkPhone,
+    contact?.HomePhone,
+    contact?.ContactPhone,
     contact?.formattedPhone,
     contact?.FormattedPhone,
+    ...(Array.isArray(contact?.phones) ? contact.phones : []),
+    ...(Array.isArray(contact?.Phones) ? contact.Phones : []),
     ...(Array.isArray(contact?.phoneNumbers) ? contact.phoneNumbers : []),
     ...(Array.isArray(contact?.PhoneNumbers) ? contact.PhoneNumbers : []),
+    ...(Array.isArray(contact?.numbers) ? contact.numbers : []),
+    ...(Array.isArray(contact?.Numbers) ? contact.Numbers : []),
   ];
   return values
     .map((value) => String(value || "").trim())
@@ -4493,6 +4525,37 @@ const css = `
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+.dp-thread-call-overflow {
+  position: relative;
+  justify-self: end;
+}
+.dp-thread-call-menu-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: var(--dp-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.dp-thread-call-menu-button:hover,
+.dp-thread-call-menu-button:focus-visible {
+  background: var(--dp-bg-hover);
+  color: var(--dp-text);
+}
+.dp-thread-call-overflow .dp-thread-call-actions {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  padding: 4px;
+  border: 1px solid var(--dp-border);
+  border-radius: 8px;
+  background: var(--dp-bg-surface);
+  box-shadow: 0 8px 24px rgba(60, 64, 67, 0.18);
 }
 .dp-call-filter-grid {
   border-bottom: 1px solid var(--dp-border);

@@ -1,0 +1,31 @@
+Shamash Pro 4 live brief
+
+Active workspace:
+- C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App
+
+Production source:
+- apps/web: Tasks, NerveCenter, Switchboard, DeskPhone Web, Netlify functions.
+- apps/shailos: editable Shailos source.
+- apps/phone-host-windows: native DeskPhone host source.
+
+Current rule:
+- Verify current state from docs/ops/VERIFICATION_LOG.md before changing code.
+- Do not work from old Shamash/OneTask/DeskPhone folders unless the user explicitly asks for rollback or archive recovery.
+- Do not push, deploy, or relink Netlify without explicit approval.
+
+Current shipped state:
+- Production URL: https://onetaskfocuser.netlify.app
+- Latest live deploy: 2026-05-11 via Netlify CLI, deploy ID 6a015f2aafd56281e9c2b4f4.
+- Pro 4 native DeskPhone shortcut points to apps/phone-host-windows/deployed-builds/launcher/DeskPhoneLauncher.exe.
+- Last recorded native host release: DeskPhone b263.
+- Last recorded production web deploy for WebPhone contact/MMS/history: 6a014b570c09106d30c7802d.
+
+Fast verification:
+- apps/web: npm run build
+- apps/shailos: npm run build
+- apps/phone-host-windows: dotnet build
+- Local phone host: http://127.0.0.1:8765/status
+
+Current active issue in this session:
+- WebPhone/NerveCenter phone rows still need stronger contact-name matching for calls and texts.
+- NerveCenter should reclaim space: compact task entry, compact priority add buttons, tighter connection/status chrome, see-more task reveal, compact phone glance rows, and hidden call-row actions behind three-dot menus.
