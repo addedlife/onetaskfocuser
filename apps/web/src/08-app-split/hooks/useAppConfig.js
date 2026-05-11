@@ -12,7 +12,7 @@ export function useAppConfig() {
         const cfg = d.ai || null;
         const googleId = d?.integrations?.googleClientId || d?.googleClientId || "";
         setAiConfig(cfg);
-        setServerKeyAvailable(!!(cfg?.available?.gemini || d.geminiKey));
+        setServerKeyAvailable(!!(cfg?.available && Object.values(cfg.available).some(Boolean)));
         setServerGoogleClientId(typeof googleId === "string" ? googleId.trim() : "");
       })
       .catch(() => {});

@@ -413,3 +413,19 @@ Current source-grade file count after cleanup: 162 files.
 - `node -e "const core=require('./apps/web/backend/functions/_ai-core.cjs'); console.log(JSON.stringify(core.publicAiConfig().ai.rateLimit));"` returned `{"strategy":"server-side queue","safeRpm":4,"safeTpm":200000,"safeRpd":225}` for the default Gemini 2.5 Flash model.
 - `npm run build` passed in `apps/web`; existing large-bundle warning remains.
 - `git diff --check` passed; line-ending normalization warnings only.
+
+## 2026-05-11 Cross-Provider AI Model Picker
+
+- Researched current official model guidance before editing:
+  - OpenAI docs list `gpt-5.5` as the current flagship, with `gpt-5.4-mini` and `gpt-5.4-nano` as lower-latency/lower-cost options.
+  - Anthropic docs list Claude Opus 4.7, Claude Sonnet 4.6, and Claude Haiku 4.5.
+  - Google AI docs list Gemini 3.1 Pro Preview, Gemini 3 Flash Preview, and Gemini 3.1 Flash-Lite among current Gemini text-out models.
+- Added a central model catalog in `apps/web/backend/functions/_ai-core.cjs` covering Gemini, OpenAI, and Claude frontier/fast/budget lanes.
+- Added OpenAI Responses API and Anthropic Messages API routing to the central AI gateway while keeping audio transcription on Gemini.
+- Changed Settings > Account from a Gemini-only selector to one model dropdown that saves `aiProvider` plus `aiModel` and marks providers without configured keys.
+- Updated the live split app shell so all text AI calls use the selected provider/model through `/.netlify/functions/ai-proxy`.
+- Updated the legacy `claude-proxy` wrapper to route through Claude via the central gateway.
+- `node -e "const core=require('./apps/web/backend/functions/_ai-core.cjs'); const ai=core.publicAiConfig().ai; console.log(JSON.stringify({provider:ai.provider,model:ai.model,audioModel:ai.audioModel,catalog:ai.catalog.map(x=>x.provider+':'+x.model)}, null, 2));"` returned the expected nine-entry cross-provider catalog.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `git diff --check` passed; line-ending normalization warnings only.
+- Browser smoke was attempted through the Codex in-app browser, but the local browser helper crashed before opening the tab; code-side verification above passed.

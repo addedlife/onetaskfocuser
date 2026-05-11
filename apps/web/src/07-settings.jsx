@@ -36,14 +36,28 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   const [deskPhoneSyncNote, setDeskPhoneSyncNote] = useState("");
   const pris = AS.priorities;
 
+  const modelCatalog = aiConfig?.catalog || [
+    {provider:"gemini", model:"gemini-3.1-pro-preview", label:"Gemini 3.1 Pro Preview", tier:"frontier"},
+    {provider:"gemini", model:"gemini-3-flash-preview", label:"Gemini 3 Flash Preview", tier:"fast"},
+    {provider:"gemini", model:"gemini-3.1-flash-lite", label:"Gemini 3.1 Flash-Lite", tier:"budget"},
+    {provider:"openai", model:"gpt-5.5", label:"GPT-5.5", tier:"frontier"},
+    {provider:"openai", model:"gpt-5.4-mini", label:"GPT-5.4 Mini", tier:"fast"},
+    {provider:"openai", model:"gpt-5.4-nano", label:"GPT-5.4 Nano", tier:"budget"},
+    {provider:"claude", model:"claude-opus-4-7", label:"Claude Opus 4.7", tier:"frontier"},
+    {provider:"claude", model:"claude-sonnet-4-6", label:"Claude Sonnet 4.6", tier:"fast"},
+    {provider:"claude", model:"claude-haiku-4-5-20251001", label:"Claude Haiku 4.5", tier:"budget"},
+  ];
+  const selectedProvider = AS.aiProvider || aiConfig?.provider || aiConfig?.defaultProvider || "gemini";
   const selectedModel = AS.aiModel || aiConfig?.model || aiConfig?.textModel || "";
+  const selectedModelKey = AS.aiModel ? `${selectedProvider}:${AS.aiModel}` : "";
+  const availableProviders = aiConfig?.available || {};
+  const selectedProviderOnline = !!availableProviders[selectedProvider] || !!hasAI;
   const settingsAiOpts = AS ? {
-    provider: "gemini",
+    provider: selectedProvider,
     model: selectedModel,
     source: "server",
   } : null;
-  const settingsHasAI = !!hasAI;
-  const geminiModels = aiConfig?.models?.gemini || ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite"];
+  const settingsHasAI = !!(hasAI || availableProviders.gemini || availableProviders.openai || availableProviders.claude);
 
   async function handleGenSchemes() {
     if (!settingsHasAI) { setSchemeGenErr("AI server is not configured."); return; }
@@ -362,12 +376,30 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
           <div>
             <h4 style={sh}>AI Model</h4>
             <div style={{marginBottom:16}}>
-              <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",fontWeight:500,display:"block",marginBottom:6}}>Gemini model</label>
-              <select value={AS.aiModel||""} onChange={e=>setAS(p=>({...p,aiModel:e.target.value}))} style={{width:"100%",minHeight:42,padding:"8px 12px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:settingsType.control,fontFamily:"system-ui",background:T.bgW,color:T.text,boxSizing:"border-box"}}>
-                <option value="">Server default ({aiConfig?.model || aiConfig?.textModel || "auto"})</option>
-                {geminiModels.map(m => <option key={m} value={m}>{m}</option>)}
+              <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",fontWeight:500,display:"block",marginBottom:6}}>Model</label>
+              <select
+                value={selectedModelKey}
+                onChange={e=>{
+                  const [provider, model] = e.target.value.split(":");
+                  setAS(p=>({...p,aiProvider:provider || "",aiModel:model || ""}));
+                }}
+                style={{width:"100%",minHeight:42,padding:"8px 12px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:settingsType.control,fontFamily:"system-ui",background:T.bgW,color:T.text,boxSizing:"border-box"}}
+              >
+                <option value="">Server default ({aiConfig?.provider || "auto"} / {aiConfig?.model || aiConfig?.textModel || "auto"})</option>
+                {["frontier","fast","budget"].map(tier => (
+                  <optgroup key={tier} label={tier === "frontier" ? "Most capable" : tier === "fast" ? "Faster / cheaper" : "Lowest cost"}>
+                    {modelCatalog.filter(m => m.tier === tier).map(m => {
+                      const online = !!availableProviders[m.provider];
+                      return <option key={`${m.provider}:${m.model}`} value={`${m.provider}:${m.model}`}>
+                        {m.label} ({m.provider}{online ? "" : " key missing"})
+                      </option>;
+                    })}
+                  </optgroup>
+                ))}
               </select>
-              <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"8px 0 0",lineHeight:settingsType.line}}>Gateway: {settingsHasAI ? "online" : "not configured"}</p>
+              <p style={{fontSize:settingsType.help,color:selectedProviderOnline?T.tFaint:"#C94040",fontFamily:"system-ui",margin:"8px 0 0",lineHeight:settingsType.line}}>
+                Gateway: {settingsHasAI ? `${selectedProvider} ${selectedProviderOnline ? "online" : "key missing"}` : "not configured"}
+              </p>
             </div>
 
             <div style={{height:1,background:T.brdS,margin:"0 0 16px"}}/>

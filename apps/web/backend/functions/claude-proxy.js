@@ -1,5 +1,5 @@
-// Legacy endpoint name only. Active app code uses /.netlify/functions/ai-proxy,
-// and this wrapper now routes old callers into the same Gemini model lane.
+// Legacy endpoint name only. Active app code uses /.netlify/functions/ai-proxy.
+// This wrapper preserves old callers while routing through the central gateway.
 const { corsFor, processAiPayload } = require("./_ai-core.cjs");
 
 exports.handler = async (event) => {
@@ -20,10 +20,10 @@ exports.handler = async (event) => {
   try {
     const { prompt, maxTokens, mode, model } = JSON.parse(event.body || "{}");
     const result = await processAiPayload({
-      provider: "gemini",
+      provider: "claude",
       model,
       prompt,
-      maxTokens,
+      genConfig: { maxOutputTokens: maxTokens },
       mode,
       task: mode === "research" ? "research" : "compat",
     });

@@ -885,8 +885,8 @@ function App({ user, onSignOut }) {
 
   // ─── Derived state ───────────────────────────────────────────────────────
   // All app AI calls go through the central Netlify AI gateway.
-  const selectedProvider = "gemini";
-  const selectedProviderAvailable = aiConfig ? !!aiConfig?.available?.gemini : serverKeyAvailable;
+  const selectedProvider = AS?.aiProvider || aiConfig?.provider || aiConfig?.defaultProvider || "gemini";
+  const selectedProviderAvailable = aiConfig ? !!aiConfig?.available?.[selectedProvider] : serverKeyAvailable;
   const selectedModel = AS?.aiModel || aiConfig?.model || aiConfig?.textModel || "";
   const rawAiOpts = AS ? {
     provider: selectedProvider,

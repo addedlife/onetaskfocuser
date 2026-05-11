@@ -17,23 +17,117 @@ function isAllowedOrigin(origin) {
   }
 }
 
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
-const QUOTA_FALLBACK_GEMINI_MODEL = "gemini-2.5-flash-lite";
+const DEFAULT_PROVIDER = "gemini";
+const DEFAULT_GEMINI_MODEL = "gemini-3.1-pro-preview";
+const DEFAULT_OPENAI_MODEL = "gpt-5.5";
+const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
+const QUOTA_FALLBACK_GEMINI_MODEL = "gemini-3.1-flash-lite";
 const GEMINI_DEFAULT_SAFE_RPM = 4;
 const GEMINI_DEFAULT_TPM = 200000;
 const GEMINI_QUEUE_TIMEOUT_MS = 55000;
 
 const GEMINI_FREE_LIMITS = {
+  "gemini-3.1-pro-preview": { rpm: 4, tpm: 250000, rpd: 90 },
+  "gemini-3-flash-preview": { rpm: 8, tpm: 250000, rpd: 180 },
+  "gemini-3.1-flash-lite": { rpm: 15, tpm: 250000, rpd: 1000 },
   "gemini-2.5-pro": { rpm: 5, tpm: 250000, rpd: 100 },
   "gemini-2.5-flash": { rpm: 10, tpm: 250000, rpd: 250 },
   "gemini-2.5-flash-lite": { rpm: 15, tpm: 250000, rpd: 1000 },
 };
 
 const GEMINI_MODELS = [
+  "gemini-3.1-pro-preview",
+  "gemini-3-flash-preview",
+  "gemini-3.1-flash-lite",
   "gemini-2.5-flash",
   "gemini-2.5-pro",
   "gemini-2.5-flash-lite",
 ];
+
+const OPENAI_MODELS = [
+  "gpt-5.5",
+  "gpt-5.4",
+  "gpt-5.4-mini",
+  "gpt-5.4-nano",
+];
+
+const CLAUDE_MODELS = [
+  "claude-opus-4-7",
+  "claude-sonnet-4-6",
+  "claude-haiku-4-5-20251001",
+];
+
+const MODEL_CATALOG = [
+  {
+    provider: "gemini",
+    model: "gemini-3.1-pro-preview",
+    label: "Gemini 3.1 Pro Preview",
+    tier: "frontier",
+    note: "Advanced reasoning and coding; preview.",
+  },
+  {
+    provider: "gemini",
+    model: "gemini-3-flash-preview",
+    label: "Gemini 3 Flash Preview",
+    tier: "fast",
+    note: "Frontier multimodal model at lower cost; preview.",
+  },
+  {
+    provider: "gemini",
+    model: "gemini-3.1-flash-lite",
+    label: "Gemini 3.1 Flash-Lite",
+    tier: "budget",
+    note: "Fast, low-cost Gemini lane.",
+  },
+  {
+    provider: "openai",
+    model: "gpt-5.5",
+    label: "GPT-5.5",
+    tier: "frontier",
+    note: "OpenAI flagship for complex reasoning and coding.",
+  },
+  {
+    provider: "openai",
+    model: "gpt-5.4-mini",
+    label: "GPT-5.4 Mini",
+    tier: "fast",
+    note: "Lower-latency, lower-cost OpenAI option.",
+  },
+  {
+    provider: "openai",
+    model: "gpt-5.4-nano",
+    label: "GPT-5.4 Nano",
+    tier: "budget",
+    note: "Lowest-cost OpenAI option for focused jobs.",
+  },
+  {
+    provider: "claude",
+    model: "claude-opus-4-7",
+    label: "Claude Opus 4.7",
+    tier: "frontier",
+    note: "Anthropic's strongest generally available model.",
+  },
+  {
+    provider: "claude",
+    model: "claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6",
+    tier: "fast",
+    note: "Strong speed/intelligence balance.",
+  },
+  {
+    provider: "claude",
+    model: "claude-haiku-4-5-20251001",
+    label: "Claude Haiku 4.5",
+    tier: "budget",
+    note: "Fastest lower-cost Claude lane.",
+  },
+];
+
+const MODEL_IDS_BY_PROVIDER = {
+  gemini: GEMINI_MODELS,
+  openai: OPENAI_MODELS,
+  claude: CLAUDE_MODELS,
+};
 
 const geminiLimiterState = globalThis.__shamashGeminiLimiterState || {
   queue: Promise.resolve(),
@@ -281,26 +375,32 @@ Interpret all content in this Torah, halachic, and Orthodox Jewish community con
 
 function normalizeProvider(value) {
   const v = String(value || "").trim().toLowerCase();
-  return v === "gemini" || v === "claude" ? "gemini" : null;
+  if (v === "gemini" || v === "openai" || v === "claude") return v;
+  if (v === "anthropic") return "claude";
+  return null;
 }
 
 function defaultTextProvider() {
-  return "gemini";
+  return normalizeProvider(process.env.AI_PROVIDER) || DEFAULT_PROVIDER;
 }
 
 function defaultProviderFor(kind, task) {
-  return "gemini";
+  if (kind === "audio") return "gemini";
+  return defaultTextProvider();
 }
 
 function modelFor(provider, kind, task, requestedModel) {
   const requested = String(requestedModel || "").trim();
-  const fallback =
-    process.env.AI_MODEL ||
-    process.env.GEMINI_MODEL ||
-    DEFAULT_GEMINI_MODEL;
+  const defaultByProvider = {
+    gemini: process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
+    openai: process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
+    claude: process.env.CLAUDE_MODEL || process.env.ANTHROPIC_MODEL || DEFAULT_CLAUDE_MODEL,
+  };
+  const fallback = process.env.AI_MODEL || defaultByProvider[provider] || DEFAULT_GEMINI_MODEL;
+  const allowed = MODEL_IDS_BY_PROVIDER[provider] || GEMINI_MODELS;
 
-  if (requested && GEMINI_MODELS.includes(requested)) return requested;
-  return GEMINI_MODELS.includes(fallback) ? fallback : DEFAULT_GEMINI_MODEL;
+  if (requested && allowed.includes(requested)) return requested;
+  return allowed.includes(fallback) ? fallback : defaultByProvider[provider];
 }
 
 function corsFor(event, methods = "POST, OPTIONS") {
@@ -442,6 +542,71 @@ async function callGemini({ body, prompt, base64, mimeType, model, genConfig, al
   return { provider: "gemini", model, text: extractGeminiText(data), raw: data };
 }
 
+function maxOutputTokensFrom(genConfig = {}, fallback = 4096) {
+  const value = Number.parseInt(genConfig.maxOutputTokens || genConfig.max_output_tokens || genConfig.max_tokens || "", 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+async function callOpenAI({ body, prompt, model, genConfig }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw httpError(500, "OPENAI_API_KEY not configured in Netlify env vars");
+
+  const input = prompt || geminiBodyToPrompt(body);
+  const requestBody = {
+    model,
+    input,
+    max_output_tokens: maxOutputTokensFrom(genConfig, 4096),
+  };
+
+  const r = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(requestBody),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.error) {
+    throw httpError(r.status || 502, data?.error?.message || r.statusText || "OpenAI API error", retryAfterSeconds(r.headers, data));
+  }
+
+  const text = data.output_text ||
+    data.output?.flatMap(item => item.content || [])
+      ?.map(part => part.text || "")
+      ?.filter(Boolean)
+      ?.join("") ||
+    "";
+  return { provider: "openai", model, text, raw: data };
+}
+
+async function callClaude({ body, prompt, model, genConfig }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+  if (!apiKey) throw httpError(500, "ANTHROPIC_API_KEY not configured in Netlify env vars");
+
+  const input = prompt || geminiBodyToPrompt(body);
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxOutputTokensFrom(genConfig, 4096),
+      messages: [{ role: "user", content: input }],
+    }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.error) {
+    throw httpError(r.status || 502, data?.error?.message || r.statusText || "Claude API error", retryAfterSeconds(r.headers, data));
+  }
+
+  const text = data.content?.map(part => part.text || "").join("") || "";
+  return { provider: "claude", model, text, raw: data };
+}
+
 function retryAfterSeconds(headers, data) {
   const retryAfter = headers?.get?.("retry-after");
   if (retryAfter) {
@@ -477,18 +642,23 @@ async function processAiPayload(payload = {}) {
 
   const model = modelFor(provider, kind, task, payload.model);
 
-  return callGemini({
+  const common = {
     body: payload.body,
     prompt: payload.prompt || payload.text || "",
     base64: payload.base64 || payload.audioBase64,
     mimeType: payload.mimeType,
     model,
     genConfig: payload.genConfig || {},
-  });
+  };
+
+  if (provider === "openai") return callOpenAI(common);
+  if (provider === "claude") return callClaude(common);
+  return callGemini(common);
 }
 
 function publicAiConfig() {
-  const model = modelFor("gemini", "text", "general");
+  const provider = defaultProviderFor("text", "general");
+  const model = modelFor(provider, "text", "general");
   const googleClientId = String(
     process.env.GOOGLE_CLIENT_ID ||
     process.env.GOOGLE_OAUTH_CLIENT_ID ||
@@ -497,24 +667,29 @@ function publicAiConfig() {
   ).trim();
   return {
     ai: {
-      defaultProvider: "gemini",
-      provider: "gemini",
+      defaultProvider: provider,
+      provider,
       model,
       textModel: model,
-      audioModel: model,
+      audioModel: modelFor("gemini", "audio", "transcription"),
       researchModel: model,
       available: {
         gemini: !!process.env.GEMINI_API_KEY,
+        openai: !!process.env.OPENAI_API_KEY,
+        claude: !!(process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY),
         serper: !!process.env.SERPER_API_KEY,
       },
       models: {
         gemini: GEMINI_MODELS,
+        openai: OPENAI_MODELS,
+        claude: CLAUDE_MODELS,
       },
+      catalog: MODEL_CATALOG,
       rateLimit: {
         strategy: "server-side queue",
-        safeRpm: geminiLimitsFor(model).rpm,
-        safeTpm: geminiLimitsFor(model).tpm,
-        safeRpd: geminiLimitsFor(model).rpd,
+        safeRpm: geminiLimitsFor(modelFor("gemini", "text", "general")).rpm,
+        safeTpm: geminiLimitsFor(modelFor("gemini", "text", "general")).tpm,
+        safeRpd: geminiLimitsFor(modelFor("gemini", "text", "general")).rpd,
       },
     },
     integrations: {
