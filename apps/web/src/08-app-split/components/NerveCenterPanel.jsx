@@ -25,6 +25,26 @@ function nerveDisplaySummary(item, fallback = "Open item") {
   return compactNerveSummary(summary || source, fallback);
 }
 
+function hexToRgb(color, fallback = [126, 176, 222]) {
+  const value = String(color || "").replace("#", "").trim();
+  if (!/^[0-9a-f]{6}$/i.test(value)) return fallback;
+  return [
+    parseInt(value.slice(0, 2), 16),
+    parseInt(value.slice(2, 4), 16),
+    parseInt(value.slice(4, 6), 16),
+  ];
+}
+
+function softBg(color, alpha) {
+  const [r, g, b] = hexToRgb(color);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function softBorder(color, alpha) {
+  const [r, g, b] = hexToRgb(color);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 const MIN_COLLAPSED_TASKS = 5;
 
 function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems }) {
@@ -255,6 +275,20 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     .filter(Boolean);
   const activePri = gP(priorities, taskPriority);
   const activePriColor = activePri?.color || T.primary || "#7EB0DE";
+  const compactAddDot = (color, active = false) => ({
+    width: 24,
+    height: 24,
+    flexShrink: 0,
+    borderRadius: 99,
+    border: active ? `1px solid ${color}` : `1px solid ${softBorder(color, 0.34)}`,
+    background: softBg(color, active ? 0.22 : 0.13),
+    color,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: active ? 1 : 0.86,
+  });
 
   const bySection = Object.fromEntries(sections.map(s => [s.id, s]));
   const collectActions = (...ids) => ids.flatMap(id => bySection[id]?.actions || []);
@@ -304,15 +338,15 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     return (
                       <button key={p.id} onClick={() => openTaskComposer(p.id)}
                         title={`Add ${p.ncLabel} task`} aria-label={`Add ${p.ncLabel} task`} aria-expanded={taskComposerOpen && active && !taskComposerMrsW}
-                        style={{ width: 24, height: 24, flexShrink: 0, borderRadius: 6, border: `1.5px solid ${active && taskComposerOpen && !taskComposerMrsW ? p.color : "transparent"}`, background: p.color, color: textOnColor(p.color), cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        {suiteIcon("add", 13)}
+                        style={compactAddDot(p.color, active && taskComposerOpen && !taskComposerMrsW)}>
+                        {suiteIcon("add", 12)}
                       </button>
                     );
                   })}
                   {onAddMrsWTask && (
                     <button onClick={() => openTaskComposer(taskPriority, { mrsW: true })} title="Add Mrs W task" aria-label="Add Mrs W task" aria-expanded={taskComposerOpen && taskComposerMrsW}
-                      style={{ width: 24, height: 24, flexShrink: 0, borderRadius: 6, border: `1.5px solid ${taskComposerOpen && taskComposerMrsW ? "#7DB892" : "transparent"}`, background: "#A8D8B9", color: "#123D25", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {suiteIcon("add", 13)}
+                      style={compactAddDot("#4F9B6B", taskComposerOpen && taskComposerMrsW)}>
+                      {suiteIcon("add", 12)}
                     </button>
                   )}
                   <span style={{ width: 1, height: 13, background: C.divider, margin: "0 3px", flexShrink: 0 }} />
@@ -527,15 +561,15 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           };
 
           // Each card: header (fixed) + content (scrollable)
-          const cardWrap = { background: C.bg, borderRadius: 8, border: `1px solid ${C.divider}`, flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" };
-          const cardHead = { padding: "11px 14px 8px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 };
-          const cardBody = { flex: 1, overflow: "auto", padding: "4px 14px 8px" };
-          const headLabel = { fontSize: NC_TYPE.label, fontWeight: 500, color: C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0 };
+          const cardWrap = { background: C.bg, borderRadius: 8, border: `1px solid ${C.divider}`, flex: isStacked ? "1 1 0" : 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" };
+          const cardHead = { minHeight: isStacked ? 28 : 36, padding: isStacked ? "3px 8px" : "11px 14px 8px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 };
+          const cardBody = { flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: isStacked ? "2px 8px 6px" : "4px 14px 8px", overscrollBehavior: "contain", scrollbarGutter: "stable" };
+          const headLabel = { fontSize: isStacked ? NC_TYPE.meta : NC_TYPE.label, fontWeight: 500, color: C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0, display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0 };
 
           return (
             <React.Fragment>
             <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", gap: 6, minHeight: 0 }}>
-              <div style={{ display: "flex", flexDirection: isStacked ? "column" : "row", gap: isStacked ? 12 : 8, flex: isStacked ? "0 0 auto" : `0 0 ${googleH}px`, minHeight: 0 }}>
+              <div style={{ display: "flex", flexDirection: isStacked ? "column" : "row", gap: 8, flex: isStacked ? "0 0 min(42vh, 330px)" : `0 0 ${googleH}px`, minHeight: 0, maxHeight: isStacked ? 330 : undefined }}>
 
               {/* Not connected — never been connected: show connect button */}
               {notConnected && !googleError && !googleWasConnected && (
@@ -585,7 +619,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               {(calendarEvents !== null || (googleLoading && googleToken)) && (
                 <div style={cardWrap}>
                   <div style={cardHead}>
-                    <span style={headLabel}>📅 Today</span>
+                    <span style={headLabel}>{suiteIcon("calendar_today", 13)} Today</span>
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                       {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
                       <button onClick={() => setShowAddEvent(true)} title="Add event"
@@ -608,10 +642,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       <p style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK, margin: "12px 0", textAlign: "center" }}>Nothing today</p>
                     ) : calendarEvents.map((evt, i) => {
                       const now = isNow(evt);
-                      const rowStyle = { display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 4px", textDecoration: "none", color: "inherit", borderRadius: 4 };
+                      const rowStyle = { display: "flex", gap: isStacked ? 7 : 10, alignItems: "flex-start", padding: isStacked ? "5px 2px" : "8px 4px", textDecoration: "none", color: "inherit", borderRadius: 4 };
                       const inner = (
                         <>
-                          <span style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: now ? accentBlue : T.tFaint, fontWeight: now ? 500 : 400, flexShrink: 0, width: 66, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
+                          <span style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: now ? accentBlue : T.tFaint, fontWeight: now ? 500 : 400, flexShrink: 0, width: isStacked ? 54 : 66, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                               {now && <span style={{ width: 5, height: 5, borderRadius: "50%", background: accentBlue, flexShrink: 0 }} />}
@@ -632,7 +666,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               {(gmailMessages !== null || (googleLoading && googleToken)) && (
                 <div style={cardWrap}>
                   <div style={cardHead}>
-                    <span style={headLabel}>✉️ Important &amp; Unread</span>
+                    <span style={headLabel}>{suiteIcon("mail", 13)} Mail</span>
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                       {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
                       <a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" title="Open Gmail"
@@ -656,7 +690,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       const url = `https://mail.google.com/mail/u/0/#inbox/${msg.id}`;
                       return (
                         <a key={msg.id || i} href={url} target="_blank" rel="noopener noreferrer"
-                          style={{ display: "block", padding: "8px 4px", textDecoration: "none", color: "inherit", borderRadius: 4 }}
+                          style={{ display: "block", padding: isStacked ? "5px 2px" : "8px 4px", textDecoration: "none", color: "inherit", borderRadius: 4 }}
                           onMouseEnter={e => {
                             e.currentTarget.style.background = T.bgW || 'rgba(255,255,255,0.05)';
                             clearTimeout(hoverTimerRef.current);

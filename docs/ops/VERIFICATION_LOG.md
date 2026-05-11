@@ -371,3 +371,14 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` passed in `apps/web`.
 - Local browser geometry smoke at `http://127.0.0.1:4305/?suite=nervecenter` with 18 seeded tasks at 1440x900: upper pane bottom spread was `0px`, vertical gutters were `6px`, top-grid-to-horizontal-handle gap was `4px`, handle height was `8px`, and handle-to-lower-pane gap was `4px`.
 - Pushed commit `5081943` to `origin/main` and deployed production from `apps/web`; production URL `https://onetaskfocuser.netlify.app`, deploy ID `6a01e83c9d4b00081b36567c`.
+
+## 2026-05-11 NerveCenter Mobile Chrome And Call Direction Correction
+
+- Researched the UI/data standards before editing: promoted add actions should be compact circular affordances with few related choices, mobile list content should stay in vertical scroll containers, and Android call logs distinguish incoming, outgoing, and missed calls as separate `CallLog.Calls.TYPE` values.
+- Changed the NerveCenter task add buttons from saturated square fills to softer circular add dots.
+- Bounded the mobile Calendar/Mail strip to a fixed viewport budget, tightened the card headers, and gave each card its own internal vertical scroll so long Google result lists do not push the rest of the dashboard down.
+- Changed DeskPhone host `/status.recentCalls` and `/calls` to export the full newest-first call history instead of inheriting the native desktop call-history filter.
+- `npm run build` passed in `apps/web`; existing large bundle warning remains.
+- `dotnet build` and `dotnet build .\DeskPhone.csproj -c Release` passed in `apps/phone-host-windows`; existing NuGet/nullable/async warnings remain.
+- Released native DeskPhone `b264`; the running host reported `build: b264` and `/status.recentCalls` included Missed, Incoming, and Outgoing rows.
+- Local headless Chrome smoke at `http://127.0.0.1:4305/?suite=nervecenter` reached the served app but stopped at the unauthenticated `Loading...` shell, matching the existing limitation noted for headless visual capture.
