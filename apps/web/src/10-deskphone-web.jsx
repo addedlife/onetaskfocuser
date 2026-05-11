@@ -5818,6 +5818,9 @@ export function DeskPhoneWebPanel({
       setMessages([]);
       setCalls([]);
       setContacts([]);
+      messagesSigRef.current = "";
+      callsSigRef.current = "";
+      contactsSigRef.current = "";
       setOnline(false);
       if (isLocalMobileBridgeHost(host) && !bridgeAutoOpenAttempted.current) {
         bridgeAutoOpenAttempted.current = true;
