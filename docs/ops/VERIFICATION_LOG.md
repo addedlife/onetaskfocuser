@@ -169,3 +169,16 @@ Current source-grade file count after cleanup: 162 files.
 - Moved old DeskPhone source into `PC as Bluetooth call - text interface\_MOTHBALLED_ROLLBACK_ONLY_DeskPhone_2026-05-10`.
 - The old DeskPhone path remains only as a tombstone/residue folder because Windows/OneDrive protected `.git` and scratch metadata during the move.
 - Updated `BRIEF.txt` so cold-start routing points only to Shamash Pro 4 live source paths, with mothballed folders listed as rollback-only.
+
+## 2026-05-10 DeskPhone Shortcut Cutover
+
+- Found the desktop `DeskPhone.lnk` still pointed to the old mothballed DeskPhone launcher path.
+- Released Pro 4 native DeskPhone build `b262`.
+- Current live desktop shortcut:
+  - `C:\Users\ydanz\OneDrive\Desktop\DeskPhone.lnk`
+  - Target: `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App\apps\phone-host-windows\deployed-builds\launcher\DeskPhoneLauncher.exe`
+- Running host after cutover:
+  - `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App\apps\phone-host-windows\deployed-builds\b262\DeskPhone.exe`
+- Verified `http://127.0.0.1:8765/status` returned HTTP 200 with `connected:true`.
+- Verified `http://127.0.0.1:8765/messages?limit=5` returned HTTP 200.
+- Verified CORS/PNA headers allow `https://onetaskfocuser.netlify.app` to call the localhost host.
