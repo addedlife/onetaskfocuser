@@ -222,7 +222,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const paneResizeHandle = (leftKey, rightKey) => (
     <button type="button" aria-label="Resize panes" title="Drag to resize panes. Double-click to equalize." onPointerDown={e => startPaneResize(leftKey, rightKey, e)} onDoubleClick={() => onPaneWeightsChange?.({ tasks: 1, shailos: 1, phone: 1 })}
       style={{ display: touchLayout ? "none" : "flex", alignItems: "center", justifyContent: "center", minWidth: 6, width: 6, border: "none", padding: 0, cursor: "col-resize", background: "transparent", touchAction: "none" }}>
-      <span style={{ width: 1, height: 42, borderRadius: 2, background: C.divider }} />
+      <span style={{ width: 1, height: 48, borderRadius: 2, background: C.divider }} />
     </button>
   );
   const startGoogleResize = e => {
@@ -244,7 +244,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   };
   const googleResizeHandle = !touchLayout && (
     <button type="button" aria-label="Resize Google pane" title="Drag to resize calendar and mail. Double-click to reset." onPointerDown={startGoogleResize} onDoubleClick={() => onGooglePaneHeightChange?.(244)}
-      style={{ height: 10, minHeight: 10, width: "100%", border: "none", padding: 0, cursor: "row-resize", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none" }}>
+      style={{ height: 8, minHeight: 8, width: "100%", border: "none", padding: 0, cursor: "row-resize", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none" }}>
       <span style={{ width: 62, height: 2, borderRadius: 2, background: C.divider }} />
     </button>
   );
@@ -285,13 +285,13 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
   return (
     <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: touchLayout ? "auto" : "hidden", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}` }}>
-      <div style={{ minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: isStacked ? "16px" : "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: isStacked ? 16 : 20 }}>
+      <div style={{ minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: isStacked ? "16px" : "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: isStacked ? 16 : touchLayout ? 12 : 4 }}>
 
         {/* Three-panel grid — fills all remaining height */}
-        <div ref={taskGridRef} style={{ display: "grid", gridTemplateColumns: gridColumns, gap: isStacked ? 14 : touchLayout ? 20 : 4, flex: touchLayout ? "0 0 auto" : "1 1 0", minHeight: 0, alignItems: "stretch" }}>
+        <div ref={taskGridRef} data-nc-task-grid="true" style={{ display: "grid", gridTemplateColumns: gridColumns, gap: isStacked ? 14 : touchLayout ? 16 : 0, flex: touchLayout ? "0 0 auto" : "1 1 0", minHeight: 0, alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
-          <section style={ncTasksPanel}>
+          <section style={primaryTaskQueue.length > MIN_COLLAPSED_TASKS ? ncPanel : ncTasksPanel}>
             <div ref={taskHeaderRef} style={{ ...ncHeader, display: taskComposerOpen ? "block" : "flex", ...(taskComposerOpen ? { padding: "7px 12px" } : {}) }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, ...(taskComposerOpen ? { marginBottom: 7 } : {}) }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -535,7 +535,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           return (
             <React.Fragment>
             <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", gap: 6, minHeight: 0 }}>
-              <div style={{ display: "flex", flexDirection: isStacked ? "column" : "row", gap: isStacked ? 12 : 16, flex: isStacked ? "0 0 auto" : `0 0 ${googleH}px`, minHeight: 0 }}>
+              <div style={{ display: "flex", flexDirection: isStacked ? "column" : "row", gap: isStacked ? 12 : 8, flex: isStacked ? "0 0 auto" : `0 0 ${googleH}px`, minHeight: 0 }}>
 
               {/* Not connected — never been connected: show connect button */}
               {notConnected && !googleError && !googleWasConnected && (

@@ -361,3 +361,12 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` passed in `apps/web`.
 - Local smoke at `http://127.0.0.1:4305/?suite=nervecenter` with 18 seeded tasks: at 1440x760 the Tasks pane rendered 6 rows; after increasing available height to 1440x1040 it rendered 10 rows without clicking `See more`.
 - Pushed commit `eb9eeba` to `origin/main` and deployed production from `apps/web`; production URL `https://onetaskfocuser.netlify.app`, deploy ID `6a01e5772a30436805044422`.
+
+## 2026-05-11 NerveCenter Dense Alignment Correction
+
+- Researched spacing conventions before editing: app layouts should use consistent 4/8px increments, with tighter gutters for related working panels and larger whitespace reserved for unrelated sections.
+- Reduced the inflated NerveCenter vertical stack spacing so the horizontal drag bar has `4px` above, `8px` handle height, and `4px` below instead of being separated by large flex gaps.
+- Reduced desktop vertical pane gutters to the visible `6px` drag columns, and reduced the Calendar/Mail lower-pane gutter to `8px`.
+- Kept the Tasks pane aligned to the top grid height when more than five tasks exist, so the three upper panes share the same top and bottom edges while the auto-fill row calculation still reveals more tasks.
+- `npm run build` passed in `apps/web`.
+- Local browser geometry smoke at `http://127.0.0.1:4305/?suite=nervecenter` with 18 seeded tasks at 1440x900: upper pane bottom spread was `0px`, vertical gutters were `6px`, top-grid-to-horizontal-handle gap was `4px`, handle height was `8px`, and handle-to-lower-pane gap was `4px`.
