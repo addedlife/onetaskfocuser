@@ -313,3 +313,12 @@ Current source-grade file count after cleanup: 162 files.
 - Reduced `BRIEF.txt` from a fuller session summary to a tiny context kernel.
 - Added `docs/ops/CONTEXT_INDEX.md` as the task-area file map for accurate low-token changes.
 - Updated `README.md` and `AGENTS.md` so future sessions use `BRIEF.txt` plus only the matching context-index row instead of broad doc/code rereads.
+
+## 2026-05-11 Phone Panel Glanceability Correction
+
+- Removed the cramped compact-mode side-by-side Messages/Recent calls subpanes from NerveCenter WebPhone.
+- Replaced them with one unified `Activity` feed that interleaves recent messages and calls by timestamp.
+- Moved idle connection status out of the Phone card body and into the Phone header as a tiny status dot; active call, incoming call, and voicemail still surface as compact alerts.
+- Reduced Phone card body padding to reclaim vertical space for actual content.
+- `npm run build` passed in `apps/web`.
+- Verified the local phone host `http://127.0.0.1:8765/status` returned HTTP 200 with `connected:true`.

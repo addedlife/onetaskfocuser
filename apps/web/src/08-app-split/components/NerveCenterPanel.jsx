@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { callAI, gP, textOnColor } from '../../01-core.js';
 import { cleanTheme, cleanToolbarButton, gvIconButton, gvTextButton, NC_FONT_STACK, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { NerveCenterPhoneSurface } from './NerveCenterPhoneSurface.jsx';
@@ -41,6 +41,15 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [hoverEmail, setHoverEmail] = useState(null);
   const hoverTimerRef = useRef(null);
   const [reconnectTimedOut, setReconnectTimedOut] = useState(false);
+  const [phoneStatusSummary, setPhoneStatusSummary] = useState({ online: false, tone: "offline", label: "DeskPhone offline", voicemailCount: 0 });
+  const handlePhoneStatusSummary = useCallback((next) => {
+    setPhoneStatusSummary(prev => (
+      prev.online === next.online &&
+      prev.tone === next.tone &&
+      prev.label === next.label &&
+      prev.voicemailCount === next.voicemailCount
+    ) ? prev : next);
+  }, []);
   // Give silent reconnect 6 seconds; if still not connected, surface the button
   useEffect(() => {
     if (!googleWasConnected || googleToken) { setReconnectTimedOut(false); return; }
@@ -100,6 +109,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const ncTitle = { fontSize: ncType.title, fontWeight: "var(--nc-font-weight-strong, 500)", color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35 };
   const ncSectionIcon = (accent = C.accent) => ({ width: 32, height: 32, borderRadius: 16, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
   const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 32, height: 32, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
+  const phoneStatusColor = phoneStatusSummary.tone === "incoming" ? C.success : phoneStatusSummary.tone === "call" ? C.warning : phoneStatusSummary.online ? C.success : C.faint;
 
   const shailaPriorityIds = new Set(priorities.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
   const isShailaWork = t => t?.type === "shailo-research" || t?.type === "shaila-research" || !!t?.shailaId || !!t?.isGetBackStep || shailaPriorityIds.has(t?.priority);
@@ -401,9 +411,18 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           {/* ── Phone ── */}
           <section style={ncPanel}>
             <div style={ncHeader}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                 <span style={ncSectionIcon()}>{suiteIcon("phone_in_talk", 19)}</span>
                 <span style={ncTitle}>Phone</span>
+                <span title={phoneStatusSummary.label} style={{ display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0, color: phoneStatusColor, fontSize: 12, fontWeight: 500 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 99, background: phoneStatusColor, flexShrink: 0 }} />
+                  {(phoneStatusSummary.tone === "incoming" || phoneStatusSummary.tone === "call") && (
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 150 }}>{phoneStatusSummary.label}</span>
+                  )}
+                  {phoneStatusSummary.voicemailCount > 0 && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: C.danger }}>{suiteIcon("voicemail", 12)} {phoneStatusSummary.voicemailCount}</span>
+                  )}
+                </span>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <button onClick={onOpenPhone} style={cleanToolbarButton(false, C)}>
@@ -412,8 +431,8 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 <button onClick={() => { setActionCategoryId("phone"); setActionsOpen(true); }} title="Phone actions" style={ncSmallIconButton()}>{suiteIcon("apps", 17)}</button>
               </div>
             </div>
-            <div style={{ overflow: "hidden", flex: "1 1 auto", minHeight: 0, padding: "18px 20px 20px", display: "flex", flexDirection: "column" }}>
-              <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
+            <div style={{ overflow: "hidden", flex: "1 1 auto", minHeight: 0, padding: "10px 14px 14px", display: "flex", flexDirection: "column" }}>
+              <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </section>
         </div>

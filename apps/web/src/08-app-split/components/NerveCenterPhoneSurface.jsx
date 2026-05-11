@@ -54,7 +54,7 @@ function messagePeerNumber(message) {
   return preferred.find(value => phoneDigits(value).length >= 4) || allMessageNumbers(message).find(value => phoneDigits(value).length >= 4) || "Unknown";
 }
 
-function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
+function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
   const api = "http://127.0.0.1:8765";
   const viewportW = useViewportWidth();
   const touchActions = viewportW < 980;
@@ -224,6 +224,14 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, 10);
   const hasMessages = threads.length > 0;
   const hasCalls = recentCalls.length > 0;
+  useEffect(() => {
+    onStatusSummary?.({
+      online: statusOnline,
+      tone: isIncoming ? "incoming" : isOnCall ? "call" : statusOnline ? "online" : "offline",
+      label: callerDisplay && (isIncoming || isOnCall) ? `${isIncoming ? "Incoming" : "On call"}: ${callerDisplay}` : statusText,
+      voicemailCount: vmCount,
+    });
+  }, [onStatusSummary, statusOnline, isIncoming, isOnCall, callerDisplay, statusText, vmCount]);
   const phoneIconButton = (active = false) => gvIconButton({
     width: compact ? 32 : 36,
     height: compact ? 32 : 36,
@@ -257,6 +265,15 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
     if (diff < 86400000) return `${Math.round(diff / 3600000)}h`;
     return d.toLocaleDateString(undefined, { weekday: "short" });
   };
+  const timeMs = val => {
+    if (!val) return 0;
+    const d = new Date(typeof val === "number" ? val : val);
+    return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+  };
+  const activityItems = [
+    ...threads.map((m, idx) => ({ kind: "message", item: m, idx, at: timeMs(m.timestamp || m.date || m.time) })),
+    ...recentCalls.map((c, idx) => ({ kind: "call", item: c, idx, at: timeMs(c.timestamp || c.date || c.time || c.startTime || c.StartTime) })),
+  ].sort((a, b) => b.at - a.at).slice(0, compact ? 8 : 14);
 
   const callDirIcon = c => {
     // Numeric type codes: 1=incoming, 2=outgoing/dialed, 3=missed, 4=unknown
@@ -317,26 +334,14 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: compact ? 6 : 12, minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden", color: C.text }}>
 
-      {/* ── Status bar ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: compact ? 30 : 44 }}>
-        <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: isIncoming ? C.success : statusOnline ? (isOnCall ? C.warning : C.success) : C.faint }} />
-        <span style={{ flex: 1, minWidth: 0 }}>
-          {callerDisplay && (isIncoming || isOnCall) ? (
-            <span>
-              <span style={{ display: "block", fontSize: 16, fontWeight: 500, color: isIncoming ? C.success : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{callerDisplay}</span>
-              <span style={{ display: "block", fontSize: 14, color: C.muted, fontWeight: 400 }}>{isIncoming ? "Incoming call" : "On call"}</span>
-            </span>
-          ) : (
-            <span style={{ fontSize: compact ? 13 : 14, fontWeight: 400, color: statusOnline ? C.muted : C.faint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>{statusText}</span>
-          )}
-        </span>
-        {vmCount > 0 && (
-          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: NC_TYPE.small, fontWeight: 500, color: "#fff", background: C.danger, borderRadius: 99, padding: "2px 7px", flexShrink: 0 }} title="Voicemail">
-            {suiteIcon("voicemail", 13)} {vmCount}
+      {(isIncoming || isOnCall || vmCount > 0) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: compact ? 28 : 36, padding: "0 2px" }}>
+          <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: isIncoming ? C.success : isOnCall ? C.warning : C.danger }} />
+          <span style={{ flex: 1, minWidth: 0, fontSize: compact ? 13 : 14, fontWeight: 500, color: isIncoming ? C.success : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {callerDisplay && (isIncoming || isOnCall) ? `${isIncoming ? "Incoming" : "On call"} · ${callerDisplay}` : `${vmCount} voicemail${vmCount === 1 ? "" : "s"}`}
           </span>
-        )}
-        <button onClick={refresh} disabled={!!busy} title="Refresh" style={phoneIconButton(false)}>{suiteIcon("refresh", 16)}</button>
-      </div>
+        </div>
+      )}
 
       {/* ── Compose area — at TOP, above lists ── */}
       {composeOpen && (
@@ -388,7 +393,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
       )}
 
       {/* ── Control bar: answer/hangup | record | new-msg | keypad toggle ── */}
-      <div style={{ display: "flex", gap: 6, alignItems: "center", minHeight: compact ? 32 : 44 }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", minHeight: compact ? 30 : 44 }}>
         {isIncoming ? (
           <button onClick={() => post("/answer", "answer")} disabled={!!busy} title="Answer"
             style={gvTextButton({ border: "none", background: C.success, color: "#fff" }, C)}>
@@ -401,6 +406,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
           </button>
         ) : null}
         <div style={{ flex: 1 }} />
+        <button onClick={refresh} disabled={!!busy} title="Refresh phone" style={phoneIconButton(false)}>{suiteIcon("refresh", 15)}</button>
         {/* Record general */}
         <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
           style={phoneIconButton(false)}>
@@ -458,15 +464,14 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
         </div>
       )}
 
-      {/* ── Vertical split: Texts (top) then Calls (bottom), each independently scrollable ── */}
+      {/* ── Unified phone activity feed ── */}
       {statusOnline && (hasMessages || hasCalls) && (
-        <div style={{ flex: compact ? "0 0 auto" : "1 1 0", minHeight: 0, display: "flex", flexDirection: compact ? "row" : "column", gap: compact ? 10 : 0, overflow: "hidden" }}>
-
-          {/* TEXTS section */}
-          {hasMessages && (
-            <div style={{ flex: "1 1 0", minHeight: compact ? 0 : 60, maxHeight: compact ? 184 : undefined, overflowY: "auto", paddingRight: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: C.muted, letterSpacing: 0, marginBottom: 6, paddingLeft: 4, paddingTop: 2, position: "sticky", top: 0, background: C.bg, zIndex: 1 }}>Messages</div>
-              {threads.map((m, idx) => {
+        <div style={{ flex: compact ? "0 1 auto" : "1 1 0", minHeight: 0, maxHeight: compact ? 360 : undefined, overflowY: "auto", paddingRight: 1 }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: C.muted, letterSpacing: 0, marginBottom: 3, paddingLeft: 4, paddingTop: 1, position: "sticky", top: 0, background: C.bg, zIndex: 1 }}>Activity</div>
+          {activityItems.map(entry => {
+            if (entry.kind === "message") {
+                const m = entry.item;
+                const idx = entry.idx;
                 const { icon: msgIcon, color: msgColor } = msgDirIcon(m);
                 const isUnread = !!(m.unread || m.isUnread || m.read === false || m.status === "unread");
                 const preview = m.body || m.text || m.message || m.content || "";
@@ -494,27 +499,9 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
                     )}
                   </div>
                 );
-              })}
-              {onMoreHistory && (
-                <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
-                  <button onClick={onMoreHistory} style={gvTextButton({ height: 32, fontSize: NC_TYPE.meta }, C)}>
-                    {suiteIcon("history", 13)} More history
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Divider between sections */}
-          {hasMessages && hasCalls && !compact && (
-            <div style={{ height: 1, background: C.divider, flexShrink: 0, margin: "4px 0" }} />
-          )}
-
-          {/* CALLS section */}
-          {hasCalls && (
-            <div style={{ flex: "1 1 0", minHeight: compact ? 0 : 60, maxHeight: compact ? 184 : undefined, overflowY: "auto", paddingRight: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: C.muted, letterSpacing: 0, marginBottom: 6, paddingLeft: 4, paddingTop: 2, position: "sticky", top: 0, background: C.bg, zIndex: 1 }}>Recent calls</div>
-              {recentCalls.map((c, idx) => {
+              }
+              const c = entry.item;
+              const idx = entry.idx;
                 const num = c.number || c.phoneNumber || c.from || c.Number || c.PhoneNumber || "";
                 const name = lookupName(num) || c.name || c.displayName || c.Name || c.DisplayName || c.from || num || "Unknown";
                 const { icon, color } = callDirIcon(c);
@@ -543,13 +530,11 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, compact = false, onRecordC
                   </div>
                 );
               })}
-              {onMoreHistory && (
-                <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
-                  <button onClick={onMoreHistory} style={gvTextButton({ height: 32, fontSize: NC_TYPE.meta }, C)}>
-                    {suiteIcon("history", 13)} More history
-                  </button>
-                </div>
-              )}
+          {onMoreHistory && (
+            <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
+              <button onClick={onMoreHistory} style={gvTextButton({ height: 32, fontSize: NC_TYPE.meta }, C)}>
+                {suiteIcon("history", 13)} More history
+              </button>
             </div>
           )}
         </div>
