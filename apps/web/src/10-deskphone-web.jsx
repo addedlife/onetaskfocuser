@@ -25,6 +25,8 @@ const THREAD_DIALPAD_KEYS = [
 ];
 const DESKPHONE_WEB_VERSION = "001";
 const MAX_COMPOSE_ATTACHMENTS = 6;
+const WEBPHONE_MESSAGE_LIMIT = 5000;
+const WEBPHONE_MEDIA_MESSAGE_LIMIT = 1200;
 
 const COLORS = {
   bgMain: "#FFFFFF",
@@ -604,6 +606,15 @@ function normalizePhoneKey(value) {
   return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
 }
 
+function phoneKeysLikelyMatch(a, b) {
+  const left = normalizePhoneKey(a);
+  const right = normalizePhoneKey(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const minLength = Math.min(left.length, right.length);
+  return minLength >= 7 && (left.endsWith(right) || right.endsWith(left));
+}
+
 function formatPhone(value) {
   const digits = normalizePhoneKey(value);
   if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
@@ -722,6 +733,7 @@ function normalizeMessage(raw, index) {
     formattedPhone: formatPhone(number),
     from: raw?.from || "",
     to: raw?.to || "",
+    contactName: raw?.contactName || raw?.ContactName || raw?.displayName || raw?.DisplayName || "",
     body: raw?.body || raw?.preview || "",
     preview: messagePreview(raw),
     timestamp,
@@ -738,6 +750,44 @@ function normalizeMessage(raw, index) {
     sourceDeviceAddress: raw?.sourceDeviceAddress || "",
     attachments,
   };
+}
+
+function findContactForPhone(contacts, phone) {
+  return getApiList(contacts).find((contact) =>
+    contactPhoneOptions(contact).some((contactPhone) => phoneKeysLikelyMatch(contactPhone, phone))
+  ) || null;
+}
+
+function enrichMessageWithContact(message, contacts) {
+  if (message.contactName) return message;
+  const matchingContact = findContactForPhone(contacts, message.number);
+  if (!matchingContact) return message;
+  return {
+    ...message,
+    contactName: contactDisplayName(matchingContact),
+  };
+}
+
+function mergeMessagesWithMedia(baseMessages, mediaMessages) {
+  const mediaById = new Map();
+  getApiList(mediaMessages).forEach((raw, index) => {
+    const message = normalizeMessage(raw, index);
+    mediaById.set(message.id, message);
+    if (message.handle) mediaById.set(message.handle, message);
+  });
+
+  return getApiList(baseMessages).map((raw, index) => {
+    const message = normalizeMessage(raw, index);
+    const mediaMatch = mediaById.get(message.id) || (message.handle ? mediaById.get(message.handle) : null);
+    if (!mediaMatch?.attachments?.length) return raw;
+    return {
+      ...raw,
+      attachments: message.attachments.map((attachment, attachmentIndex) => {
+        const mediaAttachment = mediaMatch.attachments[attachmentIndex];
+        return mediaAttachment?.dataUrl ? { ...attachment, dataUrl: mediaAttachment.dataUrl } : attachment;
+      }),
+    };
+  });
 }
 
 function attachmentLabel(attachment) {
@@ -760,20 +810,25 @@ function saveDataUrlAttachment(attachment, onNotice) {
   link.remove();
 }
 
-function buildConversations(messages) {
+function buildConversations(messages, contacts = []) {
   const grouped = new Map();
-  messages.map(normalizeMessage).forEach((message) => {
+  messages.map(normalizeMessage).map((message) => enrichMessageWithContact(message, contacts)).forEach((message) => {
+    const displayName = message.contactName || message.formattedPhone;
     const existing = grouped.get(message.key) || {
       key: message.key,
       number: message.number,
       formattedPhone: message.formattedPhone,
-      displayName: message.formattedPhone,
-      avatarInitial: avatarInitial(message.formattedPhone),
+      displayName,
+      avatarInitial: avatarInitial(displayName),
       messages: [],
       isPinned: false,
       areAlertsMuted: false,
       isBlocked: false,
     };
+    if (message.contactName) {
+      existing.displayName = message.contactName;
+      existing.avatarInitial = avatarInitial(message.contactName);
+    }
     existing.messages.push(message);
     grouped.set(message.key, existing);
   });
@@ -1432,9 +1487,7 @@ function enrichCallWithContactName(call, contacts) {
   if (call.contactName) return call;
   const callNumber = normalizePhoneKey(call?.number);
   if (!callNumber) return call;
-  const matchingContact = getApiList(contacts).find((contact) =>
-    contactPhoneOptions(contact).some((phone) => normalizePhoneKey(phone) === callNumber)
-  );
+  const matchingContact = findContactForPhone(contacts, callNumber);
   return {
     ...call,
     contactName: matchingContact ? contactDisplayName(matchingContact) : call.contactName,
@@ -1617,7 +1670,7 @@ function MessagesSlice({
   const composeRef = useRef(null);
   const replyAttachmentInputRef = useRef(null);
 
-  const conversations = useMemo(() => buildConversations(messages), [messages]);
+  const conversations = useMemo(() => buildConversations(messages, contacts), [contacts, messages]);
   const visibleConversations = useMemo(
     () => filterConversations(conversations, conversationSearch, conversationFilter, unreadFirst),
     [conversations, conversationSearch, conversationFilter, unreadFirst]
@@ -2279,6 +2332,7 @@ function ContactsSlice({ contacts, contactDraft, onContactDraftConsumed, onComma
     () => [...contacts].sort((a, b) => contactDisplayName(a).localeCompare(contactDisplayName(b))),
     [contacts]
   );
+  const [contactSearch, setContactSearch] = useState("");
   const [selectedKey, setSelectedKey] = useState("");
   const [editorName, setEditorName] = useState("");
   const [editorPhone, setEditorPhone] = useState("");
@@ -2292,6 +2346,17 @@ function ContactsSlice({ contacts, contactDraft, onContactDraftConsumed, onComma
   const selectedPhones = isCreatingContact ? [] : contactPhoneOptions(selectedContact);
   const selectedPhone = selectedPhones[0] || "";
   const canSave = editorName.trim() && editorPhone.trim();
+  const visibleContacts = useMemo(() => {
+    const search = contactSearch.trim().toLowerCase();
+    if (!search) return sortedContacts;
+    return sortedContacts.filter((contact) => {
+      const phones = contactPhoneOptions(contact);
+      return (
+        contactDisplayName(contact).toLowerCase().includes(search) ||
+        phones.some((phone) => phone.toLowerCase().includes(search) || normalizePhoneKey(phone).includes(normalizePhoneKey(search)))
+      );
+    });
+  }, [contactSearch, sortedContacts]);
 
   useEffect(() => {
     if (!sortedContacts.length) {
@@ -2367,9 +2432,19 @@ function ContactsSlice({ contacts, contactDraft, onContactDraftConsumed, onComma
           <ShellButton className="dp-primary" iconName="person_add" nativeSource="MainWindow.xaml:3766" onClick={startNewContact}>New Contact</ShellButton>
         </div>
       </div>
+      <label className="dp-message-search dp-contact-search" data-native-source="MainWindow.xaml:3762">
+        {icon("search", 18)}
+        <input
+          value={contactSearch}
+          onChange={(event) => setContactSearch(event.target.value)}
+          placeholder="Search contacts"
+          aria-label="Search contacts"
+          data-automation-id="ContactsSearchBox"
+        />
+      </label>
       <div className="dp-contacts-grid">
         <div className="dp-contacts-list" data-native-source="MainWindow.xaml:3762">
-          {sortedContacts.slice(0, 80).map((contact, index) => {
+          {visibleContacts.map((contact, index) => {
             const key = contactKey(contact, index);
             const phones = contactPhoneOptions(contact);
             return (
@@ -2388,6 +2463,7 @@ function ContactsSlice({ contacts, contactDraft, onContactDraftConsumed, onComma
               </button>
             );
           })}
+          {!visibleContacts.length ? <div className="dp-contact-empty">No matching contacts</div> : null}
         </div>
         <section className="dp-contact-detail" data-native-source="MainWindow.xaml:3840">
           {selectedContact || isCreatingContact ? (
@@ -5593,6 +5669,8 @@ export function DeskPhoneWebPanel({
   const [draft, setDraft] = useState("");
   const [newMessageTo, setNewMessageTo] = useState("");
   const [contactDraft, setContactDraft] = useState(null);
+  const mediaMessagesRef = useRef([]);
+  const lastMediaRefreshRef = useRef(0);
 
   const showNotice = useCallback((message) => {
     setNotice(message);
@@ -5601,18 +5679,29 @@ export function DeskPhoneWebPanel({
 
   const refresh = useCallback(async () => {
     try {
-      const [nextStatus, nextMessages, nextCalls, nextContacts] = await Promise.all([
+      const shouldFetchMedia = Date.now() - lastMediaRefreshRef.current > 60000;
+      const [nextStatus, nextMessages, nextMediaMessages, nextCalls, nextContacts] = await Promise.all([
         readOptionalJson(host, "/status"),
-        readOptionalJson(host, "/messages?limit=1200"),
+        readOptionalJson(host, `/messages?limit=${WEBPHONE_MESSAGE_LIMIT}`),
+        shouldFetchMedia
+          ? readOptionalJson(host, `/messages?limit=${WEBPHONE_MEDIA_MESSAGE_LIMIT}&includeAttachmentData=1`)
+          : Promise.resolve({ ok: false, data: mediaMessagesRef.current, path: "/messages media cache" }),
         readOptionalJson(host, "/calls"),
         readOptionalJson(host, "/contacts"),
       ]);
+      if (nextMediaMessages.ok) {
+        mediaMessagesRef.current = getApiList(nextMediaMessages.data);
+        lastMediaRefreshRef.current = Date.now();
+      }
       const anyOnline = nextStatus.ok || nextMessages.ok || nextCalls.ok || nextContacts.ok;
       if (!anyOnline) {
         throw nextStatus.error || nextMessages.error || nextCalls.error || nextContacts.error || new Error("DeskPhone host was not reached.");
       }
       if (nextStatus.ok) setStatus(nextStatus.data);
-      if (nextMessages.ok) setMessages(getApiList(nextMessages.data));
+      if (nextMessages.ok) {
+        const mediaData = nextMediaMessages.ok ? nextMediaMessages.data : mediaMessagesRef.current;
+        setMessages(mergeMessagesWithMedia(nextMessages.data, mediaData));
+      }
       if (nextCalls.ok) setCalls(getApiList(nextCalls.data));
       if (nextContacts.ok) setContacts(getApiList(nextContacts.data));
       setOnline(true);

@@ -182,3 +182,24 @@ Current source-grade file count after cleanup: 162 files.
 - Verified `http://127.0.0.1:8765/status` returned HTTP 200 with `connected:true`.
 - Verified `http://127.0.0.1:8765/messages?limit=5` returned HTTP 200.
 - Verified CORS/PNA headers allow `https://onetaskfocuser.netlify.app` to call the localhost host.
+
+## 2026-05-10 WebPhone Contact/MMS/History Fix
+
+- Native host released as DeskPhone `b263`.
+- Host API changes:
+  - `/contacts` no longer truncates at 250 rows.
+  - `/calls` exports up to 1000 rows instead of 100.
+- WebPhone changes:
+  - Message conversations are enriched from the contacts payload, so thread names can resolve even when message rows only contain numbers.
+  - Call-history name matching now uses the same tolerant phone-key comparison as message/contact matching.
+  - Contacts view has a search field and no longer displays only the first 80 rows.
+  - Message history request increased to 5000 rows.
+  - Recent MMS media request fetches attachment image data for the latest 1200 rows and caches that media payload for 60 seconds, avoiding repeated large image downloads every refresh.
+- Production web deploy: `6a014b570c09106d30c7802d`.
+- Verified production root, `/shailos/`, and `/.netlify/functions/app-config` returned HTTP 200.
+- Verified localhost host after b263 returned HTTP 200 with `connected:true`.
+- Measured localhost payloads after b263:
+  - Contacts: 1731.
+  - Calls: 148.
+  - Messages with `limit=5000`: 5000.
+  - Recent media rows with image data: 21.
