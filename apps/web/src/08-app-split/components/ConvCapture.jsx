@@ -3,7 +3,7 @@ import { aiParseConversation, fmtMs, uid } from '../../01-core.js';
 import { deletePendingRecording, savePendingRecording, transcribePendingRecording, updatePendingRecordingError } from '../../09-transcription-pen.js';
 import { NC_FONT_STACK } from '../ui-tokens.jsx';
 
-function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMode=false }) {
+function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMode=false, ownerUid }) {
   // callMode starts in 'ready' phase (waiting for user to share screen)
   const [phase, setPhase] = useState(callMode ? 'ready' : 'recording');
   const [liveText, setLiveText] = useState('');
@@ -21,6 +21,17 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
   const elapsedTmrRef = useRef(null);
 
   function goPhase(p) { phaseRef.current = p; setPhase(p); }
+  function stopCapture() {
+    clearInterval(elapsedTmrRef.current);
+    if (recogRef.current) { try { recogRef.current.onend = null; recogRef.current.abort(); } catch(_) {} recogRef.current = null; }
+    if (mediaRecRef.current && mediaRecRef.current.state !== 'inactive') { try { mediaRecRef.current.stop(); } catch(_) {} }
+    mediaRecRef.current = null;
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+  }
+  function closeCapture() {
+    stopCapture();
+    onClose();
+  }
 
   function startMediaRecorder(stream) {
     streamRef.current = stream;
@@ -69,10 +80,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
 
     return () => {
       clearTimeout(t);
-      clearInterval(elapsedTmrRef.current);
-      if (recogRef.current) { try { recogRef.current.onend = null; recogRef.current.abort(); } catch(_) {} }
-      if (mediaRecRef.current && mediaRecRef.current.state !== 'inactive') { try { mediaRecRef.current.stop(); } catch(_) {} }
-      if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); }
+      stopCapture();
     };
   }, []); // eslint-disable-line
 
@@ -122,12 +130,15 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
         pending = await savePendingRecording(webmBlob, callMode ? 'conversation_call' : 'conversation_mic', {
           source: 'main',
           label: callMode ? 'Conversation call capture' : 'Conversation mic capture',
+          ownerUid,
         });
         // If Gemini transcription fails, fall back to Web Speech text — never kill the whole flow
         try {
           const geminiTranscript = await transcribePendingRecording(
             pending.id, aiOpts,
-            `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Common words: shaila/shailos, halacha, gemara, Shabbos, davening, daven, bracha, mutar, assur, kashrus, Rashi, Rambam, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.\n\nReturn only the verbatim transcript. No summary, no rephrasing, no meta-commentary.`
+            `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Common words: shaila/shailos, halacha, gemara, Shabbos, davening, daven, bracha, mutar, assur, kashrus, Rashi, Rambam, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.\n\nReturn only the verbatim transcript. No summary, no rephrasing, no meta-commentary.`,
+            {},
+            ownerUid
           );
           if (geminiTranscript?.trim()) transcript = geminiTranscript.trim();
         } catch(transcriptErr) {
@@ -153,11 +164,11 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
       add('scheduleItems', parsed.scheduleItems);
       add('reminders', parsed.reminders);
       setItems(allItems);
-      if (pending?.id) await deletePendingRecording(pending.id);
+      if (pending?.id) await deletePendingRecording(pending.id, ownerUid);
       goPhase('review');
     } catch(e) {
       if (typeof pending !== 'undefined' && pending?.id) {
-        await updatePendingRecordingError(pending.id, e.message || String(e)).catch(() => {});
+        await updatePendingRecordingError(pending.id, e.message || String(e), ownerUid).catch(() => {});
       }
       setErr('Could not process: ' + e.message);
       setItems([]);
@@ -178,7 +189,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
       else if (it.cat === 'reminders') onApply(it.text, 'eventually');
       // completions + gotBacks are info-only for now
     });
-    onClose();
+    closeCapture();
   }
 
   const approvedCount = items.filter(it => it.approved).length;
@@ -201,12 +212,12 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
 
   // ── Call mode: waiting for user to share screen ───────────────────────────
   if (phase === 'ready') return (
-    <div style={overlayS} onClick={onClose}>
+    <div style={overlayS} onClick={closeCapture}>
       <div style={cardS} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '22px 24px 18px', borderBottom: `1px solid ${T.brd}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <span style={{ fontSize: 18, fontWeight: 500, color: T.t }}>Capture Call Audio</span>
-            <button style={btnClose} onClick={onClose}>×</button>
+            <button style={btnClose} onClick={closeCapture}>×</button>
           </div>
           <div style={{ fontSize: 14, color: T.tSoft, fontFamily: NC_FONT_STACK, lineHeight: 1.55, marginBottom: 14 }}>
             Click <strong>Start capturing</strong>, then in the browser dialog:<br/>
@@ -219,7 +230,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
           <button onClick={startCallCapture} style={{ background: '#5B7BE8', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 28px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Start capturing
           </button>
-          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+          <button onClick={closeCapture} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Cancel
           </button>
         </div>
@@ -228,13 +239,13 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
   );
 
   if (phase === 'recording') return (
-    <div style={overlayS} onClick={onClose}>
+    <div style={overlayS} onClick={closeCapture}>
       <style>{`@keyframes conv-pulse{0%,100%{opacity:1}50%{opacity:.25}}`}</style>
       <div style={cardS} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '22px 24px 18px', borderBottom: `1px solid ${T.brd}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <span style={{ fontSize: 18, fontWeight: 500, color: T.t }}>{callMode ? 'Capturing Call Audio' : 'Recording Conversation'}</span>
-            <button style={btnClose} onClick={onClose}>×</button>
+            <button style={btnClose} onClick={closeCapture}>×</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#E74C3C', animation: 'conv-pulse 1.4s ease infinite' }}/>
@@ -252,7 +263,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
           <button onClick={stopAndProcess} style={{ background: '#E74C3C', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 30px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Stop &amp; Process
           </button>
-          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+          <button onClick={closeCapture} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Cancel
           </button>
         </div>
@@ -272,7 +283,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
 
   // ── Review phase ──────────────────────────────────────────────────────────
   return (
-    <div style={overlayS} onClick={onClose}>
+    <div style={overlayS} onClick={closeCapture}>
       <div style={cardS} onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div style={{ padding: '20px 24px 14px', borderBottom: `1px solid ${T.brd}`, flexShrink: 0 }}>
@@ -283,7 +294,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
                 {items.length} item{items.length !== 1 ? 's' : ''} — check what to add
               </div>
             </div>
-            <button style={btnClose} onClick={onClose}>×</button>
+            <button style={btnClose} onClick={closeCapture}>×</button>
           </div>
           {err && <div style={{ fontSize: 13, color: '#E74C3C', fontFamily: NC_FONT_STACK, marginTop: 8 }}>{err}</div>}
         </div>
@@ -354,7 +365,7 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
             style={{ flex: 1, background: approvedCount > 0 ? '#5B7BE8' : T.brdS, color: approvedCount > 0 ? '#fff' : T.tFaint, border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 500, cursor: approvedCount > 0 ? 'pointer' : 'default', fontFamily: NC_FONT_STACK, transition: 'background 0.15s' }}>
             Add {approvedCount > 0 ? approvedCount : 0} item{approvedCount !== 1 ? 's' : ''}
           </button>
-          <button onClick={onClose}
+          <button onClick={closeCapture}
             style={{ padding: '12px 18px', background: 'none', border: `1px solid ${T.brd}`, borderRadius: 10, fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Cancel
           </button>

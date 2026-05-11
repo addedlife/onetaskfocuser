@@ -344,8 +344,11 @@ function AppContent() {
 
   const researchRef = useRef<HTMLDivElement>(null);
 
-  const USER_ID = 'rabbidanziger';
-  const shailosCol = () => collection(db, 'users', USER_ID, 'shailos');
+  const userId = user?.uid || '';
+  const shailosCol = () => {
+    if (!userId) throw new Error('Sign in before opening shailos.');
+    return collection(db, 'users', userId, 'shailos');
+  };
 
   const refreshPendingRecordings = async () => {
     try {
@@ -393,11 +396,11 @@ function AppContent() {
     refreshPendingRecordings();
   }, []);
 
-  // Handle ?action= param from task app FAB buttons
+  // Handle ?action= param from task app FAB buttons without creating records from URL alone.
   useEffect(() => {
     const action = new URLSearchParams(window.location.search).get('action');
     if (action === 'add-manual' && user) {
-      handleAddManually();
+      window.history.replaceState({}, '', window.location.pathname);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -409,7 +412,7 @@ function AppContent() {
     // Test connection
     const testConnection = async () => {
       try {
-        await getDocFromServer(doc(db, 'users', USER_ID));
+        await getDocFromServer(doc(db, 'users', user.uid));
       } catch (err) {
         if (err instanceof Error && err.message.includes('the client is offline')) {
           console.error("Firebase configuration error: client is offline");
@@ -674,7 +677,7 @@ function AppContent() {
           reasons: data.reasons || '',
           status: data.answer && data.answer.trim() !== "" ? 'answered' : 'pending',
           createdAt: Timestamp.now(),
-          userId: USER_ID
+          userId
         })
       );
       await Promise.all(promises);
@@ -801,7 +804,7 @@ function AppContent() {
         reasons: '',
         status: 'pending',
         createdAt: now,
-        userId: USER_ID,
+        userId,
       });
       setSelectedShaila({
         id: docRef.id,
@@ -815,7 +818,7 @@ function AppContent() {
         reasons: '',
         status: 'pending',
         createdAt: now,
-        userId: USER_ID,
+        userId,
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'shailos');

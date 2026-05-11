@@ -15,7 +15,7 @@ Start with `BRIEF.txt`. Keep both cached and uncached token use low: read the br
 - Before a coding fix, project, upgrade, or change, research the relevant industry-standard practice. If it conflicts with the local plan, tell the user and get confirmation before proceeding.
 - Verify current state from `docs/ops/VERIFICATION_LOG.md` before changing code.
 - Use `docs/ops/CONTEXT_INDEX.md` to target source reads; expand with `rg` only when the listed context is insufficient.
-- Commit, push, and deploy verified web changes unless the current thread specifically says not to.
+- Commit and push verified web changes when requested; deploy to production only after explicit approval in the current thread.
 - Do not relink Netlify without explicit approval.
 - Record verification results in `docs/ops/VERIFICATION_LOG.md`.
 - Record migration decisions in `docs/ops/MIGRATION_MANIFEST.md`.
@@ -26,7 +26,7 @@ Start with `BRIEF.txt`. Keep both cached and uncached token use low: read the br
 - GitHub `main` is reconciled to Pro 4 as of 2026-05-11.
 - Normal push target is `origin/main`.
 - Old GitHub main is preserved at branch `archive/pre-pro4-main-20260511-011424` and tag `archive-pre-pro4-main-20260511-011424`.
-- Netlify production should be deployed from `apps/web` with `npx netlify deploy --prod` after verified web changes unless the current thread says not to.
+- Netlify production should be deployed from `apps/web` with `npx netlify deploy --prod` only after explicit approval in the current thread.
 
 ## Verification Gates
 

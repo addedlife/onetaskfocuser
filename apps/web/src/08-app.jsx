@@ -1,7 +1,7 @@
 // === 08-app.js ===
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callAI, suggestFirstStep, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer, gG, fmtMs, db, _lum, priText, textOnPastel } from './01-core.js';
+import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callAI, suggestFirstStep, aiParseBrainDump, aiParseConversation, gG, fmtMs, db, _lum, priText, textOnPastel } from './01-core.js';
 import { IC } from './02-icons.jsx';
 import { VoiceInput } from './03-voice.jsx';
 import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from './04-components.jsx';
@@ -976,8 +976,24 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       const raw = await callAI(prompt, { maxTokens: 500 });
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('Could not parse event — try rephrasing.');
-      const eventBody = JSON.parse(jsonMatch[0]);
-      eventBody.reminders = eventBody.reminders || { useDefault: false, overrides: [] };
+      const parsedEvent = JSON.parse(jsonMatch[0]);
+      const cleanReminders = Array.isArray(parsedEvent?.reminders?.overrides)
+        ? parsedEvent.reminders.overrides
+            .filter(reminder => reminder?.method === "popup" && Number.isFinite(Number(reminder?.minutes)))
+            .slice(0, 3)
+            .map(reminder => ({ method: "popup", minutes: Math.max(0, Math.min(40320, Math.round(Number(reminder.minutes)))) }))
+        : [];
+      const eventBody = {
+        summary: String(parsedEvent?.summary || "").slice(0, 160),
+        start: parsedEvent?.start?.dateTime
+          ? { dateTime: String(parsedEvent.start.dateTime) }
+          : { date: String(parsedEvent?.start?.date || today) },
+        end: parsedEvent?.end?.dateTime
+          ? { dateTime: String(parsedEvent.end.dateTime) }
+          : { date: String(parsedEvent?.end?.date || parsedEvent?.start?.date || today) },
+        reminders: { useDefault: false, overrides: cleanReminders },
+      };
+      if (!eventBody.summary.trim()) throw new Error('Could not parse event title — try rephrasing.');
       const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
         method: 'POST',
         headers: { Authorization: `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
@@ -1040,12 +1056,8 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     .join("|");
   useEffect(() => {
     if (!onPolishNerveItems || !polishQueueKey) return;
-    const items = [...primaryTasks, ...visibleShailos]
-      .filter(needsNervePolish)
-      .map(item => ({ id: item.id, kind: isShailaWork(item) ? "shaila" : "task", source: nerveSummarySource(item) }))
-      .slice(0, 8);
-    if (items.length) onPolishNerveItems(items);
-  }, [polishQueueKey]); // eslint-disable-line
+    // AI polishing is intentionally opt-in. Automatic sends can disclose task or shaila text.
+  }, [polishQueueKey, onPolishNerveItems]);
 
   const startPaneResize = (leftKey, rightKey, e) => {
     if (touchLayout || !onPaneWeightsChange) return;
@@ -2045,6 +2057,7 @@ function App({ user, onSignOut }) {
   // ─── Conversation Capture ────────────────────────────────────────────────
   const [showConvCapture, setShowConvCapture] = useState(false);
   const [convCallMode, setConvCallMode] = useState(false); // true = getDisplayMedia (phone call)
+  const currentOwnerUid = canonicalUid(user);
 
   const inRef = useRef(null);
   const edRef = useRef(null);
@@ -2237,10 +2250,10 @@ function App({ user, onSignOut }) {
   }, []);
 
   const refreshPendingRecordings = useCallback(() => {
-    listPendingRecordings()
+    listPendingRecordings(currentOwnerUid)
       .then(setPendingRecordings)
       .catch(() => {});
-  }, []);
+  }, [currentOwnerUid]);
 
   useEffect(() => {
     refreshPendingRecordings();
@@ -2273,7 +2286,7 @@ function App({ user, onSignOut }) {
   }, [loaded]); // eslint-disable-line
 
   // ─── Google Calendar + Gmail via GIS OAuth ───────────────────────────────
-  const effectiveGoogleClientId = (AS?.googleClientId || serverGoogleClientId || "").trim();
+  const effectiveGoogleClientId = (serverGoogleClientId || "").trim();
 
   useEffect(() => {
     const clientId = effectiveGoogleClientId;
@@ -2370,8 +2383,12 @@ function App({ user, onSignOut }) {
       console.warn('[Google] calendarList failed, falling back to primary:', e.message);
     }
 
-    // If calendarList failed or returned nothing, fall back to primary
-    if (!cals || cals.length === 0) {
+    if (cals && cals.length === 0) {
+      return [];
+    }
+
+    // If calendarList failed, fall back to primary. An empty selected list means the user hid every calendar.
+    if (!cals) {
       const r = await fetch(eventsUrl('primary'), { headers: { Authorization: `Bearer ${token}` } });
       if (r.status === 401) throw new Error('token_expired');
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + r.status}`); }
@@ -2398,8 +2415,7 @@ function App({ user, onSignOut }) {
 
   async function fetchGmailData(token) {
     console.log('[Google] Fetching Gmail…');
-    // Personal = all; Promotions + Updates = important only; most recent 20 combined
-    const q = encodeURIComponent('(category:primary) OR (category:promotions is:important) OR (category:updates is:important)');
+    const q = encodeURIComponent('is:unread is:important in:inbox');
     const listR = await fetch(
       `https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=${q}`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -2416,7 +2432,7 @@ function App({ user, onSignOut }) {
           { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
       )
     );
-    // Batch AI: generate one-sentence summaries for all emails in a single call
+    /*
     try {
       const lines = msgs.map((m, i) => {
         const subj = m?.payload?.headers?.find(h => h.name === 'Subject')?.value || '';
@@ -2433,6 +2449,7 @@ function App({ user, onSignOut }) {
     } catch (e) {
       console.warn('[Google] AI email summary failed:', e.message);
     }
+    */
     return msgs;
   }
 
@@ -2501,6 +2518,7 @@ function App({ user, onSignOut }) {
   // ─── Listen for shailos iframe "close" message ───────────────────────────
   useEffect(() => {
     const handler = (e) => {
+      if (e.origin !== window.location.origin) return;
       if (e.data === 'shailos:close') { setShowShailos(false); setShailosAction(null); }
       if (e.data === 'shailos:open-conv-capture') {
         setShowShailos(false); setShailosAction(null);
@@ -2756,12 +2774,13 @@ function App({ user, onSignOut }) {
         rec.id,
         aiOpts,
         "Transcribe this audio exactly and faithfully. The speaker may use Yeshivish English, Hebrew, Yiddish, and halachic terms. Do not summarize or classify. Return only the transcript.",
-        { maxOutputTokens: 8192 }
+        { maxOutputTokens: 8192 },
+        currentOwnerUid
       );
       setPendingTranscripts(p => ({ ...p, [rec.id]: txt }));
-      await updatePendingRecordingError(rec.id, "");
+      await updatePendingRecordingError(rec.id, "", currentOwnerUid);
     } catch(e) {
-      await updatePendingRecordingError(rec.id, e.message || String(e)).catch(() => {});
+      await updatePendingRecordingError(rec.id, e.message || String(e), currentOwnerUid).catch(() => {});
     } finally {
       setPendingRetryId(null);
       refreshPendingRecordings();
@@ -2770,7 +2789,7 @@ function App({ user, onSignOut }) {
 
   async function deleteHeldTranscription(rec) {
     if (pendingRetryId === rec.id) return;
-    await deletePendingRecording(rec.id);
+    await deletePendingRecording(rec.id, currentOwnerUid);
     setPendingTranscripts(p => {
       const next = { ...p };
       delete next[rec.id];
@@ -2779,9 +2798,10 @@ function App({ user, onSignOut }) {
     refreshPendingRecordings();
   }
 
-  const sc = SCHEMES[AS?.colorScheme] || AS?.customSchemes?.[AS?.colorScheme] || SCHEMES.claude;
+  const customScheme = AS?.customSchemes?.[AS?.colorScheme];
+  const sc = SCHEMES[AS?.colorScheme] || (customScheme && typeof customScheme === "object" ? customScheme : null) || SCHEMES.claude;
   // Detect dark theme by checking bg luminance
-  const isDark = (()=>{const h=sc.bg||"#EDE5D8";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000<128;})();
+  const isDark = (()=>{const h=typeof sc.bg==="string"&&/^#[0-9a-f]{6}$/i.test(sc.bg)?sc.bg:"#EDE5D8";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000<128;})();
   const T = {...sc, isDark, glow:!!sc.glow, shadow: isDark?"0 2px 12px rgba(0,0,0,0.3)":"0 2px 12px rgba(0,0,0,0.06)", shadowLg: isDark?"0 6px 24px rgba(0,0,0,0.4)":"0 6px 24px rgba(0,0,0,0.09)"};
   const fontWeightNormal = Math.max(320, Math.min(560, Number(AS?.fontWeightScale || 400)));
   const fontWeightStrong = Math.max(420, Math.min(700, fontWeightNormal + 110));
@@ -3367,12 +3387,6 @@ function App({ user, onSignOut }) {
 
   function saveShailaField(id, field, value) {
     setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => t.id===id ? {...t, [field]: value} : t)}))}));
-    // When an answer is saved, generate a 6-word AI summary and store it alongside
-    if (field === "shailaAnswer" && value.trim() && hasAI) {
-      aiSummarizeAnswer(value, aiOpts).then(summary => {
-        if (summary) setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => t.id===id ? {...t, answerSummary: summary} : t)}))}));
-      }).catch(() => {});
-    }
   }
 
   function handleShailaGotBack(id, value) {
@@ -5933,12 +5947,14 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
         pending = await savePendingRecording(webmBlob, callMode ? 'conversation_call' : 'conversation_mic', {
           source: 'main',
           label: callMode ? 'Conversation call capture' : 'Conversation mic capture',
-        });
+        }, currentOwnerUid);
         // If Gemini transcription fails, fall back to Web Speech text — never kill the whole flow
         try {
           const geminiTranscript = await transcribePendingRecording(
             pending.id, aiOpts,
             `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Common words: shaila/shailos, halacha, gemara, Shabbos, davening, daven, bracha, mutar, assur, kashrus, Rashi, Rambam, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.\n\nReturn only the verbatim transcript. No summary, no rephrasing, no meta-commentary.`
+            undefined,
+            currentOwnerUid
           );
           if (geminiTranscript?.trim()) transcript = geminiTranscript.trim();
         } catch(transcriptErr) {
@@ -5964,11 +5980,11 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
       add('scheduleItems', parsed.scheduleItems);
       add('reminders', parsed.reminders);
       setItems(allItems);
-      if (pending?.id) await deletePendingRecording(pending.id);
+      if (pending?.id) await deletePendingRecording(pending.id, currentOwnerUid);
       goPhase('review');
     } catch(e) {
       if (typeof pending !== 'undefined' && pending?.id) {
-        await updatePendingRecordingError(pending.id, e.message || String(e)).catch(() => {});
+        await updatePendingRecordingError(pending.id, e.message || String(e), currentOwnerUid).catch(() => {});
       }
       setErr('Could not process: ' + e.message);
       setItems([]);

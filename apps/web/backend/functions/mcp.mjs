@@ -9,14 +9,30 @@ const PROJECT_ID = "onetaskonly-app";
 const USER_KEY = "rabbidanziger";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
+const ALLOWED_ORIGINS = new Set([
+  "https://onetaskfocuser.netlify.app",
+  "http://localhost:8888",
+  "http://localhost:5173",
+  "http://localhost:4305",
+]);
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, content-type, mcp-protocol-version",
-  "Access-Control-Expose-Headers": "mcp-protocol-version",
-  "MCP-Protocol-Version": "2025-11-25",
-};
+function corsHeadersFor(request) {
+  const origin = request.headers.get("origin") || "";
+  const allowedOrigin = !origin || ALLOWED_ORIGINS.has(origin) ? (origin || "https://onetaskfocuser.netlify.app") : "";
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin || "https://onetaskfocuser.netlify.app",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, content-type, mcp-protocol-version",
+    "Access-Control-Expose-Headers": "mcp-protocol-version",
+    "MCP-Protocol-Version": "2025-11-25",
+    "Vary": "Origin",
+  };
+}
+
+function isAllowedOrigin(request) {
+  const origin = request.headers.get("origin") || "";
+  return !origin || ALLOWED_ORIGINS.has(origin);
+}
 
 const tools = [
   {
@@ -121,6 +137,11 @@ const tools = [
 ];
 
 export default async function handler(request) {
+  const corsHeaders = corsHeadersFor(request);
+  if (!isAllowedOrigin(request)) {
+    return json({ error: "origin_not_allowed" }, 403, corsHeaders);
+  }
+
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
@@ -135,23 +156,23 @@ export default async function handler(request) {
       endpoint: "/mcp",
       tools: tools.map((tool) => tool.name),
       auth: authProblem ? authProblem.message : "authorized",
-    }, authProblem ? 401 : 200);
+    }, authProblem ? 401 : 200, corsHeaders);
   }
 
   if (request.method !== "POST") {
-    return json({ error: "Method not allowed" }, 405);
+    return json({ error: "Method not allowed" }, 405, corsHeaders);
   }
 
   const authProblem = authorize(request);
   if (authProblem) {
-    return jsonRpcError(null, -32001, authProblem.message, 401);
+    return jsonRpcError(null, -32001, authProblem.message, 401, corsHeaders);
   }
 
   let payload;
   try {
     payload = await request.json();
   } catch {
-    return jsonRpcError(null, -32700, "Parse error", 400);
+    return jsonRpcError(null, -32700, "Parse error", 400, corsHeaders);
   }
 
   const requests = Array.isArray(payload) ? payload : [payload];
@@ -162,10 +183,10 @@ export default async function handler(request) {
   }
 
   if (Array.isArray(payload)) {
-    return json(responses);
+    return json(responses, 200, corsHeaders);
   }
 
-  return responses[0] ? json(responses[0]) : new Response(null, { status: 204, headers: corsHeaders });
+  return responses[0] ? json(responses[0], 200, corsHeaders) : new Response(null, { status: 204, headers: corsHeaders });
 }
 
 async function handleRpc(message) {
@@ -449,11 +470,9 @@ function serviceAccount() {
 
 function authorize(request) {
   const expected = env("MCP_READ_TOKEN");
-  const allowOpen = env("MCP_ALLOW_UNAUTHENTICATED_READS") === "true";
-  if (!expected && !allowOpen) {
+  if (!expected) {
     return new Error("MCP_READ_TOKEN is required before this endpoint will serve data.");
   }
-  if (allowOpen && !expected) return null;
 
   const authorization = request.headers.get("authorization") || "";
   const token = authorization.replace(/^Bearer\s+/i, "").trim();
@@ -537,15 +556,15 @@ function rpcError(id, code, message) {
   return { jsonrpc: "2.0", id, error: { code, message } };
 }
 
-function jsonRpcError(id, code, message, status) {
-  return json(rpcError(id, code, message), status);
+function jsonRpcError(id, code, message, status, headers) {
+  return json(rpcError(id, code, message), status, headers);
 }
 
-function json(body, status = 200) {
+function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...corsHeaders,
+      ...headers,
       "Content-Type": "application/json; charset=utf-8",
     },
   });

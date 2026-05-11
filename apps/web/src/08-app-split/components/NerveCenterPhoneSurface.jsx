@@ -2,6 +2,57 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { cleanTheme, gvIconButton, gvTextButton, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
+const HOST_PAIRING_TOKEN_KEY = "deskphone_web_pairing_token";
+
+function getHostPairingToken() {
+  try {
+    return localStorage.getItem(HOST_PAIRING_TOKEN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function setHostPairingToken(token) {
+  try {
+    localStorage.setItem(HOST_PAIRING_TOKEN_KEY, token);
+  } catch {
+    // Local storage may be disabled.
+  }
+}
+
+let hostPairingPrompt = null;
+
+async function promptForHostPairingToken() {
+  if (!hostPairingPrompt) {
+    hostPairingPrompt = Promise.resolve().then(() => {
+      const token = window.prompt("Enter the DeskPhone web pairing token from the DeskPhone Log tab.");
+      if (token?.trim()) {
+        setHostPairingToken(token.trim());
+        return token.trim();
+      }
+      return "";
+    }).finally(() => {
+      hostPairingPrompt = null;
+    });
+  }
+  return hostPairingPrompt;
+}
+
+async function fetchHostApi(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  const token = getHostPairingToken();
+  if (token) headers["X-DeskPhone-Token"] = token;
+
+  let response = await fetch(url, { ...options, headers });
+  if (response.status !== 401) return response;
+
+  const nextToken = await promptForHostPairingToken();
+  if (!nextToken) return response;
+  return fetch(url, {
+    ...options,
+    headers: { ...(options.headers || {}), "X-DeskPhone-Token": nextToken },
+  });
+}
 
 function phoneDigits(value) {
   return String(value || "").replace(/\D/g, "");
@@ -10,11 +61,9 @@ function phoneDigits(value) {
 function phoneKeys(value) {
   const digits = phoneDigits(value);
   if (!digits) return [];
-  const keys = [digits];
-  if (digits.length === 11 && digits.startsWith("1")) keys.push(digits.slice(1));
-  if (digits.length > 10) keys.push(digits.slice(-10));
-  if (digits.length > 7) keys.push(digits.slice(-7));
-  return [...new Set(keys.filter(Boolean))];
+  if (digits.length === 10) return [digits, `1${digits}`];
+  if (digits.length === 11 && digits.startsWith("1")) return [digits.slice(1), digits];
+  return [digits];
 }
 
 function allContactPhones(contact) {
@@ -80,10 +129,10 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
     try {
       setError("");
       const [statusRes, messagesRes, callsRes, contactsRes] = await Promise.all([
-        fetch(`${api}/status`, { cache: "no-store" }),
-        fetch(`${api}/messages?limit=5000`, { cache: "no-store" }),
-        fetch(`${api}/calls`, { cache: "no-store" }).catch(() => null),
-        fetch(`${api}/contacts`, { cache: "no-store" }).catch(() => null),
+        fetchHostApi(`${api}/status`, { cache: "no-store" }),
+        fetchHostApi(`${api}/messages?limit=5000`, { cache: "no-store" }),
+        fetchHostApi(`${api}/calls`, { cache: "no-store" }).catch(() => null),
+        fetchHostApi(`${api}/contacts`, { cache: "no-store" }).catch(() => null),
       ]);
       const nextStatus = await statusRes.json();
       const parsed = await messagesRes.json().catch(() => []);
@@ -169,7 +218,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
   const post = async (path, label) => {
     setBusy(label);
     try {
-      const res = await fetch(`${api}${path}`, { method: "POST" });
+      const res = await fetchHostApi(`${api}${path}`, { method: "POST" });
       if (!res.ok) {
         let msg = `DeskPhone error (${res.status})`;
         try { const d = await res.json(); if (d?.error || d?.message) msg = d.error || d.message; } catch {}

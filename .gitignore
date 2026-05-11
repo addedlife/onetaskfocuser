@@ -6,6 +6,7 @@ obj/
 .claude/
 .launcher/
 artifacts/
+HANDOFF.md
 deno.lock
 *.log
 *.tmp

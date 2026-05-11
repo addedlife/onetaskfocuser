@@ -1,4 +1,4 @@
-const { corsFor, processAiPayload } = require("./_ai-core.cjs");
+const { authorizeFunctionRequest, corsFor, processAiPayload } = require("./_ai-core.cjs");
 
 exports.handler = async (event) => {
   const cors = corsFor(event);
@@ -24,6 +24,7 @@ exports.handler = async (event) => {
   }
 
   try {
+    await authorizeFunctionRequest(event, "ai");
     const payload = event.body ? JSON.parse(event.body) : {};
     const result = await processAiPayload(payload);
     return {

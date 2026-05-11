@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 const DEFAULT_HOST = "http://127.0.0.1:8765";
 const ANDROID_BRIDGE_INTENT_URL = "intent://start#Intent;scheme=webphonebridge;package=com.pureinc.webphonebridge;end";
 const HOST_CONNECTOR_KEY = "deskphone_web_host_url";
+const HOST_PAIRING_TOKEN_KEY = "deskphone_web_pairing_token";
 const LEGACY_BRIDGE_KEY = "deskphone_web_bridge_url";
 const RAIL_COLLAPSED_KEY = "deskphone_web_rail_collapsed";
 const RAIL_AUTO_COLLAPSE_KEY = "deskphone_web_rail_autocollapse";
@@ -25,6 +26,8 @@ const THREAD_DIALPAD_KEYS = [
 ];
 const DESKPHONE_WEB_VERSION = "001";
 const MAX_COMPOSE_ATTACHMENTS = 6;
+const MAX_COMPOSE_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+const MAX_COMPOSE_TOTAL_ATTACHMENT_BYTES = 24 * 1024 * 1024;
 const WEBPHONE_MESSAGE_LIMIT = 5000;
 const WEBPHONE_MEDIA_MESSAGE_LIMIT = 1200;
 
@@ -272,7 +275,7 @@ function openAndroidBridgeApp() {
 }
 
 async function readJson(host, path) {
-  const response = await fetch(`${host}${path}`, { cache: "no-store" });
+  const response = await fetchHostApi(host, path, { cache: "no-store" });
   if (!response.ok) {
     let detail = "";
     try {
@@ -309,9 +312,7 @@ async function postJson(host, path, payload) {
     options.headers = { "Content-Type": "application/json" };
     options.body = stringifyAsciiJson(payload);
   }
-  const response = await fetch(`${host}${path}`, {
-    ...options,
-  });
+  const response = await fetchHostApi(host, path, options);
   if (!response.ok) throw new Error(`${path} returned ${response.status}`);
   const text = await response.text();
   if (!text) return {};
@@ -322,10 +323,84 @@ async function postJson(host, path, payload) {
   }
 }
 
+function getHostPairingToken() {
+  try {
+    return localStorage.getItem(HOST_PAIRING_TOKEN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function setHostPairingToken(token) {
+  try {
+    localStorage.setItem(HOST_PAIRING_TOKEN_KEY, token);
+  } catch {
+    // Local storage may be disabled; the next request will simply prompt again.
+  }
+}
+
+let hostPairingPrompt = null;
+
+async function promptForHostPairingToken() {
+  if (!hostPairingPrompt) {
+    hostPairingPrompt = Promise.resolve().then(() => {
+      const token = window.prompt("Enter the DeskPhone web pairing token from the DeskPhone Log tab.");
+      if (token?.trim()) {
+        setHostPairingToken(token.trim());
+        return token.trim();
+      }
+      return "";
+    }).finally(() => {
+      hostPairingPrompt = null;
+    });
+  }
+  return hostPairingPrompt;
+}
+
+async function fetchHostApi(host, path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  const token = getHostPairingToken();
+  if (token) headers["X-DeskPhone-Token"] = token;
+
+  let response = await fetch(`${host}${path}`, { ...options, headers });
+  if (response.status !== 401) return response;
+
+  const nextToken = await promptForHostPairingToken();
+  if (!nextToken) return response;
+  response = await fetch(`${host}${path}`, {
+    ...options,
+    headers: { ...(options.headers || {}), "X-DeskPhone-Token": nextToken },
+  });
+  return response;
+}
+
 function formatFileSize(bytes = 0) {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${bytes} B`;
+}
+
+function safeAttachmentDataUrl(value, contentType = "") {
+  const url = String(value || "").trim();
+  if (!url) return "";
+  const match = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,[a-z0-9+/=\s]+$/i.exec(url);
+  if (!match) return "";
+  const mime = match[1].toLowerCase();
+  const declared = String(contentType || "").toLowerCase();
+  const allowed = new Set([
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+    "text/vcard",
+    "text/x-vcard",
+    "text/plain",
+    "application/pdf",
+  ]);
+  if (!allowed.has(mime)) return "";
+  if (declared && declared !== mime && !declared.startsWith("image/") && !declared.includes("vcard")) return "";
+  return url.replace(/\s+/g, "");
 }
 
 function sanitizeUploadFileName(name = "") {
@@ -364,8 +439,22 @@ function addComposeFiles(fileList, setAttachments, onNotice) {
   if (!files.length) return;
   setAttachments((current) => {
     const room = Math.max(0, MAX_COMPOSE_ATTACHMENTS - current.length);
-    const next = files.slice(0, room).map(makeComposeAttachment);
+    const currentBytes = current.reduce((sum, attachment) => sum + Number(attachment.size || 0), 0);
+    let nextBytes = currentBytes;
+    const accepted = [];
+    let rejected = 0;
+    for (const file of files.slice(0, room)) {
+      const size = Number(file?.size || 0);
+      if (size > MAX_COMPOSE_ATTACHMENT_BYTES || nextBytes + size > MAX_COMPOSE_TOTAL_ATTACHMENT_BYTES) {
+        rejected++;
+        continue;
+      }
+      accepted.push(file);
+      nextBytes += size;
+    }
+    const next = accepted.map(makeComposeAttachment);
     if (files.length > room) onNotice?.(`Attached ${room}; DeskPhone allows ${MAX_COMPOSE_ATTACHMENTS} at once in the browser.`);
+    if (rejected) onNotice?.(`Skipped ${rejected} oversized attachment${rejected === 1 ? "" : "s"}.`);
     return [...current, ...next];
   });
 }
@@ -610,9 +699,12 @@ function phoneKeysLikelyMatch(a, b) {
   const left = normalizePhoneKey(a);
   const right = normalizePhoneKey(b);
   if (!left || !right) return false;
-  if (left === right) return true;
-  const minLength = Math.min(left.length, right.length);
-  return minLength >= 7 && (left.endsWith(right) || right.endsWith(left));
+  const canonical = value => {
+    if (value.length === 11 && value.startsWith("1")) return value.slice(1);
+    if (value.length === 10) return value;
+    return value;
+  };
+  return canonical(left) === canonical(right);
 }
 
 function formatPhone(value) {
@@ -698,56 +790,58 @@ function outgoingStatusIconName(message) {
 }
 
 function normalizeAttachment(raw, index) {
-  const contentType = raw?.contentType || raw?.type || "";
-  const fileName = raw?.fileName || raw?.name || `Attachment ${index + 1}`;
-  const dataUrl = raw?.dataUrl || raw?.imageDataUrl || raw?.url || "";
+  const source = raw && typeof raw === "object" ? raw : {};
+  const contentType = String(source.contentType || source.type || "");
+  const fileName = String(source.fileName || source.name || `Attachment ${index + 1}`);
+  const dataUrl = safeAttachmentDataUrl(source.dataUrl || source.imageDataUrl || source.url || "", contentType);
   const isImage =
-    !!raw?.isImage ||
+    !!source.isImage ||
     /^image\//i.test(contentType) ||
     /\.(png|jpe?g|gif|webp|bmp|heic|heif)$/i.test(fileName);
 
   return {
-    ...raw,
+    ...source,
     fileName,
     contentType,
     dataUrl,
     isImage,
-    isContactCard: !!raw?.isContactCard,
-    size: Number(raw?.size || raw?.length || 0),
+    isContactCard: !!source.isContactCard,
+    size: Number(source.size || source.length || 0),
   };
 }
 
 function normalizeMessage(raw, index) {
-  const number = raw?.number || raw?.to || raw?.from || "";
+  const source = raw && typeof raw === "object" ? raw : {};
+  const number = source.number || source.to || source.from || "";
   const key = normalizePhoneKey(number) || `unknown-${index}`;
-  const timestamp = raw?.timestamp || raw?.datetime || raw?.date || raw?.time || "";
-  const attachments = getApiList(raw?.attachments).map(normalizeAttachment);
-  const sendStatus = normalizeSendStatus(raw);
-  const readValue = raw?.isRead ?? raw?.IsRead ?? raw?.read ?? raw?.Read;
+  const timestamp = source.timestamp || source.datetime || source.date || source.time || "";
+  const attachments = getApiList(source.attachments).map(normalizeAttachment);
+  const sendStatus = normalizeSendStatus(source);
+  const readValue = source.isRead ?? source.IsRead ?? source.read ?? source.Read;
   const isRead = typeof readValue === "string" ? !["0", "false", "no"].includes(readValue.toLowerCase()) : readValue !== false;
   return {
-    id: raw?.id || raw?.handle || `${key}-${timestamp}-${index}`,
-    handle: raw?.handle || "",
+    id: String(source.id || source.handle || `${key}-${timestamp}-${index}`),
+    handle: String(source.handle || ""),
     key,
-    number,
+    number: String(number || ""),
     formattedPhone: formatPhone(number),
-    from: raw?.from || "",
-    to: raw?.to || "",
-    contactName: raw?.contactName || raw?.ContactName || raw?.displayName || raw?.DisplayName || "",
-    body: raw?.body || raw?.preview || "",
-    preview: messagePreview(raw),
-    timestamp,
+    from: String(source.from || ""),
+    to: String(source.to || ""),
+    contactName: String(source.contactName || source.ContactName || source.displayName || source.DisplayName || ""),
+    body: String(source.body || source.preview || ""),
+    preview: messagePreview(source),
+    timestamp: String(timestamp || ""),
     timestampMs: parseDate(timestamp)?.getTime() || 0,
-    isSent: !!raw?.isSent,
-    isRead: raw?.isSent ? true : isRead,
-    isPinned: !!(raw?.isPinned ?? raw?.IsPinned),
-    pinActionLabel: raw?.pinActionLabel || raw?.PinActionLabel || ((raw?.isPinned ?? raw?.IsPinned) ? "Unpin" : "Pin"),
+    isSent: !!source.isSent,
+    isRead: source.isSent ? true : isRead,
+    isPinned: !!(source.isPinned ?? source.IsPinned),
+    pinActionLabel: String(source.pinActionLabel || source.PinActionLabel || ((source.isPinned ?? source.IsPinned) ? "Unpin" : "Pin")),
     sendStatus,
-    sendStatusLabel: raw?.sendStatusLabel || raw?.SendStatusLabel || "",
-    outgoingStatusLabel: raw?.outgoingStatusLabel || raw?.OutgoingStatusLabel || "",
-    outgoingStatusIcon: raw?.outgoingStatusIcon || raw?.OutgoingStatusIcon || "",
-    isMms: !!raw?.isMms,
-    sourceDeviceAddress: raw?.sourceDeviceAddress || "",
+    sendStatusLabel: String(source.sendStatusLabel || source.SendStatusLabel || ""),
+    outgoingStatusLabel: String(source.outgoingStatusLabel || source.OutgoingStatusLabel || ""),
+    outgoingStatusIcon: String(source.outgoingStatusIcon || source.OutgoingStatusIcon || ""),
+    isMms: !!source.isMms,
+    sourceDeviceAddress: String(source.sourceDeviceAddress || ""),
     attachments,
   };
 }
@@ -797,13 +891,14 @@ function attachmentLabel(attachment) {
 }
 
 function saveDataUrlAttachment(attachment, onNotice) {
-  if (!attachment?.dataUrl) {
+  const dataUrl = safeAttachmentDataUrl(attachment?.dataUrl, attachment?.contentType);
+  if (!dataUrl) {
     onNotice?.("Attachment data is not available in the browser yet.");
     return;
   }
 
   const link = document.createElement("a");
-  link.href = attachment.dataUrl;
+  link.href = dataUrl;
   link.download = attachment.fileName || "DeskPhone attachment";
   document.body.appendChild(link);
   link.click();
@@ -900,6 +995,7 @@ function callTimestampMs(call) {
 
 function getSortedCalls(calls) {
   return getApiList(calls)
+    .filter((call) => call && typeof call === "object")
     .slice()
     .sort((a, b) => callTimestampMs(b) - callTimestampMs(a));
 }
@@ -1313,6 +1409,8 @@ function ThreadSearchBar({ value, onChange, matchCount, currentIndex, onPrevious
 
 function ImageLightbox({ image, rotation, onClose, onRotate }) {
   if (!image) return null;
+  const imageUrl = safeAttachmentDataUrl(image.dataUrl, image.contentType);
+  if (!imageUrl) return null;
   return (
     <div className="dp-image-viewer" role="dialog" aria-modal="true" aria-label={image.fileName || "MMS image"}>
       <button type="button" className="dp-image-viewer-close" aria-label="Close image" title="Close" onClick={onClose}>
@@ -1320,7 +1418,7 @@ function ImageLightbox({ image, rotation, onClose, onRotate }) {
       </button>
       <div className="dp-image-viewer-stage" onDoubleClick={onClose}>
         <img
-          src={image.dataUrl}
+          src={imageUrl}
           alt={image.fileName || "MMS image"}
           style={{ transform: `rotate(${rotation}deg)` }}
         />
@@ -1342,13 +1440,14 @@ function MessageAttachments({ message, onNotice, onOpenImage }) {
   return (
     <div className="dp-attachment-stack">
       {message.attachments.map((attachment, index) => {
-        const isInlineImage = attachment.isImage && attachment.dataUrl;
+        const inlineImageUrl = attachment.isImage ? safeAttachmentDataUrl(attachment.dataUrl, attachment.contentType) : "";
+        const isInlineImage = !!inlineImageUrl;
         return (
           <React.Fragment key={`${message.id}-attachment-${index}`}>
           {isInlineImage ? (
             <img
               className="dp-mms-image"
-              src={attachment.dataUrl}
+              src={inlineImageUrl}
               alt={attachment.fileName || "MMS image"}
               loading="lazy"
               role="button"
@@ -2330,10 +2429,12 @@ function MessagesSlice({
 }
 
 function contactDisplayName(contact) {
-  return contact?.displayName || contact?.name || contact?.Name || contact?.fullName || "Unknown contact";
+  if (!contact || typeof contact !== "object") return "Unknown contact";
+  return String(contact.displayName || contact.name || contact.Name || contact.fullName || "Unknown contact");
 }
 
 function contactPhoneOptions(contact) {
+  if (!contact || typeof contact !== "object") return [];
   const values = [
     contact?.primaryPhone,
     contact?.PrimaryPhone,
@@ -2375,12 +2476,13 @@ function contactPhoneOptions(contact) {
 }
 
 function contactKey(contact, index) {
-  return contact?.id || contact?.Id || contact?.contactId || contact?.ContactId || `${contactDisplayName(contact)}-${index}`;
+  if (!contact || typeof contact !== "object") return `contact-${index}`;
+  return String(contact.id || contact.Id || contact.contactId || contact.ContactId || `${contactDisplayName(contact)}-${index}`);
 }
 
 function ContactsSlice({ contacts, contactDraft, onContactDraftConsumed, onCommand, onOpenNewMessage, onNotice }) {
   const sortedContacts = useMemo(
-    () => [...contacts].sort((a, b) => contactDisplayName(a).localeCompare(contactDisplayName(b))),
+    () => getApiList(contacts).filter(contact => contact && typeof contact === "object").sort((a, b) => contactDisplayName(a).localeCompare(contactDisplayName(b))),
     [contacts]
   );
   const [contactSearch, setContactSearch] = useState("");
@@ -2558,7 +2660,7 @@ function NewMessageComposer({ contacts, initialTo = "", initialBody = "", onComm
   const attachmentInputRef = useRef(null);
   const contactOptions = useMemo(() => {
     const search = query.trim().toLowerCase();
-    return contacts.flatMap((contact, contactIndex) => (
+    return getApiList(contacts).filter(contact => contact && typeof contact === "object").flatMap((contact, contactIndex) => (
       contactPhoneOptions(contact).map((phone, phoneIndex) => ({
         key: `${contactKey(contact, contactIndex)}-${phoneIndex}`,
         name: contactDisplayName(contact),

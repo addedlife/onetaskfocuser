@@ -1,3 +1,6 @@
+const { cert, getApps, initializeApp } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
+
 const ALLOWED_ORIGINS = [
   "https://onetaskfocuser.netlify.app",
   "http://localhost:3000",
@@ -5,16 +8,15 @@ const ALLOWED_ORIGINS = [
   "http://localhost:4173",
 ];
 
+const MAX_REQUEST_BYTES = 768 * 1024;
+const MAX_AI_CALLS_PER_MINUTE = 20;
+const MAX_AI_CALLS_PER_HOUR = 240;
+const rateBuckets = new Map();
+
 function isAllowedOrigin(origin) {
   if (!origin) return true;
   if (ALLOWED_ORIGINS.includes(origin)) return true;
-
-  try {
-    const { protocol, hostname } = new URL(origin);
-    return protocol === "https:" && hostname.endsWith("--onetaskfocuser.netlify.app");
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
@@ -77,10 +79,89 @@ function corsFor(event, methods = "POST, OPTIONS") {
     isAllowed,
     headers: {
       "Access-Control-Allow-Origin": isAllowed ? (origin || ALLOWED_ORIGINS[0]) : ALLOWED_ORIGINS[0],
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Authorization, Content-Type",
       "Access-Control-Allow-Methods": methods,
+      "Vary": "Origin",
     },
   };
+}
+
+function serviceAccount() {
+  const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (rawJson) return JSON.parse(rawJson);
+
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  if (!projectId || !clientEmail || !privateKey) {
+    throw httpError(500, "Firebase Admin credentials are not configured");
+  }
+
+  return { project_id: projectId, client_email: clientEmail, private_key: privateKey };
+}
+
+function ensureAdminApp() {
+  if (getApps().length) return;
+  initializeApp({
+    credential: cert(serviceAccount()),
+    projectId: process.env.FIREBASE_PROJECT_ID || "onetaskonly-app",
+  });
+}
+
+async function requireFirebaseUser(event) {
+  const authHeader = event.headers.authorization || event.headers.Authorization || "";
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  if (!match) throw httpError(401, "Firebase auth token required");
+
+  ensureAdminApp();
+  try {
+    return await getAuth().verifyIdToken(match[1], true);
+  } catch {
+    throw httpError(401, "Invalid Firebase auth token");
+  }
+}
+
+function enforceRequestSize(event) {
+  const rawLength = event.headers["content-length"] || event.headers["Content-Length"] || "";
+  const declared = Number.parseInt(rawLength, 10);
+  const actual = Buffer.byteLength(event.body || "", event.isBase64Encoded ? "base64" : "utf8");
+  const size = Number.isFinite(declared) && declared > 0 ? Math.max(declared, actual) : actual;
+  if (size > MAX_REQUEST_BYTES) {
+    throw httpError(413, "AI request is too large");
+  }
+}
+
+function enforceRateLimit(uid, event, scope = "ai") {
+  const now = Date.now();
+  const minuteWindow = 60 * 1000;
+  const hourWindow = 60 * minuteWindow;
+  const ip = event.headers["x-nf-client-connection-ip"] || event.headers["client-ip"] || "unknown";
+  const key = `${scope}:${uid || ip}`;
+  const bucket = rateBuckets.get(key) || { minuteStart: now, minuteCount: 0, hourStart: now, hourCount: 0 };
+
+  if (now - bucket.minuteStart >= minuteWindow) {
+    bucket.minuteStart = now;
+    bucket.minuteCount = 0;
+  }
+  if (now - bucket.hourStart >= hourWindow) {
+    bucket.hourStart = now;
+    bucket.hourCount = 0;
+  }
+
+  bucket.minuteCount += 1;
+  bucket.hourCount += 1;
+  rateBuckets.set(key, bucket);
+
+  if (bucket.minuteCount > MAX_AI_CALLS_PER_MINUTE || bucket.hourCount > MAX_AI_CALLS_PER_HOUR) {
+    throw httpError(429, "AI request limit reached");
+  }
+}
+
+async function authorizeFunctionRequest(event, scope = "ai") {
+  enforceRequestSize(event);
+  const user = await requireFirebaseUser(event);
+  enforceRateLimit(user.uid, event, scope);
+  return user;
 }
 
 function normalizeGeminiPart(part) {
@@ -173,7 +254,7 @@ async function callGemini({ body, prompt, base64, mimeType, model, genConfig, al
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const controller = new AbortController();
-  const fetchTimeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+  const fetchTimeout = setTimeout(() => controller.abort(), 60 * 1000);
   let r;
   try {
     r = await fetch(url, {
@@ -276,7 +357,9 @@ function httpError(statusCode, message) {
 }
 
 module.exports = {
+  authorizeFunctionRequest,
   corsFor,
   processAiPayload,
   publicAiConfig,
+  httpError,
 };

@@ -73,8 +73,24 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       const raw = await callAI(prompt, { maxTokens: 500 });
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('Could not parse event — try rephrasing.');
-      const eventBody = JSON.parse(jsonMatch[0]);
-      eventBody.reminders = eventBody.reminders || { useDefault: false, overrides: [] };
+      const parsedEvent = JSON.parse(jsonMatch[0]);
+      const cleanReminders = Array.isArray(parsedEvent?.reminders?.overrides)
+        ? parsedEvent.reminders.overrides
+            .filter(reminder => reminder?.method === "popup" && Number.isFinite(Number(reminder?.minutes)))
+            .slice(0, 3)
+            .map(reminder => ({ method: "popup", minutes: Math.max(0, Math.min(40320, Math.round(Number(reminder.minutes)))) }))
+        : [];
+      const eventBody = {
+        summary: String(parsedEvent?.summary || "").slice(0, 160),
+        start: parsedEvent?.start?.dateTime
+          ? { dateTime: String(parsedEvent.start.dateTime) }
+          : { date: String(parsedEvent?.start?.date || today) },
+        end: parsedEvent?.end?.dateTime
+          ? { dateTime: String(parsedEvent.end.dateTime) }
+          : { date: String(parsedEvent?.end?.date || parsedEvent?.start?.date || today) },
+        reminders: { useDefault: false, overrides: cleanReminders },
+      };
+      if (!eventBody.summary.trim()) throw new Error('Could not parse event title — try rephrasing.');
       const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
         method: 'POST',
         headers: { Authorization: `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
@@ -135,12 +151,8 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     .join("|");
   useEffect(() => {
     if (!onPolishNerveItems || !polishQueueKey) return;
-    const items = [...primaryTasks, ...visibleShailos]
-      .filter(needsNervePolish)
-      .map(item => ({ id: item.id, kind: isShailaWork(item) ? "shaila" : "task", source: nerveSummarySource(item) }))
-      .slice(0, 8);
-    if (items.length) onPolishNerveItems(items);
-  }, [polishQueueKey]); // eslint-disable-line
+    // AI polishing is intentionally opt-in. Automatic sends can disclose task or shaila text.
+  }, [polishQueueKey, onPolishNerveItems]);
 
   const startPaneResize = (leftKey, rightKey, e) => {
     if (touchLayout || !onPaneWeightsChange) return;

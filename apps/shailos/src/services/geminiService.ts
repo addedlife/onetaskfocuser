@@ -1,4 +1,5 @@
 // All Shailos AI calls route through the same OneTask AI gateway.
+import { auth } from "../firebase";
 
 const AI_PROXY = "/.netlify/functions/ai-proxy";
 const SERPER_PROXY = "/.netlify/functions/serper-proxy";
@@ -15,9 +16,11 @@ async function callGemini(body: object, task = "shailos"): Promise<any> {
   const cfg = getSharedAiConfig();
   const provider = "gemini";
   const model = cfg.model || "";
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error("Sign in before using AI.");
   const r = await fetch(AI_PROXY, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ task, provider, model, body }),
   });
   const data = await r.json().catch(() => ({ error: r.statusText }));
@@ -261,9 +264,11 @@ function buildSeferiaSearchLink(name: string, location: string): string {
 }
 
 async function searchWeb(query: string): Promise<Array<{ title: string; link: string; snippet: string }>> {
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error("Sign in before using search.");
   const r = await fetch(SERPER_PROXY, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ query, num: 10 }),
   });
   if (!r.ok) {

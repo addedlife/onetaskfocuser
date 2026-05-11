@@ -74,7 +74,11 @@ async function fetchCalendarData(token) {
     console.warn('[Google] calendarList failed, falling back to primary:', e.message);
   }
 
-  if (!cals || cals.length === 0) {
+  if (cals && cals.length === 0) {
+    return [];
+  }
+
+  if (!cals) {
     const r = await fetch(eventsUrl('primary'), { headers: { Authorization: `Bearer ${token}` } });
     if (r.status === 401) throw new Error('token_expired');
     if (!r.ok) {
@@ -103,7 +107,7 @@ async function fetchCalendarData(token) {
 
 async function fetchGmailData(token) {
   console.log('[Google] Fetching Gmail...');
-  const q = encodeURIComponent('(category:primary) OR (category:promotions is:important) OR (category:updates is:important)');
+  const q = encodeURIComponent('is:unread is:important in:inbox');
   const listR = await fetch(
     `https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=${q}`,
     { headers: { Authorization: `Bearer ${token}` } }
@@ -124,6 +128,7 @@ async function fetchGmailData(token) {
     )
   );
 
+  /*
   try {
     const lines = msgs.map((m, i) => {
       const subj = m?.payload?.headers?.find(h => h.name === 'Subject')?.value || '';
@@ -140,6 +145,7 @@ async function fetchGmailData(token) {
   } catch (e) {
     console.warn('[Google] AI email summary failed:', e.message);
   }
+  */
   return msgs;
 }
 

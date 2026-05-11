@@ -1,56 +1,33 @@
-// Serper.dev proxy — routes browser search requests through the server
-// so the API key is never in the client bundle.
-// POST / with JSON body { query, num? }
-// Returns Serper organic search results.
-
-const ALLOWED_ORIGINS = [
-  "https://onetaskfocuser.netlify.app",
-  "http://localhost:3000",
-  "http://localhost:5173",
-  "http://localhost:4173",
-];
-
-function isAllowedOrigin(origin) {
-  if (!origin) return true;
-  if (ALLOWED_ORIGINS.includes(origin)) return true;
-
-  try {
-    const { protocol, hostname } = new URL(origin);
-    return protocol === "https:" && hostname.endsWith("--onetaskfocuser.netlify.app");
-  } catch {
-    return false;
-  }
-}
+// Serper.dev proxy. Server-side keys require server-side auth, not CORS-only checks.
+const { authorizeFunctionRequest, corsFor } = require("./_ai-core.cjs");
 
 exports.handler = async (event) => {
-  const origin = (event.headers.origin || event.headers.Origin || "").trim();
-  const isAllowed = isAllowedOrigin(origin);
+  const cors = corsFor(event);
 
-  const cors = {
-    "Access-Control-Allow-Origin":  isAllowed ? (origin || ALLOWED_ORIGINS[0]) : ALLOWED_ORIGINS[0],
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-  };
-
-  if (!isAllowed) {
+  if (!cors.isAllowed) {
     return { statusCode: 403, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Origin not allowed" }) };
   }
 
   if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers: cors, body: "" };
+    return { statusCode: 204, headers: cors.headers, body: "" };
   }
 
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, headers: { ...cors, "Content-Type": "application/json" }, body: JSON.stringify({ error: "Method not allowed" }) };
+    return { statusCode: 405, headers: { ...cors.headers, "Content-Type": "application/json" }, body: JSON.stringify({ error: "Method not allowed" }) };
   }
 
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) {
-    return { statusCode: 500, headers: { ...cors, "Content-Type": "application/json" }, body: JSON.stringify({ error: "SERPER_API_KEY not configured in Netlify env vars" }) };
+    return { statusCode: 500, headers: { ...cors.headers, "Content-Type": "application/json" }, body: JSON.stringify({ error: "SERPER_API_KEY not configured in Netlify env vars" }) };
   }
 
   try {
-    const { query, num = 8 } = JSON.parse(event.body);
+    await authorizeFunctionRequest(event, "serper");
+    const { query, num = 8 } = JSON.parse(event.body || "{}");
+    const cleanQuery = String(query || "").trim();
+    if (!cleanQuery) {
+      return { statusCode: 400, headers: { ...cors.headers, "Content-Type": "application/json" }, body: JSON.stringify({ error: "query is required" }) };
+    }
 
     const r = await fetch("https://google.serper.dev/search", {
       method: "POST",
@@ -58,20 +35,17 @@ exports.handler = async (event) => {
         "Content-Type": "application/json",
         "X-API-KEY": apiKey,
       },
-      body: JSON.stringify({ q: query, num }),
+      body: JSON.stringify({ q: cleanQuery, num: Math.min(Math.max(Number(num) || 8, 1), 10) }),
     });
 
-    const data = await r.json();
-
+    const data = await r.json().catch(() => ({}));
     if (!r.ok) {
-      return { statusCode: r.status, headers: { ...cors, "Content-Type": "application/json" }, body: JSON.stringify({ error: data?.message || r.statusText }) };
+      return { statusCode: r.status, headers: { ...cors.headers, "Content-Type": "application/json" }, body: JSON.stringify({ error: data?.message || r.statusText }) };
     }
 
-    // Return only what we need — title, link, snippet
     const results = (data.organic || []).map(({ title, link, snippet }) => ({ title, link, snippet }));
-    return { statusCode: 200, headers: { ...cors, "Content-Type": "application/json" }, body: JSON.stringify({ results }) };
-
+    return { statusCode: 200, headers: { ...cors.headers, "Content-Type": "application/json" }, body: JSON.stringify({ results }) };
   } catch (e) {
-    return { statusCode: 502, headers: { ...cors, "Content-Type": "application/json" }, body: JSON.stringify({ error: "Serper proxy error: " + e.message }) };
+    return { statusCode: e.statusCode || 502, headers: { ...cors.headers, "Content-Type": "application/json" }, body: JSON.stringify({ error: e.message || "Serper proxy error" }) };
   }
 };

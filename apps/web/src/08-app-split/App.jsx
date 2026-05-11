@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callAI, suggestFirstStep, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer, gG, fmtMs, db, _lum, priText, textOnPastel } from '../01-core.js';
+import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callAI, suggestFirstStep, aiParseBrainDump, aiParseConversation, gG, fmtMs, db, _lum, priText, textOnPastel } from '../01-core.js';
 import { IC } from '../02-icons.jsx';
 import { VoiceInput } from '../03-voice.jsx';
 import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from '../04-components.jsx';
@@ -182,6 +182,8 @@ function App({ user, onSignOut }) {
   // ─── Conversation Capture ────────────────────────────────────────────────
   const [showConvCapture, setShowConvCapture] = useState(false);
   const [convCallMode, setConvCallMode] = useState(false); // true = getDisplayMedia (phone call)
+  const currentOwnerUid = canonicalUid(user);
+  const shailaGroupKey = (text, id) => id ? `${String(text || "New shaila")} [${id}]` : String(text || "New shaila");
 
   const inRef = useRef(null);
   const edRef = useRef(null);
@@ -284,7 +286,7 @@ function App({ user, onSignOut }) {
         }
         // Auto-dedup shaila tasks on load (clean up any lingering duplicates)
         s.lists = s.lists.map(l => {
-          const seenSId = new Set(), seenText = new Set();
+          const seenSId = new Set();
           let removed = 0;
           const deduped = (l.tasks||[]).filter(t => {
             if (t.completed) return true;
@@ -292,11 +294,6 @@ function App({ user, onSignOut }) {
               // Only dedup standalone shaila tasks — subtasks in a group share a shailaId by design
               if (seenSId.has(t.shailaId)) { removed++; return false; }
               seenSId.add(t.shailaId);
-            }
-            if (t.priority === "shaila" && !t.parentTask) {
-              const k = t.text.trim().toLowerCase();
-              if (seenText.has(k)) { removed++; return false; }
-              seenText.add(k);
             }
             return true;
           });
@@ -374,10 +371,10 @@ function App({ user, onSignOut }) {
   }, []);
 
   const refreshPendingRecordings = useCallback(() => {
-    listPendingRecordings()
+    listPendingRecordings(currentOwnerUid)
       .then(setPendingRecordings)
       .catch(() => {});
-  }, []);
+  }, [currentOwnerUid]);
 
   useEffect(() => {
     refreshPendingRecordings();
@@ -410,7 +407,7 @@ function App({ user, onSignOut }) {
   }, [loaded]); // eslint-disable-line
 
   // ─── Google Calendar + Gmail via GIS OAuth ───────────────────────────────
-  const effectiveGoogleClientId = (AS?.googleClientId || serverGoogleClientId || "").trim();
+  const effectiveGoogleClientId = (serverGoogleClientId || "").trim();
 
   useEffect(() => {
     const clientId = effectiveGoogleClientId;
@@ -507,8 +504,12 @@ function App({ user, onSignOut }) {
       console.warn('[Google] calendarList failed, falling back to primary:', e.message);
     }
 
-    // If calendarList failed or returned nothing, fall back to primary
-    if (!cals || cals.length === 0) {
+    if (cals && cals.length === 0) {
+      return [];
+    }
+
+    // If calendarList failed, fall back to primary. An empty selected list means the user hid every calendar.
+    if (!cals) {
       const r = await fetch(eventsUrl('primary'), { headers: { Authorization: `Bearer ${token}` } });
       if (r.status === 401) throw new Error('token_expired');
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + r.status}`); }
@@ -535,8 +536,7 @@ function App({ user, onSignOut }) {
 
   async function fetchGmailData(token) {
     console.log('[Google] Fetching Gmail…');
-    // Personal = all; Promotions + Updates = important only; most recent 20 combined
-    const q = encodeURIComponent('(category:primary) OR (category:promotions is:important) OR (category:updates is:important)');
+    const q = encodeURIComponent('is:unread is:important in:inbox');
     const listR = await fetch(
       `https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=${q}`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -553,7 +553,8 @@ function App({ user, onSignOut }) {
           { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
       )
     );
-    // Batch AI: generate one-sentence summaries for all emails in a single call
+    return msgs;
+    /*
     try {
       const lines = msgs.map((m, i) => {
         const subj = m?.payload?.headers?.find(h => h.name === 'Subject')?.value || '';
@@ -570,7 +571,7 @@ function App({ user, onSignOut }) {
     } catch (e) {
       console.warn('[Google] AI email summary failed:', e.message);
     }
-    return msgs;
+    */
   }
 
   // Auto-fetch when token arrives; refresh while visible and on focus.
@@ -644,10 +645,15 @@ function App({ user, onSignOut }) {
     setGoogleWasConnected(false);
     try { localStorage.removeItem('ot_google_token'); localStorage.removeItem('ot_google_token_expiry'); localStorage.removeItem('ot_google_connected'); } catch {}
   }
+  function signOutEverywhere() {
+    disconnectGoogle();
+    if (onSignOut) onSignOut();
+  }
 
   // ─── Listen for shailos iframe "close" message ───────────────────────────
   useEffect(() => {
     const handler = (e) => {
+      if (e.origin !== window.location.origin) return;
       if (e.data === 'shailos:close') { setShowShailos(false); setShailosAction(null); }
       if (e.data === 'shailos:open-conv-capture') {
         setShowShailos(false); setShailosAction(null);
@@ -663,7 +669,7 @@ function App({ user, onSignOut }) {
   // uT only sees active list, which caused duplicates when shaila tasks existed in other lists.
   useEffect(() => {
     if (!loaded || !db) return;
-    const unsub = Store.listenShailos((shailos) => {
+    const unsub = Store.listenShailos((shailos, meta = {}) => {
       shailosRef.current = shailos; // keep ref current for combined backup
       setAS(prev => {
         if (!prev?.lists) return prev;
@@ -680,12 +686,6 @@ function App({ user, onSignOut }) {
           }
         });
 
-        // Text lookup for standalone shaila-priority tasks (fallback dedup — subtasks excluded)
-        const shailaTextSet = new Set(
-          allTasks.filter(t => t.priority === "shaila" && !t.completed && !t.parentTask)
-            .map(t => t.text.trim().toLowerCase())
-        );
-
         const shailaIdSet = new Set(shailos.map(s => s.id));
         const toAdd = [];
         const toCompleteIds = new Set();
@@ -700,7 +700,7 @@ function App({ user, onSignOut }) {
           if (!linkedTasks.length && s.status !== "answered" && s.status !== "got_back") {
             // Use synopsis as concise title; fall back to content
             const parentText = s.synopsis || s.content || s.parsedShaila || "New shaila";
-            if (shailaTextSet.has(parentText.trim().toLowerCase())) return; // text dedup
+            const parentKey = shailaGroupKey(parentText, s.id);
             addedShailaIds.add(s.id);
             const baseTime = Date.now();
             const shortDesc = parentText.substring(0, 40);
@@ -708,14 +708,14 @@ function App({ user, onSignOut }) {
               id: uid(), text: `Research – ${shortDesc}`,
               completed: false, priority: "shaila", createdAt: baseTime,
               type: "shailo-research",
-              shailaId: s.id, parentTask: parentText, stepIndex: 1, totalSteps: 2,
+              shailaId: s.id, shailaQuestion: parentText, parentTask: parentKey, stepIndex: 1, totalSteps: 2,
             });
             toAdd.push({
               id: uid(), text: `Get back – ${shortDesc}`,
               completed: false, priority: "shaila", createdAt: baseTime,
               type: "shailo-research",
               shailaId: s.id, isGetBackStep: true,
-              parentTask: parentText, stepIndex: 2, totalSteps: 2,
+              shailaQuestion: parentText, parentTask: parentKey, stepIndex: 2, totalSteps: 2,
             });
           } else if (linkedTasks.length) {
             const isGroup = linkedTasks.some(t => t.parentTask);
@@ -733,11 +733,13 @@ function App({ user, onSignOut }) {
         });
 
         // Detect deletions: tasks with shailaId no longer in shailos collection
-        allTasks.forEach(t => {
-          if (t.shailaId && !t.completed && !shailaIdSet.has(t.shailaId)) {
-            toDeleteIds.add(t.id);
-          }
-        });
+        if (!meta.fromCache) {
+          allTasks.forEach(t => {
+            if (t.shailaId && !t.completed && !shailaIdSet.has(t.shailaId)) {
+              toDeleteIds.add(t.id);
+            }
+          });
+        }
 
         if (!toAdd.length && !toCompleteIds.size && !toDeleteIds.size) return prev;
 
@@ -863,7 +865,6 @@ function App({ user, onSignOut }) {
       const cur = asRef.current;
       if (cur) {
         Store.flushToLocalOnly(cur);
-        Store.autoFileBackup(cur, shailosRef.current, true).catch(() => {}); // best-effort on close
       }
     }
     window.addEventListener("beforeunload", flushLocal);
@@ -903,12 +904,13 @@ function App({ user, onSignOut }) {
         rec.id,
         aiOpts,
         "Transcribe this audio exactly and faithfully. The speaker may use Yeshivish English, Hebrew, Yiddish, and halachic terms. Do not summarize or classify. Return only the transcript.",
-        { maxOutputTokens: 8192 }
+        { maxOutputTokens: 8192 },
+        canonicalUid(user)
       );
       setPendingTranscripts(p => ({ ...p, [rec.id]: txt }));
-      await updatePendingRecordingError(rec.id, "");
+      await updatePendingRecordingError(rec.id, "", currentOwnerUid);
     } catch(e) {
-      await updatePendingRecordingError(rec.id, e.message || String(e)).catch(() => {});
+      await updatePendingRecordingError(rec.id, e.message || String(e), currentOwnerUid).catch(() => {});
     } finally {
       setPendingRetryId(null);
       refreshPendingRecordings();
@@ -917,7 +919,7 @@ function App({ user, onSignOut }) {
 
   async function deleteHeldTranscription(rec) {
     if (pendingRetryId === rec.id) return;
-    await deletePendingRecording(rec.id);
+    await deletePendingRecording(rec.id, currentOwnerUid);
     setPendingTranscripts(p => {
       const next = { ...p };
       delete next[rec.id];
@@ -926,9 +928,10 @@ function App({ user, onSignOut }) {
     refreshPendingRecordings();
   }
 
-  const sc = SCHEMES[AS?.colorScheme] || AS?.customSchemes?.[AS?.colorScheme] || SCHEMES.claude;
+  const customScheme = AS?.customSchemes?.[AS?.colorScheme];
+  const sc = SCHEMES[AS?.colorScheme] || (customScheme && typeof customScheme === "object" ? customScheme : null) || SCHEMES.claude;
   // Detect dark theme by checking bg luminance
-  const isDark = (()=>{const h=sc.bg||"#EDE5D8";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000<128;})();
+  const isDark = (()=>{const h=typeof sc.bg==="string"&&/^#[0-9a-f]{6}$/i.test(sc.bg)?sc.bg:"#EDE5D8";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000<128;})();
   const T = {...sc, isDark, glow:!!sc.glow, shadow: isDark?"0 2px 12px rgba(0,0,0,0.3)":"0 2px 12px rgba(0,0,0,0.06)", shadowLg: isDark?"0 6px 24px rgba(0,0,0,0.4)":"0 6px 24px rgba(0,0,0,0.09)"};
   const fontWeightNormal = Math.max(320, Math.min(560, Number(AS?.fontWeightScale || 400)));
   const fontWeightStrong = Math.max(420, Math.min(700, fontWeightNormal + 110));
@@ -1308,19 +1311,20 @@ function App({ user, onSignOut }) {
       const shailaId = col ? col.doc().id : null;
       if (shailaId) pendingShailaIds.current.add(shailaId);
       const parentText = text.trim();
+      const parentKey = shailaGroupKey(parentText, shailaId);
       const baseTime = Date.now();
       const shortDesc = parentText.substring(0, 40);
       const step1 = {
         id: uid(), text: `Research – ${shortDesc}`, completed: false, priority: pri,
         createdAt: baseTime, shailaId: shailaId,
         type: "shailo-research",
-        parentTask: parentText, stepIndex: 1, totalSteps: 2,
+        shailaQuestion: parentText, parentTask: parentKey, stepIndex: 1, totalSteps: 2,
       };
       const step2 = {
         id: uid(), text: `Get back – ${shortDesc}`, completed: false, priority: pri,
         createdAt: baseTime, shailaId: shailaId, isGetBackStep: true,
         type: "shailo-research",
-        parentTask: parentText, stepIndex: 2, totalSteps: 2,
+        shailaQuestion: parentText, parentTask: parentKey, stepIndex: 2, totalSteps: 2,
       };
       uT(ts => doOpt([...ts, step1, step2]));
       if (shailaId) {
@@ -1354,7 +1358,9 @@ function App({ user, onSignOut }) {
         const item = cleanItems.find(x => x.id === t.id);
         if (!item) return t;
         const summary = byId.get(t.id);
-        return {...t, ncSummaryPending: false, ncSummary: summary || t.ncSummary, ncSummarySource: item.source, ncSummaryFailedSource: undefined, ncSummaryFailedAt: undefined};
+        return summary
+          ? {...t, ncSummaryPending: false, ncSummary: summary, ncSummarySource: item.source, ncSummaryFailedSource: undefined, ncSummaryFailedAt: undefined}
+          : {...t, ncSummaryPending: false, ncSummaryFailedSource: item.source, ncSummaryFailedAt: Date.now()};
       })}))}));
     }).catch(() => {
       setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => {
@@ -1514,12 +1520,6 @@ function App({ user, onSignOut }) {
 
   function saveShailaField(id, field, value) {
     setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => t.id===id ? {...t, [field]: value} : t)}))}));
-    // When an answer is saved, generate a 6-word AI summary and store it alongside
-    if (field === "shailaAnswer" && value.trim() && hasAI) {
-      aiSummarizeAnswer(value, aiOpts).then(summary => {
-        if (summary) setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => t.id===id ? {...t, answerSummary: summary} : t)}))}));
-      }).catch(() => {});
-    }
   }
 
   function handleShailaGotBack(id, value) {
@@ -1536,6 +1536,7 @@ function App({ user, onSignOut }) {
     const shailaPriId = pris.find(p => p.isShaila)?.id || "shaila";
     const baseTime = Date.now();
     const parentText = text.trim();
+    const manualGroupId = uid();
     const snip = parentText.length > 38 ? parentText.slice(0, 38) + "…" : parentText;
     const askerSuffix = askedBy?.trim() ? ` (${askedBy.trim()})` : "";
     const newTasks = [
@@ -1545,13 +1546,13 @@ function App({ user, onSignOut }) {
         askedBy: askedBy || "", answeredBy: answeredBy || "",
         createdAt: baseTime,
         blocked: false, completed: false, energy: null, pinned: false,
-        parentTask: parentText, stepIndex: 1, totalSteps: 2,
+        shailaQuestion: parentText, parentTask: shailaGroupKey(parentText, manualGroupId), stepIndex: 1, totalSteps: 2,
       },
       {
         id: uid(), text: `Get back about: ${snip}${askerSuffix}`, priority: shailaPriId,
         createdAt: baseTime + 1,
         blocked: false, completed: false, energy: null, pinned: false,
-        parentTask: parentText, stepIndex: 2, totalSteps: 2,
+        shailaQuestion: parentText, parentTask: shailaGroupKey(parentText, manualGroupId), stepIndex: 2, totalSteps: 2,
         isGetBackStep: true,
       },
     ];
@@ -1565,6 +1566,7 @@ function App({ user, onSignOut }) {
     const newTasks = [];
     items.forEach(item => {
       const parentText = item.shaila;
+      const parentKey = shailaGroupKey(parentText, item.id);
       const snip = parentText.length > 38 ? parentText.slice(0, 38) + "…" : parentText;
       const askerSuffix = item.askedBy?.trim() ? ` (${item.askedBy.trim()})` : "";
       const baseTime = Date.now();
@@ -1574,13 +1576,13 @@ function App({ user, onSignOut }) {
         askedBy: item.askedBy || "", answeredBy: item.answeredBy || "",
         createdAt: baseTime,
         blocked: false, completed: false, energy: null, pinned: false,
-        parentTask: parentText, stepIndex: 1, totalSteps: 2,
+        shailaQuestion: parentText, parentTask: parentKey, stepIndex: 1, totalSteps: 2,
       });
       newTasks.push({
         id: uid(), text: `Get back about: ${snip}${askerSuffix}`, priority: shailaPriId,
         createdAt: baseTime,
         blocked: false, completed: false, energy: null, pinned: false,
-        parentTask: parentText, stepIndex: 2, totalSteps: 2,
+        shailaQuestion: parentText, parentTask: parentKey, stepIndex: 2, totalSteps: 2,
         isGetBackStep: true,
       });
     });
@@ -1816,7 +1818,8 @@ function App({ user, onSignOut }) {
   }
 
   const metrics = useMemo(() => {
-    const c = allComp.filter(t => t.completedAt && t.createdAt);
+    const validTime = value => Number.isFinite(Number(value)) && Number(value) > 0;
+    const c = allComp.filter(t => validTime(t.completedAt) && validTime(t.createdAt)).map(t => ({ ...t, completedAt: Number(t.completedAt), createdAt: Number(t.createdAt) }));
     if (!c.length) return null;
     const byP = {};
     pris.forEach(p => { byP[p.id] = {ts:[], c:p.color, l:p.label}; });
@@ -2455,7 +2458,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
 
       {/* Modals */}
       {showBulk && <BulkAdd pris={pris} T={T} onAddAll={bulkAdd} onClose={()=>setShowBulk(false)}/>}
-      {showBD !== null && <TaskBD task={showBD===true?null:showBD} pris={pris} T={T} onConfirm={confirmBD} onClose={()=>setShowBD(null)} aiOpts={aiOpts}/>}
+      {showBD !== null && <TaskBD task={showBD===true?null:showBD} pris={pris} T={T} onConfirm={confirmBD} onClose={()=>setShowBD(null)} aiOpts={aiOpts} ownerUid={currentOwnerUid}/>}
       {showListMgr && <ListManager AS={AS} setAS={setAS} T={T} onClose={()=>setShowListMgr(false)}/>}
       {showBodyDouble && <BodyDoubleTimer T={T} minimized={bdMinimized} onMinimize={()=>setBdMinimized(true)} onRestore={()=>setBdMinimized(false)} onClose={()=>{setShowBodyDouble(false);setBdMinimized(false);}}/>}
       {/* Floating minimized pills */}
@@ -2472,9 +2475,12 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           onClose={()=>setShowVoice(false)}
           onAddShailos={addShailas}
           onExistingShailaAnswers={(shailaTaskId, answer) => {
-            // Mark the research step answered, save the answer field
+            const target = actT.find(t => t.id === shailaTaskId && t.priority === "shaila" && !t.isGetBackStep);
+            if (!target || typeof answer !== "string" || !answer.trim()) {
+              showToast("Answer was not saved because the shaila could not be verified.", 4000);
+              return;
+            }
             saveShailaField(shailaTaskId, "shailaAnswer", answer);
-            // Also auto-complete the research step
             compTask(shailaTaskId, false, true);
             showToast("✅ Answer saved to existing shaila", 3000);
           }}
@@ -2482,6 +2488,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           color={gP(pris,selPri).color}
           T={T}
           aiOpts={aiOpts}
+          ownerUid={currentOwnerUid}
         />
       )}
       {showBrainDump && <BrainDump T={T} pris={pris} onCapture={(text)=>{captureZenDump(text);setShowZenReview(true);setShowBrainDump(false);}} onClose={()=>setShowBrainDump(false)}/>}
@@ -2532,11 +2539,12 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                   <button onClick={()=>{
                     const newTasks = shailaReconcile.missingTasks.flatMap(s => {
                       const parentText = s.synopsis||s.content||s.parsedShaila||"New shaila";
+                      const parentKey = shailaGroupKey(parentText, s.id);
                       const shortDesc = parentText.substring(0,40);
                       const baseTime = Date.now();
                       return [
-                        {id:uid(), text:`Research – ${shortDesc}`, completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, parentTask:parentText, stepIndex:1, totalSteps:2},
-                        {id:uid(), text:`Get back – ${shortDesc}`, completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, isGetBackStep:true, parentTask:parentText, stepIndex:2, totalSteps:2},
+                        {id:uid(), text:`Research – ${shortDesc}`, completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, shailaQuestion:parentText, parentTask:parentKey, stepIndex:1, totalSteps:2},
+                        {id:uid(), text:`Get back – ${shortDesc}`, completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, isGetBackStep:true, shailaQuestion:parentText, parentTask:parentKey, stepIndex:2, totalSteps:2},
                       ];
                     });
                     uT(ts=>[...ts, ...newTasks]);
@@ -2551,11 +2559,12 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                     <div style={{display:"flex",gap:4,flexShrink:0}}>
                       <button onClick={()=>{
                         const parentText = s.synopsis||s.content||s.parsedShaila||"New shaila";
+                        const parentKey = shailaGroupKey(parentText, s.id);
                         const shortDesc = parentText.substring(0,40);
                         const baseTime = Date.now();
                         const newTasks = [
-                          {id:uid(), text:`Research – ${shortDesc}`, completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, parentTask:parentText, stepIndex:1, totalSteps:2},
-                          {id:uid(), text:`Get back – ${shortDesc}`, completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, isGetBackStep:true, parentTask:parentText, stepIndex:2, totalSteps:2},
+                          {id:uid(), text:`Research – ${shortDesc}`, completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, shailaQuestion:parentText, parentTask:parentKey, stepIndex:1, totalSteps:2},
+                          {id:uid(), text:`Get back – ${shortDesc}`, completed:false, priority:"shaila", createdAt:baseTime, shailaId:s.id, isGetBackStep:true, shailaQuestion:parentText, parentTask:parentKey, stepIndex:2, totalSteps:2},
                         ];
                         uT(ts=>[...ts, ...newTasks]);
                         setShailaReconcile(prev=>({...prev, missingTasks:prev.missingTasks.filter(x=>x.id!==s.id)}));
@@ -2619,7 +2628,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       )}
       {blockedModal && <BlockedModal task={blockedModal} T={T} pris={pris} onBlock={blockTask} onClose={()=>setBlockedModal(null)}/>}
       {/* Context tags removed */}
-      {showSet && <SettingsModal AS={AS} setAS={setAS} T={T} ap={ap} initialTab={settingsInitialTab} onClose={()=>setShowSet(false)} onSignOut={onSignOut}
+      {showSet && <SettingsModal AS={AS} setAS={setAS} T={T} ap={ap} initialTab={settingsInitialTab} onClose={()=>setShowSet(false)} onSignOut={signOutEverywhere}
         onOptimize={launchpadOptimize} optLoading={optLoading} hasAI={hasAI} aiConfig={aiConfig}
         onBulkAdd={()=>{setShowSet(false);setShowBulk(true);}} onShatter={()=>{setShowSet(false);setShowBD(true);}}
         onDedup={()=>{deduplicateTasks();}}
@@ -2793,6 +2802,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           aiOpts={aiOpts}
           T={T}
           callMode={convCallMode}
+          ownerUid={currentOwnerUid}
         />
       )}
 
@@ -3185,7 +3195,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                 <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check — reconcile shailos between transcriber and tasks" style={{fontSize:10,color:T.tFaint,fontFamily:"system-ui",background:"none",border:`1px solid ${T.brd}`,borderRadius:8,cursor:"pointer",padding:"2px 6px",opacity:reconcileLoading ? .5 : 1}}>{reconcileLoading?"⏳":"🔄"}</button>
                 <button onClick={async ()=>{
                   if(AS) await Store.autoFileBackup(AS, shailosRef.current, true).catch(()=>{});
-                  if(onSignOut) onSignOut();
+                  signOutEverywhere();
                 }} style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>sign out</button>
                 <button onClick={async ()=>{
                   if(AS) await Store.autoFileBackup(AS, shailosRef.current, true).catch(()=>{});
@@ -3323,7 +3333,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
                             <span onClick={()=>setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;})}
                               style={{flex:1,fontSize:14,cursor:"pointer",fontWeight:isF?500:400,color:_qText,fontFamily:"Georgia,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                               {task.shailaId && shailaNumberMap[task.shailaId] && <span style={{fontSize:10,color:"#C8A84C",fontWeight:700,fontFamily:"system-ui",marginRight:5}}>#{shailaNumberMap[task.shailaId]}</span>}
-                              {task.parentTask}
+                              {task.shailaQuestion || task.parentTask}
                             </span>
                             {task.shailaId && (() => {
                               const hst = shailaStatusMap[task.shailaId];

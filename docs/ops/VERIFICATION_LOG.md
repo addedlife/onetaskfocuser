@@ -345,3 +345,20 @@ Current source-grade file count after cleanup: 162 files.
 - After GitHub `main` moved to Pro 4, Netlify's Git-trigger path served a 404 because the Pro 4 repo is a monorepo and the web app is under `apps/web`.
 - Restored production immediately with manual deploy `6a01667f88b9f9afe8df0a04` from `apps/web`.
 - Added root `netlify.toml` with `[build].base = "apps/web"` so future Git-triggered builds start from the web app directory and use the existing `apps/web/netlify.toml`.
+
+## 2026-05-11 Security Findings Branch Verification
+
+- Isolated worktree: `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 Security Fixes`
+- Branch: `codex/security-findings-20260511`
+- Source artifact: `C:\Users\ydanz\Downloads\codex-security-findings-2026-05-11T05-28-45.057Z.csv`
+- Scope: fixed the listed security/privacy/data-integrity findings in the isolated branch only; no live Netlify deploy and no merge into the active app worktree.
+- Hardened DeskPhone localhost control with a pairing token, exact CORS allowlist, token-bearing browser requests, and upload/URL/contact parsing guards.
+- Hardened Netlify AI/search/config/MCP functions with explicit origin allowlists, Firebase ID-token auth for key-backed providers, request-size/rate limits, timeout reduction, and no unauthenticated MCP reads.
+- Hardened Shailos identity scoping, Firestore rules, explicit AI actions, answer-save privacy, postMessage origin checks, Google token cleanup, server-managed OAuth client ID, Gmail/calendar privacy, custom-theme validation, backup restore validation, shaila sync/deletion safeguards, and per-user audio holding-pen records.
+- Validation passed:
+  - `npm run build` in `apps/web`
+  - `npm run build` in `apps/shailos`
+  - `dotnet build` in `apps/phone-host-windows`
+  - `node --check` for `apps/web/backend/functions/{ai-proxy.js,gemini-proxy.js,claude-proxy.js,serper-proxy.js,app-config.js,_ai-core.cjs,mcp.mjs}`
+  - `git diff --check`
+- Remaining expected warnings: Vite large chunk warnings for web/Shailos and existing `.NET` NU1603 approximate package resolution for `InTheHand.Net.Bluetooth`.

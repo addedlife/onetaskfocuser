@@ -139,7 +139,8 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
 
   // Auto-open if search matches
   const sq = (searchQ||"").toLowerCase().trim();
-  const hasMatch = sq && (parentTask.toLowerCase().includes(sq) || steps.some(s=>s.text.toLowerCase().includes(sq)));
+  const displayParentTask = steps[0]?.shailaQuestion || parentTask;
+  const hasMatch = sq && (displayParentTask.toLowerCase().includes(sq) || steps.some(s=>s.text.toLowerCase().includes(sq)));
   React.useEffect(() => { if (hasMatch) setOpen(true); }, [hasMatch]);
 
   const startEdit = (st) => { setEditId(st.id); setEditTx(st.text); setTimeout(()=>editRef.current?.focus(),40); };
@@ -171,7 +172,7 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
         <span style={{width:20,height:20,borderRadius:"50%",border:`1.5px solid ${T.tFaint}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           <IC.Split s={9} c={T.tFaint}/>
         </span>
-        <span style={{flex:1,fontSize:14,fontWeight:400,color:T.tSoft,fontFamily:"Georgia,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{parentTask}</span>
+        <span style={{flex:1,fontSize:14,fontWeight:400,color:T.tSoft,fontFamily:"Georgia,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayParentTask}</span>
         <div style={{width:8,height:8,borderRadius:"50%",background:pri.color,flexShrink:0,opacity:.7}}/>
         <IC.Chev d={open?"up":"down"} s={12} c={T.tSoft}/>
       </div>
@@ -228,7 +229,7 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
                       const sibling = siblings.find(t => t.shailaAnswer);
                       const summary = sibling?.answerSummary;
                       if (summary?.trim()) return summary.trim();
-                      const ans = (sibling?.shailaAnswer || '').trim();
+                      const ans = String(sibling?.shailaAnswer || '').trim();
                       if (!ans) return null;
                       const words = ans.split(/\s+/).filter(Boolean);
                       return words.slice(0, 6).join(' ') + (words.length > 6 ? '…' : '');
