@@ -29,6 +29,8 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const viewportW = useViewportWidth();
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
+  const [taskComposerOpen, setTaskComposerOpen] = useState(false);
+  const [taskComposerMrsW, setTaskComposerMrsW] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editText, setEditText] = useState("");
   const [openTaskActionsId, setOpenTaskActionsId] = useState(null);
@@ -219,7 +221,15 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     if (opts.mrsW && onAddMrsWTask) onAddMrsWTask(text, priorityOverride);
     else onAddTask?.(text, priorityOverride);
     setTaskDraft("");
+    setTaskComposerOpen(false);
+    setTaskComposerMrsW(false);
     if (taskInputRef.current) { taskInputRef.current.style.height = "36px"; }
+  };
+  const openTaskComposer = (priorityId, opts = {}) => {
+    setTaskPriority(priorityId);
+    setTaskComposerMrsW(!!opts.mrsW);
+    setTaskComposerOpen(true);
+    setTimeout(() => taskInputRef.current?.focus(), 0);
   };
 
   return (
@@ -244,29 +254,36 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 </div>
               </div>
               {/* Quick add — input + equal-width priority pills + add FAB, all inline */}
-              <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 8, alignItems: "center" }}>
-                <div style={{ position: "relative", minWidth: 0 }}>
-                  <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: C.faint, display: "flex", pointerEvents: "none" }}>{suiteIcon("add_task", 15)}</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: taskComposerOpen ? 8 : 0 }}>
+                {taskComposerOpen && <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 32px 32px", gap: 6, alignItems: "start" }}>
                   <textarea ref={taskInputRef} value={taskDraft} rows={1}
                     onChange={e => { setTaskDraft(e.target.value); e.target.style.height = "34px"; e.target.style.height = Math.min(e.target.scrollHeight, 88) + "px"; }}
-                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(); } }}
-                    placeholder="Add task"
-                    style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: 17, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "6px 12px 6px 32px", fontSize: ncType.meta, fontWeight: 400, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
-                </div>
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(taskPriority, { mrsW: taskComposerMrsW }); } if (e.key === "Escape") { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); } }}
+                    placeholder={taskComposerMrsW ? "Mrs W task" : `${priorities.find(p => p.id === taskPriority)?.ncLabel || "Task"} task`}
+                    style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: 7, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "7px 10px", fontSize: ncType.meta, fontWeight: 400, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
+                  <button onClick={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })} disabled={!taskDraft.trim()} title="Save task" aria-label="Save task"
+                    style={{ width: 32, height: 32, borderRadius: 7, border: "none", background: taskComposerMrsW ? "#A8D8B9" : activePriColor, color: taskComposerMrsW ? "#123D25" : textOnColor(activePriColor), cursor: taskDraft.trim() ? "pointer" : "default", opacity: taskDraft.trim() ? 1 : 0.38, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {suiteIcon("check", 16)}
+                  </button>
+                  <button onClick={() => { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); }} title="Cancel" aria-label="Cancel task entry"
+                    style={gvIconButton({ width: 32, height: 32, borderRadius: 7 }, C)}>
+                    {suiteIcon("close", 15)}
+                  </button>
+                </div>}
                 <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
                   {ncCorePills.map(p => {
                     const active = taskPriority === p.id;
                     return (
-                      <button key={p.id} onClick={() => { setTaskPriority(p.id); addDraft(p.id); }}
-                        title={`Add as ${p.ncLabel}`} aria-label={`Add as ${p.ncLabel}`} disabled={!taskDraft.trim()}
-                        style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 16, border: `1px solid ${active ? p.color : "transparent"}`, background: p.color, color: textOnColor(p.color), cursor: taskDraft.trim() ? "pointer" : "default", opacity: taskDraft.trim() ? 1 : 0.4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <button key={p.id} onClick={() => openTaskComposer(p.id)}
+                        title={`Add ${p.ncLabel} task`} aria-label={`Add ${p.ncLabel} task`} aria-expanded={taskComposerOpen && active && !taskComposerMrsW}
+                        style={{ width: 30, height: 30, flexShrink: 0, borderRadius: 7, border: `1px solid ${active && taskComposerOpen && !taskComposerMrsW ? p.color : "transparent"}`, background: p.color, color: textOnColor(p.color), cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         {suiteIcon("add", 16)}
                       </button>
                     );
                   })}
                   {onAddMrsWTask && (
-                    <button onClick={() => addDraft(taskPriority, { mrsW: true })} title="Add as Mrs W" aria-label="Add as Mrs W" disabled={!taskDraft.trim()}
-                      style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 16, border: "1px solid transparent", background: "#A8D8B9", color: "#123D25", cursor: taskDraft.trim() ? "pointer" : "default", opacity: taskDraft.trim() ? 1 : 0.4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <button onClick={() => openTaskComposer(taskPriority, { mrsW: true })} title="Add Mrs W task" aria-label="Add Mrs W task" aria-expanded={taskComposerOpen && taskComposerMrsW}
+                      style={{ width: 30, height: 30, flexShrink: 0, borderRadius: 7, border: `1px solid ${taskComposerOpen && taskComposerMrsW ? "#7DB892" : "transparent"}`, background: "#A8D8B9", color: "#123D25", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       {suiteIcon("add", 16)}
                     </button>
                   )}
@@ -337,9 +354,9 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No open tasks.</div>}
               {primaryTaskQueue.length > 5 && (
-                <div style={{ display: "flex", justifyContent: "center", padding: "8px 12px 12px", borderTop: `1px solid ${C.divider}` }}>
-                  <button onClick={() => setShowAllTasks(v => !v)} title={showAllTasks ? "Show fewer tasks" : "Show full task queue"} style={gvTextButton({ height: 32, minHeight: 32, fontSize: NC_TYPE.meta, padding: "0 12px" }, C)}>
-                    {suiteIcon(showAllTasks ? "expand_less" : "expand_more", 15)} {showAllTasks ? "Show less" : `See more (${primaryTaskQueue.length - 5})`}
+                <div style={{ display: "flex", justifyContent: "center", padding: "2px 8px 5px", borderTop: `1px solid ${C.divider}` }}>
+                  <button onClick={() => setShowAllTasks(v => !v)} title={showAllTasks ? "Show fewer tasks" : `Show ${primaryTaskQueue.length - 5} more tasks`} aria-label={showAllTasks ? "Show fewer tasks" : `Show ${primaryTaskQueue.length - 5} more tasks`} style={gvIconButton({ width: 28, height: 24, borderRadius: 6 }, C)}>
+                    {suiteIcon(showAllTasks ? "expand_less" : "expand_more", 15)}
                   </button>
                 </div>
               )}

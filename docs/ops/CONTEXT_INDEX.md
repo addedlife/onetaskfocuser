@@ -50,7 +50,7 @@ Goal: minimize cached and uncached tokens while preserving accuracy. Start from 
 
 - Primary files: `apps/web/netlify.toml`, `apps/web/backend/functions/*`
 - Related files: `apps/web/package.json`, `apps/web/scripts/*`
-- Gate: `npm run build` in `apps/web`; deploy only after explicit approval
+- Gate: `npm run build` in `apps/web`; deploy verified web changes unless the current thread says not to
 
 ### Native DeskPhone Host
 

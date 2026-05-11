@@ -322,3 +322,12 @@ Current source-grade file count after cleanup: 162 files.
 - Reduced Phone card body padding to reclaim vertical space for actual content.
 - `npm run build` passed in `apps/web`.
 - Verified the local phone host `http://127.0.0.1:8765/status` returned HTTP 200 with `connected:true`.
+
+## 2026-05-11 Always-Live Release Rule And Task Add Collapse
+
+- Updated startup and agent docs so verified web changes should be committed, pushed, and deployed unless the current thread says not to.
+- Kept Netlify relinking as approval-only, because relinking changes site identity rather than shipping the current app.
+- Changed NerveCenter task entry so the default state is four small square plus buttons; clicking a plus opens the task text box with save/cancel.
+- Reduced the task `See more` affordance to a small icon-only button.
+- `npm run build` passed in `apps/web`.
+- Live deploy completed with `npx netlify deploy --prod` from `apps/web`; production URL `https://onetaskfocuser.netlify.app`, deploy ID `6a0164d6afd56290d7c2b438`.

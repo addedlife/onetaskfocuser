@@ -10,5 +10,4 @@ Read this first; then read only the matching row in docs/ops/CONTEXT_INDEX.md.
 - Production source only: apps/web, apps/shailos, apps/phone-host-windows.
 - Old folders are rollback/archive only.
 - Verify current state from docs/ops/VERIFICATION_LOG.md before edits.
-- Commit and push verified source changes unless told not to.
-- Deploy or relink Netlify only with explicit approval.
+- Commit, push, and deploy verified web changes unless told not to.
