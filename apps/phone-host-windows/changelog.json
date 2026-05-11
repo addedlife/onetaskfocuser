@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-05-10 22:41:37",
+        "version":  "b262",
+        "notes":  "DeskPhone source cutover: the stable desktop launcher now comes from the Shamash Pro 4 phone host.",
+        "devNotes":  "Creates the first Pro 4 native DeskPhone release after the source consolidation and legacy mothballing pass, so the desktop DeskPhone shortcut and deskphone:// protocol point at the Pro 4 deployed-builds launcher instead of the old mothballed DeskPhone folder. This release is intended to restore the localhost WebPhone bridge on port 8765 from the active Pro 4 host while preserving the mothballed legacy DeskPhone folder as rollback-only."
+    },
+    {
         "timestamp":  "2026-05-07 04:55:32",
         "version":  "b261",
         "notes":  "DeskPhone Web parity: browser controls no longer detour through the desktop UI for conversation and call-history actions.",

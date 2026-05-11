@@ -333,7 +333,6 @@ $pathsToStage = @(
     "AGENTS.md",
     "Assets",
     "Converters.cs",
-    "docs",
     "MainWindow.xaml",
     "MainWindow.xaml.cs",
     "deploy.ps1",
