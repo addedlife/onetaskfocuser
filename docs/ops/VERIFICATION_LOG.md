@@ -370,3 +370,4 @@ Current source-grade file count after cleanup: 162 files.
 - Kept the Tasks pane aligned to the top grid height when more than five tasks exist, so the three upper panes share the same top and bottom edges while the auto-fill row calculation still reveals more tasks.
 - `npm run build` passed in `apps/web`.
 - Local browser geometry smoke at `http://127.0.0.1:4305/?suite=nervecenter` with 18 seeded tasks at 1440x900: upper pane bottom spread was `0px`, vertical gutters were `6px`, top-grid-to-horizontal-handle gap was `4px`, handle height was `8px`, and handle-to-lower-pane gap was `4px`.
+- Pushed commit `5081943` to `origin/main` and deployed production from `apps/web`; production URL `https://onetaskfocuser.netlify.app`, deploy ID `6a01e83c9d4b00081b36567c`.
