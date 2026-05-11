@@ -129,6 +129,11 @@ const MODEL_IDS_BY_PROVIDER = {
   claude: CLAUDE_MODELS,
 };
 
+const GEMINI_CREDENTIALS = [
+  { id: "primary", label: "Gemini Primary", env: "GEMINI_API_KEY" },
+  { id: "overflow-01", label: "Gemini Overflow 01", env: "Gemini_Overflow_01" },
+];
+
 const geminiLimiterState = globalThis.__shamashGeminiLimiterState || {
   queue: Promise.resolve(),
   requestStarts: [],
@@ -258,46 +263,49 @@ function estimateGeminiTokens(body) {
   return Math.max(1, textTokens + audioTokens + 64);
 }
 
-function reserveInState(state, model, estimatedTokens, now) {
+function reserveInState(state, model, estimatedTokens, now, credentialId = "primary") {
   const limits = geminiLimitsFor(model);
   const minuteWindowMs = 60000;
   const minIntervalMs = Math.ceil(minuteWindowMs / limits.rpm);
   const dayKey = pacificDayKey(new Date(now));
-  const daily = state.perModelDaily[model] || { dayKey, count: 0 };
+  const laneKey = `${credentialId}:${model}`;
+  const daily = state.perModelDaily[laneKey] || { dayKey, count: 0 };
   if (daily.dayKey !== dayKey) {
     daily.dayKey = dayKey;
     daily.count = 0;
   }
-  state.perModelDaily[model] = daily;
+  state.perModelDaily[laneKey] = daily;
 
   if (daily.count >= limits.rpd) {
     const retryAfterSecondsValue = Math.ceil(millisUntilNextPacificMidnight(new Date(now)) / 1000);
-    throw httpError(429, `Gemini daily safety cap reached for ${model}; retry after the Pacific-time quota reset.`, retryAfterSecondsValue);
+    throw httpError(429, `Gemini daily safety cap reached for ${credentialId}/${model}; retry after the Pacific-time quota reset.`, retryAfterSecondsValue);
   }
 
   pruneSince(state.requestStarts, now - minuteWindowMs);
   pruneSince(state.tokenStarts, now - minuteWindowMs);
 
-  const recentTokens = state.tokenStarts.reduce((sum, event) => sum + event.tokens, 0);
-  const lastStart = state.requestStarts.at(-1)?.at || 0;
+  const recentRequests = state.requestStarts.filter(event => (event.credentialId || "primary") === credentialId);
+  const recentTokenStarts = state.tokenStarts.filter(event => (event.credentialId || "primary") === credentialId);
+  const recentTokens = recentTokenStarts.reduce((sum, event) => sum + event.tokens, 0);
+  const lastStart = recentRequests.at(-1)?.at || 0;
   const spacingWait = Math.max(0, minIntervalMs - (now - lastStart));
-  const rpmWait = state.requestStarts.length >= limits.rpm
-    ? Math.max(0, minuteWindowMs - (now - state.requestStarts[0].at))
+  const rpmWait = recentRequests.length >= limits.rpm
+    ? Math.max(0, minuteWindowMs - (now - recentRequests[0].at))
     : 0;
-  const tpmWait = recentTokens + estimatedTokens > limits.tpm && state.tokenStarts.length
-    ? Math.max(0, minuteWindowMs - (now - state.tokenStarts[0].at))
+  const tpmWait = recentTokens + estimatedTokens > limits.tpm && recentTokenStarts.length
+    ? Math.max(0, minuteWindowMs - (now - recentTokenStarts[0].at))
     : 0;
   const waitMs = Math.max(spacingWait, rpmWait, tpmWait);
 
   if (waitMs > 0) return { waitMs, limits };
 
-  state.requestStarts.push({ at: now, model });
-  state.tokenStarts.push({ at: now, tokens: estimatedTokens, model });
+  state.requestStarts.push({ at: now, model, credentialId });
+  state.tokenStarts.push({ at: now, tokens: estimatedTokens, model, credentialId });
   daily.count += 1;
   return { waitMs: 0, limits, estimatedTokens };
 }
 
-async function reserveGeminiSlotWithFirestore(model, estimatedTokens) {
+async function reserveGeminiSlotWithFirestore(model, estimatedTokens, credentialId) {
   const db = firestoreLimiter();
   if (!db) return null;
 
@@ -311,7 +319,7 @@ async function reserveGeminiSlotWithFirestore(model, estimatedTokens) {
       tokenStarts: Array.isArray(data.tokenStarts) ? data.tokenStarts : [],
       perModelDaily: data.perModelDaily && typeof data.perModelDaily === "object" ? data.perModelDaily : {},
     };
-    reservation = reserveInState(state, model, estimatedTokens, Date.now());
+    reservation = reserveInState(state, model, estimatedTokens, Date.now(), credentialId);
     if (reservation.waitMs <= 0) {
       tx.set(ref, { ...state, updatedAt: Date.now() });
     }
@@ -319,12 +327,12 @@ async function reserveGeminiSlotWithFirestore(model, estimatedTokens) {
   return reservation;
 }
 
-async function reserveGeminiSlotInMemory(model, estimatedTokens, started) {
+async function reserveGeminiSlotInMemory(model, estimatedTokens, started, credentialId) {
   const limits = geminiLimitsFor(model);
 
   while (Date.now() - started < GEMINI_QUEUE_TIMEOUT_MS) {
     const now = Date.now();
-    const reservation = reserveInState(geminiLimiterState, model, estimatedTokens, now);
+    const reservation = reserveInState(geminiLimiterState, model, estimatedTokens, now, credentialId);
     if (reservation.waitMs <= 0) return reservation;
 
     await sleep(Math.min(reservation.waitMs + Math.floor(Math.random() * 250), 5000));
@@ -333,12 +341,12 @@ async function reserveGeminiSlotInMemory(model, estimatedTokens, started) {
   throw httpError(429, "Gemini gateway is pacing requests to protect the quota; retry shortly.", 30);
 }
 
-async function reserveGeminiSlot(model, estimatedTokens) {
+async function reserveGeminiSlot(model, estimatedTokens, credentialId = "primary") {
   const started = Date.now();
 
   while (Date.now() - started < GEMINI_QUEUE_TIMEOUT_MS) {
-    const reservation = await reserveGeminiSlotWithFirestore(model, estimatedTokens);
-    if (!reservation) return reserveGeminiSlotInMemory(model, estimatedTokens, started);
+    const reservation = await reserveGeminiSlotWithFirestore(model, estimatedTokens, credentialId);
+    if (!reservation) return reserveGeminiSlotInMemory(model, estimatedTokens, started, credentialId);
     if (reservation.waitMs <= 0) return reservation;
     await sleep(Math.min(reservation.waitMs + Math.floor(Math.random() * 250), 5000));
   }
@@ -346,8 +354,8 @@ async function reserveGeminiSlot(model, estimatedTokens) {
   throw httpError(429, "Gemini gateway is pacing requests to protect the quota; retry shortly.", 30);
 }
 
-function scheduleGeminiSlot(model, estimatedTokens) {
-  const run = () => reserveGeminiSlot(model, estimatedTokens);
+function scheduleGeminiSlot(model, estimatedTokens, credentialId = "primary") {
+  const run = () => reserveGeminiSlot(model, estimatedTokens, credentialId);
   const scheduled = geminiLimiterState.queue.then(run, run);
   geminiLimiterState.queue = scheduled.catch(() => {});
   return scheduled;
@@ -401,6 +409,46 @@ function modelFor(provider, kind, task, requestedModel) {
 
   if (requested && allowed.includes(requested)) return requested;
   return allowed.includes(fallback) ? fallback : defaultByProvider[provider];
+}
+
+function envValue(...names) {
+  for (const name of names) {
+    const value = process.env[name];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function geminiCredentialCatalog() {
+  return GEMINI_CREDENTIALS.map(credential => {
+    const key = credential.id === "overflow-01"
+      ? envValue("Gemini_Overflow_01", "GEMINI_OVERFLOW_01")
+      : envValue(credential.env);
+    return { ...credential, key, available: !!key };
+  });
+}
+
+function publicGeminiCredentialCatalog() {
+  return geminiCredentialCatalog().map(({ key, env, ...publicCredential }) => publicCredential);
+}
+
+function normalizeGeminiCredential(value) {
+  const v = String(value || "").trim().toLowerCase();
+  if (v === "overflow" || v === "overflow_01" || v === "gemini_overflow_01") return "overflow-01";
+  if (v === "primary" || v === "gemini" || v === "main") return "primary";
+  if (v === "auto" || !v) return "auto";
+  return GEMINI_CREDENTIALS.some(credential => credential.id === v) ? v : "auto";
+}
+
+function orderedGeminiCredentials(preferred = "auto") {
+  const available = geminiCredentialCatalog().filter(credential => credential.available);
+  if (!available.length) return [];
+  const normalized = normalizeGeminiCredential(preferred);
+  if (normalized === "auto") return available;
+  return [
+    ...available.filter(credential => credential.id === normalized),
+    ...available.filter(credential => credential.id !== normalized),
+  ];
 }
 
 function corsFor(event, methods = "POST, OPTIONS") {
@@ -496,17 +544,21 @@ function buildAudioGeminiBody(base64, mimeType, prompt, genConfig = {}) {
   };
 }
 
-async function callGemini({ body, prompt, base64, mimeType, model, genConfig, allowQuotaFallback = true }) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw httpError(500, "GEMINI_API_KEY not configured in Netlify env vars");
+function isDailyQuotaError(status, message, retryAfterSecondsValue) {
+  const text = String(message || "").toLowerCase();
+  if (text.includes("daily safety cap") || text.includes("requestsperday") || text.includes("per day") || text.includes("rpd")) return true;
+  if (status === 429 && retryAfterSecondsValue && retryAfterSecondsValue > 3600) return true;
+  return false;
+}
 
+async function callGeminiOnce({ body, prompt, base64, mimeType, model, genConfig, credential }) {
   const requestBody = normalizeGeminiBody(body || (base64
     ? buildAudioGeminiBody(base64, mimeType, prompt, genConfig)
     : buildTextGeminiBody(prompt, genConfig)));
   const estimatedTokens = estimateGeminiTokens(requestBody);
-  await scheduleGeminiSlot(model, estimatedTokens);
+  await scheduleGeminiSlot(model, estimatedTokens, credential.id);
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${credential.key}`;
   const controller = new AbortController();
   const fetchTimeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
   let r;
@@ -524,22 +576,54 @@ async function callGemini({ body, prompt, base64, mimeType, model, genConfig, al
   const data = await r.json().catch(() => ({}));
   if (!r.ok || data.error) {
     const message = data?.error?.message || r.statusText || "Gemini API error";
-    if (allowQuotaFallback && r.status === 429 && model !== QUOTA_FALLBACK_GEMINI_MODEL) {
-      await sleep(30000 + Math.floor(Math.random() * 5000));
-      return callGemini({
+    throw httpError(r.status || 502, message, retryAfterSeconds(r.headers, data));
+  }
+
+  return { provider: "gemini", model, credential: credential.id, text: extractGeminiText(data), raw: data };
+}
+
+async function callGemini({ body, prompt, base64, mimeType, model, genConfig, credential: preferredCredential, allowQuotaFallback = true }) {
+  const credentials = orderedGeminiCredentials(preferredCredential);
+  if (!credentials.length) throw httpError(500, "No Gemini API key configured in Netlify env vars");
+
+  const requestBody = normalizeGeminiBody(body || (base64
+    ? buildAudioGeminiBody(base64, mimeType, prompt, genConfig)
+    : buildTextGeminiBody(prompt, genConfig)));
+  let lastError = null;
+
+  for (const credential of credentials) {
+    try {
+      return await callGeminiOnce({
         body: requestBody,
         prompt,
         base64,
         mimeType,
-        model: QUOTA_FALLBACK_GEMINI_MODEL,
+        model,
         genConfig,
-        allowQuotaFallback: false,
+        credential,
       });
+    } catch (e) {
+      lastError = e;
+      if (!isDailyQuotaError(e.statusCode, e.message, e.retryAfterSeconds)) throw e;
+      console.warn(`[AI] Gemini ${credential.id} hit daily quota for ${model}; trying next credential lane.`);
     }
-    throw httpError(r.status || 502, message, retryAfterSeconds(r.headers, data));
   }
 
-  return { provider: "gemini", model, text: extractGeminiText(data), raw: data };
+  if (allowQuotaFallback && model !== QUOTA_FALLBACK_GEMINI_MODEL) {
+    await sleep(30000 + Math.floor(Math.random() * 5000));
+    return callGemini({
+      body: requestBody,
+      prompt,
+      base64,
+      mimeType,
+      model: QUOTA_FALLBACK_GEMINI_MODEL,
+      genConfig,
+      credential: preferredCredential,
+      allowQuotaFallback: false,
+    });
+  }
+
+  throw lastError || httpError(429, "All Gemini credential lanes reached their daily safety cap.", 3600);
 }
 
 function maxOutputTokensFrom(genConfig = {}, fallback = 4096) {
@@ -649,6 +733,7 @@ async function processAiPayload(payload = {}) {
     mimeType: payload.mimeType,
     model,
     genConfig: payload.genConfig || {},
+    credential: payload.geminiCredential || payload.credential || payload.keyLane,
   };
 
   if (provider === "openai") return callOpenAI(common);
@@ -674,7 +759,7 @@ function publicAiConfig() {
       audioModel: modelFor("gemini", "audio", "transcription"),
       researchModel: model,
       available: {
-        gemini: !!process.env.GEMINI_API_KEY,
+        gemini: geminiCredentialCatalog().some(credential => credential.available),
         openai: !!process.env.OPENAI_API_KEY,
         claude: !!(process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY),
         serper: !!process.env.SERPER_API_KEY,
@@ -685,6 +770,10 @@ function publicAiConfig() {
         claude: CLAUDE_MODELS,
       },
       catalog: MODEL_CATALOG,
+      defaultGeminiCredential: "auto",
+      credentialLanes: {
+        gemini: publicGeminiCredentialCatalog(),
+      },
       rateLimit: {
         strategy: "server-side queue",
         safeRpm: geminiLimitsFor(modelFor("gemini", "text", "general")).rpm,
@@ -697,7 +786,7 @@ function publicAiConfig() {
       googleAvailable: !!googleClientId,
     },
     googleClientId,
-    geminiKey: !!process.env.GEMINI_API_KEY,
+    geminiKey: geminiCredentialCatalog().some(credential => credential.available),
   };
 }
 

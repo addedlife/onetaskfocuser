@@ -1140,6 +1140,7 @@ async function callGeminiAudio(gk, base64, mimeType, textPrompt, genConfig={}) {
     task: opts.audioTask || "transcription",
     provider: "gemini",
     model: opts.model,
+    geminiCredential: opts.geminiCredential,
     base64,
     mimeType,
     prompt: textPrompt,
@@ -1161,6 +1162,7 @@ async function callAI(prompt, aiOpts, genConfig={}) {
     task: opts.task || "general",
     provider: opts.provider || "gemini",
     model: opts.model,
+    geminiCredential: opts.geminiCredential,
     prompt,
     genConfig,
   });

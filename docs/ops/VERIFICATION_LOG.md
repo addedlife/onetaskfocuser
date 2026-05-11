@@ -430,3 +430,16 @@ Current source-grade file count after cleanup: 162 files.
 - `git diff --check` passed; line-ending normalization warnings only.
 - Browser smoke was attempted through the Codex in-app browser, but the local browser helper crashed before opening the tab; code-side verification above passed.
 - Pushed commit `6e5114b` to `origin/main`; production `https://onetaskfocuser.netlify.app/.netlify/functions/app-config` returned HTTP 200 with the new catalog entries `gemini-3.1-pro-preview`, `gpt-5.5`, and `claude-sonnet-4-6`.
+
+## 2026-05-11 Gemini Overflow Key Lane
+
+- Researched current Google guidance before editing: Gemini rate limits are per Google Cloud project, not per API key, so overflow cycling only expands RPD when the overflow key belongs to a different project. The user confirmed `Gemini_Overflow_01` is from a different project.
+- Added a server-side Gemini credential catalog with `primary` from `GEMINI_API_KEY` and `overflow-01` from Netlify env var `Gemini_Overflow_01` (with `GEMINI_OVERFLOW_01` fallback).
+- Added Settings > Account > Gemini key lane with `Auto failover`, `Gemini Primary`, and `Gemini Overflow 01`; the UI receives only lane labels/availability, not key values.
+- Updated app AI calls to pass `geminiCredential` through the central gateway.
+- Updated the Gemini limiter to track RPM/TPM/RPD by credential lane plus model, so separate-project keys do not block each other in the local safety queue.
+- Updated Gemini calls to try the preferred/auto lane first and rotate to the next available Gemini lane on daily quota/RPD exhaustion signals.
+- Fixed app load cleanup so `aiProvider` persists instead of being stripped on every load.
+- Local probe with `$env:Gemini_Overflow_01='fake-overflow-key'` returned `overflow-01` as available in `publicAiConfig().ai.credentialLanes.gemini`.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `git diff --check` passed; line-ending normalization warnings only.

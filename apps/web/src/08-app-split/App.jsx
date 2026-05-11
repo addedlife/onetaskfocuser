@@ -225,7 +225,9 @@ function App({ user, onSignOut }) {
     ],
     colorScheme: "claude",
     zenEnabled: false,
+    aiProvider: "",
     aiModel: "",
+    aiGeminiCredential: "auto",
     completionSound: true,
     overwhelmThreshold: 7,
     ageThresholds: {...DEF_AGE_THRESHOLDS},
@@ -245,9 +247,10 @@ function App({ user, onSignOut }) {
         if (!s.colorScheme) s.colorScheme = "claude";
         if (s.zenEnabled === undefined) s.zenEnabled = false;
         if (s.aiModel === undefined) s.aiModel = s.aiTextModel || s.aiAudioModel || s.aiResearchModel || "";
+        if (s.aiProvider === undefined) s.aiProvider = "";
+        if (s.aiGeminiCredential === undefined) s.aiGeminiCredential = "auto";
         delete s.geminiKey;
         delete s.soferaiKey;
-        delete s.aiProvider;
         delete s.aiTextModel;
         delete s.aiAudioProvider;
         delete s.aiAudioModel;
@@ -367,7 +370,7 @@ function App({ user, onSignOut }) {
         const cfg = d.ai || null;
         const googleId = d?.integrations?.googleClientId || d?.googleClientId || "";
         setAiConfig(cfg);
-        setServerKeyAvailable(!!(cfg?.available?.gemini || d.geminiKey));
+        setServerKeyAvailable(!!(cfg?.available && Object.values(cfg.available).some(Boolean)));
         setServerGoogleClientId(typeof googleId === "string" ? googleId.trim() : "");
       })
       .catch(() => {});
@@ -891,6 +894,7 @@ function App({ user, onSignOut }) {
   const rawAiOpts = AS ? {
     provider: selectedProvider,
     model: selectedModel,
+    geminiCredential: AS?.aiGeminiCredential || aiConfig?.defaultGeminiCredential || "auto",
     source: "server",
   } : null;
   const hasAI = !!(rawAiOpts && selectedProviderAvailable);

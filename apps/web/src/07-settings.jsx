@@ -52,9 +52,14 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   const selectedModelKey = AS.aiModel ? `${selectedProvider}:${AS.aiModel}` : "";
   const availableProviders = aiConfig?.available || {};
   const selectedProviderOnline = !!availableProviders[selectedProvider] || !!hasAI;
+  const geminiCredentialLanes = aiConfig?.credentialLanes?.gemini || [
+    {id:"primary", label:"Gemini Primary", available:!!availableProviders.gemini},
+  ];
+  const selectedGeminiCredential = AS.aiGeminiCredential || aiConfig?.defaultGeminiCredential || "auto";
   const settingsAiOpts = AS ? {
     provider: selectedProvider,
     model: selectedModel,
+    geminiCredential: selectedGeminiCredential,
     source: "server",
   } : null;
   const settingsHasAI = !!(hasAI || availableProviders.gemini || availableProviders.openai || availableProviders.claude);
@@ -401,6 +406,26 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 Gateway: {settingsHasAI ? `${selectedProvider} ${selectedProviderOnline ? "online" : "key missing"}` : "not configured"}
               </p>
             </div>
+            {selectedProvider === "gemini" && (
+              <div style={{marginBottom:16}}>
+                <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",fontWeight:500,display:"block",marginBottom:6}}>Gemini key lane</label>
+                <select
+                  value={selectedGeminiCredential}
+                  onChange={e=>setAS(p=>({...p,aiGeminiCredential:e.target.value}))}
+                  style={{width:"100%",minHeight:42,padding:"8px 12px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:settingsType.control,fontFamily:"system-ui",background:T.bgW,color:T.text,boxSizing:"border-box"}}
+                >
+                  <option value="auto">Auto failover</option>
+                  {geminiCredentialLanes.map(lane => (
+                    <option key={lane.id} value={lane.id}>
+                      {lane.label}{lane.available ? "" : " key missing"}
+                    </option>
+                  ))}
+                </select>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"8px 0 0",lineHeight:settingsType.line}}>
+                  Daily quota failover uses the next available Gemini lane.
+                </p>
+              </div>
+            )}
 
             <div style={{height:1,background:T.brdS,margin:"0 0 16px"}}/>
             <h4 style={{...sh, color:T.tSoft, margin:"0 0 10px"}}>Backup</h4>
