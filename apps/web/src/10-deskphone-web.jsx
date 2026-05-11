@@ -2695,6 +2695,7 @@ function SimpleTabContent({
         status={status}
         messages={messages}
         calls={calls}
+        contacts={contacts}
         selectedConversationKey={selectedConversationKey}
         setSelectedConversationKey={setSelectedConversationKey}
         conversationSearch={conversationSearch}
