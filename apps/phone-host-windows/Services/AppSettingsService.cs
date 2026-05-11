@@ -1,4 +1,5 @@
 using System.IO;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace DeskPhone.Services;
@@ -96,6 +97,8 @@ public class AppSettingsService
         public List<MessageDraft> MessageDrafts { get; set; } = new();
 
         public List<DeviceAlertState> DeviceAlertStates { get; set; } = new();
+
+        public string ControlApiPairingToken { get; set; } = "";
     }
 
     // ── State ─────────────────────────────────────────────────────────────
@@ -147,6 +150,7 @@ public class AppSettingsService
         }
 
         NormalizeAppearanceSettings();
+        EnsureControlApiPairingToken();
     }
 
     // ── API ───────────────────────────────────────────────────────────────
@@ -159,6 +163,19 @@ public class AppSettingsService
             File.WriteAllText(SettingsPath, json);
         }
         catch { }
+    }
+
+    public string EnsureControlApiPairingToken()
+    {
+        if (!string.IsNullOrWhiteSpace(_current.ControlApiPairingToken) &&
+            _current.ControlApiPairingToken.Length >= 32)
+        {
+            return _current.ControlApiPairingToken;
+        }
+
+        _current.ControlApiPairingToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+        Save();
+        return _current.ControlApiPairingToken;
     }
 
     public void SetDarkMode(bool enabled)

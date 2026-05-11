@@ -218,10 +218,8 @@ const Store = {
       if (version === 'v5') {
         // Already migrated — load from per-task collections
         const state = await this._loadV5();
-        // Only use V5 state if it actually has tasks. If collection is empty
-        // (e.g. migration wrote meta but tasks failed), fall back to blob.
-        if (state && state.lists?.some(l => l.tasks?.length > 0)) return state;
-        console.warn("[Store] V5 collection empty or load failed, falling back to blob + re-migrate");
+        if (state) return state;
+        console.warn("[Store] V5 load failed, falling back to blob + re-migrate");
         // Fall through to blob load, which will attempt re-migration
       }
       {
@@ -516,14 +514,24 @@ const Store = {
   parseBackup(jsonStr) {
     try {
       const data = JSON.parse(jsonStr);
-      if (!data._backupVersion || !data.appState) {
+      const isValidAppState = (state) => {
+        if (!state || !Array.isArray(state.lists)) return false;
+        return state.lists.every(list =>
+          list && typeof list === "object" &&
+          Array.isArray(list.tasks) &&
+          list.tasks.every(task => task && typeof task === "object")
+        );
+      };
+      const normalizeShailos = (value) => Array.isArray(value) ? value.filter(s => s && typeof s === "object") : [];
+      if ((!data._backupVersion && !data._version) || !data.appState) {
         // Try legacy format (just appState directly)
-        if (data.lists) {
+        if (isValidAppState(data)) {
           return { appState: data, shailos: [], backupDate: data._lsModified ? new Date(data._lsModified).toISOString() : null, warning: null };
         }
         return null;
       }
-      return { appState: data.appState, shailos: data.shailos || [], backupDate: data._backupDate, warning: null };
+      if (!isValidAppState(data.appState)) return null;
+      return { appState: data.appState, shailos: normalizeShailos(data.shailos), backupDate: data._backupDate || data._backupDateTime || null, warning: null };
     } catch(e) {
       console.error("[Backup] Parse failed:", e);
       return null;
@@ -595,7 +603,7 @@ const Store = {
     return col.onSnapshot(snap => {
       const shailos = [];
       snap.forEach(doc => shailos.push({ id: doc.id, ...doc.data() }));
-      callback(shailos);
+      callback(shailos, { fromCache: !!snap.metadata?.fromCache, hasPendingWrites: !!snap.metadata?.hasPendingWrites });
     }, err => console.warn("[Store] Shaila listener error:", err));
   },
 
@@ -656,7 +664,8 @@ const Store = {
             docId = 't_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
           }
           const taskDoc = this.tasksCol().doc(docId);
-          const cleaned = this._clean({ ...task, id: docId, listId: list.id, _lastModified: Date.now() });
+          const sortIndex = (list.tasks || []).indexOf(task);
+          const cleaned = this._clean({ ...task, id: docId, listId: list.id, _sortIndex: sortIndex, _lastModified: Date.now() });
           batch.set(taskDoc, cleaned);
           docCount++;
         }
@@ -710,19 +719,25 @@ const Store = {
 
       // Group tasks by listId
       const tasksByList = {};
+      const sortBackfills = [];
+      let loadIndex = 0;
       taskSnap.forEach(doc => {
         const t = doc.data();
         const lid = t.listId || "default";
         if (!tasksByList[lid]) tasksByList[lid] = [];
         // Remove internal fields from task data (metadata, not part of the task)
         const { listId, _lastModified, _sortIndex, ...taskData } = t;
-        taskData._sortIndex = _sortIndex ?? 9999; // keep for sorting, strip after
+        const hasSortIndex = Number.isFinite(Number(_sortIndex));
+        taskData._sortIndex = hasSortIndex ? Number(_sortIndex) : 9999 + loadIndex; // keep for sorting, strip after
+        if (!hasSortIndex) sortBackfills.push({ id: doc.id, sortIndex: taskData._sortIndex });
         tasksByList[lid].push(taskData);
+        loadIndex++;
       });
 
+      const taskSortValue = (task, fallback) => Number.isFinite(Number(task._sortIndex)) ? Number(task._sortIndex) : fallback;
       // Sort each list's tasks by _sortIndex (preserves user's manual ordering)
       for (const lid in tasksByList) {
-        tasksByList[lid].sort((a, b) => (a._sortIndex ?? 9999) - (b._sortIndex ?? 9999));
+        tasksByList[lid].sort((a, b) => taskSortValue(a, 9999) - taskSortValue(b, 9999));
         tasksByList[lid].forEach(t => delete t._sortIndex); // clean up
       }
 
@@ -740,6 +755,11 @@ const Store = {
       this._fbLoadStatus = 'ok';
       this._lastSavedState = JSON.parse(JSON.stringify(state)); // deep clone for diffing
       this.ls(state);
+      if (sortBackfills.length) {
+        sortBackfills.slice(0, 450).forEach(item => {
+          col.doc(item.id).set({ _sortIndex: item.sortIndex, _lastModified: Date.now() }, { merge: true }).catch(() => {});
+        });
+      }
       console.log("[Store] V5 loaded:", taskSnap.size, "tasks,", listMeta.length, "lists");
       return state;
     } catch(e) {
@@ -841,7 +861,7 @@ const Store = {
           id: lm.id,
           name: lm.name,
           tasks: [...taskCache.values()].filter(t => (t.listId || "default") === lm.id)
-            .sort((a, b) => (a._sortIndex ?? 9999) - (b._sortIndex ?? 9999))
+            .sort((a, b) => (Number.isFinite(Number(a._sortIndex)) ? Number(a._sortIndex) : 9999) - (Number.isFinite(Number(b._sortIndex)) ? Number(b._sortIndex) : 9999))
             .map(({ listId, _lastModified, _sortIndex, ...t }) => t)
         }));
       return { ...settings, lists, _lsModified: Date.now() };
@@ -1108,9 +1128,14 @@ function normalizeAiOpts(aiOpts) {
 
 async function callAIProxy(payload) {
   try {
+    const token = await firebase.auth().currentUser?.getIdToken();
+    if (!token) {
+      console.warn("[AI] Gateway requires signed-in Firebase user.");
+      return null;
+    }
     const r = await fetch(AI_PROXY_ENDPOINT, {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      headers: {"Content-Type": "application/json", Authorization: `Bearer ${token}`},
       body: JSON.stringify(payload),
     });
     const d = await r.json().catch(() => ({}));

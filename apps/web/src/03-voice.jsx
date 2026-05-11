@@ -11,7 +11,7 @@ import { savePendingRecording, deletePendingRecording, updatePendingRecordingErr
 let _activeMicId = null;
 const MIC_CONSTRAINTS = { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } };
 
-function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, existingShailos, color, T, aiOpts }) {
+function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, existingShailos, color, T, aiOpts, ownerUid }) {
   const [phase, setPhase]             = React.useState("recording");
   const [liveText, setLiveText]       = React.useState("");
   const [editText, setEditText]       = React.useState("");
@@ -135,17 +135,12 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
     }
   }, [phase, editText, shailaMode]); // eslint-disable-line
 
-  // ── Auto-detect answers to existing shailos when transcript is ready ───────
+  // ── Answer detection is explicit. Auto-detection would send existing shailos
+  // to AI whenever a transcript arrives.
   const answerDetectFiredRef = React.useRef(false);
   React.useEffect(() => {
     if (phase === "recording") { answerDetectFiredRef.current = false; return; }
-    if (answerDetectFiredRef.current) return;
-    if (phase === "reviewing" && editText.trim() && existingShailos?.length) {
-      if (true) {
-        answerDetectFiredRef.current = true;
-        detectAnswersInTranscript(editText);
-      }
-    }
+    if (phase === "reviewing") answerDetectFiredRef.current = false;
   }, [phase, editText]); // eslint-disable-line
 
   // ── Stop recording ─────────────────────────────────────────────────────────
@@ -193,18 +188,21 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
       pending = await savePendingRecording(webmBlob, shailaMode ? 'main_shaila_voice' : 'main_voice', {
         source: 'main',
         label: shailaMode ? 'Main shaila voice' : 'Main voice input',
+        ownerUid,
       });
       const transcriptRaw = await transcribePendingRecording(
         pending.id, aiOpts,
-        `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Use these standard spellings for Jewish terms: shaila / shailos (question / questions), halacha (Jewish law), gemara (Talmud), Shabbos (Sabbath), davening (praying), daven, bracha (blessing), mutar (permitted), assur (forbidden), kashrus, Rashi, Rambam, Ramban, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.\n\nDo not add punctuation beyond what is spoken. Do not summarize or rephrase. Return only the verbatim transcript.`
+        `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Use these standard spellings for Jewish terms: shaila / shailos (question / questions), halacha (Jewish law), gemara (Talmud), Shabbos (Sabbath), davening (praying), daven, bracha (blessing), mutar (permitted), assur (forbidden), kashrus, Rashi, Rambam, Ramban, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.\n\nDo not add punctuation beyond what is spoken. Do not summarize or rephrase. Return only the verbatim transcript.`,
+        {},
+        ownerUid
       );
-      await deletePendingRecording(pending.id);
+      await deletePendingRecording(pending.id, ownerUid);
       if (transcriptRaw === null) throw new Error("AI transcription error");
       const transcript = transcriptRaw.trim();
       if (transcript) setEditText(cleanYT(transcript));
       goPhase("reviewing");
     } catch(e) {
-      if (pending?.id) await updatePendingRecordingError(pending.id, e.message || String(e)).catch(() => {});
+      if (pending?.id) await updatePendingRecordingError(pending.id, e.message || String(e), ownerUid).catch(() => {});
       setErr("AI transcription failed: " + e.message);
       goPhase("reviewing"); // fall back to Web Speech result already in editText
     }
@@ -391,6 +389,11 @@ Identify any shailos from the list above that are answered in the transcript. Fo
       ))}
     </div>
   ) : null;
+  const detectAnswersBtn = aiOpts && existingShailos?.length ? (
+    <button onClick={() => detectAnswersInTranscript(editText)} disabled={answerDetectLoading || !editText.trim()} style={{ width:"100%", padding:"7px", fontSize:11, background:"none", color:T.tSoft, border:`1px solid ${T.brd}`, borderRadius:8, cursor:answerDetectLoading || !editText.trim() ? "default" : "pointer", fontFamily:"system-ui", marginTop:6, opacity:answerDetectLoading || !editText.trim() ? .55 : 1 }}>
+      {answerDetectLoading ? "Checking..." : "Check against open shailos"}
+    </button>
+  ) : null;
 
   // ── REVIEWING ──────────────────────────────────────────────────────────────
   if (phase === "reviewing") return (
@@ -404,6 +407,7 @@ Identify any shailos from the list above that are answered in the transcript. Fo
       {editArea}
       {useBtn(color)}
       {shailaParseBtn}
+      {detectAnswersBtn}
       {detectedAnswersBanner}
       {errLine}
     </div>

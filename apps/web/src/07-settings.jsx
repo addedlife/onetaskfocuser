@@ -51,7 +51,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
     try {
       const existing = [
         ...Object.values(SCHEMES).map(s => s.name),
-        ...Object.values(AS.customSchemes || {}).map(s => s.name),
+        ...Object.values(AS.customSchemes || {}).map(s => safeScheme(s)?.name).filter(Boolean),
       ];
       const newSchemes = await aiGenSchemes(settingsAiOpts, existing);
       if (!newSchemes.length) throw new Error("No valid schemes returned.");
@@ -112,7 +112,9 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   const knob = (on) => ({width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:on?23:3,transition:"left 0.25s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)"});
   const rowSB = {display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,marginBottom:18};
   const actionBtn = {width:"100%",minHeight:44,padding:"12px 16px",borderRadius:8,border:`1px solid ${T.brdS || T.brd}`,background:T.card,cursor:"pointer",fontSize:settingsType.control,fontWeight:400,fontFamily:NC_FONT_STACK,color:T.tSoft,display:"flex",alignItems:"center",gap:12,marginBottom:10};
+  const safeScheme = (scheme) => (scheme && typeof scheme === "object" && typeof scheme.name === "string") ? scheme : null;
   const schemeButtonStyle = (id, scheme, hasDelete = false) => {
+    scheme = safeScheme(scheme) || SCHEMES.claude;
     const active = AS.colorScheme === id;
     const bg = scheme.card || scheme.bg || "#FFFFFF";
     const accent = scheme.primary || scheme.brd || "#00796B";
@@ -199,7 +201,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               {Object.entries(SCHEMES).map(([k,v]) => (
                 <button key={k} onClick={()=>setAS(p=>({...p,colorScheme:k}))} style={schemeButtonStyle(k, v)}>{v.name}</button>
               ))}
-              {Object.entries(AS.customSchemes || {}).map(([k,v]) => {
+              {Object.entries(AS.customSchemes || {}).filter(([,v]) => safeScheme(v)).map(([k,v]) => {
                 return (
                 <div key={k} style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
                   <button onClick={()=>setAS(p=>({...p,colorScheme:k}))} style={schemeButtonStyle(k, v, true)}>{v.name}</button>
@@ -413,15 +415,12 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             </div>
             <div style={{marginBottom:16}}>
               <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",fontWeight:500,display:"block",marginBottom:6}}>OAuth 2.0 Client ID</label>
-              <input
-                value={AS.googleClientId||""}
-                onChange={e=>setAS(p=>({...p,googleClientId:e.target.value.trim()}))}
-                placeholder="1234567890-abc….apps.googleusercontent.com"
-                style={{width:"100%",minHeight:42,padding:"8px 12px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:13,fontFamily:"monospace",background:T.bgW,color:T.text,boxSizing:"border-box"}}
-              />
-              <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",marginTop:6,lineHeight:settingsType.line}}>Stored only in your account — never sent to any server.</p>
+              <div style={{width:"100%",minHeight:42,padding:"10px 12px",borderRadius:8,border:`1px solid ${T.brd}`,fontSize:13,fontFamily:"monospace",background:T.bgW,color:T.tSoft,boxSizing:"border-box"}}>
+                Server-managed
+              </div>
+              <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",marginTop:6,lineHeight:settingsType.line}}>Users cannot override the OAuth client from account settings.</p>
             </div>
-            {AS.googleClientId && (
+            {false && AS.googleClientId && (
               <div style={{padding:"12px 14px",borderRadius:8,border:`1px solid #4CAF5040`,background:"rgba(76,175,80,0.06)",display:"flex",gap:10,alignItems:"center"}}>
                 <span style={{fontSize:14}}>✓</span>
                 <span style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",lineHeight:settingsType.line}}>Client ID saved. Go to your launchpad and tap <strong>Connect Google</strong> to authorize.</span>

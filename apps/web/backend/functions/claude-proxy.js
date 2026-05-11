@@ -1,6 +1,6 @@
 // Legacy endpoint name only. Active app code uses /.netlify/functions/ai-proxy,
 // and this wrapper now routes old callers into the same Gemini model lane.
-const { corsFor, processAiPayload } = require("./_ai-core.cjs");
+const { authorizeFunctionRequest, corsFor, processAiPayload } = require("./_ai-core.cjs");
 
 exports.handler = async (event) => {
   const cors = corsFor(event);
@@ -18,6 +18,7 @@ exports.handler = async (event) => {
   }
 
   try {
+    await authorizeFunctionRequest(event, "claude-compat");
     const { prompt, maxTokens, mode, model } = JSON.parse(event.body || "{}");
     const result = await processAiPayload({
       provider: "gemini",

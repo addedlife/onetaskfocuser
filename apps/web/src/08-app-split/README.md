@@ -1,10 +1,10 @@
 # 08 App Split Lab
 
-This folder is a disconnected clone of the live `src/08-app.jsx` app shell.
+This folder is the active split app shell imported by `src/00-auth.jsx`.
 
-The live app still imports `src/08-app.jsx` through `src/00-auth.jsx`.
-Nothing in this folder affects production unless `src/00-auth.jsx` is
-temporarily pointed at `./08-app-split/index.jsx` for a build or browser test.
+The legacy `src/08-app.jsx` file remains in source control as a rollback
+reference only. Keep security-sensitive behavior hardened in both places when
+the edit is cheap, but validate production behavior through this split shell.
 
 ## Promotion Rule
 

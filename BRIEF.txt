@@ -9,4 +9,4 @@ Read this first; then read only the matching row in docs/ops/CONTEXT_INDEX.md.
 - Production source only: apps/web, apps/shailos, apps/phone-host-windows.
 - Old folders are rollback/archive only.
 - Verify current state from docs/ops/VERIFICATION_LOG.md before edits.
-- Commit, push, and deploy verified web changes unless told not to.
+- Commit and push verified web changes when asked; deploy to production only after explicit approval in the current thread.

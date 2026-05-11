@@ -235,7 +235,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
 
   // Subtask info
   const isSub = !!task.parentTask;
-  const stepInfo = isSub ? `Step ${task.stepIndex||1} of ${task.totalSteps||"?"} of ${task.parentTask}` : null;
+  const stepInfo = isSub ? `Step ${task.stepIndex||1} of ${task.totalSteps||"?"} of ${task.shailaQuestion || task.parentTask}` : null;
 
   // ─── Shabbos mode (Friday or ?shabbosTimer=1) ───────────────────────
   const isShabbosMode = (() => {
@@ -1106,16 +1106,17 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
   const [sortFirst, setSortFirst]     = React.useState(null); // null | "researching" | "have_answer"
   const [statusFilter, setStatusFilter] = React.useState(null); // null | "researching" | "have_answer" | "got_back"
   const [confettiActive, setConfettiActive] = React.useState(false);
-  // Manual add form — opens with blank fields, no Save button (autosave on blur)
+  // Manual add form — opens with blank fields and saves only on explicit submit.
   const [addingNew, setAddingNew]     = React.useState(false);
   const [newForm, setNewForm]         = React.useState({text:"", shailaAnswer:"", askedBy:"", answeredBy:""});
   const [micField, setMicField]       = React.useState(null); // which field has active mic
   const micRecRef                     = React.useRef(null);
 
   function getF(s, field) {
-    return localEdits[s.id]?.[field] !== undefined
+    const value = localEdits[s.id]?.[field] !== undefined
       ? localEdits[s.id][field]
       : (s[field] || "");
+    return typeof value === "string" ? value : String(value || "");
   }
   function setF(id, field, val) {
     setLocalEdits(p => ({...p, [id]: {...(p[id]||{}), [field]: val}}));
@@ -1177,7 +1178,7 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
     } else {
       base = allShailas; // newest-first default
     }
-    return statusFilter ? base.filter(s => shailaStatus(s) === statusFilter) : base;
+    return statusFilter ? base.filter(s => localEdits[s.id] || shailaStatus(s) === statusFilter) : base;
   })();
 
   const statusLabel = {
@@ -1246,24 +1247,8 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
     setAddingNew(false);
   }
 
-  // Auto-submit when user blurs out of any field (if question is filled)
   function handleNewFormBlur(field, val) {
-    const updated = {...newForm, [field]: val};
-    setNewForm(updated);
-    // Commit if question is filled (don't need all fields)
-    if (updated.text.trim() && onAddManual) {
-      // Wait a tick to see if focus moves to another field in the same form
-      setTimeout(() => {
-        // Check if focus stayed in form — use document.activeElement
-        const active = document.activeElement;
-        const inForm = active && active.closest('[data-new-shaila-form]');
-        if (!inForm) {
-          onAddManual({...updated});
-          setNewForm({text:"", shailaAnswer:"", askedBy:"", answeredBy:""});
-          setAddingNew(false);
-        }
-      }, 120);
-    }
+    setNewForm(p => ({...p, [field]: val}));
   }
 
   function buildText() {
@@ -1368,13 +1353,14 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
           </div>
           {/* "New Shaila" toggle button */}
           <button
-            onClick={()=>setAddingNew(p=>!p)}
+            onMouseDown={e=>e.preventDefault()}
+            onClick={()=>{setAddingNew(p=>!p);setNewForm({text:"", shailaAnswer:"", askedBy:"", answeredBy:""});}}
             style={{width:"100%",padding:"8px 0",borderRadius:10,border:`1.5px dashed ${addingNew?T.text:T.brd}`,background:addingNew?T.bgW:"transparent",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"system-ui",color:addingNew?T.text:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all 0.15s"}}>
             {addingNew ? "✕ Cancel new shaila" : "+ Add shaila manually"}
           </button>
         </div>
 
-        {/* Manual-add form (slides open under header) — autosaves on blur, no Save button */}
+        {/* Manual-add form (slides open under header) */}
         {addingNew && (
           <div data-new-shaila-form="true" style={{padding:"14px 20px 16px",borderBottom:`1px solid ${T.brd}`,background:T.bgW||T.bg,flexShrink:0}}>
             <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:T.tSoft,fontFamily:"system-ui",letterSpacing:.5}}>NEW SHAILA — fill in what you have, click away when done</p>
@@ -1440,7 +1426,9 @@ function ShailaManager({AS, T, aiOpts, onSaveField, onGotBack, onAddManual, onCl
                 </div>
               </div>
             </div>
-            <p style={{margin:"6px 0 0",fontSize:10,color:T.tFaint,fontFamily:"system-ui"}}>Fields save automatically when you click away</p>
+            <button onMouseDown={e=>e.preventDefault()} onClick={submitNewShaila} disabled={!newForm.text.trim()} style={{width:"100%",marginTop:12,padding:"9px 12px",borderRadius:9,border:"none",background:newForm.text.trim()?GOLD:T.brd,color:"#fff",cursor:newForm.text.trim()?"pointer":"default",fontSize:12,fontWeight:700,fontFamily:"system-ui"}}>
+              Save shaila
+            </button>
           </div>
         )}
 

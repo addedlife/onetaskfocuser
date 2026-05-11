@@ -62,4 +62,4 @@ Goal: minimize cached and uncached tokens while preserving accuracy. Start from 
 
 - Primary files: `BRIEF.txt`, `AGENTS.md`, `README.md`, `docs/ops/VERIFICATION_LOG.md`, `docs/ops/MIGRATION_MANIFEST.md`, `docs/ops/ROLLBACK_AND_DEPRECATION.md`
 - Gate: `git diff --check`
-- Push rule: normal push target is `origin/main`; old main is archived at `archive/pre-pro4-main-20260511-011424`
+- Push rule: normal push target is `origin/main`; old main is archived at `archive/pre-pro4-main-20260511-011424`; production deploy requires explicit current-thread approval

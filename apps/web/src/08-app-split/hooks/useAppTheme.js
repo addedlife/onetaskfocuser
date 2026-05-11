@@ -3,9 +3,10 @@ import { SCHEMES } from '../../01-core.js';
 import { buildDeskPhoneThemeQuery } from '../ui-tokens.jsx';
 
 export function useAppTheme(AS) {
-  const sc = SCHEMES[AS?.colorScheme] || AS?.customSchemes?.[AS?.colorScheme] || SCHEMES.claude;
+  const customScheme = AS?.customSchemes?.[AS?.colorScheme];
+  const sc = SCHEMES[AS?.colorScheme] || (customScheme && typeof customScheme === "object" ? customScheme : null) || SCHEMES.claude;
   const isDark = (() => {
-    const h = sc.bg || "#EDE5D8";
+    const h = typeof sc.bg === "string" && /^#[0-9a-f]{6}$/i.test(sc.bg) ? sc.bg : "#EDE5D8";
     const r = parseInt(h.slice(1,3),16);
     const g = parseInt(h.slice(3,5),16);
     const b = parseInt(h.slice(5,7),16);

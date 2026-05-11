@@ -1,6 +1,7 @@
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using DeskPhone.Models;
@@ -35,8 +36,16 @@ public class ControlApiService : IDisposable
 {
     private const int Port = 8765;
     private const int MaxJsonBodyChars = 12 * 1024 * 1024;
+    private const string PairingHeaderName = "X-DeskPhone-Token";
     private TcpListener? _server;
     private CancellationTokenSource _cts = new();
+    private string _pairingToken = "";
+
+    public string PairingToken
+    {
+        get => _pairingToken;
+        set => _pairingToken = value?.Trim() ?? "";
+    }
 
     // ── Callbacks wired up by the ViewModel ───────────────────────────────
     public Func<string>?                     GetStatus   { get; set; }
@@ -169,13 +178,29 @@ public class ControlApiService : IDisposable
             var qmark   = rawPath.IndexOf('?');
             var path    = (qmark < 0 ? rawPath : rawPath[..qmark]).ToLowerInvariant();
             var qs      = qmark < 0 ? "" : rawPath[(qmark + 1)..];
-            var requestBody = await ReadRequestBodyAsync(reader, headers);
+            var requestOrigin = headers.TryGetValue("Origin", out var origin) ? origin : "";
+            var originAllowed = IsAllowedOrigin(requestOrigin);
+            var corsOrigin = originAllowed ? requestOrigin : "";
+
+            if (!string.IsNullOrWhiteSpace(requestOrigin) && !originAllowed)
+            {
+                await WriteHttpResponseAsync(stream, JsonError("origin not allowed"), 403, "");
+                return;
+            }
 
             if (method == "OPTIONS")
             {
-                await WriteHttpResponseAsync(stream, "", 204);
+                await WriteHttpResponseAsync(stream, "", 204, corsOrigin);
                 return;
             }
+
+            if (!IsAuthorized(headers))
+            {
+                await WriteHttpResponseAsync(stream, JsonError("DeskPhone pairing token required"), 401, corsOrigin);
+                return;
+            }
+
+            var requestBody = await ReadRequestBodyAsync(reader, headers);
 
             string body;
             int statusCode = 200;
@@ -517,7 +542,7 @@ public class ControlApiService : IDisposable
                 // Write response FIRST, then trigger shutdown — otherwise the TCP
                 // socket closes before the caller reads "shutdown triggered".
                 body = Json("result", "shutdown triggered");
-                await WriteHttpResponseAsync(stream, body, 200);
+                await WriteHttpResponseAsync(stream, body, 200, corsOrigin);
                 // Fire on the thread pool so we don't deadlock the TCP handler
                 var shutdownAction = Shutdown;
                 Task.Run(() => shutdownAction?.Invoke());
@@ -634,7 +659,7 @@ public class ControlApiService : IDisposable
             }
 
             // Write HTTP response
-            await WriteHttpResponseAsync(stream, body, statusCode);
+            await WriteHttpResponseAsync(stream, body, statusCode, corsOrigin);
         }
         catch (Exception ex)
         {
@@ -643,16 +668,50 @@ public class ControlApiService : IDisposable
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
-    private static async Task WriteHttpResponseAsync(NetworkStream stream, string body, int statusCode)
+    private bool IsAuthorized(IReadOnlyDictionary<string, string> headers)
+    {
+        if (string.IsNullOrWhiteSpace(_pairingToken))
+            return false;
+
+        return headers.TryGetValue(PairingHeaderName, out var supplied) &&
+               CryptographicOperations.FixedTimeEquals(
+                   Encoding.UTF8.GetBytes(supplied.Trim()),
+                   Encoding.UTF8.GetBytes(_pairingToken));
+    }
+
+    private static bool IsAllowedOrigin(string? origin)
+    {
+        if (string.IsNullOrWhiteSpace(origin))
+            return true;
+
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+            return false;
+
+        var host = uri.Host.ToLowerInvariant();
+        if (uri.Scheme == "https" && host == "onetaskfocuser.netlify.app")
+            return true;
+
+        if ((uri.Scheme == "http" || uri.Scheme == "https") &&
+            (host == "localhost" || host == "127.0.0.1" || host == "::1"))
+            return true;
+
+        return false;
+    }
+
+    private static async Task WriteHttpResponseAsync(NetworkStream stream, string body, int statusCode, string corsOrigin)
     {
         var bodyBytes = Encoding.UTF8.GetBytes(body);
+        var corsHeaders = string.IsNullOrWhiteSpace(corsOrigin)
+            ? ""
+            : $"Access-Control-Allow-Origin: {corsOrigin}\r\n" +
+              "Vary: Origin\r\n" +
+              "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
+              $"Access-Control-Allow-Headers: Content-Type, {PairingHeaderName}\r\n" +
+              "Access-Control-Allow-Private-Network: true\r\n";
         var response = Encoding.ASCII.GetBytes(
             $"HTTP/1.1 {statusCode} {StatusReason(statusCode)}\r\n" +
             "Content-Type: application/json\r\n" +
-            "Access-Control-Allow-Origin: *\r\n" +
-            "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
-            "Access-Control-Allow-Headers: Content-Type\r\n" +
-            "Access-Control-Allow-Private-Network: true\r\n" +
+            corsHeaders +
             $"Content-Length: {bodyBytes.Length}\r\n" +
             "Connection: close\r\n" +
             "\r\n");

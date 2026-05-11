@@ -33,8 +33,8 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isDocOwner() {
-      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    function isDocOwner(userId) {
+      return isOwner(userId) && request.auth.uid == resource.data.userId;
     }
 
     function isAdmin() {
@@ -49,11 +49,11 @@ service cloud.firestore {
              data.userId == request.auth.uid;
     }
 
-    match /shailos/{shailaId} {
-      allow read: if isAuthenticated() && (isDocOwner() || isAdmin());
-      allow create: if isAuthenticated() && isValidShaila(request.resource.data);
-      allow update: if isAuthenticated() && (isDocOwner() || isAdmin()) && isValidShaila(request.resource.data);
-      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+    match /users/{userId}/shailos/{shailaId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidShaila(request.resource.data);
+      allow update: if (isDocOwner(userId) || isAdmin()) && isValidShaila(request.resource.data);
+      allow delete: if isDocOwner(userId) || isAdmin();
     }
   }
 }

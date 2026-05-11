@@ -87,7 +87,7 @@ function BulkAdd({pris, T, onAddAll, onClose}) {
   );
 }
 
-function TaskBD({task, pris, T, onConfirm, onClose, aiOpts}) {
+function TaskBD({task, pris, T, onConfirm, onClose, aiOpts, ownerUid}) {
   const [inp, setInp] = useState(task ? task.text : "");
   const [subs, setSubs] = useState([]);
   const [ld, setLd] = useState(false);
@@ -114,17 +114,19 @@ function TaskBD({task, pris, T, onConfirm, onClose, aiOpts}) {
           pending = await savePendingRecording(blob, "task_breakdown_mic", {
             source: "main",
             label: "Task breakdown mic",
+            ownerUid,
           });
           const txt = await transcribePendingRecording(
             pending.id, aiOpts,
             "Transcribe this audio exactly verbatim. The speaker uses Yeshivish English. Return ONLY the transcript, nothing else.",
-            { maxOutputTokens: 2048 }
+            { maxOutputTokens: 2048 },
+            ownerUid
           );
-          await deletePendingRecording(pending.id);
+          await deletePendingRecording(pending.id, ownerUid);
           if (txt) setInp(prev => prev ? prev + " " + txt.trim() : txt.trim());
           else setErr("Couldn't transcribe.");
         } catch(e) {
-          if (pending?.id) updatePendingRecordingError(pending.id, e.message || String(e)).catch(() => {});
+          if (pending?.id) updatePendingRecordingError(pending.id, e.message || String(e), ownerUid).catch(() => {});
           setErr("Mic transcribe failed. Audio is saved in the holding pen.");
         }
         setLd(false);

@@ -3,6 +3,15 @@ import { callGeminiAudio } from './01-core.js';
 const PENDING_DB = 'onetask_shailos_pending_audio';
 const PENDING_STORE = 'recordings';
 const PENDING_EVENT = 'onetask:pending-recordings-changed';
+const LEGACY_OWNER = '__legacy__';
+
+function normalizeOwnerUid(ownerUid) {
+  return typeof ownerUid === 'string' && ownerUid.trim() ? ownerUid.trim() : LEGACY_OWNER;
+}
+
+function ownerMatches(rec, ownerUid) {
+  return normalizeOwnerUid(rec?.ownerUid) === normalizeOwnerUid(ownerUid);
+}
 
 function emitPendingChanged() {
   try { window.dispatchEvent(new CustomEvent(PENDING_EVENT)); } catch(e) {}
@@ -36,6 +45,7 @@ async function withPendingStore(mode, fn) {
 }
 
 async function savePendingRecording(blob, kind, meta = {}) {
+  const ownerUid = normalizeOwnerUid(meta.ownerUid || meta.userId);
   const rec = {
     id: `rec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     kind,
@@ -43,6 +53,7 @@ async function savePendingRecording(blob, kind, meta = {}) {
     mimeType: blob.type || 'audio/webm',
     size: blob.size,
     ...meta,
+    ownerUid,
     blob,
   };
   await withPendingStore('readwrite', store => store.put(rec));
@@ -51,32 +62,36 @@ async function savePendingRecording(blob, kind, meta = {}) {
   return publicRec;
 }
 
-async function listPendingRecordings() {
+async function listPendingRecordings(ownerUid) {
   const records = await withPendingStore('readonly', store => store.getAll()) || [];
   return records
+    .filter(rec => ownerMatches(rec, ownerUid))
     .map(({ blob, ...meta }) => meta)
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
-async function getPendingRecording(id) {
-  return await withPendingStore('readonly', store => store.get(id)) || null;
+async function getPendingRecording(id, ownerUid) {
+  const rec = await withPendingStore('readonly', store => store.get(id)) || null;
+  return rec && ownerMatches(rec, ownerUid) ? rec : null;
 }
 
-async function updatePendingRecording(id, patch) {
-  const rec = await getPendingRecording(id);
+async function updatePendingRecording(id, patch, ownerUid) {
+  const rec = await getPendingRecording(id, ownerUid || patch?.ownerUid);
   if (!rec) return null;
-  const next = { ...rec, ...patch };
+  const next = { ...rec, ...patch, ownerUid: rec.ownerUid };
   await withPendingStore('readwrite', store => store.put(next));
   emitPendingChanged();
   const { blob, ...publicRec } = next;
   return publicRec;
 }
 
-async function updatePendingRecordingError(id, error) {
-  return updatePendingRecording(id, { error, lastFailedAt: Date.now() });
+async function updatePendingRecordingError(id, error, ownerUid) {
+  return updatePendingRecording(id, { error, lastFailedAt: Date.now() }, ownerUid);
 }
 
-async function deletePendingRecording(id) {
+async function deletePendingRecording(id, ownerUid) {
+  const rec = await getPendingRecording(id, ownerUid);
+  if (!rec) return;
   await withPendingStore('readwrite', store => { store.delete(id); });
   emitPendingChanged();
 }
@@ -124,8 +139,8 @@ async function webmToWavBase64(webmBlob) {
   return blobToBase64(new Blob([buf], { type: 'audio/wav' }));
 }
 
-async function transcribePendingRecording(id, aiOpts, prompt, genConfig = {}) {
-  const rec = await getPendingRecording(id);
+async function transcribePendingRecording(id, aiOpts, prompt, genConfig = {}, ownerUid) {
+  const rec = await getPendingRecording(id, ownerUid);
   if (!rec) throw new Error('Saved recording not found.');
   let b64;
   let mimeType;

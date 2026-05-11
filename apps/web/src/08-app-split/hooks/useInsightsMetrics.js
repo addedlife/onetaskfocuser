@@ -3,7 +3,8 @@ import { fmtMs } from '../../01-core.js';
 
 export function useInsightsMetrics({ allComp, pris }) {
   const metrics = useMemo(() => {
-    const c = allComp.filter(t => t.completedAt && t.createdAt);
+    const validTime = value => Number.isFinite(Number(value)) && Number(value) > 0;
+    const c = allComp.filter(t => validTime(t.completedAt) && validTime(t.createdAt)).map(t => ({ ...t, completedAt: Number(t.completedAt), createdAt: Number(t.createdAt) }));
     if (!c.length) return null;
     const byP = {};
     pris.forEach(p => { byP[p.id] = {ts:[], c:p.color, l:p.label}; });

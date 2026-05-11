@@ -2494,6 +2494,9 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _audioRoute.Start();
 
         // ── Control API (localhost:8765) ──────────────────────────────────
+        var controlApiPairingToken = _settings.EnsureControlApiPairingToken();
+        _api.PairingToken = controlApiPairingToken;
+        AppendDebug($"[API] Web pairing token: {controlApiPairingToken}");
         _api.GetStatus = () =>
         {
             SmsMessage? lastMessage;
