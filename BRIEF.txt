@@ -1,31 +1,35 @@
-Shamash Pro 4 live brief
+Shamash Pro 4 brief
 
-Active workspace:
-- C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App
+Use this file for "read brief" startup.
 
-Production source:
+Truth
+- Active source: C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App
+- Live app: https://onetaskfocuser.netlify.app
+- Netlify site: onetaskfocuser, site id c603b156-f9ee-4b67-bcf4-d4b7f64fbccd
+- Git origin: https://github.com/addedlife/onetaskfocuser.git
+- Current safe push target: codex/pro4-compact-webphone-live
+- Do not push over GitHub main until Pro 4 history is reconciled with origin/main.
+
+Source Map
 - apps/web: Tasks, NerveCenter, Switchboard, DeskPhone Web, Netlify functions.
 - apps/shailos: editable Shailos source.
-- apps/phone-host-windows: native DeskPhone host source.
+- apps/phone-host-windows: native DeskPhone host.
+- docs/ops/VERIFICATION_LOG.md: current release and verification ledger.
 
-Current rule:
-- Verify current state from docs/ops/VERIFICATION_LOG.md before changing code.
-- Do not work from old Shamash/OneTask/DeskPhone folders unless the user explicitly asks for rollback or archive recovery.
-- Do not push, deploy, or relink Netlify without explicit approval.
+Operating Rules
+- Treat this folder as production source.
+- Old Shamash/OneTask/DeskPhone folders are rollback/archive only.
+- Before edits, check docs/ops/VERIFICATION_LOG.md for current state.
+- Commit and push verified source changes unless the current thread says not to.
+- Deploy or relink Netlify only with explicit approval.
 
-Current shipped state:
-- Production URL: https://onetaskfocuser.netlify.app
-- Latest live deploy: 2026-05-11 via Netlify CLI, deploy ID 6a015f2aafd56281e9c2b4f4.
-- Pro 4 native DeskPhone shortcut points to apps/phone-host-windows/deployed-builds/launcher/DeskPhoneLauncher.exe.
-- Last recorded native host release: DeskPhone b263.
-- Last recorded production web deploy for WebPhone contact/MMS/history: 6a014b570c09106d30c7802d.
+Latest Release
+- 2026-05-11 live deploy: 6a015f2aafd56281e9c2b4f4.
+- Commit: 3a32349 Polish NerveCenter WebPhone compact dashboard.
+- Scope: WebPhone contact-name matching, compact NerveCenter task/phone UI, three-dot call actions, near-live Gmail/Calendar refresh.
 
-Fast verification:
+Fast Gates
 - apps/web: npm run build
 - apps/shailos: npm run build
 - apps/phone-host-windows: dotnet build
-- Local phone host: http://127.0.0.1:8765/status
-
-Current active issue in this session:
-- WebPhone/NerveCenter phone rows still need stronger contact-name matching for calls and texts.
-- NerveCenter should reclaim space: compact task entry, compact priority add buttons, tighter connection/status chrome, see-more task reveal, compact phone glance rows, and hidden call-row actions behind three-dot menus.
+- Phone host check: http://127.0.0.1:8765/status

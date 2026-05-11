@@ -1,30 +1,35 @@
 # Shamash Pro 4 Agent Instructions
 
-This folder is the active Shamash production workspace for Tasks, Shailos, and Phone.
+Start with `BRIEF.txt`. Keep startup token use low: read the brief first, then only the specific ops log or source files needed for the task.
 
-## Operating Rule
+## Production Source
 
-Treat this folder as production source. Verify current state from `docs/ops/VERIFICATION_LOG.md` before changing code.
-
-## Layout
-
+- Active workspace: `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App`
 - `apps/web/` - Tasks, NerveCenter, Switchboard, DeskPhone Web, Netlify functions.
 - `apps/shailos/` - editable Shailos source.
-- `apps/phone-host-windows/` - native DeskPhone host source.
+- `apps/phone-host-windows/` - native DeskPhone host.
+- Old Shamash/OneTask/DeskPhone folders are rollback/archive only unless the user explicitly requests recovery.
 
-## Safety
+## Operating Law
 
-- Do not resume normal feature work in old folders; they are rollback-only unless the user explicitly requests rollback.
-- Always commit and push verified source changes unless the user specifically instructs otherwise in the current thread.
-- Do not deploy or relink Netlify from this folder without explicit approval.
-- Keep verification results in `docs/ops/VERIFICATION_LOG.md`.
-- Keep migration decisions in `docs/ops/MIGRATION_MANIFEST.md`.
+- Before a coding fix, project, upgrade, or change, research the relevant industry-standard practice. If it conflicts with the local plan, tell the user and get confirmation before proceeding.
+- Verify current state from `docs/ops/VERIFICATION_LOG.md` before changing code.
+- Commit and push verified source changes unless the current thread specifically says not to.
+- Do not deploy or relink Netlify without explicit approval.
+- Record verification results in `docs/ops/VERIFICATION_LOG.md`.
+- Record migration decisions in `docs/ops/MIGRATION_MANIFEST.md`.
 
-## Verification
+## Git And Release
 
-Before claiming this workspace is operational:
+- Git origin is `https://github.com/addedlife/onetaskfocuser.git`.
+- Pro 4 local `master` was initialized as a clean history and is not yet reconciled with GitHub `main`.
+- Until reconciliation is approved, push Pro 4 work to `codex/...` branches, not directly over `main`.
+- Current safe branch: `codex/pro4-compact-webphone-live`.
+- Netlify production can be deployed from `apps/web` after approval with `npx netlify deploy --prod`.
 
-- Run `npm run build` in `apps/web`.
-- Run `npm run build` in `apps/shailos`.
-- Run `dotnet build` in `apps/phone-host-windows`.
-- Smoke-test the app surfaces locally.
+## Verification Gates
+
+- `apps/web`: `npm run build`
+- `apps/shailos`: `npm run build`
+- `apps/phone-host-windows`: `dotnet build`
+- Smoke-test affected app surfaces locally before claiming completion.

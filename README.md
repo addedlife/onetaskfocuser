@@ -2,31 +2,25 @@
 
 Unified production workspace for Tasks, Shailos, and Phone.
 
-This folder is the active production source for Shamash as of the 2026-05-10 Netlify production promotion. The old scattered folders are deprecated rollback sources only.
+For a new Codex session, say: `read brief`.
 
-## Layout
+## Folders
 
-- `apps/web/` - OneTask / NerveCenter / Switchboard / DeskPhone Web.
-- `apps/shailos/` - editable Shailos React/TypeScript source.
-- `apps/phone-host-windows/` - native Windows DeskPhone host for local phone control.
-- `docs/ops/` - migration, promotion, and deprecation notes.
-- `services/` - reserved for shared service code once duplicated app logic is extracted.
-- `tooling/` - reserved for shared build/test/verification scripts.
+- `apps/web/` - OneTask, NerveCenter, Switchboard, DeskPhone Web, Netlify functions.
+- `apps/shailos/` - editable Shailos source.
+- `apps/phone-host-windows/` - native Windows DeskPhone host.
+- `docs/ops/` - verification, migration, promotion, rollback records.
 
-## Current Safety Rule
+## Source Rules
 
-Production now ships from this workspace. Do not resume normal feature work in the old folders. Keep old sources as rollback-only until the rollback window is intentionally closed.
+- Active production source is this folder only.
+- Old scattered folders are rollback/archive sources only.
+- Current operational state starts in `BRIEF.txt`, then `docs/ops/VERIFICATION_LOG.md` if more detail is needed.
+- Verified source changes should be committed and pushed unless the current thread says not to.
+- Netlify deploys require explicit approval.
 
-Operational truth lives in:
+## Git
 
-- `docs/ops/VERIFICATION_LOG.md`
-- `docs/ops/PROMOTION_CHECKLIST.md`
-- `docs/ops/ROLLBACK_AND_DEPRECATION.md`
-
-## Source Truth Brought In
-
-- Tasks/OneTask source came from `C:\Users\ydanz\OneDrive\Documents\taskmanager app\sandbox`.
-- Shailos source came from `C:\Users\ydanz\OneDrive\Documents\taskmanager app\backup\sto-src\Shaila-Trancriber-Organizer-main`.
-- Phone host source came from `C:\Users\ydanz\OneDrive\Documents\PC as Bluetooth call - text interface\DeskPhone`.
-
-Generated build outputs, dependency folders, local screenshots, logs, scratch probes, old backups, and machine-specific state were intentionally excluded.
+- Origin: `https://github.com/addedlife/onetaskfocuser.git`
+- Pro 4 was initialized as a clean repo, so local `master` and remote `main` do not share history yet.
+- Push Pro 4 work to `codex/...` branches until `main` is intentionally reconciled.

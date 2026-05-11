@@ -299,3 +299,11 @@ Current source-grade file count after cleanup: 162 files.
 - Visual smoke captured via Edge/CDP from `http://127.0.0.1:4305/?suite=nervecenter`; local screenshot was reviewed but not kept as source.
 - Remaining note: true Google push/webhook delivery would require a backend notification channel and explicit deploy/config approval; this pass implemented the safe client-side near-live refresh path.
 - Live deploy completed with `npx netlify deploy --prod --build` from `apps/web`; production URL `https://onetaskfocuser.netlify.app`, deploy ID `6a015f2aafd56281e9c2b4f4`.
+
+## 2026-05-11 Lean Startup Docs And Git Remote Record
+
+- Rewrote `BRIEF.txt` as the single low-token startup file for the phrase `read brief`.
+- Trimmed `README.md` to repo orientation only and moved active-session startup guidance to `BRIEF.txt`.
+- Trimmed `AGENTS.md` to operating law: research-before-change, production source rules, verification gates, push policy, Netlify approval policy.
+- Restored Git origin to `https://github.com/addedlife/onetaskfocuser.git`.
+- Recorded that Pro 4 local `master` is clean-history and not yet reconciled with GitHub `main`; Pro 4 work should push to `codex/...` branches until `main` reconciliation is explicitly approved.
