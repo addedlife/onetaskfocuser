@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Contacts permission prompt shown to the user -->
+    <key>NSContactsUsageDescription</key>
+    <string>DeskPhone iOS reads your contacts so they appear in the DeskPhone web app running in Safari.</string>
+
+    <!-- Register deskphone:// URL scheme so the web app can deep-link into this host -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>deskphone</string>
+            </array>
+            <key>CFBundleURLName</key>
+            <string>com.addedlife.deskphone-ios</string>
+        </dict>
+    </array>
+</dict>
+</plist>
