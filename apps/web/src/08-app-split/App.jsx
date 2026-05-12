@@ -2272,7 +2272,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div ref={appRef} className="nc-suite-root" style={{height:"100vh",overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:NC_FONT_STACK,color:T.text,display:"flex",flexDirection:"column",alignItems:"center","--nc-font-weight-normal":fontWeightNormal,"--nc-font-weight-strong":fontWeightStrong}}>
+    <div ref={appRef} className="nc-suite-root" style={{overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:NC_FONT_STACK,color:T.text,display:"flex",flexDirection:"column",alignItems:"center","--nc-font-weight-normal":fontWeightNormal,"--nc-font-weight-strong":fontWeightStrong}}>
       <style>{NC_GLOBAL_CSS}</style>
 
       {/* Overlays */}
@@ -2906,7 +2906,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
       )}
 
 
-      <div style={{position:"fixed",top:0,bottom:0,left:sidebarW,right:0,width:"auto",maxWidth:"none",padding:"0 clamp(16px,3vw,32px)",boxSizing:"border-box",zIndex:1,height:"100vh",transition:"left 0.20s cubic-bezier(0.4,0,0.2,1)",overflowY:tab==="focus"?"hidden":"auto",display:"flex",flexDirection:"column",alignItems:"center"}}>
+      <div style={{position:"fixed",top:0,bottom:0,left:sidebarW,right:0,width:"auto",maxWidth:"none",padding:"0 clamp(16px,3vw,32px)",boxSizing:"border-box",zIndex:1,transition:"left 0.20s cubic-bezier(0.4,0,0.2,1)",overflowY:tab==="focus"?"hidden":"auto",display:"flex",flexDirection:"column",alignItems:"center"}}>
 
         {/* ===== FOCUS TAB ===== */}
         {tab === "focus" && (
