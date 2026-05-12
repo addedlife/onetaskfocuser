@@ -64,6 +64,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const taskListRef = useRef(null);
   const taskMoreButtonRef = useRef(null);
   const taskInputRef = useRef(null);
+  const stackedTaskInputRef = useRef(null);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [addEventText, setAddEventText] = useState('');
   const [addEventLoading, setAddEventLoading] = useState(false);
@@ -362,6 +363,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
           {/* ── Tasks ── */}
           <section style={isStacked ? { ...ncPanel, flex: "0 0 100%", minWidth: 0, scrollSnapAlign: "start", height: "100%", touchAction: "pan-y" } : (primaryTaskQueue.length > MIN_COLLAPSED_TASKS ? ncPanel : ncTasksPanel)}>
+            {!isStacked && (
             <div ref={taskHeaderRef} style={{ ...ncHeader, display: taskComposerOpen ? "block" : "flex", ...(taskComposerOpen ? { padding: "7px 12px" } : {}) }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, ...(taskComposerOpen ? { marginBottom: 7 } : {}) }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -409,7 +411,32 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 </div>
               )}
             </div>
+            )}
             <div style={ncTaskBody}>
+              {isStacked && (taskComposerOpen ? (
+                <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 32px 32px", gap: 6, alignItems: "start" }}>
+                    <textarea ref={stackedTaskInputRef} value={taskDraft} rows={1} autoFocus
+                      onChange={e => { setTaskDraft(e.target.value); e.target.style.height = "34px"; e.target.style.height = Math.min(e.target.scrollHeight, 88) + "px"; }}
+                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(taskPriority, { mrsW: taskComposerMrsW }); } if (e.key === "Escape") { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); } }}
+                      placeholder={`${priorities.find(p => p.id === taskPriority)?.ncLabel || "Task"} task`}
+                      style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: 7, border: `1px solid ${activePriColor}`, background: C.bgSoft, color: C.text, padding: "7px 10px", fontSize: ncType.body, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
+                    <button onClick={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })} disabled={!taskDraft.trim()} title="Save"
+                      style={{ width: 32, height: 32, borderRadius: 8, border: "none", background: activePriColor, color: textOnColor(activePriColor), cursor: taskDraft.trim() ? "pointer" : "default", opacity: taskDraft.trim() ? 1 : 0.38, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {suiteIcon("check", 15)}
+                    </button>
+                    <button onClick={() => { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); }} title="Cancel"
+                      style={gvIconButton({ width: 32, height: 32, borderRadius: 8 }, C)}>
+                      {suiteIcon("close", 14)}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => openTaskComposer(taskPriority)}
+                  style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 8, padding: "11px 18px", border: "none", background: "none", color: C.faint, cursor: "pointer", fontFamily: NC_FONT_STACK, fontSize: ncType.body, borderBottom: `1px solid ${C.divider}`, flexShrink: 0, touchAction: "manipulation" }}>
+                  {suiteIcon("add", 17)} <span>New task</span>
+                </button>
+              ))}
               <div ref={taskListRef} style={ncTaskList}>
               {primaryTasks.length ? primaryTasks.map(t => {
                 const pri = gP(priorities, t.priority);
@@ -469,7 +496,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
           {/* ── Shailos ── */}
           <section style={isStacked ? { ...ncPanel, flex: "0 0 100%", minWidth: 0, scrollSnapAlign: "start", height: "100%", touchAction: "pan-y" } : ncPanel}>
-            <div style={ncHeader}>
+            <div style={{ ...ncHeader, display: isStacked ? "none" : "flex" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={ncSectionIcon(GOLD)}>{suiteIcon("rule", 16)}</span>
                 <span style={ncTitle}>Shailos</span>
@@ -529,7 +556,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
           {/* ── Phone ── */}
           <section style={isStacked ? { ...ncPanel, flex: "0 0 100%", minWidth: 0, scrollSnapAlign: "start", height: "100%", touchAction: "pan-y" } : ncPanel}>
-            <div style={ncHeader}>
+            <div style={{ ...ncHeader, display: isStacked ? "none" : "flex" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                 <span style={ncSectionIcon()}>{suiteIcon("phone_in_talk", 16)}</span>
                 <span style={ncTitle}>Phone</span>
