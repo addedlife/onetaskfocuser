@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { callAI, gP, textOnColor } from '../../01-core.js';
-import { cleanTheme, cleanToolbarButton, gvIconButton, gvTextButton, NC_FONT_STACK, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
+import { cleanTheme, cleanToolbarButton, gvIconButton, gvTextButton, NC_FONT_STACK, NC_TYPE, suiteIcon, useViewportWidth, useViewportHeight } from '../ui-tokens.jsx';
 import { NerveCenterPhoneSurface } from './NerveCenterPhoneSurface.jsx';
 
 function nerveSummarySource(item) {
@@ -49,6 +49,7 @@ const MIN_COLLAPSED_TASKS = 5;
 
 function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems }) {
   const viewportW = useViewportWidth();
+  const viewportH = useViewportHeight();
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
@@ -125,7 +126,9 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const C = cleanTheme(T);
   const ncType = NC_TYPE;
   const availableW = Math.max(0, viewportW - sidebarW);
-  const isStacked = availableW < 760;
+  // Treat landscape phones as stacked: a device with min(width,height) < 500 is a phone
+  const isStacked = availableW < 760 || viewportH < 500;
+  const isLandscape = isStacked && viewportH < availableW; // phone in landscape
   const isTablet = !isStacked && availableW < 1120;
   const touchLayout = isStacked || isTablet;
   const paneW = {
@@ -351,8 +354,9 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           <div style={{ display: "flex", background: C.bg, borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
             {[["Tasks", "task_alt", 0], ["Shailos", "rule", 1], ["Phone", "phone_in_talk", 2]].map(([lbl, ico, idx]) => (
               <button key={idx} onClick={() => goToPanel(idx)}
-                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, height: 42, padding: "0 4px", border: "none", borderBottom: `2px solid ${idx === activeStackPanel ? C.accent : "transparent"}`, background: "none", cursor: "pointer", color: idx === activeStackPanel ? C.text : C.muted, fontSize: ncType.label, fontWeight: 500, fontFamily: NC_FONT_STACK, transition: "color 0.15s" }}>
-                {suiteIcon(ico, 13)} {lbl}
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: isLandscape ? 0 : 5, height: isLandscape ? 32 : 42, padding: "0 4px", border: "none", borderBottom: `2px solid ${idx === activeStackPanel ? C.accent : "transparent"}`, background: "none", cursor: "pointer", color: idx === activeStackPanel ? C.text : C.muted, fontSize: ncType.label, fontWeight: 500, fontFamily: NC_FONT_STACK, transition: "color 0.15s" }}>
+                {suiteIcon(ico, isLandscape ? 16 : 13)}
+                {!isLandscape && lbl}
               </button>
             ))}
           </div>
@@ -420,7 +424,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       onChange={e => { setTaskDraft(e.target.value); e.target.style.height = "34px"; e.target.style.height = Math.min(e.target.scrollHeight, 88) + "px"; }}
                       onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(taskPriority, { mrsW: taskComposerMrsW }); } if (e.key === "Escape") { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); } }}
                       placeholder={`${priorities.find(p => p.id === taskPriority)?.ncLabel || "Task"} task`}
-                      style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: 7, border: `1px solid ${activePriColor}`, background: C.bgSoft, color: C.text, padding: "7px 10px", fontSize: ncType.body, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
+                      style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: 7, border: `1px solid ${activePriColor}`, background: C.bgSoft, color: C.text, padding: "7px 10px", fontSize: ncType.body, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line, touchAction: "auto" }} />
                     <button onClick={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })} disabled={!taskDraft.trim()} title="Save"
                       style={{ width: 32, height: 32, borderRadius: 8, border: "none", background: activePriColor, color: textOnColor(activePriColor), cursor: taskDraft.trim() ? "pointer" : "default", opacity: taskDraft.trim() ? 1 : 0.38, display: "flex", alignItems: "center", justifyContent: "center" }}>
                       {suiteIcon("check", 15)}
@@ -577,7 +581,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 <button onClick={() => { setActionCategoryId("phone"); setActionsOpen(true); }} title="Phone actions" style={ncSmallIconButton()}>{suiteIcon("apps", 14)}</button>
               </div>
             </div>
-            <div style={{ overflow: "hidden", flex: "1 1 auto", minHeight: 0, padding: "10px 14px 14px", display: "flex", flexDirection: "column" }}>
+            <div style={{ overflow: isStacked ? "auto" : "hidden", flex: "1 1 auto", minHeight: 0, padding: isLandscape ? "6px 12px 10px" : "10px 14px 14px", display: "flex", flexDirection: "column" }}>
               <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </section>

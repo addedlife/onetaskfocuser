@@ -46,6 +46,21 @@ export function useViewportWidth() {
   return width;
 }
 
+export function useViewportHeight() {
+  const [height, setHeight] = useState(() => (
+    typeof window === "undefined" ? 900 : window.innerHeight
+  ));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const onResize = () => setHeight(window.innerHeight);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  return height;
+}
+
 export const NC_GLOBAL_CSS = `
 .nc-suite-root,
 .nc-suite-root :where(button, input, textarea, select, p, span, div, a, label, h1, h2, h3, h4, h5, h6, li, summary) {

@@ -188,12 +188,13 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
     finally { setBusy(""); }
   };
 
-  const dialNum = async (n) => { if (n?.trim()) await post(`/dial?n=${encodeURIComponent(n.trim())}`, "dial"); };
+  const dialNum = async (n) => { const num = String(n || "").trim(); if (num) await post(`/dial?n=${encodeURIComponent(num)}`, "dial"); };
   const dial = () => dialNum(number);
   const sendSms = async () => {
-    const to = selected?.number || number;
-    if (!to?.trim() || !body.trim()) return;
-    await post(`/send?to=${encodeURIComponent(to.trim())}&body=${encodeURIComponent(body.trim())}`, "send");
+    const to = String(selected?.number || number || "").trim();
+    const text = body.trim();
+    if (!to || !text) return;
+    await post(`/send?to=${encodeURIComponent(to)}&body=${encodeURIComponent(text)}`, "send");
     setBody(""); closeCompose();
   };
 
@@ -213,7 +214,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
 
   const threadMap = new Map();
   messages.forEach(m => {
-    const who = messagePeerNumber(m);
+    const who = String(messagePeerNumber(m));
     // directName: name embedded right on the message object by DeskPhone
     const directName = m.name || m.displayName || m.contactName || m.fromName || m.senderName || m.contact ||
       m.Name || m.DisplayName || m.ContactName || m.FromName || m.SenderName || m.Contact || "";
@@ -301,7 +302,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
   };
 
   // Compose helpers — open from row, open new, close
-  const openCompose = (name, num) => { setSelected({ name, number: num }); setNumber(num); setBody(""); setComposeOpen(true); setComposeIsNew(false); };
+  const openCompose = (name, num) => { const numStr = String(num || ""); setSelected({ name, number: numStr }); setNumber(numStr); setBody(""); setComposeOpen(true); setComposeIsNew(false); };
   const openNewMessage = () => { setSelected(null); setBody(""); setComposeSearch(""); setComposeIsNew(true); setComposeOpen(true); };
   const closeCompose = () => { setComposeOpen(false); setComposeIsNew(false); setComposeSearch(""); setSelected(null); };
 
@@ -332,7 +333,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: compact ? 6 : 12, minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden", color: C.text }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: compact ? 6 : 12, minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: compact ? "visible" : "hidden", color: C.text }}>
 
       {(isIncoming || isOnCall || vmCount > 0) && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: compact ? 28 : 36, padding: "0 2px" }}>
@@ -354,7 +355,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
                 onBlur={() => setTimeout(() => setComposeFocused(false), 160)}
                 placeholder="Search contact or enter number…"
                 autoFocus
-                style={{ width: "100%", height: 36, boxSizing: "border-box", padding: "0 12px", borderRadius: 18, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: 14, fontWeight: 400, outline: "none" }} />
+                style={{ width: "100%", height: 36, boxSizing: "border-box", padding: "0 12px", borderRadius: 18, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: 14, fontWeight: 400, outline: "none", touchAction: "auto" }} />
               {composeFocused && suggestions.length > 0 && (
                 <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 300 }}>
                   <SuggestionList onPick={s => { setSelected({ name: s.name, number: s.num }); setNumber(s.num); setComposeSearch(s.name); setComposeIsNew(false); }} />
@@ -376,7 +377,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
               <textarea value={body} onChange={e => setBody(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendSms(); } }}
                 placeholder="Message…" rows={2}
-                style={{ boxSizing: "border-box", borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, padding: "8px 12px", fontSize: 14, fontFamily: "system-ui", resize: "none", outline: "none", width: "100%" }} />
+                style={{ boxSizing: "border-box", borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, padding: "8px 12px", fontSize: 14, fontFamily: "system-ui", resize: "none", outline: "none", width: "100%", touchAction: "auto" }} />
               <button onClick={sendSms} disabled={!body.trim() || !!busy || (!selected && !number.trim())}
                 style={{ width: 40, height: 40, borderRadius: 20, border: "none", background: body.trim() ? C.accent : "transparent", color: body.trim() ? "#fff" : C.faint, cursor: body.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0 }}>
                 {suiteIcon("send", 16)}
@@ -442,7 +443,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
               onBlur={() => setTimeout(() => setInputFocused(false), 160)}
               onKeyDown={e => e.key === "Enter" && dial()}
               placeholder="Name or number"
-              style={{ width: "100%", height: 40, boxSizing: "border-box", padding: "0 46px 0 32px", borderRadius: 20, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: 14, fontWeight: 400, outline: "none" }} />
+              style={{ width: "100%", height: 40, boxSizing: "border-box", padding: "0 46px 0 32px", borderRadius: 20, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: 14, fontWeight: 400, outline: "none", touchAction: "auto" }} />
             <button onClick={dial} disabled={!number.trim() || !!busy} title="Call"
               style={{ position: "absolute", right: 4, top: 4, width: 32, height: 32, borderRadius: 99, border: "none", background: number.trim() ? C.success : "transparent", color: number.trim() ? "#fff" : C.faint, cursor: number.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {suiteIcon("call", 14)}
