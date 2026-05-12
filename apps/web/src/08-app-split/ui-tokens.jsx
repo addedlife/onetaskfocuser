@@ -129,6 +129,18 @@ export const NC_GLOBAL_CSS = `
     transform: none;
   }
 }
+/* Use dynamic viewport height so the app doesn't overflow on mobile when
+   browser chrome (address bar, nav bar) changes the visible area */
+.nc-suite-root {
+  height: 100vh;
+  height: 100dvh;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+/* Hide the scroll-snap carousel scrollbar on WebKit */
+[data-nc-task-grid="true"]::-webkit-scrollbar {
+  display: none;
+}
 `;
 
 export const cleanTheme = (theme = {}) => ({
