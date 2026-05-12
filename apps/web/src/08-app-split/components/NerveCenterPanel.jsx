@@ -58,11 +58,14 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [openTaskActionsId, setOpenTaskActionsId] = useState(null);
   const [showAllTasks, setShowAllTasks] = useState(false);
   const [autoTaskLimit, setAutoTaskLimit] = useState(MIN_COLLAPSED_TASKS);
+  const [activeStackPanel, setActiveStackPanel] = useState(0);
   const taskGridRef = useRef(null);
   const taskHeaderRef = useRef(null);
   const taskListRef = useRef(null);
   const taskMoreButtonRef = useRef(null);
   const taskInputRef = useRef(null);
+  const stackCarouselRef = useRef(null);
+  const stackSwipeState = useRef({ startX: 0, startY: 0, dir: null });
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [addEventText, setAddEventText] = useState('');
   const [addEventLoading, setAddEventLoading] = useState(false);
@@ -213,6 +216,42 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     if (items.length) onPolishNerveItems(items);
   }, [polishQueueKey]); // eslint-disable-line
 
+  // Attach swipe handlers with { passive: false } so touchmove can preventDefault on horizontal swipes
+  useEffect(() => {
+    if (!isStacked) return;
+    const el = stackCarouselRef.current;
+    if (!el) return;
+    const s = stackSwipeState.current;
+    const onStart = e => {
+      s.startX = e.touches[0].clientX;
+      s.startY = e.touches[0].clientY;
+      s.dir = null;
+    };
+    const onMove = e => {
+      const dx = e.touches[0].clientX - s.startX;
+      const dy = e.touches[0].clientY - s.startY;
+      if (s.dir === null) {
+        if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+        s.dir = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      }
+      if (s.dir === "x") e.preventDefault();
+    };
+    const onEnd = e => {
+      if (s.dir !== "x") return;
+      const dx = e.changedTouches[0].clientX - s.startX;
+      if (dx < -50) setActiveStackPanel(p => Math.min(2, p + 1));
+      else if (dx > 50) setActiveStackPanel(p => Math.max(0, p - 1));
+    };
+    el.addEventListener("touchstart", onStart);
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd);
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+    };
+  }, [isStacked]);
+
   const startPaneResize = (leftKey, rightKey, e) => {
     if (touchLayout || !onPaneWeightsChange) return;
     e.preventDefault();
@@ -321,11 +360,24 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: touchLayout ? "auto" : "hidden", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}` }}>
       <div style={{ minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: isStacked ? "16px" : "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: isStacked ? 16 : touchLayout ? 12 : 4 }}>
 
-        {/* Three-panel grid — fills all remaining height */}
-        <div ref={taskGridRef} data-nc-task-grid="true" style={{ display: "grid", gridTemplateColumns: gridColumns, gap: isStacked ? 14 : touchLayout ? 16 : 0, flex: touchLayout ? "0 0 auto" : "1 1 0", minHeight: 0, alignItems: "stretch" }}>
+        {/* Panel tab bar — mobile/stacked only */}
+        {isStacked && (
+          <div style={{ display: "flex", background: C.bg, borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
+            {[["Tasks", "task_alt", 0], ["Shailos", "rule", 1], ["Phone", "phone_in_talk", 2]].map(([lbl, ico, idx]) => (
+              <button key={idx} onClick={() => setActiveStackPanel(idx)}
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, height: 42, padding: "0 4px", border: "none", borderBottom: `2px solid ${idx === activeStackPanel ? C.accent : "transparent"}`, background: "none", cursor: "pointer", color: idx === activeStackPanel ? C.text : C.muted, fontSize: ncType.label, fontWeight: 500, fontFamily: NC_FONT_STACK, transition: "color 0.15s" }}>
+                {suiteIcon(ico, 13)} {lbl}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Three-panel grid — fills all remaining height; becomes swipe carousel when stacked */}
+        <div ref={isStacked ? stackCarouselRef : undefined} style={isStacked ? { overflow: "hidden", position: "relative" } : { display: "contents" }}>
+        <div ref={taskGridRef} data-nc-task-grid="true" style={isStacked ? { display: "flex", width: "300%", transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)", transform: `translateX(${-activeStackPanel * 100 / 3}%)`, alignItems: "stretch" } : { display: "grid", gridTemplateColumns: gridColumns, gap: touchLayout ? 16 : 0, flex: touchLayout ? "0 0 auto" : "1 1 0", minHeight: 0, alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
-          <section style={primaryTaskQueue.length > MIN_COLLAPSED_TASKS ? ncPanel : ncTasksPanel}>
+          <section style={isStacked ? { ...ncPanel, flex: "0 0 33.333%", minWidth: 0 } : (primaryTaskQueue.length > MIN_COLLAPSED_TASKS ? ncPanel : ncTasksPanel)}>
             <div ref={taskHeaderRef} style={{ ...ncHeader, display: taskComposerOpen ? "block" : "flex", ...(taskComposerOpen ? { padding: "7px 12px" } : {}) }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, ...(taskComposerOpen ? { marginBottom: 7 } : {}) }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -432,7 +484,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           {paneResizeHandle("tasks", "shailos")}
 
           {/* ── Shailos ── */}
-          <section style={ncPanel}>
+          <section style={isStacked ? { ...ncPanel, flex: "0 0 33.333%", minWidth: 0 } : ncPanel}>
             <div style={ncHeader}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={ncSectionIcon(GOLD)}>{suiteIcon("rule", 16)}</span>
@@ -492,7 +544,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           {paneResizeHandle("shailos", "phone")}
 
           {/* ── Phone ── */}
-          <section style={ncPanel}>
+          <section style={isStacked ? { ...ncPanel, flex: "0 0 33.333%", minWidth: 0 } : ncPanel}>
             <div style={ncHeader}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                 <span style={ncSectionIcon()}>{suiteIcon("phone_in_talk", 16)}</span>
@@ -519,6 +571,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
             </div>
           </section>
         </div>
+        </div>{/* end carousel wrapper */}
 
         {googleResizeHandle}
 
