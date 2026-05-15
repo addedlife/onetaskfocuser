@@ -23,6 +23,29 @@ function shailaText(item) {
   return String(item?.parentTask || item?.synopsis || item?.parsedShaila || item?.content || item?.text || "").trim();
 }
 
+function hasText(value) {
+  return String(value || "").trim().length > 0;
+}
+
+function shailaHasAnswer(item) {
+  return hasText(item?.answer) ||
+    hasText(item?.shailaAnswer) ||
+    hasText(item?.answerSummary) ||
+    hasText(item?.answeredBy) ||
+    hasText(item?.answererName);
+}
+
+function shailaIsGotBack(item) {
+  return item?.status === "got_back" ||
+    item?.gotBackToAsker === true ||
+    item?.gotBack === true ||
+    item?.got_back === true;
+}
+
+function shailaIsAnswered(item) {
+  return item?.status === "answered" || shailaHasAnswer(item);
+}
+
 function shailaGroupKey(task) {
   if (task?.shailaId) return `id:${task.shailaId}`;
   const parent = String(task?.parentTask || "").trim().toLowerCase();
@@ -52,10 +75,18 @@ function buildNerveShailaRows(tasks = [], priorities = [], sourceShailos = []) {
     groups.set(key, existing);
   });
 
-  const linkedIds = new Set([...groups.values()].map(g => g.shailaId).filter(Boolean));
   (sourceShailos || []).forEach((shaila, index) => {
-    if (!shaila?.id || linkedIds.has(shaila.id) || shaila.status === "got_back") return;
+    if (!shaila?.id) return;
     const key = `id:${shaila.id}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.sourceShaila = shaila;
+      existing.parentTask = shailaText(existing) || shailaText(shaila);
+      existing.createdAt = existing.createdAt || shailaCreatedAt(shaila.createdAt || shaila.updatedAt);
+      groups.set(key, existing);
+      return;
+    }
+    if (shailaIsGotBack(shaila)) return;
     groups.set(key, {
       id: key,
       shailaId: shaila.id,
@@ -74,10 +105,10 @@ function buildNerveShailaRows(tasks = [], priorities = [], sourceShailos = []) {
       const getBackTasks = group.tasks.filter(t => t.isGetBackStep);
       const activeResearch = researchTasks.find(t => !t.completed);
       const activeGetBack = getBackTasks.find(t => !t.completed);
-      const answered = group.sourceShaila?.status === "answered" ||
-        researchTasks.some(t => t.completed || String(t.shailaAnswer || "").trim());
-      const gotBack = group.sourceShaila?.status === "got_back" || getBackTasks.some(t => t.completed || t.gotBackToAsker);
-      const status = gotBack ? "got_back" : group.sourceShaila?.status === "answered" || (activeGetBack && (answered || !activeResearch)) ? "get_back" : "research";
+      const answered = shailaIsAnswered(group.sourceShaila) ||
+        researchTasks.some(t => t.completed || shailaHasAnswer(t));
+      const gotBack = shailaIsGotBack(group.sourceShaila) || getBackTasks.some(t => t.completed || shailaIsGotBack(t));
+      const status = gotBack ? "got_back" : shailaIsAnswered(group.sourceShaila) || (activeGetBack && (answered || !activeResearch)) ? "get_back" : "research";
       const displayTask = status === "get_back" ? (activeGetBack || group.sourceShaila) : activeResearch || activeTasks[0] || group.tasks[0] || group.sourceShaila;
       if (gotBack || !displayTask) return null;
       return {

@@ -323,6 +323,14 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` passed in `apps/web`.
 - Verified the local phone host `http://127.0.0.1:8765/status` returned HTTP 200 with `connected:true`.
 
+## 2026-05-15 NerveCenter Historical Shailos Status Correction
+
+- Researched React state/list practice before editing: current React docs recommend deriving display data from source state, avoiding redundant/duplicated status state, and using stable data IDs for list keys.
+- Updated `apps/web/src/08-app-split/utils/shailosQueue.js` so linked task groups merge the matching Firestore Shaila record before calculating the NerveCenter pane status.
+- Expanded status inference for older records: `answer`, `shailaAnswer`, `answerSummary`, `answeredBy`, `answererName`, `gotBackToAsker`, `gotBack`, and `got_back` are now honored in addition to the explicit `status` field.
+- Sample helper check passed: linked `got_back` records are excluded from the open pane, answered records show as get-back, and only unanswered pending records show as research.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+
 ## 2026-05-15 NerveCenter Shailos Pane Grouping Correction
 
 - Researched React list/state practice before editing: derive display rows from source state, keep array updates immutable, avoid duplicated/contradictory state, and use stable item keys for lists that can reorder.
