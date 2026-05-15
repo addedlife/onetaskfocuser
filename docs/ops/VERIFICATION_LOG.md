@@ -335,6 +335,7 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run lint` remains blocked by the existing ESLint glob configuration, which reports that `src/*.jsx` matches ignored files.
 - Local Vite smoke returned HTTP 200 at `http://127.0.0.1:4305/?suite=nervecenter`, and the rebased built asset `index-BKxtnjDy.js` contains the new Shailos pane labels.
 - Codex in-app browser visual smoke was attempted, but the browser helper crashed during setup under the local Node ESM configuration before opening the page.
+- Pushed commit `820dcc9` to `origin/main`; Netlify Git-triggered production published on poll attempt 2. Production root returned HTTP 200 and served `assets/index-BKxtnjDy.js`, which contains `pending research`, `waiting to reply`, and `get_back`.
 
 ## 2026-05-11 Always-Live Release Rule And Task Add Collapse
 
