@@ -36,6 +36,7 @@ import { useSuiteNavigation } from './hooks/useSuiteNavigation.js';
 import { useTimedUndo } from './hooks/useTimedUndo.js';
 import { useTipCarousel } from './hooks/useTipCarousel.js';
 import { useToastNotifier } from './hooks/useToastNotifier.js';
+import { buildNerveShailaRows, isShailaPriority } from './utils/shailosQueue.js';
 
 function App({ user, onSignOut }) {
   Store.setUid(canonicalUid(user));
@@ -2101,13 +2102,11 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
 
   if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui",color:"#999"}}>Loading...</div>;
 
-  const isShailaPriority = (id) => id === "shaila" || !!pris.find(p => p.id === id && p.isShaila);
   const switchboardTaskList = actT.filter(t => !t.completed);
-  const switchboardShailaAll = actT.filter(t => isShailaPriority(t.priority) && !t.completed);
-  const switchboardShailaList = switchboardShailaAll.slice(0, 12);
-  const shailaOpenCount = switchboardShailaAll.length;
-  const switchboardShailaCompleted = actT
-    .filter(t => isShailaPriority(t.priority) && t.completed)
+  const switchboardShailaList = buildNerveShailaRows(tasks, pris, shailosRef.current);
+  const shailaOpenCount = switchboardShailaList.length;
+  const switchboardShailaCompleted = compT
+    .filter(t => isShailaPriority(t.priority, pris) && t.completed)
     .sort((a, b) => (b.completedAt || b.createdAt || 0) - (a.completedAt || a.createdAt || 0))
     .slice(0, 5);
   const shellHidden = !!(zen && curT);

@@ -323,6 +323,19 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` passed in `apps/web`.
 - Verified the local phone host `http://127.0.0.1:8765/status` returned HTTP 200 with `connected:true`.
 
+## 2026-05-15 NerveCenter Shailos Pane Grouping Correction
+
+- Researched React list/state practice before editing: derive display rows from source state, keep array updates immutable, avoid duplicated/contradictory state, and use stable item keys for lists that can reorder.
+- Added a shared Shailos queue derivation helper so NerveCenter shows one row per open Shaila thread, including pending research and get-back cases, keyed by Shaila ID when available.
+- Changed the NerveCenter Shailos pane to consume the derived rows directly instead of filtering out research/get-back rows and slicing the list down again.
+- Kept the Tasks pane classification on the same helper so Shailos work is separated consistently from ordinary task work.
+- `node --input-type=module` sample check passed for regular task exclusion, pending research, get-back, and raw Firestore Shailos fallback rows.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `git diff --check` passed; line-ending normalization warnings only.
+- `npm run lint` remains blocked by the existing ESLint glob configuration, which reports that `src/*.jsx` matches ignored files.
+- Local Vite smoke returned HTTP 200 at `http://127.0.0.1:4305/?suite=nervecenter`, and the rebased built asset `index-BKxtnjDy.js` contains the new Shailos pane labels.
+- Codex in-app browser visual smoke was attempted, but the browser helper crashed during setup under the local Node ESM configuration before opening the page.
+
 ## 2026-05-11 Always-Live Release Rule And Task Add Collapse
 
 - Updated startup and agent docs so verified web changes should be committed, pushed, and deployed unless the current thread says not to.

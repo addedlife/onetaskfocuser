@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { callAI, gP, textOnColor } from '../../01-core.js';
 import { cleanTheme, cleanToolbarButton, gvIconButton, gvTextButton, NC_FONT_STACK, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { NerveCenterPhoneSurface } from './NerveCenterPhoneSurface.jsx';
+import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 
 function nerveSummarySource(item) {
   return String(item?.parentTask || item?.shaila || item?.question || item?.text || "").trim();
@@ -146,8 +147,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 26, height: 26, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
   const phoneStatusColor = phoneStatusSummary.tone === "incoming" ? C.success : phoneStatusSummary.tone === "call" ? C.warning : phoneStatusSummary.online ? C.success : C.faint;
 
-  const shailaPriorityIds = new Set(priorities.filter(p => p.isShaila || p.id === "shaila").map(p => p.id));
-  const isShailaWork = t => t?.type === "shailo-research" || t?.type === "shaila-research" || !!t?.shailaId || !!t?.isGetBackStep || shailaPriorityIds.has(t?.priority);
+  const isShailaWork = t => isNerveTaskShailaWork(t, priorities);
   const primaryTaskQueue = tasks.filter(t => !isShailaWork(t));
   useEffect(() => {
     if (showAllTasks || isStacked || !primaryTaskQueue.length || typeof ResizeObserver === "undefined") {
@@ -190,8 +190,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const collapsedTaskLimit = Math.min(primaryTaskQueue.length, Math.max(MIN_COLLAPSED_TASKS, autoTaskLimit));
   const hiddenTaskCount = Math.max(0, primaryTaskQueue.length - collapsedTaskLimit);
   const primaryTasks = (isStacked || showAllTasks) ? primaryTaskQueue : primaryTaskQueue.slice(0, collapsedTaskLimit);
-  // Exclude research-type shaila tasks — they're not actionable get-backs until research is done
-  const visibleShailos = shailos.filter(s => s.type !== "shaila-research" && s.type !== "shailo-research").slice(0, 10);
+  const visibleShailos = shailos.filter(Boolean);
   const needsNervePolish = item => {
     const source = nerveSummarySource(item);
     const summary = String(item?.ncSummary || "").trim();
@@ -515,8 +514,8 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               {/* Active shailos — open + pending get-back */}
               {visibleShailos.length ? visibleShailos.map((s, idx) => {
                 const text = nerveDisplaySummary(s, "Open shaila");
-                const isGetBack = !!s.isGetBackStep;
-                const chipLabel = isGetBack ? "Get back" : "Open";
+                const isGetBack = s.status === "get_back" || !!s.isGetBackStep;
+                const chipLabel = isGetBack ? "Get back" : "Research";
                 const chipBg = isGetBack ? "rgba(201,146,60,0.22)" : "rgba(201,146,60,0.10)";
                 return (
                   <button key={s.id} onClick={onOpenShailos}
@@ -524,7 +523,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     <span style={{ width: 3, alignSelf: "stretch", minHeight: 28, borderRadius: 2, background: GOLD, flexShrink: 0 }} />
                     <span style={{ paddingLeft: 5, paddingTop: 1 }}>
                       <span style={{ display: "block", fontSize: ncType.body, fontWeight: "var(--nc-font-weight-strong, 500)", lineHeight: ncType.line, color: C.text, wordBreak: "break-word" }}>{text}</span>
-                      {isGetBack && <span style={{ display: "block", fontSize: ncType.label, color: GOLD, fontWeight: 500, marginTop: 4 }}>{suiteIcon("schedule", 13)} waiting to reply</span>}
+                      <span style={{ display: "block", fontSize: ncType.label, color: GOLD, fontWeight: 500, marginTop: 4 }}>{suiteIcon(isGetBack ? "schedule" : "search", 13)} {isGetBack ? "waiting to reply" : "pending research"}</span>
                     </span>
                     <span style={{ fontSize: 12, fontWeight: 500, color: GOLD, background: chipBg, border: `1px solid ${GOLD_BRD}`, borderRadius: 999, padding: "4px 9px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 2 }}>{chipLabel}</span>
                   </button>
