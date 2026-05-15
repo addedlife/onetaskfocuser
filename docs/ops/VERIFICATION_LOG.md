@@ -478,3 +478,4 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` passed in `apps/shailos`; existing large-bundle warning remains.
 - Local Vite smoke returned HTTP 200 at `http://127.0.0.1:4320/?suite=nervecenter`; `/manifest.webmanifest` returned HTTP 200 and contained both `id` and `launch_handler`.
 - `git diff --check` passed; line-ending normalization warnings only.
+- Pushed commit `212107c` to `origin/main`; Netlify Git-triggered production served `assets/index-DTX7sLyJ.js` on poll attempt 2, and production `/manifest.webmanifest` returned HTTP 200 with both `id` and `launch_handler`.
