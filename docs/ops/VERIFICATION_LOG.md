@@ -467,3 +467,14 @@ Current source-grade file count after cleanup: 162 files.
 - Local probe with `$env:Gemini_Overflow_01='fake-overflow-key'` returned `overflow-01` as available in `publicAiConfig().ai.credentialLanes.gemini`.
 - `npm run build` passed in `apps/web`; existing large-bundle warning remains.
 - `git diff --check` passed; line-ending normalization warnings only.
+
+## 2026-05-15 NerveCenter Shailos Status Refresh And PWA Launch Identity
+
+- Researched current web-app launch practice before editing: installed web apps should carry a stable manifest `id`, explicit `start_url`/`scope`, and a `launch_handler` when the app wants launches to prefer an existing app window.
+- Changed NerveCenter to keep the live Shailos listener payload in React state, so answer/got-back updates from the Shailos collection trigger a pane repaint even when the task list itself does not change.
+- Changed the NerveCenter Shailos pane source task scan from the active task list to all app task lists, so completed research/get-back evidence outside the current list can still affect status.
+- Added manifest `id: "/"` and `launch_handler.client_mode: ["focus-existing", "navigate-existing"]` for installed Chrome/Edge PWA taskbar launches.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `npm run build` passed in `apps/shailos`; existing large-bundle warning remains.
+- Local Vite smoke returned HTTP 200 at `http://127.0.0.1:4320/?suite=nervecenter`; `/manifest.webmanifest` returned HTTP 200 and contained both `id` and `launch_handler`.
+- `git diff --check` passed; line-ending normalization warnings only.

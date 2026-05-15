@@ -149,6 +149,7 @@ function App({ user, onSignOut }) {
   const justLoaded = useRef(false);           // true for one render cycle after initial load — skip auto-save
   const lastSavedModified = useRef(0);       // _lsModified of last save/load — sync comparison baseline
   const adoptedRemote = useRef(false);       // true when onSnapshot adopted remote data — skip next save
+  const [shailosSnapshot, setShailosSnapshot] = useState([]);
   const [zenDumpParsed, setZenDumpParsed] = useState([]);   // AI-parsed brain dump tasks
   const [zenDumpParsing, setZenDumpParsing] = useState(false);
   const [showZenReview, setShowZenReview] = useState(false);
@@ -669,6 +670,7 @@ function App({ user, onSignOut }) {
     if (!loaded || !db) return;
     const unsub = Store.listenShailos((shailos) => {
       shailosRef.current = shailos; // keep ref current for combined backup
+      setShailosSnapshot(shailos);
       setAS(prev => {
         if (!prev?.lists) return prev;
         // Gather ALL tasks across ALL lists
@@ -2103,7 +2105,8 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
   if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"system-ui",color:"#999"}}>Loading...</div>;
 
   const switchboardTaskList = actT.filter(t => !t.completed);
-  const switchboardShailaList = buildNerveShailaRows(tasks, pris, shailosRef.current);
+  const allSwitchboardTasks = AS ? AS.lists.flatMap(l => l.tasks || []) : tasks;
+  const switchboardShailaList = buildNerveShailaRows(allSwitchboardTasks, pris, shailosSnapshot);
   const shailaOpenCount = switchboardShailaList.length;
   const switchboardShailaCompleted = compT
     .filter(t => isShailaPriority(t.priority, pris) && t.completed)

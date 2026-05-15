@@ -2,9 +2,13 @@
   "name": "OneTask Switchboard",
   "short_name": "OneTask",
   "description": "OneTask, Shailos, and DeskPhone web shell with offline launch support.",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "launch_handler": {
+    "client_mode": ["focus-existing", "navigate-existing"]
+  },
   "background_color": "#F8FAFD",
   "theme_color": "#0B57D0",
   "icons": [
