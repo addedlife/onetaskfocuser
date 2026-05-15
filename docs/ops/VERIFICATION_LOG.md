@@ -330,6 +330,8 @@ Current source-grade file count after cleanup: 162 files.
 - Expanded status inference for older records: `answer`, `shailaAnswer`, `answerSummary`, `answeredBy`, `answererName`, `gotBackToAsker`, `gotBack`, and `got_back` are now honored in addition to the explicit `status` field.
 - Sample helper check passed: linked `got_back` records are excluded from the open pane, answered records show as get-back, and only unanswered pending records show as research.
 - `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `git diff --check` passed; line-ending normalization warnings only.
+- Pushed commit `af2e94d` to `origin/main`; Netlify Git-triggered production published `assets/index-nxNoMWeG.js`, which contains the broader historical status fields including `gotBackToAsker` and `answererName`.
 
 ## 2026-05-15 NerveCenter Shailos Pane Grouping Correction
 
