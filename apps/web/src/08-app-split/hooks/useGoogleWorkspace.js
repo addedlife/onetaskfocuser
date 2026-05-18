@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { callAI } from '../../01-core.js';
+import { runAIJob } from '../../01-core.js';
 
 const GOOGLE_TOKEN_KEY = 'ot_google_token';
 const GOOGLE_EXPIRY_KEY = 'ot_google_token_expiry';
@@ -125,16 +125,14 @@ async function fetchGmailData(token) {
   );
 
   try {
-    const lines = msgs.map((m, i) => {
+    const emails = msgs.map((m) => {
       const subj = m?.payload?.headers?.find(h => h.name === 'Subject')?.value || '';
       const snip = (m.snippet || '').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
-      return `${i + 1}. Subject: "${subj}" | Body: "${snip}"`;
-    }).join('\n');
-    const prompt = `For each email below, summarize what the body is actually saying in ONE sentence of 10 words or fewer. Focus on the body content - do not just restate the subject line. Return ONLY a valid JSON array of strings, one per email, in order.\n\n${lines}`;
-    const raw = await callAI(prompt, { maxTokens: 400 });
-    const match = raw.match(/\[[\s\S]*?\]/);
-    if (match) {
-      const summaries = JSON.parse(match[0]);
+      return { subject: subj, body: snip };
+    });
+    const job = await runAIJob("dashboard.email_summaries.v1", { emails }, {});
+    const summaries = Array.isArray(job?.output) ? job.output : null;
+    if (summaries) {
       return msgs.map((m, i) => ({ ...m, aiSummary: typeof summaries[i] === 'string' ? summaries[i].replace(/^"|"$/g, '') : '' }));
     }
   } catch (e) {

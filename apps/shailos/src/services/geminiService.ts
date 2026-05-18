@@ -11,25 +11,22 @@ function getSharedAiConfig(): any {
   }
 }
 
-async function callGemini(body: object, task = "shailos"): Promise<any> {
+async function runAiJob(job: string, input: object, task = "shailos"): Promise<any> {
   const cfg = getSharedAiConfig();
-  const provider = "gemini";
+  const provider = cfg.provider || cfg.aiProvider || "gemini";
   const model = cfg.model || "";
+  const geminiCredential = cfg.geminiCredential || cfg.aiGeminiCredential || "auto";
   const r = await fetch(AI_PROXY, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ task, provider, model, body }),
+    body: JSON.stringify({ job, input, task, provider, model, geminiCredential }),
   });
   const data = await r.json().catch(() => ({ error: r.statusText }));
   if (!r.ok) {
     throw new Error(data.error || "AI gateway error");
   }
   if (data.error) throw new Error(data.error);
-  return data.raw || data;
-}
-
-function getText(data: any): string {
-  return data?.text || data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  return data.output ?? data.text ?? data.raw ?? data;
 }
 
 async function blobToBase64(blob: Blob): Promise<string> {
@@ -91,140 +88,42 @@ async function audioPartForGemini(blob: Blob): Promise<{ inlineData: { mimeType:
   }
 }
 
-const SYSTEM_INSTRUCTION = `You are an expert transcriber and halachic query parser.
-You specialize in recognizing terminology of a Yeshivish English, Yiddish, and Hebrew dialect.
-Common terms include: Shaila, Halacha, Pasken, Muttar, Assur, B'diavad, L'chatchila, etc.
-
-Your task is to:
-1. Faithfully transcribe the conversation if audio is provided.
-2. Identify if there are multiple distinct shailos (questions) or sub-shailos in the input.
-3. Parse EACH shaila into a specific format:
-   "Shaila: [date][name of asker if found][the shaila and any points relevant to it][the answer if found, including the name of the answerer (e.g., CC for R' Chaim Cohen, YCD for R' Yosef Chaim Danziger, or any other name identified), and any reasons given in the transcript]."
-
-If the input contains multiple questions, return an array of objects, one for each question.
-For each shaila:
-- Identify the asker, the core question, any context, and if an answer was already given on the call.
-- Identify the answerer if an answer was given. Common ones are CC (R' Chaim Cohen) and YCD (R' Yosef Chaim Danziger), but it could be anyone.
-- If an answer was given, provide the answer text and reasons.
-- If no answer was given, the "answer" field MUST be an empty string "". DO NOT use placeholder text like "Waiting for answer...", "N/A", or "None".
-- Include all reasons provided in the transcript.
-- Create a "synopsis" which is a non-verbatim, extremely concise "complete thought" (3-8 words) summarizing the core HALACHIC question.
-  FORMAT: "Topic: Core Question" or "Topic: Specific Detail".
-  EXAMPLES:
-    - "Non-mevushal juice: Mechallel Shabbos touch?"
-    - "Mevushal wine: Hiddur for 4 cups?"
-    - "Tevilas Keilim: Electric toaster?"
-  DO NOT include conversational filler or non-halachic actions like "Should she cancel order". Focus on the halachic point.`;
-
 export async function transcribeAudio(blob: Blob, prompt: string): Promise<string> {
   const audioPart = await audioPartForGemini(blob);
-  const data = await callGemini({
-    contents: [{ parts: [
-      audioPart,
-      { text: prompt },
-    ]}],
+  const inline = audioPart.inlineData;
+  const data = await runAiJob("transcribe.yeshivish.v1", {
+    base64: inline.data,
+    mimeType: inline.mimeType,
+    instruction: prompt,
+    mode: "shailos",
   }, "transcription");
-  return getText(data);
+  return typeof data === "string" ? data : (data?.transcript || "");
 }
 
 export async function generateSynopsis(content: string) {
-  const data = await callGemini({
-    contents: [{ parts: [{ text: `Create an extremely concise halachic synopsis (3-8 words) for the following content.
-  FORMAT: "Topic: Core Question" or "Topic: Specific Detail".
-  EXAMPLES:
-    - "Non-mevushal juice: Mechallel Shabbos touch?"
-    - "Tevilas Keilim: Electric toaster?"
-
-  Content: "${content}"` }] }],
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "OBJECT",
-        properties: { synopsis: { type: "STRING" } },
-        required: ["synopsis"],
-      },
-    },
-  });
-  const result = JSON.parse(getText(data));
-  return result.synopsis;
+  const data = await runAiJob("shaila.synopsis.v1", { content });
+  return data?.synopsis || "";
 }
 
 export async function transcribeAndParse(content: string | Blob, isAudio: boolean) {
-  let parts: any[] = [];
-
+  let text = "";
   if (isAudio && content instanceof Blob) {
-    const transcript = await transcribeAudio(
+    text = await transcribeAudio(
       content,
       "Transcribe this audio exactly and faithfully. The speakers may use Yeshivish English, Hebrew, Yiddish, and halachic terms. Do not summarize or classify. Return only the transcript."
     );
-    parts.push({ text: `Please parse this transcript. If there are multiple shailos, split them and parse each one according to the system instructions:\n\n${transcript}` });
   } else {
-    parts.push({ text: `Please parse this text. If there are multiple shailos, split them and parse each one according to the system instructions:\n\n${content}` });
+    text = String(content || "");
   }
-
-  const data = await callGemini({
-    systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-    contents: [{ parts }],
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "OBJECT",
-        properties: {
-          shailos: {
-            type: "ARRAY",
-            items: {
-              type: "OBJECT",
-              properties: {
-                askerName:     { type: "STRING" },
-                shailaContent: { type: "STRING" },
-                answer:        { type: "STRING" },
-                answererName:  { type: "STRING" },
-                reasons:       { type: "STRING" },
-                synopsis:      { type: "STRING", description: "A non-verbatim, concise complete thought (3-8 words) summarizing the question." },
-                parsedShaila:  { type: "STRING", description: "The full formatted string as requested." },
-              },
-              required: ["parsedShaila", "shailaContent", "synopsis"],
-            },
-          },
-        },
-        required: ["shailos"],
-      },
-    },
-  });
-
-  const result = JSON.parse(getText(data));
-  return result.shailos;
+  const data = await runAiJob("shaila.parse.structured.v1", { text });
+  return data?.shailos || [];
 }
 
 export async function findPotentialMatches(newShaila: any, existingShailos: any[]) {
   if (existingShailos.length === 0) return [];
-
   const existingList = existingShailos.map(s => ({ id: s.id, synopsis: s.synopsis, asker: s.askerName }));
-  const data = await callGemini({
-    contents: [{ parts: [{ text: `A new shaila has been recorded/parsed:
-  Asker: ${newShaila.askerName}
-  Content: ${newShaila.shailaContent}
-
-  Compare this to the following existing shailos and identify if this new recording is likely a follow-up, a return call with an answer, or a clarification for one of them.
-
-  Existing Shailos:
-  ${JSON.stringify(existingList)}
-
-  Return an array of potential match IDs, ordered from most to least probable. Only include matches with a reasonable probability. If none, return an empty array.` }] }],
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "OBJECT",
-        properties: {
-          matchIds: { type: "ARRAY", items: { type: "STRING" } },
-        },
-        required: ["matchIds"],
-      },
-    },
-  });
-
-  const result = JSON.parse(getText(data));
-  return result.matchIds;
+  const data = await runAiJob("shaila.find_matches.v1", { newShaila, existingShailos: existingList });
+  return data?.matchIds || [];
 }
 
 
@@ -279,40 +178,9 @@ async function searchWeb(query: string): Promise<Array<{ title: string; link: st
 
 // Generate 3 search queries approaching the shaila from different angles
 async function buildSearchQueries(shaila: string): Promise<string[]> {
-  const data = await callGemini({
-    contents: [{ parts: [{ text: `Generate 3 different Google search queries for this halachic/kashrut question. Each must approach it from a different angle:
-
-Query 1 — broad halachic category: the general topic in standard halachic terms (e.g. "chametz gamur machine matzah Pesach halacha")
-Query 2 — specific scenario or product: the exact situation described, keeping brand names if relevant (e.g. "year-round matzah box chametz label sell before Pesach")
-Query 3 — posek/agency perspective: likely sources (OU, Star-K, CRC, Halachipedia, Igros Moshe, Mishnah Berurah) and the precise halachic question (e.g. "OU Star-K machine matzah chametz gamur mechiyas chametz ruling")
-
-Rules:
-- Use standard English transliterations (Pesach, Shabbos, shiur, libun, maror, mechiyas, etc.)
-- Translate Yeshivish colloquialisms to standard halachic terms
-- Keep brand/product names when the question is about a specific product
-- Include "halacha" or "kosher" or "kashrut" in at least one query
-- Return ONLY a JSON array of exactly 3 query strings
-
-Question: "${shaila.substring(0, 400)}"` }] }],
-    generationConfig: {
-      temperature: 0,
-      maxOutputTokens: 200,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "OBJECT" as const,
-        properties: {
-          queries: { type: "ARRAY" as const, items: { type: "STRING" as const } },
-        },
-        required: ["queries"],
-      },
-    },
-  }, "research");
-  try {
-    const parsed = JSON.parse(getText(data));
-    const qs: string[] = parsed.queries || [];
-    if (qs.length) return qs.slice(0, 3);
-  } catch {}
-  // fallback: single broad query
+  const data = await runAiJob("shaila.research_queries.v1", { shaila }, "research");
+  const qs: string[] = data?.queries || [];
+  if (qs.length) return qs.slice(0, 3);
   return [`${shaila.substring(0, 80)} halacha`];
 }
 
@@ -332,39 +200,14 @@ export async function performResearch(shaila: string) {
 
   // Step 3: Gemini identifies gaps → generates 1-2 targeted follow-up queries
   const initialSnippets = results.slice(0, 6).map((r, i) => `[${i+1}] ${r.title}: ${r.snippet}`).join("\n");
-  const followUpData = await callGemini({
-    contents: [{ parts: [{ text: `A posek needs to research this shaila: "${shaila.substring(0, 300)}"
-
-Initial search results (titles + snippets):
-${initialSnippets}
-
-Do these results directly address the specific question? If there are obvious gaps — e.g. no ruling from a major agency (OU, Star-K, CRC), no relevant sefer cited, wrong topic entirely — generate 1-2 targeted follow-up search queries to fill those gaps. If the results are sufficient, return an empty array.
-
-Return ONLY a JSON object: { "followUpQueries": ["query1", "query2"] }` }] }],
-    generationConfig: {
-      temperature: 0,
-      maxOutputTokens: 150,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "OBJECT" as const,
-        properties: {
-          followUpQueries: { type: "ARRAY" as const, items: { type: "STRING" as const } },
-        },
-        required: ["followUpQueries"],
-      },
-    },
-  }, "research");
-
-  try {
-    const fp = JSON.parse(getText(followUpData));
-    const followUps: string[] = (fp.followUpQueries || []).slice(0, 2);
-    if (followUps.length) {
-      const followUpResults = await Promise.all(followUps.map(q => searchWeb(q).catch(() => [])));
-      followUpResults.flat().forEach(r => {
-        if (!seen.has(r.link)) { seen.add(r.link); results.push(r); }
-      });
-    }
-  } catch {}
+  const followUpData = await runAiJob("shaila.research_followups.v1", { shaila, initialSnippets }, "research");
+  const followUps: string[] = (followUpData?.followUpQueries || []).slice(0, 2);
+  if (followUps.length) {
+    const followUpResults = await Promise.all(followUps.map(q => searchWeb(q).catch(() => [])));
+    followUpResults.flat().forEach(r => {
+      if (!seen.has(r.link)) { seen.add(r.link); results.push(r); }
+    });
+  }
 
   const articlesText = results
     .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.link}\nExcerpt: ${r.snippet}`)
@@ -372,58 +215,8 @@ Return ONLY a JSON object: { "followUpQueries": ["query1", "query2"] }` }] }],
 
   // Step 3: Gemini reads snippets → per-article one-line summary + seforim + highlight phrase
   // CRITICAL: No synthesis, no conclusions, no psak. Each article gets its own line.
-  const data = await callGemini({
-    contents: [{ parts: [{ text: `You are a research assistant finding sources for a posek. Report ONLY what each article says. Do NOT draw conclusions, do NOT synthesize, do NOT add your own reasoning.
-
-SHAILA: "${shaila}"
-
-SEARCH RESULTS:
-${articlesText}
-
-Return a JSON object with:
-- "articleSummaries": For each search result (by 0-based index), a single sentence of what THAT article says about the shaila. Start with the source name (e.g. "OU Torah states...", "Star-K notes...", "Halachipedia records..."). If an article is clearly not relevant to the shaila, use empty string.
-- "articleHighlights": For each search result (by 0-based index), a 1-3 word key term almost certainly on that page and specific to this shaila (e.g. "chametz gamur", "year-round matzah", "libun gamur"). Short only — must match actual text on the page. Empty string if not relevant.
-- "seforim": Array of halachic seforim explicitly named in the snippets. Each: { "name": full name (e.g. "Shulchan Aruch OC", "Mishnah Berurah", "Igros Moshe"), "location": siman:seif if given (e.g. "451:1"), or empty string }` }] }],
-    generationConfig: {
-      temperature: 0,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: "OBJECT" as const,
-        properties: {
-          articleSummaries: {
-            type: "ARRAY" as const,
-            items: { type: "STRING" as const },
-          },
-          articleHighlights: {
-            type: "ARRAY" as const,
-            items: { type: "STRING" as const },
-          },
-          seforim: {
-            type: "ARRAY" as const,
-            items: {
-              type: "OBJECT" as const,
-              properties: {
-                name:     { type: "STRING" as const },
-                location: { type: "STRING" as const },
-              },
-              required: ["name", "location"],
-            },
-          },
-        },
-        required: ["articleSummaries", "articleHighlights", "seforim"],
-      },
-    },
-  }, "research");
-
-  const raw = getText(data);
-  if (!raw.trim()) throw new Error("No research data generated from search results.");
-
-  let parsed: { articleSummaries: string[]; articleHighlights: string[]; seforim: Array<{ name: string; location: string }> };
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return raw;
-  }
+  const parsed = await runAiJob("shaila.research_summarize_sources.v1", { shaila, articlesText }, "research");
+  if (!parsed?.articleSummaries?.length) throw new Error("No research data generated from search results.");
 
   // Build output — document all search queries used, then list each source with what it says
   const lines: string[] = [
@@ -458,9 +251,7 @@ Return a JSON object with:
 }
 
 export async function generateAnswerSummary(answerText: string): Promise<string> {
-  const data = await callGemini({
-    contents: [{ parts: [{ text: `Summarize this halachic answer in 4-6 words. Output ONLY the summary — no quotes, no explanation. Start with the ruling. Preserve key Yeshivish terms (mutar, assur, bedieved, lechatchila, etc.).\n\nAnswer: ${answerText.substring(0, 600)}` }] }],
-    generationConfig: { temperature: 0.1, maxOutputTokens: 24 },
-  });
-  return getText(data).trim().replace(/^["'`]+|["'`]+$/g, '');
+  const data = await runAiJob("shaila.answer_summary.v1", { answerText }, "shailos");
+  const text = typeof data === "string" ? data : "";
+  return text.trim().replace(/^["'`]+|["'`]+$/g, "");
 }

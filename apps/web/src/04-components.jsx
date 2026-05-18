@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { IC } from './02-icons.jsx';
-import { isTaskAged, getTaskAgeHours, gP, pBg, textOnColor, _lum, priText, callAI, uid, db, Store, DEF_PRI, PALETTE, cleanYT, aiDetectShailaAnswers } from './01-core.js';
+import { isTaskAged, getTaskAgeHours, gP, pBg, textOnColor, _lum, priText, runAIJob, uid, db, Store, DEF_PRI, PALETTE, cleanYT, aiDetectShailaAnswers } from './01-core.js';
 
 function Ripple({color}) {
   return <div style={{position:"absolute",inset:0,zIndex:0,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -968,14 +968,17 @@ function BlockReflectModal({task, T, aiOpts, onClose}) {
   async function analyze(reason) {
     setSelReason(reason); setLoading(true); setResult(null);
     const d = task.createdAt ? Math.floor(getTaskAgeHours(task) / 24) : 0;
-    const ageStr = d > 0 ? ` that has been waiting ${d} day${d !== 1 ? "s" : ""}` : "";
     const obstacleStr = reason.isFreewrite
       ? `"${reason.desc}"`
-      : `"${reason.label} — ${reason.desc}"`;
-    const prompt = `An ADHD user is stuck on a task${ageStr}: "${task.text}"\n\nThe obstacle they described: ${obstacleStr}\n\nGive exactly 3 concrete, practical suggestions to get unstuck. Each under 2 sentences. Be direct and specific to this task. Format exactly as:\n1. ...\n2. ...\n3. ...`;
+      : `"${reason.label} - ${reason.desc}"`;
     try {
-      const r = await callAI(prompt, aiOpts);
-      setResult(r || "1. Break it into the single smallest next action.\n2. Set a 5-minute timer and start anywhere — just begin.\n3. Tell someone what you're about to do right now.");
+      const job = await runAIJob("task.unblock.v1", {
+        taskText: task.text,
+        ageDays: d,
+        obstacle: obstacleStr,
+      }, aiOpts);
+      const r = job?.text || "";
+      setResult(r || "1. Break it into the single smallest next action.\n2. Set a 5-minute timer and start anywhere - just begin.\n3. Tell someone what you are about to do right now.");
     } catch(e) {
       setResult("1. Break it into the single smallest next action.\n2. Set a 5-minute timer and start anywhere — just begin.\n3. Tell someone what you're about to do right now.");
     }

@@ -1127,6 +1127,20 @@ async function callAIProxy(payload) {
   }
 }
 
+async function runAIJob(job, input={}, aiOpts, options={}) {
+  const opts = normalizeAiOpts(aiOpts);
+  const d = await callAIProxy({
+    job,
+    input,
+    mode: options.mode || opts.mode,
+    provider: opts.provider,
+    model: opts.model,
+    geminiCredential: opts.geminiCredential,
+    genConfig: options.genConfig || options,
+  });
+  return d || null;
+}
+
 async function callGemini(gk, prompt, genConfig={}) {
   const opts = normalizeAiOpts(gk);
   return callAI(prompt, {...opts, provider: "gemini"}, genConfig);
@@ -1135,18 +1149,13 @@ async function callGemini(gk, prompt, genConfig={}) {
 // Unified audio transcription — use this for ALL inline audio calls instead of raw fetch.
 async function callGeminiAudio(gk, base64, mimeType, textPrompt, genConfig={}) {
   const opts = normalizeAiOpts(gk);
-  const d = await callAIProxy({
-    kind: "audio",
-    task: opts.audioTask || "transcription",
-    provider: "gemini",
-    model: opts.model,
-    geminiCredential: opts.geminiCredential,
+  const d = await runAIJob("transcribe.yeshivish.v1", {
     base64,
     mimeType,
-    prompt: textPrompt,
-    genConfig,
-  });
-  return d?.text || null;
+    instruction: textPrompt,
+    mode: opts.audioTask || "plain",
+  }, opts, { genConfig });
+  return d?.output?.transcript || d?.text || null;
 }
 
 // Compatibility wrapper for older callers that explicitly ask for Gemini.
@@ -1273,27 +1282,26 @@ async function aiOptTasks(tasks, pris, aiOpts) {
   const nowD = new Date();
   const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][nowD.getDay()];
   const timeStr = nowD.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
-  const r = await callAI( `You are a productivity optimizer for someone with ADHD. It is ${dayName} at ${timeStr}.\n\nReorder these tasks by optimal execution order.\n\nPriority levels (highest to lowest): ${priLabels}\n\nRULES — apply in this strict order:\n1. PRIORITY IS PRIMARY: Never place a lower-priority task above a higher-priority task. A [Today] task can NEVER appear before a [Now] task. Priority tier is inviolable.\n2. Within the same priority tier, use these tiebreakers:\n   - URGENCY: tasks with deadline/asap/urgent/shaila/halacha in text go first within their tier.\n   - STALENESS: ⚠stale tasks (2+ days old) have been waiting — surface them within their tier.\n   - ★mrsW tasks: treat as urgent within their tier during morning hours Mon-Fri.\n   - ENERGY: quick wins first to build momentum; deeper cognitive tasks mid-morning.\n   - TIME: if afternoon/evening, deprioritize energy-heavy tasks within their tier.\n3. DEPENDENCIES: keep related tasks grouped together.\n\nTasks:\n${desc}\n\nReturn ONLY a JSON array of task numbers in optimal order, e.g. [3,1,4,2]`, aiOpts);
-  if (!r) return optTasks(tasks, pris);
-  try {
-    const m = r.match(/\[[\s\S]*?\]/);
-    if (m) {
-      const order = JSON.parse(m[0]);
-      const reorderedItems = order.map(n => items[n-1]).filter(Boolean);
-      const seen = new Set();
-      const deduped = reorderedItems.filter(t => { if (seen.has(t._groupName || t.id)) return false; seen.add(t._groupName || t.id); return true; });
-      const missed = items.filter(t => !seen.has(t._groupName || t.id));
-      const finalItems = [...deduped, ...missed];
-      // Rebuild full task list: expand groups back to subtasks
-      const result = [];
-      finalItems.forEach(item => {
-        if (item._groupName) result.push(...(groupMap[item._groupName] || []));
-        else result.push(item);
-      });
-      return [...result, ...blocked, ...comp];
-    }
-  } catch(e) {}
-  return optTasks(tasks, pris);
+  const job = await runAIJob("task.optimize.basic.v1", {
+    dayName,
+    timeStr,
+    priorityLabels: priLabels,
+    tasks: desc,
+  }, aiOpts);
+  const order = Array.isArray(job?.output) ? job.output : null;
+  if (!order) return optTasks(tasks, pris);
+  const reorderedItems = order.map(n => items[n-1]).filter(Boolean);
+  const seen = new Set();
+  const deduped = reorderedItems.filter(t => { if (seen.has(t._groupName || t.id)) return false; seen.add(t._groupName || t.id); return true; });
+  const missed = items.filter(t => !seen.has(t._groupName || t.id));
+  const finalItems = [...deduped, ...missed];
+  // Rebuild full task list: expand groups back to subtasks
+  const result = [];
+  finalItems.forEach(item => {
+    if (item._groupName) result.push(...(groupMap[item._groupName] || []));
+    else result.push(item);
+  });
+  return [...result, ...blocked, ...comp];
 }
 
 // Smart manual prioritization — returns {optimized, alreadyOptimal, insight, pinOverride}
@@ -1345,12 +1353,15 @@ async function aiOptTasksWithAnalysis(tasks, pris, aiOpts) {
   const hour = nowD.getHours();
   const energyCtx = hour<12 ? 'morning — quick win first, then deeper work' : hour<15 ? 'early afternoon — meaningful work over admin' : 'late afternoon/evening — favor wrap-up and completable items';
 
-  const r = await callAI( `You are an elite executive function coach for someone with ADHD. Today is ${dayName} at ${timeStr} (${energyCtx}).\n\nReorder ONLY the unpinned tasks listed below. Pinned tasks are user-locked at the top — respect them completely, UNLESS something unpinned is genuinely critical right now and the pinned tasks are less urgent (flag via "urgentOverride" — use sparingly, only for true exceptions).${pinnedCtx}\n\nUNPINNED tasks to reorder:\n${desc}\n\nPriority levels (highest to lowest): ${priLabels}\n\nRules — apply in this strict order:\n1. PRIORITY IS PRIMARY: Never place a lower-priority task above a higher-priority task. A [Today] task can NEVER appear before a [Now] task. Priority tier is the hard outer constraint — inviolable.\n2. Within the same priority tier, use these tiebreakers in order:\n   a. URGENCY: deadline/asap/shaila/halacha in the task text → front of its tier. ★mrsW → front of tier Mon–Thu before 1 PM and Fri before 10 AM.\n   b. STALE DEBT: ⚠stale tasks have been waiting too long — surface them within their tier.\n   c. MOMENTUM: one quick win near the front to trigger the reward loop.\n   d. ENERGY-TIME: ${energyCtx}.\n3. GROUP INTEGRITY: subtask groups stay together in step order.\n4. HONEST ASSESSMENT: if the current order is already optimal, set alreadyOptimal:true.\n5. PIN OVERRIDE: only set urgentOverride if something is genuinely more critical than pinned items right now — use very sparingly.\n\nRespond with ONLY valid JSON:\n{\n  "order": [unpinned task numbers in optimal sequence],\n  "alreadyOptimal": false,\n  "insight": "One punchy sentence using actual task names. Max 20 words.",\n  "urgentOverride": null\n}\nIf a pin override is warranted:\n{\n  "order": [...],\n  "alreadyOptimal": false,\n  "insight": "...",\n  "urgentOverride": { "taskNumber": N, "reason": "Why this must jump above the pins. Max 15 words." }\n}`, aiOpts);
-
-  if (!r) return { optimized: optTasks(tasks, pris), alreadyOptimal: false, insight: "", pinOverride: null };
-
-  let parsed;
-  try { const m = r.match(/\{[\s\S]*\}/); if (m) parsed = JSON.parse(m[0]); } catch(e) {}
+  const job = await runAIJob("task.optimize.analysis.v1", {
+    dayName,
+    timeStr,
+    energyContext: energyCtx,
+    pinnedContext: pinnedCtx,
+    unpinnedTasks: desc,
+    priorityLabels: priLabels,
+  }, aiOpts);
+  const parsed = job?.output;
   if (!parsed || !Array.isArray(parsed.order)) return { optimized: optTasks(tasks, pris), alreadyOptimal: false, insight: "", pinOverride: null };
 
   // ── Rebuild unpinned in AI order ───────────────────────────────────────
@@ -1426,37 +1437,16 @@ function applyTaskAging(tasks, pris) {
 // AI first-step suggestion: returns a single crisp action-verb sentence
 async function suggestFirstStep(taskText, aiOpts) {
   if (!aiOpts) return null;
-  const r = await callAI(
-    `You are a task coach. Give ONE single, concrete first step for this task.
-
-Task: "${taskText}"
-
-Rules:
-- Start with an action verb
-- Under 12 words
-- Immediately doable — specific, physical, no vague "start working on it"
-- Return ONLY the step itself. No quotes, no preamble, no explanation.
-
-Examples of good responses:
-Open the document and type the first sentence.
-Call Sarah to confirm the meeting time.
-Set a 10-minute timer and write the ingredient list.`,
-    aiOpts
-  );
-  if (!r) return null;
-  return r.replace(/^["'`]|["'`]$/g, '').trim();
+  const job = await runAIJob("task.first_step.v1", { taskText }, aiOpts);
+  const r = job?.text || "";
+  return r ? r.replace(/^["'`]|["'`]$/g, "").trim() : null;
 }
 
 // Parse a transcript into individual shailos + answers + askedBy + answeredBy
 async function aiParseShailos(text, aiOpts) {
-  const r = await callAI(
-    `This is a transcript of halachic questions (shailos). Extract and cleanly formulate each individual shaila and its answer.\n\nSHAILA RULES:\n- Write the shaila as a clear, well-formed halachic question — clean up filler words, false starts, and Yeshivish colloquialisms\n- Preserve all halachic content and terminology (mutar, assur, b'dieved, l'chatchila, specific topics)\n- Each shaila should be a single self-contained question\n- Answers often appear in parentheses or as a direct statement following the question\n- If no answer is detectable, use null for answer\n- Write the answer as a clean ruling — preserve the halachic content and any reasons given\n\nFOR askedBy — infer from context:\n- "friend", "a friend", "my friend" → "friend"\n- "shear", "שאר" (Yiddish/Hebrew for relative) → "relative"\n- "neighbor" → "neighbor" | "wife"/"my wife" → "wife"\n- Any explicit name → use that name | If unidentifiable → null\n\nFOR answeredBy — look for rabbi/posek title patterns:\n- "R' [Name]", "Rabbi [Name]", "Rav [Name]" → use full title+name\n- "Chaim Cohen" / "CC" → "R' Chaim Cohen"\n- If no answerer identifiable → null\n\nTranscript:\n"${text}"\n\nReturn ONLY a JSON array:\n[{"shaila":"clean well-formed question","answer":"clean ruling or null","askedBy":"name or null","answeredBy":"name or null"},...]`,
-    aiOpts, { temperature: 0.1 }
-  );
-  if (!r) throw new Error('no response');
-  const m = r.match(/\[[\s\S]*?\]/);
-  if (!m) throw new Error('no json');
-  const items = JSON.parse(m[0]);
+  const job = await runAIJob("shaila.parse.simple.v1", { transcript: text }, aiOpts, { genConfig: { temperature: 0.1 } });
+  const items = Array.isArray(job?.output) ? job.output : [];
+  if (!items.length) throw new Error("no shailos parsed");
   return items.filter(i => i?.shaila?.trim()).map(i => ({
     id: uid(),
     shaila: i.shaila.trim(),
@@ -1468,131 +1458,36 @@ async function aiParseShailos(text, aiOpts) {
 
 // Generate new calm color schemes via Gemini
 async function aiGenSchemes(aiOpts, existingNames) {
-  const r = await callAI(
-    `Generate 4 new calm, relaxing color schemes for a minimal productivity app UI. Each should have a distinct soothing mood (e.g., "Morning Mist", "Cedar Study", "Desert Sand", "Rain Garden", "Birch Grove", "Still Pond", "Candlelight", "Stone Path", etc.). Avoid duplicating these existing schemes: ${existingNames.join(', ')}.
-
-Each scheme must have exactly these keys:
-- id: short unique slug (lowercase, no spaces, e.g. "cedar")
-- name: display name (2-3 words)
-- bg: main background hex
-- bgW: slightly darker version of bg for input wells
-- card: slightly lighter version of bg for card surfaces
-- text: main text color (dark, at least 7:1 contrast on bg)
-- tSoft: medium contrast text (for labels)
-- tFaint: low contrast text (for hints/placeholders)
-- brd: border color
-- brdS: subtle border (slightly lighter than brd)
-- grad: array of exactly 3 hex color strings for bg gradient
-
-Rules:
-- All schemes must be calm, low-saturation, restful — think spa, library, monastery, nature
-- No bright or saturated colors
-- text must contrast strongly against bg (dark text on light bg OR light text on dark bg)
-- bg, bgW, card should be muted, close to each other in tone
-- All hex values must be valid 6-digit hex strings starting with #
-- The grad array must contain exactly 3 quoted hex strings separated by commas
-
-Return ONLY a valid JSON array. No markdown fences, no commentary, no trailing commas:
-[{"id":"x","name":"X","bg":"#aaa","bgW":"#bbb","card":"#ccc","text":"#ddd","tSoft":"#eee","tFaint":"#fff","brd":"#ggg","brdS":"#hhh","grad":["#aaa","#bbb","#ccc"]}]`,
-    aiOpts
-  );
-  if (!r) throw new Error('no response');
-  // Use greedy match to capture full array including nested grad arrays
-  const m = r.match(/\[[\s\S]*\]/);
-  if (!m) throw new Error('no json');
-  // Sanitize: strip trailing commas before ] or } (common AI mistake that causes JSON parse errors)
-  let jsonStr = m[0].replace(/,\s*([}\]])/g, '$1');
-  let items;
-  try { items = JSON.parse(jsonStr); }
-  catch(e) {
-    // Fallback: extract individual objects
-    const objMatches = [...jsonStr.matchAll(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g)];
-    if (!objMatches.length) throw new Error(e.message);
-    items = objMatches.map(om => { try { return JSON.parse(om[0]); } catch { return null; } }).filter(Boolean);
-    if (!items.length) throw new Error(e.message);
-  }
-  // Validate and clean each scheme
+  const job = await runAIJob("settings.color_schemes.v1", { existingNames }, aiOpts);
+  const items = Array.isArray(job?.output) ? job.output : [];
+  if (!items.length) throw new Error("no schemes generated");
   return items.filter(s => s.id && s.name && s.bg && s.text && Array.isArray(s.grad) && s.grad.length === 3);
 }
 
 // Detect embedded answers in existing shaila texts (bulk, single AI call)
 async function aiDetectShailaAnswers(shailas, aiOpts) {
   if (!shailas.length) return [];
-  const list = shailas.map((s, i) => `${i+1}. [id:${s.id}] ${s.text}`).join('\n');
-  const r = await callAI(
-    `These are halachic questions (shailos). Some have answers embedded in their text — in parentheses or as a following statement.\n\nFor each entry where an answer is present:\n- Write the answer as a clean halachic ruling — preserve all halachic content and terminology (mutar, assur, b'dieved, l'chatchila, etc.)\n- Clean up filler words and false starts, but keep the full halachic meaning intact\n- Only return entries where an answer was actually found\n\nShailos:\n${list}\n\nReturn ONLY a JSON array:\n[{"id":"the_id_from_brackets","answer":"clean ruling text"},...]`,
-    aiOpts, { temperature: 0.1 }
-  );
-  if (!r) return [];
-  const m = r.match(/\[[\s\S]*?\]/);
-  if (!m) return [];
-  try { return JSON.parse(m[0]).filter(x => x?.id && x?.answer); }
-  catch(e) { return []; }
+  const list = shailas.map((s, i) => `${i+1}. [id:${s.id}] ${s.text}`).join("\n");
+  const job = await runAIJob("shaila.detect_answers.v1", { shailos: list }, aiOpts, { genConfig: { temperature: 0.1 } });
+  return Array.isArray(job?.output) ? job.output.filter(x => x?.id && x?.answer) : [];
 }
 
 async function aiParseConversation(transcript, currentTasks, currentShailos, aiOpts) {
-  const taskSnap = currentTasks.slice(0,20).map((t,i)=>`${i+1}. [${t.priority}] ${t.text}`).join('\n') || '(none)';
-  const shailaSnap = currentShailos.slice(0,15).map((s,i)=>`${i+1}. ${s.synopsis||s.content||'shaila'}`).join('\n') || '(none)';
-  const r = await callAI(
-    `You are extracting EVERY actionable item from a Yeshivish English recording. Yeshivish mixes English with Hebrew/Yiddish: shaila, halacha, Shabbos, daven, bracha, etc.
-
-TRANSCRIPT:
-${transcript}
-
-CURRENT TASK QUEUE:
-${taskSnap}
-
-OPEN SHAILOS:
-${shailaSnap}
-
-=== EXTRACTION RULES — READ CAREFULLY ===
-
-COMPLETENESS: Extract EVERY item mentioned — a single recording may contain 10, 15, or more distinct tasks and shailos. Do not stop after the first few. Go through the entire transcript systematically.
-
-GRANULARITY: One entry per distinct action or question. Never merge two things into one entry. "Call Yankel and email Moshe" = two tasks.
-
-NEVER copy raw transcript text — write clean concise summaries (5-15 words). Preserve key halachic/Jewish terms.
-
-=== SHAILA RULE (HIGHEST PRIORITY) ===
-If ANYTHING sounds like a halachic question — "shaila", "shailos", "is it mutar/assur", "can I", "is there a problem with", kashrus, Shabbos, niddah, tefillin, bracha, eruv, kitniyos, borer, bishul, etc. — it MUST go in "shailos". NEVER put a halacha question in tasks.
-
-=== TASK-QUEUE OPERATION RULE ===
-Requests to move, bump, reorder, resurface, prioritize, or "move up" a task belong in "tasks", not "shailos", unless the speaker is actually asking a halachic question.
-Examples:
-- "move up the payroll task" -> tasks
-- "make the Camp HASC email now" -> tasks
-- "put the dentist call back on top" -> tasks
-- "should I move up this halacha shaila?" -> shailos
-
-=== CATEGORIES ===
-1. tasks — Action items NOT in the queue already. NOT shailos. Priority: "now" (urgent/today), "today" (this week), "eventually" (someday), "shaila" (halachic task — rare, only if it's a task around a shaila, not the shaila itself).
-2. completions — Things mentioned as already done. matchedTask = queue number if it matches.
-3. shailos — ANY halachic question. synopsis = 5-8 word core question.
-4. gotBacks — Answers the speaker delivered to people who asked shailos. matchedShailaIndex if matches open shaila.
-5. scheduleItems — Appointments/meetings/fixed-time events. Include "when" if mentioned.
-6. reminders — Notes to remember that are NOT tasks and NOT shailos.
-
-Return ONLY valid JSON (no markdown, no explanation):
-{"tasks":[{"text":"concise task","priority":"now|today|eventually"}],"completions":[{"text":"what was completed","matchedTask":null}],"shailos":[{"synopsis":"core question 5-8 words","content":"fuller description","askerName":null,"answer":""}],"gotBacks":[{"synopsis":"which shaila got answered","matchedShailaIndex":null}],"scheduleItems":[{"text":"event description","when":null}],"reminders":[{"text":"what to remember"}]}
-
-Use [] for empty categories. Output nothing except the JSON object.`,
-    aiOpts, { temperature: 0.1, maxOutputTokens: 8192 });
-  if (!r) throw new Error('No AI response');
-  const m = r.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('Could not parse AI response');
-  return JSON.parse(m[0]);
+  const taskSnap = currentTasks.slice(0,20).map((t,i)=>`${i+1}. [${t.priority}] ${t.text}`).join("\n") || "(none)";
+  const shailaSnap = currentShailos.slice(0,15).map((s,i)=>`${i+1}. ${s.synopsis||s.content||"shaila"}`).join("\n") || "(none)";
+  const job = await runAIJob("conversation.extract.v1", { transcript, taskSnap, shailaSnap }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 8192 } });
+  if (!job?.output) throw new Error("Could not parse AI response");
+  return job.output;
 }
 
 async function aiParseBrainDump(text, pris, aiOpts) {
   const activePris = pris.filter(p => !p.deleted).sort((a,b) => b.weight-a.weight);
-  const priOptions = activePris.map(p => `"${p.id}" = ${p.label}`).join(', ');
-  const lowestPri = activePris[activePris.length-1]?.id || 'eventually';
+  const priOptions = activePris.map(p => `"${p.id}" = ${p.label}`).join(", ");
+  const lowestPri = activePris[activePris.length-1]?.id || "eventually";
   const validIds = new Set(activePris.map(p => p.id));
-  const r = await callAI( `Parse this brain dump into individual tasks. Extract each distinct action item.\n\nPriority levels (use the id string): ${priOptions}\n\nUrgency clues → higher priority: "urgent", "asap", "deadline", "today", "call", "shaila", "halacha question", "important", "need to"\nClues → lower priority: "eventually", "maybe", "someday", "when I get a chance", "one day"\n\nBrain dump:\n"${text}"\n\nReturn ONLY a JSON array:\n[{"text":"task description","priority":"priority_id"}, ...]\n\nRules: extract real actionable tasks only, ignore filler words and transitions, split compound sentences into separate tasks, default priority to "${lowestPri}" if unclear.`, aiOpts);
-  if (!r) throw new Error('no response');
-  const m = r.match(/\[[\s\S]*?\]/);
-  if (!m) throw new Error('no json');
-  const items = JSON.parse(m[0]);
+  const job = await runAIJob("task.parse_brain_dump.v1", { text, priorityOptions: priOptions, lowestPriority: lowestPri }, aiOpts);
+  const items = Array.isArray(job?.output) ? job.output : [];
+  if (!items.length) throw new Error("no tasks parsed");
   return items.filter(i => i?.text?.trim()).map(i => ({
     id: uid(),
     text: i.text.trim(),
@@ -1602,11 +1497,8 @@ async function aiParseBrainDump(text, pris, aiOpts) {
 
 
 async function aiSummarizeAnswer(answerText, aiOpts) {
-  const r = await callAI(
-    `Summarize this halachic answer in 4-6 words. Output ONLY the summary — no quotes, no explanation. Start with the ruling. Preserve key Yeshivish terms (mutar, assur, bedieved, lechatchila, etc.).\n\nAnswer: ${answerText.substring(0, 600)}`,
-    aiOpts, { temperature: 0.1, maxOutputTokens: 24 }
-  );
-  return r?.trim().replace(/^["'`]+|["'`]+$/g, '') || '';
+  const job = await runAIJob("shaila.answer_summary.v1", { answerText }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 24 } });
+  return job?.text?.trim().replace(/^["'`]+|["'`]+$/g, "") || "";
 }
 
-export { firebaseConfig, db, Store, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, PALETTE, PROMPTS, TIPS, YC, cleanYT, uid, canonicalUid, gG, gP, pBg, _lum, textOnColor, _priTextMap, priText, textOnPastel, dayKey, tipOfDay, fmtMs, getMrsWPriority, getTaskAgeHours, isTaskAged, callAI, callGemini, callGeminiAudio, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, suggestFirstStep, aiParseShailos, aiGenSchemes, aiDetectShailaAnswers, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer };
+export { firebaseConfig, db, Store, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, PALETTE, PROMPTS, TIPS, YC, cleanYT, uid, canonicalUid, gG, gP, pBg, _lum, textOnColor, _priTextMap, priText, textOnPastel, dayKey, tipOfDay, fmtMs, getMrsWPriority, getTaskAgeHours, isTaskAged, callAI, runAIJob, callGemini, callGeminiAudio, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, suggestFirstStep, aiParseShailos, aiGenSchemes, aiDetectShailaAnswers, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer };

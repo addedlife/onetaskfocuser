@@ -381,6 +381,679 @@ Key vocabulary:
 
 Interpret all content in this Torah, halachic, and Orthodox Jewish community context. When processing voice transcripts or tasks, recognize and correctly interpret these terms even when phonetically transcribed.`;
 
+const AI_JOB_VERSION = "2026-05-18";
+
+function truncateText(value, max = 4000) {
+  const text = String(value || "");
+  return text.length > max ? text.slice(0, max) : text;
+}
+
+function compactLines(lines) {
+  return lines.filter(Boolean).join("\n\n");
+}
+
+function jsonBlock(value) {
+  return JSON.stringify(value, null, 2);
+}
+
+function stripJsonFences(text) {
+  return String(text || "")
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+function extractJsonText(text, shape) {
+  const clean = stripJsonFences(text);
+  if (shape === "array") {
+    const match = clean.match(/\[[\s\S]*\]/);
+    return match ? match[0] : clean;
+  }
+  if (shape === "object") {
+    const match = clean.match(/\{[\s\S]*\}/);
+    return match ? match[0] : clean;
+  }
+  const arrayMatch = clean.match(/\[[\s\S]*\]/);
+  const objectMatch = clean.match(/\{[\s\S]*\}/);
+  return arrayMatch?.[0] || objectMatch?.[0] || clean;
+}
+
+function parseJsonOutput(text, shape) {
+  return JSON.parse(extractJsonText(text, shape));
+}
+
+function validationError(message) {
+  const e = new Error(message);
+  e.isValidationError = true;
+  return e;
+}
+
+function ensureArray(value, label = "output") {
+  if (!Array.isArray(value)) throw validationError(`${label} must be an array`);
+  return value;
+}
+
+function ensureObject(value, label = "output") {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw validationError(`${label} must be an object`);
+  return value;
+}
+
+function cleanString(value, max = 1000) {
+  return truncateText(String(value || "").trim(), max);
+}
+
+function normalizeStringArray(value, maxItems = 30, maxLen = 500) {
+  return ensureArray(value)
+    .map(item => cleanString(item, maxLen))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function normalizeNumberArray(value, maxItems = 100) {
+  return ensureArray(value)
+    .map(item => Number.parseInt(item, 10))
+    .filter(Number.isFinite)
+    .slice(0, maxItems);
+}
+
+function normalizeEmailInputs(emails = []) {
+  return ensureArray(emails, "emails").slice(0, 20).map((email, index) => ({
+    index: index + 1,
+    subject: cleanString(email.subject, 180),
+    body: cleanString(email.body || email.snippet, 220),
+  }));
+}
+
+function normalizeItemInputs(items = []) {
+  return ensureArray(items, "items").slice(0, 12).map(item => ({
+    id: cleanString(item.id, 120),
+    kind: cleanString(item.kind || "item", 40),
+    source: cleanString(item.source || item.text, 600),
+  })).filter(item => item.id && item.source);
+}
+
+function responseJsonInstruction(shape, schemaDescription) {
+  return compactLines([
+    `Return ONLY valid JSON ${shape === "array" ? "array" : "object"}. No markdown, no commentary.`,
+    schemaDescription ? `Required shape:\n${schemaDescription}` : "",
+  ]);
+}
+
+function normalizeShailaRecord(row) {
+  const o = ensureObject(row, "shaila");
+  return {
+    askerName: cleanString(o.askerName || o.askedBy, 120),
+    shailaContent: cleanString(o.shailaContent || o.content || o.shaila, 4000),
+    answer: cleanString(o.answer, 4000),
+    answererName: cleanString(o.answererName || o.answeredBy, 120),
+    reasons: cleanString(o.reasons, 2000),
+    synopsis: cleanString(o.synopsis, 200),
+    parsedShaila: cleanString(o.parsedShaila || o.shailaContent || o.shaila, 5000),
+  };
+}
+
+function normalizeConversationExtract(value) {
+  const o = ensureObject(value);
+  return {
+    tasks: ensureArray(o.tasks || []).map(item => ({
+      text: cleanString(item?.text, 500),
+      priority: ["now", "today", "eventually"].includes(item?.priority) ? item.priority : "eventually",
+    })).filter(item => item.text),
+    completions: ensureArray(o.completions || []).map(item => ({
+      text: cleanString(item?.text, 500),
+      matchedTask: item?.matchedTask == null ? null : Number(item.matchedTask),
+    })).filter(item => item.text),
+    shailos: ensureArray(o.shailos || []).map(item => ({
+      synopsis: cleanString(item?.synopsis, 200),
+      content: cleanString(item?.content, 3000),
+      askerName: item?.askerName ? cleanString(item.askerName, 160) : null,
+      answer: cleanString(item?.answer, 3000),
+    })).filter(item => item.synopsis || item.content),
+    gotBacks: ensureArray(o.gotBacks || []).map(item => ({
+      synopsis: cleanString(item?.synopsis, 300),
+      matchedShailaIndex: item?.matchedShailaIndex == null ? null : Number(item.matchedShailaIndex),
+    })).filter(item => item.synopsis),
+    scheduleItems: ensureArray(o.scheduleItems || []).map(item => ({
+      text: cleanString(item?.text, 500),
+      when: item?.when ? cleanString(item.when, 200) : null,
+    })).filter(item => item.text),
+    reminders: ensureArray(o.reminders || []).map(item => ({
+      text: cleanString(item?.text, 500),
+    })).filter(item => item.text),
+  };
+}
+
+function normalizeCalendarEvent(value) {
+  const o = ensureObject(value);
+  if (!o.summary || !o.start || !o.end) throw validationError("calendar event requires summary, start, and end");
+  return {
+    ...o,
+    summary: cleanString(o.summary, 300),
+    reminders: o.reminders || { useDefault: false, overrides: [] },
+  };
+}
+
+function normalizeColorSchemes(value) {
+  return ensureArray(value).slice(0, 4).map(s => {
+    const o = ensureObject(s, "scheme");
+    return {
+      id: cleanString(o.id, 40).toLowerCase().replace(/[^a-z0-9_-]/g, ""),
+      name: cleanString(o.name, 80),
+      bg: cleanString(o.bg, 20),
+      bgW: cleanString(o.bgW, 20),
+      card: cleanString(o.card, 20),
+      text: cleanString(o.text, 20),
+      tSoft: cleanString(o.tSoft, 20),
+      tFaint: cleanString(o.tFaint, 20),
+      brd: cleanString(o.brd, 20),
+      brdS: cleanString(o.brdS, 20),
+      grad: normalizeStringArray(o.grad || [], 3, 20),
+    };
+  }).filter(s => s.id && s.name && s.bg && s.text && s.grad.length === 3);
+}
+
+const AI_JOB_REGISTRY = {
+  "transcribe.yeshivish.v1": {
+    kind: "audio",
+    task: "transcription",
+    output: "text",
+    genConfig: { temperature: 0, maxOutputTokens: 8192 },
+    buildPrompt(input = {}) {
+      const mode = cleanString(input.mode || input.taskMode || "plain", 40);
+      const callerInstruction = cleanString(input.instruction || input.prompt, 1000);
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        `Job: verbatim audio transcription. Mode: ${mode}.`,
+        "Transcribe exactly and faithfully. The speaker may use Yeshivish English, Hebrew, Yiddish, and halachic terms.",
+        "Use standard spellings for common Torah terms when the audio is clear. Do not summarize, classify, invent missing words, or add meta-commentary.",
+        callerInstruction,
+        "Return only the transcript text.",
+      ]);
+    },
+    normalizeText(text) {
+      return cleanString(text, 50000);
+    },
+  },
+  "conversation.extract.v1": {
+    task: "conversation-extract",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+    schema: '{"tasks":[{"text":"...","priority":"now|today|eventually"}],"completions":[{"text":"...","matchedTask":null}],"shailos":[{"synopsis":"...","content":"...","askerName":null,"answer":""}],"gotBacks":[{"synopsis":"...","matchedShailaIndex":null}],"scheduleItems":[{"text":"...","when":null}],"reminders":[{"text":"..."}]}',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "You are extracting every actionable item from a Yeshivish English recording.",
+        `Transcript:\n${truncateText(input.transcript, 20000)}`,
+        `Current task queue:\n${truncateText(input.taskSnap || input.currentTasks || "(none)", 6000)}`,
+        `Open shailos:\n${truncateText(input.shailaSnap || input.currentShailos || "(none)", 6000)}`,
+        "Rules: extract every distinct item; never merge unrelated items; clean wording while preserving halachic/Jewish terms.",
+        "Halachic questions always go to shailos. Got-back answers go to gotBacks. Fixed-time appointments go to scheduleItems.",
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate: normalizeConversationExtract,
+  },
+  "task.optimize.basic.v1": {
+    task: "task-optimize",
+    output: "json",
+    shape: "array",
+    genConfig: { temperature: 0.1, maxOutputTokens: 2048 },
+    schema: '[3,1,4,2]',
+    buildPrompt(input = {}) {
+      return compactLines([
+        "You are a productivity optimizer for someone with ADHD.",
+        `It is ${cleanString(input.dayName, 40)} at ${cleanString(input.timeStr, 40)}.`,
+        `Priority levels, highest to lowest: ${cleanString(input.priorityLabels, 500)}`,
+        "Rules: priority tier is the hard outer constraint; within a tier use urgency, staleness, MrsW timing, energy, and dependencies.",
+        `Tasks:\n${truncateText(input.tasks || input.desc, 12000)}`,
+        responseJsonInstruction("array", this.schema),
+      ]);
+    },
+    validate: normalizeNumberArray,
+  },
+  "task.optimize.analysis.v1": {
+    task: "task-optimize-analysis",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0.1, maxOutputTokens: 3072 },
+    schema: '{"order":[1,2],"alreadyOptimal":false,"insight":"Max 20 words using task names.","urgentOverride":null}',
+    buildPrompt(input = {}) {
+      return compactLines([
+        "You are an elite executive function coach for someone with ADHD.",
+        `Today is ${cleanString(input.dayName, 40)} at ${cleanString(input.timeStr, 40)} (${cleanString(input.energyContext, 200)}).`,
+        "Reorder only the unpinned tasks. Pinned tasks are user locked. Use urgentOverride only for true exceptions.",
+        `Pinned tasks:\n${truncateText(input.pinnedContext || "(none)", 4000)}`,
+        `Unpinned tasks:\n${truncateText(input.unpinnedTasks || input.desc, 12000)}`,
+        `Priority levels, highest to lowest: ${cleanString(input.priorityLabels, 500)}`,
+        "Rules: priority first; then urgency, stale debt, one momentum win, energy-time fit, and group integrity.",
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate(value) {
+      const o = ensureObject(value);
+      return {
+        order: normalizeNumberArray(o.order || []),
+        alreadyOptimal: !!o.alreadyOptimal,
+        insight: cleanString(o.insight, 220),
+        urgentOverride: o.urgentOverride && typeof o.urgentOverride === "object"
+          ? { taskNumber: Number(o.urgentOverride.taskNumber), reason: cleanString(o.urgentOverride.reason, 180) }
+          : null,
+      };
+    },
+  },
+  "task.first_step.v1": {
+    task: "task-first-step",
+    output: "text",
+    genConfig: { temperature: 0, maxOutputTokens: 80 },
+    buildPrompt(input = {}) {
+      return compactLines([
+        "You are a task coach.",
+        `Task: "${cleanString(input.taskText, 1000)}"`,
+        'Give one concrete first step. Start with an action verb. Under 12 words. No vague "start working on it". Return only the step.',
+      ]);
+    },
+  },
+  "task.parse_brain_dump.v1": {
+    task: "task-parse-brain-dump",
+    output: "json",
+    shape: "array",
+    genConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+    schema: '[{"text":"task description","priority":"priority_id"}]',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "Parse this brain dump into individual actionable tasks.",
+        `Priority options: ${cleanString(input.priorityOptions, 1000)}`,
+        `Default priority if unclear: ${cleanString(input.lowestPriority, 80)}`,
+        `Brain dump:\n${truncateText(input.text, 12000)}`,
+        "Split compound sentences. Ignore filler. Extract real actions only.",
+        responseJsonInstruction("array", this.schema),
+      ]);
+    },
+    validate(value) {
+      return ensureArray(value).map(item => ({
+        text: cleanString(item?.text, 600),
+        priority: cleanString(item?.priority, 100),
+      })).filter(item => item.text);
+    },
+  },
+  "task.breakdown.v1": {
+    task: "task-breakdown",
+    output: "json",
+    shape: "array",
+    genConfig: { temperature: 0.2, maxOutputTokens: 1024 },
+    schema: '["small concrete action step"]',
+    buildPrompt(input = {}) {
+      return compactLines([
+        "You are a productivity assistant for ADHD.",
+        `Task: "${cleanString(input.taskText, 1200)}"`,
+        "Break it into 3 to 7 small concrete action steps. No time estimates.",
+        responseJsonInstruction("array", this.schema),
+      ]);
+    },
+    validate: value => normalizeStringArray(value, 7, 220),
+  },
+  "task.breakdown_revise.v1": {
+    task: "task-breakdown-revise",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0.2, maxOutputTokens: 1536 },
+    schema: '{"explanation":"short explanation","steps":["updated step"]}',
+    buildPrompt(input = {}) {
+      return compactLines([
+        "You are helping revise a task breakdown for ADHD-friendly execution.",
+        `Task: "${cleanString(input.taskText, 1200)}"`,
+        `Current steps:\n${jsonBlock(input.steps || [])}`,
+        `User request: "${cleanString(input.userRequest, 1500)}"`,
+        "Return an updated concise step list.",
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate(value) {
+      const o = ensureObject(value);
+      return { explanation: cleanString(o.explanation, 300), steps: normalizeStringArray(o.steps || [], 8, 220) };
+    },
+  },
+  "task.unblock.v1": {
+    task: "task-unblock",
+    output: "text",
+    genConfig: { temperature: 0.2, maxOutputTokens: 700 },
+    buildPrompt(input = {}) {
+      return compactLines([
+        "An ADHD user is stuck on a task.",
+        `Task: "${cleanString(input.taskText, 1000)}"`,
+        input.ageDays ? `Waiting time: ${Number(input.ageDays)} days.` : "",
+        `Obstacle: "${cleanString(input.obstacle, 1000)}"`,
+        "Give exactly 3 concrete, practical suggestions. Each under 2 sentences. Format exactly as numbered lines 1, 2, 3.",
+      ]);
+    },
+  },
+  "dashboard.email_summaries.v1": {
+    task: "email-summary",
+    output: "json",
+    shape: "array",
+    genConfig: { temperature: 0, maxOutputTokens: 600 },
+    schema: '["one sentence of 10 words or fewer"]',
+    buildPrompt(input = {}) {
+      return compactLines([
+        "For each email below, summarize what the body is actually saying in one sentence of 10 words or fewer.",
+        "Focus on body content, not just the subject line.",
+        `Emails:\n${jsonBlock(normalizeEmailInputs(input.emails || []))}`,
+        responseJsonInstruction("array", this.schema),
+      ]);
+    },
+    validate: value => normalizeStringArray(value, 20, 160),
+  },
+  "dashboard.polish_items.v1": {
+    task: "dashboard-polish",
+    output: "json",
+    shape: "array",
+    genConfig: { temperature: 0, maxOutputTokens: 900 },
+    schema: '[{"id":"same id","summary":"polished display text"}]',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "Polish hurried personal task and shaila notes for a compact executive dashboard.",
+        "Preserve meaning exactly. Do not add facts, names, dates, or rulings. Make each item clear, calm, and short. Max 12 words each.",
+        `Items:\n${jsonBlock(normalizeItemInputs(input.items || []))}`,
+        responseJsonInstruction("array", this.schema),
+      ]);
+    },
+    validate(value) {
+      return ensureArray(value).map(item => ({
+        id: cleanString(item?.id, 120),
+        summary: cleanString(item?.summary, 200),
+      })).filter(item => item.id && item.summary);
+    },
+  },
+  "schedule.parse_event.v1": {
+    task: "schedule-parse",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0, maxOutputTokens: 700 },
+    schema: '{"summary":"...","start":{"dateTime":"RFC3339"},"end":{"dateTime":"RFC3339"},"reminders":{"useDefault":false,"overrides":[{"method":"popup","minutes":10}]}}',
+    buildPrompt(input = {}) {
+      return compactLines([
+        `Today is ${cleanString(input.today, 40)}.`,
+        `Description: "${cleanString(input.description, 2000)}"`,
+        "Parse this natural language event into a Google Calendar event body. Use all-day date fields only when the user clearly describes an all-day event.",
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate: normalizeCalendarEvent,
+  },
+  "analytics.insight.v1": {
+    task: "analytics-insight",
+    output: "text",
+    genConfig: { temperature: 0.2, maxOutputTokens: 1000 },
+    buildPrompt(input = {}) {
+      return compactLines([
+        "You are a professional productivity analyst. Analyze task completion data and provide a structured, data-driven summary.",
+        "Do not compare completion times across priority tiers. Tone: professional, direct, useful.",
+        `Priority tiers: ${cleanString(input.priorityTiers, 500)}`,
+        `Data:\n${jsonBlock(input.data || {})}`,
+        "Output exactly three bullet observations and one TAKEAWAY sentence. Reference specific numbers or task names.",
+      ]);
+    },
+  },
+  "analytics.chat.v1": {
+    task: "analytics-chat",
+    output: "text",
+    genConfig: { temperature: 0.25, maxOutputTokens: 1400 },
+    buildPrompt(input = {}) {
+      return compactLines([
+        "You are a warm, expert ADHD productivity analyst. Give detailed, data-driven answers from a supportive perspective.",
+        "Do not compare completion times across priority tiers. Ground every insight in the user's actual data.",
+        `Data snapshot:\n${jsonBlock(input.data || {})}`,
+        input.previousChat ? `Previous chat:\n${truncateText(input.previousChat, 4000)}` : "",
+        `User question: ${cleanString(input.question, 1200)}`,
+        "Answer in 4-8 sentences. No headers.",
+      ]);
+    },
+  },
+  "settings.color_schemes.v1": {
+    task: "settings-color-schemes",
+    output: "json",
+    shape: "array",
+    genConfig: { temperature: 0.4, maxOutputTokens: 1800 },
+    schema: '[{"id":"slug","name":"Name","bg":"#ffffff","bgW":"#ffffff","card":"#ffffff","text":"#111111","tSoft":"#333333","tFaint":"#666666","brd":"#cccccc","brdS":"#dddddd","grad":["#ffffff","#eeeeee","#dddddd"]}]',
+    buildPrompt(input = {}) {
+      return compactLines([
+        "Generate 4 calm, relaxing color schemes for a minimal productivity app UI.",
+        `Avoid duplicating existing schemes: ${normalizeStringArray(input.existingNames || [], 80, 80).join(", ")}`,
+        "All colors must be low-saturation and readable. Use valid 6-digit hex strings.",
+        responseJsonInstruction("array", this.schema),
+      ]);
+    },
+    validate: normalizeColorSchemes,
+  },
+  "shaila.parse.simple.v1": {
+    task: "shaila-parse-simple",
+    output: "json",
+    shape: "array",
+    genConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+    schema: '[{"shaila":"clean question","answer":"clean ruling or null","askedBy":"name or null","answeredBy":"name or null"}]',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "Extract and cleanly formulate each individual halachic question and any answer from this transcript.",
+        "Preserve halachic content and terminology. Clean filler and false starts. Infer asker and answerer only when supported by context.",
+        `Transcript:\n${truncateText(input.transcript, 18000)}`,
+        responseJsonInstruction("array", this.schema),
+      ]);
+    },
+    validate(value) {
+      return ensureArray(value).map(item => ({
+        shaila: cleanString(item?.shaila, 2000),
+        answer: item?.answer ? cleanString(item.answer, 2000) : null,
+        askedBy: item?.askedBy ? cleanString(item.askedBy, 160) : null,
+        answeredBy: item?.answeredBy ? cleanString(item.answeredBy, 160) : null,
+      })).filter(item => item.shaila);
+    },
+  },
+  "shaila.parse.structured.v1": {
+    task: "shaila-parse-structured",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0.1, maxOutputTokens: 6144 },
+    schema: '{"shailos":[{"askerName":"","shailaContent":"","answer":"","answererName":"","reasons":"","synopsis":"","parsedShaila":""}]}',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "You are an expert transcriber and halachic query parser.",
+        "Identify multiple distinct shailos or sub-shailos. Include answer, answerer, and reasons when present. If no answer was given, answer must be an empty string.",
+        'Synopsis must be a concise complete thought, 3-8 words, formatted like "Topic: Core Question".',
+        `Text:\n${truncateText(input.text || input.transcript, 20000)}`,
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate(value) {
+      const o = ensureObject(value);
+      return { shailos: ensureArray(o.shailos || []).map(normalizeShailaRecord).filter(s => s.shailaContent || s.parsedShaila) };
+    },
+  },
+  "shaila.synopsis.v1": {
+    task: "shaila-synopsis",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0.1, maxOutputTokens: 120 },
+    schema: '{"synopsis":"Topic: Core Question"}',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "Create an extremely concise halachic synopsis, 3-8 words.",
+        'Format: "Topic: Core Question" or "Topic: Specific Detail".',
+        `Content: "${cleanString(input.content, 3000)}"`,
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate(value) {
+      const o = ensureObject(value);
+      const synopsis = cleanString(o.synopsis, 200);
+      if (!synopsis) throw validationError("synopsis required");
+      return { synopsis };
+    },
+  },
+  "shaila.find_matches.v1": {
+    task: "shaila-find-matches",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0, maxOutputTokens: 700 },
+    schema: '{"matchIds":["id"]}',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "Compare a new shaila to existing shailos and identify likely follow-up, answer-call, or clarification matches.",
+        `New shaila:\n${jsonBlock(input.newShaila || {})}`,
+        `Existing shailos:\n${jsonBlock((input.existingShailos || []).slice(0, 80))}`,
+        "Only include matches with reasonable probability. Order most likely first.",
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate(value) {
+      const o = ensureObject(value);
+      return { matchIds: normalizeStringArray(o.matchIds || [], 20, 120) };
+    },
+  },
+  "shaila.detect_answers.v1": {
+    task: "shaila-detect-answers",
+    output: "json",
+    shape: "array",
+    genConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+    schema: '[{"id":"the_id","answer":"clean ruling text"}]',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "These are halachic questions. Some have answers embedded in their text, usually in parentheses or as a following statement.",
+        "Only return entries where an answer was actually found. Preserve full halachic meaning.",
+        `Shailos:\n${truncateText(input.shailos || input.list, 18000)}`,
+        responseJsonInstruction("array", this.schema),
+      ]);
+    },
+    validate(value) {
+      return ensureArray(value).map(item => ({
+        id: cleanString(item?.id, 120),
+        answer: cleanString(item?.answer, 2000),
+      })).filter(item => item.id && item.answer);
+    },
+  },
+  "shaila.match_answers_in_transcript.v1": {
+    task: "shaila-match-answers",
+    output: "json",
+    shape: "array",
+    genConfig: { temperature: 0, maxOutputTokens: 3072 },
+    schema: '[{"id":"exact ID","shaila":"question text","answer":"extracted answer"}]',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "Identify whether this transcript answers any listed open shailos.",
+        `Open shailos:\n${truncateText(input.openShailos || "", 10000)}`,
+        `Transcript:\n${truncateText(input.transcript, 16000)}`,
+        "Only return confident matches. Partial or implied answers may be included when clearly present.",
+        responseJsonInstruction("array", this.schema),
+      ]);
+    },
+    validate(value) {
+      return ensureArray(value).map(item => ({
+        id: cleanString(item?.id, 120),
+        shaila: cleanString(item?.shaila, 1200),
+        answer: cleanString(item?.answer, 3000),
+      })).filter(item => item.id && item.answer);
+    },
+  },
+  "shaila.answer_summary.v1": {
+    task: "shaila-answer-summary",
+    output: "text",
+    genConfig: { temperature: 0.1, maxOutputTokens: 40 },
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "Summarize this halachic answer in 4-6 words. Start with the ruling. Preserve key terms like mutar, assur, bedieved, lechatchila.",
+        `Answer: ${truncateText(input.answerText || input.answer, 1000)}`,
+        "Return only the summary.",
+      ]);
+    },
+  },
+  "shaila.research_queries.v1": {
+    task: "shaila-research-queries",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0, maxOutputTokens: 300 },
+    schema: '{"queries":["query1","query2","query3"]}',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "Generate 3 different Google search queries for this halachic or kashrut question.",
+        "Query 1: broad halachic category. Query 2: exact product/scenario. Query 3: posek/agency perspective.",
+        "Keep brand/product names when relevant. Include halacha, kosher, or kashrut in at least one query.",
+        `Question: "${cleanString(input.shaila, 800)}"`,
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate(value) {
+      const o = ensureObject(value);
+      return { queries: normalizeStringArray(o.queries || [], 3, 240) };
+    },
+  },
+  "shaila.research_followups.v1": {
+    task: "shaila-research-followups",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0, maxOutputTokens: 300 },
+    schema: '{"followUpQueries":["query1","query2"]}',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        `A posek needs to research this shaila: "${cleanString(input.shaila, 800)}"`,
+        `Initial search results:\n${truncateText(input.initialSnippets, 5000)}`,
+        "If obvious gaps remain, generate 1-2 targeted follow-up search queries. If sufficient, return an empty array.",
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate(value) {
+      const o = ensureObject(value);
+      return { followUpQueries: normalizeStringArray(o.followUpQueries || [], 2, 240) };
+    },
+  },
+  "shaila.research_summarize_sources.v1": {
+    task: "shaila-research-sources",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0, maxOutputTokens: 4096 },
+    schema: '{"articleSummaries":["source says..."],"articleHighlights":["short phrase"],"seforim":[{"name":"Shulchan Aruch OC","location":"451:1"}]}',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "You are a research assistant finding sources for a posek. Report only what each article says. Do not draw conclusions, synthesize, or add your own reasoning.",
+        `Shaila: "${cleanString(input.shaila, 1200)}"`,
+        `Search results:\n${truncateText(input.articlesText, 24000)}`,
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate(value) {
+      const o = ensureObject(value);
+      return {
+        articleSummaries: normalizeStringArray(o.articleSummaries || [], 40, 1000),
+        articleHighlights: normalizeStringArray(o.articleHighlights || [], 40, 120),
+        seforim: ensureArray(o.seforim || []).map(s => ({
+          name: cleanString(s?.name, 160),
+          location: cleanString(s?.location, 80),
+        })).filter(s => s.name),
+      };
+    },
+  },
+};
+
+function publicJobCatalog() {
+  return Object.keys(AI_JOB_REGISTRY).sort().map(id => ({
+    id,
+    task: AI_JOB_REGISTRY[id].task,
+    kind: AI_JOB_REGISTRY[id].kind || "text",
+    output: AI_JOB_REGISTRY[id].output || "text",
+  }));
+}
+
 function normalizeProvider(value) {
   const v = String(value || "").trim().toLowerCase();
   if (v === "gemini" || v === "openai" || v === "claude") return v;
@@ -714,7 +1387,108 @@ function normalizeKind(payload) {
   return "text";
 }
 
+async function repairJsonJob({ jobId, job, input, text, parseError, payload, provider, model }) {
+  const repairPrompt = compactLines([
+    "Repair this AI job response so it matches the required JSON contract.",
+    `Job: ${jobId}`,
+    job.schema ? `Required shape:\n${job.schema}` : "",
+    `Validation or parse error: ${parseError.message || String(parseError)}`,
+    `Original input summary:\n${truncateText(JSON.stringify(input || {}), 3000)}`,
+    `Previous response:\n${truncateText(text, 12000)}`,
+    "Return ONLY corrected JSON. No markdown, no commentary.",
+  ]);
+  return processAiPayload({
+    kind: "text",
+    task: `${job.task || jobId}-repair`,
+    provider,
+    model,
+    geminiCredential: payload.geminiCredential || payload.credential || payload.keyLane,
+    prompt: repairPrompt,
+    genConfig: {
+      temperature: 0,
+      maxOutputTokens: maxOutputTokensFrom(job.genConfig || {}, 4096),
+    },
+  });
+}
+
+async function runAiJobPayload(payload = {}) {
+  const jobId = String(payload.job || payload.aiJob || "").trim();
+  const job = AI_JOB_REGISTRY[jobId];
+  if (!job) throw httpError(400, `Unknown AI job: ${jobId || "(missing)"}`);
+
+  const input = payload.input && typeof payload.input === "object" ? payload.input : {};
+  const kind = job.kind || normalizeKind(payload);
+  const prompt = job.buildPrompt ? job.buildPrompt(input, payload) : (payload.prompt || payload.text || "");
+  const provider = kind === "audio"
+    ? "gemini"
+    : (payload.provider || payload.aiProvider || undefined);
+  const model = payload.model || payload.aiModel || undefined;
+  const genConfig = { ...(job.genConfig || {}), ...(payload.genConfig || {}) };
+  const started = Date.now();
+  const aiResult = await processAiPayload({
+    kind,
+    task: job.task || jobId,
+    provider,
+    model,
+    geminiCredential: payload.geminiCredential || payload.credential || payload.keyLane,
+    prompt,
+    base64: input.base64 || payload.base64 || payload.audioBase64,
+    mimeType: input.mimeType || payload.mimeType,
+    genConfig,
+  });
+
+  const text = cleanString(aiResult.text || "", job.output === "text" ? 50000 : 100000);
+  let output;
+
+  if ((job.output || "text") === "json") {
+    let parsed;
+    try {
+      parsed = parseJsonOutput(text, job.shape);
+      output = job.validate ? job.validate(parsed, input) : parsed;
+    } catch (parseError) {
+      const repaired = await repairJsonJob({
+        jobId,
+        job,
+        input,
+        text,
+        parseError,
+        payload,
+        provider: aiResult.provider,
+        model: aiResult.model,
+      });
+      const repairedText = cleanString(repaired.text || "", 100000);
+      parsed = parseJsonOutput(repairedText, job.shape);
+      output = job.validate ? job.validate(parsed, input) : parsed;
+      return {
+        job: jobId,
+        version: AI_JOB_VERSION,
+        provider: repaired.provider,
+        model: repaired.model,
+        output,
+        text: typeof output === "string" ? output : JSON.stringify(output),
+        repaired: true,
+        elapsedMs: Date.now() - started,
+      };
+    }
+  } else {
+    const normalized = job.normalizeText ? job.normalizeText(text, input) : text.trim();
+    output = jobId === "transcribe.yeshivish.v1" ? { transcript: normalized } : normalized;
+  }
+
+  return {
+    job: jobId,
+    version: AI_JOB_VERSION,
+    provider: aiResult.provider,
+    model: aiResult.model,
+    output,
+    text: typeof output === "string" ? output : (output?.transcript || JSON.stringify(output)),
+    elapsedMs: Date.now() - started,
+  };
+}
+
 async function processAiPayload(payload = {}) {
+  if (payload.job || payload.aiJob) return runAiJobPayload(payload);
+
   const task = String(payload.task || "").trim() || "general";
   const kind = normalizeKind(payload);
   const requestedProvider = normalizeProvider(payload.provider);
@@ -780,6 +1554,7 @@ function publicAiConfig() {
         safeTpm: geminiLimitsFor(modelFor("gemini", "text", "general")).tpm,
         safeRpd: geminiLimitsFor(modelFor("gemini", "text", "general")).rpd,
       },
+      jobs: publicJobCatalog(),
     },
     integrations: {
       googleClientId,

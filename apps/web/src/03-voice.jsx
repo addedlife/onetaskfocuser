@@ -1,7 +1,7 @@
 // === 03-voice.js ===
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { cleanYT, aiParseShailos, callAI, uid, textOnColor } from './01-core.js';
+import { cleanYT, aiParseShailos, runAIJob, uid, textOnColor } from './01-core.js';
 import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, webmToWavBase64 } from './09-transcription-pen.js';
 // VoiceInput: Web Speech (live preview) + MediaRecorder run together.
 // Web Speech starts first to get mic priority; MediaRecorder starts 300ms later.
@@ -236,19 +236,12 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
         .map((s, i) => `${i+1}. [ID:${s.id}] ${s.parsedShaila || s.content || s.synopsis || s.text || ""}`)
         .join("\n");
       if (!shailoList.trim()) { setAnswerDetectLoading(false); return; }
-      const prompt = `You are analyzing a voice transcript of a call or shaila-recording session.
-
-Existing open shailos (unanswered questions) that need answers:
-${shailoList}
-
-Transcript:
-${text}
-
-Identify any shailos from the list above that are answered in the transcript. For each match, return a JSON array of objects: {"id": "<exact ID>", "shaila": "<question text>", "answer": "<extracted answer>"}. If the answer is partial or implied, include it. Only return answers you are confident are present in the transcript. If none match, return []. Return only raw JSON, no markdown.`;
-      const raw = (await callAI(prompt, aiOpts, { temperature: 0, maxOutputTokens: 2048 }) || "").trim();
-      const clean = raw.replace(/```json|```/g,"").trim();
-      const parsed = JSON.parse(clean);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      const job = await runAIJob("shaila.match_answers_in_transcript.v1", {
+        openShailos: shailoList,
+        transcript: text,
+      }, aiOpts, { genConfig: { temperature: 0, maxOutputTokens: 2048 } });
+      const parsed = Array.isArray(job?.output) ? job.output : [];
+      if (parsed.length > 0) {
         setDetectedAnswers(parsed.map(x => ({...x, approved: true})));
       }
     } catch(e) { /* silently fail — not critical */ }

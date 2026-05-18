@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, callAI, suggestFirstStep, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer, gG, fmtMs, db, _lum, priText, textOnPastel } from '../01-core.js';
+import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, runAIJob, suggestFirstStep, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer, gG, fmtMs, db, _lum, priText, textOnPastel } from '../01-core.js';
 import { IC } from '../02-icons.jsx';
 import { VoiceInput } from '../03-voice.jsx';
 import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from '../04-components.jsx';
@@ -560,17 +560,15 @@ function App({ user, onSignOut }) {
     );
     // Batch AI: generate one-sentence summaries for all emails in a single call
     try {
-      const lines = msgs.map((m, i) => {
-        const subj = m?.payload?.headers?.find(h => h.name === 'Subject')?.value || '';
-        const snip = (m.snippet || '').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
-        return `${i + 1}. Subject: "${subj}" | Body: "${snip}"`;
-      }).join('\n');
-      const prompt = `For each email below, summarize what the body is actually saying in ONE sentence of 10 words or fewer. Focus on the body content — do not just restate the subject line. Return ONLY a valid JSON array of strings, one per email, in order.\n\n${lines}`;
-      const raw = await callAI(prompt, { maxTokens: 400 });
-      const match = raw.match(/\[[\s\S]*?\]/);
-      if (match) {
-        const summaries = JSON.parse(match[0]);
-        return msgs.map((m, i) => ({ ...m, aiSummary: typeof summaries[i] === 'string' ? summaries[i].replace(/^"|"$/g, '') : '' }));
+      const emails = msgs.map((m) => {
+        const subj = m?.payload?.headers?.find(h => h.name === "Subject")?.value || "";
+        const snip = (m.snippet || "").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim().slice(0, 180);
+        return { subject: subj, body: snip };
+      });
+      const job = await runAIJob("dashboard.email_summaries.v1", { emails }, aiOpts || {});
+      const summaries = Array.isArray(job?.output) ? job.output : null;
+      if (summaries) {
+        return msgs.map((m, i) => ({ ...m, aiSummary: typeof summaries[i] === "string" ? summaries[i].replace(/^"|"$/g, "") : "" }));
       }
     } catch (e) {
       console.warn('[Google] AI email summary failed:', e.message);
@@ -1353,11 +1351,8 @@ function App({ user, onSignOut }) {
     if (!cleanItems.length) return;
     const ids = new Set(cleanItems.map(item => item.id));
     setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => ids.has(t.id) ? {...t, ncSummaryPending: true} : t)}))}));
-    const prompt = `You polish hurried personal task and shaila notes for a compact executive dashboard. Preserve meaning exactly. Do not add facts, names, dates, or rulings. Make each item clear, calm, and short. Max 12 words each. Return ONLY valid JSON array: [{"id":"same id","summary":"polished display text"}].\n\nItems:\n${cleanItems.map((item, i) => `${i + 1}. id=${item.id} kind=${item.kind} raw=${JSON.stringify(item.source)}`).join("\n")}`;
-    callAI(prompt, aiOpts, { temperature: 0, maxOutputTokens: 900 }).then(raw => {
-      const match = String(raw || "").match(/\[[\s\S]*\]/);
-      if (!match) throw new Error("No JSON summary array");
-      const parsed = JSON.parse(match[0]);
+    runAIJob("dashboard.polish_items.v1", { items: cleanItems }, aiOpts).then(job => {
+      const parsed = Array.isArray(job?.output) ? job.output : [];
       const byId = new Map((Array.isArray(parsed) ? parsed : []).map(row => [row.id, compactNerveSummary(row.summary || "", "")]).filter(([, summary]) => summary));
       setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => {
         const item = cleanItems.find(x => x.id === t.id);
@@ -1959,33 +1954,20 @@ function App({ user, onSignOut }) {
     const recentDone = metrics.cL.slice(0,10).map(t=>t.text).join("; ");
     const priTiers = pris.filter(p=>!p.deleted).sort((a,b)=>b.weight-a.weight).map(p=>p.label).join(" → ");
     const priBreakdownDetailed = metrics.pS.map(p=>`${p.l}: ${p.n} done, avg ${p.a}`).join("; ");
-    const prompt = `You are a professional productivity analyst. Analyze this user's task completion data and provide a structured, data-driven summary.
-
-CRITICAL RULES:
-- NEVER compare completion times across priority tiers. "Eventually" tasks take longer than "Now" tasks BY DESIGN — different categories entirely. Treat each tier independently.
-- Tone: professional and direct. Not critical or judgmental. Not overly enthusiastic or cheerleader-ish. Just clear, honest, useful.
-- Surface real patterns from the data. If something is genuinely working well, note it factually.
-- Each bullet must reference specific numbers or task names from the data.
-
-Priority tiers (high urgency → low urgency): ${priTiers}
-Each tier has fundamentally different expected timeframes — this is by design.
-
-Data:
-- Total completed: ${metrics.total} tasks
-- Current streak: ${metrics.sk} days
-- Peak hour: ${metrics.pT || "unknown"}
-- Best day: ${metrics.bD ? metrics.bD[0] : "unknown"} (${metrics.bD ? metrics.bD[1] + " tasks" : ""})
-- By priority tier (completed): ${priBreakdownDetailed}
-- Overall avg completion time: ${metrics.avg}
-- Good enough completions: ${metrics.goodEnoughCount || 0}
-- Recent completions: ${recentDone}
-
-REQUIRED OUTPUT FORMAT — use this exact structure, no preamble, no extra text:
-• [First observation — a specific pattern grounded in the data]
-• [Second observation — a different angle, e.g. timing, energy, or tier consistency]
-• [Third observation — something actionable or forward-looking]
-TAKEAWAY: [The single most useful thing to know. One sentence. Specific.]`;
-    const result = await callAI(prompt, aiOpts);
+    const job = await runAIJob("analytics.insight.v1", {
+      priorityTiers: priTiers,
+      data: {
+        totalCompleted: metrics.total,
+        currentStreak: metrics.sk,
+        peakHour: metrics.pT || "unknown",
+        bestDay: metrics.bD ? `${metrics.bD[0]} (${metrics.bD[1]} tasks)` : "unknown",
+        byPriorityTier: priBreakdownDetailed,
+        overallAverage: metrics.avg,
+        goodEnoughCompletions: metrics.goodEnoughCount || 0,
+        recentCompletions: recentDone,
+      },
+    }, aiOpts);
+    const result = job?.text || "";
     setAiInsight(result || "Complete more tasks to generate a personalized insight.");
     setAiInsightLoading(false);
   };
@@ -2005,30 +1987,26 @@ TAKEAWAY: [The single most useful thing to know. One sentence. Specific.]`;
     const activeBreakdown = actT.map(t => `"${t.text}" [${gP(pris,t.priority).label}]${t.blocked?" BLOCKED":""}${t.pinned?" PINNED":""}`).join("; ");
     const prevChat = aiChatHistory.slice(-6).map(m => `${m.role}: ${m.text}`).join("\n");
     const priTiersChat = pris.filter(p=>!p.deleted).sort((a,b)=>b.weight-a.weight).map(p=>p.label).join(" → ");
-    const sysPrompt = `You are a warm, expert ADHD productivity analyst. Give detailed, data-driven answers with specific numbers and patterns — always from a supportive, non-critical perspective.
-
-CRITICAL RULES:
-- NEVER compare completion times across priority tiers. "Eventually" tasks take longer than "Now" tasks BY DESIGN — they are a completely different category, like comparing a sprint to a marathon. Treat each tier independently and never present the difference as a problem.
-- Never be critical, judgmental, or frame anything as a failure.
-- Ground every insight in the user's actual data.
-- Priority tiers (high urgency → low): ${priTiersChat}
-
-Data snapshot:
-- Total completed: ${metrics.total} tasks
-- Active queue: ${actT.length} tasks (${actT.filter(t=>t.pinned).length} pinned, ${actT.filter(t=>t.blocked).length} blocked)
-- Current streak: ${metrics.sk} days
-- Peak completion hour: ${metrics.pT||"unknown"}
-- Best completion day: ${metrics.bD ? metrics.bD[0]+" ("+metrics.bD[1]+" tasks)" : "unknown"}
-- Priority breakdown completed: ${priBreakdown}
-- Overall avg completion time: ${metrics.avg}
-- Good enough completions: ${metrics.goodEnoughCount || 0} of ${metrics.total} (${metrics.total?Math.round((metrics.goodEnoughCount||0)/metrics.total*100):0}%)
-- Active tasks: ${activeBreakdown}
-- Recent completions: ${recentDone}
-
-${prevChat ? "Previous chat:\n" + prevChat + "\n" : ""}User question: ${userMsg}
-
-Give a thorough, analytical response (4-8 sentences) with specific numbers and actionable insights. No bullet points or headers.`;
-    const result = await callAI(sysPrompt, aiOpts);
+    const job = await runAIJob("analytics.chat.v1", {
+      question: userMsg,
+      previousChat: prevChat,
+      data: {
+        totalCompleted: metrics.total,
+        activeQueue: actT.length,
+        pinned: actT.filter(t=>t.pinned).length,
+        blocked: actT.filter(t=>t.blocked).length,
+        currentStreak: metrics.sk,
+        peakCompletionHour: metrics.pT || "unknown",
+        bestCompletionDay: metrics.bD ? `${metrics.bD[0]} (${metrics.bD[1]} tasks)` : "unknown",
+        priorityTiers: priTiersChat,
+        priorityBreakdown: priBreakdown,
+        overallAverage: metrics.avg,
+        goodEnoughCompletions: metrics.goodEnoughCount || 0,
+        activeTasks: activeBreakdown,
+        recentCompletions: recentDone,
+      },
+    }, aiOpts);
+    const result = job?.text || "";
     setAiChatHistory(h => {
       const updated = [...h, {role:"ai", text:result || "I couldn't analyze that. Try a different question."}];
       return updated.slice(-60);
@@ -2850,6 +2828,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
           shailos={switchboardShailaList}
           shailosCompleted={switchboardShailaCompleted}
           priorities={ap}
+          aiOpts={aiOpts}
           onAddTask={addVT}
           onAddMrsWTask={addMrsWTask}
           onCompleteTask={id => compTask(id)}

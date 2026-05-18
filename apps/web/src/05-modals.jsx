@@ -1,7 +1,7 @@
 // === 05-modals.js ===
 
 import React, { useState, useRef } from 'react';
-import { uid, callAI, textOnColor, gP, pBg } from './01-core.js';
+import { uid, runAIJob, textOnColor, gP, pBg } from './01-core.js';
 import { IC } from './02-icons.jsx';
 import { CTX_TAG_COLORS } from './04-components.jsx';
 import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording } from './09-transcription-pen.js';
@@ -141,36 +141,33 @@ function TaskBD({task, pris, T, onConfirm, onClose, aiOpts}) {
     if (bdMicRef.current?.state === "recording") { bdMicRef.current.stop(); setMicRec(false); }
   };
 
-  const callG = async (pr) => {
+  const runBreakdownJob = async (job, input) => {
     if (!aiOpts) { setErr("AI server is not configured."); return null; }
     setLd(true); setErr("");
-    const r = await callAI(pr, aiOpts);
+    const result = await runAIJob(job, input, aiOpts);
     setLd(false);
-    if (!r) setErr("API error");
-    return r;
+    if (!result) setErr("API error");
+    return result;
   };
 
   const bd = async () => {
-    const r = await callG(`You are a productivity assistant for ADHD. Shatter this task into 3-7 crystals — small concrete action steps. No time estimates. Task: "${inp}"\nReturn ONLY a JSON array of strings.`);
-    if (!r) return;
-    try {
-      const m = r.match(/\[[\s\S]*\]/);
-      if (m) setSubs(JSON.parse(m[0]).map(t => ({id:uid(), text:t, on:true})));
-      else setErr("Parse error.");
-    } catch(e) { setErr("Parse error."); }
+    const job = await runBreakdownJob("task.breakdown.v1", { taskText: inp });
+    const steps = Array.isArray(job?.output) ? job.output : [];
+    if (steps.length) setSubs(steps.map(t => ({id:uid(), text:t, on:true})));
+    else setErr("Parse error.");
   };
 
   const chat = async () => {
     if (!cm.trim()) return;
     const nh = [...ch, {r:"user", t:cm}]; setCh(nh); setCm("");
-    const r = await callG(`You are a productivity assistant helping shatter a task. Task: "${inp}"\nCurrent crystals (JSON): ${JSON.stringify(subs.filter(s=>s.on).map(s=>s.text))}\nUser says: "${nh[nh.length-1].t}"\nIMPORTANT: Respond with an updated crystal list as a JSON array. First a short explanation, then the JSON array.`);
-    if (!r) return;
-    try {
-      const jm = r.match(/\[[\s\S]*\]/);
-      if (jm) setSubs(JSON.parse(jm[0]).map(t => ({id:uid(), text:t, on:true})));
-      const explain = r.replace(/\[[\s\S]*\]/, '').trim();
-      setCh([...nh, {r:"ai", t:explain||"Updated."}]);
-    } catch(e) { setCh([...nh, {r:"ai", t:r.trim()}]); }
+    const job = await runBreakdownJob("task.breakdown_revise.v1", {
+      taskText: inp,
+      steps: subs.filter(s=>s.on).map(s=>s.text),
+      userRequest: nh[nh.length-1].t,
+    });
+    const steps = Array.isArray(job?.output?.steps) ? job.output.steps : [];
+    if (steps.length) setSubs(steps.map(t => ({id:uid(), text:t, on:true})));
+    setCh([...nh, {r:"ai", t:job?.output?.explanation || "Updated."}]);
   };
 
   // B12 fix: step text is just the step itself, not "Step N of parent: text"
