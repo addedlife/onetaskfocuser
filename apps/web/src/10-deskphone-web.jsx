@@ -27,6 +27,7 @@ const DESKPHONE_WEB_VERSION = "001";
 const MAX_COMPOSE_ATTACHMENTS = 6;
 const WEBPHONE_MESSAGE_LIMIT = 5000;
 const WEBPHONE_MEDIA_MESSAGE_LIMIT = 1200;
+const THREAD_RENDER_BATCH = 240;
 
 const COLORS = {
   bgMain: "#FFFFFF",
@@ -461,7 +462,7 @@ function isBridgeApiReady(status, online) {
 }
 
 function connectionStatusFromStatus(status) {
-  return status ? "Connected to this device" : "This device is not reachable";
+  return status ? "Connected to DeskPhone Host" : "DeskPhone Host is not reachable";
 }
 
 function webVersionLabel() {
@@ -518,12 +519,12 @@ function bridgeConnectSummary(status, online) {
   if (hasRemotePhoneRows(status)) {
     return `${remote.contacts || 0} contacts, ${remote.calls || 0} calls, ${remote.messages || 0} texts`;
   }
-  return isBridgeApiReady(status, online) ? "This device is ready" : online ? "Waiting for phone data" : "This device is not reachable";
+  return isBridgeApiReady(status, online) ? "Phone Bridge is ready" : online ? "Waiting for phone data" : "Phone Bridge is not reachable";
 }
 
 function bridgeStatusLabel(status, online) {
-  if (isBridgeApiReady(status, online)) return "Connected to this device";
-  return online ? "This device is ready" : "This device is not reachable";
+  if (isBridgeApiReady(status, online)) return "Connected to Phone Bridge";
+  return online ? "Phone Bridge is ready" : "Phone Bridge is not reachable";
 }
 
 function bridgeIndicatorRows(status, online) {
@@ -532,7 +533,7 @@ function bridgeIndicatorRows(status, online) {
   return [
     {
       key: "display",
-      label: "This screen to this device",
+      label: "This screen to Phone Bridge",
       value: displayConnected ? "Connected" : "Not connected",
       ok: displayConnected,
     },
@@ -551,24 +552,8 @@ function bridgeIndicatorRows(status, online) {
   ];
 }
 
-function hostDeviceDescriptor(status) {
-  const name =
-    status?.hostDeviceName ||
-    status?.HostDeviceName ||
-    status?.computerName ||
-    status?.ComputerName ||
-    status?.hostConnector ||
-    status?.HostConnector ||
-    "this device";
-  const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
-  const osType =
-    status?.hostOsType ||
-    status?.HostOsType ||
-    (userAgent.includes("Windows") ? "Windows" :
-     userAgent.includes("Android") ? "Android" :
-     userAgent.includes("iPad") || userAgent.includes("iPhone") ? "iOS" :
-     userAgent.includes("Mac") ? "macOS" : "");
-  return osType ? `${name}, ${osType}` : name;
+function localPhoneHostName(status) {
+  return isAndroidPhoneBridge(status) ? "Phone Bridge" : "DeskPhone Host";
 }
 
 function callBannerText(status) {
@@ -1695,6 +1680,7 @@ function MessagesSlice({
   const [imageRotation, setImageRotation] = useState(0);
   const [replyAttachments, setReplyAttachments] = useState([]);
   const [phoneView, setPhoneView] = useState(false);
+  const [threadRenderLimit, setThreadRenderLimit] = useState(THREAD_RENDER_BATCH);
   const messageScrollRef = useRef(null);
   const composeRef = useRef(null);
   const replyAttachmentInputRef = useRef(null);
@@ -1746,6 +1732,9 @@ function MessagesSlice({
     () => selectedConversation?.messages.filter((message) => message.isPinned).slice().reverse() || [],
     [selectedConversation]
   );
+  useEffect(() => {
+    setThreadRenderLimit(THREAD_RENDER_BATCH);
+  }, [selectedConversation?.key]);
   const threadSearchLower = threadSearch.trim().toLowerCase();
   const threadMatchIds = useMemo(() => (
     threadSearchLower && selectedConversation
@@ -1758,6 +1747,13 @@ function MessagesSlice({
   const threadMatchIdSet = useMemo(() => new Set(threadMatchIds), [threadMatchIds]);
   const threadMatchCount = threadMatchIds.length;
   const activeThreadSearchCursor = threadMatchCount ? Math.min(threadSearchCursor, threadMatchCount - 1) : 0;
+  const selectedThreadMessages = selectedConversation?.messages || [];
+  const renderedThreadMessages = useMemo(() => {
+    if (!selectedThreadMessages.length) return [];
+    if (threadSearchLower) return selectedThreadMessages;
+    return selectedThreadMessages.slice(Math.max(0, selectedThreadMessages.length - threadRenderLimit));
+  }, [selectedThreadMessages, threadRenderLimit, threadSearchLower]);
+  const hiddenThreadMessageCount = Math.max(0, selectedThreadMessages.length - renderedThreadMessages.length);
 
   useEffect(() => {
     setThreadSearchCursor(threadMatchIds.length ? threadMatchIds.length - 1 : 0);
@@ -1850,8 +1846,20 @@ function MessagesSlice({
     const scrollBox = messageScrollRef.current;
     const item = Array.from(scrollBox?.querySelectorAll?.("[data-message-id]") || [])
       .find((node) => node.getAttribute("data-message-id") === messageId);
-    item?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, []);
+    if (item) {
+      item.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+    const index = selectedThreadMessages.findIndex((message) => message.id === messageId);
+    if (index >= 0) {
+      setThreadRenderLimit(Math.min(selectedThreadMessages.length, selectedThreadMessages.length - index + THREAD_RENDER_BATCH));
+      window.requestAnimationFrame(() => {
+        const nextItem = Array.from(scrollBox?.querySelectorAll?.("[data-message-id]") || [])
+          .find((node) => node.getAttribute("data-message-id") === messageId);
+        nextItem?.scrollIntoView({ block: "center", behavior: "smooth" });
+      });
+    }
+  }, [selectedThreadMessages]);
 
   const revealMessageActions = useCallback((messageId) => {
     setOpenActionMessageId((current) => current === messageId ? "" : messageId);
@@ -2199,11 +2207,21 @@ function MessagesSlice({
                   </div>
                 ) : null}
                 <div className="dp-message-scroll" ref={messageScrollRef}>
-                  {selectedConversation.messages.map((message, index) => (
+                  {hiddenThreadMessageCount > 0 ? (
+                    <button
+                      type="button"
+                      className="dp-thread-load-older"
+                      onClick={() => setThreadRenderLimit((current) => Math.min(selectedThreadMessages.length, current + THREAD_RENDER_BATCH))}
+                    >
+                      {icon("history", 16)}
+                      <span>Show older messages ({hiddenThreadMessageCount})</span>
+                    </button>
+                  ) : null}
+                  {renderedThreadMessages.map((message, index) => (
                     <MessageBubble
                       key={message.id}
                       message={message}
-                      previousMessage={selectedConversation.messages[index - 1]}
+                      previousMessage={renderedThreadMessages[index - 1]}
                       open={openActionMessageId === message.id}
                       searchMatch={threadMatchIdSet.has(message.id)}
                       searchCurrent={threadMatchIds[activeThreadSearchCursor] === message.id}
@@ -2876,13 +2894,13 @@ function SimpleTabContent({
               <div className="dp-device-manager-head">
                 <h3>This screen</h3>
                 <span className={`dp-bridge-state ${online ? "is-ready" : "needs-attention"}`}>
-                  {online ? "Connected to this device" : "This device is not reachable"}
+                  {online ? `Connected to ${localPhoneHostName(status)}` : `${localPhoneHostName(status)} is not reachable`}
                 </span>
               </div>
               <div className="dp-device-status">
                 {online
-                  ? `Using ${hostDeviceDescriptor(status)}. Status refreshes automatically.`
-                  : "Open the phone service on this device, then refresh."}
+                  ? `${localPhoneHostName(status)} is online. Source phone: ${hostDeviceName(status)}.`
+                  : "Open the local phone service, then refresh."}
               </div>
             </div>
             <div className="dp-settings-actions">
@@ -2908,12 +2926,12 @@ function SimpleTabContent({
             {isAndroidBridge ? (
               <div className="dp-device-manager dp-phone-bridge-card" data-native-source="MainWindow.xaml:4052">
                 <div className="dp-device-manager-head">
-                  <h3>This device to phone</h3>
+                  <h3>{localPhoneHostName(status)} to source phone</h3>
                   <span className={`dp-bridge-state ${phoneDataReady ? "is-ready" : "needs-attention"}`}>
                     {phoneDataReady ? "Ready" : "Needs attention"}
                   </span>
                 </div>
-                <div className="dp-device-status">{phoneDataReady ? "Phone data is available on this device." : "Phone data is not available yet."}</div>
+                <div className="dp-device-status">{phoneDataReady ? `Phone data from ${hostDeviceName(status)} is available through ${localPhoneHostName(status)}.` : "Phone data is not available yet."}</div>
                 <div className="dp-bridge-metrics" aria-label="Bridge data available">
                   <div><strong>{remotePhone.contacts || 0}</strong><span>Contacts</span></div>
                   <div><strong>{remotePhone.calls || 0}</strong><span>Calls</span></div>
@@ -4175,6 +4193,22 @@ const css = `
   overscroll-behavior: contain;
   scroll-padding-block: 16px 112px;
   padding: 12px 24px 112px;
+}
+.dp-thread-load-older {
+  min-height: 34px;
+  margin: 0 auto 12px;
+  padding: 0 12px;
+  border: 1px solid var(--dp-border);
+  background: var(--dp-bg-surface);
+  color: var(--dp-text-second);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.dp-thread-load-older:hover {
+  background: var(--dp-bg-hover);
 }
 .dp-message-item {
   display: grid;
@@ -5849,15 +5883,16 @@ export function DeskPhoneWebPanel({
     [bridgeMode, online, status]
   );
   const callsConnectionLabel = useMemo(() => {
-    const deviceDescriptor = hostDeviceDescriptor(status);
+    const phoneHostName = localPhoneHostName(status);
+    const sourcePhone = hostDeviceName(status);
     return (
       <div className="dp-channel-row">
         <div className="dp-channel-status">
           <span className={`dp-status-dot ${online ? "is-online" : ""}`} />
-          <strong>This screen to {deviceDescriptor}</strong>
+          <strong>This screen to {phoneHostName}</strong>
         </div>
         <div className="dp-channel-guide">
-          {online ? "Connected. Status refreshes automatically." : "Not reachable. Open the phone service on this device."}
+          {online ? `${phoneHostName} is online. Source phone: ${sourcePhone}.` : `${phoneHostName} is not reachable. Open the local phone service.`}
         </div>
       </div>
     );
@@ -5868,17 +5903,18 @@ export function DeskPhoneWebPanel({
     const callsConnected = String(hfpStatus).toLowerCase().includes("connected");
     const textsConnected = String(mapStatus).toLowerCase().includes("connected");
     const isConnected = callsConnected || textsConnected;
-    const deviceDescriptor = hostDeviceDescriptor(status);
+    const phoneHostName = localPhoneHostName(status);
+    const sourcePhone = hostDeviceName(status);
 
     return (
       <div className="dp-channel-row">
         <div className="dp-channel-status">
           <span className={`dp-status-dot ${isConnected ? "is-online" : ""}`} />
-          <strong>{deviceDescriptor} to phone</strong>
+          <strong>{phoneHostName} to source phone</strong>
         </div>
         <div className="dp-channel-guide">
           {isConnected
-            ? `Connected for ${callsConnected && textsConnected ? "calls and texts" : callsConnected ? "calls" : "texts"} by Bluetooth.`
+            ? `${sourcePhone} is connected for ${callsConnected && textsConnected ? "calls and texts" : callsConnected ? "calls" : "texts"} by Bluetooth.`
             : "Phone not available. Make sure the phone is nearby, paired, and Bluetooth is on."}
         </div>
       </div>

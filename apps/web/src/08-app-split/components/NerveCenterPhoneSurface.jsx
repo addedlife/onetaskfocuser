@@ -490,10 +490,12 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
                       </div>
                       {preview && !expanded && <span style={{ display: "block", fontSize: compact ? 13 : 14, color: C.muted, marginTop: 1, whiteSpace: compact ? "nowrap" : "normal", overflow: compact ? "hidden" : undefined, textOverflow: compact ? "ellipsis" : undefined, wordBreak: compact ? "normal" : "break-word", lineHeight: compact ? 1.35 : 1.5 }}>{preview}</span>}
                     </button>
-                    <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
-                      {suiteIcon("more_horiz", 17)}
-                    </button>
-                    {actionsOpen && (
+                    {!expanded && (
+                      <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
+                        {suiteIcon("more_horiz", 17)}
+                      </button>
+                    )}
+                    {!expanded && actionsOpen && (
                       <div style={phoneActionGroupStyle}>
                         <AB icon="call" title="Call" onClick={() => { setOpenPhoneActionId(null); dialNum(m._who); }} />
                         <AB icon="sms" title="Text" onClick={() => { setOpenPhoneActionId(null); openCompose(m._name, m._who); }} />
