@@ -489,3 +489,4 @@ Current source-grade file count after cleanup: 162 files.
 - `git diff --check` passed; existing line-ending normalization warnings only.
 - Local Vite returned HTTP 200 at `http://127.0.0.1:4305/?suite=nervecenter`.
 - In-app Browser verification was attempted, but the browser helper failed before opening the tab due a local Node runtime boot issue. Headless Edge screenshot reached the app and stopped at the existing unauthenticated `Loading...` shell, matching the prior headless limitation for this surface.
+- Pushed commit `19ee669` to `origin/main`; Netlify Git-triggered production served `assets/index-VmtlB680.js` on poll attempt 3.
