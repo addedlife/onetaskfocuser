@@ -502,3 +502,14 @@ Current source-grade file count after cleanup: 162 files.
 - `git diff --check` passed; existing line-ending normalization warnings only.
 - Vite preview returned HTTP 200 at `http://127.0.0.1:4310/?suite=nervecenter`; dev server smoke was blocked by the existing unresolved `@emotion/is-prop-valid` import under `apps/web/shailos/assets`.
 - Pushed commit `73f1796` to `origin/main`; Netlify Git-triggered production served `assets/index-MjB3wvi_.js` on poll attempt 3.
+
+## 2026-05-18 NerveCenter Shailos Strict Queue Cleanup
+
+- Tightened NerveCenter Shailos task classification so bare Shaila-priority tasks no longer create Shailos-pane rows.
+- Kept legacy Shaila-priority task records as supporting evidence only when they match a real Shailos record by text.
+- Added fallback matching for old task text prefixes such as "Research" and "Get back" so prior answer/got-back fields can still resolve matching Shailos.
+- Changed recently resolved Shailos filtering to use the strict Shaila workflow classifier.
+- Focused Node state test passed for non-Shaila priority noise, legacy answer matching, got-back hiding, and linked pending Shailos.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `git diff --check` passed; existing line-ending normalization warnings only.
+- Vite preview returned HTTP 200 at `http://127.0.0.1:4311/?suite=nervecenter`.

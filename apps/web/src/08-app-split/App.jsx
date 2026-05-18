@@ -36,7 +36,7 @@ import { useSuiteNavigation } from './hooks/useSuiteNavigation.js';
 import { useTimedUndo } from './hooks/useTimedUndo.js';
 import { useTipCarousel } from './hooks/useTipCarousel.js';
 import { useToastNotifier } from './hooks/useToastNotifier.js';
-import { buildNerveShailaRows, isShailaPriority, shailaIsAnswered, shailaIsGotBack } from './utils/shailosQueue.js';
+import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack } from './utils/shailosQueue.js';
 
 function App({ user, onSignOut }) {
   Store.setUid(canonicalUid(user));
@@ -2111,7 +2111,7 @@ Give a thorough, analytical response (4-8 sentences) with specific numbers and a
   const switchboardShailaList = buildNerveShailaRows(allSwitchboardTasks, pris, shailosSnapshot);
   const shailaOpenCount = switchboardShailaList.length;
   const switchboardShailaCompleted = compT
-    .filter(t => isShailaPriority(t.priority, pris) && t.completed)
+    .filter(t => isNerveTaskShailaWork(t, pris) && t.completed)
     .sort((a, b) => (b.completedAt || b.createdAt || 0) - (a.completedAt || a.createdAt || 0))
     .slice(0, 5);
   const shellHidden = !!(zen && curT);

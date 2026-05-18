@@ -7,8 +7,7 @@ function isNerveTaskShailaWork(task, priorities = []) {
     task?.type === "shailo-research" ||
     task?.type === "shaila-research" ||
     !!task?.shailaId ||
-    !!task?.isGetBackStep ||
-    isShailaPriority(task?.priority, priorities);
+    !!task?.isGetBackStep;
 }
 
 function shailaCreatedAt(value) {
@@ -50,6 +49,14 @@ function shailaText(item) {
   ).trim();
 }
 
+function shailaTextKey(item) {
+  return shailaText(item)
+    .replace(/^(research|researching|get back|get back about|follow up|todo|task)\s*[-:\u2013\u2014]\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 function hasText(value) {
   return String(value || "").trim().length > 0;
 }
@@ -63,7 +70,11 @@ function shailaHasAnswer(item) {
 }
 
 function shailaIsGotBack(item) {
-  return shailaStatus(item) === "got_back" ||
+  const status = shailaStatus(item);
+  return status === "got_back" ||
+    status === "gotback" ||
+    status === "got-back" ||
+    status === "got_back_to_asker" ||
     shailaFlag(item, "gotBackToAsker") ||
     shailaFlag(item, "gotBack") ||
     shailaFlag(item, "got_back");
@@ -76,7 +87,7 @@ function shailaIsAnswered(item) {
 
 function shailaGroupKey(task) {
   if (task?.shailaId) return `id:${task.shailaId}`;
-  const parent = String(task?.parentTask || "").trim().toLowerCase();
+  const parent = shailaTextKey(task);
   if (parent) return `parent:${parent}`;
   return `task:${task?.id || shailaText(task).toLowerCase()}`;
 }
@@ -85,7 +96,9 @@ function buildNerveShailaRows(tasks = [], priorities = [], sourceShailos = []) {
   const groups = new Map();
 
   (tasks || []).forEach((task, index) => {
-    if (!isNerveTaskShailaWork(task, priorities)) return;
+    const linkedShailaWork = isNerveTaskShailaWork(task, priorities);
+    const legacyShailaPriority = !linkedShailaWork && isShailaPriority(task?.priority, priorities);
+    if (!linkedShailaWork && !legacyShailaPriority) return;
     const key = shailaGroupKey(task);
     const existing = groups.get(key) || {
       id: key,
@@ -94,22 +107,31 @@ function buildNerveShailaRows(tasks = [], priorities = [], sourceShailos = []) {
       tasks: [],
       order: index,
       createdAt: task.createdAt || 0,
+      hasLinkedTask: false,
+      hasLegacyTask: false,
     };
     existing.tasks.push(task);
     existing.order = Math.min(existing.order, index);
     existing.createdAt = Math.min(existing.createdAt || task.createdAt || 0, task.createdAt || existing.createdAt || 0);
     existing.shailaId = existing.shailaId || task.shailaId || null;
     existing.parentTask = shailaText(existing) || shailaText(task);
+    existing.hasLinkedTask = existing.hasLinkedTask || linkedShailaWork;
+    existing.hasLegacyTask = existing.hasLegacyTask || legacyShailaPriority;
     groups.set(key, existing);
   });
 
   (sourceShailos || []).forEach((shaila, index) => {
     if (!shaila?.id) return;
     const key = `id:${shaila.id}`;
-    const existing = groups.get(key);
+    const textKey = shailaTextKey(shaila);
+    const fallbackKey = textKey ? `parent:${textKey}` : null;
+    const existing = groups.get(key) || (fallbackKey ? groups.get(fallbackKey) : null);
     if (existing) {
+      if (fallbackKey && fallbackKey !== key) groups.delete(fallbackKey);
+      existing.id = key;
       existing.sourceShaila = shaila;
-      existing.parentTask = shailaText(existing) || shailaText(shaila);
+      existing.shailaId = existing.shailaId || shaila.id;
+      existing.parentTask = shailaText(shaila) || shailaText(existing);
       existing.createdAt = existing.createdAt || shailaCreatedAt(shaila.createdAt || shaila.updatedAt);
       groups.set(key, existing);
       return;
@@ -123,11 +145,14 @@ function buildNerveShailaRows(tasks = [], priorities = [], sourceShailos = []) {
       order: tasks.length + index,
       createdAt: shailaCreatedAt(shaila.createdAt || shaila.updatedAt),
       sourceShaila: shaila,
+      hasLinkedTask: false,
+      hasLegacyTask: false,
     });
   });
 
   return [...groups.values()]
     .map(group => {
+      if (!group.sourceShaila && !group.hasLinkedTask) return null;
       const activeTasks = group.tasks.filter(t => !t.completed);
       const researchTasks = group.tasks.filter(t => !t.isGetBackStep);
       const getBackTasks = group.tasks.filter(t => t.isGetBackStep);
@@ -136,8 +161,10 @@ function buildNerveShailaRows(tasks = [], priorities = [], sourceShailos = []) {
       const sourceAnswered = shailaIsAnswered(group.sourceShaila);
       const answered = sourceAnswered ||
         researchTasks.some(t => t.completed || shailaHasAnswer(t));
-      const gotBack = shailaIsGotBack(group.sourceShaila) || getBackTasks.some(t => t.completed || shailaIsGotBack(t));
-      const status = gotBack ? "got_back" : sourceAnswered || (activeGetBack && (answered || !activeResearch)) ? "get_back" : "research";
+      const gotBack = shailaIsGotBack(group.sourceShaila) ||
+        group.tasks.some(t => shailaIsGotBack(t)) ||
+        getBackTasks.some(t => t.completed);
+      const status = gotBack ? "got_back" : answered || (activeGetBack && !activeResearch) ? "get_back" : "research";
       const displayTask = status === "get_back" ? (activeGetBack || group.sourceShaila || activeResearch) : activeResearch || activeTasks[0] || group.tasks[0] || group.sourceShaila;
       if (gotBack || !displayTask) return null;
       return {
