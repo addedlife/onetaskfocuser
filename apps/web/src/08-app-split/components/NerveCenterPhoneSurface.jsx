@@ -501,7 +501,17 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
                     )}
                     {expanded && preview && (
                       <div style={{ gridColumn: "2 / 4", fontSize: compact ? 13 : 14, lineHeight: 1.5, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word", padding: "0 4px 4px 0" }}>
-                        {preview}
+                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>{preview}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                            <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); dialNum(m._who); }} title="Call" aria-label="Call" style={phoneIconButton(false)}>
+                              {suiteIcon("call", 15)}
+                            </button>
+                            <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); openCompose(m._name, m._who); }} title="Reply" aria-label="Reply" style={phoneIconButton(false)}>
+                              {suiteIcon("sms", 15)}
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
