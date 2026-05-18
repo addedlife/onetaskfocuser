@@ -74,6 +74,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
   const [composeSearch, setComposeSearch] = useState("");   // contact search in new-compose mode
   const [composeFocused, setComposeFocused] = useState(false);
   const [openPhoneActionId, setOpenPhoneActionId] = useState(null);
+  const [expandedPhoneMessageId, setExpandedPhoneMessageId] = useState(null);
   const C = cleanTheme(T);
 
   const refresh = useCallback(async () => {
@@ -478,15 +479,16 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
                 const time = fmtTime(m.timestamp || m.date || m.time);
                 const actionId = `msg-${m._who}-${idx}`;
                 const actionsOpen = openPhoneActionId === actionId;
+                const expanded = expandedPhoneMessageId === actionId;
                 return (
-                  <div key={`${m._who}-${idx}`} className="nc-action-row" style={phoneRowStyle}>
+                  <div key={`${m._who}-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, background: expanded ? C.hover : "transparent" }}>
                     <span style={{ width: 32, height: 32, borderRadius: 99, background: isUnread ? C.hover : C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color: isUnread ? C.accent : msgColor, flexShrink: 0, marginTop: 2 }}>{suiteIcon(msgIcon, 15)}</span>
-                    <button onClick={() => openCompose(m._name, m._who)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: T.text }}>
+                    <button onClick={() => setExpandedPhoneMessageId(expanded ? null : actionId)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: T.text }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
                         <span style={{ flex: 1, fontSize: 15, fontWeight: isUnread ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m._name}</span>
                         {time && <span style={{ fontSize: 13, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
                       </div>
-                      {preview && <span style={{ display: "block", fontSize: compact ? 13 : 14, color: C.muted, marginTop: 1, whiteSpace: compact ? "nowrap" : "normal", overflow: compact ? "hidden" : undefined, textOverflow: compact ? "ellipsis" : undefined, wordBreak: compact ? "normal" : "break-word", lineHeight: compact ? 1.35 : 1.5 }}>{preview}</span>}
+                      {preview && !expanded && <span style={{ display: "block", fontSize: compact ? 13 : 14, color: C.muted, marginTop: 1, whiteSpace: compact ? "nowrap" : "normal", overflow: compact ? "hidden" : undefined, textOverflow: compact ? "ellipsis" : undefined, wordBreak: compact ? "normal" : "break-word", lineHeight: compact ? 1.35 : 1.5 }}>{preview}</span>}
                     </button>
                     <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
                       {suiteIcon("more_horiz", 17)}
@@ -495,6 +497,11 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
                       <div style={phoneActionGroupStyle}>
                         <AB icon="call" title="Call" onClick={() => { setOpenPhoneActionId(null); dialNum(m._who); }} />
                         <AB icon="sms" title="Text" onClick={() => { setOpenPhoneActionId(null); openCompose(m._name, m._who); }} />
+                      </div>
+                    )}
+                    {expanded && preview && (
+                      <div style={{ gridColumn: "2 / 4", fontSize: compact ? 13 : 14, lineHeight: 1.5, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word", padding: "0 4px 4px 0" }}>
+                        {preview}
                       </div>
                     )}
                   </div>

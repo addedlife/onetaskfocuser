@@ -479,3 +479,13 @@ Current source-grade file count after cleanup: 162 files.
 - Local Vite smoke returned HTTP 200 at `http://127.0.0.1:4320/?suite=nervecenter`; `/manifest.webmanifest` returned HTTP 200 and contained both `id` and `launch_handler`.
 - `git diff --check` passed; line-ending normalization warnings only.
 - Pushed commit `212107c` to `origin/main`; Netlify Git-triggered production served `assets/index-DTX7sLyJ.js` on poll attempt 2, and production `/manifest.webmanifest` returned HTTP 200 with both `id` and `launch_handler`.
+
+## 2026-05-18 NerveCenter Message Detail Click
+
+- Researched list/detail UI practice before editing: selected list items should reveal the full item in a related detail area, with compact list rows remaining as summaries.
+- Changed NerveCenter Gmail rows so clicking a mail item selects it, fetches the full Gmail body on demand with the existing readonly Google token, and renders the readable message body in the Mail card. The Gmail external-open control remains available as a separate row action.
+- Changed the NerveCenter DeskPhone activity feed so clicking a text message expands the full SMS body in place, while Call/Text actions stay in the action menu.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `git diff --check` passed; existing line-ending normalization warnings only.
+- Local Vite returned HTTP 200 at `http://127.0.0.1:4305/?suite=nervecenter`.
+- In-app Browser verification was attempted, but the browser helper failed before opening the tab due a local Node runtime boot issue. Headless Edge screenshot reached the app and stopped at the existing unauthenticated `Loading...` shell, matching the prior headless limitation for this surface.

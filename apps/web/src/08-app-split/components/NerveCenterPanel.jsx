@@ -48,6 +48,44 @@ function softBorder(color, alpha) {
 
 const MIN_COLLAPSED_TASKS = 5;
 
+function decodeBase64UrlText(value) {
+  if (!value) return "";
+  try {
+    const normalized = String(value).replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+    return new TextDecoder("utf-8").decode(bytes);
+  } catch {
+    return "";
+  }
+}
+
+function htmlToText(html) {
+  if (!html) return "";
+  try {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    return (doc.body?.textContent || "").replace(/\s+/g, " ").trim();
+  } catch {
+    return String(html).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  }
+}
+
+function collectGmailBodyParts(part, acc = { plain: [], html: [] }) {
+  if (!part) return acc;
+  const mime = String(part.mimeType || "").toLowerCase();
+  const decoded = decodeBase64UrlText(part.body?.data);
+  if (decoded && mime.includes("text/plain")) acc.plain.push(decoded);
+  if (decoded && mime.includes("text/html")) acc.html.push(htmlToText(decoded));
+  (part.parts || []).forEach(child => collectGmailBodyParts(child, acc));
+  return acc;
+}
+
+function gmailFullBody(message) {
+  const parts = collectGmailBodyParts(message?.payload);
+  return (parts.plain.join("\n\n") || parts.html.join("\n\n") || "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems }) {
   const viewportW = useViewportWidth();
   const [taskDraft, setTaskDraft] = useState("");
@@ -71,6 +109,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [addEventLoading, setAddEventLoading] = useState(false);
   const [addEventError, setAddEventError] = useState(null);
   const [hoverEmail, setHoverEmail] = useState(null);
+  const [selectedEmailId, setSelectedEmailId] = useState(null);
+  const [emailDetails, setEmailDetails] = useState({});
+  const [emailDetailLoadingId, setEmailDetailLoadingId] = useState(null);
+  const [emailDetailError, setEmailDetailError] = useState("");
   const hoverTimerRef = useRef(null);
   const [reconnectTimedOut, setReconnectTimedOut] = useState(false);
   const [phoneStatusSummary, setPhoneStatusSummary] = useState({ online: false, tone: "offline", label: "DeskPhone offline", voicemailCount: 0 });
@@ -93,6 +135,36 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || '';
   const fmtFrom = (raw) => { const m = raw?.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : (raw || '').split('@')[0]; };
   const decodeSnippet = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ').trim();
+
+  async function handleEmailSelect(msg) {
+    if (!msg?.id) return;
+    setSelectedEmailId(msg.id);
+    setHoverEmail(null);
+    clearTimeout(hoverTimerRef.current);
+    if (emailDetails[msg.id] || emailDetailLoadingId === msg.id) return;
+    if (!googleToken) {
+      setEmailDetailError("Reconnect Google to read the full message.");
+      return;
+    }
+    setEmailDetailError("");
+    setEmailDetailLoadingId(msg.id);
+    try {
+      const r = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`, {
+        headers: { Authorization: `Bearer ${googleToken}` },
+      });
+      if (r.status === 401) throw new Error("Google session expired. Reconnect Google.");
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d?.error?.message || `Gmail message failed (${r.status})`);
+      }
+      const detail = await r.json();
+      setEmailDetails(prev => ({ ...prev, [msg.id]: { ...detail, fullBody: gmailFullBody(detail) || decodeSnippet(detail.snippet || msg.snippet) } }));
+    } catch (e) {
+      setEmailDetailError(e.message || "Could not load the full message.");
+    } finally {
+      setEmailDetailLoadingId(null);
+    }
+  }
 
   async function handleAddEvent() {
     if (!addEventText.trim() || addEventLoading) return;
@@ -628,6 +700,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           const cardHead = { minHeight: isStacked ? 28 : 36, padding: isStacked ? "3px 8px" : "11px 14px 8px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 };
           const cardBody = { flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: isStacked ? "2px 8px 6px" : "4px 14px 8px", overscrollBehavior: "contain", scrollbarGutter: "stable" };
           const headLabel = { fontSize: isStacked ? NC_TYPE.meta : NC_TYPE.label, fontWeight: 500, color: C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0, display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0 };
+          const selectedEmail = selectedEmailId ? (gmailMessages || []).find(msg => msg.id === selectedEmailId) : null;
+          const selectedEmailDetail = selectedEmailId ? emailDetails[selectedEmailId] : null;
+          const selectedEmailSource = selectedEmailDetail || selectedEmail;
+          const selectedEmailBody = selectedEmailDetail?.fullBody || decodeSnippet(selectedEmail?.snippet || "");
 
           return (
             <React.Fragment>
@@ -746,14 +822,18 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       </div>
                     ) : gmailMessages.length === 0 ? (
                       <p style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK, margin: "12px 0", textAlign: "center" }}>Inbox zero 🎉</p>
-                    ) : gmailMessages.map((msg, i) => {
+                    ) : (
+                      <React.Fragment>
+                      {gmailMessages.map((msg, i) => {
                       const subject = gmailHeader(msg, 'Subject') || '(no subject)';
                       const from = fmtFrom(gmailHeader(msg, 'From'));
                       const date = fmtTime(gmailHeader(msg, 'Date'));
                       const url = `https://mail.google.com/mail/u/0/#inbox/${msg.id}`;
+                      const selected = selectedEmailId === msg.id;
                       return (
-                        <a key={msg.id || i} href={url} target="_blank" rel="noopener noreferrer"
-                          style={{ display: "block", padding: isStacked ? "5px 2px" : "8px 4px", textDecoration: "none", color: "inherit", borderRadius: 4 }}
+                        <React.Fragment key={msg.id || i}>
+                        <div
+                          style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: isStacked ? "5px 2px" : "8px 4px", borderRadius: 4, background: selected ? (T.bgW || 'rgba(255,255,255,0.05)') : "transparent" }}
                           onMouseEnter={e => {
                             e.currentTarget.style.background = T.bgW || 'rgba(255,255,255,0.05)';
                             clearTimeout(hoverTimerRef.current);
@@ -766,16 +846,51 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                             e.currentTarget.style.background = 'transparent';
                             clearTimeout(hoverTimerRef.current);
                             setHoverEmail(null);
+                            if (selectedEmailId !== msg.id) e.currentTarget.style.background = 'transparent';
                           }}
                         >
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6, marginBottom: 2 }}>
-                            <span style={{ fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
-                            <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, flexShrink: 0 }}>{date}</span>
+                          <button type="button" onClick={() => handleEmailSelect(msg)}
+                            style={{ flex: 1, minWidth: 0, minHeight: 0, border: "none", background: "transparent", color: "inherit", textAlign: "left", padding: 0, cursor: "pointer", fontFamily: NC_FONT_STACK }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6, marginBottom: 2 }}>
+                              <span style={{ fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
+                              <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, flexShrink: 0 }}>{date}</span>
+                            </div>
+                            <span style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
+                          </button>
+                          <a href={url} target="_blank" rel="noopener noreferrer" title="Open in Gmail"
+                            style={{ color: C.faint, textDecoration: "none", fontSize: NC_TYPE.meta, lineHeight: 1.4, padding: "1px 2px", flexShrink: 0 }}
+                            onClick={e => e.stopPropagation()}>↗</a>
+                        </div>
+                        {selected && selectedEmailSource && (
+                          <div style={{ margin: "2px 0 8px", padding: "10px 10px 11px", borderRadius: 6, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, fontFamily: NC_FONT_STACK }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{gmailHeader(selectedEmailSource, 'Subject') || '(no subject)'}</div>
+                                <div style={{ fontSize: NC_TYPE.meta, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>{fmtFrom(gmailHeader(selectedEmailSource, 'From'))}</div>
+                              </div>
+                              <button type="button" onClick={() => { setSelectedEmailId(null); setEmailDetailError(""); }}
+                                title="Close message"
+                                style={{ width: 24, height: 24, minHeight: 0, border: "none", background: "transparent", color: C.faint, cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0 }}>x</button>
+                            </div>
+                            {emailDetailLoadingId === selectedEmailId ? (
+                              <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: NC_TYPE.meta, color: C.muted }}>
+                                <div style={{ width: 11, height: 11, borderRadius: "50%", border: `2px solid ${C.muted}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                                Loading full message...
+                              </div>
+                            ) : emailDetailError ? (
+                              <div style={{ fontSize: NC_TYPE.meta, color: C.danger }}>{emailDetailError}</div>
+                            ) : (
+                              <div style={{ fontSize: NC_TYPE.meta, lineHeight: 1.5, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: isStacked ? 150 : 220, overflowY: "auto", paddingRight: 2 }}>
+                                {selectedEmailBody || "No message body available."}
+                              </div>
+                            )}
                           </div>
-                          <span style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
-                        </a>
+                        )}
+                        </React.Fragment>
                       );
                     })}
+                    </React.Fragment>
+                    )}
                   </div>
                 </div>
               )}
