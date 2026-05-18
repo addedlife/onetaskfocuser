@@ -54,6 +54,33 @@ function messagePeerNumber(message) {
   return preferred.find(value => phoneDigits(value).length >= 4) || allMessageNumbers(message).find(value => phoneDigits(value).length >= 4) || "Unknown";
 }
 
+function messageBody(message) {
+  return String(message?.body || message?.text || message?.message || message?.content || message?.Body || message?.Text || message?.Message || message?.Content || "").trim();
+}
+
+function eventTimeMs(value) {
+  if (!value) return 0;
+  const d = new Date(typeof value === "number" ? value : value);
+  return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function messageTimeMs(message) {
+  return eventTimeMs(message?.timestamp || message?.date || message?.time || message?.Timestamp || message?.Date || message?.Time);
+}
+
+function isOutgoingMessage(message) {
+  const typeNum = typeof (message?.type || message?.Type) === "number" ? (message.type || message.Type) : null;
+  const dir = (typeof message?.type === "string" ? message.type : "") || message?.direction || message?.messageType || message?.folder || message?.Direction || message?.Type || "";
+  const dirL = String(dir).toLowerCase();
+  return typeNum === 2 || typeNum === 4 || typeNum === 5 || typeNum === 6 ||
+    dirL.includes("sent") || dirL.includes("out") || dirL === "send" || dirL === "egress" ||
+    message?.fromMe || message?.from_me || message?.isSent;
+}
+
+function isUnreadMessage(message) {
+  return !!(message?.unread || message?.isUnread || message?.read === false || message?.status === "unread");
+}
+
 function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
   const api = "http://127.0.0.1:8765";
   const viewportW = useViewportWidth();
@@ -212,16 +239,39 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
   const callerDisplay = callerName || (callerNumber ? (lookupName(callerNumber) || callerNumber) : "");
   const vmCount = parseInt(status?.voicemailCount || status?.VoicemailCount || status?.voicemail?.count || 0, 10) || 0;
 
-  const threadMap = new Map();
-  messages.forEach(m => {
-    const who = messagePeerNumber(m);
-    // directName: name embedded right on the message object by DeskPhone
-    const directName = m.name || m.displayName || m.contactName || m.fromName || m.senderName || m.contact ||
-      m.Name || m.DisplayName || m.ContactName || m.FromName || m.SenderName || m.Contact || "";
-    const resolvedName = directName || lookupName(who) || who;
-    if (!threadMap.has(who)) threadMap.set(who, { ...m, _who: who, _name: resolvedName });
-  });
-  const threads = Array.from(threadMap.values()).slice(0, 10);
+  const threads = useMemo(() => {
+    const threadMap = new Map();
+    (Array.isArray(messages) ? messages : []).forEach(m => {
+      const who = messagePeerNumber(m);
+      const directName = m.name || m.displayName || m.contactName || m.fromName || m.senderName || m.contact ||
+        m.Name || m.DisplayName || m.ContactName || m.FromName || m.SenderName || m.Contact || "";
+      const resolvedName = directName || lookupName(who) || who;
+      const at = messageTimeMs(m);
+      const existing = threadMap.get(who) || {
+        _who: who,
+        _name: resolvedName,
+        _messages: [],
+        _latestMessage: null,
+        _latestAt: 0,
+        _unreadCount: 0,
+      };
+      existing._name = existing._name === who && resolvedName !== who ? resolvedName : existing._name;
+      existing._messages.push(m);
+      if (at >= existing._latestAt) {
+        existing._latestAt = at;
+        existing._latestMessage = m;
+      }
+      if (isUnreadMessage(m)) existing._unreadCount += 1;
+      threadMap.set(who, existing);
+    });
+    return Array.from(threadMap.values())
+      .map(thread => ({
+        ...thread,
+        _messages: thread._messages.sort((a, b) => messageTimeMs(a) - messageTimeMs(b)),
+      }))
+      .sort((a, b) => b._latestAt - a._latestAt)
+      .slice(0, 10);
+  }, [messages, lookupName]);
   const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, 10);
   const hasMessages = threads.length > 0;
   const hasCalls = recentCalls.length > 0;
@@ -267,12 +317,10 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
     return d.toLocaleDateString(undefined, { weekday: "short" });
   };
   const timeMs = val => {
-    if (!val) return 0;
-    const d = new Date(typeof val === "number" ? val : val);
-    return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+    return eventTimeMs(val);
   };
   const activityItems = [
-    ...threads.map((m, idx) => ({ kind: "message", item: m, idx, at: timeMs(m.timestamp || m.date || m.time) })),
+    ...threads.map((thread, idx) => ({ kind: "message", item: thread, idx, at: thread._latestAt })),
     ...recentCalls.map((c, idx) => ({ kind: "call", item: c, idx, at: timeMs(c.timestamp || c.date || c.time || c.startTime || c.StartTime) })),
   ].sort((a, b) => b.at - a.at).slice(0, compact ? 8 : 14);
 
@@ -293,11 +341,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
   // Incoming SMS = sms icon; outgoing = outgoing_mail icon
   // Android SMS type codes: 1=inbox/received, 2=sent, 4=outbox/pending, 5=failed, 6=queued
   const msgDirIcon = m => {
-    const typeNum = typeof (m.type || m.Type) === "number" ? (m.type || m.Type) : null;
-    const dir = (typeof m.type === "string" ? m.type : "") || m.direction || m.messageType || m.folder || m.Direction || m.Type || "";
-    const dirL = String(dir).toLowerCase();
-    if (typeNum === 2 || typeNum === 4 || typeNum === 5 || typeNum === 6) return { icon: "outgoing_mail", color: T.tSoft };
-    if (dirL.includes("sent") || dirL.includes("out") || dirL === "send" || dirL === "egress" || m.fromMe || m.from_me || m.isSent) return { icon: "outgoing_mail", color: T.tSoft };
+    if (isOutgoingMessage(m)) return { icon: "outgoing_mail", color: T.tSoft };
     return { icon: "sms", color: T.tSoft };
   };
 
@@ -471,21 +515,24 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
           <div style={{ fontSize: 12, fontWeight: 500, color: C.muted, letterSpacing: 0, marginBottom: 3, paddingLeft: 4, paddingTop: 1, position: "sticky", top: 0, background: C.bg, zIndex: 1 }}>Activity</div>
           {activityItems.map(entry => {
             if (entry.kind === "message") {
-                const m = entry.item;
+                const thread = entry.item;
+                const m = thread._latestMessage || thread._messages?.[thread._messages.length - 1] || {};
                 const idx = entry.idx;
                 const { icon: msgIcon, color: msgColor } = msgDirIcon(m);
-                const isUnread = !!(m.unread || m.isUnread || m.read === false || m.status === "unread");
-                const preview = m.body || m.text || m.message || m.content || "";
-                const time = fmtTime(m.timestamp || m.date || m.time);
-                const actionId = `msg-${m._who}-${idx}`;
+                const isUnread = thread._unreadCount > 0;
+                const preview = messageBody(m);
+                const time = fmtTime(thread._latestAt);
+                const count = thread._messages?.length || 1;
+                const actionId = `msg-${thread._who}`;
                 const actionsOpen = openPhoneActionId === actionId;
                 const expanded = expandedPhoneMessageId === actionId;
                 return (
-                  <div key={`${m._who}-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, background: expanded ? C.hover : "transparent" }}>
+                  <div key={`${thread._who}-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, background: expanded ? C.hover : "transparent" }}>
                     <span style={{ width: 32, height: 32, borderRadius: 99, background: isUnread ? C.hover : C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color: isUnread ? C.accent : msgColor, flexShrink: 0, marginTop: 2 }}>{suiteIcon(msgIcon, 15)}</span>
                     <button onClick={() => setExpandedPhoneMessageId(expanded ? null : actionId)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: T.text }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
-                        <span style={{ flex: 1, fontSize: 15, fontWeight: isUnread ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m._name}</span>
+                        <span style={{ flex: 1, fontSize: 15, fontWeight: isUnread ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread._name}</span>
+                        {count > 1 && <span style={{ fontSize: 12, color: C.muted, flexShrink: 0, fontWeight: 500 }}>{count}</span>}
                         {time && <span style={{ fontSize: 13, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
                       </div>
                       {preview && !expanded && <span style={{ display: "block", fontSize: compact ? 13 : 14, color: C.muted, marginTop: 1, whiteSpace: compact ? "nowrap" : "normal", overflow: compact ? "hidden" : undefined, textOverflow: compact ? "ellipsis" : undefined, wordBreak: compact ? "normal" : "break-word", lineHeight: compact ? 1.35 : 1.5 }}>{preview}</span>}
@@ -497,22 +544,37 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
                     )}
                     {!expanded && actionsOpen && (
                       <div style={phoneActionGroupStyle}>
-                        <AB icon="call" title="Call" onClick={() => { setOpenPhoneActionId(null); dialNum(m._who); }} />
-                        <AB icon="sms" title="Text" onClick={() => { setOpenPhoneActionId(null); openCompose(m._name, m._who); }} />
+                        <AB icon="call" title="Call" onClick={() => { setOpenPhoneActionId(null); dialNum(thread._who); }} />
+                        <AB icon="sms" title="Text" onClick={() => { setOpenPhoneActionId(null); openCompose(thread._name, thread._who); }} />
                       </div>
                     )}
-                    {expanded && preview && (
+                    {expanded && (
                       <div style={{ gridColumn: "2 / 4", fontSize: compact ? 13 : 14, lineHeight: 1.5, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word", padding: "0 4px 4px 0" }}>
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>{preview}</div>
+                          <div style={{ flex: 1, minWidth: 0, color: C.muted }}>{count} message{count === 1 ? "" : "s"}</div>
                           <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                            <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); dialNum(m._who); }} title="Call" aria-label="Call" style={phoneIconButton(false)}>
+                            <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); dialNum(thread._who); }} title="Call" aria-label="Call" style={phoneIconButton(false)}>
                               {suiteIcon("call", 15)}
                             </button>
-                            <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); openCompose(m._name, m._who); }} title="Reply" aria-label="Reply" style={phoneIconButton(false)}>
+                            <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); openCompose(thread._name, thread._who); }} title="Reply" aria-label="Reply" style={phoneIconButton(false)}>
                               {suiteIcon("sms", 15)}
                             </button>
                           </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {thread._messages.map((msg, msgIdx) => {
+                            const outgoing = isOutgoingMessage(msg);
+                            const msgText = messageBody(msg);
+                            const msgTime = fmtTime(messageTimeMs(msg));
+                            return (
+                              <div key={`${thread._who}-${messageTimeMs(msg)}-${msgIdx}`} style={{ alignSelf: outgoing ? "flex-end" : "flex-start", maxWidth: "92%", minWidth: 0 }}>
+                                <div style={{ borderRadius: 8, border: `1px solid ${outgoing ? "transparent" : C.divider}`, background: outgoing ? C.hover : C.bgSoft, color: C.text, padding: "7px 9px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                                  {msgText || "(no text)"}
+                                </div>
+                                {msgTime && <div style={{ fontSize: 11, color: C.faint, marginTop: 2, textAlign: outgoing ? "right" : "left" }}>{msgTime}</div>}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}

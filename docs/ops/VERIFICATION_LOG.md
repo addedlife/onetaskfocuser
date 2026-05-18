@@ -513,3 +513,13 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` passed in `apps/web`; existing large-bundle warning remains.
 - `git diff --check` passed; existing line-ending normalization warnings only.
 - Vite preview returned HTTP 200 at `http://127.0.0.1:4311/?suite=nervecenter`.
+
+## 2026-05-18 NerveCenter Phone Text Threads
+
+- Researched conversation-list practice before editing: compact lists should group messages into contact/thread rows and expand manually to show the message history.
+- Changed NerveCenter phone messages from latest-message rows into contact threads sorted by latest activity.
+- Expanded text rows now render the fetched conversation history chronologically with incoming/outgoing bubble alignment and direct call/reply icons.
+- Kept the collapsed row compact with the latest text preview, latest time, unread styling, and message count.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `git diff --check` passed; existing line-ending normalization warnings only.
+- Vite preview returned HTTP 200 at `http://127.0.0.1:4312/?suite=nervecenter`.
