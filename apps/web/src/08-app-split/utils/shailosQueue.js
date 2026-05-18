@@ -19,8 +19,35 @@ function shailaCreatedAt(value) {
   return Number(value) || 0;
 }
 
+function shailaField(item, field) {
+  if (!item) return undefined;
+  const fields = item.fields || item.Fields;
+  if (fields && Object.prototype.hasOwnProperty.call(fields, field)) return fields[field];
+  return item[field];
+}
+
+function shailaStatus(item) {
+  return String(shailaField(item, "status") || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+}
+
+function shailaFlag(item, field) {
+  const value = shailaField(item, field);
+  return value === true || String(value || "").trim().toLowerCase() === "true";
+}
+
 function shailaText(item) {
-  return String(item?.parentTask || item?.synopsis || item?.parsedShaila || item?.content || item?.text || "").trim();
+  return String(
+    shailaField(item, "parentTask") ||
+    shailaField(item, "synopsis") ||
+    shailaField(item, "parsedShaila") ||
+    shailaField(item, "content") ||
+    shailaField(item, "shailaQuestion") ||
+    shailaField(item, "text") ||
+    ""
+  ).trim();
 }
 
 function hasText(value) {
@@ -28,22 +55,23 @@ function hasText(value) {
 }
 
 function shailaHasAnswer(item) {
-  return hasText(item?.answer) ||
-    hasText(item?.shailaAnswer) ||
-    hasText(item?.answerSummary) ||
-    hasText(item?.answeredBy) ||
-    hasText(item?.answererName);
+  return hasText(shailaField(item, "answer")) ||
+    hasText(shailaField(item, "shailaAnswer")) ||
+    hasText(shailaField(item, "answerSummary")) ||
+    hasText(shailaField(item, "answeredBy")) ||
+    hasText(shailaField(item, "answererName"));
 }
 
 function shailaIsGotBack(item) {
-  return item?.status === "got_back" ||
-    item?.gotBackToAsker === true ||
-    item?.gotBack === true ||
-    item?.got_back === true;
+  return shailaStatus(item) === "got_back" ||
+    shailaFlag(item, "gotBackToAsker") ||
+    shailaFlag(item, "gotBack") ||
+    shailaFlag(item, "got_back");
 }
 
 function shailaIsAnswered(item) {
-  return item?.status === "answered" || shailaHasAnswer(item);
+  const status = shailaStatus(item);
+  return status === "answered" || status === "have_answer" || shailaHasAnswer(item);
 }
 
 function shailaGroupKey(task) {
@@ -105,11 +133,12 @@ function buildNerveShailaRows(tasks = [], priorities = [], sourceShailos = []) {
       const getBackTasks = group.tasks.filter(t => t.isGetBackStep);
       const activeResearch = researchTasks.find(t => !t.completed);
       const activeGetBack = getBackTasks.find(t => !t.completed);
-      const answered = shailaIsAnswered(group.sourceShaila) ||
+      const sourceAnswered = shailaIsAnswered(group.sourceShaila);
+      const answered = sourceAnswered ||
         researchTasks.some(t => t.completed || shailaHasAnswer(t));
       const gotBack = shailaIsGotBack(group.sourceShaila) || getBackTasks.some(t => t.completed || shailaIsGotBack(t));
-      const status = gotBack ? "got_back" : shailaIsAnswered(group.sourceShaila) || (activeGetBack && (answered || !activeResearch)) ? "get_back" : "research";
-      const displayTask = status === "get_back" ? (activeGetBack || group.sourceShaila) : activeResearch || activeTasks[0] || group.tasks[0] || group.sourceShaila;
+      const status = gotBack ? "got_back" : sourceAnswered || (activeGetBack && (answered || !activeResearch)) ? "get_back" : "research";
+      const displayTask = status === "get_back" ? (activeGetBack || group.sourceShaila || activeResearch) : activeResearch || activeTasks[0] || group.tasks[0] || group.sourceShaila;
       if (gotBack || !displayTask) return null;
       return {
         ...displayTask,
@@ -128,4 +157,4 @@ function buildNerveShailaRows(tasks = [], priorities = [], sourceShailos = []) {
     .sort((a, b) => (a._nerveOrder - b._nerveOrder) || ((a._nerveCreatedAt || 0) - (b._nerveCreatedAt || 0)));
 }
 
-export { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority };
+export { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack };

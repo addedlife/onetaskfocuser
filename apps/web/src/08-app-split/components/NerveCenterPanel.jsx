@@ -587,7 +587,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               {visibleShailos.length ? visibleShailos.map((s, idx) => {
                 const text = nerveDisplaySummary(s, "Open shaila");
                 const isGetBack = s.status === "get_back" || !!s.isGetBackStep;
-                const chipLabel = isGetBack ? "Get back" : "Research";
+                const chipLabel = isGetBack ? "Get back" : "Answer";
                 const chipBg = isGetBack ? "rgba(201,146,60,0.22)" : "rgba(201,146,60,0.10)";
                 return (
                   <button key={s.id} onClick={onOpenShailos}
@@ -595,7 +595,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     <span style={{ width: 3, alignSelf: "stretch", minHeight: 28, borderRadius: 2, background: GOLD, flexShrink: 0 }} />
                     <span style={{ paddingLeft: 5, paddingTop: 1 }}>
                       <span style={{ display: "block", fontSize: ncType.body, fontWeight: "var(--nc-font-weight-strong, 500)", lineHeight: ncType.line, color: C.text, wordBreak: "break-word" }}>{text}</span>
-                      <span style={{ display: "block", fontSize: ncType.label, color: GOLD, fontWeight: 500, marginTop: 4 }}>{suiteIcon(isGetBack ? "schedule" : "search", 13)} {isGetBack ? "waiting to reply" : "pending research"}</span>
+                      <span style={{ display: "block", fontSize: ncType.label, color: GOLD, fontWeight: 500, marginTop: 4 }}>{suiteIcon(isGetBack ? "schedule" : "search", 13)} {isGetBack ? "waiting to reply" : "pending answer"}</span>
                     </span>
                     <span style={{ fontSize: 12, fontWeight: 500, color: GOLD, background: chipBg, border: `1px solid ${GOLD_BRD}`, borderRadius: 999, padding: "4px 9px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 2 }}>{chipLabel}</span>
                   </button>

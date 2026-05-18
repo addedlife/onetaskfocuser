@@ -36,7 +36,7 @@ import { useSuiteNavigation } from './hooks/useSuiteNavigation.js';
 import { useTimedUndo } from './hooks/useTimedUndo.js';
 import { useTipCarousel } from './hooks/useTipCarousel.js';
 import { useToastNotifier } from './hooks/useToastNotifier.js';
-import { buildNerveShailaRows, isShailaPriority } from './utils/shailosQueue.js';
+import { buildNerveShailaRows, isShailaPriority, shailaIsAnswered, shailaIsGotBack } from './utils/shailosQueue.js';
 
 function App({ user, onSignOut }) {
   Store.setUid(canonicalUid(user));
@@ -700,10 +700,12 @@ function App({ user, onSignOut }) {
         const addedShailaIds = new Set(); // prevent dupes within this batch
         shailos.forEach(s => {
           const linkedTasks = tasksByShailaId[s.id] || [];
+          const isAnswered = shailaIsAnswered(s);
+          const isGotBack = shailaIsGotBack(s);
           // Skip shailaIds that were just pre-assigned but haven't made it into state yet
           if (pendingShailaIds.current.has(s.id)) return;
           if (addedShailaIds.has(s.id)) return; // already adding in this batch
-          if (!linkedTasks.length && s.status !== "answered" && s.status !== "got_back") {
+          if (!linkedTasks.length && !isAnswered && !isGotBack) {
             // Use synopsis as concise title; fall back to content
             const parentText = s.synopsis || s.content || s.parsedShaila || "New shaila";
             if (shailaTextSet.has(parentText.trim().toLowerCase())) return; // text dedup
@@ -725,13 +727,13 @@ function App({ user, onSignOut }) {
             });
           } else if (linkedTasks.length) {
             const isGroup = linkedTasks.some(t => t.parentTask);
-            if (s.status === "answered") {
+            if (isAnswered && !isGotBack) {
               // Complete research step (step 1) only; leave "get back" step pending
               const step1 = isGroup
                 ? linkedTasks.find(t => !t.isGetBackStep && !t.completed)
                 : linkedTasks.find(t => !t.completed); // backward compat: single task
               if (step1) toCompleteIds.add(step1.id);
-            } else if (s.status === "got_back") {
+            } else if (isGotBack) {
               // Complete all remaining linked tasks
               linkedTasks.filter(t => !t.completed).forEach(t => toCompleteIds.add(t.id));
             }
