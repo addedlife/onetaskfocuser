@@ -523,3 +523,17 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` passed in `apps/web`; existing large-bundle warning remains.
 - `git diff --check` passed; existing line-ending normalization warnings only.
 - Vite preview returned HTTP 200 at `http://127.0.0.1:4312/?suite=nervecenter`.
+
+## 2026-05-18 AI Job Registry Consolidation
+
+- Researched current AI API best practice before editing: keep prompts centralized, use structured outputs where available, keep stable prompt prefixes cache-friendly, and validate/repair model JSON before writing to app state.
+- Added a backend AI job registry in `apps/web/backend/functions/_ai-core.cjs` with 25 named jobs spanning Yeshivish transcription, NerveCenter analysis, tasks, email summaries, schedule parsing, and Shailos parsing/research/summaries.
+- Moved active web and Shailos callers onto `runAIJob(...)` so prompts now live in the backend registry instead of being scattered across UI modules.
+- Preserved existing provider/model settings flow through `/.netlify/functions/ai-proxy`; production `/.netlify/functions/app-config` returned HTTP 200 with 25 jobs, including `transcribe.yeshivish.v1` and `shaila.research_summarize_sources.v1`.
+- `node --check` passed for `_ai-core.cjs`, `ai-proxy.js`, `app-config.js`, and `01-core.js`.
+- `npm run lint` and `npm run build` passed in `apps/shailos`.
+- `node scripts/copy-shailos-to-dist.cjs` passed in `apps/web`.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- Local Vite preview returned HTTP 200 for `/` and `/shailos/`.
+- `npm run lint` in `apps/web` is still blocked by the existing ESLint glob issue where `src/*.jsx` is ignored by repo lint config.
+- Pushed commit `b349b40` to `origin/main`; production root returned HTTP 200 and production `app-config` served the new AI job registry.
