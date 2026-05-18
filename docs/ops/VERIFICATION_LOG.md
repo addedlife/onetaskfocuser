@@ -501,3 +501,4 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` passed in `apps/web`; existing large-bundle warning remains.
 - `git diff --check` passed; existing line-ending normalization warnings only.
 - Vite preview returned HTTP 200 at `http://127.0.0.1:4310/?suite=nervecenter`; dev server smoke was blocked by the existing unresolved `@emotion/is-prop-valid` import under `apps/web/shailos/assets`.
+- Pushed commit `73f1796` to `origin/main`; Netlify Git-triggered production served `assets/index-MjB3wvi_.js` on poll attempt 3.
