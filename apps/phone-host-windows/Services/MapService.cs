@@ -196,7 +196,12 @@ public class MapService : IAsyncDisposable
         }
 
         // Subsequent: probe newest handle in both folders in one lock acquisition
-        var (probeInbox, probeSent) = await ProbeBothFoldersAsync(ct);
+        var (probeInbox, probeSent, probeFailures) = await ProbeBothFoldersAsync(ct);
+        if (probeFailures >= 2)
+        {
+            MarkDisconnected("Both MAP folder probes failed; marking message sync disconnected.");
+            throw new IOException("MAP message sync stopped responding.");
+        }
 
         bool inboxChanged = probeInbox != null && probeInbox != _lastInboxHandle;
         bool sentChanged  = probeSent  != null && probeSent  != _lastSentHandle;
@@ -238,13 +243,14 @@ public class MapService : IAsyncDisposable
     // Probe newest handle in BOTH inbox and sent in a single lock acquisition.
     // This cuts RFCOMM round-trips from 10 to 7 compared to two separate probe calls.
     // Returns (inboxHandle, sentHandle) — either may be null on error.
-    private async Task<(string? inbox, string? sent)> ProbeBothFoldersAsync(CancellationToken ct)
+    private async Task<(string? inbox, string? sent, int failures)> ProbeBothFoldersAsync(CancellationToken ct)
     {
-        if (_obex is null) return (null, null);
+        if (_obex is null) return (null, null, 2);
         await _obexLock.WaitAsync(ct);
         try
         {
             var appParams = new byte[] { 0x01, 0x02, 0x00, 0x01 }; // MaxListCount=1
+            var failures = 0;
 
             // Navigate once to telecom/msg — shared prefix for both folders
             await _obex.SetPathAsync("",        ct: ct);
@@ -261,7 +267,7 @@ public class MapService : IAsyncDisposable
                     xml = await _obex.GetAsync("x-bt/MAP-msg-listing", name: null, appParams: null, ct: ct);
                 inboxHandle = ParseMessageListing(Encoding.UTF8.GetString(xml)).FirstOrDefault().Handle;
             }
-            catch (Exception ex) { MapLogLine?.Invoke($"[PROBE inbox] {ex.Message}"); }
+            catch (Exception ex) { failures++; MapLogLine?.Invoke($"[PROBE inbox] {ex.Message}"); }
 
             // sent — navigate from inbox via root shortcut (SetPath with empty = parent)
             string? sentHandle = null;
@@ -277,11 +283,21 @@ public class MapService : IAsyncDisposable
                     xml = await _obex.GetAsync("x-bt/MAP-msg-listing", name: null, appParams: null, ct: ct);
                 sentHandle = ParseMessageListing(Encoding.UTF8.GetString(xml)).FirstOrDefault().Handle;
             }
-            catch (Exception ex) { MapLogLine?.Invoke($"[PROBE sent] {ex.Message}"); }
+            catch (Exception ex) { failures++; MapLogLine?.Invoke($"[PROBE sent] {ex.Message}"); }
 
-            return (inboxHandle, sentHandle);
+            return (inboxHandle, sentHandle, failures);
         }
         finally { _obexLock.Release(); }
+    }
+
+    private void MarkDisconnected(string reason)
+    {
+        if (!IsConnected)
+            return;
+
+        IsConnected = false;
+        MapLogLine?.Invoke($"[MAP] {reason}");
+        StatusChanged?.Invoke("MAP disconnected");
     }
 
     /// <summary>

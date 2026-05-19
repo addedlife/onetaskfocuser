@@ -61,6 +61,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private readonly ConcurrentQueue<string> _priorityMessageHandles = new();
     private static readonly TimeSpan MessagePollInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan BusyMessagePollRetryInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan AutoReconnectRetryWindow = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan PhoneReadStatePollInterval = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan MessageDeleteReconcileInterval = TimeSpan.FromMinutes(1);
     private const int AutomaticDeleteReconcilePhoneWindowPerFolder = 150;
@@ -69,6 +70,8 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private DateTime _nextPhoneReadStateRefreshUtc = DateTime.MinValue;
     private int _messagePollWakeRequests = 0;
     private int _pendingPriorityMessageSync = 0;
+    private int _autoReconnectInFlight = 0;
+    private DateTime _nextAutoReconnectUtc = DateTime.MinValue;
     private string _lastAudioRouteLogLine = "";
 
     // Background poll loop — runs entirely off the UI thread.
@@ -411,8 +414,8 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private void UpdateConnectionStatus()
     {
-        bool callsOk = StatusHfp.Contains("connected", StringComparison.OrdinalIgnoreCase);
-        bool msgsOk  = StatusMap.Contains("connected",  StringComparison.OrdinalIgnoreCase);
+        bool callsOk = ConnectionTextLooksConnected(StatusHfp);
+        bool msgsOk  = ConnectionTextLooksConnected(StatusMap);
         IsFullyConnected = callsOk && msgsOk;
         ConnectionStatus = (callsOk, msgsOk) switch
         {
@@ -5086,8 +5089,8 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
             IsConnecting = false;
             _notif.UpdateStatus(
-                StatusHfp.Contains("connected", StringComparison.OrdinalIgnoreCase),
-                StatusMap.Contains("connected", StringComparison.OrdinalIgnoreCase));
+                ConnectionTextLooksConnected(StatusHfp),
+                ConnectionTextLooksConnected(StatusMap));
             RefreshAudioDevices();
             _connectLock.Release();
         }
@@ -5600,7 +5603,13 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                         ? Interlocked.Exchange(ref _messagePollWakeRequests, 0)
                         : 0;
                     if (ct.IsCancellationRequested) break;
-                    if (_map == null || !_map.IsConnected) continue;
+                    if (_map == null || !_map.IsConnected)
+                    {
+                        Dispatch(() => StatusMap = "Messages disconnected");
+                        QueueAutoReconnect("message sync stopped");
+                        await Task.Delay(BusyMessagePollRetryInterval, ct);
+                        continue;
+                    }
                     if (IsRealOpActive)
                     {
                         if (coalescedWakeRequests > 0)
@@ -5683,10 +5692,51 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                     }
                 }
                 catch (OperationCanceledException) { break; }
-                catch (Exception ex) { AppendDebugThreadSafe($"[POLL ERROR] {ex.Message}"); }
+                catch (Exception ex)
+                {
+                    AppendDebugThreadSafe($"[POLL ERROR] {ex.Message}");
+                    Dispatch(() => StatusMap = FriendlyBtError(ex, "Messages"));
+                    QueueAutoReconnect("message sync failed");
+                }
             }
             AppendDebugThreadSafe("[POLL] Background poll loop stopped");
         }, ct);
+    }
+
+    private void QueueAutoReconnect(string reason)
+    {
+        if (!HasQuickConnectDevice || IsConnecting || CurrentCall.Status != CallStatus.Idle)
+            return;
+
+        var now = DateTime.UtcNow;
+        if (now < _nextAutoReconnectUtc)
+            return;
+
+        if (Interlocked.Exchange(ref _autoReconnectInFlight, 1) == 1)
+            return;
+
+        _nextAutoReconnectUtc = now.Add(AutoReconnectRetryWindow);
+        AppendDebugThreadSafe($"[CONNECT] Auto-reconnect queued: {reason}");
+
+        Dispatch(async () =>
+        {
+            try
+            {
+                ConnectionStatus = "Reconnecting...";
+                ShowReconnectPrompt = false;
+                await ReconnectToMostRecentAsync();
+                if (IsFullyConnected)
+                    _nextAutoReconnectUtc = DateTime.MinValue;
+            }
+            catch (Exception ex)
+            {
+                AppendDebug($"[CONNECT] Auto-reconnect failed: {ex.Message}");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _autoReconnectInFlight, 0);
+            }
+        });
     }
 
     private void StartContactSyncLoop(CancellationToken ct)
@@ -6371,18 +6421,38 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private static string GetConnectionChannelLabel(string status, string label)
     {
-        if (status.Contains("connected", StringComparison.OrdinalIgnoreCase))
+        if (ConnectionTextLooksConnected(status))
             return $"{label}: Connected";
-        if (status.Contains("connecting", StringComparison.OrdinalIgnoreCase))
-            return $"{label}: Connecting";
         if (status.Contains("reconnecting", StringComparison.OrdinalIgnoreCase))
             return $"{label}: Reconnecting";
+        if (status.Contains("connecting", StringComparison.OrdinalIgnoreCase))
+            return $"{label}: Connecting";
         if (status.Contains("failed", StringComparison.OrdinalIgnoreCase)
             || status.Contains("rejected", StringComparison.OrdinalIgnoreCase)
             || status.Contains("timed out", StringComparison.OrdinalIgnoreCase)
             || status.Contains("denied", StringComparison.OrdinalIgnoreCase))
             return $"{label}: Needs attention";
         return $"{label}: Not connected";
+    }
+
+    private static bool ConnectionTextLooksConnected(string? status)
+    {
+        var text = (status ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        if (text.Contains("not connected", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("disconnected", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("failed", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("rejected", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("denied", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("can't reach", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("cannot reach", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("error", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return text.Contains("connected", StringComparison.OrdinalIgnoreCase);
     }
 
     // ── Debug log ─────────────────────────────────────────────────────────

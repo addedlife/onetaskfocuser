@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-05-19 01:14:32",
+        "version":  "b265",
+        "notes":  "DeskPhone Web status now detects dropped message sync and queues an automatic reconnect.",
+        "devNotes":  "Fixes the localhost host connection parser so Not connected and disconnected text no longer counts as connected, marks MAP message sync disconnected when both live folder probes fail, and queues a paced reconnect to the saved default phone when background message sync stops responding. This is a host reliability release for DeskPhone Web live-sync accuracy; it does not change MAP send semantics, PBAP import, HFP call-control commands, contact matching, launcher identity, or web bundle routing."
+    },
+    {
         "timestamp":  "2026-05-11 10:44:23",
         "version":  "b264",
         "notes":  "DeskPhone Web call history now exports all recent call directions instead of inheriting the desktop filter.",
