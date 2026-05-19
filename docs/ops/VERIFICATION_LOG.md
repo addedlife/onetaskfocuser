@@ -537,3 +537,14 @@ Current source-grade file count after cleanup: 162 files.
 - Local Vite preview returned HTTP 200 for `/` and `/shailos/`.
 - `npm run lint` in `apps/web` is still blocked by the existing ESLint glob issue where `src/*.jsx` is ignored by repo lint config.
 - Pushed commit `b349b40` to `origin/main`; production root returned HTTP 200 and production `app-config` served the new AI job registry.
+
+
+## 2026-05-19 NerveCenter Expanded Thread Bottom Anchor
+
+- Researched current chat/thread scrolling practice before editing: messages stay in chronological DOM order and the expanded view anchors to the latest appended message using a rendered end marker.
+- Changed `NerveCenterPhoneSurface.jsx` so an expanded contact thread scrolls to the rendered conversation end when opened and when the latest message signature changes.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `git diff --check -- apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx` passed; line-ending normalization warning only.
+- Local Vite preview returned HTTP 200 at `http://127.0.0.1:4315/?suite=nervecenter`.
+- Local DeskPhone host returned HTTP 200 at `/status` and `/messages?limit=50` with connected message data available for smoke context.
+- In-app Browser verification was attempted, but the existing local helper failed on `require is not defined in ES module scope`; headless Chrome reached the existing unauthenticated `Loading...` shell.

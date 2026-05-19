@@ -125,6 +125,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
   const [openPhoneActionId, setOpenPhoneActionId] = useState(null);
   const [expandedPhoneMessageId, setExpandedPhoneMessageId] = useState(null);
   const refreshInFlightRef = useRef(false);
+  const expandedConversationEndRef = useRef(null);
   const messagesSigRef = useRef("");
   const callsSigRef = useRef("");
   const contactsSigRef = useRef("");
@@ -324,6 +325,19 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
   const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, 10);
   const hasMessages = threads.length > 0;
   const hasCalls = recentCalls.length > 0;
+  const expandedConversationSig = useMemo(() => {
+    if (!expandedPhoneMessageId) return "";
+    const thread = threads.find(t => `msg-${t._key || t._who}` === expandedPhoneMessageId);
+    const latest = thread?._messages?.[thread._messages.length - 1];
+    return `${expandedPhoneMessageId}|${thread?._messages?.length || 0}|${messageTimeMs(latest)}|${latest?.id ?? latest?.handle ?? ""}`;
+  }, [expandedPhoneMessageId, threads]);
+  useEffect(() => {
+    if (!expandedPhoneMessageId || !expandedConversationEndRef.current) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      expandedConversationEndRef.current?.scrollIntoView({ block: "end", inline: "nearest" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [expandedPhoneMessageId, expandedConversationSig]);
   useEffect(() => {
     onStatusSummary?.({
       online: statusOnline,
@@ -633,6 +647,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
                               </div>
                             );
                           })}
+                          <div ref={expandedConversationEndRef} style={{ height: 1 }} />
                         </div>
                       </div>
                     )}
