@@ -17,6 +17,14 @@ function phoneKeys(value) {
   return [...new Set(keys.filter(Boolean))];
 }
 
+function phoneThreadKey(value) {
+  const digits = phoneDigits(value);
+  if (!digits) return "";
+  if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
+  if (digits.length > 10) return digits.slice(-10);
+  return digits;
+}
+
 function allContactPhones(contact) {
   const direct = [
     contact?.primaryPhone, contact?.PrimaryPhone,
@@ -38,6 +46,7 @@ function allContactPhones(contact) {
 
 function allMessageNumbers(message) {
   return [
+    message?.normalizedPhone, message?.NormalizedPhone,
     message?.from, message?.sender, message?.address, message?.phoneNumber, message?.number,
     message?.to, message?.recipient, message?.From, message?.Sender, message?.Address,
     message?.PhoneNumber, message?.Number, message?.To, message?.Recipient,
@@ -49,8 +58,8 @@ function messagePeerNumber(message) {
   const dir = String(message?.direction || message?.messageType || message?.folder || message?.Direction || message?.Type || "").toLowerCase();
   const sent = typeNum === 2 || dir.includes("sent") || dir.includes("out") || message?.fromMe || message?.from_me || message?.isSent;
   const preferred = sent
-    ? [message?.to, message?.recipient, message?.number, message?.phoneNumber, message?.To, message?.Recipient, message?.Number, message?.PhoneNumber]
-    : [message?.from, message?.sender, message?.address, message?.number, message?.phoneNumber, message?.From, message?.Sender, message?.Address, message?.Number, message?.PhoneNumber];
+    ? [message?.normalizedPhone, message?.NormalizedPhone, message?.to, message?.recipient, message?.number, message?.phoneNumber, message?.To, message?.Recipient, message?.Number, message?.PhoneNumber]
+    : [message?.normalizedPhone, message?.NormalizedPhone, message?.from, message?.sender, message?.address, message?.number, message?.phoneNumber, message?.From, message?.Sender, message?.Address, message?.Number, message?.PhoneNumber];
   return preferred.find(value => phoneDigits(value).length >= 4) || allMessageNumbers(message).find(value => phoneDigits(value).length >= 4) || "Unknown";
 }
 
@@ -243,11 +252,13 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
     const threadMap = new Map();
     (Array.isArray(messages) ? messages : []).forEach(m => {
       const who = messagePeerNumber(m);
+      const threadKey = phoneThreadKey(who) || String(who || "Unknown").trim().toLowerCase();
       const directName = m.name || m.displayName || m.contactName || m.fromName || m.senderName || m.contact ||
         m.Name || m.DisplayName || m.ContactName || m.FromName || m.SenderName || m.Contact || "";
       const resolvedName = directName || lookupName(who) || who;
       const at = messageTimeMs(m);
-      const existing = threadMap.get(who) || {
+      const existing = threadMap.get(threadKey) || {
+        _key: threadKey,
         _who: who,
         _name: resolvedName,
         _messages: [],
@@ -256,13 +267,14 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
         _unreadCount: 0,
       };
       existing._name = existing._name === who && resolvedName !== who ? resolvedName : existing._name;
+      existing._who = phoneDigits(existing._who).length >= phoneDigits(who).length ? existing._who : who;
       existing._messages.push(m);
       if (at >= existing._latestAt) {
         existing._latestAt = at;
         existing._latestMessage = m;
       }
       if (isUnreadMessage(m)) existing._unreadCount += 1;
-      threadMap.set(who, existing);
+      threadMap.set(threadKey, existing);
     });
     return Array.from(threadMap.values())
       .map(thread => ({
@@ -523,11 +535,11 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
                 const preview = messageBody(m);
                 const time = fmtTime(thread._latestAt);
                 const count = thread._messages?.length || 1;
-                const actionId = `msg-${thread._who}`;
+                const actionId = `msg-${thread._key || thread._who}`;
                 const actionsOpen = openPhoneActionId === actionId;
                 const expanded = expandedPhoneMessageId === actionId;
                 return (
-                  <div key={`${thread._who}-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, background: expanded ? C.hover : "transparent" }}>
+                  <div key={`${thread._key || thread._who}-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, background: expanded ? C.hover : "transparent" }}>
                     <span style={{ width: 32, height: 32, borderRadius: 99, background: isUnread ? C.hover : C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color: isUnread ? C.accent : msgColor, flexShrink: 0, marginTop: 2 }}>{suiteIcon(msgIcon, 15)}</span>
                     <button onClick={() => setExpandedPhoneMessageId(expanded ? null : actionId)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: T.text }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
@@ -558,6 +570,9 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
                             </button>
                             <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); openCompose(thread._name, thread._who); }} title="Reply" aria-label="Reply" style={phoneIconButton(false)}>
                               {suiteIcon("sms", 15)}
+                            </button>
+                            <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); setExpandedPhoneMessageId(null); }} title="Close conversation" aria-label="Close conversation" style={phoneIconButton(false)}>
+                              {suiteIcon("close", 16)}
                             </button>
                           </div>
                         </div>
