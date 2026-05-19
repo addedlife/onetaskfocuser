@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cleanTheme, gvIconButton, gvTextButton, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
+const PHONE_FETCH_TIMEOUT_MS = 4500;
 
 function phoneDigits(value) {
   return String(value || "").replace(/\D/g, "");
@@ -90,6 +91,18 @@ function isUnreadMessage(message) {
   return !!(message?.unread || message?.isUnread || message?.read === false || message?.status === "unread");
 }
 
+async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS) {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetch(url, { cache: "no-store", signal: controller?.signal });
+    if (!response.ok) throw new Error(`${url} returned ${response.status}`);
+    return await response.json();
+  } finally {
+    if (timer) window.clearTimeout(timer);
+  }
+}
+
 function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
   const api = "http://127.0.0.1:8765";
   const viewportW = useViewportWidth();
@@ -111,30 +124,54 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
   const [composeFocused, setComposeFocused] = useState(false);
   const [openPhoneActionId, setOpenPhoneActionId] = useState(null);
   const [expandedPhoneMessageId, setExpandedPhoneMessageId] = useState(null);
+  const refreshInFlightRef = useRef(false);
+  const messagesSigRef = useRef("");
+  const callsSigRef = useRef("");
+  const contactsSigRef = useRef("");
   const C = cleanTheme(T);
 
   const refresh = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
     try {
       setError("");
       const [statusRes, messagesRes, callsRes, contactsRes] = await Promise.all([
-        fetch(`${api}/status`, { cache: "no-store" }),
-        fetch(`${api}/messages?limit=5000`, { cache: "no-store" }),
-        fetch(`${api}/calls`, { cache: "no-store" }).catch(() => null),
-        fetch(`${api}/contacts`, { cache: "no-store" }).catch(() => null),
+        fetchPhoneJson(`${api}/status`),
+        fetchPhoneJson(`${api}/messages?limit=5000`),
+        fetchPhoneJson(`${api}/calls`).catch(() => null),
+        fetchPhoneJson(`${api}/contacts`).catch(() => null),
       ]);
-      const nextStatus = await statusRes.json();
-      const parsed = await messagesRes.json().catch(() => []);
+      const nextStatus = statusRes;
+      const parsed = messagesRes || [];
       const nextMessages = Array.isArray(parsed) ? parsed : (parsed?.messages || []);
-      const callsParsed = callsRes ? await callsRes.json().catch(() => []) : [];
+      const callsParsed = callsRes || [];
       const nextCalls = Array.isArray(callsParsed) ? callsParsed : (callsParsed?.calls || nextStatus?.recentCalls || []);
-      const contactsParsed = contactsRes ? await contactsRes.json().catch(() => []) : [];
+      const contactsParsed = contactsRes || [];
       const nextContacts = Array.isArray(contactsParsed) ? contactsParsed : (contactsParsed?.contacts || []);
-      setStatus(nextStatus); setMessages(nextMessages); setCalls(nextCalls); setContacts(nextContacts);
+      setStatus(nextStatus);
+      const msgSig = `${nextMessages.length}|${nextMessages[0]?.id ?? nextMessages[0]?.handle ?? ""}|${nextMessages[nextMessages.length - 1]?.id ?? nextMessages[nextMessages.length - 1]?.handle ?? ""}`;
+      if (msgSig !== messagesSigRef.current) {
+        messagesSigRef.current = msgSig;
+        setMessages(nextMessages);
+      }
+      const callSig = `${nextCalls.length}|${nextCalls[0]?.id ?? nextCalls[0]?.number ?? ""}|${nextCalls[0]?.timestamp ?? nextCalls[0]?.time ?? ""}`;
+      if (callSig !== callsSigRef.current) {
+        callsSigRef.current = callSig;
+        setCalls(nextCalls);
+      }
+      const contactsSig = `${nextContacts.length}|${nextContacts[0]?.id ?? nextContacts[0]?.displayName ?? ""}|${nextContacts[nextContacts.length - 1]?.id ?? nextContacts[nextContacts.length - 1]?.displayName ?? ""}`;
+      if (contactsSig !== contactsSigRef.current) {
+        contactsSigRef.current = contactsSig;
+        setContacts(nextContacts);
+      }
       onOnlineChange?.(true);
     } catch {
       setStatus(null); setMessages([]); setCalls([]);
+      messagesSigRef.current = ""; callsSigRef.current = ""; contactsSigRef.current = "";
       setError("Open DeskPhone to use calls and texts.");
       onOnlineChange?.(false);
+    } finally {
+      refreshInFlightRef.current = false;
     }
   }, [onOnlineChange]);
 
@@ -238,13 +275,13 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
   const callStateRaw = status?.CallState || status?.callState || status?.CurrentCallState || status?.currentCallState || "";
   const callState = /^(idle|none|available|ready|standby|free|disconnected|inactive)$/i.test(callStateRaw.trim()) ? "" : callStateRaw.trim();
   const isIncoming = /ring|incoming/i.test(callState);
-  const isOnCall = !!callState && !isIncoming && /active|connected|call/i.test(callState);
+  const isOnCall = !!callState && !isIncoming && /^(active|dialing|oncall|callactive)$/i.test(callState.replace(/\s+/g, ""));
   const statusOnline = !!status;
   const deviceName = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
   const idleLabel = deviceName ? `Connected · ${deviceName}` : "Connected";
-  const statusText = status ? (callState || idleLabel) : "DeskPhone offline";
+  const statusText = status ? (isIncoming ? "Incoming call" : isOnCall ? "On call" : callState ? "Call status changed" : idleLabel) : "DeskPhone offline";
   const callerName = status?.callerName || status?.CallerName || status?.callerDisplay || status?.CallerDisplay || status?.callerID || status?.CallerID || "";
-  const callerNumber = status?.callerNumber || status?.CallerNumber || status?.incomingNumber || status?.IncomingNumber || "";
+  const callerNumber = status?.callerNumber || status?.CallerNumber || status?.incomingNumber || status?.IncomingNumber || status?.callNumber || status?.CallNumber || "";
   const callerDisplay = callerName || (callerNumber ? (lookupName(callerNumber) || callerNumber) : "");
   const vmCount = parseInt(status?.voicemailCount || status?.VoicemailCount || status?.voicemail?.count || 0, 10) || 0;
 
@@ -452,10 +489,16 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
       {/* ── Control bar: answer/hangup | record | new-msg | keypad toggle ── */}
       <div style={{ display: "flex", gap: 6, alignItems: "center", minHeight: compact ? 30 : 44 }}>
         {isIncoming ? (
-          <button onClick={() => post("/answer", "answer")} disabled={!!busy} title="Answer"
-            style={gvTextButton({ border: "none", background: C.success, color: "#fff" }, C)}>
-            {suiteIcon("phone_callback", 14)} Answer
-          </button>
+          <>
+            <button onClick={() => post("/answer", "answer")} disabled={!!busy} title="Answer"
+              style={gvTextButton({ border: "none", background: C.success, color: "#fff" }, C)}>
+              {suiteIcon("phone_callback", 14)} Answer
+            </button>
+            <button onClick={() => post("/hangup", "decline")} disabled={!!busy} title="Decline"
+              style={gvTextButton({ border: "none", background: C.danger, color: "#fff" }, C)}>
+              {suiteIcon("call_end", 14)} Decline
+            </button>
+          </>
         ) : isOnCall ? (
           <button onClick={() => post("/hangup", "hangup")} disabled={!!busy} title="Hang up"
             style={gvTextButton({ border: "none", background: C.danger, color: "#fff" }, C)}>

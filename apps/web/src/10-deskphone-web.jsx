@@ -27,6 +27,9 @@ const DESKPHONE_WEB_VERSION = "001";
 const MAX_COMPOSE_ATTACHMENTS = 6;
 const WEBPHONE_MESSAGE_LIMIT = 5000;
 const WEBPHONE_MEDIA_MESSAGE_LIMIT = 1200;
+const HOST_FETCH_TIMEOUT_MS = 4500;
+const MEDIA_FETCH_TIMEOUT_MS = 9000;
+const CONVERSATION_RENDER_BATCH = 160;
 const THREAD_RENDER_BATCH = 240;
 
 const COLORS = {
@@ -272,8 +275,25 @@ function openAndroidBridgeApp() {
   window.location.href = ANDROID_BRIDGE_INTENT_URL;
 }
 
-async function readJson(host, path) {
-  const response = await fetch(`${host}${path}`, { cache: "no-store" });
+async function readJson(host, path, { timeoutMs = HOST_FETCH_TIMEOUT_MS } = {}) {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller && typeof window !== "undefined"
+    ? window.setTimeout(() => controller.abort(), timeoutMs)
+    : null;
+  let response;
+  try {
+    response = await fetch(`${host}${path}`, {
+      cache: "no-store",
+      signal: controller?.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`${path} timed out`);
+    }
+    throw error;
+  } finally {
+    if (timer) window.clearTimeout(timer);
+  }
   if (!response.ok) {
     let detail = "";
     try {
@@ -287,9 +307,9 @@ async function readJson(host, path) {
   return response.json();
 }
 
-async function readOptionalJson(host, path) {
+async function readOptionalJson(host, path, options) {
   try {
-    return { ok: true, path, data: await readJson(host, path) };
+    return { ok: true, path, data: await readJson(host, path, options) };
   } catch (error) {
     return { ok: false, path, error };
   }
@@ -423,19 +443,35 @@ function ComposeAttachmentTray({ attachments, onRemove, removeSource }) {
 }
 
 function includesConnected(value) {
-  return String(value || "").toLowerCase().includes("connected");
+  const lower = String(value || "").trim().toLowerCase();
+  if (!lower) return false;
+  if (
+    lower.includes("not connected") ||
+    lower.includes("disconnected") ||
+    lower.includes("failed") ||
+    lower.includes("rejected") ||
+    lower.includes("timed out") ||
+    lower.includes("denied") ||
+    lower.includes("can't reach") ||
+    lower.includes("cannot reach") ||
+    lower.includes("error")
+  ) {
+    return false;
+  }
+  return lower.includes("connected");
 }
 
 function channelLabel(status, label) {
   const text = String(status || "");
   const lower = text.toLowerCase();
-  if (lower.includes("connected")) return `${label}: Connected`;
-  if (lower.includes("connecting")) return `${label}: Connecting`;
+  if (includesConnected(text)) return `${label}: Connected`;
   if (lower.includes("reconnecting")) return `${label}: Reconnecting`;
+  if (lower.includes("connecting")) return `${label}: Connecting`;
   if (
     lower.includes("failed") ||
     lower.includes("rejected") ||
     lower.includes("timed out") ||
+    lower.includes("disconnected") ||
     lower.includes("denied")
   ) {
     return `${label}: Needs attention`;
@@ -462,7 +498,10 @@ function isBridgeApiReady(status, online) {
 }
 
 function connectionStatusFromStatus(status) {
-  return status ? "Connected to DeskPhone Host" : "DeskPhone Host is not reachable";
+  if (!status) return "DeskPhone Host is not reachable";
+  if (status.connected || status.Connected) return "Connected to phone";
+  if (status.isConnecting || status.IsConnecting) return "Reconnecting to phone";
+  return "Phone link needs reconnect";
 }
 
 function webVersionLabel() {
@@ -559,10 +598,11 @@ function localPhoneHostName(status) {
 function callBannerText(status) {
   if (!status) return "";
   const callState = String(status.callState || status.CallState || "");
-  const number = status.callNumber || status.CallNumber || status.number || "";
-  if (status.isRinging || callState === "IncomingRinging") return `Incoming: ${number || "Unknown"}`;
-  if (callState === "Dialing") return `Calling ${number || "Unknown"}...`;
-  if (status.isCallActive || callState === "Active") return `${number || "Active call"}`;
+  const number = status.callerName || status.CallerName || status.callerDisplay || status.CallerDisplay || status.callNumber || status.CallNumber || status.number || "";
+  const display = number ? String(number).trim() : "";
+  if (status.isRinging || /ring|incoming/i.test(callState)) return display ? `Incoming call from ${display}` : "Incoming call";
+  if (callState === "Dialing") return display ? `Calling ${display}...` : "Calling...";
+  if (status.isCallActive || callState === "Active") return display || "Active call";
   if (callState === "Ending") return "Ending call...";
   return "";
 }
@@ -816,7 +856,8 @@ function buildConversations(messages, contacts = []) {
     return contact ? { ...message, contactName: contactDisplayName(contact) } : message;
   };
   const grouped = new Map();
-  messages.map(normalizeMessage).map(enrichFast).forEach((message) => {
+  getApiList(messages).forEach((raw, index) => {
+    const message = enrichFast(normalizeMessage(raw, index));
     const displayName = message.contactName || message.formattedPhone;
     const existing = grouped.get(message.key) || {
       key: message.key,
@@ -828,20 +869,28 @@ function buildConversations(messages, contacts = []) {
       isPinned: false,
       areAlertsMuted: false,
       isBlocked: false,
+      latest: null,
+      timestampMs: 0,
+      unreadCount: 0,
     };
     if (message.contactName) {
       existing.displayName = message.contactName;
       existing.avatarInitial = avatarInitial(message.contactName);
     }
     existing.messages.push(message);
+    if (!existing.latest || message.timestampMs >= existing.timestampMs) {
+      existing.latest = message;
+      existing.timestampMs = message.timestampMs || 0;
+    }
+    if (!message.isSent && !message.isRead) {
+      existing.unreadCount += 1;
+    }
     grouped.set(message.key, existing);
   });
 
   return Array.from(grouped.values()).map((conversation) => {
-    const newestFirst = [...conversation.messages].sort((a, b) => b.timestampMs - a.timestampMs);
     const chronological = [...conversation.messages].sort((a, b) => a.timestampMs - b.timestampMs);
-    const latest = newestFirst[0];
-    const unreadCount = newestFirst.filter((message) => !message.isSent && !message.isRead).length;
+    const latest = conversation.latest;
     return {
       ...conversation,
       messages: chronological,
@@ -851,8 +900,7 @@ function buildConversations(messages, contacts = []) {
       preview: latest?.preview || "No preview",
       timestampMs: latest?.timestampMs || 0,
       timestampDisplay: formatConversationTime(latest?.timestamp),
-      unreadCount,
-      isUnread: unreadCount > 0,
+      isUnread: conversation.unreadCount > 0,
     };
   });
 }
@@ -1162,8 +1210,13 @@ function BuildUpdateOverlay({ showPrompt, showIndicator, title, body, onShowProm
 }
 
 function CallBanner({ status, muted, onMute, onAnswer, onHangup }) {
-  const isRinging = !!(status?.isRinging || status?.callState === "IncomingRinging");
-  const isCallActive = !!(status?.isCallActive || status?.callState === "Active" || status?.callState === "Dialing");
+  const callState = String(status?.callState || status?.CallState || "");
+  const isRinging = !!(status?.isRinging || status?.IsRinging || /ring|incoming/i.test(callState));
+  const isCallActive = !!(
+    status?.isCallActive ||
+    status?.IsCallActive ||
+    /^(active|dialing)$/i.test(callState)
+  );
   const visible = isRinging || isCallActive;
   if (!visible) {
     return (
@@ -1680,6 +1733,7 @@ function MessagesSlice({
   const [imageRotation, setImageRotation] = useState(0);
   const [replyAttachments, setReplyAttachments] = useState([]);
   const [phoneView, setPhoneView] = useState(false);
+  const [conversationRenderLimit, setConversationRenderLimit] = useState(CONVERSATION_RENDER_BATCH);
   const [threadRenderLimit, setThreadRenderLimit] = useState(THREAD_RENDER_BATCH);
   const messageScrollRef = useRef(null);
   const composeRef = useRef(null);
@@ -1690,6 +1744,27 @@ function MessagesSlice({
     () => filterConversations(conversations, conversationSearch, conversationFilter, unreadFirst),
     [conversations, conversationSearch, conversationFilter, unreadFirst]
   );
+  const renderedConversations = useMemo(
+    () => visibleConversations.slice(0, conversationRenderLimit),
+    [visibleConversations, conversationRenderLimit]
+  );
+  const hiddenConversationCount = Math.max(0, visibleConversations.length - renderedConversations.length);
+
+  useEffect(() => {
+    setConversationRenderLimit(CONVERSATION_RENDER_BATCH);
+  }, [conversationSearch, conversationFilter, unreadFirst]);
+
+  const loadMoreConversations = useCallback(() => {
+    setConversationRenderLimit((current) => Math.min(visibleConversations.length, current + CONVERSATION_RENDER_BATCH));
+  }, [visibleConversations.length]);
+
+  const handleConversationScroll = useCallback((event) => {
+    const box = event.currentTarget;
+    if (!box || hiddenConversationCount <= 0) return;
+    if (box.scrollTop + box.clientHeight >= box.scrollHeight - 320) {
+      loadMoreConversations();
+    }
+  }, [hiddenConversationCount, loadMoreConversations]);
 
   useEffect(() => {
     if (!conversations.length) {
@@ -2017,14 +2092,14 @@ function MessagesSlice({
           </div>
         </header>
 
-        <div className="dp-conversation-list" data-native-source="MainWindow.xaml:1267">
+        <div className="dp-conversation-list" data-native-source="MainWindow.xaml:1267" onScroll={handleConversationScroll}>
           {!visibleConversations.length ? (
             <div className="dp-empty-conversations" data-native-source="MainWindow.xaml:1247">
               {icon("forum", 48)}
               <span>{emptyText}</span>
             </div>
           ) : null}
-          {visibleConversations.map((conversation) => (
+          {renderedConversations.map((conversation) => (
             <ConversationRow
               key={conversation.key}
               conversation={conversation}
@@ -2033,6 +2108,11 @@ function MessagesSlice({
               onConversationAction={runConversationAction}
             />
           ))}
+          {hiddenConversationCount > 0 ? (
+            <button type="button" className="dp-thread-load-older dp-conversation-load-more" onClick={loadMoreConversations}>
+              Show {Math.min(CONVERSATION_RENDER_BATCH, hiddenConversationCount)} more conversations
+            </button>
+          ) : null}
         </div>
       </section>
 
@@ -5791,6 +5871,8 @@ export function DeskPhoneWebPanel({
   const contactsSigRef = useRef("");
   const messagesSigRef = useRef("");
   const callsSigRef = useRef("");
+  const refreshInFlightRef = useRef(false);
+  const refreshQueuedRef = useRef(false);
 
   const showNotice = useCallback((message) => {
     setNotice(message);
@@ -5798,13 +5880,18 @@ export function DeskPhoneWebPanel({
   }, []);
 
   const refresh = useCallback(async () => {
+    if (refreshInFlightRef.current) {
+      refreshQueuedRef.current = true;
+      return;
+    }
+    refreshInFlightRef.current = true;
     try {
       const shouldFetchMedia = Date.now() - lastMediaRefreshRef.current > 60000;
       const [nextStatus, nextMessages, nextMediaMessages, nextCalls, nextContacts] = await Promise.all([
         readOptionalJson(host, "/status"),
         readOptionalJson(host, `/messages?limit=${WEBPHONE_MESSAGE_LIMIT}`),
         shouldFetchMedia
-          ? readOptionalJson(host, `/messages?limit=${WEBPHONE_MEDIA_MESSAGE_LIMIT}&includeAttachmentData=1`)
+          ? readOptionalJson(host, `/messages?limit=${WEBPHONE_MEDIA_MESSAGE_LIMIT}&includeAttachmentData=1`, { timeoutMs: MEDIA_FETCH_TIMEOUT_MS })
           : Promise.resolve({ ok: false, data: mediaMessagesRef.current, path: "/messages media cache" }),
         readOptionalJson(host, "/calls"),
         readOptionalJson(host, "/contacts"),
@@ -5864,6 +5951,12 @@ export function DeskPhoneWebPanel({
         setError(err?.message || "DeskPhone host was not reached.");
       }
       onOnlineChange?.(false);
+    } finally {
+      refreshInFlightRef.current = false;
+      if (refreshQueuedRef.current) {
+        refreshQueuedRef.current = false;
+        window.setTimeout(refresh, 0);
+      }
     }
   }, [host, onOnlineChange]);
 
@@ -5900,8 +5993,8 @@ export function DeskPhoneWebPanel({
   const messagesConnectionLabel = useMemo(() => {
     const mapStatus = status?.map || status?.Map || "";
     const hfpStatus = status?.hfp || status?.Hfp || "";
-    const callsConnected = String(hfpStatus).toLowerCase().includes("connected");
-    const textsConnected = String(mapStatus).toLowerCase().includes("connected");
+    const callsConnected = includesConnected(hfpStatus);
+    const textsConnected = includesConnected(mapStatus);
     const isConnected = callsConnected || textsConnected;
     const phoneHostName = localPhoneHostName(status);
     const sourcePhone = hostDeviceName(status);
