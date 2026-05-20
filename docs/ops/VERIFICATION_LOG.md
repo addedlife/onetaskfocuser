@@ -548,3 +548,5 @@ Current source-grade file count after cleanup: 162 files.
 - Local Vite preview returned HTTP 200 at `http://127.0.0.1:4315/?suite=nervecenter`.
 - Local DeskPhone host returned HTTP 200 at `/status` and `/messages?limit=50` with connected message data available for smoke context.
 - In-app Browser verification was attempted, but the existing local helper failed on `require is not defined in ES module scope`; headless Chrome reached the existing unauthenticated `Loading...` shell.
+- Pushed commit `d7da807` to `origin/main`; Netlify Git-triggered production served `assets/index-BhHooHv2.js` on poll attempt 3.
+- Production asset `https://onetaskfocuser.netlify.app/assets/index-BhHooHv2.js` returned HTTP 200.
