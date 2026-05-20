@@ -574,3 +574,4 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` passed in `apps/web`; existing large-bundle warning remains.
 - `git diff --check -- apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx` passed; line-ending normalization warning only.
 - Local Vite preview returned HTTP 200 at `http://127.0.0.1:4317/?suite=nervecenter`.
+- Pushed commit `4193857` to `origin/main`; Netlify Git-triggered production served `assets/index-DsQIkbDO.js` on poll attempt 4.
