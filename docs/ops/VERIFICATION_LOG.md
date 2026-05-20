@@ -606,3 +606,11 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` passed in `apps/web`; existing large-bundle warning remains.
 - Local Vite returned HTTP 200 at `http://127.0.0.1:4318/?suite=nervecenter`; headless Edge screenshot still reached the known unauthenticated/fresh-profile `Loading...` shell.
 - Pushed commit `9f4912a` to `origin/main`; Netlify Git-triggered production served `assets/index-C30KzPHN.js` on poll attempt 3, the asset returned HTTP 200, production `app-config` exposed `googleAuthMode:"token"` and `googleServerAuthAvailable:false`, and `google-workspace` returned HTTP 401 without an app sign-in token as expected.
+
+## 2026-05-20 DeskPhone Web Contrast Repair
+
+- Researched WCAG 2.2 AA contrast expectations: normal text should reach 4.5:1, with UI/non-text controls at least 3:1.
+- Repaired DeskPhone Web's component-level theme bridge so message bubbles, menus, compose input, action buttons, call banners, and dialer controls use per-surface readable CSS variables instead of hardcoded white/light assumptions.
+- DeskPhone theme matrix audit passed: 18 built-in schemes plus 4 adversarial custom schemes, 24 critical text/background pairs each, 0 failures below 4.5:1.
+- `npm run build` in `apps/web` passed and generated `assets/index-Byx5ijvj.js`; existing bundle-size warning remains.
+- Local preview `http://127.0.0.1:4320/?suite=deskphone` returned HTTP 200. A fresh-profile headless screenshot stayed on the existing `Loading...` gate, so the local render proof is the matrix audit plus production build.

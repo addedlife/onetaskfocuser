@@ -55,11 +55,97 @@ const COLORS = {
   border: "#DADCE0",
 };
 
-function buildDeskPhoneWebVars(theme = {}) {
+function dpIsHexColor(value) {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim());
+}
+
+function dpLum(hex) {
+  const channel = (value) => {
+    const s = parseInt(value, 16) / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * channel(hex.slice(1, 3)) + 0.7152 * channel(hex.slice(3, 5)) + 0.0722 * channel(hex.slice(5, 7));
+}
+
+export function deskPhoneContrastRatio(a, b) {
+  if (!dpIsHexColor(a) || !dpIsHexColor(b)) return 21;
+  const l1 = dpLum(a);
+  const l2 = dpLum(b);
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+}
+
+function dpMixHex(from, to, amount) {
+  if (!dpIsHexColor(from) || !dpIsHexColor(to)) return from;
+  const f = from.replace("#", "");
+  const t = to.replace("#", "");
+  const next = [0, 2, 4].map((i) => {
+    const a = parseInt(f.slice(i, i + 2), 16);
+    const b = parseInt(t.slice(i, i + 2), 16);
+    return Math.round(a + (b - a) * amount).toString(16).padStart(2, "0");
+  }).join("");
+  return `#${next}`.toUpperCase();
+}
+
+function dpReadableOn(fg, bg, min = 4.5) {
+  if (!dpIsHexColor(fg) || !dpIsHexColor(bg)) return fg;
+  if (deskPhoneContrastRatio(fg, bg) >= min) return fg;
+  const target = dpLum(bg) > 0.45 ? "#000000" : "#FFFFFF";
+  for (let step = 1; step <= 24; step += 1) {
+    const next = dpMixHex(fg, target, step / 24);
+    if (deskPhoneContrastRatio(next, bg) >= min) return next;
+  }
+  return deskPhoneContrastRatio("#000000", bg) >= deskPhoneContrastRatio("#FFFFFF", bg) ? "#000000" : "#FFFFFF";
+}
+
+function dpReadableAcross(fg, backgrounds, min = 4.5) {
+  let next = fg;
+  const bgs = backgrounds.filter(dpIsHexColor);
+  for (let pass = 0; pass < 4; pass += 1) {
+    let changed = false;
+    bgs.forEach((bg) => {
+      const adjusted = dpReadableOn(next, bg, min);
+      if (adjusted !== next) {
+        next = adjusted;
+        changed = true;
+      }
+    });
+    if (!changed) break;
+  }
+  return next;
+}
+
+function dpReadableSurface(preferred, fallback, text, min = 4.5) {
+  if (dpIsHexColor(preferred) && dpIsHexColor(text) && deskPhoneContrastRatio(text, preferred) >= min) return preferred;
+  return fallback;
+}
+
+export function buildDeskPhoneWebVars(theme = {}) {
   const bg = theme.card || theme.bg || COLORS.bgMain;
+  const pageBg = theme.bg || bg;
   const bgSoft = theme.bgW || COLORS.bgInput;
   const selected = theme.tonal || theme.bgW || COLORS.bgSelected;
   const accent = theme.primary || COLORS.accentBlue;
+  const surfaces = [pageBg, bg, bgSoft, selected].filter(dpIsHexColor);
+  const text = dpReadableAcross(theme.text || COLORS.textPrimary, surfaces, 4.5);
+  const textSecond = dpReadableAcross(theme.tSoft || COLORS.textSecond, surfaces, 4.5);
+  const muted = dpReadableAcross(theme.tSoft || COLORS.textMuted, surfaces, 4.5);
+  const disabled = dpReadableAcross(theme.tFaint || muted, [pageBg, bg, bgSoft].filter(dpIsHexColor), 4.5);
+  const accentText = dpReadableAcross(theme.onTonal || accent, [pageBg, bg, bgSoft].filter(dpIsHexColor), 4.5);
+  const successLight = dpReadableSurface(theme.successLight || COLORS.accentGreenLight, bgSoft, theme.success || COLORS.accentGreen, 4.5);
+  const dangerLight = dpReadableSurface(theme.dangerLight || COLORS.accentRedLight, bgSoft, theme.danger || COLORS.accentRed, 4.5);
+  const success = dpReadableAcross(theme.success || COLORS.accentGreen, [pageBg, bg, bgSoft, successLight].filter(dpIsHexColor), 4.5);
+  const danger = dpReadableAcross(theme.danger || COLORS.accentRed, [pageBg, bg, bgSoft, dangerLight].filter(dpIsHexColor), 4.5);
+  const successText = dpReadableOn(theme.successDark || success, successLight, 4.5);
+  const onPrimary = dpReadableOn(theme.onPrimary || COLORS.textOnAccent, accent, 4.5);
+  const onSuccess = dpReadableOn(theme.onSuccess || COLORS.textOnAccent, success, 4.5);
+  const onDanger = dpReadableOn(theme.onDanger || COLORS.textOnAccent, danger, 4.5);
+  const incomingBg = bgSoft;
+  const incomingText = dpReadableOn(text, incomingBg, 4.5);
+  const incomingMuted = dpReadableOn(muted, incomingBg, 4.5);
+  const outgoingText = onPrimary;
+  const callRingingBg = dpReadableSurface(theme.tonal || selected, bgSoft, text, 4.5);
+  const callActiveBg = dpReadableSurface(successLight || selected, bgSoft, text, 4.5);
+  const callBannerText = dpReadableAcross(text, [callRingingBg, callActiveBg].filter(dpIsHexColor), 4.5);
   return {
     "--dp-bg-main": bg,
     "--dp-bg-sidebar": bg,
@@ -67,20 +153,38 @@ function buildDeskPhoneWebVars(theme = {}) {
     "--dp-bg-input": bgSoft,
     "--dp-bg-selected": selected,
     "--dp-blue": accent,
-    "--dp-blue-dark": theme.onTonal || accent,
+    "--dp-blue-dark": accentText,
     "--dp-blue-light": theme.tonal || selected,
-    "--dp-green": theme.success || COLORS.accentGreen,
-    "--dp-green-dark": theme.successDark || COLORS.accentGreenDark,
-    "--dp-green-light": theme.successLight || COLORS.accentGreenLight,
-    "--dp-red": theme.danger || COLORS.accentRed,
-    "--dp-red-light": theme.dangerLight || COLORS.accentRedLight,
-    "--dp-text": theme.text || COLORS.textPrimary,
-    "--dp-text-second": theme.tSoft || COLORS.textSecond,
-    "--dp-muted": theme.tSoft || COLORS.textMuted,
-    "--dp-disabled": theme.tFaint || COLORS.textDisabled,
+    "--dp-green": success,
+    "--dp-green-dark": successText,
+    "--dp-green-light": successLight,
+    "--dp-red": danger,
+    "--dp-red-light": dangerLight,
+    "--dp-text": text,
+    "--dp-text-second": textSecond,
+    "--dp-muted": muted,
+    "--dp-disabled": disabled,
     "--dp-border": theme.brdS || theme.brd || COLORS.border,
     "--dp-border-strong": theme.brd || "#BDC1C6",
     "--dp-bg-surface": bg,
+    "--dp-menu-bg": bg,
+    "--dp-menu-text": dpReadableOn(text, bg, 4.5),
+    "--dp-control-bg": bgSoft,
+    "--dp-control-text": dpReadableOn(text, bgSoft, 4.5),
+    "--dp-on-primary": onPrimary,
+    "--dp-on-success": onSuccess,
+    "--dp-on-danger": onDanger,
+    "--dp-bubble-incoming-bg": incomingBg,
+    "--dp-bubble-incoming-text": incomingText,
+    "--dp-bubble-incoming-muted": incomingMuted,
+    "--dp-bubble-outgoing-bg": accent,
+    "--dp-bubble-outgoing-text": outgoingText,
+    "--dp-bubble-outgoing-muted": outgoingText,
+    "--dp-bubble-outgoing-border": dpMixHex(accent, outgoingText, 0.35),
+    "--dp-message-failed-text": dpReadableOn(danger, accent, 4.5),
+    "--dp-call-ringing-bg": callRingingBg,
+    "--dp-call-active-bg": callActiveBg,
+    "--dp-call-banner-text": callBannerText,
   };
 }
 
@@ -3641,16 +3745,16 @@ const css = `
   box-shadow: none;
 }
 .dp-call-banner.is-ringing {
-  background: #EAF1FB;
+  background: var(--dp-call-ringing-bg);
 }
 .dp-call-banner.is-active-call {
-  background: #E6F4EA;
+  background: var(--dp-call-active-bg);
 }
 .dp-call-icon {
   width: 44px;
   height: 44px;
   border-radius: 22px;
-  color: white;
+  color: var(--dp-on-success);
   background: var(--dp-green);
   display: flex;
   align-items: center;
@@ -3658,9 +3762,10 @@ const css = `
 }
 .dp-call-banner.is-ringing .dp-call-icon {
   background: var(--dp-blue);
+  color: var(--dp-on-primary);
 }
 .dp-call-text {
-  color: var(--dp-text);
+  color: var(--dp-call-banner-text);
   font-size: 16px;
   font-weight: 500;
   overflow: hidden;
@@ -3690,7 +3795,7 @@ const css = `
 }
 .dp-primary {
   background: var(--dp-blue);
-  color: white;
+  color: var(--dp-on-primary);
 }
 .dp-tonal {
   background: var(--dp-bg-input);
@@ -3698,15 +3803,15 @@ const css = `
 }
 .dp-success {
   background: var(--dp-green);
-  color: white;
+  color: var(--dp-on-success);
 }
 .dp-destructive {
   background: var(--dp-red);
-  color: white;
+  color: var(--dp-on-danger);
 }
 .dp-tonal.is-muted {
-  background: #FFCDD2;
-  color: #C62828;
+  background: var(--dp-red-light);
+  color: var(--dp-red);
 }
 .dp-tab-area {
   min-height: 0;
@@ -4035,7 +4140,7 @@ const css = `
   min-width: 190px;
   border: 1px solid var(--dp-border);
   border-radius: 8px;
-  background: white;
+  background: var(--dp-menu-bg);
   box-shadow: 0 8px 24px rgba(60, 64, 67, 0.18);
   padding: 6px;
 }
@@ -4045,7 +4150,7 @@ const css = `
   border-radius: 4px;
   padding: 9px 10px;
   background: transparent;
-  color: var(--dp-text);
+  color: var(--dp-menu-text);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
@@ -4359,13 +4464,13 @@ const css = `
 }
 .dp-message-bubble.is-incoming {
   border: 1px solid var(--dp-border);
-  background: white;
-  color: var(--dp-text);
+  background: var(--dp-bubble-incoming-bg);
+  color: var(--dp-bubble-incoming-text);
   border-bottom-left-radius: 6px;
 }
 .dp-message-bubble.is-outgoing {
-  background: var(--dp-blue);
-  color: white;
+  background: var(--dp-bubble-outgoing-bg);
+  color: var(--dp-bubble-outgoing-text);
   border-bottom-right-radius: 6px;
 }
 .dp-message-bubble.is-media-only {
@@ -4389,11 +4494,11 @@ const css = `
   line-height: 1.45;
 }
 .dp-muted-body {
-  color: var(--dp-muted);
+  color: var(--dp-bubble-incoming-muted);
   font-style: italic;
 }
 .dp-message-bubble.is-outgoing .dp-muted-body {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--dp-bubble-outgoing-muted);
 }
 .dp-message-meta {
   margin-top: 5px;
@@ -4401,11 +4506,11 @@ const css = `
   justify-content: flex-end;
   align-items: center;
   gap: 5px;
-  color: var(--dp-muted);
+  color: var(--dp-bubble-incoming-muted);
   font-size: 11px;
 }
 .dp-message-bubble.is-outgoing .dp-message-meta {
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--dp-bubble-outgoing-muted);
 }
 .dp-message-bubble.is-media-only:not(.has-send-status) .dp-message-meta {
   display: none;
@@ -4420,7 +4525,7 @@ const css = `
   font-weight: 500;
 }
 .dp-message-status.is-failed {
-  color: #FCE8E6;
+  color: var(--dp-message-failed-text);
   font-weight: 600;
 }
 .dp-attachment-stack {
@@ -4464,8 +4569,9 @@ const css = `
   gap: 10px;
 }
 .dp-attachment-row.is-outgoing {
-  border-color: rgba(255, 255, 255, 0.24);
-  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--dp-bubble-outgoing-border);
+  background: transparent;
+  color: var(--dp-bubble-outgoing-text);
 }
 .dp-attachment-row strong,
 .dp-attachment-row span {
@@ -4480,7 +4586,7 @@ const css = `
   font-size: 11px;
 }
 .dp-attachment-row.is-outgoing span {
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--dp-bubble-outgoing-muted);
 }
 .dp-attachment-row button {
   min-width: 56px;
@@ -4493,6 +4599,10 @@ const css = `
   font-weight: 500;
   cursor: pointer;
 }
+.dp-message-bubble.is-outgoing .dp-attachment-row button {
+  background: var(--dp-bubble-outgoing-text);
+  color: var(--dp-bubble-outgoing-bg);
+}
 .dp-bubble-actions {
   margin-top: 4px;
   color: var(--dp-muted);
@@ -4501,7 +4611,7 @@ const css = `
   gap: 6px;
 }
 .dp-message-bubble.is-outgoing .dp-bubble-actions {
-  color: white;
+  color: var(--dp-bubble-outgoing-text);
 }
 .dp-bubble-actions button {
   width: 28px;
@@ -4525,7 +4635,7 @@ const css = `
   border: 0;
   border-radius: 20px;
   background: var(--dp-blue);
-  color: white;
+  color: var(--dp-on-primary);
   box-shadow: 0 2px 8px rgba(60, 64, 67, 0.22);
   cursor: pointer;
   display: flex;
@@ -4633,7 +4743,7 @@ const css = `
 }
 .dp-send-button {
   background: var(--dp-blue);
-  color: white;
+  color: var(--dp-on-primary);
 }
 .dp-send-button:disabled {
   opacity: 0.38;
@@ -4646,8 +4756,8 @@ const css = `
   resize: vertical;
   border: 1px solid var(--dp-border);
   border-radius: 8px;
-  background: white;
-  color: var(--dp-text);
+  background: var(--dp-control-bg);
+  color: var(--dp-control-text);
   padding: 12px;
   font: 16px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   line-height: 1.35;
@@ -4759,7 +4869,7 @@ const css = `
 .dp-thread-dialer {
   border-bottom: 1px solid var(--dp-border);
   padding: 12px 14px 14px;
-  background: white;
+  background: var(--dp-bg-surface);
 }
 .dp-thread-dialer-top {
   display: grid;
@@ -4784,7 +4894,8 @@ const css = `
   border-radius: 4px;
   min-height: 42px;
   padding: 9px 11px;
-  color: var(--dp-text);
+  background: var(--dp-control-bg);
+  color: var(--dp-control-text);
   font: 400 15px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
 }
 .dp-thread-dialer-keys {
