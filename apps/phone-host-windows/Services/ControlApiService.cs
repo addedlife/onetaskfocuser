@@ -105,20 +105,39 @@ public class ControlApiService : IDisposable
     // ── Startup result reported back to the ViewModel for logging ─────────
     public string StartupResult { get; private set; } = "";
 
+    // ── LAN URL (populated after Start) ──────────────────────────────────
+    public string? LanUrl { get; private set; }
+
     public void Start()
     {
         try
         {
             _cts = new CancellationTokenSource();
-            _server = new TcpListener(IPAddress.Loopback, Port);
+            _server = new TcpListener(IPAddress.Any, Port);
             _server.Start();
+            LanUrl = GetLanUrl();
             _ = Task.Run(() => AcceptLoopAsync(_cts.Token));
-            StartupResult = $"OK — listening on http://localhost:{Port}/";
+            var lanNote = LanUrl is not null ? $" | LAN: {LanUrl}/" : "";
+            StartupResult = $"OK — listening on http://localhost:{Port}/{lanNote}";
         }
         catch (Exception ex)
         {
             StartupResult = $"FAILED — {ex.GetType().Name}: {ex.Message}";
         }
+    }
+
+    private static string? GetLanUrl()
+    {
+        try
+        {
+            var host = System.Net.Dns.GetHostName();
+            var addresses = System.Net.Dns.GetHostAddresses(host);
+            var lan = addresses.FirstOrDefault(a =>
+                a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
+                !IPAddress.IsLoopback(a));
+            return lan is not null ? $"http://{lan}:{Port}" : null;
+        }
+        catch { return null; }
     }
 
     public void Stop()
@@ -586,6 +605,10 @@ public class ControlApiService : IDisposable
                 bool ok = !string.IsNullOrWhiteSpace(palette) && ApplyTheme is not null && await ApplyTheme(palette, colors);
                 body = Json("result", ok ? "theme applied" : "theme unavailable");
             }
+            else if (path == "/lan-url")
+            {
+                body = LanUrl is not null ? $"{{\"url\":\"{LanUrl}\"}}" : "{\"url\":null}";
+            }
             else if (method == "POST" && path == "/test-reg")
             {
                 var v = ParseInt(qs, "v", 0);
@@ -626,6 +649,12 @@ public class ControlApiService : IDisposable
                     bool ok = SendWithAttachments is not null && await SendWithAttachments(to, text, attachments);
                     body = Json("result", ok ? "sent" : "failed");
                 }
+            }
+            else if (method == "GET")
+            {
+                // Serve built webapp static files from ./web/ next to the exe (SPA fallback for unknown GET paths)
+                await ServeStaticAsync(stream, rawPath.Contains('?') ? rawPath[..rawPath.IndexOf('?')] : rawPath);
+                return;
             }
             else
             {
@@ -844,6 +873,92 @@ public class ControlApiService : IDisposable
         public string? ContentType { get; set; }
         public string? DataBase64 { get; set; }
     }
+
+    // ── Static file serving (webapp bundle from ./web/ next to exe) ──────
+
+    private static string WebRoot => Path.Combine(AppContext.BaseDirectory, "web");
+
+    private static async Task ServeStaticAsync(NetworkStream stream, string urlPath)
+    {
+        var root = WebRoot;
+        if (!Directory.Exists(root))
+        {
+            // No web bundle deployed — fall through to generic 404
+            var nb = Encoding.UTF8.GetBytes(JsonError("web root not found"));
+            var nh = Encoding.ASCII.GetBytes(
+                "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n" +
+                $"Content-Length: {nb.Length}\r\nConnection: close\r\n\r\n");
+            await stream.WriteAsync(nh); await stream.WriteAsync(nb); await stream.FlushAsync();
+            return;
+        }
+
+        // Resolve path inside web root; SPA fallback to index.html for non-asset paths
+        string filePath;
+        var clean = urlPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+        if (string.IsNullOrEmpty(clean) || clean == "index.html")
+            filePath = Path.Combine(root, "index.html");
+        else
+            filePath = Path.Combine(root, clean);
+
+        // Path traversal guard
+        var fullPath = Path.GetFullPath(filePath);
+        var rootFull = Path.GetFullPath(root);
+        if (!fullPath.StartsWith(rootFull + Path.DirectorySeparatorChar) && fullPath != rootFull)
+        {
+            var fb = Encoding.UTF8.GetBytes(JsonError("forbidden"));
+            var fh = Encoding.ASCII.GetBytes(
+                "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n" +
+                $"Content-Length: {fb.Length}\r\nConnection: close\r\n\r\n");
+            await stream.WriteAsync(fh); await stream.WriteAsync(fb); await stream.FlushAsync();
+            return;
+        }
+
+        // If file missing, serve index.html (client-side routing / SPA fallback)
+        if (!File.Exists(fullPath))
+            fullPath = Path.Combine(root, "index.html");
+
+        if (!File.Exists(fullPath))
+        {
+            var mb = Encoding.UTF8.GetBytes(JsonError("not found"));
+            var mh = Encoding.ASCII.GetBytes(
+                "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n" +
+                $"Content-Length: {mb.Length}\r\nConnection: close\r\n\r\n");
+            await stream.WriteAsync(mh); await stream.WriteAsync(mb); await stream.FlushAsync();
+            return;
+        }
+
+        var mime = GetMimeType(fullPath);
+        var data = await File.ReadAllBytesAsync(fullPath);
+        var header = Encoding.ASCII.GetBytes(
+            "HTTP/1.1 200 OK\r\n" +
+            $"Content-Type: {mime}\r\n" +
+            $"Content-Length: {data.Length}\r\n" +
+            "Access-Control-Allow-Origin: *\r\n" +
+            "Cache-Control: no-cache\r\n" +
+            "Connection: close\r\n\r\n");
+        await stream.WriteAsync(header);
+        await stream.WriteAsync(data);
+        await stream.FlushAsync();
+    }
+
+    private static string GetMimeType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".html"          => "text/html; charset=utf-8",
+        ".js"            => "application/javascript",
+        ".css"           => "text/css",
+        ".json"          => "application/json",
+        ".png"           => "image/png",
+        ".jpg" or ".jpeg"=> "image/jpeg",
+        ".gif"           => "image/gif",
+        ".svg"           => "image/svg+xml",
+        ".ico"           => "image/x-icon",
+        ".woff"          => "font/woff",
+        ".woff2"         => "font/woff2",
+        ".ttf"           => "font/ttf",
+        ".otf"           => "font/otf",
+        ".txt"           => "text/plain",
+        _                => "application/octet-stream"
+    };
 
     public void Dispose() => Stop();
 }

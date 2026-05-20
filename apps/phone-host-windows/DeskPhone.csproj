@@ -53,6 +53,24 @@
        full explanation, the alternative-stack candidates (BlueSoleil + USB dongle), and
        the reasoning behind shipping DeskPhone without an audio bridge. -->
 
+  <!-- Copy built webapp (apps/web/dist/) into output/web/ so DeskPhone can serve it over LAN. -->
+  <Target Name="CopyWebDist" AfterTargets="Build">
+    <PropertyGroup>
+      <WebDistDir>$(MSBuildProjectDirectory)\..\web\dist</WebDistDir>
+      <WebOutDir>$(OutputPath)web</WebOutDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <WebDistFiles Include="$(WebDistDir)\**\*" Condition="Exists('$(WebDistDir)')" />
+    </ItemGroup>
+    <MakeDir Directories="$(WebOutDir)" Condition="Exists('$(WebDistDir)')" />
+    <Copy SourceFiles="@(WebDistFiles)"
+          DestinationFiles="@(WebDistFiles->'$(WebOutDir)\%(RecursiveDir)%(Filename)%(Extension)')"
+          Condition="Exists('$(WebDistDir)')"
+          SkipUnchangedFiles="true" />
+    <Message Text="[DeskPhone] Web dist copied to $(WebOutDir)" Importance="High" Condition="Exists('$(WebDistDir)')" />
+    <Message Text="[DeskPhone] Web dist not found at $(WebDistDir) — build apps/web first for LAN webapp" Importance="Normal" Condition="!Exists('$(WebDistDir)')" />
+  </Target>
+
   <!-- After every Release build: increment build number, delete old shortcuts, create new one. -->
   <Target Name="DeployDesktop" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
     <Exec Command="%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -File &quot;$(ProjectDir)deploy.ps1&quot; &quot;$(TargetPath)&quot;" />

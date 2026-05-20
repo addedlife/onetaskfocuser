@@ -148,7 +148,16 @@ async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS) {
 }
 
 function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
-  const api = "http://127.0.0.1:8765";
+  // Dynamic API base: auto-detect when served from DeskPhone (port 8765), else use saved LAN URL or localhost
+  const [remoteUrl, setRemoteUrl] = useState(() =>
+    typeof localStorage !== "undefined" ? (localStorage.getItem("shamash_deskphone_url") || "") : ""
+  );
+  const [showRemoteConfig, setShowRemoteConfig] = useState(false);
+  const [remoteInput, setRemoteInput] = useState("");
+  const api = (typeof window !== "undefined" && window.location.port === "8765")
+    ? window.location.origin
+    : (remoteUrl.replace(/\/$/, "") || "http://127.0.0.1:8765");
+
   const viewportW = useViewportWidth();
   const touchActions = viewportW < 980;
   const [status, setStatus] = useState(null);
@@ -220,7 +229,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
     } finally {
       refreshInFlightRef.current = false;
     }
-  }, [onOnlineChange]);
+  }, [api, onOnlineChange]);
 
   // Build phone-number → name map from contacts, covering many possible field names from the DeskPhone API
   const contactMap = useMemo(() => {
@@ -284,6 +293,19 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
       num: allContactPhones(c)[0] || "",
     }));
   }, [contacts, number, composeSearch, composeIsNew]);
+
+  const saveRemoteUrl = useCallback(() => {
+    const val = remoteInput.trim().replace(/\/$/, "");
+    setRemoteUrl(val);
+    if (typeof localStorage !== "undefined")
+      val ? localStorage.setItem("shamash_deskphone_url", val) : localStorage.removeItem("shamash_deskphone_url");
+    setShowRemoteConfig(false);
+  }, [remoteInput]);
+
+  const clearRemoteUrl = useCallback(() => {
+    setRemoteUrl(""); setRemoteInput("");
+    if (typeof localStorage !== "undefined") localStorage.removeItem("shamash_deskphone_url");
+  }, []);
 
   useEffect(() => { refresh(); const id = setInterval(refresh, 6500); return () => clearInterval(id); }, [refresh]);
 
@@ -667,7 +689,39 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
           style={phoneIconButton(showDialer)}>
           {suiteIcon("dialpad", 15)}
         </button>
+        {/* Remote connection config */}
+        <button onClick={() => { setShowRemoteConfig(v => !v); setRemoteInput(remoteUrl); }}
+          title={remoteUrl ? `Remote DeskPhone: ${remoteUrl}` : "Connect remote DeskPhone"}
+          style={phoneIconButton(showRemoteConfig || !!remoteUrl)}>
+          {suiteIcon("settings_ethernet", 15)}
+        </button>
       </div>
+
+      {/* ── Remote DeskPhone config panel ── */}
+      {showRemoteConfig && window.location.port !== "8765" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, background: C.bgSoft, borderRadius: 8, padding: "10px 12px" }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: C.muted }}>Remote DeskPhone URL</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input
+              value={remoteInput}
+              onChange={e => setRemoteInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && saveRemoteUrl()}
+              placeholder="http://192.168.x.x:8765"
+              style={{ flex: 1, height: 32, boxSizing: "border-box", padding: "0 10px", borderRadius: 6, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: 13, outline: "none" }}
+            />
+            <button onClick={saveRemoteUrl} style={gvTextButton({ height: 32, fontSize: 12 }, C)}>Save</button>
+            <button onClick={() => setShowRemoteConfig(false)} style={gvIconButton({ width: 32, height: 32 }, C)}>{suiteIcon("close", 13)}</button>
+          </div>
+          {remoteUrl && (
+            <button onClick={clearRemoteUrl} style={gvTextButton({ height: 28, fontSize: 11 }, C)}>
+              Clear (use localhost)
+            </button>
+          )}
+          <div style={{ fontSize: 11, color: C.faint, lineHeight: 1.5 }}>
+            On your home network: navigate to <strong>http://[PC‑IP]:8765</strong> for zero‑config auto‑connect.
+          </div>
+        </div>
+      )}
 
       {/* ── Dialer — only when keypad is open ── */}
       {showDialer && (
