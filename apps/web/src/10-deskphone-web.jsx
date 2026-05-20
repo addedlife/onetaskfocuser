@@ -668,13 +668,48 @@ function parseDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function isSameLocalDay(a, b) {
+  return a.toDateString() === b.toDateString();
+}
+
+function startOfCurrentWeek(now = new Date()) {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - start.getDay());
+  return start;
+}
+
+function isInCurrentWeek(date, now = new Date()) {
+  return date >= startOfCurrentWeek(now) && date <= now;
+}
+
+function formatCompactDate(date, now = new Date()) {
+  return date.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  });
+}
+
+function formatCallLogTime(value) {
+  const date = parseDate(value);
+  if (!date) return "";
+  const now = new Date();
+  const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (isSameLocalDay(date, now)) return time;
+  if (isInCurrentWeek(date, now)) {
+    return `${date.toLocaleDateString([], { weekday: "short" })} ${time}`;
+  }
+  return `${formatCompactDate(date, now)} ${time}`;
+}
+
 function formatConversationTime(value) {
   const date = parseDate(value);
   if (!date) return "";
-  const today = new Date();
-  const sameDay = date.toDateString() === today.toDateString();
-  if (sameDay) return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  return date.toLocaleDateString([], { month: "short", day: "numeric" });
+  const now = new Date();
+  if (isSameLocalDay(date, now)) return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (isInCurrentWeek(date, now)) return date.toLocaleDateString([], { weekday: "short" });
+  return formatCompactDate(date, now);
 }
 
 function formatBubbleTime(value) {
@@ -1630,7 +1665,7 @@ function ConversationCallHistory({
                 <div>{icon(call.isMissed ? "phone_missed" : call.direction === "Outgoing" ? "call_made" : "call_received", 18)}</div>
                 <div>
                   <strong>{call.contactName || call.number || "Unknown"}</strong>
-                  <span>{call.timeDisplay || formatConversationTime(call.timestamp)}{call.durationDisplay ? ` - ${call.durationDisplay}` : ""}</span>
+                  <span>{formatCallLogTime(call.timestamp || call.time) || call.timeDisplay || formatConversationTime(call.timestamp)}{call.durationDisplay ? ` - ${call.durationDisplay}` : ""}</span>
                 </div>
                 <div className="dp-thread-call-overflow">
                   <button type="button" className="dp-thread-call-menu-button" title={actionsOpen ? "Hide call actions" : "Show call actions"} aria-label={actionsOpen ? "Hide call actions" : "Show call actions"} onClick={() => setOpenCallActionKey(actionsOpen ? "" : callKey)}>{icon("more_horiz", 18)}</button>

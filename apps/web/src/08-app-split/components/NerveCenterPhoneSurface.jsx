@@ -78,6 +78,25 @@ function messageTimeMs(message) {
   return eventTimeMs(message?.timestamp || message?.date || message?.time || message?.Timestamp || message?.Date || message?.Time);
 }
 
+function startOfCurrentWeek(now = new Date()) {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - start.getDay());
+  return start;
+}
+
+function isInCurrentWeek(date, now = new Date()) {
+  return date >= startOfCurrentWeek(now) && date <= now;
+}
+
+function formatCompactDate(date, now = new Date()) {
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  });
+}
+
 function isOutgoingMessage(message) {
   const typeNum = typeof (message?.type || message?.Type) === "number" ? (message.type || message.Type) : null;
   const dir = (typeof message?.type === "string" ? message.type : "") || message?.direction || message?.messageType || message?.folder || message?.Direction || message?.Type || "";
@@ -375,9 +394,10 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
     const d = new Date(typeof val === "number" ? val : val);
     if (isNaN(d.getTime())) return typeof val === "string" ? val.slice(0, 8) : "";
     const diff = Date.now() - d.getTime();
-    if (diff < 3600000) return `${Math.round(diff / 60000)}m`;
-    if (diff < 86400000) return `${Math.round(diff / 3600000)}h`;
-    return d.toLocaleDateString(undefined, { weekday: "short" });
+    if (diff >= 0 && diff < 3600000) return `${Math.max(1, Math.round(diff / 60000))}m`;
+    if (diff >= 0 && diff < 86400000) return `${Math.round(diff / 3600000)}h`;
+    if (isInCurrentWeek(d)) return d.toLocaleDateString(undefined, { weekday: "short" });
+    return formatCompactDate(d);
   };
   const timeMs = val => {
     return eventTimeMs(val);
@@ -647,6 +667,16 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
                               </div>
                             );
                           })}
+                          <button
+                            type="button"
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={e => { e.stopPropagation(); setExpandedPhoneMessageId(null); }}
+                            title="Close conversation"
+                            aria-label="Close conversation"
+                            style={{ ...phoneIconButton(false), position: "sticky", bottom: 6, alignSelf: "flex-end", zIndex: 2, background: C.bg, boxShadow: `0 2px 8px ${C.shadow || "rgba(15,23,42,0.18)"}` }}
+                          >
+                            {suiteIcon("close", 16)}
+                          </button>
                           <div ref={expandedConversationEndRef} style={{ height: 1 }} />
                         </div>
                       </div>

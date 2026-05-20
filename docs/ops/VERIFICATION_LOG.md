@@ -550,3 +550,16 @@ Current source-grade file count after cleanup: 162 files.
 - In-app Browser verification was attempted, but the existing local helper failed on `require is not defined in ES module scope`; headless Chrome reached the existing unauthenticated `Loading...` shell.
 - Pushed commit `d7da807` to `origin/main`; Netlify Git-triggered production served `assets/index-BhHooHv2.js` on poll attempt 3.
 - Production asset `https://onetaskfocuser.netlify.app/assets/index-BhHooHv2.js` returned HTTP 200.
+
+
+## 2026-05-19 Phone Date Labels And Expanded Thread Exit
+
+- Researched current date/time display practice before editing: recent activity can use relative or weekday labels, but older history should include a date; user-locale formatters should be preferred over hand-coded numeric dates.
+- Changed NerveCenter phone timestamps so today keeps minute/hour labels, current-week rows can use weekday, and older rows show month/day with year when needed.
+- Added a sticky floating close button inside expanded NerveCenter text threads so the bottom-anchored conversation can be closed without scrolling back to the header.
+- Changed DeskPhone Web conversation list labels to use weekday only for the current week and real dates for older threads.
+- Changed DeskPhone Web call-history rows to format from call timestamps first, showing today as time, current-week calls as weekday plus time, and older calls as date plus time.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `git diff --check -- apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx apps/web/src/10-deskphone-web.jsx` passed; line-ending normalization warnings only.
+- Local Vite preview returned HTTP 200 at `http://127.0.0.1:4316/?suite=nervecenter`; local DeskPhone host `/status` returned HTTP 200.
+- In-app Browser verification was attempted, but the existing local helper failed on `require is not defined in ES module scope`; headless Chrome reached the existing unauthenticated `Loading...` shell.
