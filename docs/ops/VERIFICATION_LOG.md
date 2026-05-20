@@ -676,3 +676,20 @@ Current source-grade file count after cleanup: 162 files.
 - In-app Browser verification was attempted but hit the existing local helper boot issue (`require is not defined in ES module scope`), so headless Edge/CDP was used for visual proof.
 - Headless Edge/CDP seeded calendar, Gmail, task, shaila, and phone data and verified NerveCenter, Chief, AI recommendation, clock zone, special calendar item, routine calendar items, mail, tasks, phone activity, and no horizontal overflow (`scrollW=1365`, `clientW=1365`). Screenshot: `apps/web/artifacts/nervecenter-chief-staff-smoke.png`.
 - Pushed commit `ac21937` to `origin/main`; Netlify Git-triggered production served `assets/index-BseNaqHz.js` on poll attempt 3, and the deployed asset returned HTTP 200.
+
+## 2026-05-20 Chief Tweaks, Schedule Approval, And Text Links
+
+- Researched current standards before editing: calendar widgets should expose a current-time marker and initial scroll position, task/action suggestions should stay user-approved and editable, Google Calendar events should use event start/end fields, Netlify secrets should live in site environment variables, and external text-message links should open with `noopener`/`noreferrer` protections.
+- Changed Chief missed-call context so only unresolved missed calls count as return-call work; later outbound calls, outbound texts, or non-missed inbound calls for the same number mark older missed calls as already handled.
+- Added email/calendar task suggestions in the Chief card as editable `Create new task?` approval rows with auto-selected priority and a dismiss path.
+- Added the current-time line and auto-scroll behavior to the NerveCenter schedule card.
+- Changed the Chief discussion box to show a visible pending assistant response while the AI is thinking.
+- Changed NerveCenter phone replies so the composer opens at the clicked row/action and focuses the message field for immediate typing and Enter-to-send.
+- Changed Record Anything schedule parsing so event-like items stay as schedule items with editable date, time, duration, and notes; incomplete schedule approvals explain which details are missing before Calendar creation.
+- Made URLs inside NerveCenter expanded text messages clickable and applied the same safe link rendering to DeskPhone Web message bubbles.
+- `node --check apps/web/backend/functions/_ai-core.cjs` passed.
+- `git diff --check -- apps/web/backend/functions/_ai-core.cjs apps/web/src/08-app-split/components/ConvCapture.jsx apps/web/src/08-app-split/components/NerveCenterPanel.jsx apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx apps/web/src/10-deskphone-web.jsx` passed; line-ending normalization warnings only.
+- `npm run build` passed in `apps/web` and generated `assets/index-o2Hb_rOw.js`; existing large-bundle warning remains.
+- Local preview returned HTTP 200 at `http://127.0.0.1:4326/?suite=nervecenter`.
+- In-app Browser verification was attempted but hit the existing Node ESM helper boot issue (`require is not defined in ES module scope`), so headless Edge/CDP verified the built NerveCenter route hydrated with zero runtime exceptions. Screenshot: `apps/web/artifacts/chief-tweaks-nervecenter-hydrated.png`.
+- Pushed commit `761962b` to `origin/main`; Netlify Git-triggered production served `assets/index-o2Hb_rOw.js` on poll attempt 3, and the deployed asset contained the new Chief suggestion, resolved-missed-call, dialogue pending-response, and secure-link markers.
