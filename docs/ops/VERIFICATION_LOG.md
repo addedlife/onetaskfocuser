@@ -648,6 +648,7 @@ Current source-grade file count after cleanup: 162 files.
 - `git diff --check -- apps/web/backend/functions/_ai-core.cjs apps/web/src/01-core.js apps/web/src/08-app-split/App.jsx apps/web/src/08-app-split/components/ConvCapture.jsx apps/web/src/08-app-split/components/NerveCenterPanel.jsx apps/web/src/04-components.jsx` passed; line-ending normalization warnings only.
 - `npm run build` passed in `apps/web` and generated `assets/index-DqbwuWbq.js`; existing large-bundle warning remains.
 - Local Vite dev server returned HTTP 200 at `http://127.0.0.1:4305/?suite=nervecenter`; in-app Browser verification hit the existing Node ESM helper boot issue, and fresh-profile headless Edge reached the known `Loading...` shell.
+- Pushed commit `0978da5` to `origin/main`; Netlify production served `assets/index-BseNaqHz.js`, and the deployed asset contained the `scheduleItems`, `America/New_York`, and calendar-add success markers.
 
 ## 2026-05-20 Auth Session Persistence And Google Prompt Throttle
 
