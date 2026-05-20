@@ -87,6 +87,7 @@ function gmailFullBody(message) {
 }
 
 const CHIEF_TIME_BUCKET_MS = 15 * 60 * 1000;
+const CHIEF_LEARNING_KEY = "ot_chief_learning_v1";
 const ROUTINE_CALENDAR_RE = /\b(shacharis|shacharit|mincha|maariv|arvit|daven(?:ing)?|daf yomi|mishna(?:h)? yomi|halacha yomi|parsha|selichos|slichos)\b/i;
 
 function cleanOneLine(value, max = 180) {
@@ -101,6 +102,117 @@ function taskSuggestionKey(value) {
     .replace(/\b(the|a|an|to|for|about|with|and|or|on|in|at|of)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function hashChiefValue(value) {
+  const text = String(value || "");
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function inferChiefActionType(text) {
+  const value = String(text || "").toLowerCase();
+  const tests = [
+    ["reply", /\b(reply|respond|email back|get back|answer)\b/],
+    ["call", /\b(call|phone|return call)\b/],
+    ["confirm", /\b(confirm|verify|check with|make sure)\b/],
+    ["prepare", /\b(prep|prepare|review|read|bring|print)\b/],
+    ["schedule", /\b(schedule|book|set up|calendar|meet)\b/],
+    ["send", /\b(send|forward|share)\b/],
+    ["pay", /\b(pay|invoice|bill)\b/],
+    ["register", /\b(register|sign up|submit form)\b/],
+  ];
+  return tests.find(([, re]) => re.test(value))?.[0] || "follow_up";
+}
+
+function emptyChiefLearning() {
+  return { version: 1, events: [] };
+}
+
+function readChiefLearning() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CHIEF_LEARNING_KEY) || "null");
+    if (parsed && Array.isArray(parsed.events)) return { version: 1, events: parsed.events.slice(-200) };
+  } catch {}
+  return emptyChiefLearning();
+}
+
+function writeChiefLearning(next) {
+  try {
+    localStorage.setItem(CHIEF_LEARNING_KEY, JSON.stringify({ version: 1, events: (next?.events || []).slice(-200) }));
+  } catch {}
+}
+
+function buildChiefLearningProfile(learning) {
+  const profile = {
+    acceptedActionTypes: {},
+    rejectedActionTypes: {},
+    acceptedPriorityByAction: {},
+    quietedEvidenceCount: 0,
+  };
+  (learning?.events || []).forEach(event => {
+    const action = event.actionType || "follow_up";
+    if (event.decision === "accepted") {
+      profile.acceptedActionTypes[action] = (profile.acceptedActionTypes[action] || 0) + 1;
+      if (event.priorityId) {
+        profile.acceptedPriorityByAction[action] = profile.acceptedPriorityByAction[action] || {};
+        profile.acceptedPriorityByAction[action][event.priorityId] = (profile.acceptedPriorityByAction[action][event.priorityId] || 0) + 1;
+      }
+    }
+    if (event.decision === "rejected") {
+      profile.rejectedActionTypes[action] = (profile.rejectedActionTypes[action] || 0) + 1;
+      profile.quietedEvidenceCount += 1;
+    }
+  });
+  return profile;
+}
+
+function findSuggestionEvidence(item, context) {
+  const source = String(item?.source || "").toLowerCase();
+  const titleKey = taskSuggestionKey(item?.sourceTitle || item?.text || "");
+  const sourceRows = source.includes("mail") || source.includes("gmail")
+    ? (context?.emails || [])
+    : source.includes("calendar")
+      ? (context?.calendar || [])
+      : [...(context?.emails || []), ...(context?.calendar || [])];
+  const matched = sourceRows.find(row => {
+    const haystack = taskSuggestionKey(`${row.subject || row.summary || ""} ${row.summary || ""}`);
+    return titleKey && haystack && (haystack.includes(titleKey) || titleKey.includes(haystack));
+  }) || sourceRows[0] || null;
+  const stablePart = matched?.sourceKey || matched?.threadId || matched?.id || item?.sourceTitle || item?.source || "dashboard";
+  const freshPart = matched?.freshnessKey || `${matched?.date || ""}|${matched?.start || ""}|${matched?.end || ""}|${matched?.summary || ""}|${matched?.subject || ""}`;
+  return {
+    sourceKey: hashChiefValue(`${item?.source || ""}|${stablePart}`),
+    freshnessKey: hashChiefValue(`${item?.source || ""}|${stablePart}|${freshPart}`),
+  };
+}
+
+function decorateTaskSuggestion(item, context) {
+  const actionType = item.actionType || inferChiefActionType(item.text);
+  const evidence = findSuggestionEvidence(item, context);
+  const sourceKey = item.sourceKey || evidence.sourceKey;
+  const freshnessKey = item.freshnessKey || evidence.freshnessKey;
+  const issueKey = item.issueKey || hashChiefValue(`${item.source || ""}|${sourceKey}|${actionType}`);
+  return {
+    ...item,
+    actionType,
+    sourceKey,
+    freshnessKey,
+    issueKey,
+  };
+}
+
+function shouldHideTaskSuggestion(item, learning) {
+  const events = learning?.events || [];
+  return events.some(event =>
+    (event.decision === "rejected" || event.decision === "accepted") &&
+    event.issueKey === item.issueKey &&
+    event.freshnessKey === item.freshnessKey
+  );
 }
 
 function parseEventMs(value) {
@@ -253,7 +365,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [chiefRefreshNonce, setChiefRefreshNonce] = useState(0);
   const [taskSuggestions, setTaskSuggestions] = useState([]);
   const [taskSuggestionsLoading, setTaskSuggestionsLoading] = useState(false);
-  const [dismissedTaskSuggestionKeys, setDismissedTaskSuggestionKeys] = useState(new Set());
+  const [chiefLearning, setChiefLearning] = useState(() => readChiefLearning());
   const [phoneActivitySummary, setPhoneActivitySummary] = useState({ online: false, status: "DeskPhone offline", unreadTexts: 0, missedCalls: 0, voicemailCount: 0, texts: [], calls: [] });
   const phoneActivitySigRef = useRef("");
   const [phoneStatusSummary, setPhoneStatusSummary] = useState({ online: false, tone: "offline", label: "DeskPhone offline", voicemailCount: 0 });
@@ -470,6 +582,9 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
         status: item.status === "get_back" || item.isGetBackStep ? "waiting to reply" : "pending answer",
       })),
       calendar: calendarRows.slice(0, 24).map(row => ({
+        id: cleanOneLine(row.evt?.id || "", 120),
+        sourceKey: hashChiefValue(`calendar|${row.evt?.id || row.evt?.summary || ""}`),
+        freshnessKey: hashChiefValue(`calendar|${row.evt?.id || row.evt?.summary || ""}|${row.evt?.updated || ""}|${row.evt?.start?.dateTime || row.evt?.start?.date || ""}|${row.evt?.end?.dateTime || row.evt?.end?.date || ""}`),
         summary: cleanOneLine(row.evt?.summary || "(no title)", 220),
         start: row.evt?.start?.dateTime || row.evt?.start?.date || "",
         end: row.evt?.end?.dateTime || row.evt?.end?.date || "",
@@ -480,6 +595,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
         routine: row.routine,
       })),
       emails: (gmailMessages || []).slice(0, 12).map(msg => ({
+        id: cleanOneLine(msg.id || "", 120),
+        threadId: cleanOneLine(msg.threadId || "", 120),
+        sourceKey: hashChiefValue(`mail|${msg.threadId || msg.id || header(msg, "Subject") || ""}`),
+        freshnessKey: hashChiefValue(`mail|${msg.threadId || msg.id || header(msg, "Subject") || ""}|${msg.internalDate || header(msg, "Date") || ""}|${msg.snippet || ""}`),
         from: fmtFrom(header(msg, "From")),
         subject: cleanOneLine(header(msg, "Subject") || "(no subject)", 220),
         summary: cleanOneLine(msg.aiSummary || decodeSnippet(msg.snippet || ""), 280),
@@ -496,12 +615,14 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       .sort((a, b) => b.weight - a.weight),
   [priorities]);
   const defaultSuggestionPriorityId = taskSuggestionPriorities.find(p => p.id === "today")?.id || taskSuggestionPriorities[0]?.id || priorities[0]?.id || "today";
+  const chiefLearningProfile = useMemo(() => buildChiefLearningProfile(chiefLearning), [chiefLearning]);
   const taskSuggestionScanKey = useMemo(() => JSON.stringify({
     calendar: chiefContext.calendar,
     emails: chiefContext.emails,
     tasks: primaryTaskQueue.slice(0, 60).map(task => nerveDisplaySummary(task, task.text || "")),
     priorities: taskSuggestionPriorities.map(p => `${p.id}:${p.label}:${p.weight}`),
-  }), [chiefContext.calendar, chiefContext.emails, primaryTaskQueue, taskSuggestionPriorities]);
+    learning: chiefLearningProfile,
+  }), [chiefContext.calendar, chiefContext.emails, primaryTaskQueue, taskSuggestionPriorities, chiefLearningProfile]);
   const needsNervePolish = item => {
     const source = nerveSummarySource(item);
     const summary = String(item?.ncSummary || "").trim();
@@ -581,6 +702,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
         context: chiefContext,
         priorityOptions: taskSuggestionPriorities.map((p, index) => ({ id: p.id, label: p.label || p.id, rank: index + 1 })),
         existingTasks: primaryTaskQueue.slice(0, 80).map(task => ({ text: nerveDisplaySummary(task, task.text || "") })),
+        learningProfile: chiefLearningProfile,
       }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 900 } })
         .then(job => {
           if (cancelled) return;
@@ -595,11 +717,15 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 text,
                 priorityId: validPriorityIds.has(item.priorityId) ? item.priorityId : defaultSuggestionPriorityId,
                 source: cleanOneLine(item.source || "Dashboard", 40),
+                sourceKey: cleanOneLine(item.sourceKey || "", 80),
+                freshnessKey: cleanOneLine(item.freshnessKey || "", 80),
                 sourceTitle: cleanOneLine(item.sourceTitle || "", 160),
                 reason: cleanOneLine(item.reason || "", 160),
+                actionType: cleanOneLine(item.actionType || "", 40),
               };
             })
-            .filter(item => item.text && item.key && !dismissedTaskSuggestionKeys.has(item.key))
+            .map(item => decorateTaskSuggestion(item, chiefContext))
+            .filter(item => item.text && item.key && !shouldHideTaskSuggestion(item, chiefLearning))
             .filter(item => {
               const bare = taskSuggestionKey(item.text);
               if (!bare || existingKeys.has(bare) || seen.has(item.key)) return false;
@@ -620,7 +746,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [taskSuggestionScanKey, dismissedTaskSuggestionKeys]); // eslint-disable-line
+  }, [taskSuggestionScanKey]); // eslint-disable-line
 
   async function submitChiefPrompt() {
     const question = chiefPrompt.trim();
@@ -641,7 +767,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
         history: historyText,
         question,
       }, aiOpts, { genConfig: { temperature: 0.2, maxOutputTokens: 1100 } });
-      const answer = String(job?.text || "").trim() || `${chiefBrief?.nextAction || chiefFallback.nextAction} ${chiefBrief?.why || chiefFallback.why}`;
+      const answer = String(job?.output || job?.text || "").trim() || `${chiefBrief?.nextAction || chiefFallback.nextAction} ${chiefBrief?.why || chiefFallback.why}`;
       setChiefDialogue([...nextHistory, { role: "assistant", text: answer }].slice(-6));
     } catch {
       setChiefDialogue([...nextHistory, { role: "assistant", text: `${chiefBrief?.nextAction || chiefFallback.nextAction} ${chiefBrief?.why || chiefFallback.why}` }].slice(-6));
@@ -654,8 +780,32 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     setTaskSuggestions(rows => rows.map(row => row.id === id ? { ...row, ...patch } : row));
   }
 
+  function recordTaskSuggestionDecision(row, decision) {
+    const decorated = decorateTaskSuggestion(row, chiefContext);
+    setChiefLearning(prev => {
+      const next = {
+        version: 1,
+        events: [
+          ...(prev?.events || []),
+          {
+            ts: Date.now(),
+            decision,
+            issueKey: decorated.issueKey,
+            freshnessKey: decorated.freshnessKey,
+            sourceKey: decorated.sourceKey,
+            source: decorated.source || "Dashboard",
+            actionType: decorated.actionType || inferChiefActionType(decorated.text),
+            priorityId: decorated.priorityId || defaultSuggestionPriorityId,
+          },
+        ].slice(-200),
+      };
+      writeChiefLearning(next);
+      return next;
+    });
+  }
+
   function dismissTaskSuggestion(row) {
-    setDismissedTaskSuggestionKeys(prev => new Set([...prev, row.key]));
+    recordTaskSuggestionDecision(row, "rejected");
     setTaskSuggestions(rows => rows.filter(item => item.id !== row.id));
   }
 
@@ -663,7 +813,8 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     const text = String(row?.text || "").trim();
     if (!text) return;
     onAddTask?.(text, row.priorityId || defaultSuggestionPriorityId);
-    dismissTaskSuggestion(row);
+    recordTaskSuggestionDecision(row, "accepted");
+    setTaskSuggestions(rows => rows.filter(item => item.id !== row.id));
   }
 
   // Keep tab indicator in sync with native scroll position in stacked carousel
@@ -1113,11 +1264,26 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           const chiefTone = brief?.urgency === "now" ? C.danger : brief?.urgency === "today" ? C.accent : C.muted;
           const sourceLabels = (brief?.sources || []).slice(0, 4);
           const nowLineColor = C.success || C.accent || "#1A9E78";
+          const hasCurrentCalendarEvent = calendarRows.some(row => row.now);
           const calendarNowLine = (key = "now") => (
             <div key={key} ref={calendarNowRef} aria-label="Current time" style={{ display: "grid", gridTemplateColumns: "44px minmax(0,1fr)", gap: 8, alignItems: "center", padding: "5px 0", scrollMarginBlock: "50%" }}>
               <span style={{ color: nowLineColor, fontSize: NC_TYPE.small, fontWeight: 700, textAlign: "right", fontFamily: NC_FONT_STACK, whiteSpace: "nowrap" }}>Now</span>
               <span style={{ height: 2, borderRadius: 2, background: nowLineColor, boxShadow: `0 0 0 1px ${softBorder(nowLineColor, 0.18)}` }} />
             </div>
+          );
+          const currentEventNowRule = () => (
+            <span aria-hidden="true" style={{
+              position: "absolute",
+              left: isStacked ? 64 : 82,
+              right: 6,
+              top: "50%",
+              height: 2,
+              borderRadius: 2,
+              background: nowLineColor,
+              boxShadow: `0 0 0 1px ${softBorder(nowLineColor, 0.16)}`,
+              zIndex: 1,
+              pointerEvents: "none",
+            }} />
           );
 
           return (
@@ -1223,11 +1389,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       const evt = row.evt;
                       const now = row.now;
                       const lifted = row.special || row.now;
-                      const rowStyle = { display: "flex", gap: isStacked ? 7 : 10, alignItems: "flex-start", padding: isStacked ? "5px 2px" : "8px 4px", textDecoration: "none", color: "inherit", borderRadius: 4, background: lifted ? softBg(accentBlue, row.now ? 0.10 : 0.055) : "transparent" };
+                      const rowStyle = { position: "relative", overflow: "hidden", display: "flex", gap: isStacked ? 7 : 10, alignItems: "flex-start", padding: isStacked ? "5px 2px" : "8px 4px", textDecoration: "none", color: "inherit", borderRadius: 4, background: lifted ? softBg(accentBlue, row.now ? 0.10 : 0.055) : "transparent" };
                       const inner = (
                         <>
-                          <span style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: now ? accentBlue : T.tFaint, fontWeight: lifted ? 600 : 400, flexShrink: 0, width: isStacked ? 54 : 66, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ position: "relative", zIndex: 2, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: now ? accentBlue : T.tFaint, fontWeight: lifted ? 600 : 400, flexShrink: 0, width: isStacked ? 54 : 66, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
+                          <div style={{ position: "relative", zIndex: 2, flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                               {now && <span style={{ width: 5, height: 5, borderRadius: "50%", background: accentBlue, flexShrink: 0 }} />}
                               <span style={{ fontSize: NC_TYPE.control, color: lifted ? C.text : C.muted, fontWeight: lifted ? 600 : 400, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: row.routine && !lifted ? 0.78 : 1 }}>{evt.summary || "(no title)"}</span>
@@ -1236,10 +1402,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                         </>
                       );
                       return evt.htmlLink
-                        ? <React.Fragment key={evt.id || i}>{i === calendarNowInsertIndex && calendarNowLine("now-line")}<a href={evt.htmlLink} target="_blank" rel="noopener noreferrer" style={rowStyle} onMouseEnter={e => e.currentTarget.style.background = T.bgW || 'rgba(255,255,255,0.05)'} onMouseLeave={e => e.currentTarget.style.background = rowStyle.background}>{inner}</a></React.Fragment>
-                        : <React.Fragment key={evt.id || i}>{i === calendarNowInsertIndex && calendarNowLine("now-line")}<div style={rowStyle}>{inner}</div></React.Fragment>;
+                        ? <React.Fragment key={evt.id || i}>{!hasCurrentCalendarEvent && i === calendarNowInsertIndex && calendarNowLine("now-line")}<a ref={now ? calendarNowRef : null} href={evt.htmlLink} target="_blank" rel="noopener noreferrer" style={{ ...rowStyle, scrollMarginBlock: now ? "50%" : undefined }} onMouseEnter={e => e.currentTarget.style.background = T.bgW || 'rgba(255,255,255,0.05)'} onMouseLeave={e => e.currentTarget.style.background = rowStyle.background}>{now && currentEventNowRule()}{inner}</a></React.Fragment>
+                        : <React.Fragment key={evt.id || i}>{!hasCurrentCalendarEvent && i === calendarNowInsertIndex && calendarNowLine("now-line")}<div ref={now ? calendarNowRef : null} style={{ ...rowStyle, scrollMarginBlock: now ? "50%" : undefined }}>{now && currentEventNowRule()}{inner}</div></React.Fragment>;
                     })}
-                    {calendarNowInsertIndex === calendarRows.length && calendarNowLine("now-line-end")}
+                    {!hasCurrentCalendarEvent && calendarNowInsertIndex === calendarRows.length && calendarNowLine("now-line-end")}
                     </React.Fragment>
                     )}
                   </div>
@@ -1312,7 +1478,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     </div>
                   )}
                   {(chiefDialogue.length > 0 || chiefDialogueLoading) && (
-                    <div style={{ display: "grid", gap: 6, minHeight: 0, overflowY: "auto", paddingRight: 2 }}>
+                    <div role="status" aria-live="polite" aria-atomic="false" style={{ display: "grid", gap: 6, flex: "0 1 112px", minHeight: 44, maxHeight: 132, overflowY: "auto", paddingRight: 2 }}>
                       {[...chiefDialogue.slice(-4), ...(chiefDialogueLoading ? [{ role: "assistant", text: "Thinking through the next move...", pending: true }] : [])].slice(-4).map((row, idx) => (
                         <div key={`${row.role}-${idx}`} style={{ justifySelf: row.role === "user" ? "end" : "start", maxWidth: "92%", border: `1px solid ${row.role === "user" ? softBorder(C.accent, 0.24) : C.divider}`, background: row.role === "user" ? softBg(C.accent, 0.08) : C.bgSoft, color: C.text, borderRadius: 7, padding: "6px 8px", fontSize: NC_TYPE.meta, lineHeight: 1.38, fontFamily: NC_FONT_STACK }}>
                           <span style={row.pending ? { color: C.muted } : null}>{row.text}</span>

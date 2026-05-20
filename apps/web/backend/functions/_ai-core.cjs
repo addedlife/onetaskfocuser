@@ -489,6 +489,9 @@ function normalizeChiefContext(input = {}) {
       status: cleanString(shaila?.status, 80),
     })).filter(shaila => shaila.text),
     calendar: ensureArray(source.calendar || [], "calendar").slice(0, 24).map(evt => ({
+      id: cleanString(evt?.id, 120),
+      sourceKey: cleanString(evt?.sourceKey, 80),
+      freshnessKey: cleanString(evt?.freshnessKey, 80),
       summary: cleanString(evt?.summary, 220),
       start: cleanString(evt?.start, 80),
       end: cleanString(evt?.end, 80),
@@ -499,6 +502,10 @@ function normalizeChiefContext(input = {}) {
       routine: !!evt?.routine,
     })).filter(evt => evt.summary),
     emails: ensureArray(source.emails || [], "emails").slice(0, 12).map(email => ({
+      id: cleanString(email?.id, 120),
+      threadId: cleanString(email?.threadId, 120),
+      sourceKey: cleanString(email?.sourceKey, 80),
+      freshnessKey: cleanString(email?.freshnessKey, 80),
       from: cleanString(email?.from, 120),
       subject: cleanString(email?.subject, 220),
       summary: cleanString(email?.summary || email?.snippet, 280),
@@ -545,6 +552,9 @@ function normalizeChiefTaskSuggestions(value) {
       text: cleanString(item?.text, 320),
       priorityId: cleanString(item?.priorityId || item?.priority, 80),
       source: cleanString(item?.source, 40),
+      sourceKey: cleanString(item?.sourceKey, 80),
+      freshnessKey: cleanString(item?.freshnessKey, 80),
+      actionType: cleanString(item?.actionType, 40),
       sourceTitle: cleanString(item?.sourceTitle || item?.title, 220),
       reason: cleanString(item?.reason, 220),
     })).filter(item => item.text),
@@ -870,7 +880,7 @@ const AI_JOB_REGISTRY = {
     output: "json",
     shape: "object",
     genConfig: { temperature: 0.1, maxOutputTokens: 900 },
-    schema: '{"suggestions":[{"text":"task to create","priorityId":"priority_id","source":"Calendar|Mail","sourceTitle":"source item","reason":"why this is taskable"}]}',
+    schema: '{"suggestions":[{"text":"task to create","priorityId":"priority_id","source":"Calendar|Mail","sourceKey":"sourceKey from source row if available","freshnessKey":"freshnessKey from source row if available","actionType":"reply|call|confirm|prepare|schedule|send|pay|register|follow_up","sourceTitle":"source item","reason":"why this is taskable"}]}',
     buildPrompt(input = {}) {
       const context = normalizeChiefContext(input.context || input);
       const priorityOptions = ensureArray(input.priorityOptions || [], "priorityOptions").slice(0, 8).map(priority => ({
@@ -879,13 +889,19 @@ const AI_JOB_REGISTRY = {
         rank: Number.isFinite(Number(priority?.rank)) ? Number(priority.rank) : null,
       })).filter(priority => priority.id);
       const existingTasks = ensureArray(input.existingTasks || [], "existingTasks").slice(0, 80).map(task => cleanString(task?.text || task, 260)).filter(Boolean);
+      const learningProfile = input.learningProfile && typeof input.learningProfile === "object" && !Array.isArray(input.learningProfile)
+        ? input.learningProfile
+        : {};
       return compactLines([
         YESHIVISH_SYSTEM,
         "You are finding taskable follow-up items from Calendar and Gmail for an executive dashboard.",
         "Suggest only concrete user actions that are visible in the provided Calendar or Gmail data and are not already represented in existing tasks.",
         "Do not suggest routine calendar attendance by itself. Do suggest prep, reply, bring, call, send, confirm, register, pay, review, or deadline work when the source implies action.",
         "Choose one priorityId from the priority options. Use the highest priority only for urgent, same-day, blocking, or time-sensitive work.",
+        "Use the learning profile as a preference signal: favor accepted action types and priority patterns; avoid action types the user repeatedly rejects unless the current source is clearly new or time-sensitive.",
+        "When a source row has sourceKey or freshnessKey, copy those exact values into the suggestion.",
         `Priority options:\n${jsonBlock(priorityOptions)}`,
+        `Learning profile:\n${jsonBlock(learningProfile)}`,
         `Existing tasks:\n${jsonBlock(existingTasks)}`,
         `Calendar and Gmail snapshot:\n${jsonBlock({ currentTime: context.localeTime || context.currentTime, calendar: context.calendar, emails: context.emails })}`,
         "Return at most 4 suggestions. If nothing taskable is visible, return an empty suggestions array.",
