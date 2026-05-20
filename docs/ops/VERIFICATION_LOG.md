@@ -722,3 +722,4 @@ Current source-grade file count after cleanup: 162 files.
 - In-app Browser verification was attempted first, but the existing local helper failed on `require is not defined in ES module scope`; direct Edge/CDP verified mobile `390x820` Chief page render with Chief, Next best move, Not now, Discuss, Chief profile, and no horizontal overflow (`scrollW=390`, `clientW=390`).
 - Direct Edge/CDP click-smoke verified `Not now` records a rejected Chief learning event, preserves no horizontal overflow, and shows a useful local-save response when cloud profile sync is unavailable.
 - Direct Edge/CDP chat-smoke verified typing `skip this, I do not want sleep tasks now` records a rejected Chief learning event and shows `Got it. I am dropping... rescanning for a better next move.`
+- Pushed commit `177a60f` to `origin/main`; Netlify Git-triggered production served `assets/index-DOs95XYV.js` on poll attempt 4, and the deployed asset returned HTTP 200.
