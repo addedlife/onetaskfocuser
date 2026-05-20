@@ -647,3 +647,4 @@ Current source-grade file count after cleanup: 162 files.
 - `git diff --check -- apps/web/src/00-auth.jsx apps/web/src/08-app-split/App.jsx` passed; line-ending normalization warnings only.
 - `npm run build` passed in `apps/web` and generated `assets/index-ZTkUASIM.js`; existing large-bundle warning remains.
 - Built asset marker check found `Stay signed in on this device`, `ot_auth_stay_signed_in`, `ot_google_silent_reauth_last`, and `Reconnect Google to refresh Calendar and Gmail`.
+- Pushed commit `b0b56db` to `origin/main`; Netlify Git-triggered production served `assets/index-AlH-x7EB.js` on poll attempt 1, and the deployed asset contained the app-session persistence and Google reconnect markers.
