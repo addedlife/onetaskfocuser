@@ -2418,6 +2418,28 @@ function App({ user, onSignOut }) {
     },
   ];
   const noticeTopOffset = (networkOffline && !offlineNoticeDismissed ? 48 : 0) + (fbOffline ? 48 : 0);
+  const commandPageWidth = { width: "100%", maxWidth: 760, minWidth: 0, boxSizing: "border-box" };
+  const commandAvailableW = Math.max(0, viewportW - sidebarW);
+  const queueCompactRows = commandAvailableW < 720;
+  const queueRowBase = {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "12px 10px",
+    minWidth: 0,
+    maxWidth: "100%",
+    boxSizing: "border-box",
+    flexWrap: queueCompactRows ? "wrap" : "nowrap",
+  };
+  const queueActionRail = {
+    display: "flex",
+    gap: 0,
+    flexShrink: queueCompactRows ? 1 : 0,
+    flexWrap: "wrap",
+    justifyContent: queueCompactRows ? "flex-end" : "flex-start",
+    minWidth: 0,
+    ...(queueCompactRows ? { width: "100%", paddingLeft: 64, boxSizing: "border-box", marginTop: 2 } : {}),
+  };
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -3058,7 +3080,7 @@ function App({ user, onSignOut }) {
       )}
 
 
-      <div style={{position:"fixed",top:0,bottom:0,left:sidebarW,right:0,width:"auto",maxWidth:"none",padding:"0 clamp(16px,3vw,32px)",boxSizing:"border-box",zIndex:1,transition:"left 0.20s cubic-bezier(0.4,0,0.2,1)",overflowY:tab==="focus"?"hidden":"auto",display:"flex",flexDirection:"column",alignItems:"center"}}>
+      <div style={{position:"fixed",top:0,bottom:0,left:sidebarW,right:0,width:"auto",maxWidth:"none",minWidth:0,padding:"0 clamp(16px,3vw,32px)",boxSizing:"border-box",zIndex:1,transition:"left 0.20s cubic-bezier(0.4,0,0.2,1)",overflowY:tab==="focus"?"hidden":"auto",overflowX:"hidden",display:"flex",flexDirection:"column",alignItems:"center"}}>
 
         {/* ===== FOCUS TAB ===== */}
         {tab === "focus" && (
@@ -3329,7 +3351,7 @@ function App({ user, onSignOut }) {
         {/* ===== NON-FOCUS HEADER ===== */}
         {tab !== "focus" && (
           <>
-            <header style={{textAlign:"center",paddingTop:40,paddingBottom:4,flexShrink:0}}>
+            <header style={{...commandPageWidth,textAlign:"center",paddingTop:40,paddingBottom:4,flexShrink:0}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                 <h1 style={{fontSize:24,fontWeight:600,margin:0}}>OneTaskOnly</h1>
                 <button onClick={()=>{setSettingsInitialTab("queue"); setShowSet(true);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:.4}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.4}><IC.Gear s={15} c={T.tSoft}/></button>
@@ -3349,7 +3371,7 @@ function App({ user, onSignOut }) {
                 }} title="Save backup and close window" style={{fontSize:11,color:T.tFaint,fontFamily:"system-ui",background:"none",border:`1px solid ${T.brd}`,borderRadius:8,cursor:"pointer",padding:"2px 8px"}}>save &amp; close</button>
               </div>
             </header>
-            <div style={{display:"flex",gap:3,marginTop:16,background:T.bgW,borderRadius:16,padding:3,flexShrink:0,position:"relative"}}>
+            <div style={{...commandPageWidth,display:"flex",gap:3,marginTop:16,background:T.bgW,borderRadius:16,padding:3,flexShrink:0,position:"relative"}}>
               <TabBtn T={T} active={false} onClick={()=>switchTab("focus")} icon={<IC.Focus s={13} c={T.tSoft}/>} label="Launchpad"/>
               <div style={{position:"relative",flex:1,display:"flex"}}>
                 <TabBtn T={T} active={tab==="queue"} onClick={()=>switchTab("queue")} icon={<IC.List s={13} c={tab==="queue"?T.text:T.tSoft}/>} label={`Queue (${effectiveCount})`}/>
@@ -3361,7 +3383,7 @@ function App({ user, onSignOut }) {
 
         {/* ===== QUEUE TAB ===== */}
         {tab === "queue" && (
-          <div style={{animation:"ot-fade 0.3s",marginTop:24,flex:1}}>
+          <div style={{...commandPageWidth,animation:"ot-fade 0.3s",marginTop:24,flex:1}}>
             {/* Queue header: task count + energy indicator + overflow menu */}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -3433,11 +3455,11 @@ function App({ user, onSignOut }) {
               </div>
               {/* Text input — shown once priority selected */}
               {qAddPri && (
-                <form onSubmit={e=>{e.preventDefault();const t=qAddText.trim();if(!t)return;const newQT={id:uid(),text:t,completed:false,priority:qAddPri,createdAt:Date.now()};uT(ts=>doOpt([...ts,newQT]));setQAddText("");setQAddPri(null);clearTimeout(queueToastTmr.current);const clr=gP(pris,newQT.priority).isShaila?"#2ECC71":gP(pris,newQT.priority).color;setQueueToast(clr);setQueueToastKey(k=>k+1);queueToastTmr.current=setTimeout(()=>setQueueToast(null),5000);triggerAIPrioritize();}} style={{display:"flex",gap:6,animation:"ot-fade 0.15s"}}>
+                <form onSubmit={e=>{e.preventDefault();const t=qAddText.trim();if(!t)return;const newQT={id:uid(),text:t,completed:false,priority:qAddPri,createdAt:Date.now()};uT(ts=>doOpt([...ts,newQT]));setQAddText("");setQAddPri(null);clearTimeout(queueToastTmr.current);const clr=gP(pris,newQT.priority).isShaila?"#2ECC71":gP(pris,newQT.priority).color;setQueueToast(clr);setQueueToastKey(k=>k+1);queueToastTmr.current=setTimeout(()=>setQueueToast(null),5000);triggerAIPrioritize();}} style={{display:"flex",gap:6,animation:"ot-fade 0.15s",minWidth:0}}>
                   <input autoFocus value={qAddText} onChange={e=>setQAddText(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Escape"){setQAddPri(null);setQAddText("");}}}
                     placeholder={qAddPri==="shaila"?"Who + what shaila?":"What needs doing?"}
-                    style={{flex:1,padding:"7px 12px",fontSize:13,border:`1.5px solid ${gP(pris,qAddPri).isShaila?"#2ECC71":gP(pris,qAddPri).color}`,borderRadius:10,outline:"none",background:T.bgW,color:T.text,fontFamily:"Georgia,serif"}}/>
+                    style={{flex:1,minWidth:0,padding:"7px 12px",fontSize:13,border:`1.5px solid ${gP(pris,qAddPri).isShaila?"#2ECC71":gP(pris,qAddPri).color}`,borderRadius:10,outline:"none",background:T.bgW,color:T.text,fontFamily:"Georgia,serif"}}/>
                   <button type="submit" style={{background:gP(pris,qAddPri).isShaila?"#2ECC71":gP(pris,qAddPri).color,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
                     <IC.Plus s={14} c={textOnColor(gP(pris,qAddPri).isShaila?"#2ECC71":gP(pris,qAddPri).color)}/>
                   </button>
@@ -3450,7 +3472,7 @@ function App({ user, onSignOut }) {
 
             {/* Queue: all tasks in one continuous card — groups inline, no gaps */}
             {queueTFiltered.length > 0 ? (
-              <div style={{background:T.card,borderRadius:16,border:`1px solid ${T.brd}`,overflow:"hidden",boxShadow:T.shadow}}>
+              <div style={{background:T.card,borderRadius:16,border:`1px solid ${T.brd}`,overflow:"hidden",boxShadow:T.shadow,width:"100%",maxWidth:"100%",minWidth:0,boxSizing:"border-box"}}>
                 {(() => {
                   let pos = 0;
                   return queueTFiltered.map((task, idx) => {
@@ -3471,13 +3493,13 @@ function App({ user, onSignOut }) {
                         <React.Fragment key={`grp-${task.parentTask}`}>
                           {/* Header — identical layout to a regular task row */}
                           <div draggable onDragStart={()=>setDragId(task.id)} onDragOver={e=>e.preventDefault()} onDrop={()=>handleDrop(task.id)}
-                            style={{display:"flex",alignItems:"center",gap:6,padding:"12px 10px",borderBottom:`1px solid ${T.brdS}`,borderLeft:`3px solid ${tp.color}`,background:isF?pBg(tp.color):"transparent",cursor:"grab"}}>
+                            style={{...queueRowBase,borderBottom:`1px solid ${T.brdS}`,borderLeft:`3px solid ${tp.color}`,background:isF?pBg(tp.color):"transparent",cursor:"grab"}}>
                             <span style={{cursor:"grab",padding:"2px",opacity:.35,flexShrink:0}}><IC.Grab s={12} c={T.tSoft}/></span>
                             <span style={{width:20,height:20,borderRadius:"50%",background:isF?tp.color:"transparent",border:isF?"none":`1.5px solid ${T.tFaint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:isF?textOnColor(tp.color):T.tFaint,fontWeight:600,fontFamily:"system-ui",flexShrink:0}}>
                               {dispPos}
                             </span>
                             <span onClick={()=>setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;})}
-                              style={{flex:1,fontSize:14,cursor:"pointer",fontWeight:isF?500:400,color:_qText,fontFamily:"Georgia,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                              style={{flex:1,minWidth:0,fontSize:14,cursor:"pointer",fontWeight:isF?500:400,color:_qText,fontFamily:"Georgia,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
                               {task.shailaId && shailaNumberMap[task.shailaId] && <span style={{fontSize:10,color:"#C8A84C",fontWeight:700,fontFamily:"system-ui",marginRight:5}}>#{shailaNumberMap[task.shailaId]}</span>}
                               {task.parentTask}
                             </span>
@@ -3488,7 +3510,7 @@ function App({ user, onSignOut }) {
                               return <ShailaMiniPill status={hst} shailaNum={shailaNumberMap[task.shailaId]} onToggle={e=>{e?.stopPropagation();if(gbStep)handleShailaGotBack(gbStep.id,hst!=="got_back");}}/>;
                             })()}
                             <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.7}}/>
-                            <div style={{display:"flex",gap:0,flexShrink:0}}>
+                            <div style={queueActionRail}>
                               <button onClick={e=>{e.stopPropagation();compTask(gSteps[0]?.id);}} title="Complete next step" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Check s={13} c={tp.color}/></button>
                               {AS.legacyCompleteUI && <button onClick={e=>{e.stopPropagation();legacyCompTask(gSteps[0]?.id);}} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Clock s={12} c={tp.color}/></button>}
                               <button onClick={e=>{e.stopPropagation();moveTop(gSteps[0]?.id);}} title="To top" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.MoveTop s={12} c={T.tSoft}/></button>
@@ -3504,12 +3526,12 @@ function App({ user, onSignOut }) {
                           {/* Expanded subtask rows */}
                           {isOpen && <>
                             {gSteps.map((st) => (
-                              <div key={st.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px 7px 28px",borderBottom:`1px solid ${T.brdS}`,background:"transparent"}}>
+                              <div key={st.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px 7px 28px",borderBottom:`1px solid ${T.brdS}`,background:"transparent",minWidth:0,maxWidth:"100%",boxSizing:"border-box"}}>
                                 <button onClick={e=>{e.stopPropagation();compTask(st.id);}} style={{width:18,height:18,borderRadius:"50%",border:`1.5px solid ${tp.color}`,background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} title="Complete step"><IC.Check s={10} c={tp.color}/></button>
                                 {editId === st.id ? (
-                                  <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(st.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(st.id)} style={{flex:1,fontSize:13,fontFamily:"Georgia,serif",border:`1px solid ${tp.color}80`,borderRadius:6,padding:"3px 7px",outline:"none",color:T.text,background:T.bgW}}/>
+                                  <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(st.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(st.id)} style={{flex:1,minWidth:0,fontSize:13,fontFamily:"Georgia,serif",border:`1px solid ${tp.color}80`,borderRadius:6,padding:"3px 7px",outline:"none",color:T.text,background:T.bgW}}/>
                                 ) : (
-                                  <span onClick={()=>startEd(st)} style={{flex:1,fontSize:13,color:T.tSoft,cursor:"text",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                                  <span onClick={()=>startEd(st)} style={{flex:1,minWidth:0,fontSize:13,color:T.tSoft,cursor:"text",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
                                     {st.stepIndex && <span style={{fontSize:10,color:T.tFaint,marginRight:4,fontFamily:"system-ui"}}>#{st.stepIndex}</span>}{st.text}
                                   </span>
                                 )}
@@ -3547,14 +3569,14 @@ function App({ user, onSignOut }) {
                       const _qText = isF ? textOnPastel(AS.colorScheme, T.text) : T.tSoft;
                       const _qSoft = isF ? textOnPastel(AS.colorScheme, T.tSoft) : T.tSoft;
                       return (
-                        <div key={task.id} draggable onDragStart={()=>setDragId(task.id)} onDragOver={e=>e.preventDefault()} onDrop={()=>handleDrop(task.id)} style={{display:"flex",alignItems:"center",gap:6,padding:"12px 10px",borderBottom:`1px solid ${T.brdS}`,borderLeft:`3px solid ${tp.color}`,background:isF?pBg(tp.color):(task.blocked?pBg("#E0B472"):"transparent"),cursor:"grab",opacity:task.blocked?.6:1}}>
+                        <div key={task.id} draggable onDragStart={()=>setDragId(task.id)} onDragOver={e=>e.preventDefault()} onDrop={()=>handleDrop(task.id)} style={{...queueRowBase,borderBottom:`1px solid ${T.brdS}`,borderLeft:`3px solid ${tp.color}`,background:isF?pBg(tp.color):(task.blocked?pBg("#E0B472"):"transparent"),cursor:"grab",opacity:task.blocked?.6:1}}>
                           <span style={{cursor:"grab",padding:"2px",opacity:.35,flexShrink:0}}><IC.Grab s={12} c={_qSoft}/></span>
                           <span style={{width:20,height:20,borderRadius:"50%",background:isF?tp.color:"transparent",border:isF?"none":`1.5px solid ${T.tFaint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:isF?textOnColor(tp.color):T.tFaint,fontWeight:600,fontFamily:"system-ui",flexShrink:0}}>{dispPos}</span>
                           {editId === task.id ? (
-                            <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(task.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(task.id)} style={{flex:1,fontSize:14,fontFamily:"Georgia,serif",border:`1px solid ${tp.color}80`,borderRadius:8,padding:"4px 8px",outline:"none",color:textOnPastel(AS.colorScheme, T.text),background:pBg(tp.color)}}/>
+                            <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(task.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(task.id)} style={{flex:1,minWidth:0,fontSize:14,fontFamily:"Georgia,serif",border:`1px solid ${tp.color}80`,borderRadius:8,padding:"4px 8px",outline:"none",color:textOnPastel(AS.colorScheme, T.text),background:pBg(tp.color)}}/>
                           ) : (
                             <div style={{flex:1,display:"flex",flexDirection:"column",gap:1,minWidth:0}}>
-                              <span onClick={()=>startEd(task)} style={{fontSize:14,cursor:"text",fontWeight:isF?500:400,color:_qText,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                              <span onClick={()=>startEd(task)} style={{fontSize:14,cursor:"text",fontWeight:isF?500:400,color:_qText,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
                                 {task.pinned && <span style={{fontSize:10,marginRight:4,opacity:.5}}>📌</span>}
                                 {task.text}
                               </span>
@@ -3578,7 +3600,7 @@ function App({ user, onSignOut }) {
                             </div>
                           )}
                           <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.7}}/>
-                          <div draggable={false} onPointerDown={e=>e.stopPropagation()} style={{display:"flex",gap:0,flexShrink:0}}>
+                          <div draggable={false} onPointerDown={e=>e.stopPropagation()} style={queueActionRail}>
                             <button onClick={e=>{e.stopPropagation();compTask(task.id);}} title="Mark done" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Check s={13} c={tp.color}/></button>
                             {AS.legacyCompleteUI && <button onClick={e=>{e.stopPropagation();legacyCompTask(task.id);}} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Clock s={12} c={tp.color}/></button>}
                             <button onClick={e=>{e.stopPropagation();moveTop(task.id);}} title="Top" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.MoveTop s={12} c={T.tSoft}/></button>

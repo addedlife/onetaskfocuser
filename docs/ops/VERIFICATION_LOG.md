@@ -615,3 +615,14 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` in `apps/web` passed and generated `assets/index-Byx5ijvj.js`; existing bundle-size warning remains.
 - Local preview `http://127.0.0.1:4320/?suite=deskphone` returned HTTP 200. A fresh-profile headless screenshot stayed on the existing `Loading...` gate, so the local render proof is the matrix audit plus production build.
 - Pushed commit `2195385` to `origin/main`; Netlify Git-triggered production served `assets/index-Byx5ijvj.js` on poll attempt 3, and the deployed asset returned HTTP 200.
+
+## 2026-05-20 Full Queue Layout Containment
+
+- Researched current CSS layout guidance before editing: fixed-width work lanes should stay bounded by the available viewport, flex children that contain long text need `min-width: 0`, and long tokens should be allowed to wrap or ellipsize inside their own box instead of expanding the page.
+- Changed the full queue command page in `apps/web/src/08-app-split/App.jsx` so the non-focus header, tab bar, and queue tab share a bounded `760px` page width with `minWidth: 0`.
+- Changed queue rows so task text and edit fields can shrink inside the row, long unbroken task strings use safe overflow containment, and dense action controls wrap under the row on compact widths.
+- `git diff --check -- apps/web/src/08-app-split/App.jsx` passed; line-ending normalization warning only.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- Local preview returned HTTP 200 at `http://127.0.0.1:4322/`.
+- In-app Browser verification was attempted first, but the existing local helper failed on `require is not defined in ES module scope`.
+- Headless Edge/CDP seeded 12 queue tasks including one long unbroken token and verified desktop `1365x850` plus mobile `390x820`: document/root scroll width matched viewport width, the queue page stayed bounded (`760px` desktop, available mobile width), and measured queue row overflow count was `0` in both viewports. Screenshots were written under `apps/web/artifacts/queue-layout-*-seeded.png`.
