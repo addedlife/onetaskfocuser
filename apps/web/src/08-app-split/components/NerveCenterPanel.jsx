@@ -89,6 +89,14 @@ function gmailFullBody(message) {
 const CHIEF_TIME_BUCKET_MS = 15 * 60 * 1000;
 const CHIEF_LEARNING_KEY = "ot_chief_learning_v1";
 const CHIEF_CHAT_HEIGHT_KEY = "ot_chief_chat_height_v1";
+const CHIEF_SCAN_CACHE_KEY = "ot_chief_scan_cache_v1";
+const CHIEF_SCAN_LAST_RUN_KEY = "ot_chief_scan_last_ai_run_v1";
+const CHIEF_SUGGESTIONS_CACHE_KEY = "ot_chief_task_suggestions_cache_v1";
+const CHIEF_SUGGESTIONS_LAST_RUN_KEY = "ot_chief_task_suggestions_last_ai_run_v1";
+const CHIEF_SCAN_CACHE_MS = 30 * 60 * 1000;
+const CHIEF_SCAN_MIN_AI_GAP_MS = 20 * 60 * 1000;
+const CHIEF_SUGGESTIONS_CACHE_MS = 45 * 60 * 1000;
+const CHIEF_SUGGESTIONS_MIN_AI_GAP_MS = 25 * 60 * 1000;
 const ROUTINE_CALENDAR_RE = /\b(shacharis|shacharit|mincha|maariv|arvit|daven(?:ing)?|daf yomi|mishna(?:h)? yomi|halacha yomi|parsha|selichos|slichos)\b/i;
 
 function cleanOneLine(value, max = 180) {
@@ -154,6 +162,27 @@ function readChiefLearning() {
   return emptyChiefLearning();
 }
 
+function readStorageJson(key) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "null");
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStorageJson(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
+function readStorageNumber(key) {
+  try { return Number(localStorage.getItem(key) || 0) || 0; } catch { return 0; }
+}
+
+function writeStorageNumber(key, value) {
+  try { localStorage.setItem(key, String(value)); } catch {}
+}
+
 function writeChiefLearning(next) {
   try {
     localStorage.setItem(CHIEF_LEARNING_KEY, JSON.stringify({ version: 1, events: (next?.events || []).slice(-200) }));
@@ -195,6 +224,33 @@ function buildChiefLearningProfile(learning) {
     }
   });
   return profile;
+}
+
+function profileNotesForPrompt(profile) {
+  const notes = Array.isArray(profile?.notes) ? profile.notes : [];
+  const manual = String(profile?.manualMarkdown || "").trim();
+  return [
+    ...notes.map(note => cleanOneLine(note.text, 240)).filter(Boolean),
+    ...(manual ? manual.split(/\n+/).map(line => cleanOneLine(line.replace(/^[-*]\s*/, ""), 240)).filter(Boolean).slice(0, 8) : []),
+  ].slice(-20);
+}
+
+function markdownFromChiefProfile(profile) {
+  const notes = Array.isArray(profile?.notes) ? profile.notes : [];
+  const manual = String(profile?.manualMarkdown || "").trim();
+  return [
+    "# Chief of Staff Profile",
+    "",
+    `Updated: ${profile?.updatedAt || "local draft"}`,
+    "",
+    "## Preferences",
+    "",
+    ...(notes.length ? notes.map(note => `- [${note.category || "preference"}] ${note.text || ""}`) : ["- No saved preferences yet."]),
+    "",
+    "## Manual Notes",
+    "",
+    manual || "",
+  ].join("\n");
 }
 
 function findSuggestionEvidence(item, context) {
@@ -255,6 +311,47 @@ function shouldHideTaskSuggestion(item, learning) {
     if (event.sourceTitleKey && tokenOverlapRatio(event.sourceTitleKey, item.sourceTitleKey || item.textKey) >= 0.7) return true;
     return false;
   });
+}
+
+function looksLikePreferenceUpdate(text) {
+  return /\b(remember|profile|preference|don't remind|do not remind|dont remind|stop reminding|never remind|i don't really do|i do not really do|not useful|no more of those)\b/i.test(String(text || ""));
+}
+
+function looksLikeDeleteConfirmation(text) {
+  return /\b(delete it|delete that|remove it|remove that|cancel it|yes delete|yes remove|take it off calendar)\b/i.test(String(text || ""));
+}
+
+function findCalendarPreferenceTarget(text, calendar = []) {
+  const source = taskSuggestionKey(text);
+  const scored = (calendar || [])
+    .filter(evt => evt?.id && evt?.summary && !evt.past)
+    .map(evt => ({ evt, score: tokenOverlapRatio(source, evt.summary) }))
+    .sort((a, b) => b.score - a.score);
+  return scored[0]?.score >= 0.25 ? scored[0].evt : (calendar || []).find(evt => evt?.special && !evt.past) || null;
+}
+
+function profileNoteFromChiefText(text, target) {
+  const cleaned = cleanOneLine(text, 360);
+  if (target?.summary) {
+    return {
+      category: "calendar_preference",
+      text: `Avoid surfacing reminders for "${cleanOneLine(target.summary, 180)}" unless the user asks directly. User note: ${cleaned}`,
+      source: "Chief chat",
+      linkedSource: {
+        type: "calendar",
+        id: target.id,
+        calendarId: target.calendarId || "primary",
+        title: target.summary,
+        start: target.start || "",
+        end: target.end || "",
+      },
+    };
+  }
+  return {
+    category: "preference",
+    text: cleaned,
+    source: "Chief chat",
+  };
 }
 
 function parseEventMs(value) {
@@ -368,7 +465,7 @@ function buildChiefFallbackBrief(context = {}) {
   };
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null }) {
   const viewportW = useViewportWidth();
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
@@ -409,6 +506,19 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [taskSuggestions, setTaskSuggestions] = useState([]);
   const [taskSuggestionsLoading, setTaskSuggestionsLoading] = useState(false);
   const [chiefLearning, setChiefLearning] = useState(() => readChiefLearning());
+  const [chiefProfileOpen, setChiefProfileOpen] = useState(false);
+  const [chiefProfileDraft, setChiefProfileDraft] = useState("");
+  const [chiefProfileSaving, setChiefProfileSaving] = useState(false);
+  const [pendingChiefCalendarAction, setPendingChiefCalendarAction] = useState(null);
+  const chiefRefreshHandledRef = useRef(chiefRefreshNonce);
+  useEffect(() => {
+    if (chiefProfile?.learning?.events?.length) {
+      const next = { version: 1, events: chiefProfile.learning.events.slice(-200) };
+      setChiefLearning(next);
+      writeChiefLearning(next);
+    }
+    setChiefProfileDraft(markdownFromChiefProfile(chiefProfile));
+  }, [chiefProfile?.updatedAt]); // eslint-disable-line
   const [phoneActivitySummary, setPhoneActivitySummary] = useState({ online: false, status: "DeskPhone offline", unreadTexts: 0, missedCalls: 0, voicemailCount: 0, texts: [], calls: [] });
   const phoneActivitySigRef = useRef("");
   const [phoneStatusSummary, setPhoneStatusSummary] = useState({ online: false, tone: "offline", label: "DeskPhone offline", voicemailCount: 0 });
@@ -608,6 +718,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     });
     return () => window.cancelAnimationFrame(frame);
   }, [calendarMinuteKey, calendarEvents, calendarRows.length]);
+  const chiefProfileNotes = useMemo(() => profileNotesForPrompt(chiefProfile), [chiefProfile?.updatedAt]);
   const chiefContext = useMemo(() => {
     const bucketDate = new Date(timeBucket * CHIEF_TIME_BUCKET_MS);
     const priById = new Map((priorities || []).map(p => [p.id, p.label || p.id]));
@@ -626,6 +737,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       })),
       calendar: calendarRows.slice(0, 24).map(row => ({
         id: cleanOneLine(row.evt?.id || "", 120),
+        calendarId: cleanOneLine(row.evt?.calendarId || "primary", 180),
         sourceKey: hashChiefValue(`calendar|${row.evt?.id || row.evt?.summary || ""}`),
         freshnessKey: hashChiefValue(`calendar|${row.evt?.id || row.evt?.summary || ""}|${row.evt?.updated || ""}|${row.evt?.start?.dateTime || row.evt?.start?.date || ""}|${row.evt?.end?.dateTime || row.evt?.end?.date || ""}`),
         summary: cleanOneLine(row.evt?.summary || "(no title)", 220),
@@ -648,8 +760,9 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
         date: header(msg, "Date"),
       })),
       phone: phoneActivitySummary,
+      profile: { notes: chiefProfileNotes },
     };
-  }, [timeBucket, priorities, primaryTaskQueue, visibleShailos, calendarRows, gmailMessages, phoneActivitySummary, nowMs]);
+  }, [timeBucket, priorities, primaryTaskQueue, visibleShailos, calendarRows, gmailMessages, phoneActivitySummary, nowMs, chiefProfileNotes]);
   const chiefScanKey = useMemo(() => JSON.stringify(chiefContext), [chiefContext]);
   const chiefFallback = useMemo(() => buildChiefFallbackBrief(chiefContext), [chiefContext]);
   const taskSuggestionPriorities = useMemo(() =>
@@ -691,6 +804,9 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
   useEffect(() => {
     let cancelled = false;
+    const now = Date.now();
+    const force = chiefRefreshNonce !== chiefRefreshHandledRef.current;
+    chiefRefreshHandledRef.current = chiefRefreshNonce;
     setChiefBrief(prev => prev || chiefFallback);
     setChiefError("");
     if (!aiOpts) {
@@ -698,14 +814,28 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       setChiefLoading(false);
       return undefined;
     }
+    const cached = readStorageJson(CHIEF_SCAN_CACHE_KEY);
+    if (!force && cached?.scanKey === chiefScanKey && cached?.brief && now - Number(cached.ts || 0) < CHIEF_SCAN_CACHE_MS) {
+      setChiefBrief(cached.brief);
+      setChiefLoading(false);
+      return undefined;
+    }
+    if (!force && now - readStorageNumber(CHIEF_SCAN_LAST_RUN_KEY) < CHIEF_SCAN_MIN_AI_GAP_MS) {
+      setChiefBrief(cached?.brief || chiefFallback);
+      setChiefError(cached?.brief ? "Using cached scan." : "Using local scan.");
+      setChiefLoading(false);
+      return undefined;
+    }
     setChiefLoading(true);
     const timer = window.setTimeout(() => {
+      writeStorageNumber(CHIEF_SCAN_LAST_RUN_KEY, Date.now());
       runAIJob("dashboard.chief_of_staff.v1", { context: chiefContext }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 900 } })
         .then(job => {
           if (cancelled) return;
           const output = job?.output;
           if (output?.summary && output?.nextAction) {
             setChiefBrief(output);
+            writeStorageJson(CHIEF_SCAN_CACHE_KEY, { scanKey: chiefScanKey, ts: Date.now(), brief: output });
           } else {
             setChiefBrief(chiefFallback);
             setChiefError("Using local scan.");
@@ -733,6 +863,18 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       return undefined;
     }
     let cancelled = false;
+    const now = Date.now();
+    const cached = readStorageJson(CHIEF_SUGGESTIONS_CACHE_KEY);
+    if (cached?.scanKey === taskSuggestionScanKey && Array.isArray(cached.rows) && now - Number(cached.ts || 0) < CHIEF_SUGGESTIONS_CACHE_MS) {
+      setTaskSuggestions(cached.rows);
+      setTaskSuggestionsLoading(false);
+      return undefined;
+    }
+    if (now - readStorageNumber(CHIEF_SUGGESTIONS_LAST_RUN_KEY) < CHIEF_SUGGESTIONS_MIN_AI_GAP_MS) {
+      setTaskSuggestions(Array.isArray(cached?.rows) ? cached.rows : []);
+      setTaskSuggestionsLoading(false);
+      return undefined;
+    }
     setTaskSuggestionsLoading(true);
     const existingKeys = new Set(
       primaryTaskQueue
@@ -741,6 +883,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     );
     const validPriorityIds = new Set(taskSuggestionPriorities.map(p => p.id));
     const timer = window.setTimeout(() => {
+      writeStorageNumber(CHIEF_SUGGESTIONS_LAST_RUN_KEY, Date.now());
       runAIJob("dashboard.task_suggestions.v1", {
         context: chiefContext,
         priorityOptions: taskSuggestionPriorities.map((p, index) => ({ id: p.id, label: p.label || p.id, rank: index + 1 })),
@@ -779,6 +922,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
             })
             .slice(0, 3);
           setTaskSuggestions(rows);
+          writeStorageJson(CHIEF_SUGGESTIONS_CACHE_KEY, { scanKey: taskSuggestionScanKey, ts: Date.now(), rows });
         })
         .catch(() => {
           if (!cancelled) setTaskSuggestions([]);
@@ -799,6 +943,38 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     const nextHistory = [...chiefDialogue, { role: "user", text: question }].slice(-6);
     setChiefDialogue(nextHistory);
     setChiefPrompt("");
+    if (pendingChiefCalendarAction && looksLikeDeleteConfirmation(question)) {
+      setChiefDialogueLoading(true);
+      try {
+        await onDeleteCalendarEvent?.(pendingChiefCalendarAction);
+        setChiefDialogue([...nextHistory, { role: "assistant", text: `Deleted "${pendingChiefCalendarAction.summary}" from Calendar. I kept the preference in your Chief profile.` }].slice(-6));
+        setPendingChiefCalendarAction(null);
+        onRefreshCalendar?.();
+      } catch (error) {
+        setChiefDialogue([...nextHistory, { role: "assistant", text: error?.message || "I could not delete that calendar event. Reconnect Google and try again." }].slice(-6));
+      } finally {
+        setChiefDialogueLoading(false);
+      }
+      return;
+    }
+    if (looksLikePreferenceUpdate(question)) {
+      const target = findCalendarPreferenceTarget(question, chiefContext.calendar);
+      const note = profileNoteFromChiefText(question, target);
+      setChiefDialogueLoading(true);
+      try {
+        await onAppendChiefProfileNote?.(note);
+        if (target?.id) setPendingChiefCalendarAction(target);
+        const answer = target?.summary
+          ? `Updated your Chief profile: I will stop surfacing reminders for "${target.summary}" unless you ask. Should I delete it from Calendar too? Reply "delete it" if yes.`
+          : "Updated your Chief profile with that preference.";
+        setChiefDialogue([...nextHistory, { role: "assistant", text: answer }].slice(-6));
+      } catch {
+        setChiefDialogue([...nextHistory, { role: "assistant", text: "I understood the preference, but could not save it to the cloud profile yet." }].slice(-6));
+      } finally {
+        setChiefDialogueLoading(false);
+      }
+      return;
+    }
     if (!aiOpts) {
       setChiefDialogue([...nextHistory, { role: "assistant", text: `${chiefBrief?.nextAction || chiefFallback.nextAction} ${chiefBrief?.why || chiefFallback.why}` }].slice(-6));
       return;
@@ -827,30 +1003,32 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
   function recordTaskSuggestionDecision(row, decision) {
     const decorated = decorateTaskSuggestion(row, chiefContext);
+    const eventRow = {
+      ts: Date.now(),
+      decision,
+      issueKey: decorated.issueKey,
+      freshnessKey: decorated.freshnessKey,
+      sourceKey: decorated.sourceKey,
+      suppressionKey: decorated.suppressionKey,
+      textKey: decorated.textKey,
+      sourceTitleKey: decorated.sourceTitleKey,
+      sourceBucket: decorated.sourceBucket,
+      source: decorated.source || "Dashboard",
+      actionType: decorated.actionType || inferChiefActionType(decorated.text),
+      priorityId: decorated.priorityId || defaultSuggestionPriorityId,
+    };
     setChiefLearning(prev => {
       const next = {
         version: 1,
         events: [
           ...(prev?.events || []),
-          {
-            ts: Date.now(),
-            decision,
-            issueKey: decorated.issueKey,
-            freshnessKey: decorated.freshnessKey,
-            sourceKey: decorated.sourceKey,
-            suppressionKey: decorated.suppressionKey,
-            textKey: decorated.textKey,
-            sourceTitleKey: decorated.sourceTitleKey,
-            sourceBucket: decorated.sourceBucket,
-            source: decorated.source || "Dashboard",
-            actionType: decorated.actionType || inferChiefActionType(decorated.text),
-            priorityId: decorated.priorityId || defaultSuggestionPriorityId,
-          },
+          eventRow,
         ].slice(-200),
       };
       writeChiefLearning(next);
       return next;
     });
+    onRecordChiefLearning?.(eventRow);
   }
 
   function dismissTaskSuggestion(row) {
@@ -864,6 +1042,16 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     onAddTask?.(text, row.priorityId || defaultSuggestionPriorityId);
     recordTaskSuggestionDecision(row, "accepted");
     setTaskSuggestions(rows => rows.filter(item => item.id !== row.id));
+  }
+
+  async function saveChiefProfileDraft() {
+    if (!onSaveChiefProfileMarkdown || chiefProfileSaving) return;
+    setChiefProfileSaving(true);
+    try {
+      await onSaveChiefProfileMarkdown(chiefProfileDraft);
+    } finally {
+      setChiefProfileSaving(false);
+    }
   }
 
   // Keep tab indicator in sync with native scroll position in stacked carousel
@@ -1484,12 +1672,32 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                   <span style={{ ...headLabel, color: C.text }}>{suiteIcon("psychology", 14)} Chief of Staff</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     {chiefLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${chiefTone}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+                    <button onClick={() => setChiefProfileOpen(open => !open)} title="Open Chief profile" aria-label="Open Chief profile"
+                      style={{ fontSize: NC_TYPE.small, color: chiefProfileOpen ? C.accent : C.faint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .8, lineHeight: 1, fontFamily: NC_FONT_STACK }}>
+                      Profile
+                    </button>
                     <button onClick={() => setChiefRefreshNonce(n => n + 1)} title="Refresh Chief scan" aria-label="Refresh Chief scan"
                       style={{ fontSize: 14, color: C.faint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .65, lineHeight: 1 }}
                       onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .65}>{suiteIcon("refresh", 14)}</button>
                   </div>
                 </div>
                 <div style={{ ...cardBody, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {chiefProfileOpen && (
+                    <div style={{ border: `1px solid ${C.divider}`, borderRadius: 7, background: C.bgSoft, padding: 8, display: "grid", gap: 6, flexShrink: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                        <span style={{ color: C.text, fontSize: NC_TYPE.small, fontWeight: 600, fontFamily: NC_FONT_STACK }}>Cloud profile</span>
+                        <span style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK }}>{chiefProfileLoading ? "Loading" : "Netlify Blobs"}</span>
+                      </div>
+                      <textarea value={chiefProfileDraft} onChange={e => setChiefProfileDraft(e.target.value)} rows={5}
+                        style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${C.divider}`, borderRadius: 6, background: C.bg, color: C.text, padding: "7px 8px", fontSize: NC_TYPE.small, lineHeight: 1.35, fontFamily: NC_FONT_STACK, resize: "vertical", outline: "none" }} />
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                        <button type="button" onClick={() => setChiefProfileDraft(markdownFromChiefProfile(chiefProfile))} title="Reset profile draft" aria-label="Reset profile draft"
+                          style={gvIconButton({ width: 28, height: 28, color: C.faint, background: "transparent" }, C)}>{suiteIcon("undo", 13)}</button>
+                        <button type="button" onClick={saveChiefProfileDraft} disabled={!onSaveChiefProfileMarkdown || chiefProfileSaving} title="Save Chief profile" aria-label="Save Chief profile"
+                          style={gvIconButton({ width: 28, height: 28, color: !chiefProfileSaving ? "#fff" : C.faint, background: !chiefProfileSaving ? C.accent : "transparent" }, C)}>{suiteIcon(chiefProfileSaving ? "hourglass_top" : "save", 14)}</button>
+                      </div>
+                    </div>
+                  )}
                   <div style={{ borderLeft: `3px solid ${chiefTone}`, padding: "2px 0 2px 10px", flexShrink: 0 }}>
                     <div style={{ fontSize: NC_TYPE.control, color: C.text, fontWeight: 600, lineHeight: 1.42, fontFamily: NC_FONT_STACK }}>{brief?.summary || chiefFallback.summary}</div>
                     <div style={{ fontSize: NC_TYPE.meta, color: C.muted, lineHeight: 1.42, marginTop: 5, fontFamily: NC_FONT_STACK }}>

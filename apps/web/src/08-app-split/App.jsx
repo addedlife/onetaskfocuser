@@ -188,6 +188,8 @@ function App({ user, onSignOut }) {
   const [serverKeyAvailable, setServerKeyAvailable] = useState(false); // true = Netlify AI is configured
   const [aiConfig, setAiConfig] = useState(null);
   const [serverGoogleClientId, setServerGoogleClientId] = useState("");
+  const [chiefProfile, setChiefProfile] = useState(null);
+  const [chiefProfileLoading, setChiefProfileLoading] = useState(false);
   const [pendingRecordings, setPendingRecordings] = useState([]);
   const [pendingRetryId, setPendingRetryId] = useState(null);
   const [pendingTranscripts, setPendingTranscripts] = useState({});
@@ -469,6 +471,55 @@ function App({ user, onSignOut }) {
     return d;
   }, [user]);
 
+  const callChiefProfile = useCallback(async (action, payload = {}) => {
+    if (!user?.getIdToken) throw new Error("Sign in again before updating Chief profile.");
+    const idToken = await user.getIdToken();
+    const r = await fetch("/.netlify/functions/chief-profile", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${idToken}`,
+        "X-Requested-With": "XmlHttpRequest",
+      },
+      body: JSON.stringify({ action, ...payload }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.error) throw new Error(d.error || `Chief profile request failed (${r.status})`);
+    if (d.profile) setChiefProfile(d.profile);
+    return d;
+  }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!user?.getIdToken) return undefined;
+    setChiefProfileLoading(true);
+    callChiefProfile("get")
+      .then(d => {
+        if (!cancelled && d.profile) setChiefProfile(d.profile);
+      })
+      .catch(() => {
+        if (!cancelled) setChiefProfile(null);
+      })
+      .finally(() => {
+        if (!cancelled) setChiefProfileLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [callChiefProfile, user]);
+
+  async function appendChiefProfileNote(note) {
+    const d = await callChiefProfile("appendNote", { note });
+    return d.profile;
+  }
+
+  async function recordChiefProfileLearning(event) {
+    callChiefProfile("recordLearning", { event }).catch(() => {});
+  }
+
+  async function saveChiefProfileMarkdown(markdown) {
+    const d = await callChiefProfile("replaceMarkdown", { markdown });
+    return d.profile;
+  }
+
   const loadGoogleWorkspaceFromServer = useCallback(async () => {
     setGoogleLoading(true);
     try {
@@ -664,7 +715,7 @@ function App({ user, onSignOut }) {
       if (r.status === 401) throw new Error('token_expired');
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + r.status}`); }
       const d = await r.json();
-      return sortCalEvents(d.items || []).slice(0, 20);
+      return sortCalEvents((d.items || []).map(evt => ({ ...evt, calendarId: "primary" }))).slice(0, 20);
     }
 
     // Step 2: fetch events from each calendar in parallel
@@ -672,7 +723,7 @@ function App({ user, onSignOut }) {
       cals.map(cal =>
         fetch(eventsUrl(cal.id), { headers: { Authorization: `Bearer ${token}` } })
           .then(r => { if (r.status === 401) throw new Error('token_expired'); return r.json(); })
-          .then(d => (d.items || []))
+          .then(d => (d.items || []).map(evt => ({ ...evt, calendarId: cal.id, calendarSummary: cal.summary || "" })))
       )
     );
     // Re-throw token_expired if any calendar hit it
@@ -848,6 +899,23 @@ function App({ user, onSignOut }) {
       throw new Error(d?.error?.message || 'Failed to create event');
     }
     return r.json();
+  }
+
+  async function deleteGoogleCalendarEvent(event) {
+    const eventId = String(event?.id || "").trim();
+    const calendarId = String(event?.calendarId || "primary").trim() || "primary";
+    if (!eventId) throw new Error("Missing calendar event id.");
+    if (useGoogleServerAuth) return callGoogleWorkspace("deleteCalendarEvent", { eventId, calendarId });
+    if (!googleToken) throw new Error("Reconnect Google to delete calendar events.");
+    const r = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${googleToken}` },
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d?.error?.message || 'Failed to delete event');
+    }
+    return { deleted: true, eventId, calendarId };
   }
 
   // ─── Listen for shailos iframe "close" message ───────────────────────────
@@ -3125,6 +3193,12 @@ function App({ user, onSignOut }) {
           onDisconnectGoogle={disconnectGoogle}
           onLoadEmailDetail={loadGoogleEmailDetail}
           onCreateCalendarEvent={createGoogleCalendarEvent}
+          onDeleteCalendarEvent={deleteGoogleCalendarEvent}
+          chiefProfile={chiefProfile}
+          chiefProfileLoading={chiefProfileLoading}
+          onAppendChiefProfileNote={appendChiefProfileNote}
+          onRecordChiefLearning={recordChiefProfileLearning}
+          onSaveChiefProfileMarkdown={saveChiefProfileMarkdown}
           googleWasConnected={googleWasConnected}
           onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
           paneWeights={AS.nerveCenterPaneWeights}

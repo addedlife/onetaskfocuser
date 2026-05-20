@@ -476,6 +476,7 @@ function normalizeItemInputs(items = []) {
 function normalizeChiefContext(input = {}) {
   const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   const phone = source.phone && typeof source.phone === "object" && !Array.isArray(source.phone) ? source.phone : {};
+  const profile = source.profile && typeof source.profile === "object" && !Array.isArray(source.profile) ? source.profile : {};
   return {
     currentTime: cleanString(source.currentTime, 80),
     localeTime: cleanString(source.localeTime, 120),
@@ -529,6 +530,9 @@ function normalizeChiefContext(input = {}) {
         time: cleanString(item?.time, 80),
         needsReturnCall: !!item?.needsReturnCall,
       })).filter(item => item.name || item.kind),
+    },
+    profile: {
+      notes: ensureArray(profile.notes || [], "profile.notes").slice(-20).map(note => cleanString(note, 260)).filter(Boolean),
     },
   };
 }
@@ -867,6 +871,7 @@ const AI_JOB_REGISTRY = {
         "Prioritize active or imminent events, unusual or special calendar items, urgent communications, unanswered shailos, actionable missed calls/texts, and the top actionable task.",
         "Treat a missed call as return-call work only when phone.missedCalls is positive or the call row has needsReturnCall true; stale missed calls already answered by a later call or outgoing text are context only.",
         "Routine calendar items are context only unless they are happening now or blocking the next move.",
+        "Use the profile notes as durable preferences. If a profile note says the user does not want a reminder class, avoid making it the next action unless the current item is clearly urgent.",
         "Do not invent facts, do not claim actions were taken, and do not give halachic rulings. If data is thin, say what is visible.",
         `Current snapshot:\n${jsonBlock(context)}`,
         "Return a calm executive brief: summary is one or two short sentences, nextAction is one specific next move.",
@@ -898,10 +903,11 @@ const AI_JOB_REGISTRY = {
         "Suggest only concrete user actions that are visible in the provided Calendar or Gmail data and are not already represented in existing tasks.",
         "Do not suggest routine calendar attendance by itself. Do suggest prep, reply, bring, call, send, confirm, register, pay, review, or deadline work when the source implies action.",
         "Choose one priorityId from the priority options. Use the highest priority only for urgent, same-day, blocking, or time-sensitive work.",
-        "Use the learning profile as a preference signal: favor accepted action types and priority patterns; avoid action types the user repeatedly rejects unless the current source is clearly new or time-sensitive.",
+        "Use the learning profile and profile notes as preference signals: favor accepted action types and priority patterns; avoid action types or reminder classes the user repeatedly rejects unless the current source is clearly new or time-sensitive.",
         "When a source row has sourceKey or freshnessKey, copy those exact values into the suggestion.",
         `Priority options:\n${jsonBlock(priorityOptions)}`,
         `Learning profile:\n${jsonBlock(learningProfile)}`,
+        `Profile notes:\n${jsonBlock(context.profile?.notes || [])}`,
         `Existing tasks:\n${jsonBlock(existingTasks)}`,
         `Calendar and Gmail snapshot:\n${jsonBlock({ currentTime: context.localeTime || context.currentTime, calendar: context.calendar, emails: context.emails })}`,
         "Return at most 4 suggestions. If nothing taskable is visible, return an empty suggestions array.",
@@ -921,6 +927,7 @@ const AI_JOB_REGISTRY = {
         "You are the user's Chief of Staff inside an operational dashboard.",
         "Answer the follow-up using only the provided dashboard snapshot and prior brief. Be concise, practical, and source-grounded.",
         "If the user asks for a decision, recommend the next concrete move and the reason. Do not claim to send, schedule, call, or mark anything done.",
+        "If profile notes apply, use them as preference guidance.",
         `Current snapshot:\n${jsonBlock(context)}`,
         input.brief ? `Current brief:\n${jsonBlock(input.brief)}` : "",
         input.history ? `Recent dialogue:\n${truncateText(input.history, 3000)}` : "",

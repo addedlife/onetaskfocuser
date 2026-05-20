@@ -229,9 +229,12 @@ async function fetchCalendarData(accessToken) {
   }
   if (!calendars?.length) {
     const data = await googleJson(eventsUrl("primary"), accessToken);
-    return sortCalEvents(data.items || []).slice(0, 20);
+    return sortCalEvents((data.items || []).map(event => ({ ...event, calendarId: "primary" }))).slice(0, 20);
   }
-  const results = await Promise.allSettled(calendars.map(cal => googleJson(eventsUrl(cal.id), accessToken).then(data => data.items || [])));
+  const results = await Promise.allSettled(calendars.map(cal =>
+    googleJson(eventsUrl(cal.id), accessToken)
+      .then(data => (data.items || []).map(event => ({ ...event, calendarId: cal.id, calendarSummary: cal.summary || "" })))
+  ));
   for (const result of results) if (result.reason?.statusCode === 401) throw result.reason;
   const seen = new Set();
   const all = results
@@ -295,6 +298,17 @@ async function createCalendarEvent(user, body) {
   });
 }
 
+async function deleteCalendarEvent(user, body) {
+  const eventId = String(body.eventId || "").trim();
+  const calendarId = String(body.calendarId || "primary").trim() || "primary";
+  if (!eventId) throw httpError(400, "Missing calendar event id.");
+  const accessToken = await accessTokenFor(user);
+  await googleJson(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, accessToken, {
+    method: "DELETE",
+  });
+  return { deleted: true, eventId, calendarId };
+}
+
 async function disconnect(user) {
   const { db } = admin();
   const doc = tokenDoc(db, user.uid);
@@ -320,6 +334,7 @@ exports.handler = async function(event) {
     if (action === "summary") return json(200, await summary(user), origin);
     if (action === "gmailMessage") return json(200, await gmailMessage(user, body), origin);
     if (action === "createCalendarEvent") return json(200, await createCalendarEvent(user, body), origin);
+    if (action === "deleteCalendarEvent") return json(200, await deleteCalendarEvent(user, body), origin);
     if (action === "disconnect") return json(200, await disconnect(user), origin);
     return json(400, { error: "Unknown Google Workspace action." }, origin);
   } catch (error) {
