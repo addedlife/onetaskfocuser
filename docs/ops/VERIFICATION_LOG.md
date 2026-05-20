@@ -674,3 +674,4 @@ Current source-grade file count after cleanup: 162 files.
 - Local preview returned HTTP 200 at `http://127.0.0.1:4324/?suite=nervecenter`.
 - In-app Browser verification was attempted but hit the existing local helper boot issue (`require is not defined in ES module scope`), so headless Edge/CDP was used for visual proof.
 - Headless Edge/CDP seeded calendar, Gmail, task, shaila, and phone data and verified NerveCenter, Chief, AI recommendation, clock zone, special calendar item, routine calendar items, mail, tasks, phone activity, and no horizontal overflow (`scrollW=1365`, `clientW=1365`). Screenshot: `apps/web/artifacts/nervecenter-chief-staff-smoke.png`.
+- Pushed commit `ac21937` to `origin/main`; Netlify Git-triggered production served `assets/index-BseNaqHz.js` on poll attempt 3, and the deployed asset returned HTTP 200.
