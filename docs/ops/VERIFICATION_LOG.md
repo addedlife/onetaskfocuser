@@ -563,3 +563,4 @@ Current source-grade file count after cleanup: 162 files.
 - `git diff --check -- apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx apps/web/src/10-deskphone-web.jsx` passed; line-ending normalization warnings only.
 - Local Vite preview returned HTTP 200 at `http://127.0.0.1:4316/?suite=nervecenter`; local DeskPhone host `/status` returned HTTP 200.
 - In-app Browser verification was attempted, but the existing local helper failed on `require is not defined in ES module scope`; headless Chrome reached the existing unauthenticated `Loading...` shell.
+- Pushed commit `0ec64e7` to `origin/main`; Netlify Git-triggered production served `assets/index-DGMB_5bb.js` on poll attempt 3.
