@@ -226,7 +226,7 @@ export function getInitialSuiteView() {
     const params = new URLSearchParams(window.location.search);
     const view = (params.get("suite") || params.get("view") || "").toLowerCase();
     if (view === "switchboard" || view === "nervecenter") return "nervecenter";
-    if (view === "focus" || view === "shailos" || view === "deskphone" || view === "phone") return view === "phone" ? "deskphone" : view;
+    if (view === "focus" || view === "chief" || view === "shailos" || view === "deskphone" || view === "phone") return view === "phone" ? "deskphone" : view;
     return "nervecenter";
   } catch {
     return "nervecenter";

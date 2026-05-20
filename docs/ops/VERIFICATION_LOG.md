@@ -707,3 +707,18 @@ Current source-grade file count after cleanup: 162 files.
 - In-app Browser verification was attempted first but hit the existing Node ESM helper boot issue (`require is not defined in ES module scope`), so direct Chrome/CDP verified the NerveCenter Chief card rendered with all four smart-response buttons enabled and no horizontal overflow (`scrollW=1349`, `clientW=1349`).
 - Direct Chrome/CDP click-smoke verified `Other` leaves all four chips present, adds `Tell me the direction you want instead.`, and focuses the `Discuss next move` textarea.
 - Pushed commit `abf59c0` to `origin/main`; Netlify Git-triggered production served `assets/index-xM_h8vkM.js`, the asset returned HTTP 200, and the deployed bundle contained the Chief smart-response/profile-learning markers.
+
+## 2026-05-20 Chief Page And Feedback Rescan
+
+- Researched current human-AI feedback and dashboard practice before editing: AI recommendations should accept granular correction during normal use, preserve user control, and update future recommendations; mobile dashboards should prioritize the critical action and keep supporting details secondary. The local plan aligned with that research, so no confirmation gate was needed.
+- Added a dedicated Chief suite page at `?suite=chief`, surfaced as `Chief` in the left suite rail and reachable from the NerveCenter Chief card via `Open`.
+- Changed Chief feedback handling so `Not now`, `Next`, `Done`, and typed corrections such as `skip this` or `I do not want sleep tasks now` record local Chief learning, clear stale Chief/task-suggestion caches, and force a rescan path instead of leaving the stale recommendation in place.
+- Passed Chief learning into the AI context and prompt so rejected/skipped recommendations are treated as feedback signals in future scans and dialogue.
+- Changed smart-response persistence so local learning and the visible reply still succeed when cloud profile sync is unavailable; cloud profile failure is now a secondary status, not a blocker.
+- `node --check apps/web/backend/functions/_ai-core.cjs` passed.
+- `git diff --check -- apps/web/backend/functions/_ai-core.cjs apps/web/src/08-app-split/App.jsx apps/web/src/08-app-split/components/AppSuiteChrome.jsx apps/web/src/08-app-split/components/NerveCenterPanel.jsx apps/web/src/08-app-split/ui-tokens.jsx` passed; line-ending normalization warnings only.
+- `npm run build` passed in `apps/web` and generated `assets/index-DOs95XYV.js`; existing large-bundle warning remains.
+- Local preview returned HTTP 200 at `http://127.0.0.1:4334/?suite=chief`.
+- In-app Browser verification was attempted first, but the existing local helper failed on `require is not defined in ES module scope`; direct Edge/CDP verified mobile `390x820` Chief page render with Chief, Next best move, Not now, Discuss, Chief profile, and no horizontal overflow (`scrollW=390`, `clientW=390`).
+- Direct Edge/CDP click-smoke verified `Not now` records a rejected Chief learning event, preserves no horizontal overflow, and shows a useful local-save response when cloud profile sync is unavailable.
+- Direct Edge/CDP chat-smoke verified typing `skip this, I do not want sleep tasks now` records a rejected Chief learning event and shows `Got it. I am dropping... rescanning for a better next move.`

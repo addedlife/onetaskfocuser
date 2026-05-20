@@ -3148,7 +3148,7 @@ function App({ user, onSignOut }) {
         />
       )}
 
-      {!shellHidden && suiteView === "nervecenter" && (
+      {!shellHidden && (suiteView === "nervecenter" || suiteView === "chief") && (
         <NerveCenterPanel
           T={T}
           sections={switchboardSections}
@@ -3203,10 +3203,13 @@ function App({ user, onSignOut }) {
           onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
           paneWeights={AS.nerveCenterPaneWeights}
           onPaneWeightsChange={weights => setAS(p => ({...p, nerveCenterPaneWeights: weights}))}
+          onOpenChiefPage={()=>openCommandView("chief")}
           googlePaneHeight={AS.nerveCenterGooglePaneHeight}
           onGooglePaneHeightChange={height => setAS(p => ({...p, nerveCenterGooglePaneHeight: height}))}
           onPolishNerveItems={polishNerveItems}
           clockTime={clockTime}
+          chiefPage={suiteView === "chief"}
+          onCloseChiefPage={()=>openCommandView("nervecenter")}
         />
       )}
 
@@ -4247,7 +4250,7 @@ function App({ user, onSignOut }) {
       </div>
 
       {/* ── Floating capture buttons — always visible except during Zen ── */}
-      {!zen && !["nervecenter","deskphone"].includes(suiteView) && (()=>{
+      {!zen && !["nervecenter","chief","deskphone"].includes(suiteView) && (()=>{
         const outC = T.isDark ? T.tFaint : T.tSoft;
         const icS = {width:19,height:19,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
         const icSm = {width:14,height:14,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
