@@ -575,3 +575,17 @@ Current source-grade file count after cleanup: 162 files.
 - `git diff --check -- apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx` passed; line-ending normalization warning only.
 - Local Vite preview returned HTTP 200 at `http://127.0.0.1:4317/?suite=nervecenter`.
 - Pushed commit `4193857` to `origin/main`; Netlify Git-triggered production served `assets/index-DsQIkbDO.js` on poll attempt 4.
+
+
+## 2026-05-19 Backup Folder And Auto-Export Cleanup
+
+- Researched current browser backup/export practice before editing: browser file writes should be user-controlled through File System Access folder/file pickers where supported, automatic exports should use a selected folder rather than unsolicited Downloads files, retention should be bounded, and sensitive tokens should stay out of client-side backup JSON.
+- Changed `Store.autoFileBackup` so automatic weekly backups write only to the user-selected backup folder; if no folder is selected or permission has lapsed, the app uses Firebase/localStorage recovery and does not create Downloads files.
+- Removed reload/close-triggered forced file backups from the app close lifecycle while keeping the localStorage close flush.
+- Changed manual full backup to save into the chosen backup folder when available, otherwise ask for a save location through the browser file picker before falling back to a user-initiated download.
+- Added backup metadata to exported JSON documenting included app state, Shailos, counts, and excluded sensitive/local-only data.
+- Changed Settings > Account backup copy to show the selected folder state and clarify the no-Downloads automatic behavior.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `git diff --check -- apps/web/src/01-core.js apps/web/src/07-settings.jsx apps/web/src/08-app-split/App.jsx apps/web/src/08-app.jsx` passed; line-ending normalization warnings only.
+- Local Vite dev server returned HTTP 200 at `http://127.0.0.1:4318/?suite=nervecenter`.
+- In-app Browser verification was attempted, but the local Node helper failed on the existing `require is not defined in ES module scope` boot issue; headless Edge/CDP verified Settings > Account rendered the new backup copy and `Choose backup folder...` control.

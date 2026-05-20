@@ -2704,19 +2704,20 @@ function App({ user, onSignOut }) {
   }, [loaded]); // eslint-disable-line
 
   // ─── Tab-close flush + periodic Firebase sync ───────────────────────────
-  // beforeunload/pagehide: save to localStorage ONLY — NEVER to Firebase.
+  // beforeunload/pagehide: save to localStorage ONLY — NEVER to Firebase or disk.
   // This is the structural fix for stale-data corruption. Every single data
   // loss incident was caused by a stale tab's beforeunload flushing old data
   // to Firebase. localStorage is safe because it only affects this device.
   // The debounced save (above) and periodic sync (below) handle Firebase writes
   // during normal operation when we have time to do it safely via transaction.
+  // File backups run on the normal weekly save path; reload/close should not
+  // spray duplicate JSON files into Downloads.
   useEffect(() => {
     if (!loaded) return;
     function flushLocal() {
       const cur = asRef.current;
       if (cur) {
         Store.flushToLocalOnly(cur);
-        Store.autoFileBackup(cur, shailosRef.current, true).catch(() => {}); // best-effort on close
       }
     }
     window.addEventListener("beforeunload", flushLocal);

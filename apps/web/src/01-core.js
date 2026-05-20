@@ -86,7 +86,7 @@ const Store = {
   async chooseBackupDir() {
     if (!window.showDirectoryPicker) return false;
     try {
-      const handle = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'downloads' });
+      const handle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'onetask-backups' });
       await this._idbSet('backupDir', handle);
       return true;
     } catch(e) {
@@ -95,83 +95,175 @@ const Store = {
     }
   },
 
+  async getBackupDirInfo() {
+    const handle = await this._idbGet('backupDir');
+    if (!handle) return { available: !!window.showDirectoryPicker, set: false, name: "", permission: "missing" };
+    let permission = "unknown";
+    try { permission = await handle.queryPermission({ mode: 'readwrite' }); } catch(e) {}
+    return { available: !!window.showDirectoryPicker, set: true, name: handle.name || "Selected folder", permission };
+  },
+
+  _backupCounts(appState, shailos) {
+    return {
+      lists: appState?.lists?.length || 0,
+      tasks: appState?.lists?.reduce((n, l) => n + (l.tasks?.length || 0), 0) || 0,
+      shailos: shailos?.length || 0,
+    };
+  },
+
+  _backupStamp(withTime = false) {
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10);
+    if (!withTime) return date;
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    return `${date}_${hh}-${mm}-${ss}`;
+  },
+
+  _backupWeekStamp(now = new Date()) {
+    const start = new Date(now.getFullYear(), 0, 1);
+    const days = Math.floor((now - start) / (24 * 60 * 60 * 1000));
+    const weekNumber = Math.ceil((now.getDay() + 1 + days) / 7);
+    return `${now.getFullYear()}_W${String(weekNumber).padStart(2, '0')}`;
+  },
+
+  async _backupShailos() {
+    const col = this.shailosCol();
+    const shailos = [];
+    if (!col) return shailos;
+    try {
+      const snap = await col.get();
+      snap.forEach(doc => shailos.push({ id: doc.id, ...doc.data() }));
+    } catch(e) {
+      console.warn('[Backup] Could not fetch shailos:', e);
+    }
+    return shailos;
+  },
+
+  async _buildBackup(appState, reason = "manual") {
+    const now = new Date();
+    const shailos = await this._backupShailos();
+    const cleanedAppState = appState ? this._clean(appState) : null;
+    const cleanedShailos = shailos.map(s => this._clean(s));
+    const counts = this._backupCounts(cleanedAppState, cleanedShailos);
+    return {
+      backup: {
+        _backupVersion: 2,
+        _backupDate: now.toISOString(),
+        _uid: this.uid || "unknown",
+        _source: "shamash-pro-4",
+        _reason: reason,
+        _contents: {
+          appState: "Tasks, lists, completed-task history, priorities, app settings, pane sizes, theme and AI model choices.",
+          shailos: "Shailos records, answers, got-back status, research reports and linked task fields.",
+          excluded: "OAuth access tokens, backup-folder permissions, pending audio blobs, browser cache and DeskPhone host history.",
+        },
+        _counts: counts,
+        appState: cleanedAppState,
+        shailos: cleanedShailos,
+      },
+      counts,
+    };
+  },
+
+  async _writeBackupToDir(dirHandle, fileName, content, { allowPrompt = false } = {}) {
+    try {
+      let perm = await dirHandle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted' && allowPrompt && dirHandle.requestPermission) {
+        perm = await dirHandle.requestPermission({ mode: 'readwrite' });
+      }
+      if (perm !== 'granted') return false;
+      const fh = await dirHandle.getFileHandle(fileName, { create: true });
+      const w = await fh.createWritable();
+      await w.write(content);
+      await w.close();
+      return true;
+    } catch(e) {
+      console.warn('[Backup] Folder write failed:', e);
+      return false;
+    }
+  },
+
+  async _saveJsonFile(fileName, content) {
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{ description: 'OneTask backup JSON', accept: { 'application/json': ['.json'] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        return true;
+      } catch(e) {
+        if (e.name === 'AbortError') return false;
+        console.warn('[Backup] Save picker failed, falling back to download:', e);
+      }
+    }
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fileName;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    return true;
+  },
+
+  async _pruneBackups(dirHandle, prefix, keep) {
+    if (!dirHandle || !dirHandle.entries || keep < 1) return;
+    try {
+      const matches = [];
+      for await (const [name, handle] of dirHandle.entries()) {
+        if (handle.kind === 'file' && name.startsWith(prefix) && name.endsWith('.json')) matches.push(name);
+      }
+      matches.sort().reverse();
+      await Promise.all(matches.slice(keep).map(name => dirHandle.removeEntry(name).catch(() => {})));
+    } catch(e) {
+      console.warn('[Backup] Could not prune old backups:', e);
+    }
+  },
+
   // Weekly auto-backup. Called from the save effect in 08-app.js (not from ls()).
-  // If the user has set a backup folder: writes silently — no browser prompt at all.
-  // If not (or permission lapsed): falls back to a standard browser download.
-  // force=true skips the weekly-stamp check — use for logout/close backups
-  // Uses the same format as fullBackup (_backupVersion: 1) so parseBackup can restore it.
+  // Automatic exports write only to the user-selected folder. If no folder is
+  // approved, Firebase/localStorage remain the recovery path and no file is
+  // dropped into Downloads.
+  // force=true skips the weekly-stamp check — use only for explicit user actions.
+  // Uses the same restorable JSON shape as fullBackup.
   async autoFileBackup(d, _ignored = [], force = false) {
     if (!d || !d.lists || !d.lists.some(l => l.tasks?.length > 0)) return;
     try {
       const now = new Date();
-      const start = new Date(now.getFullYear(), 0, 1);
-      const days = Math.floor((now - start) / (24 * 60 * 60 * 1000));
-      const weekNumber = Math.ceil((now.getDay() + 1 + days) / 7);
-      const weekStamp = `${now.getFullYear()}_W${String(weekNumber).padStart(2, '0')}`;
+      const weekStamp = this._backupWeekStamp(now);
+      const forced = force === true;
 
-      if (!force) {
+      if (!forced) {
         const lastBk = localStorage.getItem(`${this.lsKey()}_last_file_bk`);
         if (lastBk === weekStamp) return; // already backed up this week
       }
 
-      // Fetch shailos fresh from Firestore (same as fullBackup)
-      const col = this.shailosCol();
-      let shailos = [];
-      if (col) {
-        try {
-          const snap = await col.get();
-          snap.forEach(doc => shailos.push({ id: doc.id, ...doc.data() }));
-        } catch(e) { console.warn('[Backup] Could not fetch shailos:', e); }
-      }
+      const { backup, counts } = await this._buildBackup(d, forced ? "explicit" : "weekly_auto");
+      const content = JSON.stringify(backup, null, 2);
+      const fileName = forced
+        ? `onetask_explicit_backup_${this._backupStamp(true)}.json`
+        : `onetask_auto_backup_${weekStamp}.json`;
 
-      // Same format as fullBackup so parseBackup can restore it
-      const combined = {
-        _backupVersion: 1,
-        _backupDate: now.toISOString(),
-        _uid: this.uid || "unknown",
-        appState: this._clean(d),
-        shailos: shailos.map(s => this._clean(s)),
-      };
-      const content = JSON.stringify(combined, null, 2);
-      const fileName = `onetask_backup_${weekStamp}.json`;
-
-      // ── Try silent write to chosen folder ──
       const dirHandle = await this._idbGet('backupDir');
-      if (dirHandle) {
-        try {
-          // queryPermission doesn't trigger a browser prompt — it just checks.
-          // If Chrome still has the permission active, we write without any dialog.
-          const perm = await dirHandle.queryPermission({ mode: 'readwrite' });
-          if (perm === 'granted') {
-            const fh = await dirHandle.getFileHandle(fileName, { create: true });
-            const w = await fh.createWritable();
-            await w.write(content);
-            await w.close();
-            localStorage.setItem(`${this.lsKey()}_last_file_bk`, weekStamp);
-            console.log(`[Backup] Saved silently to folder: ${fileName}`);
-            return;
-          }
-        } catch(e) { console.warn('[Backup] Folder write failed, falling back to download:', e); }
+      if (!dirHandle) {
+        console.log('[Backup] Skipped file auto-backup: no backup folder selected');
+        return null;
       }
 
-      // ── Fallback: standard browser download ──
-      // Only auto-download on desktop browsers that *could* use the silent folder
-      // write (i.e. they support showDirectoryPicker) but the user hasn't set one
-      // up yet. On mobile and other browsers this API doesn't exist, and triggering
-      // an unsolicited download is confusing. Firebase + localStorage serve as the
-      // backup path on those platforms.
-      if (!window.showDirectoryPicker) {
-        console.log(`[Backup] Skipped auto-download (not supported on this browser/device)`);
-        return;
+      const saved = await this._writeBackupToDir(dirHandle, fileName, content, { allowPrompt: forced });
+      if (!saved) {
+        console.log('[Backup] Skipped file auto-backup: backup folder permission is not active');
+        return null;
       }
-      const blob = new Blob([content], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = fileName;
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
+
       localStorage.setItem(`${this.lsKey()}_last_file_bk`, weekStamp);
-      console.log(`[Backup] Downloaded: ${fileName}`);
+      if (!forced) await this._pruneBackups(dirHandle, 'onetask_auto_backup_', 12);
+      console.log(`[Backup] Saved to selected folder: ${fileName}`);
+      return { ...counts, fileName };
     } catch(e) { console.warn('[Backup] Failed:', e); }
   },
 
@@ -480,33 +572,26 @@ const Store = {
     }
   },
 
-  // ── Manual full backup: tasks + shailos → downloadable JSON ──
+  // ── Manual full backup: tasks + shailos → user-chosen JSON file ──
   async fullBackup(appState) {
     try {
-      const col = this.shailosCol();
-      let shailos = [];
-      if (col) {
-        const snap = await col.get();
-        snap.forEach(doc => shailos.push({ id: doc.id, ...doc.data() }));
-      }
-      const backup = {
-        _backupVersion: 1,
-        _backupDate: new Date().toISOString(),
-        _uid: this.uid,
-        appState: appState ? this._clean(appState) : null,
-        shailos: shailos.map(s => this._clean(s)),
-      };
+      const { backup, counts } = await this._buildBackup(appState, "manual");
       const content = JSON.stringify(backup, null, 2);
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const fileName = `onetask_full_backup_${dateStr}.json`;
-      const blob = new Blob([content], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = fileName;
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
-      console.log("[Backup] Full backup downloaded:", fileName, "— tasks:", appState?.lists?.reduce((n, l) => n + (l.tasks?.length || 0), 0) || 0, ", shailos:", shailos.length);
-      return { tasks: appState?.lists?.reduce((n, l) => n + (l.tasks?.length || 0), 0) || 0, shailos: shailos.length };
+      const fileName = `onetask_full_backup_${this._backupStamp(true)}.json`;
+
+      const dirHandle = await this._idbGet('backupDir');
+      if (dirHandle) {
+        const savedToFolder = await this._writeBackupToDir(dirHandle, fileName, content, { allowPrompt: true });
+        if (savedToFolder) {
+          console.log("[Backup] Full backup saved to selected folder:", fileName, "— tasks:", counts.tasks, ", shailos:", counts.shailos);
+          return { ...counts, fileName };
+        }
+      }
+
+      const saved = await this._saveJsonFile(fileName, content);
+      if (!saved) return null;
+      console.log("[Backup] Full backup saved:", fileName, "— tasks:", counts.tasks, ", shailos:", counts.shailos);
+      return { ...counts, fileName };
     } catch(e) {
       console.error("[Backup] Full backup failed:", e);
       return null;

@@ -15,18 +15,19 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   onToggleDeskPhoneThemeSync, onRefreshDeskPhoneTheme, initialTab = "queue"}) {
 
   const [sTab, setSTab] = useState(initialTab || "queue");
-  const [backupFolderSet, setBackupFolderSet] = useState(false);
+  const [backupFolderInfo, setBackupFolderInfo] = useState({ available: false, set: false, name: "", permission: "unknown" });
   const [backupFolderSetting, setBackupFolderSetting] = useState(false);
 
   // Check on mount whether a backup folder handle is already stored
   React.useEffect(() => {
-    Store._idbGet('backupDir').then(h => setBackupFolderSet(!!h));
+    Store.getBackupDirInfo().then(setBackupFolderInfo);
   }, []);
 
   async function handleSetBackupFolder() {
     setBackupFolderSetting(true);
     const ok = await Store.chooseBackupDir();
-    setBackupFolderSet(ok);
+    const info = await Store.getBackupDirInfo();
+    setBackupFolderInfo(ok ? info : { ...info, set: info.set || false });
     setBackupFolderSetting(false);
   }
   const [showPE, setShowPE] = useState(false);
@@ -430,15 +431,26 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             <div style={{height:1,background:T.brdS,margin:"0 0 16px"}}/>
             <h4 style={{...sh, color:T.tSoft, margin:"0 0 10px"}}>Backup</h4>
             <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 12px",lineHeight:settingsType.line}}>
-              Weekly backups save automatically. Set a folder and they'll appear there silently — no download prompt.
+              Auto-backups save weekly to your selected folder. Without a folder, reloads use cloud/local recovery and do not create Downloads files.
             </p>
             <button
               onClick={handleSetBackupFolder}
-              disabled={backupFolderSetting}
-              style={{width:"100%",minHeight:44,padding:"10px 14px",borderRadius:8,border:`1px solid ${T.brd}`,background:backupFolderSet?"rgba(80,180,100,0.08)":"none",color:backupFolderSet?"#4caf50":T.tSoft,fontSize:settingsType.control,fontWeight:500,cursor:"pointer",fontFamily:"system-ui",marginBottom:16}}
+              disabled={backupFolderSetting || !backupFolderInfo.available}
+              style={{width:"100%",minHeight:44,padding:"10px 14px",borderRadius:8,border:`1px solid ${T.brd}`,background:backupFolderInfo.set?"rgba(80,180,100,0.08)":"none",color:backupFolderInfo.set?"#4caf50":T.tSoft,fontSize:settingsType.control,fontWeight:500,cursor:(backupFolderSetting || !backupFolderInfo.available)?"default":"pointer",fontFamily:"system-ui",marginBottom:8,opacity:backupFolderInfo.available?1:.6}}
             >
-              {backupFolderSetting ? "Opening…" : backupFolderSet ? "✓ Backup folder set — click to change" : "Set backup folder…"}
+              {backupFolderSetting
+                ? "Opening..."
+                : backupFolderInfo.set
+                  ? `Backup folder: ${backupFolderInfo.name || "selected"}`
+                  : backupFolderInfo.available
+                    ? "Choose backup folder..."
+                    : "Folder backup unavailable in this browser"}
             </button>
+            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 16px",lineHeight:settingsType.line}}>
+              {backupFolderInfo.set
+                ? (backupFolderInfo.permission === "granted" ? "Automatic weekly backups can write there silently." : "Chrome/Edge may ask once before writing there again.")
+                : "Manual Backup still asks where to save."}
+            </p>
 
             {onSignOut && (
               <>
