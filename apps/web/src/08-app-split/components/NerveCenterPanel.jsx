@@ -98,6 +98,8 @@ const CHIEF_SCAN_MIN_AI_GAP_MS = 20 * 60 * 1000;
 const CHIEF_SUGGESTIONS_CACHE_MS = 45 * 60 * 1000;
 const CHIEF_SUGGESTIONS_MIN_AI_GAP_MS = 25 * 60 * 1000;
 const ROUTINE_CALENDAR_RE = /\b(shacharis|shacharit|mincha|maariv|arvit|daven(?:ing)?|daf yomi|mishna(?:h)? yomi|halacha yomi|parsha|selichos|slichos)\b/i;
+const CHIEF_SEARCHING_BRIEF = { summary: "Scanning NerveCenter for the next move...", nextAction: "Hold on — looking for the next best action.", why: "", urgency: "watch", sources: [], focusArea: "operations", _isPlaceholder: true };
+const CHIEF_QUIET_BRIEF = { summary: "You handled the top item.", nextAction: "Nothing more pressing right now — check back when context changes.", why: "The remaining signals don’t require immediate action.", urgency: "watch", sources: [], focusArea: "operations", _isPlaceholder: true };
 
 function cleanOneLine(value, max = 180) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -222,11 +224,16 @@ function buildChiefLearningProfile(learning) {
         profile.acceptedPriorityByAction[action][event.priorityId] = (profile.acceptedPriorityByAction[action][event.priorityId] || 0) + 1;
       }
     }
-    if (event.decision === "rejected") {
+    if (event.decision === "rejected" || event.decision === "completed") {
       profile.rejectedActionTypes[action] = (profile.rejectedActionTypes[action] || 0) + 1;
       profile.quietedEvidenceCount += 1;
     }
   });
+  profile.recentlyRejected = (learning?.events || [])
+    .filter(e => e.decision === "rejected" || e.decision === "completed")
+    .slice(-10)
+    .map(e => ({ textKey: e.textKey || "", actionType: e.actionType || "" }))
+    .filter(e => e.textKey);
   return profile;
 }
 
@@ -307,7 +314,7 @@ function decorateTaskSuggestion(item, context) {
 function shouldHideTaskSuggestion(item, learning) {
   const events = learning?.events || [];
   return events.some(event => {
-    if (event.decision !== "rejected" && event.decision !== "accepted") return false;
+    if (event.decision !== "rejected" && event.decision !== "accepted" && event.decision !== "completed") return false;
     if (event.suppressionKey && event.suppressionKey === item.suppressionKey) return true;
     if (event.textKey && event.textKey === item.textKey) return true;
     if (event.issueKey && event.issueKey === item.issueKey) return true;
@@ -322,7 +329,9 @@ function looksLikePreferenceUpdate(text) {
 }
 
 function looksLikeChiefRejection(text) {
-  return /\b(no|nope|not now|skip|next|bad advice|wrong|irrelevant|don't want that|do not want that|dont want that|stop that|not helpful|useless|sleep tasks?)\b/i.test(String(text || ""));
+  const t = String(text || "").trim();
+  if (/^(no|nope)[.!?\s]*$/i.test(t)) return true;
+  return /\b(not now|skip|next|bad advice|wrong|irrelevant|don't want that|do not want that|dont want that|stop that|not helpful|useless|sleep tasks?)\b/i.test(t);
 }
 
 function looksLikeDeleteConfirmation(text) {
@@ -404,12 +413,17 @@ function formatCalendarWindow(evt) {
   return `${time} - ${end.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
 }
 
-function buildChiefFallbackBrief(context = {}) {
-  const currentEvent = (context.calendar || []).find(evt => evt.now);
-  const specialEvent = (context.calendar || []).find(evt => evt.special && !evt.past);
-  const nowTask = (context.tasks || []).find(task => /now/i.test(task.priority)) || (context.tasks || [])[0];
-  const shaila = (context.shailos || [])[0];
-  const email = (context.emails || [])[0];
+function buildChiefFallbackBrief(context = {}, suppressed = []) {
+  const notSuppressed = (text) => {
+    if (!suppressed.length || !text) return true;
+    return !suppressed.some(s => tokenOverlapRatio(String(text), String(s.text || "")) >= 0.35);
+  };
+  const currentEvent = (context.calendar || []).find(evt => evt.now && notSuppressed(evt.summary));
+  const specialEvent = (context.calendar || []).find(evt => evt.special && !evt.past && notSuppressed(evt.summary));
+  const nowTask = (context.tasks || []).find(task => /now/i.test(task.priority) && notSuppressed(task.text))
+    || (context.tasks || []).find(task => notSuppressed(task.text));
+  const shaila = (context.shailos || []).find(s => notSuppressed(s.text));
+  const email = (context.emails || []).find(e => notSuppressed(e.subject || e.summary));
   const phone = context.phone || {};
   const phoneNeeds = (phone.unreadTexts || 0) + (phone.missedCalls || 0) + (phone.voicemailCount || 0);
 
@@ -515,6 +529,9 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [taskSuggestions, setTaskSuggestions] = useState([]);
   const [taskSuggestionsLoading, setTaskSuggestionsLoading] = useState(false);
   const [chiefLearning, setChiefLearning] = useState(() => readChiefLearning());
+  const [sessionSuppressed, setSessionSuppressed] = useState([]);
+  const sessionSuppressedRef = useRef([]);
+  useEffect(() => { sessionSuppressedRef.current = sessionSuppressed; }, [sessionSuppressed]);
   const [chiefProfileOpen, setChiefProfileOpen] = useState(false);
   const [chiefProfileDraft, setChiefProfileDraft] = useState("");
   const [chiefProfileSaving, setChiefProfileSaving] = useState(false);
@@ -780,9 +797,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const chiefScanContext = useMemo(() => ({
     ...chiefContext,
     learning: chiefLearningProfile,
-  }), [chiefContext, chiefLearningProfile]);
+    sessionSuppressed: sessionSuppressed.slice(-8).map(s => s.text),
+  }), [chiefContext, chiefLearningProfile, sessionSuppressed]);
   const chiefScanKey = useMemo(() => JSON.stringify(chiefScanContext), [chiefScanContext]);
-  const chiefFallback = useMemo(() => buildChiefFallbackBrief(chiefContext), [chiefContext]);
+  const chiefFallback = useMemo(() => buildChiefFallbackBrief(chiefContext, sessionSuppressed), [chiefContext, sessionSuppressed]);
   const taskSuggestionPriorities = useMemo(() =>
     [...(priorities || [])]
       .filter(p => !p.deleted && !p.isShaila && p.id !== "shaila")
@@ -849,6 +867,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       return undefined;
     }
       setChiefLoading(true);
+    const delay = force ? 50 : 900;
     const timer = window.setTimeout(() => {
       writeStorageNumber(CHIEF_SCAN_LAST_RUN_KEY, Date.now());
       runAIJob("dashboard.chief_of_staff.v1", { context: chiefScanContext }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 900 } })
@@ -856,8 +875,18 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           if (cancelled) return;
           const output = job?.output;
           if (output?.summary && output?.nextAction) {
-            setChiefBrief(output);
-            writeStorageJson(CHIEF_SCAN_CACHE_KEY, { scanKey: chiefScanKey, ts: Date.now(), brief: output });
+            const actionKey = taskSuggestionKey(output.nextAction);
+            const isDuplicate = sessionSuppressedRef.current.some(s => {
+              const sk = taskSuggestionKey(s.text || "");
+              return sk && actionKey && tokenOverlapRatio(sk, actionKey) >= 0.6;
+            });
+            if (isDuplicate) {
+              setChiefBrief(CHIEF_QUIET_BRIEF);
+              setChiefError("");
+            } else {
+              setChiefBrief(output);
+              writeStorageJson(CHIEF_SCAN_CACHE_KEY, { scanKey: chiefScanKey, ts: Date.now(), brief: output });
+            }
           } else {
             setChiefBrief(chiefFallback);
             setChiefError("Using local scan.");
@@ -871,7 +900,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
         .finally(() => {
           if (!cancelled) setChiefLoading(false);
         });
-    }, 900);
+    }, delay);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
@@ -1003,8 +1032,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     if (looksLikeChiefRejection(question)) {
       const rejectedBrief = chiefBrief || chiefFallback;
       recordChiefSmartLearning(/(?:next|skip)/i.test(question) ? "next" : "not_now", rejectedBrief);
-      setChiefBrief(chiefFallback);
-      setChiefError("Rescanning without that recommendation.");
+      const suppressText = cleanOneLine(rejectedBrief.nextAction || "", 260);
+      if (suppressText) setSessionSuppressed(prev => [...prev, { text: suppressText, sources: (chiefBrief || chiefFallback).sources || [], focusArea: (chiefBrief || chiefFallback).focusArea || "" }].slice(-10));
+      setChiefBrief(CHIEF_SEARCHING_BRIEF);
+      setChiefError("");
       setChiefDialogue([...nextHistory, { role: "assistant", text: `Got it. I am dropping "${cleanOneLine(rejectedBrief.nextAction, 140)}" and rescanning for a better next move.` }].slice(-6));
       setChiefRefreshNonce(n => n + 1);
       return;
@@ -1052,7 +1083,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     const actionText = cleanOneLine(brief?.nextAction || chiefFallback.nextAction, 240);
     const eventRow = {
       ts: Date.now(),
-      decision: choice === "not_now" ? "rejected" : "accepted",
+      decision: choice === "not_now" ? "rejected" : choice === "done" ? "completed" : "accepted",
       issueKey: hashChiefValue(`chief|${brief?.focusArea || "dashboard"}|${actionText}`),
       freshnessKey: hashChiefValue(`chief|${brief?.focusArea || "dashboard"}|${brief?.summary || ""}|${actionText}`),
       suppressionKey: hashChiefValue(`chief|${choice}|${brief?.focusArea || "dashboard"}|${actionText}`),
@@ -1096,8 +1127,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
         : "Logged. I will look for the next clean move.";
     try {
       recordChiefSmartLearning(choice, brief);
-      setChiefBrief(chiefFallback);
-      setChiefError(choice === "done" ? "Closed that recommendation." : "Rescanning without that recommendation.");
+      const suppressText = cleanOneLine(brief.nextAction || "", 260);
+      if (suppressText) setSessionSuppressed(prev => [...prev, { text: suppressText, sources: brief.sources || [], focusArea: brief.focusArea || "" }].slice(-10));
+      setChiefBrief(CHIEF_SEARCHING_BRIEF);
+      setChiefError("");
       let cloudSaved = true;
       try {
         await onAppendChiefProfileNote?.(chiefSmartResponseNote(choice, label, brief));
@@ -1153,7 +1186,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
   function dismissTaskSuggestion(row) {
     recordTaskSuggestionDecision(row, "rejected");
-    setTaskSuggestions(rows => rows.filter(item => item.id !== row.id));
+    setTaskSuggestions(rows => {
+      const next = rows.filter(item => item.id !== row.id);
+      if (next.length === 0) removeStorageKey(CHIEF_SUGGESTIONS_LAST_RUN_KEY);
+      return next;
+    });
   }
 
   function createTaskSuggestion(row) {
@@ -1161,7 +1198,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     if (!text) return;
     onAddTask?.(text, row.priorityId || defaultSuggestionPriorityId);
     recordTaskSuggestionDecision(row, "accepted");
-    setTaskSuggestions(rows => rows.filter(item => item.id !== row.id));
+    setTaskSuggestions(rows => {
+      const next = rows.filter(item => item.id !== row.id);
+      if (next.length === 0) removeStorageKey(CHIEF_SUGGESTIONS_LAST_RUN_KEY);
+      return next;
+    });
   }
 
   function createChiefNextTask() {
@@ -1335,7 +1376,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const activeChiefSources = (activeChiefBrief?.sources || []).slice(0, 5);
   const activeChiefTaskText = cleanOneLine(activeChiefBrief?.nextAction || "", 260);
   useEffect(() => {
-    if (!chiefPage || !activeChiefTaskText) return;
+    if (!chiefPage || !activeChiefTaskText || activeChiefBrief?._isPlaceholder) return;
     setChiefTaskDraft(prev => {
       if (prev && prev !== chiefTaskDraftSourceRef.current) return prev;
       chiefTaskDraftSourceRef.current = activeChiefTaskText;
@@ -1352,7 +1393,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
         ["other", "Other", "edit"],
       ].map(([id, label, icon]) => {
         const active = chiefSmartSaving === id;
-        const disabled = !!chiefSmartSaving || chiefDialogueLoading;
+        const disabled = !!chiefSmartSaving || chiefDialogueLoading || !!activeChiefBrief?._isPlaceholder;
         return (
           <button key={id} type="button" onClick={() => handleChiefSmartResponse(id)} disabled={disabled}
             title={`${label} - save this signal to the Chief profile`} aria-label={`${label} smart response`}
@@ -1423,21 +1464,30 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
 
           <section style={{ display: "grid", gridTemplateColumns: isStacked ? "repeat(2,minmax(0,1fr))" : "repeat(5,minmax(0,1fr))", gap: 8 }}>
             {snapshotTiles.map(([label, value, icon, color]) => (
-              <div key={label} style={{ border: `1px solid ${C.divider}`, borderRadius: 8, background: C.bgSoft, padding: "10px 11px", minWidth: 0 }}>
+              <button key={label} type="button" onClick={onCloseChiefPage} title={`View ${label} in NerveCenter`}
+                style={{ border: `1px solid ${C.divider}`, borderRadius: 8, background: C.bgSoft, padding: "10px 11px", minWidth: 0, cursor: "pointer", textAlign: "left" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7, color, fontSize: NC_TYPE.small, fontWeight: 700, fontFamily: NC_FONT_STACK }}>
                   {suiteIcon(icon, 14)}
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
                 </div>
                 <div style={{ marginTop: 6, color: C.text, fontSize: NC_TYPE.control, fontWeight: 650, lineHeight: 1.25, fontFamily: NC_FONT_STACK }}>{value}</div>
-              </div>
+              </button>
             ))}
           </section>
 
           <section style={{ ...pagePanel, display: "grid", gridTemplateColumns: isStacked ? "1fr" : "minmax(0,1.34fr) minmax(300px,0.66fr)" }}>
             <div style={{ padding: pagePad, borderRight: isStacked ? "none" : `1px solid ${C.divider}`, borderBottom: isStacked ? `1px solid ${C.divider}` : "none", display: "grid", gap: 14 }}>
               <div style={{ display: "grid", gap: 7 }}>
-                <span style={pageLabel}>Next move</span>
-                <div style={{ borderLeft: `4px solid ${activeChiefTone}`, paddingLeft: 14, display: "grid", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={pageLabel}>Next move</span>
+                  {chiefLoading && (
+                    <span style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${C.faint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                      Rescanning
+                    </span>
+                  )}
+                </div>
+                <div style={{ borderLeft: `4px solid ${chiefLoading ? C.divider : activeChiefTone}`, paddingLeft: 14, display: "grid", gap: 8, opacity: chiefLoading ? 0.55 : 1, transition: "opacity 0.25s" }}>
                   <div style={{ fontSize: isStacked ? 19 : 24, lineHeight: 1.2, color: C.text, fontWeight: 650, fontFamily: NC_FONT_STACK }}>{activeChiefBrief.summary}</div>
                   <div style={{ fontSize: isStacked ? 15 : 17, lineHeight: 1.38, color: C.muted, fontFamily: NC_FONT_STACK }}>
                     <span style={{ color: activeChiefTone, fontWeight: 700 }}>Do: </span>{activeChiefBrief.nextAction}

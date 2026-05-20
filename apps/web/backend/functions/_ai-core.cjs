@@ -534,6 +534,22 @@ function normalizeChiefContext(input = {}) {
     profile: {
       notes: ensureArray(profile.notes || [], "profile.notes").slice(-20).map(note => cleanString(note, 260)).filter(Boolean),
     },
+    learning: (() => {
+      const l = source.learning;
+      if (!l || typeof l !== "object" || Array.isArray(l)) return {};
+      return {
+        acceptedActionTypes: l.acceptedActionTypes && typeof l.acceptedActionTypes === "object" ? l.acceptedActionTypes : {},
+        rejectedActionTypes: l.rejectedActionTypes && typeof l.rejectedActionTypes === "object" ? l.rejectedActionTypes : {},
+        recentlyRejected: ensureArray(l.recentlyRejected || [], "learning.recentlyRejected")
+          .slice(0, 10)
+          .map(r => ({ textKey: cleanString(r?.textKey || "", 120), actionType: cleanString(r?.actionType || "", 80) }))
+          .filter(r => r.textKey),
+      };
+    })(),
+    sessionSuppressed: ensureArray(source.sessionSuppressed || [], "sessionSuppressed")
+      .slice(0, 8)
+      .map(s => cleanString(typeof s === "string" ? s : (s?.text || ""), 260))
+      .filter(Boolean),
   };
 }
 
@@ -874,6 +890,8 @@ const AI_JOB_REGISTRY = {
         "Use the profile notes as durable preferences. If a profile note says the user does not want a reminder class, avoid making it the next action unless the current item is clearly urgent.",
         "Do not invent facts, do not claim actions were taken, and do not give halachic rulings. If data is thin, say what is visible.",
         `Current snapshot:\n${jsonBlock(context)}`,
+        context.sessionSuppressed?.length ? `Already dismissed this session — skip these and recommend something different:\n${jsonBlock(context.sessionSuppressed)}` : "",
+        context.learning?.recentlyRejected?.length ? `Recently rejected across sessions — avoid unless clearly urgent:\n${jsonBlock(context.learning.recentlyRejected.map(r => r.textKey))}` : "",
         "Return a calm executive brief: summary is one or two short sentences, nextAction is one specific next move.",
         responseJsonInstruction("object", this.schema),
       ]);
