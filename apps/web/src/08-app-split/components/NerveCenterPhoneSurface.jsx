@@ -666,16 +666,55 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
                               </div>
                             );
                           })}
-                          <button
-                            type="button"
-                            onMouseDown={e => e.preventDefault()}
-                            onClick={e => { e.stopPropagation(); setExpandedPhoneMessageId(null); }}
-                            title="Close conversation"
-                            aria-label="Close conversation"
-                            style={{ ...phoneIconButton(false), position: "sticky", bottom: 6, alignSelf: "flex-end", zIndex: 2, background: C.bg, boxShadow: `0 2px 8px ${C.shadow || "rgba(15,23,42,0.18)"}` }}
+                          <div
+                            role="group"
+                            aria-label="Conversation actions"
+                            style={{
+                              position: "sticky",
+                              bottom: 6,
+                              alignSelf: "flex-end",
+                              zIndex: 2,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4,
+                              padding: 3,
+                              border: `1px solid ${C.divider}`,
+                              borderRadius: 99,
+                              background: C.bg,
+                              boxShadow: `0 2px 8px ${C.shadow || "rgba(15,23,42,0.18)"}`,
+                            }}
                           >
-                            {suiteIcon("close", 16)}
-                          </button>
+                            <button
+                              type="button"
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={e => { e.stopPropagation(); dialNum(thread._who); }}
+                              title="Call"
+                              aria-label="Call"
+                              style={phoneIconButton(false)}
+                            >
+                              {suiteIcon("call", 15)}
+                            </button>
+                            <button
+                              type="button"
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={e => { e.stopPropagation(); openCompose(thread._name, thread._who); }}
+                              title="Reply"
+                              aria-label="Reply"
+                              style={phoneIconButton(false)}
+                            >
+                              {suiteIcon("sms", 15)}
+                            </button>
+                            <button
+                              type="button"
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={e => { e.stopPropagation(); setExpandedPhoneMessageId(null); }}
+                              title="Close conversation"
+                              aria-label="Close conversation"
+                              style={phoneIconButton(false)}
+                            >
+                              {suiteIcon("close", 16)}
+                            </button>
+                          </div>
                           <div ref={expandedConversationEndRef} style={{ height: 1 }} />
                         </div>
                       </div>
