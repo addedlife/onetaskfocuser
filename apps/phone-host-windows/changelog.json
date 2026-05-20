@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-05-20 19:31:04",
+        "version":  "b269",
+        "notes":  "Fix relay push error logging: failed pushes (e.g. key mismatch) now log the HTTP error to the debug window.",
+        "devNotes":  "PushStateAsync now checks resp.IsSuccessStatusCode and throws with the HTTP status and body on failure, so _pushErrors increments and the error appears in [RELAY PUSH] debug log within the first 3 failures. Also improves webapp error messages: relay 404 (no state pushed yet) shows a distinct message from relay-unreachable or DeskPhone-offline, making diagnosis clearer."
+    },
+    {
         "timestamp":  "2026-05-20 19:08:31",
         "version":  "b268",
         "notes":  "Cloud relay: texts and call control now work from any browser anywhere in the world.",

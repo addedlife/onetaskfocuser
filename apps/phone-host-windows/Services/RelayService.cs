@@ -107,6 +107,11 @@ public class RelayService : IDisposable
         using var req     = new HttpRequestMessage(HttpMethod.Post, $"{_relayUrl}?action=push") { Content = content };
         req.Headers.Add("X-Relay-Secret", _relayKey);
         using var resp = await _http.SendAsync(req);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var body = await resp.Content.ReadAsStringAsync();
+            throw new Exception($"HTTP {(int)resp.StatusCode} — {body[..Math.Min(200, body.Length)]}");
+        }
         _lastPush = DateTime.UtcNow;
     }
 
