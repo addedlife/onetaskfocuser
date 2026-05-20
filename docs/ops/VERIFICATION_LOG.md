@@ -614,3 +614,4 @@ Current source-grade file count after cleanup: 162 files.
 - DeskPhone theme matrix audit passed: 18 built-in schemes plus 4 adversarial custom schemes, 24 critical text/background pairs each, 0 failures below 4.5:1.
 - `npm run build` in `apps/web` passed and generated `assets/index-Byx5ijvj.js`; existing bundle-size warning remains.
 - Local preview `http://127.0.0.1:4320/?suite=deskphone` returned HTTP 200. A fresh-profile headless screenshot stayed on the existing `Loading...` gate, so the local render proof is the matrix audit plus production build.
+- Pushed commit `2195385` to `origin/main`; Netlify Git-triggered production served `assets/index-Byx5ijvj.js` on poll attempt 3, and the deployed asset returned HTTP 200.
