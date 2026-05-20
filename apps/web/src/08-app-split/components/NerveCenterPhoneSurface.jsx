@@ -214,13 +214,18 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
 
       if (!localOk) {
         // Relay fallback: read the single state blob the PC pushed
-        const relayState = await fetchPhoneJson(`${RELAY_BASE}?action=state`);
-        statusRes   = relayState?.status   || null;
-        messagesRes = relayState?.messages  || [];
-        callsRes    = relayState?.calls     || [];
-        contactsRes = relayState?.contacts  || [];
-        usingRelayRef.current = true;
-        setUsingRelay(true);
+        try {
+          const relayState = await fetchPhoneJson(`${RELAY_BASE}?action=state`);
+          statusRes   = relayState?.status   || null;
+          messagesRes = relayState?.messages  || [];
+          callsRes    = relayState?.calls     || [];
+          contactsRes = relayState?.contacts  || [];
+          usingRelayRef.current = true;
+          setUsingRelay(true);
+        } catch (relayErr) {
+          const msg = String(relayErr?.message || "");
+          throw new Error(msg.includes("404") ? "relay:no_state" : "relay:fail:" + msg);
+        }
       } else {
         usingRelayRef.current = false;
         setUsingRelay(false);
@@ -249,10 +254,15 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
         setContacts(nextContacts);
       }
       onOnlineChange?.(true);
-    } catch {
+    } catch (e) {
       setStatus(null); setMessages([]); setCalls([]);
       messagesSigRef.current = ""; callsSigRef.current = ""; contactsSigRef.current = "";
-      setError(usingRelayRef.current ? "Relay unreachable — is DeskPhone running on your PC?" : "Open DeskPhone to use calls and texts.");
+      const msg = String(e?.message || "");
+      setError(msg === "relay:no_state"
+        ? "Relay reachable — DeskPhone hasn't pushed yet. Is DeskPhone b268 running on your PC?"
+        : msg.startsWith("relay:fail:")
+          ? "Cloud relay unreachable. Check Netlify deploy and env vars."
+          : "Open DeskPhone to use calls and texts.");
       usingRelayRef.current = false;
       setUsingRelay(false);
       onOnlineChange?.(false);
