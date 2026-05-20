@@ -18,6 +18,10 @@
 [functions."mcp"]
   timeout = 60
 
+[functions."phone-relay"]
+  timeout = 10
+  external_node_modules = ["@netlify/blobs"]
+
 [functions."google-workspace"]
   timeout = 60
 

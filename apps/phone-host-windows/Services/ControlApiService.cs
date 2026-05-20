@@ -94,6 +94,7 @@ public class ControlApiService : IDisposable
     public Func<int, Task<bool>>?            TestReg     { get; set; }
     public Action?                           Shutdown    { get; set; }
     public Action<string>?                   LogLine     { get; set; }
+    public Func<string>?                     GetRelayStatus { get; set; }
     public Func<string, string, Task<bool>>? OfferBuildUpdate { get; set; }
     public Func<Task<bool>>?                 ShowApp     { get; set; }
     public Func<string, string, Task<bool>>? Handoff     { get; set; }
@@ -608,6 +609,10 @@ public class ControlApiService : IDisposable
             else if (path == "/lan-url")
             {
                 body = LanUrl is not null ? $"{{\"url\":\"{LanUrl}\"}}" : "{\"url\":null}";
+            }
+            else if (path == "/relay-status")
+            {
+                body = GetRelayStatus?.Invoke() ?? "{\"enabled\":false}";
             }
             else if (method == "POST" && path == "/test-reg")
             {

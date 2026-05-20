@@ -96,6 +96,10 @@ public class AppSettingsService
         public List<MessageDraft> MessageDrafts { get; set; } = new();
 
         public List<DeviceAlertState> DeviceAlertStates { get; set; } = new();
+
+        // Cloud relay: DeskPhone pushes phone state here so any browser anywhere can reach it
+        public string RelayKey { get; set; } = "";
+        public string RelayUrl { get; set; } = "";   // empty = use default Netlify URL
     }
 
     // ── State ─────────────────────────────────────────────────────────────
@@ -143,6 +147,13 @@ public class AppSettingsService
         else if (_current.KnownDevices.Count == 1 && !_current.KnownDevices[0].IsDefault)
         {
             _current.KnownDevices[0].IsDefault = true;
+            Save();
+        }
+
+        // ── Auto-generate relay key on first run ──────────────────────────
+        if (string.IsNullOrWhiteSpace(_current.RelayKey))
+        {
+            _current.RelayKey = Guid.NewGuid().ToString("N"); // 32 hex chars, no dashes
             Save();
         }
 

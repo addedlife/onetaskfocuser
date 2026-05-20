@@ -178,6 +178,10 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
   const [composeFocused, setComposeFocused] = useState(false);
   const [openPhoneActionId, setOpenPhoneActionId] = useState(null);
   const [expandedPhoneMessageId, setExpandedPhoneMessageId] = useState(null);
+  const usingRelayRef = useRef(false);
+  const [usingRelay, setUsingRelay] = useState(false);
+  const [relayStatus, setRelayStatus] = useState(null);  // { enabled, key, relayUrl } from DeskPhone
+  const [showRelaySetup, setShowRelaySetup] = useState(false);
   const refreshInFlightRef = useRef(false);
   const expandedConversationEndRef = useRef(null);
   const composeBodyRef = useRef(null);
@@ -185,18 +189,42 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
   const callsSigRef = useRef("");
   const contactsSigRef = useRef("");
   const C = cleanTheme(T);
+  const RELAY_BASE = "/.netlify/functions/phone-relay";
 
   const refresh = useCallback(async () => {
     if (refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
     try {
       setError("");
-      const [statusRes, messagesRes, callsRes, contactsRes] = await Promise.all([
-        fetchPhoneJson(`${api}/status`),
-        fetchPhoneJson(`${api}/messages?limit=5000`),
-        fetchPhoneJson(`${api}/calls`).catch(() => null),
-        fetchPhoneJson(`${api}/contacts`).catch(() => null),
-      ]);
+      let statusRes, messagesRes, callsRes, contactsRes;
+
+      // Try the direct DeskPhone API first (short timeout so fallback is fast)
+      let localOk = false;
+      try {
+        [statusRes, messagesRes, callsRes, contactsRes] = await Promise.all([
+          fetchPhoneJson(`${api}/status`, 2500),
+          fetchPhoneJson(`${api}/messages?limit=5000`, 2500),
+          fetchPhoneJson(`${api}/calls`, 2500).catch(() => null),
+          fetchPhoneJson(`${api}/contacts`, 2500).catch(() => null),
+        ]);
+        localOk = true;
+        // Opportunistically grab relay setup info while we have local access
+        fetchPhoneJson(`${api}/relay-status`, 2500).then(s => setRelayStatus(s)).catch(() => {});
+      } catch { /* fall through to relay */ }
+
+      if (!localOk) {
+        // Relay fallback: read the single state blob the PC pushed
+        const relayState = await fetchPhoneJson(`${RELAY_BASE}?action=state`);
+        statusRes   = relayState?.status   || null;
+        messagesRes = relayState?.messages  || [];
+        callsRes    = relayState?.calls     || [];
+        contactsRes = relayState?.contacts  || [];
+        usingRelayRef.current = true;
+        setUsingRelay(true);
+      } else {
+        usingRelayRef.current = false;
+        setUsingRelay(false);
+      }
       const nextStatus = statusRes;
       const parsed = messagesRes || [];
       const nextMessages = Array.isArray(parsed) ? parsed : (parsed?.messages || []);
@@ -224,7 +252,9 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
     } catch {
       setStatus(null); setMessages([]); setCalls([]);
       messagesSigRef.current = ""; callsSigRef.current = ""; contactsSigRef.current = "";
-      setError("Open DeskPhone to use calls and texts.");
+      setError(usingRelayRef.current ? "Relay unreachable — is DeskPhone running on your PC?" : "Open DeskPhone to use calls and texts.");
+      usingRelayRef.current = false;
+      setUsingRelay(false);
       onOnlineChange?.(false);
     } finally {
       refreshInFlightRef.current = false;
@@ -312,17 +342,29 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
   const post = async (path, label) => {
     setBusy(label);
     try {
-      const res = await fetch(`${api}${path}`, { method: "POST" });
-      if (!res.ok) {
-        let msg = `DeskPhone error (${res.status})`;
-        try { const d = await res.json(); if (d?.error || d?.message) msg = d.error || d.message; } catch {}
-        setError(msg);
+      if (usingRelayRef.current) {
+        // Route command through the cloud relay — DeskPhone will execute it within 2 s
+        await fetch(`${RELAY_BASE}?action=command`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path }),
+        });
+        setError("");
+        // Short wait then refresh so the UI reflects the command result
+        await new Promise(r => setTimeout(r, 2500));
       } else {
-        const data = await res.json().catch(() => ({}));
-        if (data?.success === false || data?.ok === false) {
-          setError(data?.error || data?.message || data?.reason || "DeskPhone reported failure.");
+        const res = await fetch(`${api}${path}`, { method: "POST" });
+        if (!res.ok) {
+          let msg = `DeskPhone error (${res.status})`;
+          try { const d = await res.json(); if (d?.error || d?.message) msg = d.error || d.message; } catch {}
+          setError(msg);
         } else {
-          setError("");
+          const data = await res.json().catch(() => ({}));
+          if (data?.success === false || data?.ok === false) {
+            setError(data?.error || data?.message || data?.reason || "DeskPhone reported failure.");
+          } else {
+            setError("");
+          }
         }
       }
       await refresh();
@@ -695,6 +737,12 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
           style={phoneIconButton(showRemoteConfig || !!remoteUrl)}>
           {suiteIcon("settings_ethernet", 15)}
         </button>
+        {/* Cloud relay indicator + setup */}
+        <button onClick={() => setShowRelaySetup(v => !v)}
+          title={usingRelay ? "Live via cloud relay" : "Cloud relay setup"}
+          style={{ ...phoneIconButton(showRelaySetup || usingRelay), ...(usingRelay ? { background: C.success, color: "#fff" } : {}) }}>
+          {suiteIcon("cloud", 15)}
+        </button>
       </div>
 
       {/* ── Remote DeskPhone config panel ── */}
@@ -720,6 +768,46 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
           <div style={{ fontSize: 11, color: C.faint, lineHeight: 1.5 }}>
             On your home network: navigate to <strong>http://[PC‑IP]:8765</strong> for zero‑config auto‑connect.
           </div>
+        </div>
+      )}
+
+      {/* ── Cloud relay setup / status panel ── */}
+      {showRelaySetup && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, background: C.bgSoft, borderRadius: 8, padding: "12px 14px" }}>
+          {usingRelay ? (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.success }}>Connected via cloud relay</div>
+              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+                DeskPhone on your PC is relaying this session. Commands take ~2 s to execute. SMS only — no call audio.
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 500, color: C.muted }}>Cloud relay lets any browser reach your home PC</div>
+              {relayStatus ? (
+                <>
+                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+                    Your relay key (auto-generated by DeskPhone — copy it once to Netlify):
+                  </div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <code style={{ flex: 1, fontSize: 11, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 5, padding: "5px 8px", userSelect: "all", wordBreak: "break-all", color: C.text }}>
+                      {relayStatus.key}
+                    </code>
+                    <button onClick={() => navigator.clipboard?.writeText(relayStatus.key)} style={gvTextButton({ height: 32, fontSize: 11 }, C)}>
+                      {suiteIcon("content_copy", 12)} Copy
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.faint, lineHeight: 1.6 }}>
+                    Go to <strong>netlify.com → Your site → Site configuration → Environment variables</strong>, add <code>PHONE_RELAY_SECRET</code> = the key above, then re-deploy. One-time setup.
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 12, color: C.faint }}>
+                  Open this panel while DeskPhone is running on your PC to see your relay key.
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 

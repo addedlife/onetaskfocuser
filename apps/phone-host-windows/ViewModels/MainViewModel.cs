@@ -47,6 +47,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private readonly MessageStoreService   _store    = new();
     private readonly BackupService         _backup   = new();
     private readonly ControlApiService     _api      = new();
+    private readonly RelayService          _relay    = new();
     private readonly ContactStoreService   _contactStore = new();
     private readonly ContactSyncService    _contactSync  = new();
     private readonly PbapService _pbap      = new();
@@ -2814,6 +2815,35 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         };
         _api.Start();
         AppendDebug($"[API] {_api.StartupResult}");
+
+        // ── Cloud relay (same data sources as the local API) ──────────────
+        _relay.GetStatus   = _api.GetStatus;
+        _relay.GetMessages = _api.GetMessages;
+        _relay.GetCalls    = _api.GetCalls;
+        _relay.GetContacts = _api.GetContacts;
+        _relay.Dial        = _api.Dial;
+        _relay.HangUp      = _api.HangUp;
+        _relay.Answer      = _api.Answer;
+        _relay.ToggleMute  = _api.ToggleMute;
+        _relay.Send        = _api.Send;
+        _relay.Refresh     = _api.Refresh;
+        _relay.MarkRead    = _api.MarkConversationRead;
+        _relay.MarkUnread  = _api.MarkConversationUnread;
+        _relay.LogLine     = s => AppendDebugThreadSafe(s);
+        _relay.Configure(_settings.Current.RelayKey, _settings.Current.RelayUrl);
+        _api.GetRelayStatus = () =>
+        {
+            var key   = _settings.Current.RelayKey;
+            var url   = string.IsNullOrWhiteSpace(_settings.Current.RelayUrl)
+                        ? "https://onetaskfocuser.netlify.app/.netlify/functions/phone-relay"
+                        : _settings.Current.RelayUrl;
+            return $"{{\"enabled\":{(_relay.IsEnabled ? "true" : "false")},\"key\":\"{key}\",\"relayUrl\":\"{url}\"}}";
+        };
+        _relay.Start();
+        if (_relay.IsEnabled)
+            AppendDebug($"[RELAY] Active — remote browsers can now reach the phone");
+        else
+            AppendDebug("[RELAY] No relay key set — add one in Settings → Connection to enable remote access");
 
         // ── Initialize Commands ──────────────────────────────────────────
         ScanCommand          = new RelayCommand(_ => _ = ScanAsync());
