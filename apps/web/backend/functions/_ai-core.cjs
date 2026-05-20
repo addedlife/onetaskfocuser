@@ -22,6 +22,7 @@ const DEFAULT_GEMINI_MODEL = "gemini-3.1-pro-preview";
 const DEFAULT_OPENAI_MODEL = "gpt-5.5";
 const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
 const QUOTA_FALLBACK_GEMINI_MODEL = "gemini-3.1-flash-lite";
+const DEFAULT_CALENDAR_TIME_ZONE = "America/New_York";
 const GEMINI_DEFAULT_SAFE_RPM = 4;
 const GEMINI_DEFAULT_TPM = 200000;
 const GEMINI_QUEUE_TIMEOUT_MS = 55000;
@@ -523,12 +524,44 @@ function normalizeConversationExtract(value) {
   };
 }
 
+function normalizeBrainDumpExtract(value) {
+  const o = Array.isArray(value) ? { tasks: value, scheduleItems: [] } : ensureObject(value);
+  return {
+    tasks: ensureArray(o.tasks || []).map(item => ({
+      text: cleanString(item?.text, 600),
+      priority: cleanString(item?.priority, 100),
+    })).filter(item => item.text),
+    scheduleItems: ensureArray(o.scheduleItems || []).map(item => ({
+      text: cleanString(item?.text, 500),
+      when: item?.when ? cleanString(item.when, 200) : null,
+    })).filter(item => item.text),
+  };
+}
+
+function dateTimeHasExplicitZone(value) {
+  return /(?:z|[+-]\d{2}:?\d{2})$/i.test(String(value || "").trim());
+}
+
+function normalizeEventDatePart(part, defaultTimeZone = DEFAULT_CALENDAR_TIME_ZONE) {
+  const o = ensureObject(part);
+  const next = { ...o };
+  if (next.timeZone) next.timeZone = cleanString(next.timeZone, 80);
+  if (next.dateTime && !next.timeZone && !dateTimeHasExplicitZone(next.dateTime)) {
+    next.timeZone = defaultTimeZone;
+  }
+  return next;
+}
+
 function normalizeCalendarEvent(value) {
   const o = ensureObject(value);
   if (!o.summary || !o.start || !o.end) throw validationError("calendar event requires summary, start, and end");
+  const defaultTimeZone = cleanString(o.defaultTimeZone || o.timeZone || DEFAULT_CALENDAR_TIME_ZONE, 80) || DEFAULT_CALENDAR_TIME_ZONE;
+  const { defaultTimeZone: _defaultTimeZone, timeZone: _timeZone, ...event } = o;
   return {
-    ...o,
+    ...event,
     summary: cleanString(o.summary, 300),
+    start: normalizeEventDatePart(o.start, defaultTimeZone),
+    end: normalizeEventDatePart(o.end, defaultTimeZone),
     reminders: o.reminders || { useDefault: false, overrides: [] },
   };
 }
@@ -657,26 +690,21 @@ const AI_JOB_REGISTRY = {
   "task.parse_brain_dump.v1": {
     task: "task-parse-brain-dump",
     output: "json",
-    shape: "array",
+    shape: "object",
     genConfig: { temperature: 0.1, maxOutputTokens: 4096 },
-    schema: '[{"text":"task description","priority":"priority_id"}]',
+    schema: '{"tasks":[{"text":"task description","priority":"priority_id"}],"scheduleItems":[{"text":"event description","when":null}]}',
     buildPrompt(input = {}) {
       return compactLines([
         YESHIVISH_SYSTEM,
-        "Parse this brain dump into individual actionable tasks.",
+        "Parse this brain dump into individual actionable tasks and fixed-time schedule items.",
         `Priority options: ${cleanString(input.priorityOptions, 1000)}`,
         `Default priority if unclear: ${cleanString(input.lowestPriority, 80)}`,
         `Brain dump:\n${truncateText(input.text, 12000)}`,
-        "Split compound sentences. Ignore filler. Extract real actions only.",
-        responseJsonInstruction("array", this.schema),
+        "Split compound sentences. Ignore filler. Fixed-time appointments, calls, meetings, deadlines with a date/time, and calendar entries go to scheduleItems only.",
+        responseJsonInstruction("object", this.schema),
       ]);
     },
-    validate(value) {
-      return ensureArray(value).map(item => ({
-        text: cleanString(item?.text, 600),
-        priority: cleanString(item?.priority, 100),
-      })).filter(item => item.text);
-    },
+    validate: normalizeBrainDumpExtract,
   },
   "task.breakdown.v1": {
     task: "task-breakdown",
@@ -772,12 +800,15 @@ const AI_JOB_REGISTRY = {
     output: "json",
     shape: "object",
     genConfig: { temperature: 0, maxOutputTokens: 700 },
-    schema: '{"summary":"...","start":{"dateTime":"RFC3339"},"end":{"dateTime":"RFC3339"},"reminders":{"useDefault":false,"overrides":[{"method":"popup","minutes":10}]}}',
+    schema: '{"summary":"...","start":{"dateTime":"RFC3339","timeZone":"America/New_York"},"end":{"dateTime":"RFC3339","timeZone":"America/New_York"},"reminders":{"useDefault":false,"overrides":[{"method":"popup","minutes":10}]}}',
     buildPrompt(input = {}) {
+      const defaultTimeZone = cleanString(input.defaultTimeZone || DEFAULT_CALENDAR_TIME_ZONE, 80) || DEFAULT_CALENDAR_TIME_ZONE;
       return compactLines([
         `Today is ${cleanString(input.today, 40)}.`,
+        `Default time zone: ${defaultTimeZone}.`,
         `Description: "${cleanString(input.description, 2000)}"`,
         "Parse this natural language event into a Google Calendar event body. Use all-day date fields only when the user clearly describes an all-day event.",
+        `For timed events, include start.timeZone and end.timeZone. Use ${defaultTimeZone} unless the user explicitly says another time zone.`,
         responseJsonInstruction("object", this.schema),
       ]);
     },

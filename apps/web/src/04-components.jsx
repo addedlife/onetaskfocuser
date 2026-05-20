@@ -433,9 +433,30 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
 
 function ZenDumpReview({tasks, pris, T, onSubmit, onDismiss, parsing}) {
   const [items, setItems] = useState(() => tasks.map(t=>({...t})));
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState("");
   const activePris = pris.filter(p=>!p.deleted).sort((a,b)=>b.weight-a.weight);
+  useEffect(() => {
+    setItems(tasks.map(t => ({ cat: "tasks", ...t })));
+  }, [tasks]);
   const updItem = (id,field,val) => setItems(prev=>prev.map(i=>i.id===id?{...i,[field]:val}:i));
   const remItem = (id) => setItems(prev=>prev.filter(i=>i.id!==id));
+  const counts = items.reduce((acc, item) => {
+    if ((item.cat || "tasks") === "scheduleItems") acc.schedule += 1;
+    else acc.tasks += 1;
+    return acc;
+  }, {tasks: 0, schedule: 0});
+  async function handleSubmit() {
+    if (submitting || items.length === 0) return;
+    setSubmitting(true); setErr("");
+    try {
+      await onSubmit(items);
+    } catch (e) {
+      setErr(e.message || "Could not add these items.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
   return (
     <div style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,0.68)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={onDismiss}>
       <div style={{width:"min(92vw,540px)",maxHeight:"80vh",display:"flex",flexDirection:"column",background:T.card,borderRadius:20,border:`1px solid ${T.brd}`,boxShadow:"0 12px 48px rgba(0,0,0,0.35)",overflow:"hidden"}} onClick={e=>e.stopPropagation()}>
@@ -443,8 +464,9 @@ function ZenDumpReview({tasks, pris, T, onSubmit, onDismiss, parsing}) {
         <div style={{padding:"16px 20px 12px",borderBottom:`1px solid ${T.brd}`}}>
           <p style={{margin:0,fontSize:14,fontWeight:700,fontFamily:"system-ui",color:T.text}}>Brain Dump Review</p>
           <p style={{margin:"3px 0 0",fontSize:12,fontFamily:"system-ui",color:T.tSoft}}>
-            {parsing?"AI is still parsing…":`${items.length} task${items.length===1?"":"s"} captured — adjust priorities and submit`}
+            {parsing ? "AI is still parsing..." : `${counts.tasks} task${counts.tasks===1?"":"s"} and ${counts.schedule} event${counts.schedule===1?"":"s"} captured`}
           </p>
+          {err && <p style={{margin:"7px 0 0",fontSize:12,fontFamily:"system-ui",color:"#E07040"}}>{err}</p>}
         </div>
         {/* Task list */}
         <div style={{overflowY:"auto",flex:1,padding:"6px 12px"}}>
@@ -452,21 +474,31 @@ function ZenDumpReview({tasks, pris, T, onSubmit, onDismiss, parsing}) {
             <div key={item.id} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 4px",borderBottom:`1px solid ${T.brd}`}}>
               <input value={item.text} onChange={e=>updItem(item.id,'text',e.target.value)}
                 style={{flex:1,background:"transparent",border:"none",outline:"none",fontSize:13,fontFamily:"system-ui",color:T.text,padding:"2px 0"}}/>
-              <select value={item.priority} onChange={e=>updItem(item.id,'priority',e.target.value)}
+              <select value={item.cat || "tasks"} onChange={e=>updItem(item.id,'cat',e.target.value)}
                 style={{background:T.bg,border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 6px",fontSize:11,fontFamily:"system-ui",color:T.text,cursor:"pointer",flexShrink:0}}>
-                {activePris.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
+                <option value="tasks">Task</option>
+                <option value="scheduleItems">Event</option>
               </select>
+              {(item.cat || "tasks") === "tasks" ? (
+                <select value={item.priority} onChange={e=>updItem(item.id,'priority',e.target.value)}
+                  style={{background:T.bg,border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 6px",fontSize:11,fontFamily:"system-ui",color:T.text,cursor:"pointer",flexShrink:0}}>
+                  {activePris.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+              ) : (
+                <input value={item.when || ""} onChange={e=>updItem(item.id,'when',e.target.value)} placeholder="When"
+                  style={{width:90,background:T.bg,border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 6px",fontSize:11,fontFamily:"system-ui",color:T.text,outline:"none",flexShrink:0}}/>
+              )}
               <button onClick={()=>remItem(item.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.tFaint,fontSize:18,padding:"0 2px",lineHeight:1,flexShrink:0}}>×</button>
             </div>
           ))}
-          {items.length===0&&<p style={{textAlign:"center",color:T.tFaint,fontSize:13,fontFamily:"system-ui",padding:"24px 0"}}>No tasks to add</p>}
+          {items.length===0&&<p style={{textAlign:"center",color:T.tFaint,fontSize:13,fontFamily:"system-ui",padding:"24px 0"}}>No items to add</p>}
         </div>
         {/* Footer */}
         <div style={{padding:"12px 20px",borderTop:`1px solid ${T.brd}`,display:"flex",gap:10}}>
           <button onClick={onDismiss} style={{flex:1,padding:"10px",borderRadius:12,border:`1px solid ${T.brd}`,background:"transparent",fontSize:13,fontFamily:"system-ui",fontWeight:600,color:T.tSoft,cursor:"pointer"}}>Dismiss</button>
-          <button onClick={()=>onSubmit(items)} disabled={items.length===0}
-            style={{flex:2,padding:"10px",borderRadius:12,border:"none",background:items.length>0?T.text:T.brd,fontSize:13,fontFamily:"system-ui",fontWeight:700,color:items.length>0?T.bg:T.tFaint,cursor:items.length>0?"pointer":"default"}}>
-            Add {items.length} to Queue
+          <button onClick={handleSubmit} disabled={items.length===0 || submitting}
+            style={{flex:2,padding:"10px",borderRadius:12,border:"none",background:items.length>0&&!submitting?T.text:T.brd,fontSize:13,fontFamily:"system-ui",fontWeight:700,color:items.length>0&&!submitting?T.bg:T.tFaint,cursor:items.length>0&&!submitting?"pointer":"default"}}>
+            {submitting ? "Adding..." : `Add ${items.length} item${items.length===1?"":"s"}`}
           </button>
         </div>
       </div>

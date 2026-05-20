@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, runAIJob, suggestFirstStep, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer, gG, fmtMs, db, _lum, priText, textOnPastel, ensureSchemeContrast } from '../01-core.js';
+import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, runAIJob, suggestFirstStep, aiParseBrainDump, aiParseCalendarEvent, aiParseConversation, aiSummarizeAnswer, withCalendarEventDefaults, gG, fmtMs, db, _lum, priText, textOnPastel, ensureSchemeContrast } from '../01-core.js';
 import { IC } from '../02-icons.jsx';
 import { VoiceInput } from '../03-voice.jsx';
 import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from '../04-components.jsx';
@@ -835,12 +835,13 @@ function App({ user, onSignOut }) {
   }
 
   async function createGoogleCalendarEvent(eventBody) {
-    if (useGoogleServerAuth) return callGoogleWorkspace("createCalendarEvent", { eventBody });
+    const normalizedEventBody = withCalendarEventDefaults(eventBody);
+    if (useGoogleServerAuth) return callGoogleWorkspace("createCalendarEvent", { eventBody: normalizedEventBody });
     if (!googleToken) throw new Error("Reconnect Google to add calendar events.");
     const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
       method: 'POST',
       headers: { Authorization: `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(eventBody),
+      body: JSON.stringify(normalizedEventBody),
     });
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
@@ -1394,7 +1395,7 @@ function App({ user, onSignOut }) {
         lines = text.split(/(?<=[.!?])\s+|;\s*/).map(l=>l.trim()).filter(Boolean);
         if (lines.length <= 1) lines = [text.trim()];
       }
-      setZenDumpParsed(p=>[...p,...lines.map(l=>({id:uid(),text:l,priority:lowestPri}))]);
+      setZenDumpParsed(p=>[...p,...lines.map(l=>({id:uid(),cat:"tasks",text:l,priority:lowestPri}))]);
     };
     if (!hasAI) { fallback(); return; }
     setZenDumpParsing(true);
@@ -1407,6 +1408,40 @@ function App({ user, onSignOut }) {
       }
     } catch(e) { fallback(); }
     setZenDumpParsing(false);
+  }
+  function scheduleItemDescription(item) {
+    const text = String(item?.text || "").trim();
+    const when = String(item?.when || "").trim();
+    return when ? `${text} (${when})` : text;
+  }
+
+  async function applyZenDumpItems(items) {
+    const approved = (items || []).filter(item => String(item?.text || "").trim());
+    const scheduleItems = approved.filter(item => (item.cat || "tasks") === "scheduleItems");
+    const taskItems = approved.filter(item => (item.cat || "tasks") === "tasks");
+    for (const item of scheduleItems) {
+      const eventBody = await aiParseCalendarEvent(scheduleItemDescription(item), aiOpts);
+      await createGoogleCalendarEvent(eventBody);
+    }
+    if (scheduleItems.length) setCalendarRefreshKey(k => k + 1);
+    if (taskItems.length) {
+      const activePris = pris.filter(p=>!p.deleted).sort((a,b)=>a.weight-b.weight);
+      const lowestPri = activePris[0]?.id || "eventually";
+      const validIds = new Set(activePris.map(p => p.id));
+      uT(ts => doOpt([
+        ...ts,
+        ...taskItems.map(item => ({
+          id: uid(),
+          text: item.text.trim(),
+          priority: validIds.has(item.priority) ? item.priority : lowestPri,
+          completed: false,
+          createdAt: Date.now()
+        }))
+      ]));
+    }
+    setZenDumpParsed([]); setShowZenReview(false);
+    if (scheduleItems.length && !taskItems.length) showToast(`Added ${scheduleItems.length} event${scheduleItems.length === 1 ? "" : "s"} to calendar`, 3000);
+    else if (scheduleItems.length) showToast(`Added ${taskItems.length} task${taskItems.length === 1 ? "" : "s"} and ${scheduleItems.length} event${scheduleItems.length === 1 ? "" : "s"}`, 3000);
   }
 
   // ─── Priority selector dismiss (B10, B11) ────────────────────────────────
@@ -2491,10 +2526,7 @@ function App({ user, onSignOut }) {
       {showZenReview && (
         <ZenDumpReview
           tasks={zenDumpParsed} pris={pris} T={T} parsing={zenDumpParsing}
-          onSubmit={(items) => {
-            items.forEach(item => uT(ts => [...ts, {id:uid(),text:item.text,priority:item.priority,completed:false,createdAt:Date.now()}]));
-            setZenDumpParsed([]); setShowZenReview(false);
-          }}
+          onSubmit={applyZenDumpItems}
           onDismiss={() => { setZenDumpParsed([]); setShowZenReview(false); }}
         />
       )}
@@ -2997,6 +3029,8 @@ function App({ user, onSignOut }) {
         <ConvCapture
           onClose={()=>{setShowConvCapture(false);setConvCallMode(false);}}
           onApply={addVT}
+          onCreateCalendarEvent={createGoogleCalendarEvent}
+          onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
           tasks={tasksRef.current}
           shailos={shailosRef.current}
           pris={pris}

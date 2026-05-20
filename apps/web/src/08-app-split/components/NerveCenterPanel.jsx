@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { runAIJob, gP, textOnColor } from '../../01-core.js';
+import { aiParseCalendarEvent, gP, textOnColor } from '../../01-core.js';
 import { cleanTheme, cleanToolbarButton, gvIconButton, gvTextButton, NC_FONT_STACK, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { NerveCenterPhoneSurface } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
@@ -174,9 +174,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     setAddEventLoading(true); setAddEventError(null);
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const job = await runAIJob("schedule.parse_event.v1", { today, description: addEventText }, aiOpts || {}, { genConfig: { maxOutputTokens: 700 } });
-      const eventBody = job?.output;
-      if (!eventBody) throw new Error("Could not parse event - try rephrasing.");
+      const eventBody = await aiParseCalendarEvent(addEventText, aiOpts || {}, { today });
       if (onCreateCalendarEvent) {
         await onCreateCalendarEvent(eventBody);
       } else {

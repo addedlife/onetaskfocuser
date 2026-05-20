@@ -1,14 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { aiParseConversation, fmtMs, uid } from '../../01-core.js';
+import { aiParseCalendarEvent, aiParseConversation, fmtMs, uid } from '../../01-core.js';
 import { deletePendingRecording, savePendingRecording, transcribePendingRecording, updatePendingRecordingError } from '../../09-transcription-pen.js';
 import { NC_FONT_STACK } from '../ui-tokens.jsx';
 
-function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMode=false }) {
+function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalendar, tasks, shailos, pris, aiOpts, T, callMode=false }) {
   // callMode starts in 'ready' phase (waiting for user to share screen)
   const [phase, setPhase] = useState(callMode ? 'ready' : 'recording');
   const [liveText, setLiveText] = useState('');
   const [items, setItems] = useState([]);
   const [err, setErr] = useState('');
+  const [applying, setApplying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const phaseRef = useRef(callMode ? 'ready' : 'recording');
   const streamRef = useRef(null);
@@ -170,15 +171,36 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
   function updatePriority(id, priority) { setItems(prev => prev.map(it => it.id === id ? {...it, priority} : it)); }
   function updateCategory(id, cat) { setItems(prev => prev.map(it => it.id === id ? {...it, cat} : it)); }
 
-  function applyApproved() {
-    items.filter(it => it.approved).forEach(it => {
-      if (it.cat === 'tasks')         onApply(it.text, it.priority || 'eventually');
-      else if (it.cat === 'shailos') onApply(it.text || it.synopsis || it.content || 'Shaila', 'shaila');
-      else if (it.cat === 'scheduleItems') onApply(it.when ? `${it.text} (${it.when})` : it.text, 'today');
-      else if (it.cat === 'reminders') onApply(it.text, 'eventually');
-      // completions + gotBacks are info-only for now
-    });
-    onClose();
+  function scheduleDescription(it) {
+    return it.when ? `${it.text} (${it.when})` : it.text;
+  }
+
+  async function applyApproved() {
+    if (applying) return;
+    const approved = items.filter(it => it.approved);
+    let shouldClose = false;
+    setApplying(true); setErr('');
+    try {
+      const scheduleItems = approved.filter(it => it.cat === 'scheduleItems');
+      if (scheduleItems.length && !onCreateCalendarEvent) throw new Error('Reconnect Google to add calendar events.');
+      for (const it of scheduleItems) {
+        const eventBody = await aiParseCalendarEvent(scheduleDescription(it), aiOpts);
+        await onCreateCalendarEvent(eventBody);
+      }
+      if (scheduleItems.length) onRefreshCalendar?.();
+      approved.forEach(it => {
+        if (it.cat === 'tasks')         onApply(it.text, it.priority || 'eventually');
+        else if (it.cat === 'shailos') onApply(it.text || it.synopsis || it.content || 'Shaila', 'shaila');
+        else if (it.cat === 'reminders') onApply(it.text, 'eventually');
+        // completions + gotBacks are info-only for now
+      });
+      shouldClose = true;
+    } catch (e) {
+      setErr(e.message || 'Could not add calendar event.');
+    } finally {
+      setApplying(false);
+      if (shouldClose) onClose();
+    }
   }
 
   const approvedCount = items.filter(it => it.approved).length;
@@ -350,9 +372,9 @@ function ConvCapture({ onClose, onApply, tasks, shailos, pris, aiOpts, T, callMo
 
         {/* Footer */}
         <div style={{ padding: '14px 24px 18px', borderTop: `1px solid ${T.brd}`, display: 'flex', gap: 10, flexShrink: 0 }}>
-          <button onClick={applyApproved} disabled={approvedCount === 0}
-            style={{ flex: 1, background: approvedCount > 0 ? '#5B7BE8' : T.brdS, color: approvedCount > 0 ? '#fff' : T.tFaint, border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 500, cursor: approvedCount > 0 ? 'pointer' : 'default', fontFamily: NC_FONT_STACK, transition: 'background 0.15s' }}>
-            Add {approvedCount > 0 ? approvedCount : 0} item{approvedCount !== 1 ? 's' : ''}
+          <button onClick={applyApproved} disabled={approvedCount === 0 || applying}
+            style={{ flex: 1, background: approvedCount > 0 && !applying ? '#5B7BE8' : T.brdS, color: approvedCount > 0 && !applying ? '#fff' : T.tFaint, border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 500, cursor: approvedCount > 0 && !applying ? 'pointer' : 'default', fontFamily: NC_FONT_STACK, transition: 'background 0.15s' }}>
+            {applying ? 'Adding...' : `Add ${approvedCount > 0 ? approvedCount : 0} item${approvedCount !== 1 ? 's' : ''}`}
           </button>
           <button onClick={onClose}
             style={{ padding: '12px 18px', background: 'none', border: `1px solid ${T.brd}`, borderRadius: 10, fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>

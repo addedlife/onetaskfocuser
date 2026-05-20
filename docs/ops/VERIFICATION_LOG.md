@@ -638,6 +638,17 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` in `apps/web` passed and generated `assets/index-sWvIgPze.js`; existing bundle-size warning remains.
 - Pushed commit `b6b8ea2` to `origin/main`; Netlify Git-triggered production served `assets/index-sWvIgPze.js` on poll attempt 3, and the deployed asset returned HTTP 200.
 
+## 2026-05-20 Calendar Routing From Brain Dump And Record Anything
+
+- Researched calendar event handling before editing: Google Calendar expects IANA time-zone identifiers or explicit RFC3339 offsets for timed events; RFC 5545 treats no-zone local date-times as floating times.
+- Changed the shared AI job registry so Brain Dump parsing can return separate `scheduleItems` while keeping ordinary actions in `tasks`.
+- Added a shared calendar-event parser/defaulting helper that applies `America/New_York` to timed events when the user does not specify another zone.
+- Changed NerveCenter Add Event, Brain Dump Review, and Record Anything/Call Capture so parsed schedule items create Calendar events through the existing Google Calendar path instead of being filed as `today` tasks.
+- Targeted helper smoke confirmed a no-zone timed event gets `start.timeZone` / `end.timeZone` of `America/New_York`, while an explicit `-07:00` offset is preserved.
+- `git diff --check -- apps/web/backend/functions/_ai-core.cjs apps/web/src/01-core.js apps/web/src/08-app-split/App.jsx apps/web/src/08-app-split/components/ConvCapture.jsx apps/web/src/08-app-split/components/NerveCenterPanel.jsx apps/web/src/04-components.jsx` passed; line-ending normalization warnings only.
+- `npm run build` passed in `apps/web` and generated `assets/index-DqbwuWbq.js`; existing large-bundle warning remains.
+- Local Vite dev server returned HTTP 200 at `http://127.0.0.1:4305/?suite=nervecenter`; in-app Browser verification hit the existing Node ESM helper boot issue, and fresh-profile headless Edge reached the known `Loading...` shell.
+
 ## 2026-05-20 Auth Session Persistence And Google Prompt Throttle
 
 - Researched Firebase Auth web persistence and Google Identity Services auth models: durable app sessions should use explicit local persistence with a remember-device choice, while durable Gmail/Calendar access should use server auth-code refresh-token storage.

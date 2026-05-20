@@ -1654,19 +1654,70 @@ async function aiParseConversation(transcript, currentTasks, currentShailos, aiO
   return job.output;
 }
 
+const DEFAULT_CALENDAR_TIME_ZONE = "America/New_York";
+
+function dateTimeHasExplicitZone(value) {
+  return /(?:z|[+-]\d{2}:?\d{2})$/i.test(String(value || "").trim());
+}
+
+function withCalendarEventDefaults(eventBody, defaultTimeZone = DEFAULT_CALENDAR_TIME_ZONE) {
+  const event = eventBody && typeof eventBody === "object" ? { ...eventBody } : {};
+  delete event.defaultTimeZone;
+  delete event.timeZone;
+  const applyZone = part => {
+    if (!part || typeof part !== "object") return part;
+    const next = { ...part };
+    if (next.dateTime && !next.timeZone && !dateTimeHasExplicitZone(next.dateTime)) {
+      next.timeZone = defaultTimeZone;
+    }
+    return next;
+  };
+  return {
+    ...event,
+    start: applyZone(event.start),
+    end: applyZone(event.end),
+    reminders: event.reminders || { useDefault: false, overrides: [] },
+  };
+}
+
+async function aiParseCalendarEvent(description, aiOpts, options = {}) {
+  const defaultTimeZone = options.defaultTimeZone || DEFAULT_CALENDAR_TIME_ZONE;
+  const today = options.today || new Date().toISOString().slice(0, 10);
+  const job = await runAIJob(
+    "schedule.parse_event.v1",
+    { today, description, defaultTimeZone },
+    aiOpts || {},
+    { genConfig: { maxOutputTokens: 700 } }
+  );
+  if (!job?.output) throw new Error("Could not parse event - try rephrasing.");
+  return withCalendarEventDefaults(job.output, defaultTimeZone);
+}
+
 async function aiParseBrainDump(text, pris, aiOpts) {
   const activePris = pris.filter(p => !p.deleted).sort((a,b) => b.weight-a.weight);
   const priOptions = activePris.map(p => `"${p.id}" = ${p.label}`).join(", ");
   const lowestPri = activePris[activePris.length-1]?.id || "eventually";
   const validIds = new Set(activePris.map(p => p.id));
   const job = await runAIJob("task.parse_brain_dump.v1", { text, priorityOptions: priOptions, lowestPriority: lowestPri }, aiOpts);
-  const items = Array.isArray(job?.output) ? job.output : [];
-  if (!items.length) throw new Error("no tasks parsed");
-  return items.filter(i => i?.text?.trim()).map(i => ({
-    id: uid(),
-    text: i.text.trim(),
-    priority: validIds.has(i.priority) ? i.priority : lowestPri
-  }));
+  const output = job?.output;
+  const taskItems = Array.isArray(output) ? output : (Array.isArray(output?.tasks) ? output.tasks : []);
+  const scheduleItems = Array.isArray(output?.scheduleItems) ? output.scheduleItems : [];
+  const items = [
+    ...taskItems.filter(i => i?.text?.trim()).map(i => ({
+      cat: "tasks",
+      id: uid(),
+      text: i.text.trim(),
+      priority: validIds.has(i.priority) ? i.priority : lowestPri
+    })),
+    ...scheduleItems.filter(i => i?.text?.trim()).map(i => ({
+      cat: "scheduleItems",
+      id: uid(),
+      text: i.text.trim(),
+      when: i.when ? String(i.when).trim() : null
+    })),
+  ];
+  if (!items.length) throw new Error("nothing parsed");
+  return items;
 }
 
 
@@ -1675,4 +1726,4 @@ async function aiSummarizeAnswer(answerText, aiOpts) {
   return job?.text?.trim().replace(/^["'`]+|["'`]+$/g, "") || "";
 }
 
-export { firebaseConfig, db, Store, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, PALETTE, PROMPTS, TIPS, YC, cleanYT, uid, canonicalUid, gG, gP, pBg, _lum, textOnColor, ensureSchemeContrast, _priTextMap, priText, textOnPastel, dayKey, tipOfDay, fmtMs, getMrsWPriority, getTaskAgeHours, isTaskAged, callAI, runAIJob, callGemini, callGeminiAudio, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, suggestFirstStep, aiParseShailos, aiGenSchemes, aiDetectShailaAnswers, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer };
+export { firebaseConfig, db, Store, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, PALETTE, PROMPTS, TIPS, YC, cleanYT, uid, canonicalUid, gG, gP, pBg, _lum, textOnColor, ensureSchemeContrast, _priTextMap, priText, textOnPastel, dayKey, tipOfDay, fmtMs, getMrsWPriority, getTaskAgeHours, isTaskAged, callAI, runAIJob, callGemini, callGeminiAudio, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, suggestFirstStep, aiParseShailos, aiGenSchemes, aiDetectShailaAnswers, aiParseBrainDump, aiParseCalendarEvent, withCalendarEventDefaults, DEFAULT_CALENDAR_TIME_ZONE, aiParseConversation, aiSummarizeAnswer };
