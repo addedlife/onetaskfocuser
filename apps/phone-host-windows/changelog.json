@@ -1,5 +1,17 @@
 [
     {
+        "timestamp":  "2026-05-20 19:08:31",
+        "version":  "b268",
+        "notes":  "Cloud relay: texts and call control now work from any browser anywhere in the world.",
+        "devNotes":  "Adds RelayService which pushes phone state (status, messages, calls, contacts) to a Netlify Blobs cloud relay every 5 seconds and polls for commands every 2 seconds. DeskPhone auto-generates a relay key on first run; the webapp surfaces it with a copy button in the cloud panel. The webapp tries localhost first with a 2.5-second timeout then falls back to the relay automatically — the cloud button turns green when the relay is active. Adds GET /relay-status to the local API. Binds the local HTTP server to 0.0.0.0 (was loopback-only) and serves the built webapp static files from the output web/ folder so LAN devices can also navigate directly to http://[PC-IP]:8765. This is a remote-access release for the WebPhone bridge; it does not change Bluetooth transport, MAP send semantics, PBAP import, HFP call control, contact matching, or launcher identity."
+    },
+    {
+        "timestamp":  "2026-05-20 00:00:00",
+        "version":  "b266",
+        "notes":  "Cloud relay: texts and call control now work from any browser anywhere in the world.",
+        "devNotes":  "Adds RelayService which pushes phone state (status, messages, calls, contacts) to a Netlify Blobs cloud relay every 5 seconds and polls for commands every 2 seconds. DeskPhone auto-generates a relay key on first run; the webapp surfaces it with a copy button in the cloud panel. The webapp tries localhost first with a 2.5-second timeout then falls back to the relay automatically — the cloud button turns green when the relay is active. Adds GET /relay-status to the local API. Binds the local HTTP server to 0.0.0.0 (was loopback-only) and serves the built webapp static files from the output web/ folder so LAN devices can also navigate directly to http://[PC-IP]:8765. This is a remote-access release for the WebPhone bridge; it does not change Bluetooth transport, MAP send semantics, PBAP import, HFP call control, contact matching, or launcher identity."
+    },
+    {
         "timestamp":  "2026-05-19 01:14:32",
         "version":  "b265",
         "notes":  "DeskPhone Web status now detects dropped message sync and queues an automatic reconnect.",
