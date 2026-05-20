@@ -325,7 +325,7 @@ function shouldHideTaskSuggestion(item, learning) {
 }
 
 function looksLikePreferenceUpdate(text) {
-  return /\b(remember|profile|preference|don't remind|do not remind|dont remind|stop reminding|never remind|i don't really do|i do not really do|not useful|no more of those)\b/i.test(String(text || ""));
+  return /\b(remember|profile|preference|don't remind|do not remind|dont remind|stop reminding|never remind|i don't really do|i do not really do|not useful|no more of those|focus on|prioritize|stop showing|stop suggesting|ignore this|always start|never start|i already handled|i took care|already done|skip this type|i prefer|going forward|you should know|my style|train you)\b/i.test(String(text || ""));
 }
 
 function looksLikeChiefRejection(text) {
@@ -426,64 +426,92 @@ function buildChiefFallbackBrief(context = {}, suppressed = []) {
   const email = (context.emails || []).find(e => notSuppressed(e.subject || e.summary));
   const phone = context.phone || {};
   const phoneNeeds = (phone.unreadTexts || 0) + (phone.missedCalls || 0) + (phone.voicemailCount || 0);
+  const nowCount = (context.tasks || []).filter(t => /now/i.test(t.priority)).length;
+
+  // Build per-area signals (factual status lines)
+  const signals = [];
+  if (currentEvent) signals.push({ area: "Calendar", note: `In progress: ${currentEvent.summary}` });
+  else if (specialEvent) signals.push({ area: "Calendar", note: `Up next: ${specialEvent.summary}${specialEvent.label ? ` — ${specialEvent.label}` : ""}` });
+  if (phoneNeeds > 0) {
+    const phoneParts = [
+      phone.missedCalls > 0 ? `${phone.missedCalls} missed call${phone.missedCalls > 1 ? "s" : ""}` : "",
+      phone.unreadTexts > 0 ? `${phone.unreadTexts} unread text${phone.unreadTexts > 1 ? "s" : ""}` : "",
+      phone.voicemailCount > 0 ? `${phone.voicemailCount} voicemail${phone.voicemailCount > 1 ? "s" : ""}` : "",
+    ].filter(Boolean);
+    signals.push({ area: "Phone", note: phoneParts.join(", ") });
+  }
+  if ((context.shailos || []).length > 0) signals.push({ area: "Shailos", note: `${context.shailos.length} open — ${shaila?.text || context.shailos[0]?.text || "pending"}` });
+  if (email) signals.push({ area: "Mail", note: `${email.from ? `From ${email.from}: ` : ""}${email.summary || email.subject}` });
+  if ((context.tasks || []).length > 0) signals.push({ area: "Tasks", note: `${nowCount > 0 ? `${nowCount} Now` : `${context.tasks.length} total`}${nowTask ? ` — top: ${nowTask.text}` : ""}` });
+
+  // Build natural language brief covering all sources
+  const briefParts = [];
+  if (currentEvent) briefParts.push(`You are currently in ${currentEvent.summary}.`);
+  if (specialEvent && !currentEvent) briefParts.push(`${specialEvent.summary} is the next calendar commitment.`);
+  if (phoneNeeds > 0) {
+    const phoneParts = [
+      phone.missedCalls > 0 ? `${phone.missedCalls} missed call${phone.missedCalls > 1 ? "s" : ""}` : "",
+      phone.unreadTexts > 0 ? `${phone.unreadTexts} unread text${phone.unreadTexts > 1 ? "s" : ""}` : "",
+      phone.voicemailCount > 0 ? `${phone.voicemailCount} voicemail${phone.voicemailCount > 1 ? "s" : ""}` : "",
+    ].filter(Boolean);
+    briefParts.push(`Phone has ${phoneParts.join(", ")} waiting.`);
+  }
+  if ((context.shailos || []).length > 0) briefParts.push(`${context.shailos.length} open shaila${context.shailos.length > 1 ? "s" : ""} in the queue.`);
+  if (email) briefParts.push(`${email.from ? `${email.from} sent` : "Mail has"} a message worth reviewing.`);
+  if (nowCount > 0) briefParts.push(`Task queue has ${nowCount} Now item${nowCount > 1 ? "s" : ""}.`);
+  const brief = briefParts.length > 0 ? briefParts.join(" ") : "No urgent signals visible in the current snapshot.";
 
   if (currentEvent) {
     return {
+      brief, signals,
       summary: `Right now is blocked by ${currentEvent.summary}.`,
       nextAction: nowTask ? `Keep ${nowTask.text} queued for the next open slot.` : "Protect the current calendar block and avoid adding a new commitment.",
       why: currentEvent.label || "Calendar is the active constraint.",
-      focusArea: "calendar",
-      urgency: "now",
-      sources: ["Calendar", "Tasks"],
+      focusArea: "calendar", urgency: "now", sources: ["Calendar", "Tasks"],
     };
   }
   if (specialEvent) {
     return {
+      brief, signals,
       summary: `${specialEvent.summary} is the next non-routine calendar item on the board.`,
       nextAction: `Prep for ${specialEvent.summary} before clearing routine work.`,
       why: specialEvent.label || "Special calendar item is the clearest upcoming constraint.",
-      focusArea: "calendar",
-      urgency: "today",
-      sources: ["Calendar"],
+      focusArea: "calendar", urgency: "today", sources: ["Calendar"],
     };
   }
   if (phoneNeeds > 0) {
     return {
+      brief, signals,
       summary: `Phone activity needs review: ${phoneNeeds} recent call/text/voicemail signal${phoneNeeds === 1 ? "" : "s"}.`,
       nextAction: "Open the Phone pane and clear the newest missed or unread item.",
       why: "Recent communications can hide time-sensitive follow-up.",
-      focusArea: "phone",
-      urgency: "today",
-      sources: ["Phone"],
+      focusArea: "phone", urgency: "today", sources: ["Phone"],
     };
   }
   if (shaila) {
     return {
+      brief, signals,
       summary: `Your Shailos lane has ${context.shailos.length} open item${context.shailos.length === 1 ? "" : "s"}.`,
       nextAction: `Move the next shaila forward: ${shaila.text}.`,
       why: shaila.status || "Open shaila work is still pending.",
-      focusArea: "shailos",
-      urgency: "today",
-      sources: ["Shailos"],
+      focusArea: "shailos", urgency: "today", sources: ["Shailos"],
     };
   }
   if (email) {
     return {
+      brief, signals,
       summary: `Mail has a live item from ${email.from || "your inbox"}.`,
       nextAction: `Review "${email.summary || email.subject}" and decide whether it needs a reply.`,
       why: "Inbox scan found the clearest current communication.",
-      focusArea: "mail",
-      urgency: "watch",
-      sources: ["Mail"],
+      focusArea: "mail", urgency: "watch", sources: ["Mail"],
     };
   }
   return {
-    summary: nowTask ? `The cleanest next move is already in the task queue.` : "No urgent signal is visible in the current dashboard snapshot.",
+    brief, signals,
+    summary: nowTask ? "The cleanest next move is already in the task queue." : "No urgent signal is visible in the current dashboard snapshot.",
     nextAction: nowTask ? nowTask.text : "Add or choose one concrete next task.",
     why: nowTask ? `Priority: ${nowTask.priority || "active"}.` : "The dashboard has no current calendar, mail, phone, or shaila pressure.",
-    focusArea: "tasks",
-    urgency: nowTask ? "today" : "watch",
-    sources: ["Tasks"],
+    focusArea: "tasks", urgency: nowTask ? "today" : "watch", sources: ["Tasks"],
   };
 }
 
@@ -1461,6 +1489,31 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 style={gvIconButton({ width: 38, height: 38, color: C.muted, background: C.bg }, C)}>{suiteIcon("close", 17)}</button>
             </div>
           </header>
+
+          {activeChiefBrief._isPlaceholder ? (
+            <section style={{ ...pagePanel, padding: pagePad, display: "flex", alignItems: "center", gap: 12, minHeight: 56 }}>
+              {chiefLoading && <div style={{ width: 13, height: 13, borderRadius: "50%", border: `2px solid ${C.faint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite", flexShrink: 0 }} />}
+              <span style={{ color: C.muted, fontSize: isStacked ? 14 : 15, lineHeight: 1.5, fontFamily: NC_FONT_STACK }}>{activeChiefBrief.summary}</span>
+            </section>
+          ) : (activeChiefBrief.brief || activeChiefBrief.signals?.length > 0) ? (
+            <section style={{ ...pagePanel, padding: pagePad }}>
+              {activeChiefBrief.brief && (
+                <div style={{ fontSize: isStacked ? 14 : 15, lineHeight: 1.65, color: C.text, fontFamily: NC_FONT_STACK, marginBottom: activeChiefBrief.signals?.length > 0 ? 14 : 0 }}>
+                  {activeChiefBrief.brief}
+                </div>
+              )}
+              {activeChiefBrief.signals?.length > 0 && (
+                <div style={{ display: "grid", gap: 7, borderTop: activeChiefBrief.brief ? `1px solid ${C.divider}` : "none", paddingTop: activeChiefBrief.brief ? 12 : 0 }}>
+                  {activeChiefBrief.signals.map((sig, i) => (
+                    <div key={i} style={{ display: "grid", gridTemplateColumns: "80px minmax(0,1fr)", gap: 10, fontSize: NC_TYPE.control, fontFamily: NC_FONT_STACK, lineHeight: 1.45 }}>
+                      <span style={{ color: C.faint, fontWeight: 700, fontSize: NC_TYPE.small, textTransform: "uppercase", letterSpacing: "0.04em", paddingTop: 2 }}>{sig.area}</span>
+                      <span style={{ color: C.muted }}>{sig.note}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
 
           <section style={{ display: "grid", gridTemplateColumns: isStacked ? "repeat(2,minmax(0,1fr))" : "repeat(5,minmax(0,1fr))", gap: 8 }}>
             {snapshotTiles.map(([label, value, icon, color]) => (

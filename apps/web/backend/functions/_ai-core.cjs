@@ -556,12 +556,17 @@ function normalizeChiefContext(input = {}) {
 function normalizeChiefBrief(value) {
   const o = ensureObject(value);
   return {
-    summary: cleanString(o.summary, 520),
+    brief: cleanString(o.brief || o.summary, 1400),
+    summary: cleanString(o.summary || o.brief, 520),
     nextAction: cleanString(o.nextAction, 280),
     why: cleanString(o.why, 360),
     focusArea: cleanString(o.focusArea || "operations", 80),
     urgency: ["now", "today", "soon", "watch"].includes(o.urgency) ? o.urgency : "today",
     sources: normalizeStringArray(o.sources || [], 6, 80),
+    signals: ensureArray(o.signals || [], "signals").slice(0, 6).map(s => ({
+      area: cleanString(s?.area, 60),
+      note: cleanString(s?.note, 200),
+    })).filter(s => s.area && s.note),
   };
 }
 
@@ -876,23 +881,27 @@ const AI_JOB_REGISTRY = {
     task: "dashboard-chief-of-staff",
     output: "json",
     shape: "object",
-    genConfig: { temperature: 0.1, maxOutputTokens: 900 },
-    schema: '{"summary":"1-2 sentence status brief","nextAction":"single concrete next move","why":"short reason","focusArea":"calendar|tasks|shailos|mail|phone|operations","urgency":"now|today|soon|watch","sources":["Calendar","Tasks"]}',
+    genConfig: { temperature: 0.1, maxOutputTokens: 1200 },
+    schema: '{"brief":"3-5 sentence natural language synthesis of everything on the plate","summary":"1-2 sentence headline of the top priority","nextAction":"single concrete next move","why":"clear reason why this is the top priority right now","focusArea":"calendar|tasks|shailos|mail|phone|operations","urgency":"now|today|soon|watch","sources":["Calendar","Tasks"],"signals":[{"area":"Calendar","note":"one-line factual status for this area"}]}',
     buildPrompt(input = {}) {
       const context = normalizeChiefContext(input.context || input);
       return compactLines([
         YESHIVISH_SYSTEM,
-        "You are the user's Chief of Staff inside an operational dashboard.",
-        "Scan Calendar, Gmail, tasks, shailos, calls, and texts against the current time.",
-        "Prioritize active or imminent events, unusual or special calendar items, urgent communications, unanswered shailos, actionable missed calls/texts, and the top actionable task.",
-        "Treat a missed call as return-call work only when phone.missedCalls is positive or the call row has needsReturnCall true; stale missed calls already answered by a later call or outgoing text are context only.",
-        "Routine calendar items are context only unless they are happening now or blocking the next move.",
-        "Use the profile notes as durable preferences. If a profile note says the user does not want a reminder class, avoid making it the next action unless the current item is clearly urgent.",
+        "You are the user's Chief of Staff. Your job is full situational awareness across every source — not just the next calendar item.",
+        "Scan ALL sources equally: Calendar, Gmail, Tasks, Shailos, phone calls, and texts.",
+        "Do NOT default to the next calendar item just because it exists. Weigh every source: What is most time-sensitive? What is blocking progress? What has been waiting longest? What will the user regret not handling?",
+        "Missed calls, unread texts, unanswered shailos, and emails with clear asks are as valid as calendar events. Weight them by real urgency, not source type.",
+        "Routine calendar items (regular davening, standard learning sessions, recurring meetings) are background context only — not the next action unless happening right now or actively blocking work.",
+        "Treat a missed call as actionable only when phone.missedCalls is positive or a call row has needsReturnCall true.",
+        "Write 'brief': 3–5 sentences of natural language synthesizing the full picture. Cover what is on the plate, what is active or imminent, and what stands out across all areas. This is the user's situational awareness paragraph — write it as a knowledgeable aide briefing an executive.",
+        "Write 'summary': 1–2 sentence headline of the single top-priority item.",
+        "Pick 'nextAction': the single most important concrete move across all sources. Write 'why' with clear reasoning — explain why this beats the alternatives.",
+        "Write 'signals': one short factual entry per area that has active data (Calendar, Mail, Tasks, Shailos, Phone). Each is a status line — what is there, not advice.",
+        "Use profile notes as durable preferences. If a note says avoid a reminder class, skip it unless clearly urgent.",
         "Do not invent facts, do not claim actions were taken, and do not give halachic rulings. If data is thin, say what is visible.",
         `Current snapshot:\n${jsonBlock(context)}`,
-        context.sessionSuppressed?.length ? `Already dismissed this session — skip these and recommend something different:\n${jsonBlock(context.sessionSuppressed)}` : "",
+        context.sessionSuppressed?.length ? `Already dismissed this session — skip these and find something different:\n${jsonBlock(context.sessionSuppressed)}` : "",
         context.learning?.recentlyRejected?.length ? `Recently rejected across sessions — avoid unless clearly urgent:\n${jsonBlock(context.learning.recentlyRejected.map(r => r.textKey))}` : "",
-        "Return a calm executive brief: summary is one or two short sentences, nextAction is one specific next move.",
         responseJsonInstruction("object", this.schema),
       ]);
     },
@@ -942,15 +951,17 @@ const AI_JOB_REGISTRY = {
       const context = normalizeChiefContext(input.context || {});
       return compactLines([
         YESHIVISH_SYSTEM,
-        "You are the user's Chief of Staff inside an operational dashboard.",
-        "Answer the follow-up using only the provided dashboard snapshot and prior brief. Be concise, practical, and source-grounded.",
-        "If the user asks for a decision, recommend the next concrete move and the reason. Do not claim to send, schedule, call, or mark anything done.",
-        "If profile notes apply, use them as preference guidance.",
+        "You are the user's Chief of Staff — advisor, scanner, and learner.",
+        "If the user is correcting you, instructing you, or expressing a preference (e.g. 'I already handled that', 'focus on X not Y', 'stop suggesting Z', 'remember I prefer', 'going forward', 'you should know', 'train you'), acknowledge it warmly and confirm what you have noted. Say something like 'Got it — noted for future scans' or 'I will keep that in mind going forward.' Be specific about what preference you recorded.",
+        "If the user asks a question or wants a different recommendation, answer concisely from the dashboard data. Be practical and direct.",
+        "If the user asks what else is on the plate, summarize the other areas from the snapshot — do not repeat the dismissed item.",
+        "Do not claim to send, schedule, call, or mark anything done in the real world — you can only advise and note preferences.",
+        "If profile notes apply, honor them.",
         `Current snapshot:\n${jsonBlock(context)}`,
         input.brief ? `Current brief:\n${jsonBlock(input.brief)}` : "",
         input.history ? `Recent dialogue:\n${truncateText(input.history, 3000)}` : "",
-        `User question:\n${cleanString(input.question, 1600)}`,
-        "Answer in 2-6 sentences.",
+        `User: ${cleanString(input.question, 1600)}`,
+        "Answer in 2-6 sentences. If the user is training you, be specific about what preference you noted.",
       ]);
     },
     normalizeText(text) {
