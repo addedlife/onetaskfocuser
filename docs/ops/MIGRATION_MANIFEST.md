@@ -58,3 +58,8 @@ The first copy pass missed `apps/web/backend/functions` because the old wildcard
 ## Efficiency Correction Logged 2026-05-10
 
 The copied phone host initially returned about 18.9 MB from `/messages` because it embedded MMS image data for thousands of messages. Pro 4 now defaults to a 1,200-message window and omits attachment data unless `includeAttachmentData=1` is requested. This keeps the normal browser refresh light while preserving an explicit diagnostic/full-media path.
+
+
+## Google Workspace Auth Migration Logged 2026-05-20
+
+Durable Calendar/Gmail access is now designed to use `apps/web/backend/functions/google-workspace.js` with Google authorization-code flow and server-side refresh-token storage in `serverOnlyGoogleWorkspaceTokens`. The browser token model remains as fallback until Netlify has `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and Firebase service-account env vars available.

@@ -589,3 +589,20 @@ Current source-grade file count after cleanup: 162 files.
 - `git diff --check -- apps/web/src/01-core.js apps/web/src/07-settings.jsx apps/web/src/08-app-split/App.jsx apps/web/src/08-app.jsx` passed; line-ending normalization warnings only.
 - Local Vite dev server returned HTTP 200 at `http://127.0.0.1:4318/?suite=nervecenter`.
 - In-app Browser verification was attempted, but the local Node helper failed on the existing `require is not defined in ES module scope` boot issue; headless Edge/CDP verified Settings > Account rendered the new backup copy and `Choose backup folder...` control.
+
+
+## 2026-05-20 Google Workspace Persistence And Theme Contrast
+
+- Researched current Google Workspace auth practice before editing: durable Gmail/Calendar access should use authorization-code flow with server-side refresh-token storage; browser access tokens remain short-lived by design.
+- Researched WCAG contrast practice before editing: normal UI text should meet at least 4.5:1 contrast.
+- Added `apps/web/backend/functions/google-workspace.js` for Firebase-authenticated Google Workspace actions: status, code exchange, refresh-backed Calendar/Gmail summary fetches, full Gmail message fetch, Calendar event creation, and disconnect/revoke.
+- Added public app-config flags for `googleAuthMode` / `googleServerAuthAvailable`; local fake-env probe returned `{"googleClientId":"fake-client.apps.googleusercontent.com","googleAvailable":true,"googleAuthMode":"server","googleServerAuthAvailable":true}`.
+- Checked current Netlify env: `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are not present yet, so production will stay on browser-token fallback until those Google OAuth server credentials are added.
+- Updated the split web app to use the server Google auth path when available and keep the existing browser token path as fallback.
+- Corrected built-in color scheme tokens and added `ensureSchemeContrast` so built-in/generated/custom schemes are normalized before use.
+- Focused scheme audit across text, muted, faint, primary, tonal, success, danger, and warning tokens returned `contrast_failures=0`.
+- `node --check` passed for `apps/web/backend/functions/google-workspace.js` and `apps/web/backend/functions/_ai-core.cjs`.
+- `git diff --check -- apps/web/backend/functions/google-workspace.js apps/web/backend/functions/_ai-core.cjs apps/web/netlify.toml apps/web/src/08-app-split/App.jsx apps/web/src/08-app-split/components/NerveCenterPanel.jsx apps/web/src/01-core.js apps/web/src/07-settings.jsx` passed; line-ending normalization warnings only.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- Local Vite returned HTTP 200 at `http://127.0.0.1:4318/?suite=nervecenter`; headless Edge screenshot still reached the known unauthenticated/fresh-profile `Loading...` shell.
+- Pushed commit `9f4912a` to `origin/main`; Netlify Git-triggered production served `assets/index-C30KzPHN.js` on poll attempt 3, the asset returned HTTP 200, production `app-config` exposed `googleAuthMode:"token"` and `googleServerAuthAvailable:false`, and `google-workspace` returned HTTP 401 without an app sign-in token as expected.

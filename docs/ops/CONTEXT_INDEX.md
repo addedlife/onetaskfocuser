@@ -36,8 +36,8 @@ Goal: minimize cached and uncached tokens while preserving accuracy. Start from 
 ### Gmail / Calendar Refresh
 
 - Primary file: `apps/web/src/08-app-split/App.jsx`
-- Related file: `apps/web/src/08-app-split/components/NerveCenterPanel.jsx`
-- Search terms: `refreshGoogleData`, `visibilitychange`, `focus`, `onRefreshCalendar`, `onConnectGoogle`
+- Related files: `apps/web/src/08-app-split/components/NerveCenterPanel.jsx`, `apps/web/backend/functions/google-workspace.js`, `apps/web/backend/functions/_ai-core.cjs`
+- Search terms: `refreshGoogleData`, `visibilitychange`, `focus`, `onRefreshCalendar`, `onConnectGoogle`, `googleServerAuthAvailable`, `serverOnlyGoogleWorkspaceTokens`
 - Gate: `npm run build` in `apps/web`
 
 ### Shailos
