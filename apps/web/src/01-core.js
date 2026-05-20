@@ -972,14 +972,53 @@ const Store = {
   }
 };
 
+const BEFORE_SHAVUOS_PRIORITY_ID = "before_shavuos";
+const BEFORE_SHAVUOS_PRIORITY = {
+  id: BEFORE_SHAVUOS_PRIORITY_ID,
+  label: "Before Shavuos",
+  color: "#0B57D0",
+  weight: 6,
+  superPinned: true,
+};
+
+function ensureBeforeShavuosPriority(priorities = []) {
+  const list = Array.isArray(priorities) ? priorities.filter(Boolean) : [];
+  const activeOthers = list.filter(p => p.id !== BEFORE_SHAVUOS_PRIORITY_ID && !p.deleted);
+  const maxOtherWeight = Math.max(5, ...activeOthers.map(p => Number(p.weight) || 0));
+  const targetWeight = maxOtherWeight + 1;
+  const found = list.find(p => p.id === BEFORE_SHAVUOS_PRIORITY_ID);
+  const normalize = p => ({
+    ...BEFORE_SHAVUOS_PRIORITY,
+    ...p,
+    label: String(p?.label || BEFORE_SHAVUOS_PRIORITY.label).trim() || BEFORE_SHAVUOS_PRIORITY.label,
+    color: BEFORE_SHAVUOS_PRIORITY.color,
+    weight: Math.max(Number(p?.weight) || 0, targetWeight),
+    deleted: false,
+    superPinned: true,
+  });
+  if (found) return list.map(p => p.id === BEFORE_SHAVUOS_PRIORITY_ID ? normalize(p) : p);
+  return [normalize(BEFORE_SHAVUOS_PRIORITY), ...list];
+}
+
+function beforeShavuosFirst(tasks = []) {
+  const top = [];
+  const rest = [];
+  tasks.forEach(t => {
+    const bucket = !t?.completed && !t?.blocked && t.priority === BEFORE_SHAVUOS_PRIORITY_ID ? top : rest;
+    bucket.push(t);
+  });
+  return [...top, ...rest];
+}
+
 const DEF_PRI = [
+  BEFORE_SHAVUOS_PRIORITY,
   {id:"shaila", label:"Shaila", color:"#C8A84C", weight:5, isShaila:true},
   {id:"now",    label:"Now",    color:"#E09AB8", weight:3},
   {id:"today",  label:"Today",  color:"#E0B472", weight:2},
   {id:"eventually", label:"Eventually", color:"#7EB0DE", weight:1}
 ];
 
-const DEF_AGE_THRESHOLDS = {shaila: 24, now: 48, today: 120, eventually: 336};
+const DEF_AGE_THRESHOLDS = {before_shavuos: 24, shaila: 24, now: 48, today: 120, eventually: 336};
 
 const SCHEMES = {
   googleVoice:{name:"Google Voice",     bg:"#FFFFFF",bgW:"#F8F9FA",card:"#FFFFFF",text:"#202124",tSoft:"#5F6368",tFaint:"#5F6368",brd:"#DADCE0",brdS:"#E8EAED",grad:["#FFFFFF","#F8F9FA","#F1F3F4"],primary:"#00796B",onPrimary:"#FFFFFF",tonal:"#E0F2F1",onTonal:"#00695C",success:"#137333",danger:"#D93025",warning:"#8A5A00"},
@@ -1426,7 +1465,7 @@ function optTasks(tasks, pris) {
   const seen = new Set();
   const deduped = final.filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true; });
 
-  return [...deduped, ...blocked, ...comp];
+  return [...beforeShavuosFirst(deduped), ...blocked, ...comp];
 }
 
 async function aiOptTasks(tasks, pris, aiOpts) {
@@ -1473,7 +1512,7 @@ async function aiOptTasks(tasks, pris, aiOpts) {
     if (item._groupName) result.push(...(groupMap[item._groupName] || []));
     else result.push(item);
   });
-  return [...result, ...blocked, ...comp];
+  return [...beforeShavuosFirst(result), ...blocked, ...comp];
 }
 
 // Smart manual prioritization — returns {optimized, alreadyOptimal, insight, pinOverride}
@@ -1548,7 +1587,7 @@ async function aiOptTasksWithAnalysis(tasks, pris, aiOpts) {
   });
 
   // Normal result: pinned first, then AI-reordered unpinned, blocked always last
-  const optimized = [...pinnedActv, ...reorderedUnpinned, ...blocked, ...comp];
+  const optimized = [...beforeShavuosFirst([...pinnedActv, ...reorderedUnpinned]), ...blocked, ...comp];
 
   // ── Pin override ───────────────────────────────────────────────────────
   let pinOverride = null;
@@ -1564,7 +1603,7 @@ async function aiOptTasksWithAnalysis(tasks, pris, aiOpts) {
       pinOverride = {
         taskName: overrideItem._groupName || overrideItem.text,
         reason: uo.reason || "",
-        optimizedWithOverride: [...urgentExpanded, ...pinnedActv, ...remainingUnpinned, ...blocked, ...comp]
+        optimizedWithOverride: [...beforeShavuosFirst([...urgentExpanded, ...pinnedActv, ...remainingUnpinned]), ...blocked, ...comp]
       };
     }
   }
@@ -1726,4 +1765,4 @@ async function aiSummarizeAnswer(answerText, aiOpts) {
   return job?.text?.trim().replace(/^["'`]+|["'`]+$/g, "") || "";
 }
 
-export { firebaseConfig, db, Store, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, PALETTE, PROMPTS, TIPS, YC, cleanYT, uid, canonicalUid, gG, gP, pBg, _lum, textOnColor, ensureSchemeContrast, _priTextMap, priText, textOnPastel, dayKey, tipOfDay, fmtMs, getMrsWPriority, getTaskAgeHours, isTaskAged, callAI, runAIJob, callGemini, callGeminiAudio, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, suggestFirstStep, aiParseShailos, aiGenSchemes, aiDetectShailaAnswers, aiParseBrainDump, aiParseCalendarEvent, withCalendarEventDefaults, DEFAULT_CALENDAR_TIME_ZONE, aiParseConversation, aiSummarizeAnswer };
+export { firebaseConfig, db, Store, DEF_PRI, DEF_AGE_THRESHOLDS, BEFORE_SHAVUOS_PRIORITY_ID, BEFORE_SHAVUOS_PRIORITY, ensureBeforeShavuosPriority, SCHEMES, PALETTE, PROMPTS, TIPS, YC, cleanYT, uid, canonicalUid, gG, gP, pBg, _lum, textOnColor, ensureSchemeContrast, _priTextMap, priText, textOnPastel, dayKey, tipOfDay, fmtMs, getMrsWPriority, getTaskAgeHours, isTaskAged, callAI, runAIJob, callGemini, callGeminiAudio, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, suggestFirstStep, aiParseShailos, aiGenSchemes, aiDetectShailaAnswers, aiParseBrainDump, aiParseCalendarEvent, withCalendarEventDefaults, DEFAULT_CALENDAR_TIME_ZONE, aiParseConversation, aiSummarizeAnswer };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, runAIJob, suggestFirstStep, aiParseBrainDump, aiParseCalendarEvent, aiParseConversation, aiSummarizeAnswer, withCalendarEventDefaults, gG, fmtMs, db, _lum, priText, textOnPastel, ensureSchemeContrast } from '../01-core.js';
+import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, BEFORE_SHAVUOS_PRIORITY, BEFORE_SHAVUOS_PRIORITY_ID, ensureBeforeShavuosPriority, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, runAIJob, suggestFirstStep, aiParseBrainDump, aiParseCalendarEvent, aiParseConversation, aiSummarizeAnswer, withCalendarEventDefaults, gG, fmtMs, db, _lum, priText, textOnPastel, ensureSchemeContrast } from '../01-core.js';
 import { IC } from '../02-icons.jsx';
 import { VoiceInput } from '../03-voice.jsx';
 import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from '../04-components.jsx';
@@ -237,6 +237,7 @@ function App({ user, onSignOut }) {
     lists: [{id:"default", name:"My Tasks", tasks:[]}],
     activeListId: "default",
     priorities: [
+      {...BEFORE_SHAVUOS_PRIORITY},
       {id:"now",        label:"Now",        color:"#E09AB8", weight:3},
       {id:"today",      label:"Today",      color:"#E0B472", weight:2},
       {id:"eventually", label:"Eventually", color:"#7EB0DE", weight:1},
@@ -262,6 +263,7 @@ function App({ user, onSignOut }) {
     Store.load().then(s => {
       if (s && s.lists) {
         if (!s.priorities) s.priorities = defS.priorities.map(p=>({...p}));
+        s.priorities = ensureBeforeShavuosPriority(s.priorities);
         if (!s.colorScheme) s.colorScheme = "claude";
         if (s.zenEnabled === undefined) s.zenEnabled = false;
         if (s.aiModel === undefined) s.aiModel = s.aiTextModel || s.aiAudioModel || s.aiResearchModel || "";
@@ -344,7 +346,7 @@ function App({ user, onSignOut }) {
       }
 
       // New account (Firebase confirmed empty) or Firebase offline fallback
-      setAS(defS); setLoaded(true);
+      setAS({...defS, priorities: ensureBeforeShavuosPriority(defS.priorities)}); setLoaded(true);
     });
   }, []);
 
@@ -3148,7 +3150,7 @@ function App({ user, onSignOut }) {
         />
       )}
 
-      {!shellHidden && suiteView === "nervecenter" && (
+      {!shellHidden && (suiteView === "nervecenter" || suiteView === "chief") && (
         <NerveCenterPanel
           T={T}
           sections={switchboardSections}
@@ -3203,10 +3205,13 @@ function App({ user, onSignOut }) {
           onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
           paneWeights={AS.nerveCenterPaneWeights}
           onPaneWeightsChange={weights => setAS(p => ({...p, nerveCenterPaneWeights: weights}))}
+          onOpenChiefPage={()=>openCommandView("chief")}
           googlePaneHeight={AS.nerveCenterGooglePaneHeight}
           onGooglePaneHeightChange={height => setAS(p => ({...p, nerveCenterGooglePaneHeight: height}))}
           onPolishNerveItems={polishNerveItems}
           clockTime={clockTime}
+          chiefPage={suiteView === "chief"}
+          onCloseChiefPage={()=>openCommandView("nervecenter")}
         />
       )}
 
@@ -3347,7 +3352,7 @@ function App({ user, onSignOut }) {
 
                 {/* Main circle row — Shaila + built-in priorities */}
                 <div style={{display:"flex",justifyContent:"space-around",alignItems:"flex-end",width:"100%",paddingTop:4}}>
-                  {ap.filter(p=>p.isShaila||["now","today","eventually"].includes(p.id)).map(p=>{
+                  {ap.filter(p=>p.isShaila||[BEFORE_SHAVUOS_PRIORITY_ID,"now","today","eventually"].includes(p.id)).map(p=>{
                     const a = selPri===p.id;
                     const shailaGreen="#2ECC71";
                     const clr = p.isShaila ? shailaGreen : p.color;
@@ -3371,9 +3376,9 @@ function App({ user, onSignOut }) {
                 </div>
 
                 {/* Custom priorities row — sorted by weight desc, smaller circles, below builtins */}
-                {ap.filter(p=>!p.isShaila&&!["now","today","eventually"].includes(p.id)).length>0 && (
+                {ap.filter(p=>!p.isShaila&&![BEFORE_SHAVUOS_PRIORITY_ID,"now","today","eventually"].includes(p.id)).length>0 && (
                   <div style={{display:"flex",justifyContent:"center",gap:"clamp(16px,3vw,28px)",alignItems:"flex-end",width:"100%",paddingTop:2,opacity:.85}}>
-                    {[...ap.filter(p=>!p.isShaila&&!["now","today","eventually"].includes(p.id))].sort((a,b)=>b.weight-a.weight).map(p=>{
+                    {[...ap.filter(p=>!p.isShaila&&![BEFORE_SHAVUOS_PRIORITY_ID,"now","today","eventually"].includes(p.id))].sort((a,b)=>b.weight-a.weight).map(p=>{
                       const a = selPri===p.id;
                       return (
                         <div key={p.id} style={{display:"flex",flexDirection:"column",alignItems:"center"}}
@@ -4247,7 +4252,7 @@ function App({ user, onSignOut }) {
       </div>
 
       {/* ── Floating capture buttons — always visible except during Zen ── */}
-      {!zen && !["nervecenter","deskphone"].includes(suiteView) && (()=>{
+      {!zen && !["nervecenter","chief","deskphone"].includes(suiteView) && (()=>{
         const outC = T.isDark ? T.tFaint : T.tSoft;
         const icS = {width:19,height:19,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};
         const icSm = {width:14,height:14,stroke:outC,fill:"none",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round",pointerEvents:"none"};

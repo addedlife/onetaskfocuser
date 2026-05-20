@@ -1,7 +1,7 @@
 // === 07-settings.js ===
 
 import React, { useState, useEffect } from 'react';
-import { Store, aiGenSchemes, uid, DEF_AGE_THRESHOLDS, DEF_PRI, SCHEMES, ensureSchemeContrast } from './01-core.js';
+import { Store, aiGenSchemes, uid, DEF_AGE_THRESHOLDS, DEF_PRI, BEFORE_SHAVUOS_PRIORITY_ID, SCHEMES, ensureSchemeContrast } from './01-core.js';
 import { IC } from './02-icons.jsx';
 import { PriEditor } from './04-components.jsx';
 
@@ -103,9 +103,13 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
     setAS(p => ({...p, priorities: [...p.priorities, {id, label, color, weight: mw+1}]}));
   };
   const remPri = (id) => {
-    if (id === "shaila") return;
+    if (id === "shaila" || id === BEFORE_SHAVUOS_PRIORITY_ID) return;
     if (ap.length <= 1) return;
     setAS(p => ({...p, priorities: p.priorities.map(x => x.id===id ? {...x, deleted:true} : x)}));
+  };
+  const renamePri = (id, label) => {
+    const nextLabel = label.slice(0, 40);
+    setAS(p => ({...p, priorities: p.priorities.map(x => x.id===id ? {...x, label: nextLabel} : x)}));
   };
 
   const ageThresholds = AS.ageThresholds || DEF_AGE_THRESHOLDS;
@@ -279,8 +283,16 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               {ap.map(p => (
                 <div key={p.id} style={{display:"flex",alignItems:"center",gap:6,background:T.bgW,borderRadius:8,padding:"6px 10px"}}>
                   <div style={{width:14,height:14,borderRadius:"50%",background:p.color}}/>
-                  <span style={{fontSize:settingsType.body,fontFamily:"system-ui"}}>{p.label}{p.isShaila?" ⚡":""}</span>
-                  {p.id !== "shaila" && ap.length > 1 && <button onClick={()=>remPri(p.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:14,color:T.tFaint}}>✕</button>}
+                  {p.id === BEFORE_SHAVUOS_PRIORITY_ID ? (
+                    <input value={p.label || "Before Shavuos"} aria-label="Before Shavuos category title"
+                      onChange={e=>renamePri(p.id, e.target.value)}
+                      onBlur={e=>{ if (!e.target.value.trim()) renamePri(p.id, "Before Shavuos"); }}
+                      style={{width:150,minHeight:30,border:`1px solid ${p.color}66`,borderRadius:6,background:T.card,color:T.text,padding:"4px 7px",fontSize:settingsType.body,fontFamily:"system-ui",outline:"none"}}
+                    />
+                  ) : (
+                    <span style={{fontSize:settingsType.body,fontFamily:"system-ui"}}>{p.label}{p.isShaila?" ⚡":""}</span>
+                  )}
+                  {p.id !== "shaila" && p.id !== BEFORE_SHAVUOS_PRIORITY_ID && ap.length > 1 && <button onClick={()=>remPri(p.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:14,color:T.tFaint}}>✕</button>}
                 </div>
               ))}
             </div>

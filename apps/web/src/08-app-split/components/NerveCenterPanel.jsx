@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { aiParseCalendarEvent, gP, runAIJob, textOnColor } from '../../01-core.js';
+import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, textOnColor } from '../../01-core.js';
 import { cleanTheme, cleanToolbarButton, gvIconButton, gvTextButton, NC_FONT_STACK, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { NerveCenterPhoneSurface } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
@@ -183,6 +183,10 @@ function writeStorageNumber(key, value) {
   try { localStorage.setItem(key, String(value)); } catch {}
 }
 
+function removeStorageKey(key) {
+  try { localStorage.removeItem(key); } catch {}
+}
+
 function writeChiefLearning(next) {
   try {
     localStorage.setItem(CHIEF_LEARNING_KEY, JSON.stringify({ version: 1, events: (next?.events || []).slice(-200) }));
@@ -315,6 +319,10 @@ function shouldHideTaskSuggestion(item, learning) {
 
 function looksLikePreferenceUpdate(text) {
   return /\b(remember|profile|preference|don't remind|do not remind|dont remind|stop reminding|never remind|i don't really do|i do not really do|not useful|no more of those)\b/i.test(String(text || ""));
+}
+
+function looksLikeChiefRejection(text) {
+  return /\b(no|nope|not now|skip|next|bad advice|wrong|irrelevant|don't want that|do not want that|dont want that|stop that|not helpful|useless|sleep tasks?)\b/i.test(String(text || ""));
 }
 
 function looksLikeDeleteConfirmation(text) {
@@ -465,7 +473,7 @@ function buildChiefFallbackBrief(context = {}) {
   };
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage }) {
   const viewportW = useViewportWidth();
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
@@ -969,12 +977,24 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
         const answer = target?.summary
           ? `Updated your Chief profile: I will stop surfacing reminders for "${target.summary}" unless you ask. Should I delete it from Calendar too? Reply "delete it" if yes.`
           : "Updated your Chief profile with that preference.";
+        removeStorageKey(CHIEF_SCAN_CACHE_KEY);
+        removeStorageKey(CHIEF_SUGGESTIONS_CACHE_KEY);
+        setChiefRefreshNonce(n => n + 1);
         setChiefDialogue([...nextHistory, { role: "assistant", text: answer }].slice(-6));
       } catch {
         setChiefDialogue([...nextHistory, { role: "assistant", text: "I understood the preference, but could not save it to the cloud profile yet." }].slice(-6));
       } finally {
         setChiefDialogueLoading(false);
       }
+      return;
+    }
+    if (looksLikeChiefRejection(question)) {
+      const rejectedBrief = chiefBrief || chiefFallback;
+      recordChiefSmartLearning(/(?:next|skip)/i.test(question) ? "next" : "not_now", rejectedBrief);
+      setChiefBrief(chiefFallback);
+      setChiefError("Rescanning without that recommendation.");
+      setChiefDialogue([...nextHistory, { role: "assistant", text: `Got it. I am dropping "${cleanOneLine(rejectedBrief.nextAction, 140)}" and rescanning for a better next move.` }].slice(-6));
+      setChiefRefreshNonce(n => n + 1);
       return;
     }
     if (!aiOpts) {
@@ -1037,6 +1057,9 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       return next;
     });
     onRecordChiefLearning?.(eventRow);
+    removeStorageKey(CHIEF_SCAN_CACHE_KEY);
+    removeStorageKey(CHIEF_SUGGESTIONS_CACHE_KEY);
+    return eventRow;
   }
 
   async function handleChiefSmartResponse(choice) {
@@ -1061,12 +1084,20 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
         : "Logged. I will look for the next clean move.";
     try {
       recordChiefSmartLearning(choice, brief);
-      await onAppendChiefProfileNote?.(chiefSmartResponseNote(choice, label, brief));
-      if (choice === "next") {
-        await submitChiefPrompt("Next: give me the next best move after this.");
-      } else {
-        setChiefDialogue(rows => [...rows, { role: "user", text: label }, { role: "assistant", text: answer }].slice(-6));
+      setChiefBrief(chiefFallback);
+      setChiefError(choice === "done" ? "Closed that recommendation." : "Rescanning without that recommendation.");
+      let cloudSaved = true;
+      try {
+        await onAppendChiefProfileNote?.(chiefSmartResponseNote(choice, label, brief));
+      } catch {
+        cloudSaved = false;
       }
+      if (choice === "next") {
+        setChiefDialogue(rows => [...rows, { role: "user", text: label }, { role: "assistant", text: cloudSaved ? "Dropping that recommendation and rescanning for the next clean move." : "Dropping that recommendation locally and rescanning for the next clean move. Cloud profile sync can catch up after reconnect." }].slice(-6));
+      } else {
+        setChiefDialogue(rows => [...rows, { role: "user", text: label }, { role: "assistant", text: cloudSaved ? answer : `${answer} Saved locally; cloud profile sync can catch up after reconnect.` }].slice(-6));
+      }
+      setChiefRefreshNonce(n => n + 1);
     } catch {
       setChiefDialogue(rows => [...rows, { role: "assistant", text: "I took the signal locally, but could not save it to the cloud profile yet." }].slice(-6));
     } finally {
@@ -1229,7 +1260,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   };
 
   const NC_LABEL = { now: "Now", today: "Soon", eventually: "Long" };
-  const ncCorePills = ["now", "today", "eventually"]
+  const ncCorePills = [BEFORE_SHAVUOS_PRIORITY_ID, "now", "today", "eventually"]
     .map(id => { const p = priorities.find(x => x.id === id && !x.deleted); return p ? { ...p, ncLabel: NC_LABEL[id] || p.label } : null; })
     .filter(Boolean);
   const activePri = gP(priorities, taskPriority);
@@ -1275,6 +1306,131 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     setTaskComposerOpen(true);
     setTimeout(() => taskInputRef.current?.focus(), 0);
   };
+
+  const activeChiefBrief = chiefBrief || chiefFallback;
+  const activeChiefTone = activeChiefBrief?.urgency === "now" ? C.danger : activeChiefBrief?.urgency === "today" ? C.accent : C.muted;
+  const activeChiefSources = (activeChiefBrief?.sources || []).slice(0, 5);
+  const chiefSmartButtons = (large = false) => (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: large ? 8 : 6 }} aria-label="Chief smart responses">
+      {[
+        ["done", "Done", "task_alt"],
+        ["not_now", "Not now", "schedule"],
+        ["next", "Next", "arrow_forward"],
+        ["other", "Other", "edit"],
+      ].map(([id, label, icon]) => {
+        const active = chiefSmartSaving === id;
+        const disabled = !!chiefSmartSaving || chiefDialogueLoading;
+        return (
+          <button key={id} type="button" onClick={() => handleChiefSmartResponse(id)} disabled={disabled}
+            title={`${label} - save this signal to the Chief profile`} aria-label={`${label} smart response`}
+            style={{
+              minHeight: large ? 38 : 27,
+              borderRadius: large ? 8 : 999,
+              border: `1px solid ${id === "not_now" ? softBorder(C.warning || C.accent, 0.3) : softBorder(C.accent, 0.26)}`,
+              background: active ? softBg(C.accent, 0.16) : C.bgSoft,
+              color: disabled && !active ? C.faint : C.text,
+              padding: large ? "7px 11px" : "3px 8px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              cursor: disabled ? "default" : "pointer",
+              fontSize: large ? NC_TYPE.control : NC_TYPE.small,
+              fontWeight: 600,
+              fontFamily: NC_FONT_STACK,
+              lineHeight: 1,
+              whiteSpace: "nowrap",
+              opacity: disabled && !active ? 0.62 : 1,
+            }}>
+            {suiteIcon(active ? "hourglass_top" : icon, large ? 15 : 13)}
+            <span>{label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  if (chiefPage) {
+    const pageCard = { background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, overflow: "hidden", minWidth: 0, boxShadow: "none" };
+    const pageLabel = { fontSize: NC_TYPE.small, color: C.faint, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0, fontFamily: NC_FONT_STACK };
+    return (
+      <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: "auto", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}` }}>
+        <div style={{ maxWidth: 980, margin: "0 auto", padding: isStacked ? "18px 14px 28px" : "28px 24px 36px", display: "grid", gap: 14, boxSizing: "border-box" }}>
+          <header style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 12, alignItems: "center" }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, color: activeChiefTone, fontSize: NC_TYPE.label, fontWeight: 700, fontFamily: NC_FONT_STACK, marginBottom: 6 }}>
+                {suiteIcon("psychology", 18)}
+                Chief of Staff
+              </div>
+              <h1 style={{ margin: 0, fontSize: isStacked ? 24 : 30, lineHeight: 1.12, fontWeight: 650, color: C.text, fontFamily: NC_FONT_STACK }}>Next best move</h1>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {chiefLoading && <div title="Scanning" style={{ width: 14, height: 14, borderRadius: "50%", border: `2px solid ${activeChiefTone}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+              <button type="button" onClick={() => setChiefRefreshNonce(n => n + 1)} title="Refresh Chief scan" aria-label="Refresh Chief scan"
+                style={gvIconButton({ width: 38, height: 38, color: C.text, background: C.bg }, C)}>{suiteIcon("refresh", 17)}</button>
+              <button type="button" onClick={onCloseChiefPage} title="Back to NerveCenter" aria-label="Back to NerveCenter"
+                style={gvIconButton({ width: 38, height: 38, color: C.muted, background: C.bg }, C)}>{suiteIcon("close", 17)}</button>
+            </div>
+          </header>
+
+          <section style={{ ...pageCard, padding: isStacked ? 16 : 20, display: "grid", gap: 16 }}>
+            <div style={{ display: "grid", gap: 7 }}>
+              <span style={pageLabel}>Recommendation</span>
+              <div style={{ borderLeft: `4px solid ${activeChiefTone}`, paddingLeft: 14, display: "grid", gap: 8 }}>
+                <div style={{ fontSize: isStacked ? 19 : 23, lineHeight: 1.22, color: C.text, fontWeight: 650, fontFamily: NC_FONT_STACK }}>{activeChiefBrief.summary}</div>
+                <div style={{ fontSize: isStacked ? 15 : 17, lineHeight: 1.38, color: C.muted, fontFamily: NC_FONT_STACK }}>
+                  <span style={{ color: activeChiefTone, fontWeight: 700 }}>Next: </span>{activeChiefBrief.nextAction}
+                </div>
+                {(activeChiefBrief.why || chiefError) && (
+                  <div style={{ fontSize: NC_TYPE.control, lineHeight: 1.45, color: C.faint, fontFamily: NC_FONT_STACK }}>{activeChiefBrief.why || chiefError}</div>
+                )}
+              </div>
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              <span style={pageLabel}>Respond</span>
+              {chiefSmartButtons(true)}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: isStacked ? "1fr" : "repeat(3,minmax(0,1fr))", gap: 8 }}>
+              {[
+                ["Focus", activeChiefBrief.focusArea || "operations", C.text],
+                ["Urgency", activeChiefBrief.urgency || "watch", activeChiefTone],
+                ["Evidence", (activeChiefSources.length ? activeChiefSources : ["Dashboard"]).join(", "), C.text],
+              ].map(([label, value, color]) => (
+                <div key={label} style={{ border: `1px solid ${C.divider}`, borderRadius: 8, padding: 10, background: C.bgSoft }}>
+                  <div style={pageLabel}>{label}</div>
+                  <div style={{ marginTop: 5, color, fontSize: NC_TYPE.control, fontWeight: 650, fontFamily: NC_FONT_STACK, lineHeight: 1.35 }}>{value}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section style={pageCard}>
+            <div style={{ padding: "13px 14px", borderBottom: `1px solid ${C.divider}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span style={{ color: C.text, fontSize: NC_TYPE.label, fontWeight: 700, fontFamily: NC_FONT_STACK }}>{suiteIcon("forum", 15)} Discuss</span>
+              {chiefDialogueLoading && <span style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK }}>Thinking</span>}
+            </div>
+            <div role="status" aria-live="polite" aria-atomic="false" style={{ padding: 14, minHeight: 130, maxHeight: 320, overflow: "auto", display: "grid", alignContent: "start", gap: 8 }}>
+              {chiefDialogue.length === 0 && !chiefDialogueLoading && (
+                <div style={{ color: C.faint, fontSize: NC_TYPE.control, lineHeight: 1.45, fontFamily: NC_FONT_STACK }}>Tell Chief "not now", "skip", or "stop showing sleep tasks" and it will update the recommendation model.</div>
+              )}
+              {[...chiefDialogue.slice(-8), ...(chiefDialogueLoading ? [{ role: "assistant", text: "Thinking through the next move...", pending: true }] : [])].map((row, idx) => (
+                <div key={`${row.role}-${idx}`} style={{ justifySelf: row.role === "user" ? "end" : "start", maxWidth: "92%", border: `1px solid ${row.role === "user" ? softBorder(C.accent, 0.24) : C.divider}`, background: row.role === "user" ? softBg(C.accent, 0.08) : C.bgSoft, color: C.text, borderRadius: 8, padding: "8px 10px", fontSize: NC_TYPE.control, lineHeight: 1.42, fontFamily: NC_FONT_STACK }}>
+                  <span style={row.pending ? { color: C.muted } : null}>{row.text}</span>
+                </div>
+              ))}
+            </div>
+            <form onSubmit={e => { e.preventDefault(); submitChiefPrompt(); }} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 40px", gap: 8, padding: 12, borderTop: `1px solid ${C.divider}` }}>
+              <textarea ref={chiefPromptRef} value={chiefPrompt} rows={2} onChange={e => setChiefPrompt(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitChiefPrompt(); } }} placeholder="Respond, correct, or ask for the next move"
+                style={{ minWidth: 0, minHeight: 46, maxHeight: 140, borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "9px 10px", fontSize: NC_TYPE.control, lineHeight: 1.35, fontFamily: NC_FONT_STACK, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+              <button type="submit" disabled={!chiefPrompt.trim() || chiefDialogueLoading} title="Ask Chief" aria-label="Ask Chief"
+                style={gvIconButton({ width: 40, height: 46, borderRadius: 8, color: chiefPrompt.trim() && !chiefDialogueLoading ? "#fff" : C.faint, background: chiefPrompt.trim() && !chiefDialogueLoading ? C.accent : "transparent" }, C)}>
+                {suiteIcon(chiefDialogueLoading ? "hourglass_top" : "send", 16)}
+              </button>
+            </form>
+          </section>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: isStacked ? "hidden" : touchLayout ? "auto" : "hidden", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}` }}>
@@ -1749,6 +1905,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                   <span style={{ ...headLabel, color: C.text }}>{suiteIcon("psychology", 14)} Chief of Staff</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     {chiefLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${chiefTone}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+                    <button onClick={onOpenChiefPage} title="Open Chief page" aria-label="Open Chief page"
+                      style={{ fontSize: NC_TYPE.small, color: C.accent, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .9, lineHeight: 1, fontFamily: NC_FONT_STACK }}>
+                      Open
+                    </button>
                     <button onClick={() => setChiefProfileOpen(open => !open)} title="Open Chief profile" aria-label="Open Chief profile"
                       style={{ fontSize: NC_TYPE.small, color: chiefProfileOpen ? C.accent : C.faint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .8, lineHeight: 1, fontFamily: NC_FONT_STACK }}>
                       Profile
@@ -1801,7 +1961,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       ["other", "Other", "edit"],
                     ].map(([id, label, icon]) => {
                       const active = chiefSmartSaving === id;
-                      const disabled = !!chiefSmartSaving || chiefDialogueLoading || (id !== "other" && !onAppendChiefProfileNote);
+                      const disabled = !!chiefSmartSaving || chiefDialogueLoading;
                       return (
                         <button key={id} type="button" onClick={() => handleChiefSmartResponse(id)} disabled={disabled}
                           title={`${label} - save this signal to the Chief profile`} aria-label={`${label} smart response`}
