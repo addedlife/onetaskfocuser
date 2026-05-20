@@ -637,3 +637,13 @@ Current source-grade file count after cleanup: 162 files.
 - `git diff --check -- apps/web/src/01-core.js apps/web/src/08-app-split/App.jsx` passed; line-ending normalization warnings only.
 - `npm run build` in `apps/web` passed and generated `assets/index-sWvIgPze.js`; existing bundle-size warning remains.
 - Pushed commit `b6b8ea2` to `origin/main`; Netlify Git-triggered production served `assets/index-sWvIgPze.js` on poll attempt 3, and the deployed asset returned HTTP 200.
+
+## 2026-05-20 Auth Session Persistence And Google Prompt Throttle
+
+- Researched Firebase Auth web persistence and Google Identity Services auth models: durable app sessions should use explicit local persistence with a remember-device choice, while durable Gmail/Calendar access should use server auth-code refresh-token storage.
+- Production `app-config` still reports `googleAuthMode:"token"` and `googleServerAuthAvailable:false`, so Gmail/Calendar remain on the browser-token fallback until the Google OAuth client/secret are configured in Netlify.
+- Changed `AuthGate` and `LoginScreen` to set Firebase auth persistence before auth-state listening and before password/Google sign-in, with a default-on `Stay signed in on this device` option.
+- Changed the browser-token Google fallback to treat near-expired tokens as expired, clear stale tokens consistently, and throttle silent reconnect attempts with a 10-minute cooldown.
+- `git diff --check -- apps/web/src/00-auth.jsx apps/web/src/08-app-split/App.jsx` passed; line-ending normalization warnings only.
+- `npm run build` passed in `apps/web` and generated `assets/index-ZTkUASIM.js`; existing large-bundle warning remains.
+- Built asset marker check found `Stay signed in on this device`, `ot_auth_stay_signed_in`, `ot_google_silent_reauth_last`, and `Reconnect Google to refresh Calendar and Gmail`.

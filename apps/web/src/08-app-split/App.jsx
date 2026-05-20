@@ -39,6 +39,16 @@ import { useToastNotifier } from './hooks/useToastNotifier.js';
 import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack } from './utils/shailosQueue.js';
 
 const GOOGLE_SERVER_TOKEN = "__server_google_workspace__";
+const GOOGLE_TOKEN_EXPIRY_SKEW_MS = 60 * 1000;
+const GOOGLE_SILENT_REAUTH_COOLDOWN_MS = 10 * 60 * 1000;
+const GOOGLE_SILENT_REAUTH_LAST_KEY = "ot_google_silent_reauth_last";
+
+function clearStoredGoogleBrowserToken() {
+  try {
+    localStorage.removeItem('ot_google_token');
+    localStorage.removeItem('ot_google_token_expiry');
+  } catch {}
+}
 
 function App({ user, onSignOut }) {
   Store.setUid(canonicalUid(user));
@@ -106,9 +116,8 @@ function App({ user, onSignOut }) {
     try {
       const tok = localStorage.getItem('ot_google_token');
       const exp = Number(localStorage.getItem('ot_google_token_expiry') || 0);
-      if (tok && exp > Date.now()) return tok;
-      localStorage.removeItem('ot_google_token');
-      localStorage.removeItem('ot_google_token_expiry');
+      if (tok && exp > Date.now() + GOOGLE_TOKEN_EXPIRY_SKEW_MS) return tok;
+      clearStoredGoogleBrowserToken();
     } catch {}
     return null;
   });
@@ -426,6 +435,23 @@ function App({ user, onSignOut }) {
   const effectiveGoogleClientId = (AS?.googleClientId || serverGoogleClientId || "").trim();
   const useGoogleServerAuth = googleServerAuthAvailable && !!serverGoogleClientId;
 
+  const requestSilentGoogleAccessToken = useCallback((delayMs = 0) => {
+    if (!gTokenClientRef.current) return false;
+    const now = Date.now();
+    try {
+      const last = Number(localStorage.getItem(GOOGLE_SILENT_REAUTH_LAST_KEY) || 0);
+      if (last && now - last < GOOGLE_SILENT_REAUTH_COOLDOWN_MS) {
+        setGoogleError("Reconnect Google to refresh Calendar and Gmail.");
+        return false;
+      }
+      localStorage.setItem(GOOGLE_SILENT_REAUTH_LAST_KEY, String(now));
+    } catch {}
+    const run = () => gTokenClientRef.current?.requestAccessToken({ prompt: '' });
+    if (delayMs > 0) window.setTimeout(run, delayMs);
+    else run();
+    return true;
+  }, []);
+
   const callGoogleWorkspace = useCallback(async (action, payload = {}) => {
     if (!user?.getIdToken) throw new Error("Sign in again before connecting Google Workspace.");
     const idToken = await user.getIdToken();
@@ -532,6 +558,12 @@ function App({ user, onSignOut }) {
           if (resp.error) {
             if (resp.error === 'popup_closed_by_user') return;
             if (resp.error === 'access_denied') { setGoogleError('Access denied — please approve Calendar and Gmail access in the Google popup.'); return; }
+            if (['interaction_required', 'login_required', 'consent_required'].includes(resp.error)) {
+              clearStoredGoogleBrowserToken();
+              setGoogleToken(null);
+              setGoogleError('Reconnect Google to refresh Calendar and Gmail.');
+              return;
+            }
             setGoogleError(resp.error_description || resp.error);
             return;
           }
@@ -541,6 +573,7 @@ function App({ user, onSignOut }) {
             localStorage.setItem('ot_google_token', resp.access_token);
             localStorage.setItem('ot_google_token_expiry', String(Date.now() + 3300 * 1000));
             localStorage.setItem('ot_google_connected', '1');
+            localStorage.removeItem(GOOGLE_SILENT_REAUTH_LAST_KEY);
             setGoogleWasConnected(true);
           } catch {}
           setGoogleError(null);
@@ -550,8 +583,8 @@ function App({ user, onSignOut }) {
       // Auto-reconnect silently if user was previously connected and token is expired
       if (localStorage.getItem('ot_google_connected') === '1') {
         const exp = Number(localStorage.getItem('ot_google_token_expiry') || 0);
-        if (exp <= Date.now()) {
-          setTimeout(() => { gTokenClientRef.current?.requestAccessToken({ prompt: '' }); }, 600);
+        if (exp <= Date.now() + GOOGLE_TOKEN_EXPIRY_SKEW_MS) {
+          requestSilentGoogleAccessToken(600);
         }
       }
     }
@@ -567,7 +600,7 @@ function App({ user, onSignOut }) {
     s.onerror = () => { console.error('[Google] GIS script failed to load'); setGoogleError('Could not load Google sign-in script.'); };
     document.head.appendChild(s);
     console.log('[Google] Loading GIS script…');
-  }, [effectiveGoogleClientId, useGoogleServerAuth, serverGoogleClientId, callGoogleWorkspace, loadGoogleWorkspaceFromServer]); // eslint-disable-line
+  }, [effectiveGoogleClientId, useGoogleServerAuth, serverGoogleClientId, callGoogleWorkspace, loadGoogleWorkspaceFromServer, requestSilentGoogleAccessToken]); // eslint-disable-line
 
   // Silent reconnect: if token drops to null and user was previously connected, re-auth without prompt
   useEffect(() => {
@@ -586,9 +619,9 @@ function App({ user, onSignOut }) {
       return;
     }
     if (!gTokenClientRef.current) return;
-    const t = setTimeout(() => { gTokenClientRef.current?.requestAccessToken({ prompt: '' }); }, 800);
+    const t = setTimeout(() => { requestSilentGoogleAccessToken(); }, 800);
     return () => clearTimeout(t);
-  }, [googleToken, useGoogleServerAuth, callGoogleWorkspace]); // eslint-disable-line
+  }, [googleToken, useGoogleServerAuth, callGoogleWorkspace, requestSilentGoogleAccessToken]); // eslint-disable-line
 
   // These throw 'token_expired' on 401 but do NOT call setGoogleToken themselves —
   // the effect handles token clearing to avoid cancelling its own load mid-flight.
@@ -723,7 +756,8 @@ function App({ user, onSignOut }) {
           if (calR.status === 'fulfilled') {
             setCalendarEvents(calR.value);
           } else if (calR.reason?.message === 'token_expired') {
-            try { localStorage.removeItem('ot_google_token'); localStorage.removeItem('ot_google_token_expiry'); } catch {}
+            clearStoredGoogleBrowserToken();
+            requestSilentGoogleAccessToken(300);
             setGoogleToken(null); return;
           } else {
             console.error('[Google] cal error:', calR.reason?.message);
@@ -733,7 +767,8 @@ function App({ user, onSignOut }) {
           if (mailR.status === 'fulfilled') {
             setGmailMessages(mailR.value);
           } else if (mailR.reason?.message === 'token_expired') {
-            try { localStorage.removeItem('ot_google_token'); localStorage.removeItem('ot_google_token_expiry'); } catch {}
+            clearStoredGoogleBrowserToken();
+            requestSilentGoogleAccessToken(300);
             setGoogleToken(null); return;
           } else {
             console.error('[Google] mail error:', mailR.reason?.message);
@@ -782,7 +817,7 @@ function App({ user, onSignOut }) {
     setGoogleServerConnected(false);
     if (useGoogleServerAuth) callGoogleWorkspace("disconnect").catch(() => {});
     setGoogleWasConnected(false);
-    try { localStorage.removeItem('ot_google_token'); localStorage.removeItem('ot_google_token_expiry'); localStorage.removeItem('ot_google_connected'); } catch {}
+    try { clearStoredGoogleBrowserToken(); localStorage.removeItem('ot_google_connected'); localStorage.removeItem(GOOGLE_SILENT_REAUTH_LAST_KEY); } catch {}
   }
 
   async function loadGoogleEmailDetail(messageId) {

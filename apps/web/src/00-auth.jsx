@@ -10,8 +10,23 @@ import { App } from './08-app-split/index.jsx';
 // Google auth: email prefix used as canonical UID, so same account regardless of domain.
 
 const _AUTH_DOMAIN = "onetaskapp.local";
+const _AUTH_STAY_SIGNED_IN_KEY = "ot_auth_stay_signed_in";
+
 function _toEmail(username) {
   return `${username.toLowerCase().trim()}@${_AUTH_DOMAIN}`;
+}
+
+function _readStaySignedIn() {
+  try { return localStorage.getItem(_AUTH_STAY_SIGNED_IN_KEY) !== "0"; } catch(_) { return true; }
+}
+
+function _getAuthPersistence(staySignedIn = true) {
+  return staySignedIn ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION;
+}
+
+async function _setAuthPersistence(staySignedIn = true) {
+  if (typeof firebase === "undefined" || !firebase.auth || !firebase.auth.Auth?.Persistence) return;
+  await firebase.auth().setPersistence(_getAuthPersistence(staySignedIn));
 }
 
 // Localhost-only dev bypass — creates a mock user so the preview can render the full app
@@ -33,11 +48,21 @@ function AuthGate() {
     if (typeof firebase === "undefined" || !firebase.auth) {
       setAuthState("anon"); return;
     }
-    const unsub = firebase.auth().onAuthStateChanged(u => {
-      setUser(u || null);
-      setAuthState(u ? "authed" : "anon");
-    });
-    return unsub;
+    let alive = true;
+    let unsub = null;
+    _setAuthPersistence(_readStaySignedIn())
+      .catch(e => console.warn("[Auth] Could not set durable persistence:", e?.message || e))
+      .finally(() => {
+        if (!alive) return;
+        unsub = firebase.auth().onAuthStateChanged(u => {
+          setUser(u || null);
+          setAuthState(u ? "authed" : "anon");
+        });
+      });
+    return () => {
+      alive = false;
+      if (unsub) unsub();
+    };
   }, []);
 
   if (authState === "loading") return (
@@ -61,6 +86,7 @@ function LoginScreen({ onLogin }) {
   const [err, setErr]           = React.useState("");
   const [loading, setLoading]   = React.useState(false);
   const [showPw, setShowPw]     = React.useState(false);
+  const [staySignedIn, setStaySignedIn] = React.useState(_readStaySignedIn);
 
   const S = {
     bg:"#EDE5D8", card:"#F5EFE5", text:"#3D3633",
@@ -79,6 +105,8 @@ function LoginScreen({ onLogin }) {
     const email = _toEmail(u);
     const auth  = firebase.auth();
     try {
+      await _setAuthPersistence(staySignedIn);
+      try { localStorage.setItem(_AUTH_STAY_SIGNED_IN_KEY, staySignedIn ? "1" : "0"); } catch(_) {}
       let cred;
       if (mode === "login") {
         cred = await auth.signInWithEmailAndPassword(email, password);
@@ -96,6 +124,7 @@ function LoginScreen({ onLogin }) {
         "auth/email-already-in-use":"That username is already taken.",
         "auth/weak-password":       "Password must be at least 6 characters.",
         "auth/too-many-requests":   "Too many attempts. Try again in a few minutes.",
+        "auth/web-storage-unsupported":"This browser is blocking saved sign-in storage. Allow site data for this app, then sign in again.",
       };
       setErr(map[e.code] || e.message);
     } finally { setLoading(false); }
@@ -104,6 +133,8 @@ function LoginScreen({ onLogin }) {
   async function handleGoogleSignIn() {
     setLoading(true); setErr("");
     try {
+      await _setAuthPersistence(staySignedIn);
+      try { localStorage.setItem(_AUTH_STAY_SIGNED_IN_KEY, staySignedIn ? "1" : "0"); } catch(_) {}
       const provider = new firebase.auth.GoogleAuthProvider();
       const cred = await firebase.auth().signInWithPopup(provider);
       // Ensure displayName is set to the email prefix for canonical UID matching
@@ -115,7 +146,9 @@ function LoginScreen({ onLogin }) {
       onLogin(cred.user);
     } catch(e) {
       if (e.code !== "auth/popup-closed-by-user") {
-        if (e.code === "auth/unauthorized-domain") {
+        if (e.code === "auth/web-storage-unsupported") {
+          setErr("This browser is blocking saved sign-in storage. Allow site data for this app, then sign in again.");
+        } else if (e.code === "auth/unauthorized-domain") {
           setErr("Domain not authorized — add onetaskfocuser.netlify.app to Firebase → Auth → Settings → Authorized domains.");
         } else {
           setErr((e.code ? `[${e.code}] ` : "") + e.message);
@@ -166,6 +199,16 @@ function LoginScreen({ onLogin }) {
               </button>
             </div>
           </div>
+
+          <label style={{ display:"flex", alignItems:"center", gap:9, margin:"-8px 0 18px", color:S.tSoft, fontSize:12, lineHeight:1.35, cursor:"pointer", userSelect:"none" }}>
+            <input
+              type="checkbox"
+              checked={staySignedIn}
+              onChange={e => setStaySignedIn(e.target.checked)}
+              style={{ width:16, height:16, margin:0, accentColor:S.text, cursor:"pointer", flex:"0 0 auto" }}
+            />
+            <span>Stay signed in on this device</span>
+          </label>
 
           {err && (
             <p style={{ fontSize:12, color:"#C94040", marginBottom:14, lineHeight:1.5, fontFamily:"system-ui" }}>{err}</p>
