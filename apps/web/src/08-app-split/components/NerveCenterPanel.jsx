@@ -501,6 +501,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [chiefPrompt, setChiefPrompt] = useState("");
   const [chiefDialogue, setChiefDialogue] = useState([]);
   const [chiefDialogueLoading, setChiefDialogueLoading] = useState(false);
+  const [chiefSmartSaving, setChiefSmartSaving] = useState("");
   const [chiefRefreshNonce, setChiefRefreshNonce] = useState(0);
   const [chiefChatHeight, setChiefChatHeight] = useState(() => readChiefChatHeight());
   const [taskSuggestions, setTaskSuggestions] = useState([]);
@@ -510,6 +511,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [chiefProfileDraft, setChiefProfileDraft] = useState("");
   const [chiefProfileSaving, setChiefProfileSaving] = useState(false);
   const [pendingChiefCalendarAction, setPendingChiefCalendarAction] = useState(null);
+  const chiefPromptRef = useRef(null);
   const chiefRefreshHandledRef = useRef(chiefRefreshNonce);
   useEffect(() => {
     if (chiefProfile?.learning?.events?.length) {
@@ -937,12 +939,12 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     };
   }, [taskSuggestionScanKey]); // eslint-disable-line
 
-  async function submitChiefPrompt() {
-    const question = chiefPrompt.trim();
+  async function submitChiefPrompt(questionOverride = null) {
+    const question = String(questionOverride ?? chiefPrompt).trim();
     if (!question || chiefDialogueLoading) return;
     const nextHistory = [...chiefDialogue, { role: "user", text: question }].slice(-6);
     setChiefDialogue(nextHistory);
-    setChiefPrompt("");
+    if (questionOverride == null) setChiefPrompt("");
     if (pendingChiefCalendarAction && looksLikeDeleteConfirmation(question)) {
       setChiefDialogueLoading(true);
       try {
@@ -994,6 +996,81 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       setChiefDialogue([...nextHistory, { role: "assistant", text: `${chiefBrief?.nextAction || chiefFallback.nextAction} ${chiefBrief?.why || chiefFallback.why}` }].slice(-6));
     } finally {
       setChiefDialogueLoading(false);
+    }
+  }
+
+  function chiefSmartResponseNote(choice, label, brief) {
+    const nextAction = cleanOneLine(brief?.nextAction || chiefFallback.nextAction, 240);
+    const summary = cleanOneLine(brief?.summary || chiefFallback.summary, 180);
+    const meaning = {
+      done: "User marked the Chief recommendation as handled.",
+      not_now: "User deferred the Chief recommendation.",
+      next: "User asked Chief to move on to the next recommendation.",
+      other: "User wanted a different direction than the prepared smart replies.",
+    }[choice] || `User chose ${label}.`;
+    return {
+      category: `smart_response_${choice}`,
+      text: `${meaning} Recommendation: ${nextAction}. Snapshot: ${summary}`,
+      source: "Chief smart response",
+    };
+  }
+
+  function recordChiefSmartLearning(choice, brief) {
+    if (choice !== "done" && choice !== "not_now" && choice !== "next") return;
+    const actionText = cleanOneLine(brief?.nextAction || chiefFallback.nextAction, 240);
+    const eventRow = {
+      ts: Date.now(),
+      decision: choice === "not_now" ? "rejected" : "accepted",
+      issueKey: hashChiefValue(`chief|${brief?.focusArea || "dashboard"}|${actionText}`),
+      freshnessKey: hashChiefValue(`chief|${brief?.focusArea || "dashboard"}|${brief?.summary || ""}|${actionText}`),
+      suppressionKey: hashChiefValue(`chief|${choice}|${brief?.focusArea || "dashboard"}|${actionText}`),
+      textKey: taskSuggestionKey(actionText),
+      sourceTitleKey: taskSuggestionKey(brief?.summary || actionText),
+      sourceBucket: "chief",
+      source: "Chief",
+      actionType: choice === "next" ? "next_move" : inferChiefActionType(actionText),
+      priorityId: brief?.urgency || defaultSuggestionPriorityId,
+    };
+    setChiefLearning(prev => {
+      const next = { version: 1, events: [...(prev?.events || []), eventRow].slice(-200) };
+      writeChiefLearning(next);
+      return next;
+    });
+    onRecordChiefLearning?.(eventRow);
+  }
+
+  async function handleChiefSmartResponse(choice) {
+    const brief = chiefBrief || chiefFallback;
+    const labels = { done: "Done", not_now: "Not now", next: "Next", other: "Other" };
+    const label = labels[choice] || "Response";
+    if (choice === "other") {
+      setChiefSmartSaving("other");
+      try { await onAppendChiefProfileNote?.(chiefSmartResponseNote(choice, label, brief)); } catch {}
+      setChiefDialogue(rows => [...rows, { role: "assistant", text: "Tell me the direction you want instead." }].slice(-6));
+      setChiefPrompt("");
+      window.setTimeout(() => chiefPromptRef.current?.focus(), 0);
+      setChiefSmartSaving("");
+      return;
+    }
+    if (chiefSmartSaving || chiefDialogueLoading) return;
+    setChiefSmartSaving(choice);
+    const answer = choice === "done"
+      ? "Logged as handled. I will treat this recommendation as closed."
+      : choice === "not_now"
+        ? "Logged as not now. I will down-rank similar nudges unless they become clearly urgent."
+        : "Logged. I will look for the next clean move.";
+    try {
+      recordChiefSmartLearning(choice, brief);
+      await onAppendChiefProfileNote?.(chiefSmartResponseNote(choice, label, brief));
+      if (choice === "next") {
+        await submitChiefPrompt("Next: give me the next best move after this.");
+      } else {
+        setChiefDialogue(rows => [...rows, { role: "user", text: label }, { role: "assistant", text: answer }].slice(-6));
+      }
+    } catch {
+      setChiefDialogue(rows => [...rows, { role: "assistant", text: "I took the signal locally, but could not save it to the cloud profile yet." }].slice(-6));
+    } finally {
+      setChiefSmartSaving("");
     }
   }
 
@@ -1716,6 +1793,42 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       ))}
                     </div>
                   )}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }} aria-label="Chief smart responses">
+                    {[
+                      ["done", "Done", "task_alt"],
+                      ["not_now", "Not now", "schedule"],
+                      ["next", "Next", "arrow_forward"],
+                      ["other", "Other", "edit"],
+                    ].map(([id, label, icon]) => {
+                      const active = chiefSmartSaving === id;
+                      const disabled = !!chiefSmartSaving || chiefDialogueLoading || (id !== "other" && !onAppendChiefProfileNote);
+                      return (
+                        <button key={id} type="button" onClick={() => handleChiefSmartResponse(id)} disabled={disabled}
+                          title={`${label} - save this signal to the Chief profile`} aria-label={`${label} smart response`}
+                          style={{
+                            minHeight: 27,
+                            borderRadius: 999,
+                            border: `1px solid ${id === "not_now" ? softBorder(C.warning || C.accent, 0.3) : softBorder(C.accent, 0.26)}`,
+                            background: active ? softBg(C.accent, 0.16) : C.bgSoft,
+                            color: disabled && !active ? C.faint : C.text,
+                            padding: "3px 8px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            cursor: disabled ? "default" : "pointer",
+                            fontSize: NC_TYPE.small,
+                            fontWeight: 600,
+                            fontFamily: NC_FONT_STACK,
+                            lineHeight: 1,
+                            whiteSpace: "nowrap",
+                            opacity: disabled && !active ? 0.62 : 1,
+                          }}>
+                          {suiteIcon(active ? "hourglass_top" : icon, 13)}
+                          <span>{label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                   {(taskSuggestions.length > 0 || taskSuggestionsLoading) && (
                     <div style={{ display: "grid", gap: 6, flexShrink: 0 }}>
                       {taskSuggestionsLoading && taskSuggestions.length === 0 && (
@@ -1768,7 +1881,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     </button>
                   )}
                   <form onSubmit={e => { e.preventDefault(); submitChiefPrompt(); }} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 32px", gap: 6, marginTop: "auto", flexShrink: 0 }}>
-                    <textarea value={chiefPrompt} rows={1} onChange={e => setChiefPrompt(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitChiefPrompt(); } }} placeholder="Discuss next move"
+                    <textarea ref={chiefPromptRef} value={chiefPrompt} rows={1} onChange={e => setChiefPrompt(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitChiefPrompt(); } }} placeholder="Discuss next move"
                       style={{ minWidth: 0, minHeight: 32, maxHeight: 96, borderRadius: 7, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "7px 9px", fontSize: NC_TYPE.meta, lineHeight: 1.35, fontFamily: NC_FONT_STACK, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
                     <button type="submit" disabled={!chiefPrompt.trim() || chiefDialogueLoading} title="Ask Chief" aria-label="Ask Chief"
                       style={{ width: 32, height: 32, borderRadius: 7, border: "none", background: chiefPrompt.trim() && !chiefDialogueLoading ? C.accent : "transparent", color: chiefPrompt.trim() && !chiefDialogueLoading ? "#fff" : C.faint, cursor: chiefPrompt.trim() && !chiefDialogueLoading ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}>

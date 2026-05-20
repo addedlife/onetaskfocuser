@@ -693,3 +693,16 @@ Current source-grade file count after cleanup: 162 files.
 - Local preview returned HTTP 200 at `http://127.0.0.1:4326/?suite=nervecenter`.
 - In-app Browser verification was attempted but hit the existing Node ESM helper boot issue (`require is not defined in ES module scope`), so headless Edge/CDP verified the built NerveCenter route hydrated with zero runtime exceptions. Screenshot: `apps/web/artifacts/chief-tweaks-nervecenter-hydrated.png`.
 - Pushed commit `761962b` to `origin/main`; Netlify Git-triggered production served `assets/index-o2Hb_rOw.js` on poll attempt 3, and the deployed asset contained the new Chief suggestion, resolved-missed-call, dialogue pending-response, and secure-link markers.
+
+## 2026-05-20 Chief Smart Response Pills
+
+- Researched current smart-reply/action-chip practice before editing: compact contextual chips should expose clear actions, stay low-friction, give immediate feedback, and write preference/feedback signals into durable user-controlled memory. The local plan aligned with the research, so no confirmation gate was needed.
+- Added Chief smart response chips: `Done`, `Not now`, `Next`, and `Other`.
+- `Done`, `Not now`, and `Next` now record compact Chief learning events and append a `smart_response_*` note through the cloud Chief profile, which writes the updated profile Markdown blob.
+- `Other` records the different-direction signal, adds an immediate Chief reply, and focuses the discussion textarea for the user's custom instruction.
+- `node --check apps/web/backend/functions/chief-profile.js` passed.
+- `git diff --check -- apps/web/src/08-app-split/components/NerveCenterPanel.jsx` passed; line-ending normalization warning only.
+- `npm run build` passed in `apps/web` and generated `assets/index-xM_h8vkM.js`; existing large-bundle warning remains.
+- Local Vite returned HTTP 200 at `http://127.0.0.1:4330/?suite=nervecenter`; Vite stderr still reports the existing embedded Shailos `@emotion/is-prop-valid` dependency warning.
+- In-app Browser verification was attempted first but hit the existing Node ESM helper boot issue (`require is not defined in ES module scope`), so direct Chrome/CDP verified the NerveCenter Chief card rendered with all four smart-response buttons enabled and no horizontal overflow (`scrollW=1349`, `clientW=1349`).
+- Direct Chrome/CDP click-smoke verified `Other` leaves all four chips present, adds `Tell me the direction you want instead.`, and focuses the `Discuss next move` textarea.
