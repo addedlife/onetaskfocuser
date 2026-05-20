@@ -533,7 +533,6 @@ function normalizeChiefContext(input = {}) {
     },
     profile: {
       notes: ensureArray(profile.notes || [], "profile.notes").slice(-20).map(note => cleanString(note, 260)).filter(Boolean),
-      learning: profile.learning && typeof profile.learning === "object" && !Array.isArray(profile.learning) ? profile.learning : {},
     },
   };
 }
@@ -873,7 +872,6 @@ const AI_JOB_REGISTRY = {
         "Treat a missed call as return-call work only when phone.missedCalls is positive or the call row has needsReturnCall true; stale missed calls already answered by a later call or outgoing text are context only.",
         "Routine calendar items are context only unless they are happening now or blocking the next move.",
         "Use the profile notes as durable preferences. If a profile note says the user does not want a reminder class, avoid making it the next action unless the current item is clearly urgent.",
-        "Use profile.learning as feedback: rejected Chief recommendations, skipped actions, and not-now signals should not be repeated. Pick another useful move when possible.",
         "Do not invent facts, do not claim actions were taken, and do not give halachic rulings. If data is thin, say what is visible.",
         `Current snapshot:\n${jsonBlock(context)}`,
         "Return a calm executive brief: summary is one or two short sentences, nextAction is one specific next move.",
@@ -928,7 +926,6 @@ const AI_JOB_REGISTRY = {
         YESHIVISH_SYSTEM,
         "You are the user's Chief of Staff inside an operational dashboard.",
         "Answer the follow-up using only the provided dashboard snapshot and prior brief. Be concise, practical, and source-grounded.",
-        "If the user rejects, skips, or says not now to a recommendation, acknowledge it and move to a different next move using the snapshot and feedback signals.",
         "If the user asks for a decision, recommend the next concrete move and the reason. Do not claim to send, schedule, call, or mark anything done.",
         "If profile notes apply, use them as preference guidance.",
         `Current snapshot:\n${jsonBlock(context)}`,

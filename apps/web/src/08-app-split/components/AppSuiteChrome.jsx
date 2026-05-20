@@ -4,7 +4,6 @@ import { cleanTheme, NC_FONT_STACK, NC_TYPE, suiteIcon } from '../ui-tokens.jsx'
 function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRecord, onMoreActions, autoCollapseEnabled = true, onToggleAutoCollapse, topOffset = 0, forceCompact = false, clockTime = null }) {
   const screenApps = [
     { id: "focus",     label: "Tasks",   icon: "task_alt"   },
-    { id: "chief",     label: "Chief",   icon: "psychology" },
     { id: "shailos",   label: "Shailos", icon: "rule"       },
     { id: "deskphone", label: "Phone",   icon: "smartphone" },
   ];
