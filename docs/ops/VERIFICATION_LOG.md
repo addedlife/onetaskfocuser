@@ -626,3 +626,4 @@ Current source-grade file count after cleanup: 162 files.
 - Local preview returned HTTP 200 at `http://127.0.0.1:4322/`.
 - In-app Browser verification was attempted first, but the existing local helper failed on `require is not defined in ES module scope`.
 - Headless Edge/CDP seeded 12 queue tasks including one long unbroken token and verified desktop `1365x850` plus mobile `390x820`: document/root scroll width matched viewport width, the queue page stayed bounded (`760px` desktop, available mobile width), and measured queue row overflow count was `0` in both viewports. Screenshots were written under `apps/web/artifacts/queue-layout-*-seeded.png`.
+- Pushed commit `28cfa09` to `origin/main`; Netlify Git-triggered production served `assets/index-BySJo-zy.js` on poll attempt 2, and the deployed asset contained the queue containment marker.
