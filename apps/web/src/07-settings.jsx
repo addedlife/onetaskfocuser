@@ -1,7 +1,7 @@
 // === 07-settings.js ===
 
 import React, { useState, useEffect } from 'react';
-import { Store, aiGenSchemes, uid, DEF_AGE_THRESHOLDS, DEF_PRI, SCHEMES } from './01-core.js';
+import { Store, aiGenSchemes, uid, DEF_AGE_THRESHOLDS, DEF_PRI, SCHEMES, ensureSchemeContrast } from './01-core.js';
 import { IC } from './02-icons.jsx';
 import { PriEditor } from './04-components.jsx';
 
@@ -133,6 +133,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   const rowSB = {display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,marginBottom:18};
   const actionBtn = {width:"100%",minHeight:44,padding:"12px 16px",borderRadius:8,border:`1px solid ${T.brdS || T.brd}`,background:T.card,cursor:"pointer",fontSize:settingsType.control,fontWeight:400,fontFamily:NC_FONT_STACK,color:T.tSoft,display:"flex",alignItems:"center",gap:12,marginBottom:10};
   const schemeButtonStyle = (id, scheme, hasDelete = false) => {
+    scheme = ensureSchemeContrast(scheme);
     const active = AS.colorScheme === id;
     const bg = scheme.card || scheme.bg || "#FFFFFF";
     const accent = scheme.primary || scheme.brd || "#00796B";

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, runAIJob, suggestFirstStep, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer, gG, fmtMs, db, _lum, priText, textOnPastel } from '../01-core.js';
+import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, runAIJob, suggestFirstStep, aiParseBrainDump, aiParseConversation, aiSummarizeAnswer, gG, fmtMs, db, _lum, priText, textOnPastel, ensureSchemeContrast } from '../01-core.js';
 import { IC } from '../02-icons.jsx';
 import { VoiceInput } from '../03-voice.jsx';
 import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from '../04-components.jsx';
@@ -37,6 +37,8 @@ import { useTimedUndo } from './hooks/useTimedUndo.js';
 import { useTipCarousel } from './hooks/useTipCarousel.js';
 import { useToastNotifier } from './hooks/useToastNotifier.js';
 import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack } from './utils/shailosQueue.js';
+
+const GOOGLE_SERVER_TOKEN = "__server_google_workspace__";
 
 function App({ user, onSignOut }) {
   Store.setUid(canonicalUid(user));
@@ -118,6 +120,9 @@ function App({ user, onSignOut }) {
   const [gmailMessages, setGmailMessages]   = useState(null);
   const [googleLoading, setGoogleLoading]   = useState(false);
   const [googleError, setGoogleError]       = useState(null);
+  const [googleServerAuthAvailable, setGoogleServerAuthAvailable] = useState(false);
+  const [googleServerConnected, setGoogleServerConnected] = useState(false);
+  const [googleAuthMode, setGoogleAuthMode] = useState("token");
   const gTokenClientRef = useRef(null);
 
   // Insights tab state
@@ -370,10 +375,13 @@ function App({ user, onSignOut }) {
       .then(r => r.json())
       .then(d => {
         const cfg = d.ai || null;
-        const googleId = d?.integrations?.googleClientId || d?.googleClientId || "";
+        const integrations = d?.integrations || {};
+        const googleId = integrations.googleClientId || d?.googleClientId || "";
         setAiConfig(cfg);
         setServerKeyAvailable(!!(cfg?.available && Object.values(cfg.available).some(Boolean)));
         setServerGoogleClientId(typeof googleId === "string" ? googleId.trim() : "");
+        setGoogleServerAuthAvailable(!!integrations.googleServerAuthAvailable);
+        setGoogleAuthMode(integrations.googleServerAuthAvailable ? "server" : "token");
       })
       .catch(() => {});
   }, []);
@@ -416,12 +424,105 @@ function App({ user, onSignOut }) {
 
   // ─── Google Calendar + Gmail via GIS OAuth ───────────────────────────────
   const effectiveGoogleClientId = (AS?.googleClientId || serverGoogleClientId || "").trim();
+  const useGoogleServerAuth = googleServerAuthAvailable && !!serverGoogleClientId;
+
+  const callGoogleWorkspace = useCallback(async (action, payload = {}) => {
+    if (!user?.getIdToken) throw new Error("Sign in again before connecting Google Workspace.");
+    const idToken = await user.getIdToken();
+    const r = await fetch("/.netlify/functions/google-workspace", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${idToken}`,
+        "X-Requested-With": "XmlHttpRequest",
+      },
+      body: JSON.stringify({ action, ...payload }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.error) throw new Error(d.error || `Google Workspace request failed (${r.status})`);
+    return d;
+  }, [user]);
+
+  const loadGoogleWorkspaceFromServer = useCallback(async () => {
+    setGoogleLoading(true);
+    try {
+      const d = await callGoogleWorkspace("summary");
+      setCalendarEvents(d.calendarEvents || []);
+      setGmailMessages(d.gmailMessages || []);
+      setGoogleServerConnected(true);
+      setGoogleToken(GOOGLE_SERVER_TOKEN);
+      setGoogleWasConnected(true);
+      try { localStorage.setItem("ot_google_connected", "1"); } catch {}
+      setGoogleError((d.errors || []).join(" - ") || null);
+      return true;
+    } catch(e) {
+      if (/not connected|expired|connect/i.test(e.message || "")) {
+        setGoogleServerConnected(false);
+        setGoogleToken(null);
+      }
+      setCalendarEvents(prev => prev ?? []);
+      setGmailMessages(prev => prev ?? []);
+      setGoogleError(e.message || "Google Workspace refresh failed.");
+      return false;
+    } finally {
+      setGoogleLoading(false);
+    }
+  }, [callGoogleWorkspace]);
 
   useEffect(() => {
     const clientId = effectiveGoogleClientId;
     if (!clientId) { gTokenClientRef.current = null; return; }
     function initClient() {
       if (!window.google?.accounts?.oauth2) { console.warn('[Google] GIS loaded but oauth2 not ready'); return; }
+      if (useGoogleServerAuth) {
+        console.log('[Google] initCodeClient');
+        gTokenClientRef.current = window.google.accounts.oauth2.initCodeClient({
+          client_id: serverGoogleClientId,
+          scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly',
+          ux_mode: 'popup',
+          include_granted_scopes: true,
+          callback: async (resp) => {
+            console.log('[Google] Code callback error:', resp.error || 'none', '| has code:', !!resp.code);
+            if (resp.error) {
+              if (resp.error === 'popup_closed_by_user') return;
+              if (resp.error === 'access_denied') { setGoogleError('Access denied - please approve Calendar and Gmail access in the Google popup.'); return; }
+              setGoogleError(resp.error_description || resp.error);
+              return;
+            }
+            try {
+              setGoogleLoading(true);
+              await callGoogleWorkspace("exchange", { code: resp.code });
+              setGoogleServerConnected(true);
+              setGoogleToken(GOOGLE_SERVER_TOKEN);
+              setGoogleWasConnected(true);
+              try {
+                localStorage.setItem('ot_google_connected', '1');
+                localStorage.removeItem('ot_google_token');
+                localStorage.removeItem('ot_google_token_expiry');
+              } catch {}
+              setGoogleError(null);
+              await loadGoogleWorkspaceFromServer();
+            } catch(e) {
+              setGoogleError(e.message || 'Google Workspace connection failed.');
+            } finally {
+              setGoogleLoading(false);
+            }
+          },
+        });
+        console.log('[Google] Code client ready:', !!gTokenClientRef.current);
+        if (localStorage.getItem('ot_google_connected') === '1') {
+          callGoogleWorkspace("status")
+            .then(d => {
+              if (d.connected) {
+                setGoogleServerConnected(true);
+                setGoogleToken(GOOGLE_SERVER_TOKEN);
+                setGoogleWasConnected(true);
+              }
+            })
+            .catch(() => {});
+        }
+        return;
+      }
       console.log('[Google] initTokenClient');
       gTokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
@@ -466,16 +567,28 @@ function App({ user, onSignOut }) {
     s.onerror = () => { console.error('[Google] GIS script failed to load'); setGoogleError('Could not load Google sign-in script.'); };
     document.head.appendChild(s);
     console.log('[Google] Loading GIS script…');
-  }, [effectiveGoogleClientId]); // eslint-disable-line
+  }, [effectiveGoogleClientId, useGoogleServerAuth, serverGoogleClientId, callGoogleWorkspace, loadGoogleWorkspaceFromServer]); // eslint-disable-line
 
   // Silent reconnect: if token drops to null and user was previously connected, re-auth without prompt
   useEffect(() => {
     if (googleToken !== null) return;
     try { if (localStorage.getItem('ot_google_connected') !== '1') return; } catch { return; }
+    if (useGoogleServerAuth) {
+      callGoogleWorkspace("status")
+        .then(d => {
+          if (d.connected) {
+            setGoogleServerConnected(true);
+            setGoogleToken(GOOGLE_SERVER_TOKEN);
+            setGoogleWasConnected(true);
+          }
+        })
+        .catch(() => {});
+      return;
+    }
     if (!gTokenClientRef.current) return;
     const t = setTimeout(() => { gTokenClientRef.current?.requestAccessToken({ prompt: '' }); }, 800);
     return () => clearTimeout(t);
-  }, [googleToken]); // eslint-disable-line
+  }, [googleToken, useGoogleServerAuth, callGoogleWorkspace]); // eslint-disable-line
 
   // These throw 'token_expired' on 401 but do NOT call setGoogleToken themselves —
   // the effect handles token clearing to avoid cancelling its own load mid-flight.
@@ -578,6 +691,24 @@ function App({ user, onSignOut }) {
 
   // Auto-fetch when token arrives; refresh while visible and on focus.
   useEffect(() => {
+    if (useGoogleServerAuth) {
+      if (!googleServerConnected && googleToken !== GOOGLE_SERVER_TOKEN) return;
+      let cancelled = false;
+      const load = () => { if (!cancelled) loadGoogleWorkspaceFromServer(); };
+      load();
+      const onVisible = () => {
+        if (document.visibilityState === "visible") load();
+      };
+      const t = setInterval(load, 15 * 60000);
+      document.addEventListener("visibilitychange", onVisible);
+      window.addEventListener("focus", load);
+      return () => {
+        cancelled = true;
+        clearInterval(t);
+        document.removeEventListener("visibilitychange", onVisible);
+        window.removeEventListener("focus", load);
+      };
+    }
     if (!googleToken) return;
     let cancelled = false;
     const load = () => {
@@ -626,7 +757,7 @@ function App({ user, onSignOut }) {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", load);
     };
-  }, [googleToken, calendarRefreshKey]); // eslint-disable-line
+  }, [googleToken, calendarRefreshKey, useGoogleServerAuth, googleServerConnected, loadGoogleWorkspaceFromServer]); // eslint-disable-line
 
   function connectGoogle() {
     if (!effectiveGoogleClientId) {
@@ -640,12 +771,47 @@ function App({ user, onSignOut }) {
     }
     console.log('[Google] Requesting access token…');
     setGoogleError(null);
-    gTokenClientRef.current.requestAccessToken();
+    if (useGoogleServerAuth) {
+      gTokenClientRef.current.requestCode();
+    } else {
+      gTokenClientRef.current.requestAccessToken();
+    }
   }
   function disconnectGoogle() {
     setGoogleToken(null); setCalendarEvents(null); setGmailMessages(null); setGoogleError(null);
+    setGoogleServerConnected(false);
+    if (useGoogleServerAuth) callGoogleWorkspace("disconnect").catch(() => {});
     setGoogleWasConnected(false);
     try { localStorage.removeItem('ot_google_token'); localStorage.removeItem('ot_google_token_expiry'); localStorage.removeItem('ot_google_connected'); } catch {}
+  }
+
+  async function loadGoogleEmailDetail(messageId) {
+    if (useGoogleServerAuth) return callGoogleWorkspace("gmailMessage", { id: messageId });
+    if (!googleToken) throw new Error("Reconnect Google to read the full message.");
+    const r = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`, {
+      headers: { Authorization: `Bearer ${googleToken}` },
+    });
+    if (r.status === 401) throw new Error("Google session expired. Reconnect Google.");
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d?.error?.message || `Gmail message failed (${r.status})`);
+    }
+    return r.json();
+  }
+
+  async function createGoogleCalendarEvent(eventBody) {
+    if (useGoogleServerAuth) return callGoogleWorkspace("createCalendarEvent", { eventBody });
+    if (!googleToken) throw new Error("Reconnect Google to add calendar events.");
+    const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(eventBody),
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d?.error?.message || 'Failed to create event');
+    }
+    return r.json();
   }
 
   // ─── Listen for shailos iframe "close" message ───────────────────────────
@@ -934,7 +1100,7 @@ function App({ user, onSignOut }) {
     refreshPendingRecordings();
   }
 
-  const sc = SCHEMES[AS?.colorScheme] || AS?.customSchemes?.[AS?.colorScheme] || SCHEMES.claude;
+  const sc = ensureSchemeContrast(SCHEMES[AS?.colorScheme] || AS?.customSchemes?.[AS?.colorScheme] || SCHEMES.claude);
   // Detect dark theme by checking bg luminance
   const isDark = (()=>{const h=sc.bg||"#EDE5D8";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000<128;})();
   const T = {...sc, isDark, glow:!!sc.glow, shadow: isDark?"0 2px 12px rgba(0,0,0,0.3)":"0 2px 12px rgba(0,0,0,0.06)", shadowLg: isDark?"0 6px 24px rgba(0,0,0,0.4)":"0 6px 24px rgba(0,0,0,0.09)"};
@@ -2864,6 +3030,8 @@ function App({ user, onSignOut }) {
           googleClientId={effectiveGoogleClientId || null}
           onConnectGoogle={connectGoogle}
           onDisconnectGoogle={disconnectGoogle}
+          onLoadEmailDetail={loadGoogleEmailDetail}
+          onCreateCalendarEvent={createGoogleCalendarEvent}
           googleWasConnected={googleWasConnected}
           onRefreshCalendar={() => setCalendarRefreshKey(k => k + 1)}
           paneWeights={AS.nerveCenterPaneWeights}

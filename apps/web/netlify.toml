@@ -18,6 +18,9 @@
 [functions."mcp"]
   timeout = 60
 
+[functions."google-workspace"]
+  timeout = 60
+
 [[headers]]
   for = "/assets/*"
   [headers.values]

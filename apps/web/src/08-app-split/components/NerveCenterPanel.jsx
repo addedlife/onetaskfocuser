@@ -86,7 +86,7 @@ function gmailFullBody(message) {
   return (parts.plain.join("\n\n") || parts.html.join("\n\n") || "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems }) {
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems }) {
   const viewportW = useViewportWidth();
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
@@ -142,22 +142,25 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     setHoverEmail(null);
     clearTimeout(hoverTimerRef.current);
     if (emailDetails[msg.id] || emailDetailLoadingId === msg.id) return;
-    if (!googleToken) {
+    if (!googleToken && !onLoadEmailDetail) {
       setEmailDetailError("Reconnect Google to read the full message.");
       return;
     }
     setEmailDetailError("");
     setEmailDetailLoadingId(msg.id);
     try {
-      const r = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`, {
-        headers: { Authorization: `Bearer ${googleToken}` },
-      });
-      if (r.status === 401) throw new Error("Google session expired. Reconnect Google.");
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}));
-        throw new Error(d?.error?.message || `Gmail message failed (${r.status})`);
-      }
-      const detail = await r.json();
+      const detail = onLoadEmailDetail
+        ? await onLoadEmailDetail(msg.id)
+        : await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`, {
+            headers: { Authorization: `Bearer ${googleToken}` },
+          }).then(async r => {
+            if (r.status === 401) throw new Error("Google session expired. Reconnect Google.");
+            if (!r.ok) {
+              const d = await r.json().catch(() => ({}));
+              throw new Error(d?.error?.message || `Gmail message failed (${r.status})`);
+            }
+            return r.json();
+          });
       setEmailDetails(prev => ({ ...prev, [msg.id]: { ...detail, fullBody: gmailFullBody(detail) || decodeSnippet(detail.snippet || msg.snippet) } }));
     } catch (e) {
       setEmailDetailError(e.message || "Could not load the full message.");
@@ -174,12 +177,16 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       const job = await runAIJob("schedule.parse_event.v1", { today, description: addEventText }, aiOpts || {}, { genConfig: { maxOutputTokens: 700 } });
       const eventBody = job?.output;
       if (!eventBody) throw new Error("Could not parse event - try rephrasing.");
-      const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(eventBody),
-      });
-      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d?.error?.message || 'Failed to create event'); }
+      if (onCreateCalendarEvent) {
+        await onCreateCalendarEvent(eventBody);
+      } else {
+        const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${googleToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventBody),
+        });
+        if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d?.error?.message || 'Failed to create event'); }
+      }
       setShowAddEvent(false); setAddEventText('');
       if (onRefreshCalendar) onRefreshCalendar();
     } catch (e) {

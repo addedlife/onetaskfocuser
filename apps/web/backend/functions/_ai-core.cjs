@@ -1524,6 +1524,12 @@ function publicAiConfig() {
     process.env.VITE_GOOGLE_CLIENT_ID ||
     ""
   ).trim();
+  const googleClientSecret = String(
+    process.env.GOOGLE_CLIENT_SECRET ||
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
+    ""
+  ).trim();
+  const googleServerAuthAvailable = !!(googleClientId && googleClientSecret && firebaseServiceAccount());
   return {
     ai: {
       defaultProvider: provider,
@@ -1559,6 +1565,8 @@ function publicAiConfig() {
     integrations: {
       googleClientId,
       googleAvailable: !!googleClientId,
+      googleAuthMode: googleServerAuthAvailable ? "server" : "token",
+      googleServerAuthAvailable,
     },
     googleClientId,
     geminiKey: geminiCredentialCatalog().some(credential => credential.available),
