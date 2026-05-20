@@ -2917,7 +2917,7 @@ function App({ user, onSignOut }) {
             </p>
             <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
               {ap.map(p => (
-                <button key={p.id} onClick={()=>chgPriority(chgPri,p.id,chgPriIsSubtask?chgPriScope:'one')} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,border:`2px solid ${p.color}`,background:pBg(p.color),cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"system-ui",color:T.text}}>
+                <button key={p.id} onClick={()=>chgPriority(chgPri,p.id,chgPriIsSubtask?chgPriScope:'one')} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,border:`2px solid ${p.color}`,background:pBg(p.color),cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"system-ui",color:textOnPastel(AS.colorScheme,T.text,pBg(p.color))}}>
                   <div style={{width:12,height:12,borderRadius:"50%",background:p.color}}/>{p.label}
                 </button>
               ))}
@@ -3488,19 +3488,23 @@ function App({ user, onSignOut }) {
                       const isF = pos === 0;
                       const dispPos = pos + 1;
                       pos++;
-                      const _qText = isF ? textOnPastel(AS.colorScheme, T.text) : T.tSoft;
+                      const rowBg = isF ? pBg(tp.color) : "transparent";
+                      const rowText = isF ? textOnPastel(AS.colorScheme, T.text, rowBg) : T.tSoft;
+                      const rowSoft = isF ? textOnPastel(AS.colorScheme, T.tSoft, rowBg) : T.tSoft;
+                      const rowAccent = isF ? textOnPastel(AS.colorScheme, priText(tp.color), rowBg) : tp.color;
+                      const rowActionOpacity = isF ? .82 : .35;
                       return (
                         <React.Fragment key={`grp-${task.parentTask}`}>
                           {/* Header — identical layout to a regular task row */}
                           <div draggable onDragStart={()=>setDragId(task.id)} onDragOver={e=>e.preventDefault()} onDrop={()=>handleDrop(task.id)}
-                            style={{...queueRowBase,borderBottom:`1px solid ${T.brdS}`,borderLeft:`3px solid ${tp.color}`,background:isF?pBg(tp.color):"transparent",cursor:"grab"}}>
-                            <span style={{cursor:"grab",padding:"2px",opacity:.35,flexShrink:0}}><IC.Grab s={12} c={T.tSoft}/></span>
+                            style={{...queueRowBase,borderBottom:`1px solid ${T.brdS}`,borderLeft:`3px solid ${tp.color}`,background:rowBg,cursor:"grab"}}>
+                            <span style={{cursor:"grab",padding:"2px",opacity:isF ? .75 : .35,flexShrink:0}}><IC.Grab s={12} c={rowSoft}/></span>
                             <span style={{width:20,height:20,borderRadius:"50%",background:isF?tp.color:"transparent",border:isF?"none":`1.5px solid ${T.tFaint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:isF?textOnColor(tp.color):T.tFaint,fontWeight:600,fontFamily:"system-ui",flexShrink:0}}>
                               {dispPos}
                             </span>
                             <span onClick={()=>setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;})}
-                              style={{flex:1,minWidth:0,fontSize:14,cursor:"pointer",fontWeight:isF?500:400,color:_qText,fontFamily:"Georgia,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
-                              {task.shailaId && shailaNumberMap[task.shailaId] && <span style={{fontSize:10,color:"#C8A84C",fontWeight:700,fontFamily:"system-ui",marginRight:5}}>#{shailaNumberMap[task.shailaId]}</span>}
+                              style={{flex:1,minWidth:0,fontSize:14,cursor:"pointer",fontWeight:isF?500:400,color:rowText,fontFamily:"Georgia,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
+                              {task.shailaId && shailaNumberMap[task.shailaId] && <span style={{fontSize:10,color:rowAccent,fontWeight:700,fontFamily:"system-ui",marginRight:5}}>#{shailaNumberMap[task.shailaId]}</span>}
                               {task.parentTask}
                             </span>
                             {task.shailaId && (() => {
@@ -3511,14 +3515,14 @@ function App({ user, onSignOut }) {
                             })()}
                             <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.7}}/>
                             <div style={queueActionRail}>
-                              <button onClick={e=>{e.stopPropagation();compTask(gSteps[0]?.id);}} title="Complete next step" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Check s={13} c={tp.color}/></button>
-                              {AS.legacyCompleteUI && <button onClick={e=>{e.stopPropagation();legacyCompTask(gSteps[0]?.id);}} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Clock s={12} c={tp.color}/></button>}
-                              <button onClick={e=>{e.stopPropagation();moveTop(gSteps[0]?.id);}} title="To top" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.MoveTop s={12} c={T.tSoft}/></button>
-                              <button onClick={e=>{e.stopPropagation();setChgPri(gSteps[0]?.id);}} title="Change priority" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.PriC s={12} c={T.tSoft}/></button>
-                              <button onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.add(task.parentTask);return n;});setGroupAdding(task.parentTask);}} title="Add step" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35,fontSize:11}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}>✦+</button>
-                              <button onClick={e=>{e.stopPropagation();gSteps.forEach(s=>delTask(s.id));}} title="Delete group" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.3}><IC.Trash s={12} c={T.tFaint}/></button>
+                              <button onClick={e=>{e.stopPropagation();compTask(gSteps[0]?.id);}} title="Complete next step" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></button>
+                              {AS.legacyCompleteUI && <button onClick={e=>{e.stopPropagation();legacyCompTask(gSteps[0]?.id);}} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></button>}
+                              <button onClick={e=>{e.stopPropagation();moveTop(gSteps[0]?.id);}} title="To top" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={rowSoft}/></button>
+                              <button onClick={e=>{e.stopPropagation();setChgPri(gSteps[0]?.id);}} title="Change priority" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={rowSoft}/></button>
+                              <button onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.add(task.parentTask);return n;});setGroupAdding(task.parentTask);}} title="Add step" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity,fontSize:11,color:rowSoft}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}>✦+</button>
+                              <button onClick={e=>{e.stopPropagation();gSteps.forEach(s=>delTask(s.id));}} title="Delete group" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={rowSoft}/></button>
                               {/* THE one extra icon — expand/collapse steps */}
-                              <button onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;});}} title={isOpen?"Hide steps":"Show steps"} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Chev d={isOpen?"up":"down"} s={12} c={T.tSoft}/></button>
+                              <button onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;});}} title={isOpen?"Hide steps":"Show steps"} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Chev d={isOpen?"up":"down"} s={12} c={rowSoft}/></button>
                             </div>
                           </div>
                           {/* Subtle progress bar */}
@@ -3566,22 +3570,26 @@ function App({ user, onSignOut }) {
                       const isF = pos === 0;
                       const dispPos = pos + 1;
                       pos++;
-                      const _qText = isF ? textOnPastel(AS.colorScheme, T.text) : T.tSoft;
-                      const _qSoft = isF ? textOnPastel(AS.colorScheme, T.tSoft) : T.tSoft;
+                      const rowBg = isF ? pBg(tp.color) : (task.blocked ? pBg("#E0B472") : "transparent");
+                      const hasPastelRow = isF || task.blocked;
+                      const _qText = hasPastelRow ? textOnPastel(AS.colorScheme, isF ? T.text : T.tSoft, rowBg) : T.tSoft;
+                      const _qSoft = hasPastelRow ? textOnPastel(AS.colorScheme, T.tSoft, rowBg) : T.tSoft;
+                      const rowAccent = hasPastelRow ? textOnPastel(AS.colorScheme, priText(tp.color), rowBg) : tp.color;
+                      const rowActionOpacity = isF ? .82 : .35;
                       return (
-                        <div key={task.id} draggable onDragStart={()=>setDragId(task.id)} onDragOver={e=>e.preventDefault()} onDrop={()=>handleDrop(task.id)} style={{...queueRowBase,borderBottom:`1px solid ${T.brdS}`,borderLeft:`3px solid ${tp.color}`,background:isF?pBg(tp.color):(task.blocked?pBg("#E0B472"):"transparent"),cursor:"grab",opacity:task.blocked?.6:1}}>
-                          <span style={{cursor:"grab",padding:"2px",opacity:.35,flexShrink:0}}><IC.Grab s={12} c={_qSoft}/></span>
+                        <div key={task.id} draggable onDragStart={()=>setDragId(task.id)} onDragOver={e=>e.preventDefault()} onDrop={()=>handleDrop(task.id)} style={{...queueRowBase,borderBottom:`1px solid ${T.brdS}`,borderLeft:`3px solid ${tp.color}`,background:rowBg,cursor:"grab",opacity:task.blocked ? .82 : 1}}>
+                          <span style={{cursor:"grab",padding:"2px",opacity:isF ? .75 : .35,flexShrink:0}}><IC.Grab s={12} c={_qSoft}/></span>
                           <span style={{width:20,height:20,borderRadius:"50%",background:isF?tp.color:"transparent",border:isF?"none":`1.5px solid ${T.tFaint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:isF?textOnColor(tp.color):T.tFaint,fontWeight:600,fontFamily:"system-ui",flexShrink:0}}>{dispPos}</span>
                           {editId === task.id ? (
-                            <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(task.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(task.id)} style={{flex:1,minWidth:0,fontSize:14,fontFamily:"Georgia,serif",border:`1px solid ${tp.color}80`,borderRadius:8,padding:"4px 8px",outline:"none",color:textOnPastel(AS.colorScheme, T.text),background:pBg(tp.color)}}/>
+                            <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(task.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(task.id)} style={{flex:1,minWidth:0,fontSize:14,fontFamily:"Georgia,serif",border:`1px solid ${tp.color}80`,borderRadius:8,padding:"4px 8px",outline:"none",color:textOnPastel(AS.colorScheme, T.text, pBg(tp.color)),background:pBg(tp.color)}}/>
                           ) : (
                             <div style={{flex:1,display:"flex",flexDirection:"column",gap:1,minWidth:0}}>
                               <span onClick={()=>startEd(task)} style={{fontSize:14,cursor:"text",fontWeight:isF?500:400,color:_qText,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
-                                {task.pinned && <span style={{fontSize:10,marginRight:4,opacity:.5}}>📌</span>}
+                                {task.pinned && <span style={{fontSize:10,marginRight:4,color:rowAccent,opacity:isF?1:.5}}>📌</span>}
                                 {task.text}
                               </span>
                               {task.blocked && task.blockedNote && (
-                                <span style={{fontSize:10,fontStyle:"italic",color:"#A06820",fontFamily:"system-ui",opacity:.8}}>⏸ {task.blockedNote}</span>
+                                <span style={{fontSize:10,fontStyle:"italic",color:textOnPastel(AS.colorScheme, "#A06820", rowBg),fontFamily:"system-ui",opacity:.9}}>⏸ {task.blockedNote}</span>
                               )}
                               {(aged || task.autoAged || task.mrsW || task.blocked || task.energy) && (
                                 <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:2,opacity:.8}}>
@@ -3601,15 +3609,15 @@ function App({ user, onSignOut }) {
                           )}
                           <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.7}}/>
                           <div draggable={false} onPointerDown={e=>e.stopPropagation()} style={queueActionRail}>
-                            <button onClick={e=>{e.stopPropagation();compTask(task.id);}} title="Mark done" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Check s={13} c={tp.color}/></button>
-                            {AS.legacyCompleteUI && <button onClick={e=>{e.stopPropagation();legacyCompTask(task.id);}} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Clock s={12} c={tp.color}/></button>}
-                            <button onClick={e=>{e.stopPropagation();moveTop(task.id);}} title="Top" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.MoveTop s={12} c={T.tSoft}/></button>
-                            {task.pinned && <button onClick={e=>{e.stopPropagation();unpinTask(task.id);}} title="Unpin" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35,fontSize:10}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}>📍</button>}
-                            <button onClick={e=>{e.stopPropagation();setChgPri(task.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.PriC s={12} c={T.tSoft}/></button>
-                            <button onClick={e=>{e.stopPropagation();setShowBD(task);}} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35}} title="Shatter with AI" onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Split s={12} c={T.tSoft}/></button>
-                            <button onClick={e=>{e.stopPropagation();openFirstStep(task);}} title="Suggest first step with AI" style={{background:"none",border:"none",cursor:hasAI?"pointer":"default",padding:3,opacity:hasAI?.35:.15,fontSize:11}} onMouseEnter={e=>{if(hasAI)e.currentTarget.style.opacity=1;}} onMouseLeave={e=>e.currentTarget.style.opacity=hasAI?.35:.15}>✦→</button>
-                            <button onClick={e=>{e.stopPropagation();startManualGroup(task);}} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35,fontSize:11}} title="Add subtasks manually" onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}>✦+</button>
-                            <button onClick={e=>{e.stopPropagation();delTask(task.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.3}><IC.Trash s={12} c={T.tFaint}/></button>
+                            <button onClick={e=>{e.stopPropagation();compTask(task.id);}} title="Mark done" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></button>
+                            {AS.legacyCompleteUI && <button onClick={e=>{e.stopPropagation();legacyCompTask(task.id);}} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></button>}
+                            <button onClick={e=>{e.stopPropagation();moveTop(task.id);}} title="Top" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={_qSoft}/></button>
+                            {task.pinned && <button onClick={e=>{e.stopPropagation();unpinTask(task.id);}} title="Unpin" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity,fontSize:10,color:_qSoft}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}>📍</button>}
+                            <button onClick={e=>{e.stopPropagation();setChgPri(task.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={_qSoft}/></button>
+                            <button onClick={e=>{e.stopPropagation();setShowBD(task);}} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} title="Shatter with AI" onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Split s={12} c={_qSoft}/></button>
+                            <button onClick={e=>{e.stopPropagation();openFirstStep(task);}} title="Suggest first step with AI" style={{background:"none",border:"none",cursor:hasAI?"pointer":"default",padding:3,opacity:hasAI?rowActionOpacity:.15,fontSize:11,color:_qSoft}} onMouseEnter={e=>{if(hasAI)e.currentTarget.style.opacity=1;}} onMouseLeave={e=>e.currentTarget.style.opacity=hasAI?rowActionOpacity:.15}>✦→</button>
+                            <button onClick={e=>{e.stopPropagation();startManualGroup(task);}} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity,fontSize:11,color:_qSoft}} title="Add subtasks manually" onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}>✦+</button>
+                            <button onClick={e=>{e.stopPropagation();delTask(task.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={_qSoft}/></button>
                           </div>
                         </div>
                       );

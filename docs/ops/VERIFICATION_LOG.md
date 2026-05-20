@@ -627,3 +627,12 @@ Current source-grade file count after cleanup: 162 files.
 - In-app Browser verification was attempted first, but the existing local helper failed on `require is not defined in ES module scope`.
 - Headless Edge/CDP seeded 12 queue tasks including one long unbroken token and verified desktop `1365x850` plus mobile `390x820`: document/root scroll width matched viewport width, the queue page stayed bounded (`760px` desktop, available mobile width), and measured queue row overflow count was `0` in both viewports. Screenshots were written under `apps/web/artifacts/queue-layout-*-seeded.png`.
 - Pushed commit `28cfa09` to `origin/main`; Netlify Git-triggered production served `assets/index-BySJo-zy.js` on poll attempt 2, and the deployed asset contained the queue containment marker.
+
+## 2026-05-20 Queue Pastel Row Contrast Repair
+
+- Researched WCAG 2.2 AA contrast expectations for rendered text: normal text should reach 4.5:1, and meaningful UI indicators should remain readable against their actual background.
+- Repaired the shared pastel-row contrast helper so `pBg(...)` RGB backgrounds are parsed and foregrounds are adjusted against the actual row background.
+- Updated queue first-row, group-header, blocked-row, edit-field, priority-change, and row-action controls to use row-specific readable text/accent/action colors instead of theme text on pastel backgrounds.
+- Pastel row audit passed: 20 theme shapes, 17 priority backgrounds, task text/muted-action/accent pairs, 0 failures below 4.5:1.
+- `git diff --check -- apps/web/src/01-core.js apps/web/src/08-app-split/App.jsx` passed; line-ending normalization warnings only.
+- `npm run build` in `apps/web` passed and generated `assets/index-sWvIgPze.js`; existing bundle-size warning remains.

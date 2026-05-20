@@ -1126,15 +1126,31 @@ function _isHexColor(value) {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim());
 }
 
+function _toHexColor(value) {
+  if (typeof value !== "string") return null;
+  const raw = value.trim();
+  if (_isHexColor(raw)) return raw.toUpperCase();
+  const match = raw.match(/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/i);
+  if (!match) return null;
+  const channels = match.slice(1, 4).map(n => Math.max(0, Math.min(255, Number(n))));
+  return `#${channels.map(n => n.toString(16).padStart(2, "0")).join("")}`.toUpperCase();
+}
+
 function _contrastRatio(a, b) {
-  const l1 = _lum(a);
-  const l2 = _lum(b);
+  const aHex = _toHexColor(a);
+  const bHex = _toHexColor(b);
+  if (!aHex || !bHex) return 21;
+  const l1 = _lum(aHex);
+  const l2 = _lum(bHex);
   return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
 }
 
 function _mixHex(from, to, amount) {
-  const f = from.replace("#", "");
-  const t = to.replace("#", "");
+  const fromHex = _toHexColor(from);
+  const toHex = _toHexColor(to);
+  if (!fromHex || !toHex) return from;
+  const f = fromHex.replace("#", "");
+  const t = toHex.replace("#", "");
   const next = [0, 2, 4].map(i => {
     const a = parseInt(f.slice(i, i + 2), 16);
     const b = parseInt(t.slice(i, i + 2), 16);
@@ -1144,19 +1160,21 @@ function _mixHex(from, to, amount) {
 }
 
 function _readableOn(fg, bg, min = 4.5) {
-  if (!_isHexColor(fg) || !_isHexColor(bg)) return fg;
-  if (_contrastRatio(fg, bg) >= min) return fg;
-  const target = _lum(bg) > 0.45 ? "#000000" : "#FFFFFF";
+  const fgHex = _toHexColor(fg);
+  const bgHex = _toHexColor(bg);
+  if (!fgHex || !bgHex) return fg;
+  if (_contrastRatio(fgHex, bgHex) >= min) return fgHex;
+  const target = _lum(bgHex) > 0.45 ? "#000000" : "#FFFFFF";
   for (let step = 1; step <= 24; step++) {
-    const next = _mixHex(fg, target, step / 24);
-    if (_contrastRatio(next, bg) >= min) return next;
+    const next = _mixHex(fgHex, target, step / 24);
+    if (_contrastRatio(next, bgHex) >= min) return next;
   }
-  return _contrastRatio("#000000", bg) >= _contrastRatio("#FFFFFF", bg) ? "#000000" : "#FFFFFF";
+  return _contrastRatio("#000000", bgHex) >= _contrastRatio("#FFFFFF", bgHex) ? "#000000" : "#FFFFFF";
 }
 
 function _readableAcross(fg, backgrounds, min = 4.5) {
   let next = fg;
-  const bgs = backgrounds.filter(_isHexColor);
+  const bgs = backgrounds.map(_toHexColor).filter(Boolean);
   for (let pass = 0; pass < 4; pass++) {
     let changed = false;
     for (const bg of bgs) {
@@ -1207,8 +1225,9 @@ function priText(color) {
 }
 
 // For pBg pastel backgrounds: returns appropriate text color.
-// Dark themes have light text which is invisible on pastels — override to dark.
-function textOnPastel(schemeId, fallbackText) {
+// Dark themes can have light text, so test the actual row background.
+function textOnPastel(schemeId, fallbackText, pastelBg = null) {
+  if (pastelBg) return _readableOn(fallbackText, pastelBg, 4.5);
   if (schemeId === "midnight") return "#3D3838";
   return fallbackText;
 }
