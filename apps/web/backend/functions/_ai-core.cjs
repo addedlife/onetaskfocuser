@@ -520,6 +520,7 @@ function normalizeChiefContext(input = {}) {
         name: cleanString(item?.name, 120),
         kind: cleanString(item?.kind, 80),
         time: cleanString(item?.time, 80),
+        needsReturnCall: !!item?.needsReturnCall,
       })).filter(item => item.name || item.kind),
     },
   };
@@ -534,6 +535,19 @@ function normalizeChiefBrief(value) {
     focusArea: cleanString(o.focusArea || "operations", 80),
     urgency: ["now", "today", "soon", "watch"].includes(o.urgency) ? o.urgency : "today",
     sources: normalizeStringArray(o.sources || [], 6, 80),
+  };
+}
+
+function normalizeChiefTaskSuggestions(value) {
+  const o = Array.isArray(value) ? { suggestions: value } : ensureObject(value);
+  return {
+    suggestions: ensureArray(o.suggestions || []).slice(0, 4).map(item => ({
+      text: cleanString(item?.text, 320),
+      priorityId: cleanString(item?.priorityId || item?.priority, 80),
+      source: cleanString(item?.source, 40),
+      sourceTitle: cleanString(item?.sourceTitle || item?.title, 220),
+      reason: cleanString(item?.reason, 220),
+    })).filter(item => item.text),
   };
 }
 
@@ -581,6 +595,11 @@ function normalizeConversationExtract(value) {
     scheduleItems: ensureArray(o.scheduleItems || []).map(item => ({
       text: cleanString(item?.text, 500),
       when: item?.when ? cleanString(item.when, 200) : null,
+      date: item?.date ? cleanString(item.date, 120) : null,
+      time: item?.time ? cleanString(item.time, 120) : null,
+      durationMinutes: Number.isFinite(Number(item?.durationMinutes)) ? Number(item.durationMinutes) : null,
+      missingDetails: normalizeStringArray(item?.missingDetails || [], 4, 80),
+      unclearReason: cleanString(item?.unclearReason, 260),
     })).filter(item => item.text),
     reminders: ensureArray(o.reminders || []).map(item => ({
       text: cleanString(item?.text, 500),
@@ -676,7 +695,7 @@ const AI_JOB_REGISTRY = {
     output: "json",
     shape: "object",
     genConfig: { temperature: 0.1, maxOutputTokens: 8192 },
-    schema: '{"tasks":[{"text":"...","priority":"now|today|eventually"}],"completions":[{"text":"...","matchedTask":null}],"shailos":[{"synopsis":"...","content":"...","askerName":null,"answer":""}],"gotBacks":[{"synopsis":"...","matchedShailaIndex":null}],"scheduleItems":[{"text":"...","when":null}],"reminders":[{"text":"..."}]}',
+    schema: '{"tasks":[{"text":"...","priority":"now|today|eventually"}],"completions":[{"text":"...","matchedTask":null}],"shailos":[{"synopsis":"...","content":"...","askerName":null,"answer":""}],"gotBacks":[{"synopsis":"...","matchedShailaIndex":null}],"scheduleItems":[{"text":"event title","when":null,"date":null,"time":null,"durationMinutes":null,"missingDetails":["date","time","duration"],"unclearReason":"what is unclear"}],"reminders":[{"text":"..."}]}',
     buildPrompt(input = {}) {
       return compactLines([
         YESHIVISH_SYSTEM,
@@ -685,7 +704,9 @@ const AI_JOB_REGISTRY = {
         `Current task queue:\n${truncateText(input.taskSnap || input.currentTasks || "(none)", 6000)}`,
         `Open shailos:\n${truncateText(input.shailaSnap || input.currentShailos || "(none)", 6000)}`,
         "Rules: extract every distinct item; never merge unrelated items; clean wording while preserving halachic/Jewish terms.",
-        "Halachic questions always go to shailos. Got-back answers go to gotBacks. Fixed-time appointments go to scheduleItems.",
+        "Halachic questions always go to shailos. Got-back answers go to gotBacks. Fixed-time appointments, meetings, calls at a date/time, deadlines with a time, and calendar entries go to scheduleItems even when details are incomplete.",
+        "Never downgrade an intended calendar event into a task because date, time, or duration is missing. Put unclear fields as null and list them in missingDetails.",
+        "For scheduleItems, text is only the event title/action, date is the spoken date if clear, time is the spoken start time if clear, durationMinutes is the duration if clear, and unclearReason explains ambiguity briefly.",
         responseJsonInstruction("object", this.schema),
       ]);
     },
@@ -833,7 +854,8 @@ const AI_JOB_REGISTRY = {
         YESHIVISH_SYSTEM,
         "You are the user's Chief of Staff inside an operational dashboard.",
         "Scan Calendar, Gmail, tasks, shailos, calls, and texts against the current time.",
-        "Prioritize active or imminent events, unusual or special calendar items, urgent communications, unanswered shailos, missed calls/texts, and the top actionable task.",
+        "Prioritize active or imminent events, unusual or special calendar items, urgent communications, unanswered shailos, actionable missed calls/texts, and the top actionable task.",
+        "Treat a missed call as return-call work only when phone.missedCalls is positive or the call row has needsReturnCall true; stale missed calls already answered by a later call or outgoing text are context only.",
         "Routine calendar items are context only unless they are happening now or blocking the next move.",
         "Do not invent facts, do not claim actions were taken, and do not give halachic rulings. If data is thin, say what is visible.",
         `Current snapshot:\n${jsonBlock(context)}`,
@@ -842,6 +864,35 @@ const AI_JOB_REGISTRY = {
       ]);
     },
     validate: normalizeChiefBrief,
+  },
+  "dashboard.task_suggestions.v1": {
+    task: "dashboard-task-suggestions",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0.1, maxOutputTokens: 900 },
+    schema: '{"suggestions":[{"text":"task to create","priorityId":"priority_id","source":"Calendar|Mail","sourceTitle":"source item","reason":"why this is taskable"}]}',
+    buildPrompt(input = {}) {
+      const context = normalizeChiefContext(input.context || input);
+      const priorityOptions = ensureArray(input.priorityOptions || [], "priorityOptions").slice(0, 8).map(priority => ({
+        id: cleanString(priority?.id, 80),
+        label: cleanString(priority?.label, 120),
+        rank: Number.isFinite(Number(priority?.rank)) ? Number(priority.rank) : null,
+      })).filter(priority => priority.id);
+      const existingTasks = ensureArray(input.existingTasks || [], "existingTasks").slice(0, 80).map(task => cleanString(task?.text || task, 260)).filter(Boolean);
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "You are finding taskable follow-up items from Calendar and Gmail for an executive dashboard.",
+        "Suggest only concrete user actions that are visible in the provided Calendar or Gmail data and are not already represented in existing tasks.",
+        "Do not suggest routine calendar attendance by itself. Do suggest prep, reply, bring, call, send, confirm, register, pay, review, or deadline work when the source implies action.",
+        "Choose one priorityId from the priority options. Use the highest priority only for urgent, same-day, blocking, or time-sensitive work.",
+        `Priority options:\n${jsonBlock(priorityOptions)}`,
+        `Existing tasks:\n${jsonBlock(existingTasks)}`,
+        `Calendar and Gmail snapshot:\n${jsonBlock({ currentTime: context.localeTime || context.currentTime, calendar: context.calendar, emails: context.emails })}`,
+        "Return at most 4 suggestions. If nothing taskable is visible, return an empty suggestions array.",
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate: normalizeChiefTaskSuggestions,
   },
   "dashboard.chief_dialogue.v1": {
     task: "dashboard-chief-dialogue",

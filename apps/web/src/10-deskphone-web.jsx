@@ -843,6 +843,30 @@ function messagePreview(message) {
   return "No preview";
 }
 
+function renderLinkedMessageText(text) {
+  const raw = String(text || "");
+  if (!raw) return "";
+  const pattern = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
+  const parts = [];
+  let last = 0;
+  raw.replace(pattern, (match, _url, offset) => {
+    if (offset > last) parts.push(raw.slice(last, offset));
+    const trimmed = match.replace(/[),.;!?]+$/g, "");
+    const trailing = match.slice(trimmed.length);
+    const href = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    parts.push(
+      <a key={`url-${offset}`} href={href} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()}>
+        {trimmed}
+      </a>
+    );
+    if (trailing) parts.push(trailing);
+    last = offset + match.length;
+    return match;
+  });
+  if (last < raw.length) parts.push(raw.slice(last));
+  return parts;
+}
+
 function normalizeSendStatus(raw) {
   return String(raw?.sendStatus || raw?.SendStatus || "").trim();
 }
@@ -1616,7 +1640,7 @@ function MessageBubble({
           if (event.key === "Enter" || event.key === " ") onToggleOpen(message.id);
         }}
       >
-        {message.body ? <div className="dp-message-body">{message.body}</div> : null}
+        {message.body ? <div className="dp-message-body">{renderLinkedMessageText(message.body)}</div> : null}
         {!message.body && message.isMms && !hasVisibleImage ? <div className="dp-message-body dp-muted-body">MMS message</div> : null}
         <MessageAttachments message={message} onNotice={onNotice} onOpenImage={onOpenImage} />
         <div className="dp-message-meta">
@@ -4492,6 +4516,12 @@ const css = `
   overflow-wrap: anywhere;
   font-size: 15px;
   line-height: 1.45;
+}
+.dp-message-body a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .dp-muted-body {
   color: var(--dp-bubble-incoming-muted);

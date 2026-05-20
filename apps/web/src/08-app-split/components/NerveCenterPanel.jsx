@@ -94,6 +94,15 @@ function cleanOneLine(value, max = 180) {
   return text.length > max ? `${text.slice(0, max - 3).trim()}...` : text;
 }
 
+function taskSuggestionKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0590-\u05ff]+/g, " ")
+    .replace(/\b(the|a|an|to|for|about|with|and|or|on|in|at|of)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function parseEventMs(value) {
   const d = new Date(value || 0);
   const ms = d.getTime();
@@ -223,6 +232,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const taskMoreButtonRef = useRef(null);
   const taskInputRef = useRef(null);
   const stackedTaskInputRef = useRef(null);
+  const calendarNowRef = useRef(null);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [addEventText, setAddEventText] = useState('');
   const [addEventLoading, setAddEventLoading] = useState(false);
@@ -241,6 +251,9 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [chiefDialogue, setChiefDialogue] = useState([]);
   const [chiefDialogueLoading, setChiefDialogueLoading] = useState(false);
   const [chiefRefreshNonce, setChiefRefreshNonce] = useState(0);
+  const [taskSuggestions, setTaskSuggestions] = useState([]);
+  const [taskSuggestionsLoading, setTaskSuggestionsLoading] = useState(false);
+  const [dismissedTaskSuggestionKeys, setDismissedTaskSuggestionKeys] = useState(new Set());
   const [phoneActivitySummary, setPhoneActivitySummary] = useState({ online: false, status: "DeskPhone offline", unreadTexts: 0, missedCalls: 0, voicemailCount: 0, texts: [], calls: [] });
   const phoneActivitySigRef = useRef("");
   const [phoneStatusSummary, setPhoneStatusSummary] = useState({ online: false, tone: "offline", label: "DeskPhone offline", voicemailCount: 0 });
@@ -427,6 +440,19 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     .filter(row => row.special)
     .sort((a, b) => a.startMs - b.startMs)
     .slice(0, 2);
+  const calendarNowInsertIndex = useMemo(() => {
+    if (!calendarRows.length) return 0;
+    const nextIndex = calendarRows.findIndex(row => !row.past && row.startMs > nowMs);
+    return nextIndex === -1 ? calendarRows.length : nextIndex;
+  }, [calendarRows, nowMs]);
+  const calendarMinuteKey = Math.floor(nowMs / 60000);
+  useEffect(() => {
+    if (!calendarNowRef.current || calendarEvents === null) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      calendarNowRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [calendarMinuteKey, calendarEvents, calendarRows.length]);
   const chiefContext = useMemo(() => {
     const bucketDate = new Date(timeBucket * CHIEF_TIME_BUCKET_MS);
     const priById = new Map((priorities || []).map(p => [p.id, p.label || p.id]));
@@ -464,6 +490,18 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   }, [timeBucket, priorities, primaryTaskQueue, visibleShailos, calendarRows, gmailMessages, phoneActivitySummary, nowMs]);
   const chiefScanKey = useMemo(() => JSON.stringify(chiefContext), [chiefContext]);
   const chiefFallback = useMemo(() => buildChiefFallbackBrief(chiefContext), [chiefContext]);
+  const taskSuggestionPriorities = useMemo(() =>
+    [...(priorities || [])]
+      .filter(p => !p.deleted && !p.isShaila && p.id !== "shaila")
+      .sort((a, b) => b.weight - a.weight),
+  [priorities]);
+  const defaultSuggestionPriorityId = taskSuggestionPriorities.find(p => p.id === "today")?.id || taskSuggestionPriorities[0]?.id || priorities[0]?.id || "today";
+  const taskSuggestionScanKey = useMemo(() => JSON.stringify({
+    calendar: chiefContext.calendar,
+    emails: chiefContext.emails,
+    tasks: primaryTaskQueue.slice(0, 60).map(task => nerveDisplaySummary(task, task.text || "")),
+    priorities: taskSuggestionPriorities.map(p => `${p.id}:${p.label}:${p.weight}`),
+  }), [chiefContext.calendar, chiefContext.emails, primaryTaskQueue, taskSuggestionPriorities]);
   const needsNervePolish = item => {
     const source = nerveSummarySource(item);
     const summary = String(item?.ncSummary || "").trim();
@@ -524,6 +562,66 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     };
   }, [chiefScanKey, chiefRefreshNonce]); // eslint-disable-line
 
+  useEffect(() => {
+    if (!aiOpts || (!calendarRows.length && !(gmailMessages || []).length) || !taskSuggestionPriorities.length) {
+      setTaskSuggestions([]);
+      setTaskSuggestionsLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setTaskSuggestionsLoading(true);
+    const existingKeys = new Set(
+      primaryTaskQueue
+        .map(task => taskSuggestionKey(`${task.text || ""} ${nerveDisplaySummary(task, "")}`))
+        .filter(Boolean)
+    );
+    const validPriorityIds = new Set(taskSuggestionPriorities.map(p => p.id));
+    const timer = window.setTimeout(() => {
+      runAIJob("dashboard.task_suggestions.v1", {
+        context: chiefContext,
+        priorityOptions: taskSuggestionPriorities.map((p, index) => ({ id: p.id, label: p.label || p.id, rank: index + 1 })),
+        existingTasks: primaryTaskQueue.slice(0, 80).map(task => ({ text: nerveDisplaySummary(task, task.text || "") })),
+      }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 900 } })
+        .then(job => {
+          if (cancelled) return;
+          const seen = new Set();
+          const rows = (job?.output?.suggestions || [])
+            .map((item, index) => {
+              const text = cleanOneLine(item.text, 260);
+              const key = taskSuggestionKey(`${item.source || ""} ${item.sourceTitle || ""} ${text}`);
+              return {
+                id: key || `suggestion-${index}`,
+                key,
+                text,
+                priorityId: validPriorityIds.has(item.priorityId) ? item.priorityId : defaultSuggestionPriorityId,
+                source: cleanOneLine(item.source || "Dashboard", 40),
+                sourceTitle: cleanOneLine(item.sourceTitle || "", 160),
+                reason: cleanOneLine(item.reason || "", 160),
+              };
+            })
+            .filter(item => item.text && item.key && !dismissedTaskSuggestionKeys.has(item.key))
+            .filter(item => {
+              const bare = taskSuggestionKey(item.text);
+              if (!bare || existingKeys.has(bare) || seen.has(item.key)) return false;
+              seen.add(item.key);
+              return true;
+            })
+            .slice(0, 3);
+          setTaskSuggestions(rows);
+        })
+        .catch(() => {
+          if (!cancelled) setTaskSuggestions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setTaskSuggestionsLoading(false);
+        });
+    }, 1200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [taskSuggestionScanKey, dismissedTaskSuggestionKeys]); // eslint-disable-line
+
   async function submitChiefPrompt() {
     const question = chiefPrompt.trim();
     if (!question || chiefDialogueLoading) return;
@@ -550,6 +648,22 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     } finally {
       setChiefDialogueLoading(false);
     }
+  }
+
+  function updateTaskSuggestion(id, patch) {
+    setTaskSuggestions(rows => rows.map(row => row.id === id ? { ...row, ...patch } : row));
+  }
+
+  function dismissTaskSuggestion(row) {
+    setDismissedTaskSuggestionKeys(prev => new Set([...prev, row.key]));
+    setTaskSuggestions(rows => rows.filter(item => item.id !== row.id));
+  }
+
+  function createTaskSuggestion(row) {
+    const text = String(row?.text || "").trim();
+    if (!text) return;
+    onAddTask?.(text, row.priorityId || defaultSuggestionPriorityId);
+    dismissTaskSuggestion(row);
   }
 
   // Keep tab indicator in sync with native scroll position in stacked carousel
@@ -998,6 +1112,13 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           const brief = chiefBrief || chiefFallback;
           const chiefTone = brief?.urgency === "now" ? C.danger : brief?.urgency === "today" ? C.accent : C.muted;
           const sourceLabels = (brief?.sources || []).slice(0, 4);
+          const nowLineColor = C.success || C.accent || "#1A9E78";
+          const calendarNowLine = (key = "now") => (
+            <div key={key} ref={calendarNowRef} aria-label="Current time" style={{ display: "grid", gridTemplateColumns: "44px minmax(0,1fr)", gap: 8, alignItems: "center", padding: "5px 0", scrollMarginBlock: "50%" }}>
+              <span style={{ color: nowLineColor, fontSize: NC_TYPE.small, fontWeight: 700, textAlign: "right", fontFamily: NC_FONT_STACK, whiteSpace: "nowrap" }}>Now</span>
+              <span style={{ height: 2, borderRadius: 2, background: nowLineColor, boxShadow: `0 0 0 1px ${softBorder(nowLineColor, 0.18)}` }} />
+            </div>
+          );
 
           return (
             <React.Fragment>
@@ -1082,7 +1203,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                         <span style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Loading calendar…</span>
                       </div>
                     ) : calendarRows.length === 0 ? (
-                      <p style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK, margin: "12px 0", textAlign: "center" }}>Nothing today</p>
+                      <div style={{ minHeight: "100%", display: "flex", flexDirection: "column", justifyContent: "center", gap: 8 }}>
+                        {calendarNowLine("now-empty")}
+                        <p style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK, margin: "0", textAlign: "center" }}>Nothing today</p>
+                      </div>
                     ) : (
                       <React.Fragment>
                       {specialCalendarRows.length > 0 && (
@@ -1112,9 +1236,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                         </>
                       );
                       return evt.htmlLink
-                        ? <a key={evt.id || i} href={evt.htmlLink} target="_blank" rel="noopener noreferrer" style={rowStyle} onMouseEnter={e => e.currentTarget.style.background = T.bgW || 'rgba(255,255,255,0.05)'} onMouseLeave={e => e.currentTarget.style.background = rowStyle.background}>{inner}</a>
-                        : <div key={evt.id || i} style={rowStyle}>{inner}</div>;
+                        ? <React.Fragment key={evt.id || i}>{i === calendarNowInsertIndex && calendarNowLine("now-line")}<a href={evt.htmlLink} target="_blank" rel="noopener noreferrer" style={rowStyle} onMouseEnter={e => e.currentTarget.style.background = T.bgW || 'rgba(255,255,255,0.05)'} onMouseLeave={e => e.currentTarget.style.background = rowStyle.background}>{inner}</a></React.Fragment>
+                        : <React.Fragment key={evt.id || i}>{i === calendarNowInsertIndex && calendarNowLine("now-line")}<div style={rowStyle}>{inner}</div></React.Fragment>;
                     })}
+                    {calendarNowInsertIndex === calendarRows.length && calendarNowLine("now-line-end")}
                     </React.Fragment>
                     )}
                   </div>
@@ -1150,11 +1275,47 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       ))}
                     </div>
                   )}
-                  {chiefDialogue.length > 0 && (
+                  {(taskSuggestions.length > 0 || taskSuggestionsLoading) && (
+                    <div style={{ display: "grid", gap: 6, flexShrink: 0 }}>
+                      {taskSuggestionsLoading && taskSuggestions.length === 0 && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK }}>
+                          <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${C.faint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                          Scanning for taskable items
+                        </div>
+                      )}
+                      {taskSuggestions.map(row => {
+                        const pri = gP(taskSuggestionPriorities, row.priorityId || defaultSuggestionPriorityId);
+                        return (
+                          <div key={row.id} style={{ border: `1px solid ${softBorder(pri.color || C.accent, 0.28)}`, background: softBg(pri.color || C.accent, 0.07), borderRadius: 7, padding: "7px 8px", display: "grid", gap: 6 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                              <span style={{ minWidth: 0, color: C.text, fontSize: NC_TYPE.meta, fontWeight: 600, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Create new task?</span>
+                              <span style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, whiteSpace: "nowrap" }}>{row.source}</span>
+                            </div>
+                            <input value={row.text} onChange={e => updateTaskSuggestion(row.id, { text: e.target.value })}
+                              style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${C.divider}`, borderRadius: 6, background: C.bg, color: C.text, padding: "6px 7px", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, outline: "none" }} />
+                            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto", gap: 6, alignItems: "center" }}>
+                              <select value={row.priorityId || defaultSuggestionPriorityId} onChange={e => updateTaskSuggestion(row.id, { priorityId: e.target.value })}
+                                style={{ minWidth: 0, height: 28, border: `1px solid ${C.divider}`, borderRadius: 6, background: C.bg, color: C.text, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, padding: "0 6px" }}>
+                                {taskSuggestionPriorities.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                              </select>
+                              <button type="button" onClick={() => dismissTaskSuggestion(row)} title="Dismiss suggestion" aria-label="Dismiss suggestion"
+                                style={gvIconButton({ width: 28, height: 28, color: C.faint, background: "transparent" }, C)}>{suiteIcon("close", 13)}</button>
+                              <button type="button" onClick={() => createTaskSuggestion(row)} disabled={!row.text.trim()} title="Create task" aria-label="Create task"
+                                style={gvIconButton({ width: 28, height: 28, color: row.text.trim() ? "#fff" : C.faint, background: row.text.trim() ? (pri.color || C.accent) : "transparent" }, C)}>{suiteIcon("add", 14)}</button>
+                            </div>
+                            {(row.reason || row.sourceTitle) && (
+                              <div style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{row.reason || row.sourceTitle}</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {(chiefDialogue.length > 0 || chiefDialogueLoading) && (
                     <div style={{ display: "grid", gap: 6, minHeight: 0, overflowY: "auto", paddingRight: 2 }}>
-                      {chiefDialogue.slice(-3).map((row, idx) => (
+                      {[...chiefDialogue.slice(-4), ...(chiefDialogueLoading ? [{ role: "assistant", text: "Thinking through the next move...", pending: true }] : [])].slice(-4).map((row, idx) => (
                         <div key={`${row.role}-${idx}`} style={{ justifySelf: row.role === "user" ? "end" : "start", maxWidth: "92%", border: `1px solid ${row.role === "user" ? softBorder(C.accent, 0.24) : C.divider}`, background: row.role === "user" ? softBg(C.accent, 0.08) : C.bgSoft, color: C.text, borderRadius: 7, padding: "6px 8px", fontSize: NC_TYPE.meta, lineHeight: 1.38, fontFamily: NC_FONT_STACK }}>
-                          {row.text}
+                          <span style={row.pending ? { color: C.muted } : null}>{row.text}</span>
                         </div>
                       ))}
                     </div>

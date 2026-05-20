@@ -21,6 +21,28 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
   const recogRef = useRef(null);
   const elapsedTmrRef = useRef(null);
 
+  function normalizeMissingScheduleDetails(item) {
+    const missing = new Set();
+    if (!String(item?.date || '').trim()) missing.add('date');
+    if (!String(item?.time || '').trim()) missing.add('time');
+    if (!Number(item?.durationMinutes)) missing.add('duration');
+    return Array.from(missing).filter(Boolean);
+  }
+
+  function normalizeScheduleItem(item) {
+    const durationMinutes = Number(item?.durationMinutes);
+    const next = {
+      ...item,
+      date: String(item?.date || '').trim(),
+      time: String(item?.time || '').trim(),
+      when: String(item?.when || '').trim(),
+      durationMinutes: Number.isFinite(durationMinutes) && durationMinutes > 0 ? Math.round(durationMinutes) : '',
+      unclearReason: String(item?.unclearReason || '').trim(),
+    };
+    next.missingDetails = normalizeMissingScheduleDetails(next);
+    return next;
+  }
+
   function goPhase(p) { phaseRef.current = p; setPhase(p); }
 
   function startMediaRecorder(stream) {
@@ -146,7 +168,10 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
 
       const parsed = await aiParseConversation(transcript, tasks, shailos, aiOpts);
       const allItems = [];
-      const add = (cat, arr) => (arr || []).forEach(item => allItems.push({ id: uid(), cat, approved: true, ...item }));
+      const add = (cat, arr) => (arr || []).forEach(item => {
+        const next = cat === 'scheduleItems' ? normalizeScheduleItem(item) : item;
+        allItems.push({ id: uid(), cat, approved: true, ...next });
+      });
       add('tasks', parsed.tasks);
       add('shailos', parsed.shailos);
       add('gotBacks', parsed.gotBacks);
@@ -170,9 +195,25 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
   function updateText(id, text) { setItems(prev => prev.map(it => it.id === id ? {...it, text} : it)); }
   function updatePriority(id, priority) { setItems(prev => prev.map(it => it.id === id ? {...it, priority} : it)); }
   function updateCategory(id, cat) { setItems(prev => prev.map(it => it.id === id ? {...it, cat} : it)); }
+  function updateScheduleField(id, field, value) {
+    setItems(prev => prev.map(it => {
+      if (it.id !== id) return it;
+      const next = normalizeScheduleItem({ ...it, [field]: value });
+      return next;
+    }));
+  }
 
   function scheduleDescription(it) {
-    return it.when ? `${it.text} (${it.when})` : it.text;
+    const parts = [];
+    if (it.date) parts.push(`date: ${it.date}`);
+    if (it.time) parts.push(`start time: ${it.time}`);
+    if (it.durationMinutes) parts.push(`duration: ${it.durationMinutes} minutes`);
+    if (it.when) parts.push(`spoken timing: ${it.when}`);
+    return parts.length ? `${it.text} (${parts.join(', ')})` : it.text;
+  }
+
+  function scheduleMissingDetails(it) {
+    return normalizeMissingScheduleDetails(it);
   }
 
   async function applyApproved() {
@@ -183,6 +224,11 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
     try {
       const scheduleItems = approved.filter(it => it.cat === 'scheduleItems');
       if (scheduleItems.length && !onCreateCalendarEvent) throw new Error('Reconnect Google to add calendar events.');
+      const incomplete = scheduleItems.find(it => scheduleMissingDetails(it).length);
+      if (incomplete) {
+        const missing = scheduleMissingDetails(incomplete).join(', ');
+        throw new Error(`Fill ${missing} for "${incomplete.text || 'schedule item'}" before adding it to Calendar.`);
+      }
       for (const it of scheduleItems) {
         const eventBody = await aiParseCalendarEvent(scheduleDescription(it), aiOpts);
         await onCreateCalendarEvent(eventBody);
@@ -356,8 +402,39 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
                           <option value="shaila">Shaila</option>
                         </select>
                       )}
-                      {it.cat === 'scheduleItems' && it.when && (
-                        <div style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK, marginTop: 3 }}>When: {it.when}</div>
+                      {it.cat === 'scheduleItems' && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 82px', gap: 6, marginTop: 7 }}>
+                          <input
+                            value={it.date || ''}
+                            onChange={e => updateScheduleField(it.id, 'date', e.target.value)}
+                            placeholder="Date"
+                            style={{ minWidth: 0, background: T.bgW, border: `1px solid ${scheduleMissingDetails(it).includes('date') ? '#E67E22' : T.brd}`, borderRadius: 6, color: T.t, fontSize: 13, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
+                          />
+                          <input
+                            value={it.time || ''}
+                            onChange={e => updateScheduleField(it.id, 'time', e.target.value)}
+                            placeholder="Time"
+                            style={{ minWidth: 0, background: T.bgW, border: `1px solid ${scheduleMissingDetails(it).includes('time') ? '#E67E22' : T.brd}`, borderRadius: 6, color: T.t, fontSize: 13, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
+                          />
+                          <input
+                            value={it.durationMinutes || ''}
+                            onChange={e => updateScheduleField(it.id, 'durationMinutes', e.target.value)}
+                            placeholder="Min"
+                            inputMode="numeric"
+                            style={{ minWidth: 0, background: T.bgW, border: `1px solid ${scheduleMissingDetails(it).includes('duration') ? '#E67E22' : T.brd}`, borderRadius: 6, color: T.t, fontSize: 13, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
+                          />
+                          <input
+                            value={it.when || ''}
+                            onChange={e => updateScheduleField(it.id, 'when', e.target.value)}
+                            placeholder="Original wording / notes"
+                            style={{ gridColumn: '1 / -1', minWidth: 0, background: 'transparent', border: `1px solid ${T.brdS}`, borderRadius: 6, color: T.tSoft, fontSize: 12, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
+                          />
+                          {scheduleMissingDetails(it).length > 0 && (
+                            <div style={{ gridColumn: '1 / -1', fontSize: 12, color: '#E67E22', fontFamily: NC_FONT_STACK }}>
+                              Needs {scheduleMissingDetails(it).join(', ')} before adding to Calendar{it.unclearReason ? ` - ${it.unclearReason}` : ''}.
+                            </div>
+                          )}
+                        </div>
                       )}
                       {(it.cat === 'completions' || it.cat === 'gotBacks') && (
                         <div style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK, marginTop: 2, fontStyle: 'italic' }}>Info only — no action taken</div>

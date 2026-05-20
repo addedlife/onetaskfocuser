@@ -110,6 +110,31 @@ function isUnreadMessage(message) {
   return !!(message?.unread || message?.isUnread || message?.read === false || message?.status === "unread");
 }
 
+function linkedMessageParts(text, linkStyle = {}) {
+  const raw = String(text || "");
+  if (!raw) return "";
+  const pattern = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
+  const parts = [];
+  let last = 0;
+  raw.replace(pattern, (match, _url, offset) => {
+    if (offset > last) parts.push(raw.slice(last, offset));
+    const trimmed = match.replace(/[),.;!?]+$/g, "");
+    const trailing = match.slice(trimmed.length);
+    const href = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    parts.push(
+      <a key={`url-${offset}`} href={href} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()}
+        style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2, fontWeight: 600, ...linkStyle }}>
+        {trimmed}
+      </a>
+    );
+    if (trailing) parts.push(trailing);
+    last = offset + match.length;
+    return match;
+  });
+  if (last < raw.length) parts.push(raw.slice(last));
+  return parts;
+}
+
 async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS) {
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
@@ -140,11 +165,13 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
   const [composeOpen, setComposeOpen] = useState(false);    // is compose area visible?
   const [composeIsNew, setComposeIsNew] = useState(false);  // opened as "new message" (has contact search)
   const [composeSearch, setComposeSearch] = useState("");   // contact search in new-compose mode
+  const [composeAnchorId, setComposeAnchorId] = useState(null);
   const [composeFocused, setComposeFocused] = useState(false);
   const [openPhoneActionId, setOpenPhoneActionId] = useState(null);
   const [expandedPhoneMessageId, setExpandedPhoneMessageId] = useState(null);
   const refreshInFlightRef = useRef(false);
   const expandedConversationEndRef = useRef(null);
+  const composeBodyRef = useRef(null);
   const messagesSigRef = useRef("");
   const callsSigRef = useRef("");
   const contactsSigRef = useRef("");
@@ -433,11 +460,36 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
     return "call";
   };
 
+  const callNumber = c => c?.number || c?.phoneNumber || c?.from || c?.Number || c?.PhoneNumber || "";
+  const callAtMs = c => timeMs(c?.timestamp || c?.date || c?.time || c?.startTime || c?.StartTime);
+  const phoneKeyMatch = (a, b) => {
+    const aKeys = phoneKeys(a);
+    const bKeys = phoneKeys(b);
+    return aKeys.some(key => bKeys.includes(key));
+  };
+  const isMissedCallResolved = c => {
+    if (callKindLabel(c) !== "missed") return false;
+    const num = callNumber(c);
+    const missedAt = callAtMs(c);
+    if (!num || !missedAt) return false;
+    const laterHandledCall = recentCalls.some(other => {
+      if (other === c || callKindLabel(other) === "missed") return false;
+      return callAtMs(other) > missedAt && phoneKeyMatch(callNumber(other), num);
+    });
+    if (laterHandledCall) return true;
+    return (Array.isArray(messages) ? messages : []).some(message =>
+      isOutgoingMessage(message) &&
+      messageTimeMs(message) > missedAt &&
+      phoneKeyMatch(messagePeerNumber(message), num)
+    );
+  };
+  const actionableMissedCalls = recentCalls.filter(c => callKindLabel(c) === "missed" && !isMissedCallResolved(c));
+
   const phoneActivitySnapshot = useMemo(() => ({
     online: statusOnline,
     status: statusText,
     unreadTexts: threads.reduce((sum, thread) => sum + (thread._unreadCount || 0), 0),
-    missedCalls: recentCalls.filter(c => callKindLabel(c) === "missed").length,
+    missedCalls: actionableMissedCalls.length,
     voicemailCount: vmCount,
     texts: threads.slice(0, 6).map(thread => {
       const latest = thread._latestMessage || thread._messages?.[thread._messages.length - 1] || {};
@@ -448,15 +500,17 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
         unread: (thread._unreadCount || 0) > 0,
       };
     }),
-    calls: recentCalls.slice(0, 6).map(c => {
-      const num = c.number || c.phoneNumber || c.from || c.Number || c.PhoneNumber || "";
+    calls: recentCalls.slice(0, 8).map(c => {
+      const num = callNumber(c);
+      const kind = callKindLabel(c);
       return {
         name: lookupName(num) || c.name || c.displayName || c.Name || c.DisplayName || c.from || num || "Unknown",
-        kind: callKindLabel(c),
+        kind: kind === "missed" && isMissedCallResolved(c) ? "missed resolved" : kind,
+        needsReturnCall: kind === "missed" && !isMissedCallResolved(c),
         time: fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime),
       };
     }),
-  }), [statusOnline, statusText, threads, recentCalls, vmCount, lookupName]);
+  }), [statusOnline, statusText, threads, recentCalls, actionableMissedCalls.length, vmCount, lookupName, messages]);
 
   useEffect(() => {
     onActivitySnapshot?.(phoneActivitySnapshot);
@@ -470,9 +524,65 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
   };
 
   // Compose helpers — open from row, open new, close
-  const openCompose = (name, num) => { setSelected({ name, number: num }); setNumber(num); setBody(""); setComposeOpen(true); setComposeIsNew(false); };
-  const openNewMessage = () => { setSelected(null); setBody(""); setComposeSearch(""); setComposeIsNew(true); setComposeOpen(true); };
-  const closeCompose = () => { setComposeOpen(false); setComposeIsNew(false); setComposeSearch(""); setSelected(null); };
+  const openCompose = (name, num, anchorId = null) => {
+    setSelected({ name, number: num });
+    setNumber(num);
+    setBody("");
+    setComposeAnchorId(anchorId);
+    setComposeOpen(true);
+    setComposeIsNew(false);
+  };
+  const openNewMessage = () => { setSelected(null); setBody(""); setComposeSearch(""); setComposeAnchorId(null); setComposeIsNew(true); setComposeOpen(true); };
+  const closeCompose = () => { setComposeOpen(false); setComposeIsNew(false); setComposeSearch(""); setSelected(null); setComposeAnchorId(null); };
+  useEffect(() => {
+    if (!composeOpen || composeIsNew || !selected) return undefined;
+    const frame = window.requestAnimationFrame(() => composeBodyRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [composeOpen, composeIsNew, selected?.number, composeAnchorId]);
+
+  const renderComposeBox = (extraStyle = {}) => (
+    <div style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 8, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8, ...extraStyle }}>
+      {composeIsNew && (
+        <div style={{ position: "relative" }}>
+          <input value={composeSearch} onChange={e => setComposeSearch(e.target.value)}
+            onFocus={() => setComposeFocused(true)}
+            onBlur={() => setTimeout(() => setComposeFocused(false), 160)}
+            placeholder="Search contact or enter number..."
+            autoFocus
+            style={{ width: "100%", height: 36, boxSizing: "border-box", padding: "0 12px", borderRadius: 18, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: 14, fontWeight: 400, outline: "none" }} />
+          {composeFocused && suggestions.length > 0 && (
+            <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 300 }}>
+              <SuggestionList onPick={s => { setSelected({ name: s.name, number: s.num }); setNumber(s.num); setComposeSearch(s.name); setComposeIsNew(false); }} />
+            </div>
+          )}
+        </div>
+      )}
+      {selected && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+          {suiteIcon("sms", 14)}
+          <span style={{ fontSize: 13, color: C.muted, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{selected.name || selected.number}</span>
+          <button onClick={closeCompose} style={gvIconButton({ width: 32, height: 32 }, C)}>{suiteIcon("close", 14)}</button>
+        </div>
+      )}
+      {(!composeIsNew || selected) && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 36px", gap: 6, alignItems: "flex-end" }}>
+          <textarea ref={composeBodyRef} value={body} onChange={e => setBody(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendSms(); } }}
+            placeholder="Message..." rows={2}
+            style={{ boxSizing: "border-box", borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, padding: "8px 12px", fontSize: 14, fontFamily: "system-ui", resize: "none", outline: "none", width: "100%" }} />
+          <button onClick={sendSms} disabled={!body.trim() || !!busy || (!selected && !number.trim())}
+            style={{ width: 40, height: 40, borderRadius: 20, border: "none", background: body.trim() ? C.accent : "transparent", color: body.trim() ? "#fff" : C.faint, cursor: body.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0 }}>
+            {suiteIcon("send", 16)}
+          </button>
+        </div>
+      )}
+      {composeIsNew && !selected && (
+        <button onClick={closeCompose} style={gvTextButton({ alignSelf: "flex-end", height: 32, fontSize: NC_TYPE.meta }, C)}>
+          {suiteIcon("close", 13)} Cancel
+        </button>
+      )}
+    </div>
+  );
 
   // Small neutral action button (white/card background) — used on each row
   const AB = ({ icon, title, onClick }) => (
@@ -512,54 +622,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
         </div>
       )}
 
-      {/* ── Compose area — at TOP, above lists ── */}
-      {composeOpen && (
-        <div style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 8, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-          {/* New message mode: contact search */}
-          {composeIsNew && (
-            <div style={{ position: "relative" }}>
-              <input value={composeSearch} onChange={e => setComposeSearch(e.target.value)}
-                onFocus={() => setComposeFocused(true)}
-                onBlur={() => setTimeout(() => setComposeFocused(false), 160)}
-                placeholder="Search contact or enter number…"
-                autoFocus
-                style={{ width: "100%", height: 36, boxSizing: "border-box", padding: "0 12px", borderRadius: 18, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: 14, fontWeight: 400, outline: "none" }} />
-              {composeFocused && suggestions.length > 0 && (
-                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 300 }}>
-                  <SuggestionList onPick={s => { setSelected({ name: s.name, number: s.num }); setNumber(s.num); setComposeSearch(s.name); setComposeIsNew(false); }} />
-                </div>
-              )}
-            </div>
-          )}
-          {/* Header: who we're writing to (once contact is known) */}
-          {selected && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-              {suiteIcon("sms", 14)}
-              <span style={{ fontSize: 13, color: C.muted, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{selected.name || selected.number}</span>
-              <button onClick={closeCompose} style={gvIconButton({ width: 32, height: 32 }, C)}>{suiteIcon("close", 14)}</button>
-            </div>
-          )}
-          {/* Textarea + send — shown once a contact is selected or in non-new mode */}
-          {(!composeIsNew || selected) && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 36px", gap: 6, alignItems: "flex-end" }}>
-              <textarea value={body} onChange={e => setBody(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendSms(); } }}
-                placeholder="Message…" rows={2}
-                style={{ boxSizing: "border-box", borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, padding: "8px 12px", fontSize: 14, fontFamily: "system-ui", resize: "none", outline: "none", width: "100%" }} />
-              <button onClick={sendSms} disabled={!body.trim() || !!busy || (!selected && !number.trim())}
-                style={{ width: 40, height: 40, borderRadius: 20, border: "none", background: body.trim() ? C.accent : "transparent", color: body.trim() ? "#fff" : C.faint, cursor: body.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0 }}>
-                {suiteIcon("send", 16)}
-              </button>
-            </div>
-          )}
-          {/* Close button when searching but no contact picked yet */}
-          {composeIsNew && !selected && (
-            <button onClick={closeCompose} style={gvTextButton({ alignSelf: "flex-end", height: 32, fontSize: NC_TYPE.meta }, C)}>
-              {suiteIcon("close", 13)} Cancel
-            </button>
-          )}
-        </div>
-      )}
+      {composeOpen && !composeAnchorId && renderComposeBox()}
 
       {/* ── Control bar: answer/hangup | record | new-msg | keypad toggle ── */}
       <div style={{ display: "flex", gap: 6, alignItems: "center", minHeight: compact ? 30 : 44 }}>
@@ -674,7 +737,12 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
                     {!expanded && actionsOpen && (
                       <div style={phoneActionGroupStyle}>
                         <AB icon="call" title="Call" onClick={() => { setOpenPhoneActionId(null); dialNum(thread._who); }} />
-                        <AB icon="sms" title="Text" onClick={() => { setOpenPhoneActionId(null); openCompose(thread._name, thread._who); }} />
+                        <AB icon="sms" title="Text" onClick={() => { setOpenPhoneActionId(null); openCompose(thread._name, thread._who, actionId); }} />
+                      </div>
+                    )}
+                    {!expanded && composeOpen && composeAnchorId === actionId && !composeIsNew && (
+                      <div style={{ gridColumn: "2 / 4", marginTop: 2 }}>
+                        {renderComposeBox({ boxShadow: "none" })}
                       </div>
                     )}
                     {expanded && (
@@ -685,7 +753,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
                             <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); dialNum(thread._who); }} title="Call" aria-label="Call" style={phoneIconButton(false)}>
                               {suiteIcon("call", 15)}
                             </button>
-                            <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); openCompose(thread._name, thread._who); }} title="Reply" aria-label="Reply" style={phoneIconButton(false)}>
+                            <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); openCompose(thread._name, thread._who, actionId); }} title="Reply" aria-label="Reply" style={phoneIconButton(false)}>
                               {suiteIcon("sms", 15)}
                             </button>
                             <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); setExpandedPhoneMessageId(null); }} title="Close conversation" aria-label="Close conversation" style={phoneIconButton(false)}>
@@ -693,6 +761,11 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
                             </button>
                           </div>
                         </div>
+                        {composeOpen && composeAnchorId === actionId && !composeIsNew && (
+                          <div style={{ margin: "0 0 8px" }}>
+                            {renderComposeBox({ boxShadow: "none" })}
+                          </div>
+                        )}
                         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                           {thread._messages.map((msg, msgIdx) => {
                             const outgoing = isOutgoingMessage(msg);
@@ -701,7 +774,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
                             return (
                               <div key={`${thread._who}-${messageTimeMs(msg)}-${msgIdx}`} style={{ alignSelf: outgoing ? "flex-end" : "flex-start", maxWidth: "92%", minWidth: 0 }}>
                                 <div style={{ borderRadius: 8, border: `1px solid ${outgoing ? "transparent" : C.divider}`, background: outgoing ? C.hover : C.bgSoft, color: C.text, padding: "7px 9px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                                  {msgText || "(no text)"}
+                                  {linkedMessageParts(msgText || "(no text)", { color: C.accent })}
                                 </div>
                                 {msgTime && <div style={{ fontSize: 11, color: C.faint, marginTop: 2, textAlign: outgoing ? "right" : "left" }}>{msgTime}</div>}
                               </div>
@@ -738,7 +811,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
                             <button
                               type="button"
                               onMouseDown={e => e.preventDefault()}
-                              onClick={e => { e.stopPropagation(); openCompose(thread._name, thread._who); }}
+                              onClick={e => { e.stopPropagation(); openCompose(thread._name, thread._who, actionId); }}
                               title="Reply"
                               aria-label="Reply"
                               style={phoneIconButton(false)}
@@ -787,7 +860,12 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
                     {actionsOpen && (
                       <div style={phoneActionGroupStyle}>
                         <AB icon="call" title="Call back" onClick={() => { setOpenPhoneActionId(null); dialNum(num); }} />
-                        <AB icon="sms" title="Text back" onClick={() => { setOpenPhoneActionId(null); openCompose(name, num); }} />
+                        <AB icon="sms" title="Text back" onClick={() => { setOpenPhoneActionId(null); openCompose(name, num, actionId); }} />
+                      </div>
+                    )}
+                    {composeOpen && composeAnchorId === actionId && !composeIsNew && (
+                      <div style={{ gridColumn: "2 / 4", marginTop: 2 }}>
+                        {renderComposeBox({ boxShadow: "none" })}
                       </div>
                     )}
                   </div>
