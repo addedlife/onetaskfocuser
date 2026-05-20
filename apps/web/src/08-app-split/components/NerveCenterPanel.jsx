@@ -518,9 +518,12 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [chiefProfileOpen, setChiefProfileOpen] = useState(false);
   const [chiefProfileDraft, setChiefProfileDraft] = useState("");
   const [chiefProfileSaving, setChiefProfileSaving] = useState(false);
+  const [chiefTaskDraft, setChiefTaskDraft] = useState("");
+  const [chiefTaskPriority, setChiefTaskPriority] = useState("");
   const [pendingChiefCalendarAction, setPendingChiefCalendarAction] = useState(null);
   const chiefPromptRef = useRef(null);
   const chiefRefreshHandledRef = useRef(chiefRefreshNonce);
+  const chiefTaskDraftSourceRef = useRef("");
   useEffect(() => {
     if (chiefProfile?.learning?.events?.length) {
       const next = { version: 1, events: chiefProfile.learning.events.slice(-200) };
@@ -773,7 +776,12 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       profile: { notes: chiefProfileNotes },
     };
   }, [timeBucket, priorities, primaryTaskQueue, visibleShailos, calendarRows, gmailMessages, phoneActivitySummary, nowMs, chiefProfileNotes]);
-  const chiefScanKey = useMemo(() => JSON.stringify(chiefContext), [chiefContext]);
+  const chiefLearningProfile = useMemo(() => buildChiefLearningProfile(chiefLearning), [chiefLearning]);
+  const chiefScanContext = useMemo(() => ({
+    ...chiefContext,
+    learning: chiefLearningProfile,
+  }), [chiefContext, chiefLearningProfile]);
+  const chiefScanKey = useMemo(() => JSON.stringify(chiefScanContext), [chiefScanContext]);
   const chiefFallback = useMemo(() => buildChiefFallbackBrief(chiefContext), [chiefContext]);
   const taskSuggestionPriorities = useMemo(() =>
     [...(priorities || [])]
@@ -781,7 +789,6 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       .sort((a, b) => b.weight - a.weight),
   [priorities]);
   const defaultSuggestionPriorityId = taskSuggestionPriorities.find(p => p.id === "today")?.id || taskSuggestionPriorities[0]?.id || priorities[0]?.id || "today";
-  const chiefLearningProfile = useMemo(() => buildChiefLearningProfile(chiefLearning), [chiefLearning]);
   const taskSuggestionScanKey = useMemo(() => JSON.stringify({
     calendar: chiefContext.calendar,
     emails: chiefContext.emails,
@@ -815,6 +822,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   useEffect(() => {
     let cancelled = false;
     const now = Date.now();
+    if (!chiefPage) {
+      setChiefLoading(false);
+      setChiefError("");
+      return undefined;
+    }
     const force = chiefRefreshNonce !== chiefRefreshHandledRef.current;
     chiefRefreshHandledRef.current = chiefRefreshNonce;
     setChiefBrief(prev => prev || chiefFallback);
@@ -836,10 +848,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       setChiefLoading(false);
       return undefined;
     }
-    setChiefLoading(true);
+      setChiefLoading(true);
     const timer = window.setTimeout(() => {
       writeStorageNumber(CHIEF_SCAN_LAST_RUN_KEY, Date.now());
-      runAIJob("dashboard.chief_of_staff.v1", { context: chiefContext }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 900 } })
+      runAIJob("dashboard.chief_of_staff.v1", { context: chiefScanContext }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 900 } })
         .then(job => {
           if (cancelled) return;
           const output = job?.output;
@@ -864,10 +876,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [chiefScanKey, chiefRefreshNonce]); // eslint-disable-line
+  }, [chiefPage, chiefScanKey, chiefRefreshNonce]); // eslint-disable-line
 
   useEffect(() => {
-    if (!aiOpts || (!calendarRows.length && !(gmailMessages || []).length) || !taskSuggestionPriorities.length) {
+    if (!chiefPage || !aiOpts || (!calendarRows.length && !(gmailMessages || []).length) || !taskSuggestionPriorities.length) {
       setTaskSuggestions([]);
       setTaskSuggestionsLoading(false);
       return undefined;
@@ -945,7 +957,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [taskSuggestionScanKey]); // eslint-disable-line
+  }, [chiefPage, taskSuggestionScanKey]); // eslint-disable-line
 
   async function submitChiefPrompt(questionOverride = null) {
     const question = String(questionOverride ?? chiefPrompt).trim();
@@ -1152,6 +1164,17 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
     setTaskSuggestions(rows => rows.filter(item => item.id !== row.id));
   }
 
+  function createChiefNextTask() {
+    const text = String(chiefTaskDraft || "").trim();
+    if (!text) return;
+    const priorityId = chiefTaskPriority || defaultSuggestionPriorityId;
+    onAddTask?.(text, priorityId);
+    recordChiefSmartLearning("done", chiefBrief || chiefFallback);
+    setChiefDialogue(rows => [...rows, { role: "assistant", text: "Added that next move to Tasks." }].slice(-6));
+    setChiefTaskDraft("");
+    chiefTaskDraftSourceRef.current = "";
+  }
+
   async function saveChiefProfileDraft() {
     if (!onSaveChiefProfileMarkdown || chiefProfileSaving) return;
     setChiefProfileSaving(true);
@@ -1310,6 +1333,16 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const activeChiefBrief = chiefBrief || chiefFallback;
   const activeChiefTone = activeChiefBrief?.urgency === "now" ? C.danger : activeChiefBrief?.urgency === "today" ? C.accent : C.muted;
   const activeChiefSources = (activeChiefBrief?.sources || []).slice(0, 5);
+  const activeChiefTaskText = cleanOneLine(activeChiefBrief?.nextAction || "", 260);
+  useEffect(() => {
+    if (!chiefPage || !activeChiefTaskText) return;
+    setChiefTaskDraft(prev => {
+      if (prev && prev !== chiefTaskDraftSourceRef.current) return prev;
+      chiefTaskDraftSourceRef.current = activeChiefTaskText;
+      return activeChiefTaskText;
+    });
+    setChiefTaskPriority(prev => prev || defaultSuggestionPriorityId);
+  }, [chiefPage, activeChiefTaskText, defaultSuggestionPriorityId]);
   const chiefSmartButtons = (large = false) => (
     <div style={{ display: "flex", flexWrap: "wrap", gap: large ? 8 : 6 }} aria-label="Chief smart responses">
       {[
@@ -1350,18 +1383,34 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   );
 
   if (chiefPage) {
-    const pageCard = { background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, overflow: "hidden", minWidth: 0, boxShadow: "none" };
     const pageLabel = { fontSize: NC_TYPE.small, color: C.faint, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0, fontFamily: NC_FONT_STACK };
+    const pagePanel = { border: `1px solid ${C.divider}`, borderRadius: 8, background: C.bg, minWidth: 0, overflow: "hidden" };
+    const pagePad = isStacked ? 14 : 18;
+    const dueSignals = {
+      calendar: calendarRows.filter(row => !row.past && row.special).length,
+      tasks: primaryTaskQueue.length,
+      shailos: visibleShailos.length,
+      mail: Array.isArray(gmailMessages) ? gmailMessages.length : 0,
+      phone: Number(phoneActivitySummary?.unreadTexts || 0) + Number(phoneActivitySummary?.missedCalls || 0) + Number(phoneActivitySummary?.voicemailCount || 0),
+    };
+    const snapshotTiles = [
+      ["Calendar", dueSignals.calendar ? `${dueSignals.calendar} special` : "steady", "calendar_today", dueSignals.calendar ? C.accent : C.muted],
+      ["Tasks", `${dueSignals.tasks} open`, "task_alt", dueSignals.tasks ? C.text : C.muted],
+      ["Shailos", `${dueSignals.shailos} open`, "rule", dueSignals.shailos ? C.warning || C.accent : C.muted],
+      ["Mail", dueSignals.mail ? `${dueSignals.mail} visible` : "clear", "mail", dueSignals.mail ? C.text : C.muted],
+      ["Phone", dueSignals.phone ? `${dueSignals.phone} signal${dueSignals.phone === 1 ? "" : "s"}` : "quiet", "smartphone", dueSignals.phone ? C.danger : C.muted],
+    ];
+    const chiefPri = gP(taskSuggestionPriorities, chiefTaskPriority || defaultSuggestionPriorityId);
     return (
       <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: "auto", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}` }}>
-        <div style={{ maxWidth: 980, margin: "0 auto", padding: isStacked ? "18px 14px 28px" : "28px 24px 36px", display: "grid", gap: 14, boxSizing: "border-box" }}>
+        <div style={{ maxWidth: 1120, margin: "0 auto", padding: isStacked ? "18px 14px 32px" : "28px 24px 40px", display: "grid", gap: 14, boxSizing: "border-box" }}>
           <header style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 12, alignItems: "center" }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "inline-flex", alignItems: "center", gap: 8, color: activeChiefTone, fontSize: NC_TYPE.label, fontWeight: 700, fontFamily: NC_FONT_STACK, marginBottom: 6 }}>
                 {suiteIcon("psychology", 18)}
                 Chief of Staff
               </div>
-              <h1 style={{ margin: 0, fontSize: isStacked ? 24 : 30, lineHeight: 1.12, fontWeight: 650, color: C.text, fontFamily: NC_FONT_STACK }}>Next best move</h1>
+              <h1 style={{ margin: 0, fontSize: isStacked ? 24 : 30, lineHeight: 1.12, fontWeight: 650, color: C.text, fontFamily: NC_FONT_STACK }}>Today command</h1>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               {chiefLoading && <div title="Scanning" style={{ width: 14, height: 14, borderRadius: "50%", border: `2px solid ${activeChiefTone}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
@@ -1372,45 +1421,113 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
             </div>
           </header>
 
-          <section style={{ ...pageCard, padding: isStacked ? 16 : 20, display: "grid", gap: 16 }}>
-            <div style={{ display: "grid", gap: 7 }}>
-              <span style={pageLabel}>Recommendation</span>
-              <div style={{ borderLeft: `4px solid ${activeChiefTone}`, paddingLeft: 14, display: "grid", gap: 8 }}>
-                <div style={{ fontSize: isStacked ? 19 : 23, lineHeight: 1.22, color: C.text, fontWeight: 650, fontFamily: NC_FONT_STACK }}>{activeChiefBrief.summary}</div>
-                <div style={{ fontSize: isStacked ? 15 : 17, lineHeight: 1.38, color: C.muted, fontFamily: NC_FONT_STACK }}>
-                  <span style={{ color: activeChiefTone, fontWeight: 700 }}>Next: </span>{activeChiefBrief.nextAction}
+          <section style={{ display: "grid", gridTemplateColumns: isStacked ? "repeat(2,minmax(0,1fr))" : "repeat(5,minmax(0,1fr))", gap: 8 }}>
+            {snapshotTiles.map(([label, value, icon, color]) => (
+              <div key={label} style={{ border: `1px solid ${C.divider}`, borderRadius: 8, background: C.bgSoft, padding: "10px 11px", minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, color, fontSize: NC_TYPE.small, fontWeight: 700, fontFamily: NC_FONT_STACK }}>
+                  {suiteIcon(icon, 14)}
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
                 </div>
-                {(activeChiefBrief.why || chiefError) && (
-                  <div style={{ fontSize: NC_TYPE.control, lineHeight: 1.45, color: C.faint, fontFamily: NC_FONT_STACK }}>{activeChiefBrief.why || chiefError}</div>
-                )}
+                <div style={{ marginTop: 6, color: C.text, fontSize: NC_TYPE.control, fontWeight: 650, lineHeight: 1.25, fontFamily: NC_FONT_STACK }}>{value}</div>
               </div>
-            </div>
-            <div style={{ display: "grid", gap: 8 }}>
-              <span style={pageLabel}>Respond</span>
+            ))}
+          </section>
+
+          <section style={{ ...pagePanel, display: "grid", gridTemplateColumns: isStacked ? "1fr" : "minmax(0,1.34fr) minmax(300px,0.66fr)" }}>
+            <div style={{ padding: pagePad, borderRight: isStacked ? "none" : `1px solid ${C.divider}`, borderBottom: isStacked ? `1px solid ${C.divider}` : "none", display: "grid", gap: 14 }}>
+              <div style={{ display: "grid", gap: 7 }}>
+                <span style={pageLabel}>Next move</span>
+                <div style={{ borderLeft: `4px solid ${activeChiefTone}`, paddingLeft: 14, display: "grid", gap: 8 }}>
+                  <div style={{ fontSize: isStacked ? 19 : 24, lineHeight: 1.2, color: C.text, fontWeight: 650, fontFamily: NC_FONT_STACK }}>{activeChiefBrief.summary}</div>
+                  <div style={{ fontSize: isStacked ? 15 : 17, lineHeight: 1.38, color: C.muted, fontFamily: NC_FONT_STACK }}>
+                    <span style={{ color: activeChiefTone, fontWeight: 700 }}>Do: </span>{activeChiefBrief.nextAction}
+                  </div>
+                  {(activeChiefBrief.why || chiefError) && (
+                    <div style={{ fontSize: NC_TYPE.control, lineHeight: 1.45, color: C.faint, fontFamily: NC_FONT_STACK }}>{activeChiefBrief.why || chiefError}</div>
+                  )}
+                </div>
+              </div>
               {chiefSmartButtons(true)}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: isStacked ? "1fr" : "repeat(3,minmax(0,1fr))", gap: 8 }}>
-              {[
-                ["Focus", activeChiefBrief.focusArea || "operations", C.text],
-                ["Urgency", activeChiefBrief.urgency || "watch", activeChiefTone],
-                ["Evidence", (activeChiefSources.length ? activeChiefSources : ["Dashboard"]).join(", "), C.text],
-              ].map(([label, value, color]) => (
-                <div key={label} style={{ border: `1px solid ${C.divider}`, borderRadius: 8, padding: 10, background: C.bgSoft }}>
-                  <div style={pageLabel}>{label}</div>
-                  <div style={{ marginTop: 5, color, fontSize: NC_TYPE.control, fontWeight: 650, fontFamily: NC_FONT_STACK, lineHeight: 1.35 }}>{value}</div>
-                </div>
-              ))}
+
+            <div style={{ padding: pagePad, display: "grid", gap: 12, alignContent: "start" }}>
+              <span style={pageLabel}>Capture</span>
+              <input value={chiefTaskDraft} onChange={e => setChiefTaskDraft(e.target.value)} placeholder="Task text"
+                style={{ minWidth: 0, width: "100%", boxSizing: "border-box", height: 38, borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "0 10px", fontSize: NC_TYPE.control, lineHeight: 1.35, fontFamily: NC_FONT_STACK, outline: "none" }} />
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 8 }}>
+                <select value={chiefTaskPriority || defaultSuggestionPriorityId} onChange={e => setChiefTaskPriority(e.target.value)}
+                  style={{ minWidth: 0, height: 36, border: `1px solid ${C.divider}`, borderRadius: 8, background: C.bgSoft, color: C.text, fontSize: NC_TYPE.control, fontFamily: NC_FONT_STACK, padding: "0 8px" }}>
+                  {taskSuggestionPriorities.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+                <button type="button" onClick={createChiefNextTask} disabled={!chiefTaskDraft.trim()} title="Create task" aria-label="Create task"
+                  style={gvIconButton({ width: 38, height: 36, borderRadius: 8, color: chiefTaskDraft.trim() ? "#fff" : C.faint, background: chiefTaskDraft.trim() ? (chiefPri.color || C.accent) : "transparent" }, C)}>{suiteIcon("add", 16)}</button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: isStacked ? "1fr" : "repeat(3,minmax(0,1fr))", gap: 8 }}>
+                {[
+                  ["Focus", activeChiefBrief.focusArea || "operations", C.text],
+                  ["Urgency", activeChiefBrief.urgency || "watch", activeChiefTone],
+                  ["Evidence", (activeChiefSources.length ? activeChiefSources : ["Dashboard"]).join(", "), C.text],
+                ].map(([label, value, color]) => (
+                  <div key={label} style={{ border: `1px solid ${C.divider}`, borderRadius: 8, padding: 9, background: C.bgSoft, minWidth: 0 }}>
+                    <div style={pageLabel}>{label}</div>
+                    <div style={{ marginTop: 5, color, fontSize: NC_TYPE.small, fontWeight: 650, fontFamily: NC_FONT_STACK, lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           </section>
 
-          <section style={pageCard}>
+          {(taskSuggestions.length > 0 || taskSuggestionsLoading) && (
+            <section style={{ ...pagePanel }}>
+              <div style={{ padding: "13px 14px", borderBottom: `1px solid ${C.divider}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ color: C.text, fontSize: NC_TYPE.label, fontWeight: 700, fontFamily: NC_FONT_STACK }}>{suiteIcon("playlist_add", 15)} Taskable signals</span>
+                {taskSuggestionsLoading && <span style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK }}>Scanning</span>}
+              </div>
+              <div style={{ padding: 14, display: "grid", gridTemplateColumns: isStacked ? "1fr" : "repeat(2,minmax(0,1fr))", gap: 10 }}>
+                {taskSuggestionsLoading && taskSuggestions.length === 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.faint, fontSize: NC_TYPE.control, fontFamily: NC_FONT_STACK }}>
+                    <div style={{ width: 11, height: 11, borderRadius: "50%", border: `1.5px solid ${C.faint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                    Reading calendar and mail
+                  </div>
+                )}
+                {taskSuggestions.map(row => {
+                  const pri = gP(taskSuggestionPriorities, row.priorityId || defaultSuggestionPriorityId);
+                  return (
+                    <div key={row.id} style={{ border: `1px solid ${softBorder(pri.color || C.accent, 0.28)}`, background: softBg(pri.color || C.accent, 0.07), borderRadius: 8, padding: 10, display: "grid", gap: 8, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                        <span style={{ minWidth: 0, color: C.text, fontSize: NC_TYPE.control, fontWeight: 650, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Create task</span>
+                        <span style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, whiteSpace: "nowrap" }}>{row.source}</span>
+                      </div>
+                      <input value={row.text} onChange={e => updateTaskSuggestion(row.id, { text: e.target.value })}
+                        style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${C.divider}`, borderRadius: 7, background: C.bg, color: C.text, padding: "7px 8px", fontSize: NC_TYPE.control, fontFamily: NC_FONT_STACK, outline: "none" }} />
+                      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto", gap: 6, alignItems: "center" }}>
+                        <select value={row.priorityId || defaultSuggestionPriorityId} onChange={e => updateTaskSuggestion(row.id, { priorityId: e.target.value })}
+                          style={{ minWidth: 0, height: 30, border: `1px solid ${C.divider}`, borderRadius: 7, background: C.bg, color: C.text, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, padding: "0 6px" }}>
+                          {taskSuggestionPriorities.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                        </select>
+                        <button type="button" onClick={() => dismissTaskSuggestion(row)} title="Dismiss suggestion" aria-label="Dismiss suggestion"
+                          style={gvIconButton({ width: 30, height: 30, color: C.faint, background: "transparent" }, C)}>{suiteIcon("close", 13)}</button>
+                        <button type="button" onClick={() => createTaskSuggestion(row)} disabled={!row.text.trim()} title="Create task" aria-label="Create task"
+                          style={gvIconButton({ width: 30, height: 30, color: row.text.trim() ? "#fff" : C.faint, background: row.text.trim() ? (pri.color || C.accent) : "transparent" }, C)}>{suiteIcon("add", 14)}</button>
+                      </div>
+                      {(row.reason || row.sourceTitle) && (
+                        <div style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, lineHeight: 1.35, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{row.reason || row.sourceTitle}</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          <section style={{ ...pagePanel }}>
             <div style={{ padding: "13px 14px", borderBottom: `1px solid ${C.divider}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
               <span style={{ color: C.text, fontSize: NC_TYPE.label, fontWeight: 700, fontFamily: NC_FONT_STACK }}>{suiteIcon("forum", 15)} Discuss</span>
               {chiefDialogueLoading && <span style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK }}>Thinking</span>}
             </div>
             <div role="status" aria-live="polite" aria-atomic="false" style={{ padding: 14, minHeight: 130, maxHeight: 320, overflow: "auto", display: "grid", alignContent: "start", gap: 8 }}>
               {chiefDialogue.length === 0 && !chiefDialogueLoading && (
-                <div style={{ color: C.faint, fontSize: NC_TYPE.control, lineHeight: 1.45, fontFamily: NC_FONT_STACK }}>Tell Chief "not now", "skip", or "stop showing sleep tasks" and it will update the recommendation model.</div>
+                <div style={{ color: C.faint, fontSize: NC_TYPE.control, lineHeight: 1.45, fontFamily: NC_FONT_STACK }}>What can wait? What should I clear first? Stop showing sleep tasks.</div>
               )}
               {[...chiefDialogue.slice(-8), ...(chiefDialogueLoading ? [{ role: "assistant", text: "Thinking through the next move...", pending: true }] : [])].map((row, idx) => (
                 <div key={`${row.role}-${idx}`} style={{ justifySelf: row.role === "user" ? "end" : "start", maxWidth: "92%", border: `1px solid ${row.role === "user" ? softBorder(C.accent, 0.24) : C.divider}`, background: row.role === "user" ? softBg(C.accent, 0.08) : C.bgSoft, color: C.text, borderRadius: 8, padding: "8px 10px", fontSize: NC_TYPE.control, lineHeight: 1.42, fontFamily: NC_FONT_STACK }}>
@@ -1426,6 +1543,29 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 {suiteIcon(chiefDialogueLoading ? "hourglass_top" : "send", 16)}
               </button>
             </form>
+          </section>
+
+          <section style={{ ...pagePanel }}>
+            <button type="button" onClick={() => setChiefProfileOpen(open => !open)}
+              style={{ width: "100%", minHeight: 44, border: "none", background: "transparent", color: C.text, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "0 14px", cursor: "pointer", fontSize: NC_TYPE.label, fontWeight: 700, fontFamily: NC_FONT_STACK }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>{suiteIcon("tune", 15)} Profile</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: C.faint, fontSize: NC_TYPE.small, fontWeight: 500 }}>
+                {chiefProfileLoading ? "Loading" : "Netlify Blobs"}
+                {suiteIcon(chiefProfileOpen ? "expand_less" : "expand_more", 17)}
+              </span>
+            </button>
+            {chiefProfileOpen && (
+              <div style={{ borderTop: `1px solid ${C.divider}`, padding: 14, display: "grid", gap: 8 }}>
+                <textarea value={chiefProfileDraft} onChange={e => setChiefProfileDraft(e.target.value)} rows={7}
+                  style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${C.divider}`, borderRadius: 8, background: C.bgSoft, color: C.text, padding: "9px 10px", fontSize: NC_TYPE.control, lineHeight: 1.4, fontFamily: NC_FONT_STACK, resize: "vertical", outline: "none" }} />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <button type="button" onClick={() => setChiefProfileDraft(markdownFromChiefProfile(chiefProfile))} title="Reset profile draft" aria-label="Reset profile draft"
+                    style={gvIconButton({ width: 34, height: 34, color: C.faint, background: "transparent" }, C)}>{suiteIcon("undo", 14)}</button>
+                  <button type="button" onClick={saveChiefProfileDraft} disabled={!onSaveChiefProfileMarkdown || chiefProfileSaving} title="Save Chief profile" aria-label="Save Chief profile"
+                    style={gvIconButton({ width: 34, height: 34, color: !chiefProfileSaving ? "#fff" : C.faint, background: !chiefProfileSaving ? C.accent : "transparent" }, C)}>{suiteIcon(chiefProfileSaving ? "hourglass_top" : "save", 15)}</button>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       </div>
@@ -1743,14 +1883,11 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           const selectedEmailBody = selectedEmailDetail?.fullBody || decodeSnippet(selectedEmail?.snippet || "");
           const lowerGridStyle = {
             display: "grid",
-            gridTemplateColumns: "minmax(0,0.88fr) minmax(0,1.24fr) minmax(0,0.88fr)",
+            gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)",
             gap: 8,
             flex: `0 0 ${googleH}px`,
             minHeight: 0,
           };
-          const brief = chiefBrief || chiefFallback;
-          const chiefTone = brief?.urgency === "now" ? C.danger : brief?.urgency === "today" ? C.accent : C.muted;
-          const sourceLabels = (brief?.sources || []).slice(0, 4);
           const nowLineColor = C.success || C.accent || "#1A9E78";
           const hasCurrentCalendarEvent = calendarRows.some(row => row.now);
           const calendarNowLine = (key = "now") => (
@@ -1900,156 +2037,6 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                 </div>
               )}
 
-              <div style={{ ...cardWrap, borderColor: softBorder(chiefTone, 0.24), background: C.bg }}>
-                <div style={cardHead}>
-                  <span style={{ ...headLabel, color: C.text }}>{suiteIcon("psychology", 14)} Chief of Staff</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {chiefLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${chiefTone}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
-                    <button onClick={onOpenChiefPage} title="Open Chief page" aria-label="Open Chief page"
-                      style={{ fontSize: NC_TYPE.small, color: C.accent, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .9, lineHeight: 1, fontFamily: NC_FONT_STACK }}>
-                      Open
-                    </button>
-                    <button onClick={() => setChiefProfileOpen(open => !open)} title="Open Chief profile" aria-label="Open Chief profile"
-                      style={{ fontSize: NC_TYPE.small, color: chiefProfileOpen ? C.accent : C.faint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .8, lineHeight: 1, fontFamily: NC_FONT_STACK }}>
-                      Profile
-                    </button>
-                    <button onClick={() => setChiefRefreshNonce(n => n + 1)} title="Refresh Chief scan" aria-label="Refresh Chief scan"
-                      style={{ fontSize: 14, color: C.faint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .65, lineHeight: 1 }}
-                      onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .65}>{suiteIcon("refresh", 14)}</button>
-                  </div>
-                </div>
-                <div style={{ ...cardBody, display: "flex", flexDirection: "column", gap: 8 }}>
-                  {chiefProfileOpen && (
-                    <div style={{ border: `1px solid ${C.divider}`, borderRadius: 7, background: C.bgSoft, padding: 8, display: "grid", gap: 6, flexShrink: 0 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-                        <span style={{ color: C.text, fontSize: NC_TYPE.small, fontWeight: 600, fontFamily: NC_FONT_STACK }}>Cloud profile</span>
-                        <span style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK }}>{chiefProfileLoading ? "Loading" : "Netlify Blobs"}</span>
-                      </div>
-                      <textarea value={chiefProfileDraft} onChange={e => setChiefProfileDraft(e.target.value)} rows={5}
-                        style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${C.divider}`, borderRadius: 6, background: C.bg, color: C.text, padding: "7px 8px", fontSize: NC_TYPE.small, lineHeight: 1.35, fontFamily: NC_FONT_STACK, resize: "vertical", outline: "none" }} />
-                      <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
-                        <button type="button" onClick={() => setChiefProfileDraft(markdownFromChiefProfile(chiefProfile))} title="Reset profile draft" aria-label="Reset profile draft"
-                          style={gvIconButton({ width: 28, height: 28, color: C.faint, background: "transparent" }, C)}>{suiteIcon("undo", 13)}</button>
-                        <button type="button" onClick={saveChiefProfileDraft} disabled={!onSaveChiefProfileMarkdown || chiefProfileSaving} title="Save Chief profile" aria-label="Save Chief profile"
-                          style={gvIconButton({ width: 28, height: 28, color: !chiefProfileSaving ? "#fff" : C.faint, background: !chiefProfileSaving ? C.accent : "transparent" }, C)}>{suiteIcon(chiefProfileSaving ? "hourglass_top" : "save", 14)}</button>
-                      </div>
-                    </div>
-                  )}
-                  <div style={{ borderLeft: `3px solid ${chiefTone}`, padding: "2px 0 2px 10px", flexShrink: 0 }}>
-                    <div style={{ fontSize: NC_TYPE.control, color: C.text, fontWeight: 600, lineHeight: 1.42, fontFamily: NC_FONT_STACK }}>{brief?.summary || chiefFallback.summary}</div>
-                    <div style={{ fontSize: NC_TYPE.meta, color: C.muted, lineHeight: 1.42, marginTop: 5, fontFamily: NC_FONT_STACK }}>
-                      <span style={{ color: chiefTone, fontWeight: 600 }}>Next: </span>{brief?.nextAction || chiefFallback.nextAction}
-                    </div>
-                    {(brief?.why || chiefError) && (
-                      <div style={{ fontSize: NC_TYPE.small, color: C.faint, lineHeight: 1.35, marginTop: 4, fontFamily: NC_FONT_STACK }}>
-                        {brief?.why || chiefError}
-                      </div>
-                    )}
-                  </div>
-                  {sourceLabels.length > 0 && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5, flexShrink: 0 }}>
-                      {sourceLabels.map(source => (
-                        <span key={source} style={{ border: `1px solid ${C.divider}`, borderRadius: 999, padding: "2px 7px", color: C.muted, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, whiteSpace: "nowrap" }}>{source}</span>
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0 }} aria-label="Chief smart responses">
-                    {[
-                      ["done", "Done", "task_alt"],
-                      ["not_now", "Not now", "schedule"],
-                      ["next", "Next", "arrow_forward"],
-                      ["other", "Other", "edit"],
-                    ].map(([id, label, icon]) => {
-                      const active = chiefSmartSaving === id;
-                      const disabled = !!chiefSmartSaving || chiefDialogueLoading;
-                      return (
-                        <button key={id} type="button" onClick={() => handleChiefSmartResponse(id)} disabled={disabled}
-                          title={`${label} - save this signal to the Chief profile`} aria-label={`${label} smart response`}
-                          style={{
-                            minHeight: 27,
-                            borderRadius: 999,
-                            border: `1px solid ${id === "not_now" ? softBorder(C.warning || C.accent, 0.3) : softBorder(C.accent, 0.26)}`,
-                            background: active ? softBg(C.accent, 0.16) : C.bgSoft,
-                            color: disabled && !active ? C.faint : C.text,
-                            padding: "3px 8px",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 5,
-                            cursor: disabled ? "default" : "pointer",
-                            fontSize: NC_TYPE.small,
-                            fontWeight: 600,
-                            fontFamily: NC_FONT_STACK,
-                            lineHeight: 1,
-                            whiteSpace: "nowrap",
-                            opacity: disabled && !active ? 0.62 : 1,
-                          }}>
-                          {suiteIcon(active ? "hourglass_top" : icon, 13)}
-                          <span>{label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {(taskSuggestions.length > 0 || taskSuggestionsLoading) && (
-                    <div style={{ display: "grid", gap: 6, flexShrink: 0 }}>
-                      {taskSuggestionsLoading && taskSuggestions.length === 0 && (
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK }}>
-                          <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${C.faint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
-                          Scanning for taskable items
-                        </div>
-                      )}
-                      {taskSuggestions.map(row => {
-                        const pri = gP(taskSuggestionPriorities, row.priorityId || defaultSuggestionPriorityId);
-                        return (
-                          <div key={row.id} style={{ border: `1px solid ${softBorder(pri.color || C.accent, 0.28)}`, background: softBg(pri.color || C.accent, 0.07), borderRadius: 7, padding: "7px 8px", display: "grid", gap: 6 }}>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                              <span style={{ minWidth: 0, color: C.text, fontSize: NC_TYPE.meta, fontWeight: 600, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Create new task?</span>
-                              <span style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, whiteSpace: "nowrap" }}>{row.source}</span>
-                            </div>
-                            <input value={row.text} onChange={e => updateTaskSuggestion(row.id, { text: e.target.value })}
-                              style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${C.divider}`, borderRadius: 6, background: C.bg, color: C.text, padding: "6px 7px", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, outline: "none" }} />
-                            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto", gap: 6, alignItems: "center" }}>
-                              <select value={row.priorityId || defaultSuggestionPriorityId} onChange={e => updateTaskSuggestion(row.id, { priorityId: e.target.value })}
-                                style={{ minWidth: 0, height: 28, border: `1px solid ${C.divider}`, borderRadius: 6, background: C.bg, color: C.text, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, padding: "0 6px" }}>
-                                {taskSuggestionPriorities.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-                              </select>
-                              <button type="button" onClick={() => dismissTaskSuggestion(row)} title="Dismiss suggestion" aria-label="Dismiss suggestion"
-                                style={gvIconButton({ width: 28, height: 28, color: C.faint, background: "transparent" }, C)}>{suiteIcon("close", 13)}</button>
-                              <button type="button" onClick={() => createTaskSuggestion(row)} disabled={!row.text.trim()} title="Create task" aria-label="Create task"
-                                style={gvIconButton({ width: 28, height: 28, color: row.text.trim() ? "#fff" : C.faint, background: row.text.trim() ? (pri.color || C.accent) : "transparent" }, C)}>{suiteIcon("add", 14)}</button>
-                            </div>
-                            {(row.reason || row.sourceTitle) && (
-                              <div style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{row.reason || row.sourceTitle}</div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {(chiefDialogue.length > 0 || chiefDialogueLoading) && (
-                    <div role="status" aria-live="polite" aria-atomic="false" style={{ display: "grid", gap: 6, flex: `0 1 ${chiefChatHeight}px`, minHeight: 44, maxHeight: 260, overflowY: "auto", paddingRight: 2 }}>
-                      {[...chiefDialogue.slice(-4), ...(chiefDialogueLoading ? [{ role: "assistant", text: "Thinking through the next move...", pending: true }] : [])].slice(-4).map((row, idx) => (
-                        <div key={`${row.role}-${idx}`} style={{ justifySelf: row.role === "user" ? "end" : "start", maxWidth: "92%", border: `1px solid ${row.role === "user" ? softBorder(C.accent, 0.24) : C.divider}`, background: row.role === "user" ? softBg(C.accent, 0.08) : C.bgSoft, color: C.text, borderRadius: 7, padding: "6px 8px", fontSize: NC_TYPE.meta, lineHeight: 1.38, fontFamily: NC_FONT_STACK }}>
-                          <span style={row.pending ? { color: C.muted } : null}>{row.text}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {(chiefDialogue.length > 0 || chiefDialogueLoading) && (
-                    <button type="button" aria-label="Resize Chief chat" title="Drag to resize Chief chat. Double-click to reset." onPointerDown={startChiefChatResize} onDoubleClick={() => { setChiefChatHeight(112); writeChiefChatHeight(112); }}
-                      style={{ height: 10, minHeight: 10, border: "none", padding: 0, cursor: "row-resize", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none", flexShrink: 0 }}>
-                      <span style={{ width: 42, height: 2, borderRadius: 2, background: C.divider }} />
-                    </button>
-                  )}
-                  <form onSubmit={e => { e.preventDefault(); submitChiefPrompt(); }} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 32px", gap: 6, marginTop: "auto", flexShrink: 0 }}>
-                    <textarea ref={chiefPromptRef} value={chiefPrompt} rows={1} onChange={e => setChiefPrompt(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitChiefPrompt(); } }} placeholder="Discuss next move"
-                      style={{ minWidth: 0, minHeight: 32, maxHeight: 96, borderRadius: 7, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "7px 9px", fontSize: NC_TYPE.meta, lineHeight: 1.35, fontFamily: NC_FONT_STACK, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
-                    <button type="submit" disabled={!chiefPrompt.trim() || chiefDialogueLoading} title="Ask Chief" aria-label="Ask Chief"
-                      style={{ width: 32, height: 32, borderRadius: 7, border: "none", background: chiefPrompt.trim() && !chiefDialogueLoading ? C.accent : "transparent", color: chiefPrompt.trim() && !chiefDialogueLoading ? "#fff" : C.faint, cursor: chiefPrompt.trim() && !chiefDialogueLoading ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {suiteIcon(chiefDialogueLoading ? "hourglass_top" : "send", 14)}
-                    </button>
-                  </form>
-                </div>
-              </div>
 
               {/* ── Gmail card ── */}
               {(gmailMessages !== null || (googleLoading && googleToken)) && (
