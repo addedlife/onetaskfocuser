@@ -88,6 +88,7 @@ function gmailFullBody(message) {
 
 const CHIEF_TIME_BUCKET_MS = 15 * 60 * 1000;
 const CHIEF_LEARNING_KEY = "ot_chief_learning_v1";
+const CHIEF_CHAT_HEIGHT_KEY = "ot_chief_chat_height_v1";
 const ROUTINE_CALENDAR_RE = /\b(shacharis|shacharit|mincha|maariv|arvit|daven(?:ing)?|daf yomi|mishna(?:h)? yomi|halacha yomi|parsha|selichos|slichos)\b/i;
 
 function cleanOneLine(value, max = 180) {
@@ -102,6 +103,18 @@ function taskSuggestionKey(value) {
     .replace(/\b(the|a|an|to|for|about|with|and|or|on|in|at|of)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function taskSuggestionTokens(value) {
+  return taskSuggestionKey(value).split(" ").filter(token => token.length > 2);
+}
+
+function tokenOverlapRatio(a, b) {
+  const aTokens = new Set(taskSuggestionTokens(a));
+  const bTokens = taskSuggestionTokens(b);
+  if (!aTokens.size || !bTokens.length) return 0;
+  const hits = bTokens.filter(token => aTokens.has(token)).length;
+  return hits / Math.min(aTokens.size, bTokens.length);
 }
 
 function hashChiefValue(value) {
@@ -147,6 +160,19 @@ function writeChiefLearning(next) {
   } catch {}
 }
 
+function readChiefChatHeight() {
+  try {
+    const value = Number(localStorage.getItem(CHIEF_CHAT_HEIGHT_KEY) || 112);
+    return Number.isFinite(value) ? Math.max(56, Math.min(260, value)) : 112;
+  } catch {
+    return 112;
+  }
+}
+
+function writeChiefChatHeight(value) {
+  try { localStorage.setItem(CHIEF_CHAT_HEIGHT_KEY, String(Math.round(value))); } catch {}
+}
+
 function buildChiefLearningProfile(learning) {
   const profile = {
     acceptedActionTypes: {},
@@ -179,10 +205,14 @@ function findSuggestionEvidence(item, context) {
     : source.includes("calendar")
       ? (context?.calendar || [])
       : [...(context?.emails || []), ...(context?.calendar || [])];
-  const matched = sourceRows.find(row => {
+  const directMatch = sourceRows.find(row => {
     const haystack = taskSuggestionKey(`${row.subject || row.summary || ""} ${row.summary || ""}`);
     return titleKey && haystack && (haystack.includes(titleKey) || titleKey.includes(haystack));
-  }) || sourceRows[0] || null;
+  });
+  const bestMatch = sourceRows
+    .map(row => ({ row, score: tokenOverlapRatio(titleKey, `${row.subject || row.summary || ""} ${row.summary || ""}`) }))
+    .sort((a, b) => b.score - a.score)[0];
+  const matched = directMatch || (bestMatch?.score >= 0.5 ? bestMatch.row : null);
   const stablePart = matched?.sourceKey || matched?.threadId || matched?.id || item?.sourceTitle || item?.source || "dashboard";
   const freshPart = matched?.freshnessKey || `${matched?.date || ""}|${matched?.start || ""}|${matched?.end || ""}|${matched?.summary || ""}|${matched?.subject || ""}`;
   return {
@@ -196,23 +226,35 @@ function decorateTaskSuggestion(item, context) {
   const evidence = findSuggestionEvidence(item, context);
   const sourceKey = item.sourceKey || evidence.sourceKey;
   const freshnessKey = item.freshnessKey || evidence.freshnessKey;
+  const textKey = item.textKey || taskSuggestionKey(item.text);
+  const sourceTitleKey = item.sourceTitleKey || taskSuggestionKey(item.sourceTitle || item.reason || item.text);
+  const sourceBucket = item.sourceBucket || taskSuggestionKey(item.source || "dashboard");
+  const suppressionKey = item.suppressionKey || hashChiefValue(`${sourceBucket}|${sourceKey}|${actionType}|${sourceTitleKey || textKey}`);
   const issueKey = item.issueKey || hashChiefValue(`${item.source || ""}|${sourceKey}|${actionType}`);
   return {
     ...item,
     actionType,
     sourceKey,
     freshnessKey,
+    sourceBucket,
+    textKey,
+    sourceTitleKey,
+    suppressionKey,
     issueKey,
   };
 }
 
 function shouldHideTaskSuggestion(item, learning) {
   const events = learning?.events || [];
-  return events.some(event =>
-    (event.decision === "rejected" || event.decision === "accepted") &&
-    event.issueKey === item.issueKey &&
-    event.freshnessKey === item.freshnessKey
-  );
+  return events.some(event => {
+    if (event.decision !== "rejected" && event.decision !== "accepted") return false;
+    if (event.suppressionKey && event.suppressionKey === item.suppressionKey) return true;
+    if (event.textKey && event.textKey === item.textKey) return true;
+    if (event.issueKey && event.issueKey === item.issueKey) return true;
+    if (event.sourceKey && event.sourceKey === item.sourceKey && event.actionType === item.actionType) return true;
+    if (event.sourceTitleKey && tokenOverlapRatio(event.sourceTitleKey, item.sourceTitleKey || item.textKey) >= 0.7) return true;
+    return false;
+  });
 }
 
 function parseEventMs(value) {
@@ -363,6 +405,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [chiefDialogue, setChiefDialogue] = useState([]);
   const [chiefDialogueLoading, setChiefDialogueLoading] = useState(false);
   const [chiefRefreshNonce, setChiefRefreshNonce] = useState(0);
+  const [chiefChatHeight, setChiefChatHeight] = useState(() => readChiefChatHeight());
   const [taskSuggestions, setTaskSuggestions] = useState([]);
   const [taskSuggestionsLoading, setTaskSuggestionsLoading] = useState(false);
   const [chiefLearning, setChiefLearning] = useState(() => readChiefLearning());
@@ -728,8 +771,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
             .filter(item => item.text && item.key && !shouldHideTaskSuggestion(item, chiefLearning))
             .filter(item => {
               const bare = taskSuggestionKey(item.text);
-              if (!bare || existingKeys.has(bare) || seen.has(item.key)) return false;
+              if (!bare || existingKeys.has(bare) || seen.has(item.key) || seen.has(item.suppressionKey) || seen.has(item.textKey)) return false;
               seen.add(item.key);
+              seen.add(item.suppressionKey);
+              seen.add(item.textKey);
               return true;
             })
             .slice(0, 3);
@@ -793,6 +838,10 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
             issueKey: decorated.issueKey,
             freshnessKey: decorated.freshnessKey,
             sourceKey: decorated.sourceKey,
+            suppressionKey: decorated.suppressionKey,
+            textKey: decorated.textKey,
+            sourceTitleKey: decorated.sourceTitleKey,
+            sourceBucket: decorated.sourceBucket,
             source: decorated.source || "Dashboard",
             actionType: decorated.actionType || inferChiefActionType(decorated.text),
             priorityId: decorated.priorityId || defaultSuggestionPriorityId,
@@ -895,6 +944,24 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       <span style={{ width: 62, height: 2, borderRadius: 2, background: C.divider }} />
     </button>
   );
+  const startChiefChatResize = e => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = chiefChatHeight;
+    let latestH = startH;
+    const move = ev => {
+      const nextH = Math.max(56, Math.min(260, startH + (ev.clientY - startY)));
+      latestH = nextH;
+      setChiefChatHeight(nextH);
+    };
+    const up = () => {
+      writeChiefChatHeight(latestH);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
 
   const NC_LABEL = { now: "Now", today: "Soon", eventually: "Long" };
   const ncCorePills = ["now", "today", "eventually"]
@@ -1478,7 +1545,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                     </div>
                   )}
                   {(chiefDialogue.length > 0 || chiefDialogueLoading) && (
-                    <div role="status" aria-live="polite" aria-atomic="false" style={{ display: "grid", gap: 6, flex: "0 1 112px", minHeight: 44, maxHeight: 132, overflowY: "auto", paddingRight: 2 }}>
+                    <div role="status" aria-live="polite" aria-atomic="false" style={{ display: "grid", gap: 6, flex: `0 1 ${chiefChatHeight}px`, minHeight: 44, maxHeight: 260, overflowY: "auto", paddingRight: 2 }}>
                       {[...chiefDialogue.slice(-4), ...(chiefDialogueLoading ? [{ role: "assistant", text: "Thinking through the next move...", pending: true }] : [])].slice(-4).map((row, idx) => (
                         <div key={`${row.role}-${idx}`} style={{ justifySelf: row.role === "user" ? "end" : "start", maxWidth: "92%", border: `1px solid ${row.role === "user" ? softBorder(C.accent, 0.24) : C.divider}`, background: row.role === "user" ? softBg(C.accent, 0.08) : C.bgSoft, color: C.text, borderRadius: 7, padding: "6px 8px", fontSize: NC_TYPE.meta, lineHeight: 1.38, fontFamily: NC_FONT_STACK }}>
                           <span style={row.pending ? { color: C.muted } : null}>{row.text}</span>
@@ -1486,9 +1553,15 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                       ))}
                     </div>
                   )}
+                  {(chiefDialogue.length > 0 || chiefDialogueLoading) && (
+                    <button type="button" aria-label="Resize Chief chat" title="Drag to resize Chief chat. Double-click to reset." onPointerDown={startChiefChatResize} onDoubleClick={() => { setChiefChatHeight(112); writeChiefChatHeight(112); }}
+                      style={{ height: 10, minHeight: 10, border: "none", padding: 0, cursor: "row-resize", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none", flexShrink: 0 }}>
+                      <span style={{ width: 42, height: 2, borderRadius: 2, background: C.divider }} />
+                    </button>
+                  )}
                   <form onSubmit={e => { e.preventDefault(); submitChiefPrompt(); }} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 32px", gap: 6, marginTop: "auto", flexShrink: 0 }}>
-                    <input value={chiefPrompt} onChange={e => setChiefPrompt(e.target.value)} placeholder="Discuss next move"
-                      style={{ minWidth: 0, height: 32, borderRadius: 7, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "0 9px", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, outline: "none" }} />
+                    <textarea value={chiefPrompt} rows={1} onChange={e => setChiefPrompt(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitChiefPrompt(); } }} placeholder="Discuss next move"
+                      style={{ minWidth: 0, minHeight: 32, maxHeight: 96, borderRadius: 7, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "7px 9px", fontSize: NC_TYPE.meta, lineHeight: 1.35, fontFamily: NC_FONT_STACK, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
                     <button type="submit" disabled={!chiefPrompt.trim() || chiefDialogueLoading} title="Ask Chief" aria-label="Ask Chief"
                       style={{ width: 32, height: 32, borderRadius: 7, border: "none", background: chiefPrompt.trim() && !chiefDialogueLoading ? C.accent : "transparent", color: chiefPrompt.trim() && !chiefDialogueLoading ? "#fff" : C.faint, cursor: chiefPrompt.trim() && !chiefDialogueLoading ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       {suiteIcon(chiefDialogueLoading ? "hourglass_top" : "send", 14)}
