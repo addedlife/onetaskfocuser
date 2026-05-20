@@ -636,3 +636,4 @@ Current source-grade file count after cleanup: 162 files.
 - Pastel row audit passed: 20 theme shapes, 17 priority backgrounds, task text/muted-action/accent pairs, 0 failures below 4.5:1.
 - `git diff --check -- apps/web/src/01-core.js apps/web/src/08-app-split/App.jsx` passed; line-ending normalization warnings only.
 - `npm run build` in `apps/web` passed and generated `assets/index-sWvIgPze.js`; existing bundle-size warning remains.
+- Pushed commit `b6b8ea2` to `origin/main`; Netlify Git-triggered production served `assets/index-sWvIgPze.js` on poll attempt 3, and the deployed asset returned HTTP 200.
