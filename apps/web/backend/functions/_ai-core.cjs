@@ -473,6 +473,70 @@ function normalizeItemInputs(items = []) {
   })).filter(item => item.id && item.source);
 }
 
+function normalizeChiefContext(input = {}) {
+  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  const phone = source.phone && typeof source.phone === "object" && !Array.isArray(source.phone) ? source.phone : {};
+  return {
+    currentTime: cleanString(source.currentTime, 80),
+    localeTime: cleanString(source.localeTime, 120),
+    tasks: ensureArray(source.tasks || [], "tasks").slice(0, 18).map(task => ({
+      text: cleanString(task?.text, 300),
+      priority: cleanString(task?.priority, 80),
+      ageHours: Number.isFinite(Number(task?.ageHours)) ? Number(task.ageHours) : null,
+    })).filter(task => task.text),
+    shailos: ensureArray(source.shailos || [], "shailos").slice(0, 12).map(shaila => ({
+      text: cleanString(shaila?.text, 300),
+      status: cleanString(shaila?.status, 80),
+    })).filter(shaila => shaila.text),
+    calendar: ensureArray(source.calendar || [], "calendar").slice(0, 24).map(evt => ({
+      summary: cleanString(evt?.summary, 220),
+      start: cleanString(evt?.start, 80),
+      end: cleanString(evt?.end, 80),
+      label: cleanString(evt?.label, 120),
+      now: !!evt?.now,
+      past: !!evt?.past,
+      special: !!evt?.special,
+      routine: !!evt?.routine,
+    })).filter(evt => evt.summary),
+    emails: ensureArray(source.emails || [], "emails").slice(0, 12).map(email => ({
+      from: cleanString(email?.from, 120),
+      subject: cleanString(email?.subject, 220),
+      summary: cleanString(email?.summary || email?.snippet, 280),
+      date: cleanString(email?.date, 100),
+    })).filter(email => email.subject || email.summary),
+    phone: {
+      online: !!phone.online,
+      status: cleanString(phone.status, 140),
+      unreadTexts: Number.isFinite(Number(phone.unreadTexts)) ? Number(phone.unreadTexts) : 0,
+      missedCalls: Number.isFinite(Number(phone.missedCalls)) ? Number(phone.missedCalls) : 0,
+      voicemailCount: Number.isFinite(Number(phone.voicemailCount)) ? Number(phone.voicemailCount) : 0,
+      texts: ensureArray(phone.texts || [], "phone.texts").slice(0, 8).map(item => ({
+        name: cleanString(item?.name, 120),
+        preview: cleanString(item?.preview, 220),
+        time: cleanString(item?.time, 80),
+        unread: !!item?.unread,
+      })).filter(item => item.name || item.preview),
+      calls: ensureArray(phone.calls || [], "phone.calls").slice(0, 8).map(item => ({
+        name: cleanString(item?.name, 120),
+        kind: cleanString(item?.kind, 80),
+        time: cleanString(item?.time, 80),
+      })).filter(item => item.name || item.kind),
+    },
+  };
+}
+
+function normalizeChiefBrief(value) {
+  const o = ensureObject(value);
+  return {
+    summary: cleanString(o.summary, 520),
+    nextAction: cleanString(o.nextAction, 280),
+    why: cleanString(o.why, 360),
+    focusArea: cleanString(o.focusArea || "operations", 80),
+    urgency: ["now", "today", "soon", "watch"].includes(o.urgency) ? o.urgency : "today",
+    sources: normalizeStringArray(o.sources || [], 6, 80),
+  };
+}
+
 function responseJsonInstruction(shape, schemaDescription) {
   return compactLines([
     `Return ONLY valid JSON ${shape === "array" ? "array" : "object"}. No markdown, no commentary.`,
@@ -755,6 +819,50 @@ const AI_JOB_REGISTRY = {
         `Obstacle: "${cleanString(input.obstacle, 1000)}"`,
         "Give exactly 3 concrete, practical suggestions. Each under 2 sentences. Format exactly as numbered lines 1, 2, 3.",
       ]);
+    },
+  },
+  "dashboard.chief_of_staff.v1": {
+    task: "dashboard-chief-of-staff",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0.1, maxOutputTokens: 900 },
+    schema: '{"summary":"1-2 sentence status brief","nextAction":"single concrete next move","why":"short reason","focusArea":"calendar|tasks|shailos|mail|phone|operations","urgency":"now|today|soon|watch","sources":["Calendar","Tasks"]}',
+    buildPrompt(input = {}) {
+      const context = normalizeChiefContext(input.context || input);
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "You are the user's Chief of Staff inside an operational dashboard.",
+        "Scan Calendar, Gmail, tasks, shailos, calls, and texts against the current time.",
+        "Prioritize active or imminent events, unusual or special calendar items, urgent communications, unanswered shailos, missed calls/texts, and the top actionable task.",
+        "Routine calendar items are context only unless they are happening now or blocking the next move.",
+        "Do not invent facts, do not claim actions were taken, and do not give halachic rulings. If data is thin, say what is visible.",
+        `Current snapshot:\n${jsonBlock(context)}`,
+        "Return a calm executive brief: summary is one or two short sentences, nextAction is one specific next move.",
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate: normalizeChiefBrief,
+  },
+  "dashboard.chief_dialogue.v1": {
+    task: "dashboard-chief-dialogue",
+    output: "text",
+    genConfig: { temperature: 0.2, maxOutputTokens: 1100 },
+    buildPrompt(input = {}) {
+      const context = normalizeChiefContext(input.context || {});
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "You are the user's Chief of Staff inside an operational dashboard.",
+        "Answer the follow-up using only the provided dashboard snapshot and prior brief. Be concise, practical, and source-grounded.",
+        "If the user asks for a decision, recommend the next concrete move and the reason. Do not claim to send, schedule, call, or mark anything done.",
+        `Current snapshot:\n${jsonBlock(context)}`,
+        input.brief ? `Current brief:\n${jsonBlock(input.brief)}` : "",
+        input.history ? `Recent dialogue:\n${truncateText(input.history, 3000)}` : "",
+        `User question:\n${cleanString(input.question, 1600)}`,
+        "Answer in 2-6 sentences.",
+      ]);
+    },
+    normalizeText(text) {
+      return cleanString(text, 1600);
     },
   },
   "dashboard.email_summaries.v1": {

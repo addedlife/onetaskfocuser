@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { aiParseCalendarEvent, gP, textOnColor } from '../../01-core.js';
+import { aiParseCalendarEvent, gP, runAIJob, textOnColor } from '../../01-core.js';
 import { cleanTheme, cleanToolbarButton, gvIconButton, gvTextButton, NC_FONT_STACK, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { NerveCenterPhoneSurface } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
@@ -86,7 +86,126 @@ function gmailFullBody(message) {
   return (parts.plain.join("\n\n") || parts.html.join("\n\n") || "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems }) {
+const CHIEF_TIME_BUCKET_MS = 15 * 60 * 1000;
+const ROUTINE_CALENDAR_RE = /\b(shacharis|shacharit|mincha|maariv|arvit|daven(?:ing)?|daf yomi|mishna(?:h)? yomi|halacha yomi|parsha|selichos|slichos)\b/i;
+
+function cleanOneLine(value, max = 180) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > max ? `${text.slice(0, max - 3).trim()}...` : text;
+}
+
+function parseEventMs(value) {
+  const d = new Date(value || 0);
+  const ms = d.getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function calendarStartMs(evt) {
+  return parseEventMs(evt?.start?.dateTime || evt?.start?.date);
+}
+
+function calendarEndMs(evt) {
+  const end = parseEventMs(evt?.end?.dateTime || evt?.end?.date);
+  return end || calendarStartMs(evt);
+}
+
+function isRoutineCalendarEvent(evt) {
+  const title = String(evt?.summary || "").trim();
+  if (!title) return false;
+  return ROUTINE_CALENDAR_RE.test(title) || (evt?.recurringEventId && /\b(daily|regular|weekday)\b/i.test(title));
+}
+
+function isCalendarEventCurrent(evt, nowMs) {
+  if (!evt?.start?.dateTime) return false;
+  const start = calendarStartMs(evt);
+  const end = calendarEndMs(evt);
+  return start <= nowMs && end >= nowMs;
+}
+
+function isCalendarEventPast(evt, nowMs) {
+  return calendarEndMs(evt) < nowMs;
+}
+
+function formatCalendarWindow(evt) {
+  if (evt?.start?.date) return "All day";
+  const start = new Date(evt?.start?.dateTime);
+  const end = new Date(evt?.end?.dateTime);
+  if (!Number.isFinite(start.getTime())) return "";
+  const time = start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (!Number.isFinite(end.getTime())) return time;
+  return `${time} - ${end.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+}
+
+function buildChiefFallbackBrief(context = {}) {
+  const currentEvent = (context.calendar || []).find(evt => evt.now);
+  const specialEvent = (context.calendar || []).find(evt => evt.special && !evt.past);
+  const nowTask = (context.tasks || []).find(task => /now/i.test(task.priority)) || (context.tasks || [])[0];
+  const shaila = (context.shailos || [])[0];
+  const email = (context.emails || [])[0];
+  const phone = context.phone || {};
+  const phoneNeeds = (phone.unreadTexts || 0) + (phone.missedCalls || 0) + (phone.voicemailCount || 0);
+
+  if (currentEvent) {
+    return {
+      summary: `Right now is blocked by ${currentEvent.summary}.`,
+      nextAction: nowTask ? `Keep ${nowTask.text} queued for the next open slot.` : "Protect the current calendar block and avoid adding a new commitment.",
+      why: currentEvent.label || "Calendar is the active constraint.",
+      focusArea: "calendar",
+      urgency: "now",
+      sources: ["Calendar", "Tasks"],
+    };
+  }
+  if (specialEvent) {
+    return {
+      summary: `${specialEvent.summary} is the next non-routine calendar item on the board.`,
+      nextAction: `Prep for ${specialEvent.summary} before clearing routine work.`,
+      why: specialEvent.label || "Special calendar item is the clearest upcoming constraint.",
+      focusArea: "calendar",
+      urgency: "today",
+      sources: ["Calendar"],
+    };
+  }
+  if (phoneNeeds > 0) {
+    return {
+      summary: `Phone activity needs review: ${phoneNeeds} recent call/text/voicemail signal${phoneNeeds === 1 ? "" : "s"}.`,
+      nextAction: "Open the Phone pane and clear the newest missed or unread item.",
+      why: "Recent communications can hide time-sensitive follow-up.",
+      focusArea: "phone",
+      urgency: "today",
+      sources: ["Phone"],
+    };
+  }
+  if (shaila) {
+    return {
+      summary: `Your Shailos lane has ${context.shailos.length} open item${context.shailos.length === 1 ? "" : "s"}.`,
+      nextAction: `Move the next shaila forward: ${shaila.text}.`,
+      why: shaila.status || "Open shaila work is still pending.",
+      focusArea: "shailos",
+      urgency: "today",
+      sources: ["Shailos"],
+    };
+  }
+  if (email) {
+    return {
+      summary: `Mail has a live item from ${email.from || "your inbox"}.`,
+      nextAction: `Review "${email.summary || email.subject}" and decide whether it needs a reply.`,
+      why: "Inbox scan found the clearest current communication.",
+      focusArea: "mail",
+      urgency: "watch",
+      sources: ["Mail"],
+    };
+  }
+  return {
+    summary: nowTask ? `The cleanest next move is already in the task queue.` : "No urgent signal is visible in the current dashboard snapshot.",
+    nextAction: nowTask ? nowTask.text : "Add or choose one concrete next task.",
+    why: nowTask ? `Priority: ${nowTask.priority || "active"}.` : "The dashboard has no current calendar, mail, phone, or shaila pressure.",
+    focusArea: "tasks",
+    urgency: nowTask ? "today" : "watch",
+    sources: ["Tasks"],
+  };
+}
+
+function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null }) {
   const viewportW = useViewportWidth();
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
@@ -115,6 +234,15 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const [emailDetailError, setEmailDetailError] = useState("");
   const hoverTimerRef = useRef(null);
   const [reconnectTimedOut, setReconnectTimedOut] = useState(false);
+  const [chiefBrief, setChiefBrief] = useState(null);
+  const [chiefLoading, setChiefLoading] = useState(false);
+  const [chiefError, setChiefError] = useState("");
+  const [chiefPrompt, setChiefPrompt] = useState("");
+  const [chiefDialogue, setChiefDialogue] = useState([]);
+  const [chiefDialogueLoading, setChiefDialogueLoading] = useState(false);
+  const [chiefRefreshNonce, setChiefRefreshNonce] = useState(0);
+  const [phoneActivitySummary, setPhoneActivitySummary] = useState({ online: false, status: "DeskPhone offline", unreadTexts: 0, missedCalls: 0, voicemailCount: 0, texts: [], calls: [] });
+  const phoneActivitySigRef = useRef("");
   const [phoneStatusSummary, setPhoneStatusSummary] = useState({ online: false, tone: "offline", label: "DeskPhone offline", voicemailCount: 0 });
   const handlePhoneStatusSummary = useCallback((next) => {
     setPhoneStatusSummary(prev => (
@@ -123,6 +251,12 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       prev.label === next.label &&
       prev.voicemailCount === next.voicemailCount
     ) ? prev : next);
+  }, []);
+  const handlePhoneActivitySummary = useCallback((next) => {
+    const sig = JSON.stringify(next || {});
+    if (sig === phoneActivitySigRef.current) return;
+    phoneActivitySigRef.current = sig;
+    setPhoneActivitySummary(next || {});
   }, []);
   // Give silent reconnect 6 seconds; if still not connected, surface the button
   useEffect(() => {
@@ -220,6 +354,13 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const ncSectionIcon = (accent = C.accent) => ({ width: 26, height: 26, borderRadius: 13, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
   const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 26, height: 26, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
   const phoneStatusColor = phoneStatusSummary.tone === "incoming" ? C.success : phoneStatusSummary.tone === "call" ? C.warning : phoneStatusSummary.online ? C.success : C.faint;
+  const rawNowDate = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());
+  const nowDate = Number.isFinite(rawNowDate.getTime()) ? rawNowDate : new Date();
+  const nowMs = nowDate.getTime();
+  const clockParts = {
+    time: nowDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }),
+    date: nowDate.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" }),
+  };
 
   const isShailaWork = t => isNerveTaskShailaWork(t, priorities);
   const primaryTaskQueue = tasks.filter(t => !isShailaWork(t));
@@ -265,6 +406,64 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   const hiddenTaskCount = Math.max(0, primaryTaskQueue.length - collapsedTaskLimit);
   const primaryTasks = (isStacked || showAllTasks) ? primaryTaskQueue : primaryTaskQueue.slice(0, collapsedTaskLimit);
   const visibleShailos = shailos.filter(Boolean);
+  const timeBucket = Math.floor(nowMs / CHIEF_TIME_BUCKET_MS);
+  const calendarRows = useMemo(() => (calendarEvents || []).map((evt, index) => {
+    const routine = isRoutineCalendarEvent(evt);
+    const now = isCalendarEventCurrent(evt, nowMs);
+    const past = isCalendarEventPast(evt, nowMs);
+    const special = !routine && !past;
+    return {
+      evt,
+      index,
+      routine,
+      now,
+      past,
+      special,
+      startMs: calendarStartMs(evt),
+      label: formatCalendarWindow(evt),
+    };
+  }), [calendarEvents, nowMs]);
+  const specialCalendarRows = calendarRows
+    .filter(row => row.special)
+    .sort((a, b) => a.startMs - b.startMs)
+    .slice(0, 2);
+  const chiefContext = useMemo(() => {
+    const bucketDate = new Date(timeBucket * CHIEF_TIME_BUCKET_MS);
+    const priById = new Map((priorities || []).map(p => [p.id, p.label || p.id]));
+    const header = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || "";
+    return {
+      currentTime: bucketDate.toISOString(),
+      localeTime: bucketDate.toLocaleString([], { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
+      tasks: primaryTaskQueue.slice(0, 18).map(task => ({
+        text: nerveDisplaySummary(task, task.text || "Task"),
+        priority: priById.get(task.priority) || task.priority || "",
+        ageHours: task.createdAt ? Math.max(0, Math.round((nowMs - Number(task.createdAt || 0)) / 3600000)) : null,
+      })),
+      shailos: visibleShailos.slice(0, 12).map(item => ({
+        text: nerveDisplaySummary(item, item.text || "Shaila"),
+        status: item.status === "get_back" || item.isGetBackStep ? "waiting to reply" : "pending answer",
+      })),
+      calendar: calendarRows.slice(0, 24).map(row => ({
+        summary: cleanOneLine(row.evt?.summary || "(no title)", 220),
+        start: row.evt?.start?.dateTime || row.evt?.start?.date || "",
+        end: row.evt?.end?.dateTime || row.evt?.end?.date || "",
+        label: row.label,
+        now: row.now,
+        past: row.past,
+        special: row.special,
+        routine: row.routine,
+      })),
+      emails: (gmailMessages || []).slice(0, 12).map(msg => ({
+        from: fmtFrom(header(msg, "From")),
+        subject: cleanOneLine(header(msg, "Subject") || "(no subject)", 220),
+        summary: cleanOneLine(msg.aiSummary || decodeSnippet(msg.snippet || ""), 280),
+        date: header(msg, "Date"),
+      })),
+      phone: phoneActivitySummary,
+    };
+  }, [timeBucket, priorities, primaryTaskQueue, visibleShailos, calendarRows, gmailMessages, phoneActivitySummary, nowMs]);
+  const chiefScanKey = useMemo(() => JSON.stringify(chiefContext), [chiefContext]);
+  const chiefFallback = useMemo(() => buildChiefFallbackBrief(chiefContext), [chiefContext]);
   const needsNervePolish = item => {
     const source = nerveSummarySource(item);
     const summary = String(item?.ncSummary || "").trim();
@@ -287,6 +486,71 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
       .slice(0, 8);
     if (items.length) onPolishNerveItems(items);
   }, [polishQueueKey]); // eslint-disable-line
+
+  useEffect(() => {
+    let cancelled = false;
+    setChiefBrief(prev => prev || chiefFallback);
+    setChiefError("");
+    if (!aiOpts) {
+      setChiefBrief(chiefFallback);
+      setChiefLoading(false);
+      return undefined;
+    }
+    setChiefLoading(true);
+    const timer = window.setTimeout(() => {
+      runAIJob("dashboard.chief_of_staff.v1", { context: chiefContext }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 900 } })
+        .then(job => {
+          if (cancelled) return;
+          const output = job?.output;
+          if (output?.summary && output?.nextAction) {
+            setChiefBrief(output);
+          } else {
+            setChiefBrief(chiefFallback);
+            setChiefError("Using local scan.");
+          }
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setChiefBrief(chiefFallback);
+          setChiefError("Using local scan.");
+        })
+        .finally(() => {
+          if (!cancelled) setChiefLoading(false);
+        });
+    }, 900);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [chiefScanKey, chiefRefreshNonce]); // eslint-disable-line
+
+  async function submitChiefPrompt() {
+    const question = chiefPrompt.trim();
+    if (!question || chiefDialogueLoading) return;
+    const nextHistory = [...chiefDialogue, { role: "user", text: question }].slice(-6);
+    setChiefDialogue(nextHistory);
+    setChiefPrompt("");
+    if (!aiOpts) {
+      setChiefDialogue([...nextHistory, { role: "assistant", text: `${chiefBrief?.nextAction || chiefFallback.nextAction} ${chiefBrief?.why || chiefFallback.why}` }].slice(-6));
+      return;
+    }
+    setChiefDialogueLoading(true);
+    try {
+      const historyText = nextHistory.map(row => `${row.role}: ${row.text}`).join("\n");
+      const job = await runAIJob("dashboard.chief_dialogue.v1", {
+        context: chiefContext,
+        brief: chiefBrief || chiefFallback,
+        history: historyText,
+        question,
+      }, aiOpts, { genConfig: { temperature: 0.2, maxOutputTokens: 1100 } });
+      const answer = String(job?.text || "").trim() || `${chiefBrief?.nextAction || chiefFallback.nextAction} ${chiefBrief?.why || chiefFallback.why}`;
+      setChiefDialogue([...nextHistory, { role: "assistant", text: answer }].slice(-6));
+    } catch {
+      setChiefDialogue([...nextHistory, { role: "assistant", text: `${chiefBrief?.nextAction || chiefFallback.nextAction} ${chiefBrief?.why || chiefFallback.why}` }].slice(-6));
+    } finally {
+      setChiefDialogueLoading(false);
+    }
+  }
 
   // Keep tab indicator in sync with native scroll position in stacked carousel
   useEffect(() => {
@@ -418,6 +682,37 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
   return (
     <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: isStacked ? "hidden" : touchLayout ? "auto" : "hidden", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}` }}>
       <div style={isStacked ? { height: "100%", display: "flex", flexDirection: "column", boxSizing: "border-box" } : { minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: touchLayout ? 12 : 4 }}>
+
+        <div style={{
+          minHeight: isStacked ? 58 : 62,
+          padding: isStacked ? "8px 14px" : "0 2px 10px",
+          borderBottom: isStacked ? `1px solid ${C.divider}` : "none",
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 14,
+          boxSizing: "border-box",
+        }}>
+          <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ width: 34, height: 34, borderRadius: 17, display: "flex", alignItems: "center", justifyContent: "center", color: C.accent, background: C.hover, flexShrink: 0 }}>{suiteIcon("hub", 18)}</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: isStacked ? 17 : 20, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>NerveCenter</div>
+              <div style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clockParts.date}</div>
+            </div>
+          </div>
+          <div aria-label="Current time" style={{
+            textAlign: "right",
+            flexShrink: 0,
+            color: C.text,
+            fontFamily: '"Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif',
+            fontVariantNumeric: "tabular-nums",
+            letterSpacing: 0,
+          }}>
+            <div style={{ fontSize: isStacked ? 25 : 34, fontWeight: 500, lineHeight: 1 }}>{clockParts.time}</div>
+            {!isStacked && <div style={{ fontSize: NC_TYPE.meta, color: C.faint, marginTop: 3, fontFamily: NC_FONT_STACK }}>America/New York</div>}
+          </div>
+        </div>
 
         {/* Panel tab bar — mobile/stacked only */}
         {isStacked && (
@@ -651,7 +946,7 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
               </div>
             </div>
             <div style={{ overflow: "hidden", flex: "1 1 auto", minHeight: 0, padding: "10px 14px 14px", display: "flex", flexDirection: "column" }}>
-              <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
+              <NerveCenterPhoneSurface T={T} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </section>
         </div>
@@ -663,21 +958,8 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           const accentBlue = C.accent;
           if (isStacked) return null;
 
-          if (!googleClientId) {
-            return (
-              <div style={{ display: "flex", flex: "0 0 64px", minHeight: 0 }}>
-                <button onClick={onOpenGoogleSettings}
-                  style={{ width: "100%", borderRadius: 8, border: `1px dashed ${C.divider}`, background: C.bg, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: C.muted, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.control, fontWeight: 500 }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = accentBlue; e.currentTarget.style.color = accentBlue; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.divider; e.currentTarget.style.color = C.muted; }}>
-                  {suiteIcon("add_link", 16)}
-                  Set up Google Calendar &amp; Gmail
-                </button>
-              </div>
-            );
-          }
-
-          const notConnected = !googleToken && !googleLoading && calendarEvents === null && gmailMessages === null;
+          const googleConfigured = !!googleClientId;
+          const notConnected = googleConfigured && !googleToken && !googleLoading && calendarEvents === null && gmailMessages === null;
           const fmtTime = (raw) => {
             try {
               const d = new Date(raw); const now = new Date();
@@ -706,11 +988,31 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
           const selectedEmailDetail = selectedEmailId ? emailDetails[selectedEmailId] : null;
           const selectedEmailSource = selectedEmailDetail || selectedEmail;
           const selectedEmailBody = selectedEmailDetail?.fullBody || decodeSnippet(selectedEmail?.snippet || "");
+          const lowerGridStyle = {
+            display: "grid",
+            gridTemplateColumns: "minmax(0,0.88fr) minmax(0,1.24fr) minmax(0,0.88fr)",
+            gap: 8,
+            flex: `0 0 ${googleH}px`,
+            minHeight: 0,
+          };
+          const brief = chiefBrief || chiefFallback;
+          const chiefTone = brief?.urgency === "now" ? C.danger : brief?.urgency === "today" ? C.accent : C.muted;
+          const sourceLabels = (brief?.sources || []).slice(0, 4);
 
           return (
             <React.Fragment>
             <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", gap: 6, minHeight: 0 }}>
-              <div style={{ display: "flex", flexDirection: isStacked ? "column" : "row", gap: 8, flex: isStacked ? "0 0 min(42vh, 330px)" : `0 0 ${googleH}px`, minHeight: 0, maxHeight: isStacked ? 330 : undefined }}>
+              <div style={lowerGridStyle}>
+
+              {!googleConfigured && (
+                <button onClick={onOpenGoogleSettings}
+                  style={{ ...cardWrap, borderStyle: "dashed", cursor: "pointer", alignItems: "center", justifyContent: "center", gap: 8, color: C.muted, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.control, fontWeight: 500 }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = accentBlue; e.currentTarget.style.color = accentBlue; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.divider; e.currentTarget.style.color = C.muted; }}>
+                  {suiteIcon("add_link", 16)}
+                  Set up Google
+                </button>
+              )}
 
               {/* Not connected — never been connected: show connect button */}
               {notConnected && !googleError && !googleWasConnected && (
@@ -779,29 +1081,94 @@ function NerveCenterPanel({ T, sections = [], tasks = [], shailos = [], shailosC
                         <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
                         <span style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Loading calendar…</span>
                       </div>
-                    ) : calendarEvents.length === 0 ? (
+                    ) : calendarRows.length === 0 ? (
                       <p style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK, margin: "12px 0", textAlign: "center" }}>Nothing today</p>
-                    ) : calendarEvents.map((evt, i) => {
-                      const now = isNow(evt);
-                      const rowStyle = { display: "flex", gap: isStacked ? 7 : 10, alignItems: "flex-start", padding: isStacked ? "5px 2px" : "8px 4px", textDecoration: "none", color: "inherit", borderRadius: 4 };
+                    ) : (
+                      <React.Fragment>
+                      {specialCalendarRows.length > 0 && (
+                        <div style={{ border: `1px solid ${softBorder(accentBlue, 0.24)}`, background: softBg(accentBlue, 0.08), borderRadius: 7, padding: "8px 9px", margin: "2px 0 6px" }}>
+                          {specialCalendarRows.map(row => (
+                            <div key={`special-${row.evt?.id || row.index}`} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 8, alignItems: "start", fontFamily: NC_FONT_STACK }}>
+                              <span style={{ minWidth: 0, color: C.text, fontSize: NC_TYPE.control, fontWeight: 600, lineHeight: 1.22, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{row.evt?.summary || "(no title)"}</span>
+                              <span style={{ color: row.now ? C.danger : C.accent, fontSize: NC_TYPE.meta, fontWeight: 600, whiteSpace: "nowrap" }}>{row.now ? "Now" : row.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {calendarRows.map((row, i) => {
+                      const evt = row.evt;
+                      const now = row.now;
+                      const lifted = row.special || row.now;
+                      const rowStyle = { display: "flex", gap: isStacked ? 7 : 10, alignItems: "flex-start", padding: isStacked ? "5px 2px" : "8px 4px", textDecoration: "none", color: "inherit", borderRadius: 4, background: lifted ? softBg(accentBlue, row.now ? 0.10 : 0.055) : "transparent" };
                       const inner = (
                         <>
-                          <span style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: now ? accentBlue : T.tFaint, fontWeight: now ? 500 : 400, flexShrink: 0, width: isStacked ? 54 : 66, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
+                          <span style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: now ? accentBlue : T.tFaint, fontWeight: lifted ? 600 : 400, flexShrink: 0, width: isStacked ? 54 : 66, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                               {now && <span style={{ width: 5, height: 5, borderRadius: "50%", background: accentBlue, flexShrink: 0 }} />}
-                              <span style={{ fontSize: NC_TYPE.control, color: now ? C.text : C.muted, fontWeight: now ? 500 : 400, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{evt.summary || "(no title)"}</span>
+                              <span style={{ fontSize: NC_TYPE.control, color: lifted ? C.text : C.muted, fontWeight: lifted ? 600 : 400, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: row.routine && !lifted ? 0.78 : 1 }}>{evt.summary || "(no title)"}</span>
                             </div>
                           </div>
                         </>
                       );
                       return evt.htmlLink
-                        ? <a key={evt.id || i} href={evt.htmlLink} target="_blank" rel="noopener noreferrer" style={rowStyle} onMouseEnter={e => e.currentTarget.style.background = T.bgW || 'rgba(255,255,255,0.05)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>{inner}</a>
+                        ? <a key={evt.id || i} href={evt.htmlLink} target="_blank" rel="noopener noreferrer" style={rowStyle} onMouseEnter={e => e.currentTarget.style.background = T.bgW || 'rgba(255,255,255,0.05)'} onMouseLeave={e => e.currentTarget.style.background = rowStyle.background}>{inner}</a>
                         : <div key={evt.id || i} style={rowStyle}>{inner}</div>;
                     })}
+                    </React.Fragment>
+                    )}
                   </div>
                 </div>
               )}
+
+              <div style={{ ...cardWrap, borderColor: softBorder(chiefTone, 0.24), background: C.bg }}>
+                <div style={cardHead}>
+                  <span style={{ ...headLabel, color: C.text }}>{suiteIcon("psychology", 14)} Chief of Staff</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {chiefLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${chiefTone}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+                    <button onClick={() => setChiefRefreshNonce(n => n + 1)} title="Refresh Chief scan" aria-label="Refresh Chief scan"
+                      style={{ fontSize: 14, color: C.faint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .65, lineHeight: 1 }}
+                      onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .65}>{suiteIcon("refresh", 14)}</button>
+                  </div>
+                </div>
+                <div style={{ ...cardBody, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ borderLeft: `3px solid ${chiefTone}`, padding: "2px 0 2px 10px", flexShrink: 0 }}>
+                    <div style={{ fontSize: NC_TYPE.control, color: C.text, fontWeight: 600, lineHeight: 1.42, fontFamily: NC_FONT_STACK }}>{brief?.summary || chiefFallback.summary}</div>
+                    <div style={{ fontSize: NC_TYPE.meta, color: C.muted, lineHeight: 1.42, marginTop: 5, fontFamily: NC_FONT_STACK }}>
+                      <span style={{ color: chiefTone, fontWeight: 600 }}>Next: </span>{brief?.nextAction || chiefFallback.nextAction}
+                    </div>
+                    {(brief?.why || chiefError) && (
+                      <div style={{ fontSize: NC_TYPE.small, color: C.faint, lineHeight: 1.35, marginTop: 4, fontFamily: NC_FONT_STACK }}>
+                        {brief?.why || chiefError}
+                      </div>
+                    )}
+                  </div>
+                  {sourceLabels.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5, flexShrink: 0 }}>
+                      {sourceLabels.map(source => (
+                        <span key={source} style={{ border: `1px solid ${C.divider}`, borderRadius: 999, padding: "2px 7px", color: C.muted, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, whiteSpace: "nowrap" }}>{source}</span>
+                      ))}
+                    </div>
+                  )}
+                  {chiefDialogue.length > 0 && (
+                    <div style={{ display: "grid", gap: 6, minHeight: 0, overflowY: "auto", paddingRight: 2 }}>
+                      {chiefDialogue.slice(-3).map((row, idx) => (
+                        <div key={`${row.role}-${idx}`} style={{ justifySelf: row.role === "user" ? "end" : "start", maxWidth: "92%", border: `1px solid ${row.role === "user" ? softBorder(C.accent, 0.24) : C.divider}`, background: row.role === "user" ? softBg(C.accent, 0.08) : C.bgSoft, color: C.text, borderRadius: 7, padding: "6px 8px", fontSize: NC_TYPE.meta, lineHeight: 1.38, fontFamily: NC_FONT_STACK }}>
+                          {row.text}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <form onSubmit={e => { e.preventDefault(); submitChiefPrompt(); }} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 32px", gap: 6, marginTop: "auto", flexShrink: 0 }}>
+                    <input value={chiefPrompt} onChange={e => setChiefPrompt(e.target.value)} placeholder="Discuss next move"
+                      style={{ minWidth: 0, height: 32, borderRadius: 7, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "0 9px", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, outline: "none" }} />
+                    <button type="submit" disabled={!chiefPrompt.trim() || chiefDialogueLoading} title="Ask Chief" aria-label="Ask Chief"
+                      style={{ width: 32, height: 32, borderRadius: 7, border: "none", background: chiefPrompt.trim() && !chiefDialogueLoading ? C.accent : "transparent", color: chiefPrompt.trim() && !chiefDialogueLoading ? "#fff" : C.faint, cursor: chiefPrompt.trim() && !chiefDialogueLoading ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {suiteIcon(chiefDialogueLoading ? "hourglass_top" : "send", 14)}
+                    </button>
+                  </form>
+                </div>
+              </div>
 
               {/* ── Gmail card ── */}
               {(gmailMessages !== null || (googleLoading && googleToken)) && (

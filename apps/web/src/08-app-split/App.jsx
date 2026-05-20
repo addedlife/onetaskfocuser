@@ -1409,6 +1409,7 @@ function App({ user, onSignOut }) {
     } catch(e) { fallback(); }
     setZenDumpParsing(false);
   }
+
   function scheduleItemDescription(item) {
     const text = String(item?.text || "").trim();
     const when = String(item?.when || "").trim();
@@ -3070,6 +3071,7 @@ function App({ user, onSignOut }) {
           autoCollapseEnabled={sidebarAutoCollapse}
           topOffset={noticeTopOffset}
           forceCompact={sidebarForceCompact}
+          clockTime={clockTime}
           onToggleAutoCollapse={() => setSidebarAutoCollapse(v => {
             const next = !v;
             try { localStorage.setItem('ot_sidebar_autocollapse', String(next)); } catch {}
@@ -3130,6 +3132,7 @@ function App({ user, onSignOut }) {
           googlePaneHeight={AS.nerveCenterGooglePaneHeight}
           onGooglePaneHeightChange={height => setAS(p => ({...p, nerveCenterGooglePaneHeight: height}))}
           onPolishNerveItems={polishNerveItems}
+          clockTime={clockTime}
         />
       )}
 

@@ -659,3 +659,18 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` passed in `apps/web` and generated `assets/index-ZTkUASIM.js`; existing large-bundle warning remains.
 - Built asset marker check found `Stay signed in on this device`, `ot_auth_stay_signed_in`, `ot_google_silent_reauth_last`, and `Reconnect Google to refresh Calendar and Gmail`.
 - Pushed commit `b0b56db` to `origin/main`; Netlify Git-triggered production served `assets/index-AlH-x7EB.js` on poll attempt 1, and the deployed asset contained the app-session persistence and Google reconnect markers.
+
+## 2026-05-20 NerveCenter Chief Of Staff, Clock, And Calendar Focus
+
+- Researched current dashboard, human-AI, and accessibility practice before editing: keep dashboards scannable and action-oriented, surface contextually relevant AI suggestions with user control/follow-up, use spacing/hierarchy to prioritize the important item, and avoid horizontal overflow/reflow regressions. The local plan aligned with the research, so no product-direction confirmation was needed.
+- Added shared AI jobs `dashboard.chief_of_staff.v1` and `dashboard.chief_dialogue.v1` to the central gateway registry. The Chief scan consumes current time, calendar, Gmail summaries, tasks, shailos, and DeskPhone call/text snapshots, returns a short grounded recommendation, and keeps a local fallback when AI is unavailable.
+- Added a center `Chief of Staff` card in the lower NerveCenter strip with automatic scan output, source pills, refresh, and a follow-up prompt.
+- Added a prominent NerveCenter time/date header and a persistent compact clock in the suite rail.
+- Changed the lower NerveCenter strip to Calendar / Chief / Mail and changed calendar rendering so routine daily items remain visible while special non-routine items get the spotlight and heavier row treatment.
+- Added a DeskPhone activity snapshot callback so NerveCenter can include unread texts, missed calls, recent texts, and recent calls in the Chief context without changing the phone host API.
+- `node --check apps/web/backend/functions/_ai-core.cjs` passed.
+- `git diff --check -- apps/web/backend/functions/_ai-core.cjs apps/web/src/08-app-split/App.jsx apps/web/src/08-app-split/components/AppSuiteChrome.jsx apps/web/src/08-app-split/components/NerveCenterPanel.jsx apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx` passed; line-ending normalization warnings only.
+- `npm run build` passed in `apps/web` and generated `assets/index-BseNaqHz.js`; existing large-bundle warning remains.
+- Local preview returned HTTP 200 at `http://127.0.0.1:4324/?suite=nervecenter`.
+- In-app Browser verification was attempted but hit the existing local helper boot issue (`require is not defined in ES module scope`), so headless Edge/CDP was used for visual proof.
+- Headless Edge/CDP seeded calendar, Gmail, task, shaila, and phone data and verified NerveCenter, Chief, AI recommendation, clock zone, special calendar item, routine calendar items, mail, tasks, phone activity, and no horizontal overflow (`scrollW=1365`, `clientW=1365`). Screenshot: `apps/web/artifacts/nervecenter-chief-staff-smoke.png`.

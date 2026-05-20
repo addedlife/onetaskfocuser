@@ -122,7 +122,7 @@ async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS) {
   }
 }
 
-function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
+function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
   const api = "http://127.0.0.1:8765";
   const viewportW = useViewportWidth();
   const touchActions = viewportW < 980;
@@ -420,6 +420,47 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, compact =
     if (typeNum === 1 || dir.includes("incoming") || dir.includes("inbound") || dir.includes("receiv") || dir === "in") return { icon: "call_received", color: T.tSoft };
     return { icon: "call", color: T.tSoft };
   };
+
+  const callKindLabel = c => {
+    const typeNum = typeof (c.type || c.callType || c.Type || c.CallType) === "number"
+      ? (c.type || c.callType || c.Type || c.CallType)
+      : null;
+    if (c.missed || c.Missed || typeNum === 3) return "missed";
+    const dir = (c.direction || c.Direction || (typeof c.type === "string" ? c.type : "") || (typeof c.callType === "string" ? c.callType : "") || "").toLowerCase();
+    if (dir.includes("miss")) return "missed";
+    if (typeNum === 2 || dir.includes("out") || dir.includes("dial") || dir.includes("egress")) return "outgoing";
+    if (typeNum === 1 || dir.includes("incoming") || dir.includes("inbound") || dir.includes("receiv") || dir === "in") return "incoming";
+    return "call";
+  };
+
+  const phoneActivitySnapshot = useMemo(() => ({
+    online: statusOnline,
+    status: statusText,
+    unreadTexts: threads.reduce((sum, thread) => sum + (thread._unreadCount || 0), 0),
+    missedCalls: recentCalls.filter(c => callKindLabel(c) === "missed").length,
+    voicemailCount: vmCount,
+    texts: threads.slice(0, 6).map(thread => {
+      const latest = thread._latestMessage || thread._messages?.[thread._messages.length - 1] || {};
+      return {
+        name: thread._name || thread._who || "Unknown",
+        preview: messageBody(latest),
+        time: fmtTime(thread._latestAt),
+        unread: (thread._unreadCount || 0) > 0,
+      };
+    }),
+    calls: recentCalls.slice(0, 6).map(c => {
+      const num = c.number || c.phoneNumber || c.from || c.Number || c.PhoneNumber || "";
+      return {
+        name: lookupName(num) || c.name || c.displayName || c.Name || c.DisplayName || c.from || num || "Unknown",
+        kind: callKindLabel(c),
+        time: fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime),
+      };
+    }),
+  }), [statusOnline, statusText, threads, recentCalls, vmCount, lookupName]);
+
+  useEffect(() => {
+    onActivitySnapshot?.(phoneActivitySnapshot);
+  }, [onActivitySnapshot, phoneActivitySnapshot]);
 
   // Incoming SMS = sms icon; outgoing = outgoing_mail icon
   // Android SMS type codes: 1=inbox/received, 2=sent, 4=outbox/pending, 5=failed, 6=queued

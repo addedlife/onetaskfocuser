@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { cleanTheme, NC_FONT_STACK, NC_TYPE, suiteIcon } from '../ui-tokens.jsx';
 
-function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRecord, onMoreActions, autoCollapseEnabled = true, onToggleAutoCollapse, topOffset = 0, forceCompact = false }) {
+function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRecord, onMoreActions, autoCollapseEnabled = true, onToggleAutoCollapse, topOffset = 0, forceCompact = false, clockTime = null }) {
   const screenApps = [
     { id: "focus",     label: "Tasks",   icon: "task_alt"   },
     { id: "shailos",   label: "Shailos", icon: "rule"       },
@@ -33,6 +33,10 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRec
   });
   const chromeRef = useRef(null);
   const acTimer = useRef(null);
+  const rawNow = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());
+  const now = Number.isFinite(rawNow.getTime()) ? rawNow : new Date();
+  const railTime = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const railDate = now.toLocaleDateString([], { month: "short", day: "numeric" });
   const isChromeHovered = useCallback(() => Boolean(chromeRef.current?.matches?.(":hover")), []);
   const clearAC = useCallback(() => {
     if (acTimer.current) { clearTimeout(acTimer.current); acTimer.current = null; }
@@ -103,6 +107,28 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRec
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />
+
+      {/* Persistent clock */}
+      <div title={now.toLocaleString()} style={{
+        width: displayOpen ? "100%" : 44,
+        minHeight: displayOpen ? 50 : 44,
+        borderRadius: displayOpen ? 8 : 22,
+        border: `1px solid ${C.divider}`,
+        background: C.bgSoft,
+        color: C.text,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 6,
+        fontFamily: NC_FONT_STACK,
+        fontVariantNumeric: "tabular-nums",
+        overflow: "hidden",
+        flexShrink: 0,
+      }}>
+        <span style={{ fontSize: displayOpen ? 18 : 13, fontWeight: 600, lineHeight: 1.05, whiteSpace: "nowrap" }}>{railTime}</span>
+        {displayOpen && <span style={{ fontSize: NC_TYPE.small, color: C.muted, marginTop: 3, lineHeight: 1 }}>{railDate}</span>}
+      </div>
 
       {/* Auto-collapse toggle */}
       <button onClick={onToggleAutoCollapse} title={autoCollapseEnabled ? "Auto-collapse: ON (click to disable)" : "Auto-collapse: OFF (click to enable)"}
