@@ -706,3 +706,4 @@ Current source-grade file count after cleanup: 162 files.
 - Local Vite returned HTTP 200 at `http://127.0.0.1:4330/?suite=nervecenter`; Vite stderr still reports the existing embedded Shailos `@emotion/is-prop-valid` dependency warning.
 - In-app Browser verification was attempted first but hit the existing Node ESM helper boot issue (`require is not defined in ES module scope`), so direct Chrome/CDP verified the NerveCenter Chief card rendered with all four smart-response buttons enabled and no horizontal overflow (`scrollW=1349`, `clientW=1349`).
 - Direct Chrome/CDP click-smoke verified `Other` leaves all four chips present, adds `Tell me the direction you want instead.`, and focuses the `Discuss next move` textarea.
+- Pushed commit `abf59c0` to `origin/main`; Netlify Git-triggered production served `assets/index-xM_h8vkM.js`, the asset returned HTTP 200, and the deployed bundle contained the Chief smart-response/profile-learning markers.
