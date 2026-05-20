@@ -564,3 +564,13 @@ Current source-grade file count after cleanup: 162 files.
 - Local Vite preview returned HTTP 200 at `http://127.0.0.1:4316/?suite=nervecenter`; local DeskPhone host `/status` returned HTTP 200.
 - In-app Browser verification was attempted, but the existing local helper failed on `require is not defined in ES module scope`; headless Chrome reached the existing unauthenticated `Loading...` shell.
 - Pushed commit `0ec64e7` to `origin/main`; Netlify Git-triggered production served `assets/index-DGMB_5bb.js` on poll attempt 3.
+
+
+## 2026-05-19 NerveCenter Collapsed Thread Count Cleanup
+
+- Researched badge/count usage before editing: count badges should call attention to unread/new/actionable information, not total history length on every conversation row.
+- Removed the collapsed-row total message count from NerveCenter phone text threads.
+- Kept the expanded conversation count in the opened thread header.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `git diff --check -- apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx` passed; line-ending normalization warning only.
+- Local Vite preview returned HTTP 200 at `http://127.0.0.1:4317/?suite=nervecenter`.
