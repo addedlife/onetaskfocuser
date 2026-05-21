@@ -119,7 +119,7 @@ function DeskPhoneMiniDock({ T, onOnlineChange, onOpenDeskPhone }) {
                   <div style={{fontSize:14,fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m._who}</div>
                   <div style={{fontSize:13,color:T.tSoft,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{m.body || m.text || m.message || m.content || "Message"}</div>
                 </button>
-              )) : <div style={{fontSize:13,color:T.tFaint,border:`1px solid ${T.brdS || T.brd}`,borderRadius:12,padding:9,background:T.bgW}}>No message threads loaded.</div>}
+              )) : <div style={{fontSize:13,color:T.tFaint,border:`1px solid ${T.brdS || T.brd}`,borderRadius:12,padding:8,background:T.bgW}}>No message threads loaded.</div>}
             </div>
             <div style={{display:"grid",gap:6}}>
               <div style={{fontSize:13,fontWeight:500,color:T.tFaint,textTransform:"uppercase",letterSpacing:0}}>Recent calls</div>
@@ -128,9 +128,9 @@ function DeskPhoneMiniDock({ T, onOnlineChange, onOpenDeskPhone }) {
                   <div style={{fontSize:14,fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.name || c.number || c.phoneNumber || c.from || "Call"}</div>
                   <div style={{fontSize:13,color:T.tSoft,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{c.direction || c.status || c.time || "Recent call"}</div>
                 </button>
-              )) : <div style={{fontSize:13,color:T.tFaint,border:`1px solid ${T.brdS || T.brd}`,borderRadius:12,padding:9,background:T.bgW}}>Recent calls will appear here when DeskPhone provides them.</div>}
+              )) : <div style={{fontSize:13,color:T.tFaint,border:`1px solid ${T.brdS || T.brd}`,borderRadius:12,padding:8,background:T.bgW}}>Recent calls will appear here when DeskPhone provides them.</div>}
             </div>
-            {error && <div style={{fontSize:13,lineHeight:1.45,color:T.danger,background:"#FFE1E1",border:"1px solid #F0B5B5",borderRadius:12,padding:9}}>{error}</div>}
+            {error && <div style={{fontSize:13,lineHeight:1.45,color:T.danger,background:"#FFE1E1",border:"1px solid #F0B5B5",borderRadius:12,padding:8}}>{error}</div>}
           </div>
         </div>
       )}

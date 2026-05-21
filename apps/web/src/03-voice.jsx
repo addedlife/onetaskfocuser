@@ -304,7 +304,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
     : null;
 
   const closeBtn = (
-    <button onClick={dismiss} style={{ background:"none", border:"none", cursor:"pointer", fontSize:20, color:T.tFaint, lineHeight:1, padding:"0 0 0 8px" }}>×</button>
+    <button onClick={dismiss} style={{ background:"none", border:"none", cursor:"pointer", fontSize:22, color:T.tFaint, lineHeight:1, padding:"0 0 0 8px" }}>×</button>
   );
 
   // ── RECORDING ──────────────────────────────────────────────────────────────
@@ -389,7 +389,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
   if (phase === "reviewing") return (
     <div style={shell(T.brd)} data-voice-panel="true">
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-        <span style={{ fontSize:9, color:T.tFaint, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase" }}>
+        <span style={{ fontSize:10, color:T.tFaint, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase" }}>
           {aiOpts ? "AI transcript" : "Browser transcript"}
         </span>
         {closeBtn}
@@ -419,12 +419,12 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
         )}
         {detectedAnswers.length > 0 && (
           <div style={{ background:"#C8A84C14", borderRadius:10, border:"1px solid #C8A84C50", padding:"8px 10px", display:"flex", flexDirection:"column", gap:8 }}>
-            <div style={{ fontSize:9, fontWeight:800, color:"#C8A84C", letterSpacing:1.2, marginBottom:2 }}>POSSIBLE ANSWERS TO EXISTING SHAILOS</div>
+            <div style={{ fontSize:10, fontWeight:800, color:"#C8A84C", letterSpacing:1.2, marginBottom:2 }}>POSSIBLE ANSWERS TO EXISTING SHAILOS</div>
             {detectedAnswers.filter(x => x.approved !== false).map((match, i) => (
               <div key={match.id || i} style={{ background:T.bgW, borderRadius:8, padding:"8px 10px", borderLeft:"3px solid #C8A84C" }}>
                 <div style={{ fontSize:11, color:T.tSoft, fontFamily:"system-ui", marginBottom:3 }}>Answers existing shailo:</div>
                 <div style={{ fontSize:12, fontFamily:"Georgia,serif", color:T.text, marginBottom:4, lineHeight:1.4 }}>{match.shaila}</div>
-                <div style={{ fontSize:9, fontWeight:700, color:"#C8A84C", letterSpacing:1, marginBottom:2 }}>ANSWER FOUND:</div>
+                <div style={{ fontSize:10, fontWeight:700, color:"#C8A84C", letterSpacing:1, marginBottom:2 }}>ANSWER FOUND:</div>
                 <div style={{ fontSize:12, fontFamily:"Georgia,serif", color:T.tSoft, marginBottom:8, lineHeight:1.4 }}>{match.answer}</div>
                 <div style={{ display:"flex", gap:6 }}>
                   <button onClick={() => {
@@ -448,7 +448,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
             />
             {item.answer !== null && (
               <div style={{ borderTop:`1px solid ${T.brd}`, marginTop:6, paddingTop:6 }}>
-                <div style={{ fontSize:9, color:"#C8A84C", fontWeight:800, letterSpacing:1.2, marginBottom:3 }}>ANSWER</div>
+                <div style={{ fontSize:10, color:"#C8A84C", fontWeight:800, letterSpacing:1.2, marginBottom:3 }}>ANSWER</div>
                 <textarea
                   value={item.answer || ""}
                   onChange={e => setParsedShailas(p => p.map((x,j) => j===i ? {...x, answer:e.target.value} : x))}
@@ -465,12 +465,12 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
             )}
             <div style={{ display:"flex", gap:8, marginTop:6 }}>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:9, color:T.tFaint, fontWeight:700, letterSpacing:1, marginBottom:2 }}>ASKED BY</div>
+                <div style={{ fontSize:10, color:T.tFaint, fontWeight:700, letterSpacing:1, marginBottom:2 }}>ASKED BY</div>
                 <input value={item.askedBy || ""} onChange={e => setParsedShailas(p => p.map((x,j) => j===i ? {...x, askedBy:e.target.value} : x))}
                   placeholder="Name…" style={{ width:"100%", boxSizing:"border-box", fontSize:11, fontFamily:"system-ui", border:`1px solid ${T.brd}`, borderRadius:6, padding:"3px 7px", background:T.bgW, color:T.text, outline:"none" }} />
               </div>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:9, color:T.tFaint, fontWeight:700, letterSpacing:1, marginBottom:2 }}>ANSWERED BY</div>
+                <div style={{ fontSize:10, color:T.tFaint, fontWeight:700, letterSpacing:1, marginBottom:2 }}>ANSWERED BY</div>
                 <input value={item.answeredBy || ""} onChange={e => setParsedShailas(p => p.map((x,j) => j===i ? {...x, answeredBy:e.target.value} : x))}
                   placeholder="Name…" style={{ width:"100%", boxSizing:"border-box", fontSize:11, fontFamily:"system-ui", border:`1px solid ${T.brd}`, borderRadius:6, padding:"3px 7px", background:T.bgW, color:T.text, outline:"none" }} />
               </div>

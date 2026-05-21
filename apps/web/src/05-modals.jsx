@@ -76,12 +76,12 @@ function BulkAdd({pris, T, onAddAll, onClose}) {
                 {ap.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
               </select>
               <input value={row.text} onChange={e=>setRows(r=>r.map(x=>x.id===row.id?{...x,text:e.target.value}:x))} placeholder="Task..." style={{padding:"8px 10px",borderRadius:8,border:`1px solid ${T.brd}`,outline:"none",fontSize:13,fontFamily:"Georgia,serif",background:T.bgW,color:T.text}} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addRow();}}}/>
-              <button onClick={()=>setRows(r=>r.filter(x=>x.id!==row.id))} style={{background:"none",border:"none",cursor:"pointer",padding:2,opacity:.4}}><IC.Trash s={12} c={T.tFaint}/></button>
+              <button onClick={()=>setRows(r=>r.filter(x=>x.id!==row.id))} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:.4}}><IC.Trash s={12} c={T.tFaint}/></button>
             </React.Fragment>
           ))}
         </div>
         <button onClick={addRow} style={{width:"100%",padding:8,borderRadius:10,border:`1px dashed ${T.brd}`,background:"transparent",cursor:"pointer",fontSize:12,color:T.tSoft,fontFamily:"system-ui",marginBottom:16}}>+ Add row</button>
-        <button onClick={sub} style={{width:"100%",padding:13,borderRadius:14,border:"none",background:ap[0]?.color,color:textOnColor(ap[0]?.color||"#5A9E7C"),cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:"system-ui"}}>Add {rows.filter(r=>r.text.trim()).length} Tasks</button>
+        <button onClick={sub} style={{width:"100%",padding:12,borderRadius:14,border:"none",background:ap[0]?.color,color:textOnColor(ap[0]?.color||"#5A9E7C"),cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:"system-ui"}}>Add {rows.filter(r=>r.text.trim()).length} Tasks</button>
       </div>
     </div>
   );
@@ -215,7 +215,7 @@ function TaskBD({task, pris, T, onConfirm, onClose, aiOpts}) {
           </div>
         )}
         {subs.length>0&&subs.some(s=>s.on)&&(
-          <button onClick={confirmSteps} style={{width:"100%",padding:13,borderRadius:14,border:"none",background:"#4CAF50",color:"#fff",cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:"system-ui"}}>Plant {subs.filter(s=>s.on).length} Crystals</button>
+          <button onClick={confirmSteps} style={{width:"100%",padding:12,borderRadius:14,border:"none",background:"#4CAF50",color:"#fff",cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:"system-ui"}}>Plant {subs.filter(s=>s.on).length} Crystals</button>
         )}
       </div>
     </div>
@@ -248,7 +248,7 @@ function BlockedModal({task, T, pris, onBlock, onClose}) {
   return (
     <div style={{position:"fixed",inset:0,zIndex:9200,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:20,padding:"24px 20px",maxWidth:400,width:"90%",boxShadow:"0 12px 40px rgba(0,0,0,0.20)"}}>
-        <h3 style={{fontSize:15,fontWeight:600,margin:"0 0 6px",display:"flex",alignItems:"center",gap:7}}><IC.Pause s={16} c={T.text}/>Mark as Blocked</h3>
+        <h3 style={{fontSize:15,fontWeight:600,margin:"0 0 6px",display:"flex",alignItems:"center",gap:8}}><IC.Pause s={16} c={T.text}/>Mark as Blocked</h3>
         <p style={{fontSize:12,color:T.tSoft,fontFamily:"system-ui",margin:"0 0 14px"}}>Task moves to the bottom. You'll get a nudge after the selected time asking if it's still blocked.</p>
         <div style={{background:pBg(p.color),borderRadius:10,padding:"10px 12px",marginBottom:14,border:`1px solid ${p.color}40`}}>
           <p style={{fontSize:13,margin:0,color:T.text}}>{task.text}</p>
@@ -327,8 +327,8 @@ function ContextTagPicker({current, T, onSelect, onClose}) {
           })}
         </div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={onClose} style={{flex:1,padding:9,borderRadius:10,border:`1px solid ${T.brd}`,background:T.card,cursor:"pointer",fontSize:12,fontFamily:"system-ui",color:T.tSoft}}>Cancel</button>
-          <button onClick={()=>{onSelect(sel);onClose();}} style={{flex:1,padding:9,borderRadius:10,border:"none",background:T.text,color:T.bg||"#fff",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"system-ui"}}>Apply</button>
+          <button onClick={onClose} style={{flex:1,padding:8,borderRadius:10,border:`1px solid ${T.brd}`,background:T.card,cursor:"pointer",fontSize:12,fontFamily:"system-ui",color:T.tSoft}}>Cancel</button>
+          <button onClick={()=>{onSelect(sel);onClose();}} style={{flex:1,padding:8,borderRadius:10,border:"none",background:T.text,color:T.bg||"#fff",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"system-ui"}}>Apply</button>
         </div>
       </div>
     </div>

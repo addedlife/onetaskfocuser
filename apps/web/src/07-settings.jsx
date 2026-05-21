@@ -159,8 +159,8 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
 
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <h3 style={{fontSize:20,fontWeight:500,margin:0,fontFamily:NC_FONT_STACK}}>Settings</h3>
-          <button onClick={onClose} style={{width:40,height:40,background:"none",border:"none",cursor:"pointer",fontSize:20,color:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+          <h3 style={{fontSize:22,fontWeight:500,margin:0,fontFamily:NC_FONT_STACK}}>Settings</h3>
+          <button onClick={onClose} style={{width:40,height:40,background:"none",border:"none",cursor:"pointer",fontSize:22,color:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
 
         {/* Tab bar */}

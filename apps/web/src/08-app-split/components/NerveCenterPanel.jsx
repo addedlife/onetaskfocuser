@@ -687,7 +687,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const ncTasksPanel = showAllTasks ? ncPanel : { ...ncPanel, alignSelf: "start", width: "100%" };
   const ncHeader = { minHeight: 36, padding: "4px 12px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 };
   const ncTitle = { fontSize: ncType.title, fontWeight: "var(--nc-font-weight-strong, 500)", color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35 };
-  const ncSectionIcon = (accent = C.accent) => ({ width: 26, height: 26, borderRadius: 13, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
+  const ncSectionIcon = (accent = C.accent) => ({ width: 26, height: 26, borderRadius:12, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
   const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 26, height: 26, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
   const phoneStatusColor = phoneStatusSummary.tone === "incoming" ? C.success : phoneStatusSummary.tone === "call" ? C.warning : phoneStatusSummary.online ? C.success : C.faint;
   const rawNowDate = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());
@@ -1472,7 +1472,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const chiefPri = gP(taskSuggestionPriorities, chiefTaskPriority || defaultSuggestionPriorityId);
     return (
       <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: "auto", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}` }}>
-        <div style={{ maxWidth: 1120, margin: "0 auto", padding: isStacked ? "18px 14px 32px" : "28px 24px 40px", display: "grid", gap: 14, boxSizing: "border-box" }}>
+        <div style={{ maxWidth: 1120, margin: "0 auto", padding: isStacked ? "18px 14px 32px" : "28px 24px 40px", display: "grid", gap:12, boxSizing: "border-box" }}>
           <header style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 12, alignItems: "center" }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "inline-flex", alignItems: "center", gap: 8, color: activeChiefTone, fontSize: NC_TYPE.label, fontWeight: 700, fontFamily: NC_FONT_STACK, marginBottom: 6 }}>
@@ -1503,7 +1503,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </div>
               )}
               {activeChiefBrief.signals?.length > 0 && (
-                <div style={{ display: "grid", gap: 7, borderTop: activeChiefBrief.brief ? `1px solid ${C.divider}` : "none", paddingTop: activeChiefBrief.brief ? 12 : 0 }}>
+                <div style={{ display: "grid", gap:8, borderTop: activeChiefBrief.brief ? `1px solid ${C.divider}` : "none", paddingTop: activeChiefBrief.brief ? 12 : 0 }}>
                   {activeChiefBrief.signals.map((sig, i) => (
                     <div key={i} style={{ display: "grid", gridTemplateColumns: "80px minmax(0,1fr)", gap: 10, fontSize: NC_TYPE.control, fontFamily: NC_FONT_STACK, lineHeight: 1.45 }}>
                       <span style={{ color: C.faint, fontWeight: 700, fontSize: NC_TYPE.small, textTransform: "uppercase", letterSpacing: "0.04em", paddingTop: 2 }}>{sig.area}</span>
@@ -1519,7 +1519,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             {snapshotTiles.map(([label, value, icon, color]) => (
               <button key={label} type="button" onClick={onCloseChiefPage} title={`View ${label} in NerveCenter`}
                 style={{ border: `1px solid ${C.divider}`, borderRadius: 8, background: C.bgSoft, padding: "10px 11px", minWidth: 0, cursor: "pointer", textAlign: "left" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, color, fontSize: NC_TYPE.small, fontWeight: 700, fontFamily: NC_FONT_STACK }}>
+                <div style={{ display: "flex", alignItems: "center", gap:8, color, fontSize: NC_TYPE.small, fontWeight: 700, fontFamily: NC_FONT_STACK }}>
                   {suiteIcon(icon, 14)}
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
                 </div>
@@ -1529,12 +1529,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </section>
 
           <section style={{ ...pagePanel, display: "grid", gridTemplateColumns: isStacked ? "1fr" : "minmax(0,1.34fr) minmax(300px,0.66fr)" }}>
-            <div style={{ padding: pagePad, borderRight: isStacked ? "none" : `1px solid ${C.divider}`, borderBottom: isStacked ? `1px solid ${C.divider}` : "none", display: "grid", gap: 14 }}>
-              <div style={{ display: "grid", gap: 7 }}>
+            <div style={{ padding: pagePad, borderRight: isStacked ? "none" : `1px solid ${C.divider}`, borderBottom: isStacked ? `1px solid ${C.divider}` : "none", display: "grid", gap:12 }}>
+              <div style={{ display: "grid", gap:8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={pageLabel}>Next move</span>
                   {chiefLoading && (
-                    <span style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, display: "inline-flex", alignItems: "center", gap:6 }}>
                       <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${C.faint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
                       Rescanning
                     </span>
@@ -1571,7 +1571,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   ["Urgency", activeChiefBrief.urgency || "watch", activeChiefTone],
                   ["Evidence", (activeChiefSources.length ? activeChiefSources : ["Dashboard"]).join(", "), C.text],
                 ].map(([label, value, color]) => (
-                  <div key={label} style={{ border: `1px solid ${C.divider}`, borderRadius: 8, padding: 9, background: C.bgSoft, minWidth: 0 }}>
+                  <div key={label} style={{ border: `1px solid ${C.divider}`, borderRadius: 8, padding:8, background: C.bgSoft, minWidth: 0 }}>
                     <div style={pageLabel}>{label}</div>
                     <div style={{ marginTop: 5, color, fontSize: NC_TYPE.small, fontWeight: 650, fontFamily: NC_FONT_STACK, lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
                   </div>
@@ -1651,7 +1651,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           <section style={{ ...pagePanel }}>
             <button type="button" onClick={() => setChiefProfileOpen(open => !open)}
               style={{ width: "100%", minHeight: 44, border: "none", background: "transparent", color: C.text, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "0 14px", cursor: "pointer", fontSize: NC_TYPE.label, fontWeight: 700, fontFamily: NC_FONT_STACK }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>{suiteIcon("tune", 15)} Profile</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap:8 }}>{suiteIcon("tune", 15)} Profile</span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: C.faint, fontSize: NC_TYPE.small, fontWeight: 500 }}>
                 {chiefProfileLoading ? "Loading" : "Netlify Blobs"}
                 {suiteIcon(chiefProfileOpen ? "expand_less" : "expand_more", 17)}
@@ -1687,11 +1687,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 14,
+          gap:12,
           boxSizing: "border-box",
         }}>
           <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ width: 34, height: 34, borderRadius: 17, display: "flex", alignItems: "center", justifyContent: "center", color: C.accent, background: C.hover, flexShrink: 0 }}>{suiteIcon("hub", 18)}</span>
+            <span style={{ width: 34, height: 34, borderRadius:16, display: "flex", alignItems: "center", justifyContent: "center", color: C.accent, background: C.hover, flexShrink: 0 }}>{suiteIcon("hub", 18)}</span>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: isStacked ? 17 : 20, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>NerveCenter</div>
               <div style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clockParts.date}</div>
@@ -1715,7 +1715,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           <div style={{ display: "flex", background: C.bg, borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
             {[["Tasks", "task_alt", 0], ["Shailos", "rule", 1], ["Phone", "phone_in_talk", 2]].map(([lbl, ico, idx]) => (
               <button key={idx} onClick={() => goToPanel(idx)}
-                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, height: 42, padding: "0 4px", border: "none", borderBottom: `2px solid ${idx === activeStackPanel ? C.accent : "transparent"}`, background: "none", cursor: "pointer", color: idx === activeStackPanel ? C.text : C.muted, fontSize: ncType.label, fontWeight: 500, fontFamily: NC_FONT_STACK, transition: "color 0.15s" }}>
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap:6, height: 42, padding: "0 4px", border: "none", borderBottom: `2px solid ${idx === activeStackPanel ? C.accent : "transparent"}`, background: "none", cursor: "pointer", color: idx === activeStackPanel ? C.text : C.muted, fontSize: ncType.label, fontWeight: 500, fontFamily: NC_FONT_STACK, transition: "color 0.15s" }}>
                 {suiteIcon(ico, 13)} {lbl}
               </button>
             ))}
@@ -1730,11 +1730,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             {!isStacked && (
             <div ref={taskHeaderRef} style={{ ...ncHeader, display: taskComposerOpen ? "block" : "flex", ...(taskComposerOpen ? { padding: "7px 12px" } : {}) }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, ...(taskComposerOpen ? { marginBottom: 7 } : {}) }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <div style={{ display: "flex", alignItems: "center", gap:8 }}>
                   <span style={ncSectionIcon()}>{suiteIcon("task_alt", 16)}</span>
                   <span style={ncTitle}>Tasks</span>
                 </div>
-                <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                <div style={{ display: "flex", gap:4, alignItems: "center" }}>
                   {ncCorePills.map(p => {
                     const active = taskPriority === p.id;
                     return (
@@ -1809,7 +1809,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const actionsOpen = openTaskActionsId === t.id;
                 const displayText = nerveDisplaySummary(t, "Untitled task");
                 return (
-                  <div key={t.id} data-nc-task-row="true" className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? "3px minmax(0,1fr) 40px" : "3px minmax(0,1fr)", alignItems: "start", padding: "14px 18px 14px 0", gap: 14, minHeight: 56 }}>
+                  <div key={t.id} data-nc-task-row="true" className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? "3px minmax(0,1fr) 40px" : "3px minmax(0,1fr)", alignItems: "start", padding: "14px 18px 14px 0", gap:12, minHeight: 56 }}>
                     {/* Priority color bar */}
                     <span style={{ width: 3, alignSelf: "stretch", minHeight: 24, borderRadius: "0 3px 3px 0", background: priColor, flexShrink: 0 }} />
                     {/* Text — click to edit inline */}
@@ -1833,7 +1833,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       </button>
                     )}
                     {(!touchLayout || actionsOpen) && !isEditing && (
-                      <div className={touchLayout ? "" : "nc-hover-actions"} data-open={actionsOpen ? "true" : undefined} style={{ display: "flex", gap: 4, justifyContent: touchLayout ? "flex-start" : "flex-end", gridColumn: touchLayout ? "2 / 4" : "auto", marginTop: touchLayout ? -4 : 0, ...(touchLayout ? {} : { position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", zIndex: 2, background: C.bg, borderRadius: 8, boxShadow: "0 1px 8px rgba(60,64,67,0.12)", padding: 2 }) }}>
+                      <div className={touchLayout ? "" : "nc-hover-actions"} data-open={actionsOpen ? "true" : undefined} style={{ display: "flex", gap: 4, justifyContent: touchLayout ? "flex-start" : "flex-end", gridColumn: touchLayout ? "2 / 4" : "auto", marginTop: touchLayout ? -4 : 0, ...(touchLayout ? {} : { position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", zIndex: 2, background: C.bg, borderRadius: 8, boxShadow: "0 1px 8px rgba(60,64,67,0.12)", padding:4 }) }}>
                         <button onClick={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }} title="Mark done" aria-label="Mark done" style={gvTextButton({ minHeight: 34, height: 34, padding: "0 10px", fontSize: NC_TYPE.small, border: "none", background: C.bgSoft, color: C.success }, C)}>
                           {suiteIcon("check", 17)} <span>Done</span>
                         </button>
@@ -1848,7 +1848,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               </div>
               {!isStacked && (showAllTasks || primaryTaskQueue.length > collapsedTaskLimit) && primaryTaskQueue.length > MIN_COLLAPSED_TASKS && (
                 <button ref={taskMoreButtonRef} onClick={() => setShowAllTasks(v => !v)} title={showAllTasks ? "Show fewer tasks" : `Show ${hiddenTaskCount} more tasks`} aria-label={showAllTasks ? "Show fewer tasks" : `Show ${hiddenTaskCount} more tasks`}
-                  style={{ width: "100%", height: 24, flex: "0 0 24px", display: "flex", alignItems: "center", justifyContent: "center", gap: 3, border: "none", borderTop: `1px solid ${C.divider}`, background: "transparent", color: C.faint, cursor: "pointer", fontSize: 11, fontFamily: NC_FONT_STACK, flexShrink: 0 }}>
+                  style={{ width: "100%", height: 24, flex: "0 0 24px", display: "flex", alignItems: "center", justifyContent: "center", gap:4, border: "none", borderTop: `1px solid ${C.divider}`, background: "transparent", color: C.faint, cursor: "pointer", fontSize: 11, fontFamily: NC_FONT_STACK, flexShrink: 0 }}>
                   {suiteIcon(showAllTasks ? "expand_less" : "expand_more", 12)}
                   {!showAllTasks && <span>+{hiddenTaskCount} more</span>}
                 </button>
@@ -1884,7 +1884,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const chipBg = isGetBack ? "rgba(201,146,60,0.22)" : "rgba(201,146,60,0.10)";
                 return (
                   <button key={s.id} onClick={onOpenShailos}
-                    style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap: 14, padding: "16px 20px 16px 0", border: "none", background: GOLD_BG, color: C.text, cursor: "pointer", alignItems: "start", minHeight: 60 }}>
+                    style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap:12, padding: "16px 20px 16px 0", border: "none", background: GOLD_BG, color: C.text, cursor: "pointer", alignItems: "start", minHeight: 60 }}>
                     <span style={{ width: 3, alignSelf: "stretch", minHeight: 28, borderRadius: 2, background: GOLD, flexShrink: 0 }} />
                     <span style={{ paddingLeft: 5, paddingTop: 1 }}>
                       <span style={{ display: "block", fontSize: ncType.body, fontWeight: "var(--nc-font-weight-strong, 500)", lineHeight: ncType.line, color: C.text, wordBreak: "break-word" }}>{text}</span>
@@ -1905,7 +1905,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   {shailosCompleted.map(s => {
                     const text = nerveDisplaySummary(s, "Resolved shaila");
                     return (
-                      <div key={s.id} style={{ display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap: 14, padding: "14px 20px 14px 0", alignItems: "start", opacity: 0.72, minHeight: 56 }}>
+                      <div key={s.id} style={{ display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap:12, padding: "14px 20px 14px 0", alignItems: "start", opacity: 0.72, minHeight: 56 }}>
                         <span style={{ width: 3, alignSelf: "stretch", minHeight: 24, borderRadius: 2, background: "T.success", flexShrink: 0 }} />
                         <span style={{ paddingLeft: 5, paddingTop: 1, fontSize: ncType.meta, fontWeight: "var(--nc-font-weight-normal, 400)", lineHeight: ncType.line, color: C.muted, wordBreak: "break-word", textDecoration: "line-through" }}>{text}</span>
                         <span style={{ fontSize: 12, fontWeight: 500, color: "T.success", background: "rgba(46,125,50,0.10)", border: "1px solid rgba(46,125,50,0.22)", borderRadius: 999, padding: "4px 9px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 2 }}>Done</span>
@@ -1924,13 +1924,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                 <span style={ncSectionIcon()}>{suiteIcon("phone_in_talk", 16)}</span>
                 <span style={ncTitle}>Phone</span>
-                <span title={phoneStatusSummary.label} style={{ display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0, color: phoneStatusColor, fontSize: 12, fontWeight: 500 }}>
+                <span title={phoneStatusSummary.label} style={{ display: "inline-flex", alignItems: "center", gap:6, minWidth: 0, color: phoneStatusColor, fontSize: 12, fontWeight: 500 }}>
                   <span style={{ width: 7, height: 7, borderRadius: 99, background: phoneStatusColor, flexShrink: 0 }} />
                   {(phoneStatusSummary.tone === "incoming" || phoneStatusSummary.tone === "call") && (
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 150 }}>{phoneStatusSummary.label}</span>
                   )}
                   {phoneStatusSummary.voicemailCount > 0 && (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: C.danger }}>{suiteIcon("voicemail", 12)} {phoneStatusSummary.voicemailCount}</span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap:4, color: C.danger }}>{suiteIcon("voicemail", 12)} {phoneStatusSummary.voicemailCount}</span>
                   )}
                 </span>
               </div>
@@ -1979,7 +1979,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           const cardWrap = { background: C.bg, borderRadius: 8, border: `1px solid ${C.divider}`, flex: isStacked ? "1 1 0" : 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" };
           const cardHead = { minHeight: isStacked ? 28 : 36, padding: isStacked ? "3px 8px" : "11px 14px 8px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 };
           const cardBody = { flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: isStacked ? "2px 8px 6px" : "4px 14px 8px", overscrollBehavior: "contain", scrollbarGutter: "stable" };
-          const headLabel = { fontSize: isStacked ? NC_TYPE.meta : NC_TYPE.label, fontWeight: 500, color: C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0, display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0 };
+          const headLabel = { fontSize: isStacked ? NC_TYPE.meta : NC_TYPE.label, fontWeight: 500, color: C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0, display: "inline-flex", alignItems: "center", gap:6, minWidth: 0 };
           const selectedEmail = selectedEmailId ? (gmailMessages || []).find(msg => msg.id === selectedEmailId) : null;
           const selectedEmailDetail = selectedEmailId ? emailDetails[selectedEmailId] : null;
           const selectedEmailSource = selectedEmailDetail || selectedEmail;
@@ -2092,7 +2092,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   </div>
                   <div style={cardBody}>
                     {!calendarEvents ? (
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: 7 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap:8 }}>
                         <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
                         <span style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Loading calendar…</span>
                       </div>
@@ -2156,7 +2156,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   </div>
                   <div style={cardBody}>
                     {!gmailMessages ? (
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: 7 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap:8 }}>
                         <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
                         <span style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Loading mail…</span>
                       </div>
@@ -2213,7 +2213,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                                 style={{ width: 24, height: 24, minHeight: 0, border: "none", background: "transparent", color: C.faint, cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0 }}>x</button>
                             </div>
                             {emailDetailLoadingId === selectedEmailId ? (
-                              <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: NC_TYPE.meta, color: C.muted }}>
+                              <div style={{ display: "flex", alignItems: "center", gap:8, fontSize: NC_TYPE.meta, color: C.muted }}>
                                 <div style={{ width: 11, height: 11, borderRadius: "50%", border: `2px solid ${C.muted}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
                                 Loading full message...
                               </div>

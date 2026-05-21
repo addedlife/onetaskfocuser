@@ -122,7 +122,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       {/* Collapse / expand toggle */}
       <button onClick={onToggle} title={displayOpen ? "Collapse sidebar" : "Expand sidebar"} disabled={forceCompact}
         style={{
-          width: displayOpen ? "100%" : 40, height: 34, borderRadius: 17,
+          width: displayOpen ? "100%" : 40, height: 34, borderRadius:16,
           border: `1px solid ${C.divider}`,
           background: "transparent", color: C.faint, cursor: forceCompact ? "default" : "pointer",
           opacity: forceCompact ? 0.45 : 1,

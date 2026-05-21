@@ -684,7 +684,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const AB = ({ icon, title, onClick }) => (
     <button onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); onClick(); }} title={title}
       aria-label={title}
-      style={gvTextButton({ minHeight: 32, height: 32, padding: "0 9px", fontSize: NC_TYPE.small, gap: 5, border: "none", background: C.bgSoft }, C)}>
+      style={gvTextButton({ minHeight: 32, height: 32, padding: "0 9px", fontSize: NC_TYPE.small, gap:6, border: "none", background: C.bgSoft }, C)}>
       {suiteIcon(icon, 14)}
       <span>{title.replace(" back", "")}</span>
     </button>
@@ -869,7 +869,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
 
       {/* ── Dialer — only when keypad is open ── */}
       {showDialer && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap:6 }}>
           {/* Number input */}
           <div style={{ position: "relative" }}>
             <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.tFaint, pointerEvents: "none", lineHeight: 1, display: "flex" }}>{suiteIcon("search", 15)}</span>
@@ -989,7 +989,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                               display: "flex",
                               alignItems: "center",
                               gap: 4,
-                              padding: 3,
+                              padding:4,
                               border: `1px solid ${C.divider}`,
                               borderRadius: 99,
                               background: C.bg,

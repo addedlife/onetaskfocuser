@@ -331,7 +331,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
   if (phase === 'processing') return (
     <div style={overlayS}>
       <div style={{ ...cardS, alignItems: 'center', justifyContent: 'center', padding: '56px 32px', textAlign: 'center' }}>
-        <div style={{ fontSize: 38, marginBottom: 16 }}>🎙️</div>
+        <div style={{ fontSize:40, marginBottom: 16 }}>🎙️</div>
         <div style={{ fontSize: 18, fontWeight: 500, color: T.t, marginBottom: 8, fontFamily: NC_FONT_STACK }}>Processing conversation…</div>
         <div style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Transcribing and extracting items</div>
       </div>
@@ -368,13 +368,13 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
             if (!sItems.length) return null;
             return (
               <div key={cat} style={{ marginBottom: 18 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap:8, marginBottom: 8 }}>
                   <div style={{ width: 3, height: 18, background: color, borderRadius: 2, flexShrink: 0 }}/>
                   <span style={{ fontSize: 13, fontWeight: 500, color: T.t, fontFamily: NC_FONT_STACK, letterSpacing: 0 }}>{emoji} {label}</span>
                   <span style={{ fontSize: 12, background: color + '22', color: color, borderRadius: 10, padding: '1px 7px', fontFamily: NC_FONT_STACK, fontWeight: 500 }}>{sItems.length}</span>
                 </div>
                 {sItems.map(it => (
-                  <div key={it.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '7px 0', borderBottom: `1px solid ${T.brdS}` }}>
+                  <div key={it.id} style={{ display: 'flex', alignItems: 'flex-start', gap:8, padding: '7px 0', borderBottom: `1px solid ${T.brdS}` }}>
                     <input type="checkbox" checked={it.approved} onChange={() => toggleApproved(it.id)}
                       style={{ marginTop: 5, accentColor: color, flexShrink: 0, cursor: 'pointer', width: 14, height: 14 }}/>
                     <div style={{ flex: 1, minWidth: 0 }}>

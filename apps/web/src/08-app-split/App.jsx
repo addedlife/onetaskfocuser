@@ -2577,27 +2577,27 @@ function App({ user, onSignOut }) {
                 <p style={{fontSize:12,color:T.tFaint,margin:"0 0 26px",fontFamily:NC_FONT_STACK,lineHeight:1.5,fontStyle:"italic"}}>{optConfirm.reason}</p>
                 <div style={{display:"flex",gap:10,justifyContent:"center"}}>
                   <button onClick={()=>{uT(()=>optConfirm.optimizedWithOverride);setOptConfirm(null);showToast("Moved above pins ✦",2500);}}
-                    style={{padding:"9px 20px",borderRadius:11,border:"none",background:T.text,cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.bg||"#fff",fontWeight:700}}>
+                    style={{padding:"9px 20px",borderRadius:12,border:"none",background:T.text,cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.bg||"#fff",fontWeight:700}}>
                     Yes, move above pins
                   </button>
                   <button onClick={()=>setOptConfirm(null)}
-                    style={{padding:"9px 20px",borderRadius:11,border:`1px solid ${T.brd}`,background:"none",cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.tSoft,fontWeight:500}}>
+                    style={{padding:"9px 20px",borderRadius:12,border:`1px solid ${T.brd}`,background:"none",cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.tSoft,fontWeight:500}}>
                     Keep pins
                   </button>
                 </div>
               </>
             ) : (
               <>
-                <div style={{fontSize:30,marginBottom:14,lineHeight:1,display:"flex",justifyContent:"center",color:T.text}}>{suiteIcon("star_rate", 32)}</div>
+                <div style={{fontSize:28,marginBottom:14,lineHeight:1,display:"flex",justifyContent:"center",color:T.text}}>{suiteIcon("star_rate", 32)}</div>
                 <p style={{fontSize:15,fontWeight:700,color:T.text,margin:"0 0 10px",fontFamily:NC_FONT_STACK,letterSpacing:.2}}>Queue already looks sharp</p>
                 <p style={{fontSize:13,color:T.tSoft,margin:"0 0 26px",fontFamily:NC_FONT_STACK,lineHeight:1.6}}>{optConfirm.insight || "The current order is already well-prioritized."}</p>
                 <div style={{display:"flex",gap:10,justifyContent:"center"}}>
                   <button onClick={()=>{uT(()=>optConfirm.optimized);setOptConfirm(null);showToast("Reordered anyway ✦",2500);}}
-                    style={{padding:"9px 22px",borderRadius:11,border:`1px solid ${T.brd}`,background:"none",cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.tSoft,fontWeight:500}}>
+                    style={{padding:"9px 22px",borderRadius:12,border:`1px solid ${T.brd}`,background:"none",cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.tSoft,fontWeight:500}}>
                     Reorder anyway
                   </button>
                   <button onClick={()=>setOptConfirm(null)}
-                    style={{padding:"9px 24px",borderRadius:11,border:"none",background:T.text,cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.bg||"#fff",fontWeight:700}}>
+                    style={{padding:"9px 24px",borderRadius:12,border:"none",background:T.text,cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.bg||"#fff",fontWeight:700}}>
                     Got it
                   </button>
                 </div>
@@ -2629,11 +2629,11 @@ function App({ user, onSignOut }) {
                 />
                 <div style={{display:"flex",gap:10,justifyContent:"center"}}>
                   <button onClick={()=>setFirstStepModal(null)}
-                    style={{padding:"9px 20px",borderRadius:11,border:`1px solid ${T.brd}`,background:"none",cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.tSoft,fontWeight:500}}>
+                    style={{padding:"9px 20px",borderRadius:12,border:`1px solid ${T.brd}`,background:"none",cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:T.tSoft,fontWeight:500}}>
                     Cancel
                   </button>
                   <button onClick={confirmFirstStep} disabled={!firstStepModal.edited?.trim()}
-                    style={{padding:"9px 24px",borderRadius:11,border:"none",background:firstStepModal.edited?.trim()?T.text:"#aaa",cursor:firstStepModal.edited?.trim()?"pointer":"default",fontSize:13,fontFamily:NC_FONT_STACK,color:T.bg||"#fff",fontWeight:700,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
+                    style={{padding:"9px 24px",borderRadius:12,border:"none",background:firstStepModal.edited?.trim()?T.text:"#aaa",cursor:firstStepModal.edited?.trim()?"pointer":"default",fontSize:13,fontFamily:NC_FONT_STACK,color:T.bg||"#fff",fontWeight:700,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
                     Create as Now {suiteIcon("star_rate", 16)}
                   </button>
                 </div>
@@ -2660,11 +2660,11 @@ function App({ user, onSignOut }) {
             />
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setListNameModal(null)}
-                style={{flex:1,padding:11,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:500}}>
+                style={{flex:1,padding:12,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:500}}>
                 Cancel
               </button>
               <button onClick={confirmListName} disabled={!listNameInput.trim()}
-                style={{flex:1,padding:11,borderRadius:12,border:"none",background:listNameInput.trim()?T.text:"#aaa",color:T.bg||"#fff",cursor:listNameInput.trim()?"pointer":"default",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:600}}>
+                style={{flex:1,padding:12,borderRadius:12,border:"none",background:listNameInput.trim()?T.text:"#aaa",color:T.bg||"#fff",cursor:listNameInput.trim()?"pointer":"default",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:600}}>
                 {listNameModal.mode === 'new' ? 'Create' : 'Rename'}
               </button>
             </div>
@@ -2690,11 +2690,11 @@ function App({ user, onSignOut }) {
             <p style={{fontSize:12,color:T.tFaint,margin:"0 0 16px",fontFamily:NC_FONT_STACK}}>This will replace your current tasks and restore shailos.</p>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setRestoreConfirm(null)}
-                style={{flex:1,padding:11,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:500}}>
+                style={{flex:1,padding:12,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:500}}>
                 Cancel
               </button>
               <button onClick={doConfirmRestore}
-                style={{flex:1,padding:11,borderRadius:12,border:"none",background:T.text,color:T.bg||"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:600}}>
+                style={{flex:1,padding:12,borderRadius:12,border:"none",background:T.text,color:T.bg||"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:600}}>
                 Restore
               </button>
             </div>
@@ -2788,8 +2788,8 @@ function App({ user, onSignOut }) {
               The task <strong>"{shailaDelPrompt.taskText?.substring(0,50)}"</strong> was removed from your queue. Delete it from the Shaila Transcriber record too?
             </p>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>{setShailaDelPrompt(null);}} style={{flex:1,padding:11,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:500}}>Keep record</button>
-              <button onClick={()=>{Store.deleteShailaDoc(shailaDelPrompt.shailaId);setShailaDelPrompt(null);showToast("Shaila record deleted",3000);}} style={{flex:1,padding:11,borderRadius:12,border:"none",background:"${T.dangerMuted}",color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:600}}>Delete both</button>
+              <button onClick={()=>{setShailaDelPrompt(null);}} style={{flex:1,padding:12,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:500}}>Keep record</button>
+              <button onClick={()=>{Store.deleteShailaDoc(shailaDelPrompt.shailaId);setShailaDelPrompt(null);showToast("Shaila record deleted",3000);}} style={{flex:1,padding:12,borderRadius:12,border:"none",background:"${T.dangerMuted}",color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:600}}>Delete both</button>
             </div>
           </div>
         </div>
@@ -2931,13 +2931,13 @@ function App({ user, onSignOut }) {
               const transcript = pendingTranscripts[rec.id] || "";
               const label = rec.label || String(rec.kind || "Recording").replace(/_/g, " ");
               return (
-                <div key={rec.id} style={{background:T.bgW,border:`1px solid ${T.brdS}`,borderRadius:10,padding:9}}>
+                <div key={rec.id} style={{background:T.bgW,border:`1px solid ${T.brdS}`,borderRadius:10,padding:8}}>
                   <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}>
                     <div style={{minWidth:0}}>
                       <div style={{fontSize:12,fontWeight:700,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
                       <div style={{fontSize:12,color:T.tFaint,marginTop:1}}>{formatPendingAge(rec.createdAt)} · {(rec.size/1024/1024).toFixed(1)} MB</div>
                     </div>
-                    <div style={{display:"flex",gap:5,flexShrink:0}}>
+                    <div style={{display:"flex",gap:6,flexShrink:0}}>
                       <button onClick={()=>retryHeldTranscription(rec)} disabled={!hasAI || !!pendingRetryId} style={{fontSize:12,padding:"5px 8px",borderRadius:7,border:"none",background:hasAI&&!pendingRetryId?"${T.shaila}":T.brdS,color:hasAI&&!pendingRetryId?"#fff":T.tFaint,cursor:hasAI&&!pendingRetryId?"pointer":"default",fontWeight:500}}>{busy?"Retrying...":"Retry"}</button>
                       <button onClick={()=>deleteHeldTranscription(rec)} disabled={busy} style={{fontSize:12,padding:"5px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:"none",color:T.tFaint,cursor:busy?"default":"pointer"}}>Delete</button>
                     </div>
@@ -2945,7 +2945,7 @@ function App({ user, onSignOut }) {
                   {rec.error && <div style={{fontSize:12,color:"${T.dangerBold}",marginTop:6,lineHeight:1.35,maxHeight:38,overflow:"hidden"}}>{rec.error}</div>}
                   {transcript && (
                     <div style={{marginTop:7}}>
-                      <textarea value={transcript} readOnly rows={3} style={{width:"100%",boxSizing:"border-box",resize:"vertical",border:`1px solid ${T.brd}`,borderRadius:8,background:T.card,color:T.text,fontSize:13,lineHeight:1.45,padding:7,fontFamily:NC_FONT_STACK}}/>
+                      <textarea value={transcript} readOnly rows={3} style={{width:"100%",boxSizing:"border-box",resize:"vertical",border:`1px solid ${T.brd}`,borderRadius:8,background:T.card,color:T.text,fontSize:13,lineHeight:1.45,padding:8,fontFamily:NC_FONT_STACK}}/>
                       <button onClick={()=>navigator.clipboard?.writeText(transcript)} style={{marginTop:5,width:"100%",fontSize:12,padding:"5px 8px",borderRadius:7,border:`1px solid ${T.brd}`,background:T.card,color:T.tSoft,cursor:"pointer",fontWeight:500}}>Copy transcript</button>
                     </div>
                   )}
@@ -3043,8 +3043,8 @@ function App({ user, onSignOut }) {
       {/* Streak celebration overlay */}
       {showStreak && (
         <div style={{position:"fixed",top:"50%",left:"50%",zIndex:Z.celebration,pointerEvents:"none",animation:"ot-streak 2.6s forwards",textAlign:"center",fontFamily:NC_FONT_STACK}}>
-          <div style={{fontSize:48,marginBottom:6,display:"flex",alignItems:"center",justifyContent:"center",color:T.text}}>{suiteIcon("whatshot",48)}</div>
-          <div style={{fontSize:20,fontWeight:700,color:T.text,textShadow:"0 2px 12px rgba(0,0,0,0.12)"}}>On a roll!</div>
+          <div style={{fontSize:40,marginBottom:6,display:"flex",alignItems:"center",justifyContent:"center",color:T.text}}>{suiteIcon("whatshot",48)}</div>
+          <div style={{fontSize:22,fontWeight:700,color:T.text,textShadow:"0 2px 12px rgba(0,0,0,0.12)"}}>On a roll!</div>
           <div style={{fontSize:13,color:T.tSoft,marginTop:4}}>{todayCompCount} done today</div>
         </div>
       )}
@@ -3392,13 +3392,13 @@ function App({ user, onSignOut }) {
         {tab !== "focus" && (
           <>
             <header style={{...commandPageWidth,textAlign:"center",paddingTop:40,paddingBottom:4,flexShrink:0}}>
-              <h1 style={{fontSize:24,fontWeight:600,margin:0}}>Shamash Pro 4</h1>
+              <h1 style={{fontSize:22,fontWeight:600,margin:0}}>Shamash Pro 4</h1>
               <p style={{color:T.tFaint,fontSize:13,margin:"4px 0 0",fontStyle:"italic"}}>{gG()} — {dateStr}</p>
               <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
                 <span style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK}}>@{user?.displayName || user?.email?.split("@")[0] || ""}</span>
               </div>
             </header>
-            <div style={{...commandPageWidth,display:"flex",gap:3,marginTop:16,background:T.bgW,borderRadius:16,padding:3,flexShrink:0,position:"relative"}}>
+            <div style={{...commandPageWidth,display:"flex",gap:4,marginTop:16,background:T.bgW,borderRadius:16,padding:4,flexShrink:0,position:"relative"}}>
               <TabBtn T={T} active={false} onClick={()=>switchTab("focus")} icon={<IC.Focus s={13} c={T.tSoft}/>} label="Tasks"/>
               <div style={{position:"relative",flex:1,display:"flex"}}>
                 <TabBtn T={T} active={tab==="queue"} onClick={()=>switchTab("queue")} icon={<IC.List s={13} c={tab==="queue"?T.text:T.tSoft}/>} label={`Queue (${effectiveCount})`}/>
@@ -3462,7 +3462,7 @@ function App({ user, onSignOut }) {
             {/* Quick-add row */}
             <div style={{marginBottom:14,background:T.card,border:`1px solid ${T.brd}`,borderRadius:12,padding:"8px 10px",display:"flex",flexDirection:"column",gap:8}}>
               {/* Priority pills */}
-              <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                 <span style={{fontSize:10,color:T.tFaint,fontFamily:NC_FONT_STACK,flexShrink:0}}>Add:</span>
                 {[...ap].sort((a,b)=>{
                   const ab = !a.id.startsWith('pri_'), bb = !b.id.startsWith('pri_');
@@ -3542,14 +3542,14 @@ function App({ user, onSignOut }) {
                             })()}
                             <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.7}}/>
                             <div style={queueActionRail}>
-                              <button onClick={e=>{e.stopPropagation();compTask(gSteps[0]?.id);}} title="Complete next step" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></button>
-                              {AS.legacyCompleteUI && <button onClick={e=>{e.stopPropagation();legacyCompTask(gSteps[0]?.id);}} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></button>}
-                              <button onClick={e=>{e.stopPropagation();moveTop(gSteps[0]?.id);}} title="To top" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={rowSoft}/></button>
-                              <button onClick={e=>{e.stopPropagation();setChgPri(gSteps[0]?.id);}} title="Change priority" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={rowSoft}/></button>
-                              <button onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.add(task.parentTask);return n;});setGroupAdding(task.parentTask);}} title="Add step" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity,color:rowSoft,display:"flex",alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}>{suiteIcon("add_circle",12)}</button>
-                              <button onClick={e=>{e.stopPropagation();gSteps.forEach(s=>delTask(s.id));}} title="Delete group" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={rowSoft}/></button>
+                              <button onClick={e=>{e.stopPropagation();compTask(gSteps[0]?.id);}} title="Complete next step" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></button>
+                              {AS.legacyCompleteUI && <button onClick={e=>{e.stopPropagation();legacyCompTask(gSteps[0]?.id);}} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></button>}
+                              <button onClick={e=>{e.stopPropagation();moveTop(gSteps[0]?.id);}} title="To top" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={rowSoft}/></button>
+                              <button onClick={e=>{e.stopPropagation();setChgPri(gSteps[0]?.id);}} title="Change priority" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={rowSoft}/></button>
+                              <button onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.add(task.parentTask);return n;});setGroupAdding(task.parentTask);}} title="Add step" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity,color:rowSoft,display:"flex",alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}>{suiteIcon("add_circle",12)}</button>
+                              <button onClick={e=>{e.stopPropagation();gSteps.forEach(s=>delTask(s.id));}} title="Delete group" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={rowSoft}/></button>
                               {/* THE one extra icon — expand/collapse steps */}
-                              <button onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;});}} title={isOpen?"Hide steps":"Show steps"} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Chev d={isOpen?"up":"down"} s={12} c={rowSoft}/></button>
+                              <button onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;});}} title={isOpen?"Hide steps":"Show steps"} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Chev d={isOpen?"up":"down"} s={12} c={rowSoft}/></button>
                             </div>
                           </div>
                           {/* Subtle progress bar */}
@@ -3575,7 +3575,7 @@ function App({ user, onSignOut }) {
                                   const pillStatus = st.gotBackToAsker ? "got_back" : researchDone ? "have_answer" : "researching";
                                   return <ShailaMiniPill status={pillStatus} shailaNum={shailaNum} onToggle={()=>handleShailaGotBack(st.id, !st.gotBackToAsker)}/>;
                                 })()}
-                                <button onClick={e=>{e.stopPropagation();delTask(st.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:2,opacity:.3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.3}><IC.Trash s={11} c={T.tFaint}/></button>
+                                <button onClick={e=>{e.stopPropagation();delTask(st.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:.3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.3}><IC.Trash s={11} c={T.tFaint}/></button>
                               </div>
                             ))}
                             {gDone > 0 && <div style={{padding:"3px 10px 3px 28px",fontSize:10,color:T.tFaint,fontFamily:NC_FONT_STACK,borderBottom:`1px solid ${T.brdS}`,display:"flex",alignItems:"center",gap:4}}>{gDone} step{gDone!==1?"s":""} completed {suiteIcon("done",10)}</div>}
@@ -3610,7 +3610,7 @@ function App({ user, onSignOut }) {
                           {editId === task.id ? (
                             <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(task.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(task.id)} style={{flex:1,minWidth:0,fontSize:14,fontFamily:"Georgia,serif",border:`1px solid ${tp.color}80`,borderRadius:8,padding:"4px 8px",outline:"none",color:textOnPastel(AS.colorScheme, T.text, pBg(tp.color)),background:pBg(tp.color)}}/>
                           ) : (
-                            <div style={{flex:1,display:"flex",flexDirection:"column",gap:1,minWidth:0}}>
+                            <div style={{flex:1,display:"flex",flexDirection:"column",gap:4,minWidth:0}}>
                               <span onClick={()=>startEd(task)} style={{fontSize:14,cursor:"text",fontWeight:isF?500:400,color:_qText,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
                                 {task.pinned && <span style={{fontSize:10,marginRight:4,color:rowAccent,opacity:isF?1:.5,display:"flex",alignItems:"center"}}>{suiteIcon("push_pin",10)}</span>}
                                 {task.text}
@@ -3619,7 +3619,7 @@ function App({ user, onSignOut }) {
                                 <span style={{fontSize:10,fontStyle:"italic",color:textOnPastel(AS.colorScheme, "${T.brown4}", rowBg),fontFamily:NC_FONT_STACK,opacity:.9,display:"flex",alignItems:"center",gap:4}}>{suiteIcon("pause",10)} {task.blockedNote}</span>
                               )}
                               {(aged || task.autoAged || task.mrsW || task.blocked || task.energy) && (
-                                <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:2,opacity:.8}}>
+                                <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:2,opacity:.8}}>
                                   {aged && <AgeBadge task={task} pris={pris} thresholds={AS.ageThresholds} T={T}/>}
                                   {task.autoAged && (
                                     <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,fontFamily:NC_FONT_STACK,padding:"1px 6px 1px 5px",borderRadius:6,background:"${T.eventually}18",border:"1px solid ${T.eventually}60",color:"${T.blue1}",fontWeight:600,lineHeight:1.4}}>
@@ -3636,15 +3636,15 @@ function App({ user, onSignOut }) {
                           )}
                           <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.7}}/>
                           <div draggable={false} onPointerDown={e=>e.stopPropagation()} style={queueActionRail}>
-                            <button onClick={e=>{e.stopPropagation();compTask(task.id);}} title="Mark done" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></button>
-                            {AS.legacyCompleteUI && <button onClick={e=>{e.stopPropagation();legacyCompTask(task.id);}} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></button>}
-                            <button onClick={e=>{e.stopPropagation();moveTop(task.id);}} title="Top" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={_qSoft}/></button>
-                            {task.pinned && <button onClick={e=>{e.stopPropagation();unpinTask(task.id);}} title="Unpin" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity,color:_qSoft,display:"flex",alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}>{suiteIcon("location_on",10)}</button>}
-                            <button onClick={e=>{e.stopPropagation();setChgPri(task.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={_qSoft}/></button>
-                            <button onClick={e=>{e.stopPropagation();setShowBD(task);}} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity}} title="Shatter with AI" onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Split s={12} c={_qSoft}/></button>
-                            <button onClick={e=>{e.stopPropagation();openFirstStep(task);}} title="Suggest first step with AI" style={{background:"none",border:"none",cursor:hasAI?"pointer":"default",padding:3,opacity:hasAI?rowActionOpacity:.15,color:_qSoft,display:"flex",alignItems:"center"}} onMouseEnter={e=>{if(hasAI)e.currentTarget.style.opacity=1;}} onMouseLeave={e=>e.currentTarget.style.opacity=hasAI?rowActionOpacity:.15}>{suiteIcon("arrow_forward",12)}</button>
-                            <button onClick={e=>{e.stopPropagation();startManualGroup(task);}} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:rowActionOpacity,color:_qSoft,display:"flex",alignItems:"center"}} title="Add subtasks manually" onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}>{suiteIcon("add_circle",12)}</button>
-                            <button onClick={e=>{e.stopPropagation();delTask(task.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={_qSoft}/></button>
+                            <button onClick={e=>{e.stopPropagation();compTask(task.id);}} title="Mark done" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></button>
+                            {AS.legacyCompleteUI && <button onClick={e=>{e.stopPropagation();legacyCompTask(task.id);}} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></button>}
+                            <button onClick={e=>{e.stopPropagation();moveTop(task.id);}} title="Top" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={_qSoft}/></button>
+                            {task.pinned && <button onClick={e=>{e.stopPropagation();unpinTask(task.id);}} title="Unpin" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity,color:_qSoft,display:"flex",alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}>{suiteIcon("location_on",10)}</button>}
+                            <button onClick={e=>{e.stopPropagation();setChgPri(task.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={_qSoft}/></button>
+                            <button onClick={e=>{e.stopPropagation();setShowBD(task);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} title="Shatter with AI" onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Split s={12} c={_qSoft}/></button>
+                            <button onClick={e=>{e.stopPropagation();openFirstStep(task);}} title="Suggest first step with AI" style={{background:"none",border:"none",cursor:hasAI?"pointer":"default",padding:4,opacity:hasAI?rowActionOpacity:.15,color:_qSoft,display:"flex",alignItems:"center"}} onMouseEnter={e=>{if(hasAI)e.currentTarget.style.opacity=1;}} onMouseLeave={e=>e.currentTarget.style.opacity=hasAI?rowActionOpacity:.15}>{suiteIcon("arrow_forward",12)}</button>
+                            <button onClick={e=>{e.stopPropagation();startManualGroup(task);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity,color:_qSoft,display:"flex",alignItems:"center"}} title="Add subtasks manually" onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}>{suiteIcon("add_circle",12)}</button>
+                            <button onClick={e=>{e.stopPropagation();delTask(task.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={_qSoft}/></button>
                           </div>
                         </div>
                       );
@@ -3659,7 +3659,7 @@ function App({ user, onSignOut }) {
             {/* Snoozed tasks — faded at bottom of queue */}
             {snoozedT.length > 0 && (
               <div style={{marginTop:16,opacity:0.55}}>
-                <p style={{fontSize:9,fontWeight:700,letterSpacing:1.5,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 8px 4px",textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>{suiteIcon("bedtime",10)} Sleeping</p>
+                <p style={{fontSize:10,fontWeight:700,letterSpacing:1.5,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 8px 4px",textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>{suiteIcon("bedtime",10)} Sleeping</p>
                 <div style={{background:T.card,borderRadius:14,border:`1px solid ${T.brd}`,overflow:"hidden",boxShadow:T.shadow}}>
                   {snoozedT.map((t, i) => {
                     const d = new Date(t.snoozedUntil);
@@ -3735,7 +3735,7 @@ function App({ user, onSignOut }) {
                       </ul>
                       {takeawayLine && (
                         <div style={{borderTop:`1px solid ${T.brd}`,paddingTop:10,marginTop:2,display:"flex",gap:8,alignItems:"flex-start"}}>
-                          <span style={{fontSize:9,fontWeight:700,color:T.tFaint,fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.2,paddingTop:3,flexShrink:0,whiteSpace:"nowrap"}}>Key Takeaway</span>
+                          <span style={{fontSize:10,fontWeight:700,color:T.tFaint,fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.2,paddingTop:3,flexShrink:0,whiteSpace:"nowrap"}}>Key Takeaway</span>
                           <span style={{fontSize:13,fontWeight:600,color:T.text,lineHeight:1.5}}>{takeawayLine.replace(/^TAKEAWAY:\s*/i,'')}</span>
                         </div>
                       )}
@@ -3862,9 +3862,9 @@ function App({ user, onSignOut }) {
                       <text x={cx} y={cy+15} textAnchor="middle" fontSize={7}
                         fill={T.tFaint} fontFamily="system-ui">total</text>
                     </svg>
-                    <div style={{display:"flex",flexDirection:"column",gap:5,flex:1}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:6,flex:1}}>
                       {paths.map((p,i) => (
-                        <div key={i} style={{display:"flex",alignItems:"center",gap:7}}>
+                        <div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
                           <div style={{width:9,height:9,borderRadius:"50%",background:p.color,flexShrink:0}}/>
                           <span style={{fontSize:11,fontFamily:NC_FONT_STACK,flex:1,color:T.tSoft}}>{p.label}</span>
                           <span style={{fontSize:11,fontWeight:600,fontFamily:NC_FONT_STACK,color:T.text}}>{p.n}</span>
@@ -4065,9 +4065,9 @@ function App({ user, onSignOut }) {
                 </summary>
                 <div style={{paddingTop:8}}>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-                    <div style={{background:T.card,borderRadius:14,padding:"16px",border:`1px solid ${T.brd}`,textAlign:"center"}}><div style={{fontSize:26,fontWeight:600}}>{metrics.total}</div><div style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:2}}>Completed</div><div style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Total tasks you've finished</div></div>
-                    <div style={{background:T.card,borderRadius:14,padding:"16px",border:`1px solid ${T.brd}`,textAlign:"center"}}><div style={{fontSize:26,fontWeight:600}}>{metrics.avg}</div><div style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:2}}>Avg time</div><div style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Average time from creation to done</div></div>
-                    <div style={{background:T.card,borderRadius:14,padding:"16px",border:`1px solid ${T.brd}`,textAlign:"center"}}><div style={{fontSize:26,fontWeight:600}}>{metrics.sk}d</div><div style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:2}}>Streak</div><div style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Consecutive days with completions</div></div>
+                    <div style={{background:T.card,borderRadius:14,padding:"16px",border:`1px solid ${T.brd}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:600}}>{metrics.total}</div><div style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:2}}>Completed</div><div style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Total tasks you've finished</div></div>
+                    <div style={{background:T.card,borderRadius:14,padding:"16px",border:`1px solid ${T.brd}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:600}}>{metrics.avg}</div><div style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:2}}>Avg time</div><div style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Average time from creation to done</div></div>
+                    <div style={{background:T.card,borderRadius:14,padding:"16px",border:`1px solid ${T.brd}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:600}}>{metrics.sk}d</div><div style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:2}}>Streak</div><div style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Consecutive days with completions</div></div>
                     <div style={{background:T.card,borderRadius:14,padding:"16px",border:`1px solid ${T.brd}`,textAlign:"center"}}><div style={{fontSize:15,fontWeight:600}}>{metrics.pT||"—"}</div><div style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:2}}>Peak hour</div><div style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Your most productive time of day</div></div>
                   </div>
                   {metrics.goodEnoughCount > 0 && (
@@ -4106,7 +4106,7 @@ function App({ user, onSignOut }) {
                               {t.goodEnough&&<span style={{fontSize:11,marginRight:4,opacity:.6}}>≈</span>}
                               {t.text}
                             </span>
-                            <button onClick={()=>cloneTask(t)} title="Clone as new task" style={{background:"none",border:"none",cursor:"pointer",padding:3,opacity:.35,flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Clone s={12} c={T.tFaint}/></button>
+                            <button onClick={()=>cloneTask(t)} title="Clone as new task" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:.35,flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Clone s={12} c={T.tFaint}/></button>
                             <div style={{fontSize:10,color:T.tFaint,fontFamily:NC_FONT_STACK,textAlign:"right",flexShrink:0}}>
                               <div>{new Date(t.createdAt).toLocaleDateString()}</div>
                               <div>→ {new Date(t.completedAt).toLocaleDateString()}</div>
