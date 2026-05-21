@@ -283,7 +283,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     } finally {
       refreshInFlightRef.current = false;
     }
-  }, [api, onOnlineChange]);
+  }, [api, onOnlineChange, user]);
 
   // Build phone-number → name map from contacts, covering many possible field names from the DeskPhone API
   const contactMap = useMemo(() => {
