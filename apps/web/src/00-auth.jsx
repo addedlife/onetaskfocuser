@@ -26,7 +26,14 @@ function _getAuthPersistence(staySignedIn = true) {
 
 async function _setAuthPersistence(staySignedIn = true) {
   if (typeof firebase === "undefined" || !firebase.auth || !firebase.auth.Auth?.Persistence) return;
-  await firebase.auth().setPersistence(_getAuthPersistence(staySignedIn));
+  const P = firebase.auth.Auth.Persistence;
+  try {
+    await firebase.auth().setPersistence(_getAuthPersistence(staySignedIn));
+  } catch(e) {
+    if (e.code === "auth/unsupported-persistence-type" || e.code === "auth/web-storage-unsupported") {
+      try { await firebase.auth().setPersistence(P.NONE); } catch(_) {}
+    }
+  }
 }
 
 // Localhost-only dev bypass — creates a mock user so the preview can render the full app
@@ -118,13 +125,14 @@ function LoginScreen({ onLogin }) {
       onLogin(cred.user);
     } catch(e) {
       const map = {
-        "auth/user-not-found":      "No account with that username.",
-        "auth/wrong-password":      "Incorrect password.",
-        "auth/invalid-credential":  "Incorrect username or password.",
-        "auth/email-already-in-use":"That username is already taken.",
-        "auth/weak-password":       "Password must be at least 6 characters.",
-        "auth/too-many-requests":   "Too many attempts. Try again in a few minutes.",
-        "auth/web-storage-unsupported":"This browser is blocking saved sign-in storage. Allow site data for this app, then sign in again.",
+        "auth/user-not-found":             "No account with that username.",
+        "auth/wrong-password":             "Incorrect password.",
+        "auth/invalid-credential":         "Incorrect username or password.",
+        "auth/email-already-in-use":       "That username is already taken.",
+        "auth/weak-password":              "Password must be at least 6 characters.",
+        "auth/too-many-requests":          "Too many attempts. Try again in a few minutes.",
+        "auth/web-storage-unsupported":    "This browser is blocking saved sign-in storage. Allow site data for this app, then sign in again.",
+        "auth/unsupported-persistence-type":"Sign-in storage is not available in this browser. You can still sign in, but you may not stay signed in across page reloads.",
       };
       setErr(map[e.code] || e.message);
     } finally { setLoading(false); }
