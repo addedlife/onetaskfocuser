@@ -10,9 +10,12 @@
  * Storage: Netlify Blobs, store name "phone-relay", two keys:
  *   "state"    — latest JSON state pushed by DeskPhone
  *   "commands" — JSON array of pending commands
+ *
+ * Written as ESM (.mjs) so @netlify/blobs uses its ESM entry point and avoids
+ * the require()-of-ESM crash in @netlify/runtime-utils.
  */
 
-const { getStore } = require("@netlify/blobs");
+import { getStore } from "@netlify/blobs";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -36,7 +39,7 @@ function err(statusCode, msg) {
   };
 }
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 204, headers: CORS, body: "" };
   }
