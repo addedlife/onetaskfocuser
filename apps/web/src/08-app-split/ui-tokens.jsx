@@ -31,6 +31,23 @@ export const NC_TYPE = {
   line: 1.5,
 };
 
+// ─── Z-index layering system ──────────────────────────────────────────────
+// One ordered scale for every fixed/absolute overlay. Higher = closer to the
+// user. Always reference these names instead of hand-picking magic numbers.
+export const Z = {
+  panel:         7600,   // full-screen surface panels (sit beside the sidebar)
+  overlay:       9000,   // standard modal backdrops, zen mode, full-screen overlays
+  docked:        9200,   // minimized / docked pills
+  nudgeCard:     9400,   // docked nudge cards (corner)
+  nudge:         9490,   // centered nudge cards
+  modal:         9500,   // standard modals
+  toast:         9800,   // toasts & undo bars
+  modalCritical: 9900,   // critical confirmation modals (must sit above toasts)
+  celebration:   9990,   // streak / celebration animations
+  systemBar:     10000,  // offline notice bar
+  systemBarTop:  10001,  // update / connection notice bar (topmost)
+};
+
 export function useViewportWidth() {
   const [width, setWidth] = useState(() => (
     typeof window === "undefined" ? 1440 : window.innerWidth

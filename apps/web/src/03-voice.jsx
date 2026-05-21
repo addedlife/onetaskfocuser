@@ -300,7 +300,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
   );
 
   const errLine = err
-    ? <p style={{ margin: "8px 0 0", fontSize: 11, color: "#C94040" }}>{err}</p>
+    ? <p style={{ margin: "8px 0 0", fontSize: 11, color: T.danger }}>{err}</p>
     : null;
 
   const closeBtn = (
@@ -311,7 +311,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
   if (phase === "recording") return (
     <div style={shell(color)} data-voice-panel="true">
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-        <span style={{ fontSize:10, color:"#C94040", fontWeight:800, letterSpacing:1.2 }}>🔴 LISTENING</span>
+        <span style={{ fontSize:10, color:T.danger, fontWeight:800, letterSpacing:1.2 }}>🔴 LISTENING</span>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
           {aiOpts && (
             <button onClick={() => { shailaAutoFiredRef.current = false; setShailaMode(true); stopRec(); }} title="Stop and parse as shailos" style={{
@@ -323,7 +323,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
             }}>✡</button>
           )}
           {closeBtn}
-          <button onClick={stopRec} style={{ background:"#C94040", color:"#fff", border:"none", borderRadius:7, padding:"5px 16px", fontSize:11, cursor:"pointer", fontWeight:700 }}>STOP</button>
+          <button onClick={stopRec} style={{ background:T.danger, color:"#fff", border:"none", borderRadius:7, padding:"5px 16px", fontSize:11, cursor:"pointer", fontWeight:700 }}>STOP</button>
         </div>
       </div>
       <div style={{

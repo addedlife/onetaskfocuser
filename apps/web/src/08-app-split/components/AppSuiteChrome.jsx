@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React from 'react';
 import { cleanTheme, NC_FONT_STACK, NC_TYPE, suiteIcon } from '../ui-tokens.jsx';
 
-function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRecord, onMoreActions, autoCollapseEnabled = true, onToggleAutoCollapse, topOffset = 0, forceCompact = false, clockTime = null, onSettings }) {
+function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreActions, topOffset = 0, forceCompact = false, clockTime = null, onSettings }) {
   const screenApps = [
     { id: "focus",     label: "Tasks",   icon: "task_alt"   },
     { id: "chief",     label: "Chief",   icon: "psychology" },
@@ -32,32 +32,12 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRec
     flexShrink: 0,
     ...overrides,
   });
-  const chromeRef = useRef(null);
-  const acTimer = useRef(null);
   const rawNow = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());
   const now = Number.isFinite(rawNow.getTime()) ? rawNow : new Date();
   const railTime = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const railDate = now.toLocaleDateString([], { month: "short", day: "numeric" });
-  const isChromeHovered = useCallback(() => Boolean(chromeRef.current?.matches?.(":hover")), []);
-  const clearAC = useCallback(() => {
-    if (acTimer.current) { clearTimeout(acTimer.current); acTimer.current = null; }
-  }, []);
-  const scheduleAC = useCallback(() => {
-    clearAC();
-    if (!autoCollapseEnabled || !open || isChromeHovered()) return;
-    acTimer.current = setTimeout(() => {
-      if (!isChromeHovered()) onCollapse?.();
-    }, 10000);
-  }, [autoCollapseEnabled, clearAC, isChromeHovered, onCollapse, open]);
-  useEffect(() => {
-    scheduleAC();
-    return clearAC;
-  }, [scheduleAC, clearAC]);
   return (
     <div
-      ref={chromeRef}
-      onMouseEnter={clearAC}
-      onMouseLeave={scheduleAC}
       style={{
       position: "fixed", left: 0, top: topOffset, bottom: 0, width: W, zIndex: 8600,
       display: "flex", flexDirection: "column", alignItems: displayOpen ? "stretch" : "center",
@@ -137,23 +117,6 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRec
         <span style={{ fontSize: displayOpen ? 18 : 13, fontWeight: 600, lineHeight: 1.05, whiteSpace: "nowrap" }}>{railTime}</span>
         {displayOpen && <span style={{ fontSize: NC_TYPE.small, color: C.muted, marginTop: 3, lineHeight: 1 }}>{railDate}</span>}
       </div>
-
-      {/* Auto-collapse toggle */}
-      <button onClick={onToggleAutoCollapse} title={autoCollapseEnabled ? "Auto-collapse: ON (click to disable)" : "Auto-collapse: OFF (click to enable)"}
-        data-automation-id="AppSuiteAutoCollapseToggle"
-        style={{
-          width: displayOpen ? "100%" : 40, height: 32, borderRadius: 16,
-          border: `1px solid ${C.divider}`,
-          background: autoCollapseEnabled ? C.hover : "transparent",
-          color: autoCollapseEnabled ? C.muted : C.faint,
-          cursor: "pointer", display: "flex", alignItems: "center",
-          justifyContent: displayOpen ? "flex-start" : "center",
-          padding: displayOpen ? "0 8px" : "0", gap: displayOpen ? 6 : 0, flexShrink: 0, marginBottom: 3,
-          fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.small, fontWeight: 500, overflow: "hidden", whiteSpace: "nowrap",
-        }}>
-        {suiteIcon("timer", 13)}
-        {displayOpen && (autoCollapseEnabled ? "Auto-collapse: on" : "Auto-collapse: off")}
-      </button>
 
       {/* Collapse / expand toggle */}
       <button onClick={onToggle} title={displayOpen ? "Collapse sidebar" : "Expand sidebar"} disabled={forceCompact}

@@ -190,7 +190,7 @@ const Store = {
       try {
         const handle = await window.showSaveFilePicker({
           suggestedName: fileName,
-          types: [{ description: 'OneTask backup JSON', accept: { 'application/json': ['.json'] } }],
+          types: [{ description: 'Shamash Pro 4 backup JSON', accept: { 'application/json': ['.json'] } }],
         });
         const writable = await handle.createWritable();
         await writable.write(content);
@@ -536,7 +536,7 @@ const Store = {
     try {
       await col.doc(shailaId).update({
         status: "answered",
-        answer: answerText || "Completed in OneTask",
+        answer: answerText || "Completed in Shamash Pro 4",
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       console.log("[Store] Marked shaila answered:", shailaId);

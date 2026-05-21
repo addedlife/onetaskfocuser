@@ -166,7 +166,7 @@ function LoginScreen({ onLogin }) {
         {/* Logo */}
         <div style={{ textAlign:"center", marginBottom:28 }}>
           <div style={{ fontSize:36, lineHeight:1, marginBottom:10 }}>◎</div>
-          <h1 style={{ fontSize:22, fontWeight:700, color:S.text, fontFamily:"Georgia,serif", margin:0, letterSpacing:0.5 }}>OneTask</h1>
+          <h1 style={{ fontSize:22, fontWeight:700, color:S.text, fontFamily:"Georgia,serif", margin:0, letterSpacing:0.5 }}>Shamash Pro 4</h1>
           <p style={{ fontSize:12, color:S.tFaint, marginTop:5, fontFamily:"system-ui" }}>
             {mode === "login" ? "Sign in to continue" : "Create your account"}
           </p>

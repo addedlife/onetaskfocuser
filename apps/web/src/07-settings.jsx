@@ -2,13 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Store, aiGenSchemes, uid, DEF_AGE_THRESHOLDS, DEF_PRI, BEFORE_SHAVUOS_PRIORITY_ID, SCHEMES, ensureSchemeContrast } from './01-core.js';
-import { IC } from './02-icons.jsx';
 import { PriEditor } from './04-components.jsx';
 
 const NC_FONT_STACK = '"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
 
 function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
-  onOptimize, optLoading, onBulkAdd, onShatter, onDedup,
   curEnergy, onSetEnergy, focusModeActive, onToggleFocusMode,
   effectiveCount, overwhelmThreshold, hasAI, aiConfig,
   deskPhoneThemeSync = true, deskPhoneOnline = false,
@@ -135,7 +133,6 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   const tog = (on) => ({width:44,height:24,borderRadius:12,background:on?ap[0]?.color:T.brd,border:"none",cursor:"pointer",position:"relative",flexShrink:0});
   const knob = (on) => ({width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:on?23:3,transition:"left 0.25s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)"});
   const rowSB = {display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,marginBottom:18};
-  const actionBtn = {width:"100%",minHeight:44,padding:"12px 16px",borderRadius:8,border:`1px solid ${T.brdS || T.brd}`,background:T.card,cursor:"pointer",fontSize:settingsType.control,fontWeight:400,fontFamily:NC_FONT_STACK,color:T.tSoft,display:"flex",alignItems:"center",gap:12,marginBottom:10};
   const schemeButtonStyle = (id, scheme, hasDelete = false) => {
     scheme = ensureSchemeContrast(scheme);
     const active = AS.colorScheme === id;
@@ -187,22 +184,6 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               ))}
             </div>
 
-            <div style={{height:1,background:T.brdS,margin:"0 0 18px"}}/>
-            <h4 style={sh}>Queue Actions</h4>
-
-            <button onClick={()=>{onOptimize();onClose();}} disabled={optLoading} style={{...actionBtn,opacity:optLoading?0.5:1}}>
-              <IC.Sparkle s={13} c={T.tSoft}/>{optLoading?"Optimizing…":"Optimize order"}{hasAI&&!optLoading&&<span style={{fontSize:12,opacity:.6,marginLeft:2}}>AI</span>}
-            </button>
-            <button onClick={()=>{onBulkAdd();onClose();}} style={actionBtn}>
-              <IC.Bulk s={13} c={T.tSoft}/>Bulk add tasks
-            </button>
-            <button onClick={()=>{onShatter();onClose();}} style={actionBtn}>
-              <IC.Split s={13} c={T.tSoft}/>Shatter task
-            </button>
-            <button onClick={()=>{onDedup();onClose();}} style={actionBtn}>
-              <IC.Check s={13} c={T.tSoft}/>Remove duplicates
-            </button>
-
             {effectiveCount > overwhelmThreshold && <>
               <div style={{height:1,background:T.brdS,margin:"10px 0 14px"}}/>
               <div style={rowSB}>
@@ -236,7 +217,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               <button onClick={handleGenSchemes} disabled={schemeGenLoading} style={{minHeight:40,fontSize:settingsType.control,color:T.tSoft,background:"none",border:`1px dashed ${T.brd}`,borderRadius:8,padding:"8px 16px",cursor:schemeGenLoading?"default":"pointer",fontFamily:"system-ui",opacity:schemeGenLoading?0.6:1}}>
                 {schemeGenLoading ? "Generating…" : "✦ Generate more themes"}
               </button>
-              {schemeGenErr && <span style={{fontSize:settingsType.help,color:"#C94040",fontFamily:"system-ui",lineHeight:settingsType.line}}>{schemeGenErr}</span>}
+              {schemeGenErr && <span style={{fontSize:settingsType.help,color:T.danger,fontFamily:"system-ui",lineHeight:settingsType.line}}>{schemeGenErr}</span>}
             </div>
             <div style={{height:1,background:T.brdS,margin:"18px 0 14px"}}/>
             <h4 style={sh}>Readability</h4>
@@ -260,7 +241,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             <div style={{...rowSB,alignItems:"flex-start",marginBottom:10}}>
               <div style={{paddingRight:12}}>
                 <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text,fontWeight:500}}>Link DeskPhone to this app's theme</span>
-                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"4px 0 0",lineHeight:settingsType.line}}>When on, OneTask/Shamash pushes its active color scheme to DeskPhone. DeskPhone must also allow this in its Appearance settings.</p>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"4px 0 0",lineHeight:settingsType.line}}>When on, Shamash Pro 4 pushes its active color scheme to DeskPhone. DeskPhone must also allow this in its Appearance settings.</p>
               </div>
               <button onClick={onToggleDeskPhoneThemeSync} style={tog(deskPhoneThemeSync)} title={deskPhoneThemeSync ? "DeskPhone theme sync is on" : "DeskPhone theme sync is off"}><div style={knob(deskPhoneThemeSync)}/></button>
             </div>
@@ -416,7 +397,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                   </optgroup>
                 ))}
               </select>
-              <p style={{fontSize:settingsType.help,color:selectedProviderOnline?T.tFaint:"#C94040",fontFamily:"system-ui",margin:"8px 0 0",lineHeight:settingsType.line}}>
+              <p style={{fontSize:settingsType.help,color:selectedProviderOnline?T.tFaint:T.danger,fontFamily:"system-ui",margin:"8px 0 0",lineHeight:settingsType.line}}>
                 Gateway: {settingsHasAI ? `${selectedProvider} ${selectedProviderOnline ? "online" : "key missing"}` : "not configured"}
               </p>
             </div>

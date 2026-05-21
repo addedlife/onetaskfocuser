@@ -281,7 +281,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
             1. Select the tab or window playing the call<br/>
             2. Check <em>"Share tab audio"</em> before clicking Share
           </div>
-          {err && <div style={{ fontSize: 13, color: '#E74C3C', fontFamily: NC_FONT_STACK, marginBottom: 8 }}>{err}</div>}
+          {err && <div style={{ fontSize: 13, color: T.danger, fontFamily: NC_FONT_STACK, marginBottom: 8 }}>{err}</div>}
         </div>
         <div style={{ padding: '18px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
           <button onClick={startCallCapture} style={{ background: T.accent, color: '#fff', border: 'none', borderRadius: 12, padding: '13px 28px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
@@ -305,7 +305,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
             <button style={btnClose} onClick={onClose}>×</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#E74C3C', animation: 'conv-pulse 1.4s ease infinite' }}/>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: T.danger, animation: 'conv-pulse 1.4s ease infinite' }}/>
             <span style={{ fontSize: 13, color: T.tSoft, fontFamily: NC_FONT_STACK, fontVariantNumeric: 'tabular-nums' }}>{fmtElapsed}</span>
             <span style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Speak freely — AI will extract everything</span>
           </div>
@@ -314,10 +314,10 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
               {liveText}
             </div>
           )}
-          {err && <div style={{ fontSize: 13, color: '#E74C3C', fontFamily: NC_FONT_STACK, marginTop: 8 }}>{err}</div>}
+          {err && <div style={{ fontSize: 13, color: T.danger, fontFamily: NC_FONT_STACK, marginTop: 8 }}>{err}</div>}
         </div>
         <div style={{ padding: '20px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
-          <button onClick={stopAndProcess} style={{ background: '#E74C3C', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 30px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+          <button onClick={stopAndProcess} style={{ background: T.danger, color: '#fff', border: 'none', borderRadius: 12, padding: '13px 30px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Stop &amp; Process
           </button>
           <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
@@ -353,7 +353,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
             </div>
             <button style={btnClose} onClick={onClose}>×</button>
           </div>
-          {err && <div style={{ fontSize: 13, color: '#E74C3C', fontFamily: NC_FONT_STACK, marginTop: 8 }}>{err}</div>}
+          {err && <div style={{ fontSize: 13, color: T.danger, fontFamily: NC_FONT_STACK, marginTop: 8 }}>{err}</div>}
         </div>
 
         {/* Scrollable body */}

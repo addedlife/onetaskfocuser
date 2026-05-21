@@ -615,7 +615,7 @@ function BodyDoubleTimer({T, minimized, onMinimize, onRestore, onClose}) {
   return (
     <div style={{position:"fixed",inset:0,zIndex:8600,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}}
       onClick={e=>{if(e.target===e.currentTarget) onMinimize?.();}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:22,padding:"28px 24px",maxWidth:340,width:"100%",textAlign:"center",boxShadow:"0 8px 40px rgba(0,0,0,0.2)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:20,padding:"28px 24px",maxWidth:340,width:"100%",textAlign:"center",boxShadow:"0 8px 40px rgba(0,0,0,0.2)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <h3 style={{fontSize:15,fontWeight:600,margin:0,display:"flex",alignItems:"center",gap:7}}><IC.Timer s={16} c={T.text}/>Body Double</h3>
           <div style={{display:"flex",gap:6}}>
@@ -673,7 +673,7 @@ function BrainDump({T, pris, onCapture, onClose}) {
 
   return (
     <div style={{position:"fixed",inset:0,zIndex:8600,background:"rgba(0,0,0,0.48)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:22,padding:"24px 20px",maxWidth:480,width:"90%",maxHeight:"86vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.22)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:20,padding:"24px 20px",maxWidth:480,width:"90%",maxHeight:"86vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.22)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
           <h3 style={{fontSize:15,fontWeight:600,margin:0,fontFamily:"system-ui",display:"flex",alignItems:"center",gap:7}}><IC.Brain s={16} c={T.text}/>Brain Dump</h3>
           <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:17,color:T.tSoft}}>✕</button>

@@ -9,33 +9,13 @@ import { SettingsModal } from '../07-settings.jsx';
 import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, listPendingRecordings, PENDING_EVENT, formatPendingAge } from '../09-transcription-pen.js';
 import { DeskPhoneWebPanel } from '../10-deskphone-web.jsx';
 import { isOfflineShellReady } from '../offline-support.js';
-import { buildDeskPhoneThemeQuery, getInitialSuiteView, GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, suiteIcon, useViewportWidth } from './ui-tokens.jsx';
+import { buildDeskPhoneThemeQuery, getInitialSuiteView, GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, suiteIcon, useViewportWidth, Z } from './ui-tokens.jsx';
 import { AppSuiteChrome } from './components/AppSuiteChrome.jsx';
 import { DeskPhoneSuitePanel, SuiteShailosPanel } from './components/SuitePanels.jsx';
 import { NerveCenterPhoneSurface } from './components/NerveCenterPhoneSurface.jsx';
 import { DeskPhoneMiniDock } from './components/DeskPhoneMiniDock.jsx';
 import { compactNerveSummary, nerveSummarySource, NerveCenterPanel } from './components/NerveCenterPanel.jsx';
 import { ConvCapture } from './components/ConvCapture.jsx';
-import { useAppConfig } from './hooks/useAppConfig.js';
-import { useAppTheme } from './hooks/useAppTheme.js';
-import { useBlockedResumeNudge } from './hooks/useBlockedResumeNudge.js';
-import { useClockTicks } from './hooks/useClockTicks.js';
-import { useDeskPhoneBridge } from './hooks/useDeskPhoneBridge.js';
-import { useGoogleWorkspace } from './hooks/useGoogleWorkspace.js';
-import { useInsightsAi } from './hooks/useInsightsAi.js';
-import { useInsightsMetrics } from './hooks/useInsightsMetrics.js';
-import { useOfflineStatus } from './hooks/useOfflineStatus.js';
-import { usePendingRecordings } from './hooks/usePendingRecordings.js';
-import { useMrsWLivePriority } from './hooks/useMrsWLivePriority.js';
-import { useQueueDerivations } from './hooks/useQueueDerivations.js';
-import { useQueueToast } from './hooks/useQueueToast.js';
-import { useShailosFrameMessages } from './hooks/useShailosFrameMessages.js';
-import { useShailosSharedState } from './hooks/useShailosSharedState.js';
-import { useStaleTaskNudge } from './hooks/useStaleTaskNudge.js';
-import { useSuiteNavigation } from './hooks/useSuiteNavigation.js';
-import { useTimedUndo } from './hooks/useTimedUndo.js';
-import { useTipCarousel } from './hooks/useTipCarousel.js';
-import { useToastNotifier } from './hooks/useToastNotifier.js';
 import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack } from './utils/shailosQueue.js';
 
 const GOOGLE_SERVER_TOKEN = "__server_google_workspace__";
@@ -60,7 +40,9 @@ function App({ user, onSignOut }) {
   const [selPri, setSelPri] = useState(null);
   const [tab, setTab] = useState("focus");
   const [suiteView, setSuiteView] = useState(getInitialSuiteView);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try { return localStorage.getItem("shamash_sidebar_open") !== "false"; } catch { return true; }
+  });
   const [ncActionsOpen, setNcActionsOpen] = useState(false);
   const [ncActionCatId, setNcActionCatId] = useState("tasks");
   const [deskPhoneOnline, setDeskPhoneOnline] = useState(false);
@@ -2471,6 +2453,7 @@ function App({ user, onSignOut }) {
         {id:"shatter", label:"Break into steps", note:"Make a big item smaller", icon:"account_tree", run:()=>setShowBD(true)},
         {id:"brain-dump", label:"Brain dump", note:"Drop in everything on your mind", icon:"psychology", run:()=>setShowBrainDump(true)},
         {id:"bulk-add", label:"Paste a list", note:"Add many items at once", icon:"playlist_add", run:()=>setShowBulk(true)},
+        {id:"dedup", label:"Remove duplicates", note:"Clear out repeated tasks", icon:"content_copy", run:()=>deduplicateTasks()},
       ],
     },
     {
@@ -2579,13 +2562,13 @@ function App({ user, onSignOut }) {
       {celeb && <Confetti colors={ap.map(p=>p.color)}/>}
       {/* Queue "Added" toast — global, shows regardless of active tab */}
       {queueToast && (
-        <div key={queueToastKey} style={{position:"fixed",bottom:"clamp(90px,14vh,130px)",left:"50%",transform:"translateX(-50%)",background:queueToast,color:"#fff",borderRadius:20,padding:"6px 16px",fontSize:12,fontWeight:700,fontFamily:NC_FONT_STACK,whiteSpace:"nowrap",boxShadow:"0 3px 16px rgba(0,0,0,0.22)",animation:"ot-queue-toast 5s ease forwards",pointerEvents:"none",zIndex:9800,display:"flex",alignItems:"center",gap:6}}>
+        <div key={queueToastKey} style={{position:"fixed",bottom:"clamp(90px,14vh,130px)",left:"50%",transform:"translateX(-50%)",background:queueToast,color:"#fff",borderRadius:20,padding:"6px 16px",fontSize:12,fontWeight:700,fontFamily:NC_FONT_STACK,whiteSpace:"nowrap",boxShadow:"0 3px 16px rgba(0,0,0,0.22)",animation:"ot-queue-toast 5s ease forwards",pointerEvents:"none",zIndex:Z.toast,display:"flex",alignItems:"center",gap:6}}>
           {suiteIcon("star_rate", 14)} Added to queue
         </div>
       )}
       {optConfirm && (
-        <div style={{position:"fixed",inset:0,zIndex:9900,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.38)"}}>
-          <div style={{background:T.card,borderRadius:22,padding:"32px 36px",maxWidth:360,width:"88%",boxShadow:"0 14px 56px rgba(0,0,0,0.28)",textAlign:"center",animation:"ot-fade 0.2s"}}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.modalCritical,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.38)"}}>
+          <div style={{background:T.card,borderRadius:20,padding:"32px 36px",maxWidth:360,width:"88%",boxShadow:"0 14px 56px rgba(0,0,0,0.28)",textAlign:"center",animation:"ot-fade 0.2s"}}>
             {optConfirm.kind === "pinOverride" ? (
               <>
                 <div style={{fontSize:28,marginBottom:14,lineHeight:1,display:"flex",justifyContent:"center",color:T.text}}>{suiteIcon("push_pin", 32)}</div>
@@ -2624,8 +2607,8 @@ function App({ user, onSignOut }) {
         </div>
       )}
       {firstStepModal && (
-        <div style={{position:"fixed",inset:0,zIndex:9900,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.38)"}} onClick={()=>setFirstStepModal(null)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:22,padding:"28px 28px 24px",maxWidth:380,width:"90%",boxShadow:"0 14px 56px rgba(0,0,0,0.28)",animation:"ot-fade 0.2s"}}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.modalCritical,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.38)"}} onClick={()=>setFirstStepModal(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:20,padding:"28px 28px 24px",maxWidth:380,width:"90%",boxShadow:"0 14px 56px rgba(0,0,0,0.28)",animation:"ot-fade 0.2s"}}>
             <div style={{fontSize:22,marginBottom:6,lineHeight:1,display:"flex",justifyContent:"center",color:T.text}}>{suiteIcon("star_rate", 24)}</div>
             <p style={{fontSize:13,fontWeight:700,color:T.text,margin:"0 0 4px",fontFamily:NC_FONT_STACK,letterSpacing:.2}}>First step</p>
             <p style={{fontSize:12,color:T.tFaint,margin:"0 0 16px",fontFamily:NC_FONT_STACK,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{firstStepModal.task.text}</p>
@@ -2662,7 +2645,7 @@ function App({ user, onSignOut }) {
 
       {/* List name modal (new/rename) */}
       {listNameModal && (
-        <div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setListNameModal(null)}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setListNameModal(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"22px 20px",maxWidth:380,width:"90%",boxShadow:"0 12px 48px rgba(0,0,0,0.2)"}}>
             <h3 style={{fontSize:15,fontWeight:600,margin:"0 0 14px",color:T.text,fontFamily:NC_FONT_STACK}}>
               {listNameModal.mode === 'new' ? '+ New list' : 'Rename list'}
@@ -2691,7 +2674,7 @@ function App({ user, onSignOut }) {
 
       {/* Restore backup confirmation modal */}
       {restoreConfirm && (
-        <div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setRestoreConfirm(null)}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setRestoreConfirm(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"22px 20px",maxWidth:400,width:"90%",boxShadow:"0 12px 48px rgba(0,0,0,0.2)"}}>
             <h3 style={{fontSize:15,fontWeight:600,margin:"0 0 12px",color:T.text,fontFamily:NC_FONT_STACK}}>Restore from backup?</h3>
             <div style={{fontSize:13,color:T.tSoft,margin:"0 0 16px",lineHeight:1.6,fontFamily:NC_FONT_STACK}}>
@@ -2721,20 +2704,20 @@ function App({ user, onSignOut }) {
 
       {toast && <Toast message={toast.msg} color={toast.color} onDismiss={dismissToast}/>}
       {deletedUndo && (
-        <div style={{position:"fixed",bottom:"clamp(55px,9vh,80px)",left:"50%",transform:"translateX(-50%)",background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,padding:"8px 14px",fontSize:12,fontFamily:NC_FONT_STACK,color:T.tSoft,whiteSpace:"nowrap",boxShadow:T.shadowLg,display:"flex",alignItems:"center",gap:10,zIndex:9800,animation:"ot-fade 0.2s"}}>
+        <div style={{position:"fixed",bottom:"clamp(55px,9vh,80px)",left:"50%",transform:"translateX(-50%)",background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,padding:"8px 14px",fontSize:12,fontFamily:NC_FONT_STACK,color:T.tSoft,whiteSpace:"nowrap",boxShadow:T.shadowLg,display:"flex",alignItems:"center",gap:10,zIndex:Z.toast,animation:"ot-fade 0.2s"}}>
           <span style={{color:T.tFaint}}>Task deleted</span>
           <button onClick={()=>{clearTimeout(deletedTmr.current);setAS(p=>({...p,lists:p.lists.map(l=>l.id===deletedUndo.listId?{...l,tasks:[...l.tasks,deletedUndo.task]}:l)}));setDeletedUndo(null);}} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 10px",cursor:"pointer",fontSize:13,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK}}>Undo</button>
         </div>
       )}
       {parkedUndo && (
-        <div style={{position:"fixed",bottom:"clamp(55px,9vh,80px)",left:"50%",transform:"translateX(-50%)",background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,padding:"8px 14px",fontSize:12,fontFamily:NC_FONT_STACK,color:T.tSoft,whiteSpace:"nowrap",boxShadow:T.shadowLg,display:"flex",alignItems:"center",gap:10,zIndex:9800,animation:"ot-fade 0.2s"}}>
+        <div style={{position:"fixed",bottom:"clamp(55px,9vh,80px)",left:"50%",transform:"translateX(-50%)",background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,padding:"8px 14px",fontSize:12,fontFamily:NC_FONT_STACK,color:T.tSoft,whiteSpace:"nowrap",boxShadow:T.shadowLg,display:"flex",alignItems:"center",gap:10,zIndex:Z.toast,animation:"ot-fade 0.2s"}}>
           <span style={{color:T.tFaint,display:"flex",alignItems:"center",gap:4}}>{suiteIcon("sunny", 16)} Parked until tomorrow</span>
           <button onClick={()=>{clearTimeout(parkedTmr.current);setAS(p=>({...p,lists:p.lists.map(l=>l.id===parkedUndo.listId?{...l,tasks:l.tasks.map(t=>t.id===parkedUndo.task.id?{...t,snoozedUntil:parkedUndo.task.snoozedUntil}:t)}:l)}));setParkedUndo(null);}} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 10px",cursor:"pointer",fontSize:13,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK}}>Undo</button>
         </div>
       )}
 
       {networkOffline && !offlineNoticeDismissed && (
-        <div style={{position:"fixed",top:0,left:0,right:0,zIndex:10001,background:"#245E73",color:"#fff",padding:"12px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",fontFamily:NC_FONT_STACK,fontSize:13,gap:12}}>
+        <div style={{position:"fixed",top:0,left:0,right:0,zIndex:Z.systemBarTop,background:"#245E73",color:"#fff",padding:"12px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",fontFamily:NC_FONT_STACK,fontSize:13,gap:12}}>
           <span>{offlineShellReady ? "Offline mode: the app is open from this device. Changes save here and sync to Firebase when internet returns." : "Offline mode: changes save on this device. Open the app once online to finish offline startup setup."}</span>
           <button onClick={()=>setOfflineNoticeDismissed(true)} style={{padding:"6px 14px",borderRadius:8,background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12,color:"#fff",flexShrink:0}}>Dismiss</button>
         </div>
@@ -2742,7 +2725,7 @@ function App({ user, onSignOut }) {
 
       {/* Firebase offline warning — shown when Firebase was unreachable on load */}
       {fbOffline && (
-        <div style={{position:"fixed",top:networkOffline && !offlineNoticeDismissed ? 48 : 0,left:0,right:0,zIndex:10000,background:"${T.dangerBold}",color:"#fff",padding:"12px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",fontFamily:NC_FONT_STACK,fontSize:13,gap:12}}>
+        <div style={{position:"fixed",top:networkOffline && !offlineNoticeDismissed ? 48 : 0,left:0,right:0,zIndex:Z.systemBar,background:"${T.dangerBold}",color:"#fff",padding:"12px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",fontFamily:NC_FONT_STACK,fontSize:13,gap:12}}>
           <span>Could not reach Firebase. Your latest changes are saved on this device and will try again when the connection returns.</span>
           <button onClick={()=>setFbOffline(false)} style={{padding:"6px 14px",borderRadius:8,background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12,color:"#fff",flexShrink:0}}>Dismiss</button>
         </div>
@@ -2756,7 +2739,7 @@ function App({ user, onSignOut }) {
       {showBodyDouble && <BodyDoubleTimer T={T} minimized={bdMinimized} onMinimize={()=>setBdMinimized(true)} onRestore={()=>setBdMinimized(false)} onClose={()=>{setShowBodyDouble(false);setBdMinimized(false);}}/>}
       {/* Floating minimized pills */}
       {justStartId && jsMinimized && (
-        <div onClick={()=>setJsMinimized(false)} style={{position:"fixed",bottom:16,right:16,zIndex:9200,background:curT?gP(pris,curT.priority).color:"${T.eventually}",borderRadius:20,padding:"6px 12px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.2)",animation:"ot-fade 0.2s"}}>
+        <div onClick={()=>setJsMinimized(false)} style={{position:"fixed",bottom:16,right:16,zIndex:Z.docked,background:curT?gP(pris,curT.priority).color:"${T.eventually}",borderRadius:20,padding:"6px 12px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.2)",animation:"ot-fade 0.2s"}}>
           <IC.Timer s={12} c="#fff"/>
           <span style={{fontSize:13,color:"#fff",fontFamily:NC_FONT_STACK,fontWeight:500}}>Just Start</span>
         </div>
@@ -2783,7 +2766,7 @@ function App({ user, onSignOut }) {
       {showBrainDump && <BrainDump T={T} pris={pris} onCapture={(text)=>{captureZenDump(text);setShowZenReview(true);setShowBrainDump(false);}} onClose={()=>setShowBrainDump(false)}/>}
       {/* Shaila Transcriber — full-screen iframe overlay */}
       {showShailos && (
-        <div style={{position:"fixed",inset:0,zIndex:9000,background:T.bg,display:"flex",flexDirection:"column",animation:"ot-fade 0.2s"}}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.overlay,background:T.bg,display:"flex",flexDirection:"column",animation:"ot-fade 0.2s"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",borderBottom:`1px solid ${T.brd}`,background:T.card,flexShrink:0}}>
             <span style={{fontSize:14,fontWeight:600,color:T.text,fontFamily:NC_FONT_STACK}}>Shaila Transcriber</span>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -2798,7 +2781,7 @@ function App({ user, onSignOut }) {
       )}
       {/* Shaila delete prompt — asks if user also wants to delete from transcriber record */}
       {shailaDelPrompt && (
-        <div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setShailaDelPrompt(null)}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setShailaDelPrompt(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"22px 20px",maxWidth:380,width:"90%",boxShadow:"0 12px 48px rgba(0,0,0,0.2)"}}>
             <h3 style={{fontSize:15,fontWeight:600,margin:"0 0 8px",color:T.text,fontFamily:NC_FONT_STACK}}>Also delete from Shaila record?</h3>
             <p style={{fontSize:13,color:T.tSoft,margin:"0 0 18px",lineHeight:1.5,fontFamily:NC_FONT_STACK}}>
@@ -2813,7 +2796,7 @@ function App({ user, onSignOut }) {
       )}
       {/* Shaila reconciliation modal — shows mismatches, lets user fix each one */}
       {shailaReconcile && (
-        <div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setShailaReconcile(null)}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setShailaReconcile(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"22px 20px",maxWidth:480,width:"90%",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 12px 48px rgba(0,0,0,0.2)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
               <h3 style={{fontSize:15,fontWeight:600,margin:0,color:T.text,fontFamily:NC_FONT_STACK,display:"flex",alignItems:"center",gap:8}}>{suiteIcon("refresh",18)} Shaila Sync Check</h3>
@@ -2916,9 +2899,7 @@ function App({ user, onSignOut }) {
       {blockedModal && <BlockedModal task={blockedModal} T={T} pris={pris} onBlock={blockTask} onClose={()=>setBlockedModal(null)}/>}
       {/* Context tags removed */}
       {showSet && <SettingsModal AS={AS} setAS={setAS} T={T} ap={ap} initialTab={settingsInitialTab} onClose={()=>setShowSet(false)} onSignOut={onSignOut}
-        onOptimize={tasksOptimize} optLoading={optLoading} hasAI={hasAI} aiConfig={aiConfig}
-        onBulkAdd={()=>{setShowSet(false);setShowBulk(true);}} onShatter={()=>{setShowSet(false);setShowBD(true);}}
-        onDedup={()=>{deduplicateTasks();}}
+        hasAI={hasAI} aiConfig={aiConfig}
         curEnergy={curEnergy} onSetEnergy={e=>setAS(p=>({...p,currentEnergy:e}))}
         focusModeActive={focusModeActive} onToggleFocusMode={()=>setFocusModeActive(f=>!f)}
         effectiveCount={effectiveCount} overwhelmThreshold={overwhelmThreshold}
@@ -2936,7 +2917,7 @@ function App({ user, onSignOut }) {
       />}
 
       {pendingRecordings.length > 0 && (
-        <div style={{position:"fixed",right:16,bottom:16,zIndex:9400,width:"min(380px,calc(100vw - 32px))",background:T.card,border:`1.5px solid ${T.brd}`,borderRadius:14,boxShadow:T.shadowLg,padding:12,fontFamily:NC_FONT_STACK,animation:"ot-fade 0.2s"}}>
+        <div style={{position:"fixed",right:16,bottom:16,zIndex:Z.nudgeCard,width:"min(380px,calc(100vw - 32px))",background:T.card,border:`1.5px solid ${T.brd}`,borderRadius:14,boxShadow:T.shadowLg,padding:12,fontFamily:NC_FONT_STACK,animation:"ot-fade 0.2s"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
             <div>
               <div style={{fontSize:15,fontWeight:500,color:T.text,letterSpacing:0}}>Transcription Holding Pen</div>
@@ -2977,7 +2958,7 @@ function App({ user, onSignOut }) {
 
       {/* Blocked resume nudge */}
       {blockedResume && actT.find(t=>t.id===blockedResume) && (
-        <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",background:T.card,border:`1.5px solid ${T.brd}`,borderRadius:14,padding:"12px 16px",boxShadow:T.shadowLg,zIndex:9500,maxWidth:340,width:"90%",animation:"ot-fade 0.3s"}}>
+        <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",background:T.card,border:`1.5px solid ${T.brd}`,borderRadius:14,padding:"12px 16px",boxShadow:T.shadowLg,zIndex:Z.modal,maxWidth:340,width:"90%",animation:"ot-fade 0.3s"}}>
           <p style={{fontSize:13,fontWeight:600,margin:"0 0 4px",fontFamily:NC_FONT_STACK}}>Ready to try again?</p>
           <p style={{fontSize:12,color:T.tSoft,margin:"0 0 10px",fontFamily:NC_FONT_STACK}}>{actT.find(t=>t.id===blockedResume)?.text}</p>
           <div style={{display:"flex",gap:8}}>
@@ -2996,7 +2977,7 @@ function App({ user, onSignOut }) {
 
       {/* Stale task nudge — fires 3s after load for tasks waiting 7+ days */}
       {staleNudge && actT.find(t => t.id === staleNudge.id) && (
-        <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",background:T.card,border:`1.5px solid ${T.brd}`,borderRadius:14,padding:"14px 16px",boxShadow:T.shadowLg,zIndex:9490,maxWidth:360,width:"90%",animation:"ot-fade 0.3s"}}>
+        <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",background:T.card,border:`1.5px solid ${T.brd}`,borderRadius:14,padding:"14px 16px",boxShadow:T.shadowLg,zIndex:Z.nudge,maxWidth:360,width:"90%",animation:"ot-fade 0.3s"}}>
           <p style={{fontSize:13,fontWeight:500,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 3px",textTransform:"uppercase",letterSpacing:0}}>
             ⏳ Waiting {Math.floor((Date.now()-(staleNudge.createdAt||Date.now()))/86400000)} days
           </p>
@@ -3022,7 +3003,7 @@ function App({ user, onSignOut }) {
 
       {/* Priority change picker */}
       {chgPri && (
-        <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>{setChgPri(null);setChgPriScope('one');}}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.overlay,background:"rgba(0,0,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>{setChgPri(null);setChgPriScope('one');}}>
           <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"20px 24px",boxShadow:T.shadowLg,maxWidth:320,width:"90%"}}>
             {chgPriIsSubtask && (
               <div style={{display:"flex",gap:6,marginBottom:14,background:T.bg,borderRadius:10,padding:4}}>
@@ -3048,8 +3029,8 @@ function App({ user, onSignOut }) {
       )}
 
       {delConf && (
-        <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setDelConf(null)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:22,padding:"32px 28px",maxWidth:340,textAlign:"center",boxShadow:T.shadowLg}}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.overlay,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setDelConf(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:20,padding:"32px 28px",maxWidth:340,textAlign:"center",boxShadow:T.shadowLg}}>
             <h3 style={{margin:"0 0 12px",fontSize:18,fontWeight:500}}>Delete list?</h3>
             <div style={{display:"flex",gap:10}}>
               <button onClick={()=>setDelConf(null)} style={{flex:1,padding:12,borderRadius:12,border:`1px solid ${T.brd}`,background:T.card,cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:600,color:T.tSoft}}>Cancel</button>
@@ -3061,7 +3042,7 @@ function App({ user, onSignOut }) {
 
       {/* Streak celebration overlay */}
       {showStreak && (
-        <div style={{position:"fixed",top:"50%",left:"50%",zIndex:9990,pointerEvents:"none",animation:"ot-streak 2.6s forwards",textAlign:"center",fontFamily:NC_FONT_STACK}}>
+        <div style={{position:"fixed",top:"50%",left:"50%",zIndex:Z.celebration,pointerEvents:"none",animation:"ot-streak 2.6s forwards",textAlign:"center",fontFamily:NC_FONT_STACK}}>
           <div style={{fontSize:48,marginBottom:6,display:"flex",alignItems:"center",justifyContent:"center",color:T.text}}>{suiteIcon("whatshot",48)}</div>
           <div style={{fontSize:20,fontWeight:700,color:T.text,textShadow:"0 2px 12px rgba(0,0,0,0.12)"}}>On a roll!</div>
           <div style={{fontSize:13,color:T.tSoft,marginTop:4}}>{todayCompCount} done today</div>
@@ -3104,8 +3085,7 @@ function App({ user, onSignOut }) {
           active={suiteView}
           onSelect={openCommandView}
           open={sidebarOpen}
-          onToggle={() => setSidebarOpen(v => !v)}
-          onCollapse={() => setSidebarOpen(false)}
+          onToggle={() => { const next = !sidebarOpen; setSidebarOpen(next); try { localStorage.setItem("shamash_sidebar_open", String(next)); } catch {} }}
           onRecord={() => { setConvCallMode(false); setShowConvCapture(true); }}
           onMoreActions={() => setNcActionsOpen(true)}
           onSettings={() => { setSettingsInitialTab("queue"); setShowSet(true); }}
@@ -3192,7 +3172,7 @@ function App({ user, onSignOut }) {
       )}
 
       {!shellHidden && suiteView === "deskphone" && (
-        <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7600, overflow: "hidden", background: T.bg, borderLeft: `1px solid ${T.brdS || T.brd}` }}>
+        <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: Z.panel, overflow: "hidden", background: T.bg, borderLeft: `1px solid ${T.brdS || T.brd}` }}>
           <DeskPhoneWebPanel
             T={T}
             onOnlineChange={setDeskPhoneOnline}
@@ -3400,7 +3380,7 @@ function App({ user, onSignOut }) {
 
             {/* PostIt stack — Tasks screen only */}
             {suiteView === "focus" && tab === "focus" && compT.length > 0 && (
-              <div style={{position:"fixed",bottom:"clamp(24px,4vh,48px)",left:(sidebarW + 16) + "px",zIndex:9000}}>
+              <div style={{position:"fixed",bottom:"clamp(24px,4vh,48px)",left:(sidebarW + 16) + "px",zIndex:Z.overlay}}>
                 <PostItStack tasks={compT} pris={pris} T={T} open={postItOpen} onToggle={()=>setPostItOpen(p=>!p)} onUncomp={uncompTask} onClone={cloneTask}/>
               </div>
             )}
@@ -3412,20 +3392,10 @@ function App({ user, onSignOut }) {
         {tab !== "focus" && (
           <>
             <header style={{...commandPageWidth,textAlign:"center",paddingTop:40,paddingBottom:4,flexShrink:0}}>
-              <h1 style={{fontSize:24,fontWeight:600,margin:0}}>ShamashPro 4</h1>
+              <h1 style={{fontSize:24,fontWeight:600,margin:0}}>Shamash Pro 4</h1>
               <p style={{color:T.tFaint,fontSize:13,margin:"4px 0 0",fontStyle:"italic"}}>{gG()} — {dateStr}</p>
               <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
                 <span style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK}}>@{user?.displayName || user?.email?.split("@")[0] || ""}</span>
-                <button onClick={()=>setSuiteView("shailos")} style={{fontSize:11,color:T.accent||"${T.amber}",fontFamily:NC_FONT_STACK,background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>Shailos</button>
-                <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check — reconcile shailos between transcriber and tasks" style={{fontSize:10,color:T.tFaint,fontFamily:NC_FONT_STACK,background:"none",border:`1px solid ${T.brd}`,borderRadius:8,cursor:"pointer",padding:"2px 6px",opacity:reconcileLoading ? .5 : 1,display:"flex",alignItems:"center",gap:4}}>{reconcileLoading?suiteIcon("schedule",10):suiteIcon("refresh",10)}</button>
-                <button onClick={async ()=>{
-                  if(AS) await Store.autoFileBackup(AS, shailosRef.current, true).catch(()=>{});
-                  if(onSignOut) onSignOut();
-                }} style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,background:"none",border:"none",cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2,padding:0}}>sign out</button>
-                <button onClick={async ()=>{
-                  if(AS) await Store.autoFileBackup(AS, shailosRef.current, true).catch(()=>{});
-                  window.close();
-                }} title="Save backup and close window" style={{fontSize:11,color:T.tFaint,fontFamily:NC_FONT_STACK,background:"none",border:`1px solid ${T.brd}`,borderRadius:8,cursor:"pointer",padding:"2px 8px"}}>save &amp; close</button>
               </div>
             </header>
             <div style={{...commandPageWidth,display:"flex",gap:3,marginTop:16,background:T.bgW,borderRadius:16,padding:3,flexShrink:0,position:"relative"}}>
