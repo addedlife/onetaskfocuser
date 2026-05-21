@@ -271,7 +271,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       messagesSigRef.current = ""; callsSigRef.current = ""; contactsSigRef.current = "";
       const msg = String(e?.message || "");
       setError(msg === "relay:no_state"
-        ? "Relay reachable — DeskPhone hasn't pushed yet. Is DeskPhone b268 running on your PC?"
+        ? "Relay reachable — DeskPhone hasn't pushed yet. Is DeskPhone running on your PC?"
         : msg === "relay:no_auth"
           ? "Sign in to access DeskPhone remotely."
           : msg.startsWith("relay:fail:")
