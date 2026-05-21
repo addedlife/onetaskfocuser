@@ -49,6 +49,12 @@ service cloud.firestore {
              data.userId == request.auth.uid;
     }
 
+    // Main app data — each user can only read/write their own subtree.
+    // Covers: users/{uid}/appData, users/{uid}/tasks, users/{uid}/config, users/{uid}/shailos
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
     match /shailos/{shailaId} {
       allow read: if isAuthenticated() && (isDocOwner() || isAdmin());
       allow create: if isAuthenticated() && isValidShaila(request.resource.data);
