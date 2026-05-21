@@ -537,7 +537,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       : null;
     if (c.missed || c.Missed || typeNum === 3) return { icon: "call_missed", color: C.danger };
     const dir = (c.direction || c.Direction || (typeof c.type === "string" ? c.type : "") || (typeof c.callType === "string" ? c.callType : "") || "").toLowerCase();
-    if (dir.includes("miss")) return { icon: "call_missed", color: "#BA2A2A" };
+    if (dir.includes("miss")) return { icon: "call_missed", color: C.danger };
     // Check outgoing BEFORE checking incoming so "outgoing" (contains "in") doesn't misfire
     if (typeNum === 2 || dir.includes("out") || dir.includes("dial") || dir.includes("egress")) return { icon: "call_made", color: T.tSoft };
     if (typeNum === 1 || dir.includes("incoming") || dir.includes("inbound") || dir.includes("receiv") || dir === "in") return { icon: "call_received", color: T.tSoft };

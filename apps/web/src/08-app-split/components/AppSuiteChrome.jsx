@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { cleanTheme, NC_FONT_STACK, NC_TYPE, suiteIcon } from '../ui-tokens.jsx';
 
-function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRecord, onMoreActions, autoCollapseEnabled = true, onToggleAutoCollapse, topOffset = 0, forceCompact = false, clockTime = null }) {
+function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRecord, onMoreActions, autoCollapseEnabled = true, onToggleAutoCollapse, topOffset = 0, forceCompact = false, clockTime = null, onSettings }) {
   const screenApps = [
     { id: "focus",     label: "Tasks",   icon: "task_alt"   },
     { id: "chief",     label: "Chief",   icon: "psychology" },
@@ -108,6 +108,13 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onCollapse, onRec
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />
+
+      {/* Settings */}
+      <button onClick={onSettings} title="Settings"
+        style={navButton(false)}>
+        {suiteIcon("settings", 18)}
+        {displayOpen && "Settings"}
+      </button>
 
       {/* Persistent clock */}
       <div title={now.toLocaleString()} style={{

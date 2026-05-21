@@ -255,12 +255,12 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
   const fmtElapsed = `${mm}:${ss}`;
 
   const SECTIONS = [
-    { cat: 'tasks',        color: '#5B7BE8', emoji: '✓',  label: 'New Tasks' },
+    { cat: 'tasks',        color: T.accent, emoji: '✓',  label: 'New Tasks' },
     { cat: 'shailos',      color: '#C8A84C', emoji: '❓', label: 'Shailos' },
     { cat: 'gotBacks',     color: '#2ECC71', emoji: '📬', label: 'Got Back to Asker' },
     { cat: 'completions',  color: '#27AE60', emoji: '☑',  label: 'Mark Complete' },
     { cat: 'scheduleItems',color: '#9B59B6', emoji: '📅', label: 'Schedule' },
-    { cat: 'reminders',    color: '#E67E22', emoji: '🔔', label: 'Reminders' },
+    { cat: 'reminders',    color: 'T.warning', emoji: '🔔', label: 'Reminders' },
   ];
 
   const overlayS = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 };
@@ -284,7 +284,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
           {err && <div style={{ fontSize: 13, color: '#E74C3C', fontFamily: NC_FONT_STACK, marginBottom: 8 }}>{err}</div>}
         </div>
         <div style={{ padding: '18px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
-          <button onClick={startCallCapture} style={{ background: '#5B7BE8', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 28px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+          <button onClick={startCallCapture} style={{ background: T.accent, color: '#fff', border: 'none', borderRadius: 12, padding: '13px 28px', fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Start capturing
           </button>
           <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.brd}`, borderRadius: 12, padding: '13px 18px', fontSize: 14, color: T.tSoft, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
@@ -408,20 +408,20 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
                             value={it.date || ''}
                             onChange={e => updateScheduleField(it.id, 'date', e.target.value)}
                             placeholder="Date"
-                            style={{ minWidth: 0, background: T.bgW, border: `1px solid ${scheduleMissingDetails(it).includes('date') ? '#E67E22' : T.brd}`, borderRadius: 6, color: T.t, fontSize: 13, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
+                            style={{ minWidth: 0, background: T.bgW, border: `1px solid ${scheduleMissingDetails(it).includes('date') ? T.warning : T.brd}`, borderRadius: 6, color: T.t, fontSize: 13, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
                           />
                           <input
                             value={it.time || ''}
                             onChange={e => updateScheduleField(it.id, 'time', e.target.value)}
                             placeholder="Time"
-                            style={{ minWidth: 0, background: T.bgW, border: `1px solid ${scheduleMissingDetails(it).includes('time') ? '#E67E22' : T.brd}`, borderRadius: 6, color: T.t, fontSize: 13, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
+                            style={{ minWidth: 0, background: T.bgW, border: `1px solid ${scheduleMissingDetails(it).includes('time') ? 'T.warning' : T.brd}`, borderRadius: 6, color: T.t, fontSize: 13, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
                           />
                           <input
                             value={it.durationMinutes || ''}
                             onChange={e => updateScheduleField(it.id, 'durationMinutes', e.target.value)}
                             placeholder="Min"
                             inputMode="numeric"
-                            style={{ minWidth: 0, background: T.bgW, border: `1px solid ${scheduleMissingDetails(it).includes('duration') ? '#E67E22' : T.brd}`, borderRadius: 6, color: T.t, fontSize: 13, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
+                            style={{ minWidth: 0, background: T.bgW, border: `1px solid ${scheduleMissingDetails(it).includes('duration') ? 'T.warning' : T.brd}`, borderRadius: 6, color: T.t, fontSize: 13, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
                           />
                           <input
                             value={it.when || ''}
@@ -430,7 +430,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
                             style={{ gridColumn: '1 / -1', minWidth: 0, background: 'transparent', border: `1px solid ${T.brdS}`, borderRadius: 6, color: T.tSoft, fontSize: 12, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
                           />
                           {scheduleMissingDetails(it).length > 0 && (
-                            <div style={{ gridColumn: '1 / -1', fontSize: 12, color: '#E67E22', fontFamily: NC_FONT_STACK }}>
+                            <div style={{ gridColumn: '1 / -1', fontSize: 12, color: 'T.warning', fontFamily: NC_FONT_STACK }}>
                               Needs {scheduleMissingDetails(it).join(', ')} before adding to Calendar{it.unclearReason ? ` - ${it.unclearReason}` : ''}.
                             </div>
                           )}
@@ -450,7 +450,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
         {/* Footer */}
         <div style={{ padding: '14px 24px 18px', borderTop: `1px solid ${T.brd}`, display: 'flex', gap: 10, flexShrink: 0 }}>
           <button onClick={applyApproved} disabled={approvedCount === 0 || applying}
-            style={{ flex: 1, background: approvedCount > 0 && !applying ? '#5B7BE8' : T.brdS, color: approvedCount > 0 && !applying ? '#fff' : T.tFaint, border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 500, cursor: approvedCount > 0 && !applying ? 'pointer' : 'default', fontFamily: NC_FONT_STACK, transition: 'background 0.15s' }}>
+            style={{ flex: 1, background: approvedCount > 0 && !applying ? T.accent : T.brdS, color: approvedCount > 0 && !applying ? '#fff' : T.tFaint, border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 500, cursor: approvedCount > 0 && !applying ? 'pointer' : 'default', fontFamily: NC_FONT_STACK, transition: 'background 0.15s' }}>
             {applying ? 'Adding...' : `Add ${approvedCount > 0 ? approvedCount : 0} item${approvedCount !== 1 ? 's' : ''}`}
           </button>
           <button onClick={onClose}

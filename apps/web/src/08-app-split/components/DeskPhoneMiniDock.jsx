@@ -93,7 +93,7 @@ function DeskPhoneMiniDock({ T, onOnlineChange, onOpenDeskPhone }) {
               {suiteIcon("phone_in_talk", 20)}
               <div style={{minWidth:0}}>
                 <div style={{fontSize:15,fontWeight:500,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Calls and texts</div>
-                <div style={{fontSize:13,fontWeight:400,color:status ? "#0B8043" : T.tFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{status ? (callState || "Ready") : "Open DeskPhone"}</div>
+                <div style={{fontSize:13,fontWeight:400,color:status ? T.success : T.tFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{status ? (callState || "Ready") : "Open DeskPhone"}</div>
               </div>
             </div>
             <div style={{display:"flex",gap:4}}>
@@ -103,8 +103,8 @@ function DeskPhoneMiniDock({ T, onOnlineChange, onOpenDeskPhone }) {
           </div>
           <div style={{padding:12,display:"grid",gap:10}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <button onClick={()=>post("/answer","answer")} disabled={!!busy} style={{height:38,borderRadius:12,border:"none",background:"#0B8043",color:"#fff",cursor:"pointer",fontWeight:500,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("phone_callback",17)} Answer</button>
-              <button onClick={()=>post("/hangup","hangup")} disabled={!!busy} style={{height:38,borderRadius:12,border:"none",background:"#BA2A2A",color:"#fff",cursor:"pointer",fontWeight:500,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("call_end",17)} Hang up</button>
+              <button onClick={()=>post("/answer","answer")} disabled={!!busy} style={{height:38,borderRadius:12,border:"none",background:T.success,color:"#fff",cursor:"pointer",fontWeight:500,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("phone_callback",17)} Answer</button>
+              <button onClick={()=>post("/hangup","hangup")} disabled={!!busy} style={{height:38,borderRadius:12,border:"none",background:T.danger,color:"#fff",cursor:"pointer",fontWeight:500,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("call_end",17)} Hang up</button>
             </div>
             <input value={number} onChange={e=>setNumber(e.target.value)} placeholder="Number" style={{height:38,boxSizing:"border-box",borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,padding:"0 11px",fontSize:14}}/>
             <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Text message" rows={3} style={{boxSizing:"border-box",borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,padding:"9px 11px",fontSize:14,resize:"vertical"}}/>
@@ -130,7 +130,7 @@ function DeskPhoneMiniDock({ T, onOnlineChange, onOpenDeskPhone }) {
                 </button>
               )) : <div style={{fontSize:13,color:T.tFaint,border:`1px solid ${T.brdS || T.brd}`,borderRadius:12,padding:9,background:T.bgW}}>Recent calls will appear here when DeskPhone provides them.</div>}
             </div>
-            {error && <div style={{fontSize:13,lineHeight:1.45,color:"#BA2A2A",background:"#FFE1E1",border:"1px solid #F0B5B5",borderRadius:12,padding:9}}>{error}</div>}
+            {error && <div style={{fontSize:13,lineHeight:1.45,color:T.danger,background:"#FFE1E1",border:"1px solid #F0B5B5",borderRadius:12,padding:9}}>{error}</div>}
           </div>
         </div>
       )}

@@ -1899,16 +1899,16 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               {shailosCompleted.length > 0 && (
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 20px 8px", borderTop: `1px solid ${C.divider}` }}>
-                    <span style={{ color: "#2E7D32" }}>{suiteIcon("check_circle", 15)}</span>
+                    <span style={{ color: "T.success" }}>{suiteIcon("check_circle", 15)}</span>
                     <span style={{ fontSize: ncType.label, fontWeight: 500, color: C.muted, letterSpacing: 0, textTransform: "uppercase" }}>Recently resolved</span>
                   </div>
                   {shailosCompleted.map(s => {
                     const text = nerveDisplaySummary(s, "Resolved shaila");
                     return (
                       <div key={s.id} style={{ display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap: 14, padding: "14px 20px 14px 0", alignItems: "start", opacity: 0.72, minHeight: 56 }}>
-                        <span style={{ width: 3, alignSelf: "stretch", minHeight: 24, borderRadius: 2, background: "#2E7D32", flexShrink: 0 }} />
+                        <span style={{ width: 3, alignSelf: "stretch", minHeight: 24, borderRadius: 2, background: "T.success", flexShrink: 0 }} />
                         <span style={{ paddingLeft: 5, paddingTop: 1, fontSize: ncType.meta, fontWeight: "var(--nc-font-weight-normal, 400)", lineHeight: ncType.line, color: C.muted, wordBreak: "break-word", textDecoration: "line-through" }}>{text}</span>
-                        <span style={{ fontSize: 12, fontWeight: 500, color: "#2E7D32", background: "rgba(46,125,50,0.10)", border: "1px solid rgba(46,125,50,0.22)", borderRadius: 999, padding: "4px 9px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 2 }}>Done</span>
+                        <span style={{ fontSize: 12, fontWeight: 500, color: "T.success", background: "rgba(46,125,50,0.10)", border: "1px solid rgba(46,125,50,0.22)", borderRadius: 999, padding: "4px 9px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 2 }}>Done</span>
                       </div>
                     );
                   })}
@@ -2058,8 +2058,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
               {/* Error banner */}
               {googleError && (
-                <div style={{ ...cardWrap, borderColor: "#E07040", flexDirection: "row", alignItems: "center", padding: "0 14px", gap: 10 }}>
-                  <span style={{ fontSize: NC_TYPE.meta, color: "#E07040", fontFamily: NC_FONT_STACK, flex: 1 }}>{googleError}</span>
+                <div style={{ ...cardWrap, borderColor: "T.warning", flexDirection: "row", alignItems: "center", padding: "0 14px", gap: 10 }}>
+                  <span style={{ fontSize: NC_TYPE.meta, color: "T.warning", fontFamily: NC_FONT_STACK, flex: 1 }}>{googleError}</span>
                   <button onClick={onConnectGoogle} style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: 500, color: accentBlue, background: "none", border: `1px solid ${accentBlue}`, borderRadius: 8, padding: "5px 12px", cursor: "pointer", flexShrink: 0 }}>Retry</button>
                   <button onClick={onDisconnectGoogle} style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: T.tFaint, background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: 0 }}>✕</button>
                 </div>
@@ -2258,7 +2258,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleAddEvent(); } }}
                     style={{ width: "100%", boxSizing: "border-box", borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, fontSize: NC_TYPE.control, padding: "12px 14px", resize: "none", fontFamily: NC_FONT_STACK, outline: "none", lineHeight: NC_TYPE.line }}
                   />
-                  {addEventError && <div style={{ fontSize: NC_TYPE.meta, color: "#E07040", marginTop: 6 }}>{addEventError}</div>}
+                  {addEventError && <div style={{ fontSize: NC_TYPE.meta, color: "T.warning", marginTop: 6 }}>{addEventError}</div>}
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
                     <button onClick={() => { setShowAddEvent(false); setAddEventText(''); setAddEventError(null); }} style={{ padding: "8px 16px", borderRadius: 4, border: `1px solid ${C.divider}`, background: "none", color: C.muted, cursor: "pointer", fontSize: NC_TYPE.control, fontWeight: 500 }}>Cancel</button>
                     <button onClick={handleAddEvent} disabled={addEventLoading || !addEventText.trim()} style={{ padding: "8px 18px", borderRadius: 4, border: "none", background: accentBlue, color: "#fff", cursor: addEventLoading ? "wait" : "pointer", fontSize: NC_TYPE.control, fontWeight: 500, opacity: (!addEventText.trim() || addEventLoading) ? 0.55 : 1 }}>

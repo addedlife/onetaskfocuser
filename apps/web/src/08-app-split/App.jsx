@@ -1429,8 +1429,8 @@ function App({ user, onSignOut }) {
     setToast(null);
   }
 
-  // ─── Manual launchpad AI prioritization ──────────────────────────────────
-  async function launchpadOptimize() {
+  // ─── Manual tasks AI prioritization ──────────────────────────────────
+  async function tasksOptimize() {
     if (!hasAI || optLoading) return;
     setOptLoading(true);
     try {
@@ -2467,7 +2467,7 @@ function App({ user, onSignOut }) {
         {id:"current-task", label:"Current task", note:"Return to the main task card", icon:"task_alt", primary:true, run:()=>{openCommandView("focus"); switchTab("focus");}},
         {id:"new-task", label:"New task", note:"Pick priority and add one item", icon:"add_circle", run:()=>{openCommandView("focus"); switchTab("focus");}},
         {id:"queue", label:"Open queue", note:`${effectiveCount} item${effectiveCount===1?"":"s"} waiting`, icon:"view_list", run:()=>{openCommandView("focus"); switchTab("queue");}},
-        {id:"prioritize", label:optLoading ? "Sorting..." : "Choose next", note:"Put the best next item first", icon:"auto_awesome", disabled:optLoading, run:launchpadOptimize},
+        {id:"prioritize", label:optLoading ? "Sorting..." : "Choose next", note:"Put the best next item first", icon:"auto_awesome", disabled:optLoading, run:tasksOptimize},
         {id:"shatter", label:"Break into steps", note:"Make a big item smaller", icon:"account_tree", run:()=>setShowBD(true)},
         {id:"brain-dump", label:"Brain dump", note:"Drop in everything on your mind", icon:"psychology", run:()=>setShowBrainDump(true)},
         {id:"bulk-add", label:"Paste a list", note:"Add many items at once", icon:"playlist_add", run:()=>setShowBulk(true)},
@@ -2628,7 +2628,7 @@ function App({ user, onSignOut }) {
           <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:22,padding:"28px 28px 24px",maxWidth:380,width:"90%",boxShadow:"0 14px 56px rgba(0,0,0,0.28)",animation:"ot-fade 0.2s"}}>
             <div style={{fontSize:22,marginBottom:6,lineHeight:1,display:"flex",justifyContent:"center",color:T.text}}>{suiteIcon("star_rate", 24)}</div>
             <p style={{fontSize:13,fontWeight:700,color:T.text,margin:"0 0 4px",fontFamily:NC_FONT_STACK,letterSpacing:.2}}>First step</p>
-            <p style={{fontSize:12,color:T.tFaint,margin:"0 0 16px",fontFamily:"inherit",fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{firstStepModal.task.text}</p>
+            <p style={{fontSize:12,color:T.tFaint,margin:"0 0 16px",fontFamily:NC_FONT_STACK,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{firstStepModal.task.text}</p>
             {firstStepModal.loading ? (
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"12px 0 20px",color:T.tFaint,fontSize:12,fontFamily:NC_FONT_STACK}}>
                 <div style={{width:14,height:14,borderRadius:"50%",border:`2px solid ${T.tFaint}`,borderTopColor:"transparent",animation:"ot-spin 0.7s linear infinite"}}/>
@@ -2642,7 +2642,7 @@ function App({ user, onSignOut }) {
                   onChange={e=>setFirstStepModal(m=>({...m,edited:e.target.value}))}
                   onKeyDown={e=>{if(e.key==="Enter")confirmFirstStep();if(e.key==="Escape")setFirstStepModal(null);}}
                   placeholder="Describe the first step…"
-                  style={{width:"100%",fontSize:13,fontFamily:"inherit",border:`1px solid ${T.brd}`,borderRadius:12,padding:"9px 12px",outline:"none",color:T.text,background:T.bgW,boxSizing:"border-box",marginBottom:16}}
+                  style={{width:"100%",fontSize:13,fontFamily:NC_FONT_STACK,border:`1px solid ${T.brd}`,borderRadius:12,padding:"9px 12px",outline:"none",color:T.text,background:T.bgW,boxSizing:"border-box",marginBottom:16}}
                 />
                 <div style={{display:"flex",gap:10,justifyContent:"center"}}>
                   <button onClick={()=>setFirstStepModal(null)}
@@ -2673,7 +2673,7 @@ function App({ user, onSignOut }) {
               onChange={e=>setListNameInput(e.target.value)}
               onKeyDown={e=>{if(e.key==="Enter"&&listNameInput.trim())confirmListName();if(e.key==="Escape")setListNameModal(null);}}
               placeholder={listNameModal.mode === 'new' ? "List name…" : "New name…"}
-              style={{width:"100%",fontSize:13,fontFamily:"inherit",border:`1px solid ${T.brd}`,borderRadius:12,padding:"10px 12px",outline:"none",color:T.text,background:T.bgW,boxSizing:"border-box",marginBottom:16}}
+              style={{width:"100%",fontSize:13,fontFamily:NC_FONT_STACK,border:`1px solid ${T.brd}`,borderRadius:12,padding:"10px 12px",outline:"none",color:T.text,background:T.bgW,boxSizing:"border-box",marginBottom:16}}
             />
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setListNameModal(null)}
@@ -2916,7 +2916,7 @@ function App({ user, onSignOut }) {
       {blockedModal && <BlockedModal task={blockedModal} T={T} pris={pris} onBlock={blockTask} onClose={()=>setBlockedModal(null)}/>}
       {/* Context tags removed */}
       {showSet && <SettingsModal AS={AS} setAS={setAS} T={T} ap={ap} initialTab={settingsInitialTab} onClose={()=>setShowSet(false)} onSignOut={onSignOut}
-        onOptimize={launchpadOptimize} optLoading={optLoading} hasAI={hasAI} aiConfig={aiConfig}
+        onOptimize={tasksOptimize} optLoading={optLoading} hasAI={hasAI} aiConfig={aiConfig}
         onBulkAdd={()=>{setShowSet(false);setShowBulk(true);}} onShatter={()=>{setShowSet(false);setShowBD(true);}}
         onDedup={()=>{deduplicateTasks();}}
         curEnergy={curEnergy} onSetEnergy={e=>setAS(p=>({...p,currentEnergy:e}))}
@@ -3385,7 +3385,7 @@ function App({ user, onSignOut }) {
                 )}
               </div>
 
-              {/* Queue shortcut — direct access from launchpad */}
+              {/* Queue shortcut — direct access from tasks */}
               <div style={{textAlign:"center",paddingBottom:8}}>
                 <button onClick={()=>switchTab("queue")} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:20,padding:"5px 16px",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:12,fontWeight:600,color:T.tFaint,letterSpacing:.5,transition:"all 0.15s"}}
                   onMouseEnter={e=>{e.currentTarget.style.color=T.text;e.currentTarget.style.borderColor=T.tSoft;}}
@@ -3460,7 +3460,7 @@ function App({ user, onSignOut }) {
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
               {/* ✦ AI Prioritize — direct button */}
               <button
-                onClick={launchpadOptimize}
+                onClick={tasksOptimize}
                 disabled={optLoading}
                 title={hasAI ? "AI Prioritize queue" : "Prioritize queue"}
                 style={{width:32,height:32,borderRadius:10,border:`1px solid ${T.brd}`,background:T.bgW,cursor:optLoading?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:optLoading?0.5:1,flexShrink:0}}
