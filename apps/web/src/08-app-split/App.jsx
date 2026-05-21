@@ -2568,7 +2568,7 @@ function App({ user, onSignOut }) {
       )}
       {optConfirm && (
         <div style={{position:"fixed",inset:0,zIndex:Z.modalCritical,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.38)"}}>
-          <div style={{background:T.card,borderRadius:20,padding:"32px 36px",maxWidth:360,width:"88%",boxShadow:"0 14px 56px rgba(0,0,0,0.28)",textAlign:"center",animation:"ot-fade 0.2s"}}>
+          <div style={{background:T.card,borderRadius:20,padding:"32px 36px",maxWidth:360,width:"88%",boxShadow:"0 12px 40px rgba(0,0,0,0.20)",textAlign:"center",animation:"ot-fade 0.2s"}}>
             {optConfirm.kind === "pinOverride" ? (
               <>
                 <div style={{fontSize:28,marginBottom:14,lineHeight:1,display:"flex",justifyContent:"center",color:T.text}}>{suiteIcon("push_pin", 32)}</div>
@@ -2608,7 +2608,7 @@ function App({ user, onSignOut }) {
       )}
       {firstStepModal && (
         <div style={{position:"fixed",inset:0,zIndex:Z.modalCritical,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.38)"}} onClick={()=>setFirstStepModal(null)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:20,padding:"28px 28px 24px",maxWidth:380,width:"90%",boxShadow:"0 14px 56px rgba(0,0,0,0.28)",animation:"ot-fade 0.2s"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:20,padding:"28px 28px 24px",maxWidth:380,width:"90%",boxShadow:"0 12px 40px rgba(0,0,0,0.20)",animation:"ot-fade 0.2s"}}>
             <div style={{fontSize:22,marginBottom:6,lineHeight:1,display:"flex",justifyContent:"center",color:T.text}}>{suiteIcon("star_rate", 24)}</div>
             <p style={{fontSize:13,fontWeight:700,color:T.text,margin:"0 0 4px",fontFamily:NC_FONT_STACK,letterSpacing:.2}}>First step</p>
             <p style={{fontSize:12,color:T.tFaint,margin:"0 0 16px",fontFamily:NC_FONT_STACK,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{firstStepModal.task.text}</p>
@@ -2645,8 +2645,8 @@ function App({ user, onSignOut }) {
 
       {/* List name modal (new/rename) */}
       {listNameModal && (
-        <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setListNameModal(null)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"22px 20px",maxWidth:380,width:"90%",boxShadow:"0 12px 48px rgba(0,0,0,0.2)"}}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setListNameModal(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"22px 20px",maxWidth:380,width:"90%",boxShadow:"0 12px 40px rgba(0,0,0,0.20)"}}>
             <h3 style={{fontSize:15,fontWeight:600,margin:"0 0 14px",color:T.text,fontFamily:NC_FONT_STACK}}>
               {listNameModal.mode === 'new' ? '+ New list' : 'Rename list'}
             </h3>
@@ -2674,8 +2674,8 @@ function App({ user, onSignOut }) {
 
       {/* Restore backup confirmation modal */}
       {restoreConfirm && (
-        <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setRestoreConfirm(null)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"22px 20px",maxWidth:400,width:"90%",boxShadow:"0 12px 48px rgba(0,0,0,0.2)"}}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setRestoreConfirm(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"22px 20px",maxWidth:400,width:"90%",boxShadow:"0 12px 40px rgba(0,0,0,0.20)"}}>
             <h3 style={{fontSize:15,fontWeight:600,margin:"0 0 12px",color:T.text,fontFamily:NC_FONT_STACK}}>Restore from backup?</h3>
             <div style={{fontSize:13,color:T.tSoft,margin:"0 0 16px",lineHeight:1.6,fontFamily:NC_FONT_STACK}}>
               <div>• {restoreConfirm.taskCount} task{restoreConfirm.taskCount!==1?'s':''}</div>
@@ -2781,8 +2781,8 @@ function App({ user, onSignOut }) {
       )}
       {/* Shaila delete prompt — asks if user also wants to delete from transcriber record */}
       {shailaDelPrompt && (
-        <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setShailaDelPrompt(null)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"22px 20px",maxWidth:380,width:"90%",boxShadow:"0 12px 48px rgba(0,0,0,0.2)"}}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setShailaDelPrompt(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"22px 20px",maxWidth:380,width:"90%",boxShadow:"0 12px 40px rgba(0,0,0,0.20)"}}>
             <h3 style={{fontSize:15,fontWeight:600,margin:"0 0 8px",color:T.text,fontFamily:NC_FONT_STACK}}>Also delete from Shaila record?</h3>
             <p style={{fontSize:13,color:T.tSoft,margin:"0 0 18px",lineHeight:1.5,fontFamily:NC_FONT_STACK}}>
               The task <strong>"{shailaDelPrompt.taskText?.substring(0,50)}"</strong> was removed from your queue. Delete it from the Shaila Transcriber record too?
@@ -2796,8 +2796,8 @@ function App({ user, onSignOut }) {
       )}
       {/* Shaila reconciliation modal — shows mismatches, lets user fix each one */}
       {shailaReconcile && (
-        <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setShailaReconcile(null)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"22px 20px",maxWidth:480,width:"90%",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 12px 48px rgba(0,0,0,0.2)"}}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setShailaReconcile(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"22px 20px",maxWidth:480,width:"90%",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 12px 40px rgba(0,0,0,0.20)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
               <h3 style={{fontSize:15,fontWeight:600,margin:0,color:T.text,fontFamily:NC_FONT_STACK,display:"flex",alignItems:"center",gap:8}}>{suiteIcon("refresh",18)} Shaila Sync Check</h3>
               <button onClick={()=>setShailaReconcile(null)} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center",padding:4}}>{suiteIcon("close",18)}</button>
@@ -3003,7 +3003,7 @@ function App({ user, onSignOut }) {
 
       {/* Priority change picker */}
       {chgPri && (
-        <div style={{position:"fixed",inset:0,zIndex:Z.overlay,background:"rgba(0,0,0,0.3)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>{setChgPri(null);setChgPriScope('one');}}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.overlay,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>{setChgPri(null);setChgPriScope('one');}}>
           <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:18,padding:"20px 24px",boxShadow:T.shadowLg,maxWidth:320,width:"90%"}}>
             {chgPriIsSubtask && (
               <div style={{display:"flex",gap:6,marginBottom:14,background:T.bg,borderRadius:10,padding:4}}>
@@ -3029,7 +3029,7 @@ function App({ user, onSignOut }) {
       )}
 
       {delConf && (
-        <div style={{position:"fixed",inset:0,zIndex:Z.overlay,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setDelConf(null)}>
+        <div style={{position:"fixed",inset:0,zIndex:Z.overlay,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setDelConf(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:20,padding:"32px 28px",maxWidth:340,textAlign:"center",boxShadow:T.shadowLg}}>
             <h3 style={{margin:"0 0 12px",fontSize:18,fontWeight:500}}>Delete list?</h3>
             <div style={{display:"flex",gap:10}}>
@@ -3238,7 +3238,7 @@ function App({ user, onSignOut }) {
                 return (
                   <>
                     {/* Card — full column width */}
-                    <div style={{background:cardColor,borderRadius:"clamp(22px,4vw,32px)",padding:"clamp(28px,5vh,56px) clamp(24px,4vw,48px)",width:"100%",minHeight:"clamp(130px,20vh,260px)",textAlign:"center",boxShadow:`0 12px 50px ${cardColor}35`,transition:"all 0.4s",transform:justComp?"scale(0.94)":"scale(1)",opacity:justComp?.3:1,animation:"ot-fade 0.5s",position:"relative",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"hidden",gap:8}}>
+                    <div style={{background:cardColor,borderRadius:"clamp(22px,4vw,32px)",padding:"clamp(28px,5vh,56px) clamp(24px,4vw,48px)",width:"100%",minHeight:"clamp(130px,20vh,260px)",textAlign:"center",boxShadow:`0 12px 50px ${cardColor}35`,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",transform:justComp?"scale(0.94)":"scale(1)",opacity:justComp?.3:1,animation:"ot-fade 0.3s",position:"relative",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"hidden",gap:8}}>
                       {showRip && <Ripple color={_fc}/>}
                       {/* Completion flash overlay */}
                       {compFlash && <div style={{position:"absolute",inset:0,borderRadius:"inherit",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10,animation:"ot-comp-flash 0.6s forwards",pointerEvents:"none",background:cardColor}}><span style={{fontSize:72,color:_fc,lineHeight:1,display:"flex",alignItems:"center"}}>{suiteIcon("done",72)}</span></div>}
@@ -3270,14 +3270,14 @@ function App({ user, onSignOut }) {
                     {/* Park + Reflect quick-action row */}
                     <div style={{display:"flex",gap:8,justifyContent:"center",width:"100%"}}>
                       <button onClick={()=>parkTask(curT.id)}
-                        style={{flex:1,padding:"7px 0",fontSize:11,fontFamily:NC_FONT_STACK,fontWeight:600,color:T.tFaint,background:"none",border:`1px solid ${T.brd}`,borderRadius:10,cursor:"pointer",letterSpacing:.3,transition:"all 0.15s"}}
+                        style={{flex:1,padding:"7px 0",fontSize:11,fontFamily:NC_FONT_STACK,fontWeight:600,color:T.tFaint,background:"none",border:`1px solid ${T.brd}`,borderRadius:10,cursor:"pointer",letterSpacing:.3,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}
                         onMouseEnter={e=>{e.currentTarget.style.borderColor=T.brdS;e.currentTarget.style.color=T.tSoft;}}
                         onMouseLeave={e=>{e.currentTarget.style.borderColor=T.brd;e.currentTarget.style.color=T.tFaint;}}>
                         💤 Park til tomorrow
                       </button>
                       {getTaskAgeHours(curT) >= 72 && (
                         <button onClick={()=>setShowBlockReflect(true)}
-                          style={{flex:1,padding:"7px 0",fontSize:11,fontFamily:NC_FONT_STACK,fontWeight:600,color:T.tFaint,background:"none",border:`1px solid ${T.brd}`,borderRadius:10,cursor:"pointer",letterSpacing:.3,transition:"all 0.15s"}}
+                          style={{flex:1,padding:"7px 0",fontSize:11,fontFamily:NC_FONT_STACK,fontWeight:600,color:T.tFaint,background:"none",border:`1px solid ${T.brd}`,borderRadius:10,cursor:"pointer",letterSpacing:.3,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}
                           onMouseEnter={e=>{e.currentTarget.style.borderColor=T.brdS;e.currentTarget.style.color=T.tSoft;}}
                           onMouseLeave={e=>{e.currentTarget.style.borderColor=T.brd;e.currentTarget.style.color=T.tFaint;}}>
                           🔍 What's in the way?
@@ -3287,7 +3287,7 @@ function App({ user, onSignOut }) {
                   </>
                 );
               })() : (
-                <div style={{width:"100%",textAlign:"center",animation:"ot-fade 0.4s",padding:"clamp(24px,5vh,48px) 0"}}>
+                <div style={{width:"100%",textAlign:"center",animation:"ot-fade 0.3s",padding:"clamp(24px,5vh,48px) 0"}}>
                   <div style={{width:52,height:52,borderRadius:"50%",background:pBg("${T.green5}"),display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",opacity:.6}}><IC.Check s={22} c="${T.green5}"/></div>
                   <p style={{color:T.tSoft,fontSize:"clamp(13px,2vw,16px)",margin:0}}>{compT.length>0?"All clear.":"Add your first task."}</p>
                 </div>
@@ -3320,7 +3320,7 @@ function App({ user, onSignOut }) {
                         onMouseEnter={e=>{const m=e.currentTarget.querySelector(".mic-btn");if(m)m.style.opacity=1;}}
                         onMouseLeave={e=>{const m=e.currentTarget.querySelector(".mic-btn");if(m)m.style.opacity=a?1:0;}}>
                         <button className="mic-btn" onClick={()=>{setSelPri(p.id);setShowVoice(true);}} title="Voice input" style={{width:30,height:30,borderRadius:"50%",background:clr,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:a?1:0,transition:"opacity 0.2s",marginBottom:8,flexShrink:0}}><IC.Mic s={13} c="#fff"/></button>
-                        <button onClick={()=>setSelPri(a?null:p.id)} title={p.label} style={{width:sz,height:sz,borderRadius:"50%",background:T.glow?`radial-gradient(circle at 35% 35%, ${clr}dd, ${clr}88, ${clr}44)`:clr,border:a?`3px solid ${softBorderC}`:"3px solid transparent",cursor:"pointer",transition:"all 0.25s",boxShadow:glowShadow,flexShrink:0}}/>
+                        <button onClick={()=>setSelPri(a?null:p.id)} title={p.label} style={{width:sz,height:sz,borderRadius:"50%",background:T.glow?`radial-gradient(circle at 35% 35%, ${clr}dd, ${clr}88, ${clr}44)`:clr,border:a?`3px solid ${softBorderC}`:"3px solid transparent",cursor:"pointer",transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",boxShadow:glowShadow,flexShrink:0}}/>
                         <span style={{fontSize:12,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:600,textAlign:"center",marginTop:10,letterSpacing:.3}}>{p.isShaila?"Shaila":p.label}</span>
                       </div>
                     );
@@ -3337,7 +3337,7 @@ function App({ user, onSignOut }) {
                           onMouseEnter={e=>{const m=e.currentTarget.querySelector(".mic-btn");if(m)m.style.opacity=1;}}
                           onMouseLeave={e=>{const m=e.currentTarget.querySelector(".mic-btn");if(m)m.style.opacity=a?1:0;}}>
                           <button className="mic-btn" onClick={()=>{setSelPri(p.id);setShowVoice(true);}} title="Voice input" style={{width:22,height:22,borderRadius:"50%",background:p.color,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:a?1:0,transition:"opacity 0.2s",marginBottom:6,flexShrink:0}}><IC.Mic s={10} c="#fff"/></button>
-                          <button onClick={()=>setSelPri(a?null:p.id)} title={p.label} style={{width:a?"clamp(40px,6vw,52px)":"clamp(32px,5vw,44px)",height:a?"clamp(40px,6vw,52px)":"clamp(32px,5vw,44px)",borderRadius:"50%",background:p.color,border:a?`2px solid ${softBorderC}`:"2px solid transparent",cursor:"pointer",transition:"all 0.2s",boxShadow:a?`0 4px 16px ${p.color}60`:`0 2px 8px ${p.color}25`,flexShrink:0}}/>
+                          <button onClick={()=>setSelPri(a?null:p.id)} title={p.label} style={{width:a?"clamp(40px,6vw,52px)":"clamp(32px,5vw,44px)",height:a?"clamp(40px,6vw,52px)":"clamp(32px,5vw,44px)",borderRadius:"50%",background:p.color,border:a?`2px solid ${softBorderC}`:"2px solid transparent",cursor:"pointer",transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",boxShadow:a?`0 4px 16px ${p.color}60`:`0 2px 8px ${p.color}25`,flexShrink:0}}/>
                           <span style={{fontSize:10,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:600,textAlign:"center",marginTop:7,letterSpacing:.3}}>{p.label}</span>
                         </div>
                       );
@@ -3351,7 +3351,7 @@ function App({ user, onSignOut }) {
                   <div data-input-area="true" style={{width:"100%",animation:"ot-fade 0.2s"}}>
                     <form onSubmit={addTask} style={{display:"flex",gap:8,alignItems:"flex-end"}}>
                       <textarea ref={inRef} value={newTask} onChange={e=>{setNewTask(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";}} placeholder={selPri==="shaila"?"Who + what shaila?":ph} autoFocus onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addTask(e);}if(e.key==="Escape"){setSelPri(null);setNewTask("");}}} rows={1} style={{flex:1,padding:"clamp(10px,1.5vw,14px) clamp(12px,2vw,18px)",fontSize:"clamp(14px,2vw,16px)",border:`2px solid ${gP(pris,selPri).color}`,borderRadius:14,outline:"none",background:T.card,color:T.text,fontFamily:"Georgia,serif",resize:"none",overflow:"hidden",minHeight:44,lineHeight:1.4}}/>
-                      <button type="button" onClick={()=>setEntryEnergy(e=>e===null?"high":e==="high"?"low":null)} title={entryEnergy?`Energy: ${entryEnergy}`:"Set energy"} style={{width:44,height:44,borderRadius:14,border:`1.5px solid ${entryEnergy?"${T.now}":T.brd}`,background:entryEnergy==="high"?"${T.now}18":entryEnergy==="low"?"${T.eventually}18":T.bgW,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,transition:"all 0.2s"}}>
+                      <button type="button" onClick={()=>setEntryEnergy(e=>e===null?"high":e==="high"?"low":null)} title={entryEnergy?`Energy: ${entryEnergy}`:"Set energy"} style={{width:44,height:44,borderRadius:14,border:`1.5px solid ${entryEnergy?"${T.now}":T.brd}`,background:entryEnergy==="high"?"${T.now}18":entryEnergy==="low"?"${T.eventually}18":T.bgW,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}>
                         {entryEnergy==="high"?"⚡":entryEnergy==="low"?"🌊":"·"}
                       </button>
                       <button type="button" onClick={addTask} style={{background:gP(pris,selPri).color,border:"none",borderRadius:14,width:44,height:44,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}><IC.Plus s={16} c={textOnColor(gP(pris,selPri).color)}/></button>
@@ -3367,7 +3367,7 @@ function App({ user, onSignOut }) {
 
               {/* Queue shortcut — direct access from tasks */}
               <div style={{textAlign:"center",paddingBottom:8}}>
-                <button onClick={()=>switchTab("queue")} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:20,padding:"5px 16px",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:12,fontWeight:600,color:T.tFaint,letterSpacing:.5,transition:"all 0.15s"}}
+                <button onClick={()=>switchTab("queue")} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:20,padding:"5px 16px",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:12,fontWeight:600,color:T.tFaint,letterSpacing:.5,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}
                   onMouseEnter={e=>{e.currentTarget.style.color=T.text;e.currentTarget.style.borderColor=T.tSoft;}}
                   onMouseLeave={e=>{e.currentTarget.style.color=T.tFaint;e.currentTarget.style.borderColor=T.brd;}}>
                   Queue · {effectiveCount}
@@ -3475,14 +3475,14 @@ function App({ user, onSignOut }) {
                   const isBig = !p.id.startsWith('pri_');
                   return (
                     <button key={p.id} onClick={()=>setQAddPri(sel?null:p.id)} title={p.label}
-                      style={{padding:isBig?"5px 13px":"3px 9px",borderRadius:20,background:sel?clr:clr+"22",border:`1.5px solid ${clr}`,cursor:"pointer",fontSize:isBig?11:10,fontWeight:700,fontFamily:NC_FONT_STACK,color:sel?textOnColor(clr):clr,flexShrink:0,transition:"all 0.15s",boxShadow:sel?`0 2px 8px ${clr}50`:"none"}}
+                      style={{padding:isBig?"5px 13px":"3px 9px",borderRadius:20,background:sel?clr:clr+"22",border:`1.5px solid ${clr}`,cursor:"pointer",fontSize:isBig?11:10,fontWeight:700,fontFamily:NC_FONT_STACK,color:sel?textOnColor(clr):clr,flexShrink:0,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",boxShadow:sel?`0 2px 8px ${clr}50`:"none"}}
                     >{p.label}</button>
                   );
                 })}
               </div>
               {/* Text input — shown once priority selected */}
               {qAddPri && (
-                <form onSubmit={e=>{e.preventDefault();const t=qAddText.trim();if(!t)return;const newQT={id:uid(),text:t,completed:false,priority:qAddPri,createdAt:Date.now()};uT(ts=>doOpt([...ts,newQT]));setQAddText("");setQAddPri(null);clearTimeout(queueToastTmr.current);const clr=gP(pris,newQT.priority).isShaila?"${T.shailaGreen}":gP(pris,newQT.priority).color;setQueueToast(clr);setQueueToastKey(k=>k+1);queueToastTmr.current=setTimeout(()=>setQueueToast(null),5000);triggerAIPrioritize();}} style={{display:"flex",gap:6,animation:"ot-fade 0.15s",minWidth:0}}>
+                <form onSubmit={e=>{e.preventDefault();const t=qAddText.trim();if(!t)return;const newQT={id:uid(),text:t,completed:false,priority:qAddPri,createdAt:Date.now()};uT(ts=>doOpt([...ts,newQT]));setQAddText("");setQAddPri(null);clearTimeout(queueToastTmr.current);const clr=gP(pris,newQT.priority).isShaila?"${T.shailaGreen}":gP(pris,newQT.priority).color;setQueueToast(clr);setQueueToastKey(k=>k+1);queueToastTmr.current=setTimeout(()=>setQueueToast(null),5000);triggerAIPrioritize();}} style={{display:"flex",gap:6,animation:"ot-fade 0.2s",minWidth:0}}>
                   <input autoFocus value={qAddText} onChange={e=>setQAddText(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Escape"){setQAddPri(null);setQAddText("");}}}
                     placeholder={qAddPri==="shaila"?"Who + what shaila?":"What needs doing?"}

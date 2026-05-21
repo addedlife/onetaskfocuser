@@ -319,7 +319,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
               border: "1.5px solid #C8A84C80", borderRadius:7,
               padding:"3px 9px", fontSize:13, cursor:"pointer",
               fontFamily:"system-ui", fontWeight:700, lineHeight:1,
-              transition:"all 0.15s",
+              transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",
             }}>✡</button>
           )}
           {closeBtn}

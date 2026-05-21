@@ -48,6 +48,31 @@ export const Z = {
   systemBarTop:  10001,  // update / connection notice bar (topmost)
 };
 
+// ─── Motion ───────────────────────────────────────────────────────────────
+// Three durations, two easings — every transition/animation draws from these.
+export const DUR = { fast: "0.12s", base: "0.2s", slow: "0.32s" };
+export const EASE = {
+  standard: "cubic-bezier(.2, 0, 0, 1)",   // most UI motion
+  decelerate: "cubic-bezier(0, 0, 0, 1)",  // elements entering the screen
+};
+// Standard transition for interactive surfaces — never use `transition: all`.
+export const TRANSITION = `background-color ${DUR.fast} ${EASE.standard}, border-color ${DUR.fast} ${EASE.standard}, color ${DUR.fast} ${EASE.standard}, box-shadow ${DUR.base} ${EASE.standard}, transform ${DUR.fast} ${EASE.standard}, opacity ${DUR.base} ${EASE.standard}`;
+
+// ─── Elevation ────────────────────────────────────────────────────────────
+// Named shadow tiers — higher = more lifted. Replaces ad-hoc box shadows.
+export const ELEV = {
+  1: "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)",
+  2: "0 2px 8px rgba(0,0,0,0.10)",
+  3: "0 6px 20px rgba(0,0,0,0.14)",
+  4: "0 12px 40px rgba(0,0,0,0.20)",
+};
+
+// ─── Spacing (4-pt grid) ──────────────────────────────────────────────────
+export const SP = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
+
+// One consistent modal backdrop tint.
+export const SCRIM = "rgba(0, 0, 0, 0.38)";
+
 export function useViewportWidth() {
   const [width, setWidth] = useState(() => (
     typeof window === "undefined" ? 1440 : window.innerWidth
@@ -118,6 +143,13 @@ export const NC_GLOBAL_CSS = `
 }
 .nc-suite-root button {
   touch-action: manipulation;
+}
+/* Hover / press feedback for the left navigation rail */
+.nc-rail button:hover:not(:disabled) {
+  background: rgba(127, 127, 127, 0.10) !important;
+}
+.nc-rail button:active:not(:disabled) {
+  background: rgba(127, 127, 127, 0.16) !important;
 }
 .nc-suite-root :where(button, a, input, textarea, select):focus-visible {
   outline: 2px solid rgba(0, 121, 107, 0.38);

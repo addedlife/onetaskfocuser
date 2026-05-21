@@ -38,6 +38,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
   const railDate = now.toLocaleDateString([], { month: "short", day: "numeric" });
   return (
     <div
+      className="nc-rail"
       style={{
       position: "fixed", left: 0, top: topOffset, bottom: 0, width: W, zIndex: 8600,
       display: "flex", flexDirection: "column", alignItems: displayOpen ? "stretch" : "center",
