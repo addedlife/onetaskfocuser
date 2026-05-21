@@ -491,6 +491,18 @@ Current source-grade file count after cleanup: 162 files.
 - In-app Browser verification was attempted, but the browser helper failed before opening the tab due a local Node runtime boot issue. Headless Edge screenshot reached the app and stopped at the existing unauthenticated `Loading...` shell, matching the prior headless limitation for this surface.
 - Pushed commit `19ee669` to `origin/main`; Netlify Git-triggered production served `assets/index-VmtlB680.js` on poll attempt 3.
 
+## 2026-05-18 iPad Phone Bridge Probe
+
+- Researched current iPadOS 26 Bluetooth direction before editing: Apple now documents Core Bluetooth as covering LE and BR/EDR classic devices, while Apple Support lists HFP, PBAP, and MAP as supported iOS/iPadOS profiles; the unresolved product risk is whether public app APIs expose enough MAP/PBAP/HFP client access for this exact Android-source-phone flow.
+- Promoted the retired Pro 3 iPad bridge source into `apps/ipad-phone-bridge`.
+- Replaced the old static iPad bridge boundary with a SwiftUI probe app and `BluetoothProbeService.swift`.
+- Added target profile probes for PBAP/PSE `112F`, MAP/MAS `1132`, MAP/MNS `1133`, HFP AG `111F`, and HFP HF `111E`.
+- Updated the iPad local API server/controller so `/health`, `/status`, `/devices`, `/events`, `/probe/start`, `/probe/stop`, and `/probe/connect` expose probe state on `http://127.0.0.1:8765`; `/contacts`, `/messages`, and `/calls` deliberately return reserved `501` responses until the iPad proves the Bluetooth profile channels.
+- Updated `docs/ops/CONTEXT_INDEX.md` and `docs/ops/MIGRATION_MANIFEST.md` for the new `apps/ipad-phone-bridge` lane.
+- `git diff --check` passed; line-ending normalization warnings only.
+- Confirmed `xcodebuild` and `swift` are not installed in this Windows workspace.
+- Verification on this Windows machine is source/static only: `xcodebuild`, code signing, and physical iPad Bluetooth validation require a Mac with Xcode and the target iPad.
+
 ## 2026-05-18 NerveCenter Shailos Pending Answer Filter
 
 - Researched dashboard/workflow practice before editing: operational queues should stay source-of-truth driven and surface only items with a concrete next action.
@@ -538,6 +550,31 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run lint` in `apps/web` is still blocked by the existing ESLint glob issue where `src/*.jsx` is ignored by repo lint config.
 - Pushed commit `b349b40` to `origin/main`; production root returned HTTP 200 and production `app-config` served the new AI job registry.
 
+## 2026-05-19 NerveCenter Phone Thread Merge
+
+- Researched SMS/threading practice before editing: conversation threads should be keyed by canonical participants, not by whether a row is incoming or outgoing.
+- Changed NerveCenter phone thread grouping to key message rows by canonical phone digits, using DeskPhone's normalized fields when available and falling back to local normalization.
+- Confirmed the localhost DeskPhone payload can emit incoming rows as `from:+1...` and sent rows as `to`/`number` 10-digit values for the same contact, matching the observed split.
+- Added a clear close icon to the expanded conversation header beside Call and Reply.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- Local preview returned HTTP 200 at `http://127.0.0.1:4313/?suite=nervecenter`.
+- `git diff --check -- apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx` passed; full `git diff --check` remains blocked by pre-existing `docs/ops/VERIFICATION_LOG.md` CRLF/trailing-whitespace churn already present in the dirty worktree.
+- In-app browser/Node REPL visual smoke was attempted, but the local helper failed on the existing `require is not defined in ES module scope` boot issue.
+
+## 2026-05-19 DeskPhone Web Freeze And Reconnect Fix
+
+- Researched current frontend/realtime practice before editing: long browser lists should render in bounded batches, request loops should avoid overlapping fetches and use timeouts, and live connection status should come from active health checks rather than stale text flags.
+- Changed DeskPhone Web conversation building to avoid duplicate per-thread sorts and render conversation rows in incremental batches while still keeping the selected thread's message batching.
+- Added host fetch timeouts and refresh coalescing to DeskPhone Web so slow `/messages` or attachment requests do not stack overlapping refreshes.
+- Changed both DeskPhone Web and the NerveCenter phone surface so incoming call copy is clean and ringing calls expose both Answer and Decline controls.
+- Released native DeskPhone `b265`: fixed the host parser that treated `Not connected` as connected, marks MAP disconnected when both live folder probes fail, and queues a paced reconnect to the default saved phone when message sync stops responding.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `dotnet build` passed in `apps/phone-host-windows`; existing NuGet/nullable/async warnings remain.
+- `dotnet build .\DeskPhone.csproj -c Release` passed and deployed `b265`.
+- Local host verification after b265 settled returned `build:"b265  05/19/26 1:14 am"`, `connected:true`, `hfp:"HFP connected"`, `map:"MAP connected"`, and `callState:"Idle"`.
+- Local Vite returned HTTP 200 at `http://127.0.0.1:4314/?suite=deskphone`. In-app Browser verification hit the existing local Node helper `require is not defined in ES module scope` crash; headless Chrome reached the existing unauthenticated `Loading...` shell.
+- `git diff --check -- apps/web/src/10-deskphone-web.jsx apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx apps/phone-host-windows/ViewModels/MainViewModel.cs apps/phone-host-windows/Services/MapService.cs` passed; line-ending normalization warnings only.
+- Pushed commits `1336a7f` and `286672a` to `origin/main`; Netlify Git-triggered production served `assets/index-gFNvDYvH.js` on poll attempt 2.
 
 ## 2026-05-19 NerveCenter Expanded Thread Bottom Anchor
 
@@ -550,7 +587,6 @@ Current source-grade file count after cleanup: 162 files.
 - In-app Browser verification was attempted, but the existing local helper failed on `require is not defined in ES module scope`; headless Chrome reached the existing unauthenticated `Loading...` shell.
 - Pushed commit `d7da807` to `origin/main`; Netlify Git-triggered production served `assets/index-BhHooHv2.js` on poll attempt 3.
 - Production asset `https://onetaskfocuser.netlify.app/assets/index-BhHooHv2.js` returned HTTP 200.
-
 
 ## 2026-05-19 Phone Date Labels And Expanded Thread Exit
 
@@ -565,7 +601,6 @@ Current source-grade file count after cleanup: 162 files.
 - In-app Browser verification was attempted, but the existing local helper failed on `require is not defined in ES module scope`; headless Chrome reached the existing unauthenticated `Loading...` shell.
 - Pushed commit `0ec64e7` to `origin/main`; Netlify Git-triggered production served `assets/index-DGMB_5bb.js` on poll attempt 3.
 
-
 ## 2026-05-19 NerveCenter Collapsed Thread Count Cleanup
 
 - Researched badge/count usage before editing: count badges should call attention to unread/new/actionable information, not total history length on every conversation row.
@@ -575,21 +610,6 @@ Current source-grade file count after cleanup: 162 files.
 - `git diff --check -- apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx` passed; line-ending normalization warning only.
 - Local Vite preview returned HTTP 200 at `http://127.0.0.1:4317/?suite=nervecenter`.
 - Pushed commit `4193857` to `origin/main`; Netlify Git-triggered production served `assets/index-DsQIkbDO.js` on poll attempt 4.
-
-
-## 2026-05-19 Backup Folder And Auto-Export Cleanup
-
-- Researched current browser backup/export practice before editing: browser file writes should be user-controlled through File System Access folder/file pickers where supported, automatic exports should use a selected folder rather than unsolicited Downloads files, retention should be bounded, and sensitive tokens should stay out of client-side backup JSON.
-- Changed `Store.autoFileBackup` so automatic weekly backups write only to the user-selected backup folder; if no folder is selected or permission has lapsed, the app uses Firebase/localStorage recovery and does not create Downloads files.
-- Removed reload/close-triggered forced file backups from the app close lifecycle while keeping the localStorage close flush.
-- Changed manual full backup to save into the chosen backup folder when available, otherwise ask for a save location through the browser file picker before falling back to a user-initiated download.
-- Added backup metadata to exported JSON documenting included app state, Shailos, counts, and excluded sensitive/local-only data.
-- Changed Settings > Account backup copy to show the selected folder state and clarify the no-Downloads automatic behavior.
-- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
-- `git diff --check -- apps/web/src/01-core.js apps/web/src/07-settings.jsx apps/web/src/08-app-split/App.jsx apps/web/src/08-app.jsx` passed; line-ending normalization warnings only.
-- Local Vite dev server returned HTTP 200 at `http://127.0.0.1:4318/?suite=nervecenter`.
-- In-app Browser verification was attempted, but the local Node helper failed on the existing `require is not defined in ES module scope` boot issue; headless Edge/CDP verified Settings > Account rendered the new backup copy and `Choose backup folder...` control.
-
 
 ## 2026-05-20 Google Workspace Persistence And Theme Contrast
 
@@ -606,6 +626,31 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` passed in `apps/web`; existing large-bundle warning remains.
 - Local Vite returned HTTP 200 at `http://127.0.0.1:4318/?suite=nervecenter`; headless Edge screenshot still reached the known unauthenticated/fresh-profile `Loading...` shell.
 - Pushed commit `9f4912a` to `origin/main`; Netlify Git-triggered production served `assets/index-C30KzPHN.js` on poll attempt 3, the asset returned HTTP 200, production `app-config` exposed `googleAuthMode:"token"` and `googleServerAuthAvailable:false`, and `google-workspace` returned HTTP 401 without an app sign-in token as expected.
+
+## 2026-05-19 Backup Folder And Auto-Export Cleanup
+
+- Researched current browser backup/export practice before editing: browser file writes should be user-controlled through File System Access folder/file pickers where supported, automatic exports should use a selected folder rather than unsolicited Downloads files, retention should be bounded, and sensitive tokens should stay out of client-side backup JSON.
+- Changed `Store.autoFileBackup` so automatic weekly backups write only to the user-selected backup folder; if no folder is selected or permission has lapsed, the app uses Firebase/localStorage recovery and does not create Downloads files.
+- Removed reload/close-triggered forced file backups from the app close lifecycle while keeping the localStorage close flush.
+- Changed manual full backup to save into the chosen backup folder when available, otherwise ask for a save location through the browser file picker before falling back to a user-initiated download.
+- Added backup metadata to exported JSON documenting included app state, Shailos, counts, and excluded sensitive/local-only data.
+- Changed Settings > Account backup copy to show the selected folder state and clarify the no-Downloads automatic behavior.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `git diff --check -- apps/web/src/01-core.js apps/web/src/07-settings.jsx apps/web/src/08-app-split/App.jsx apps/web/src/08-app.jsx` passed; line-ending normalization warnings only.
+- Local Vite dev server returned HTTP 200 at `http://127.0.0.1:4318/?suite=nervecenter`.
+- In-app Browser verification was attempted, but the local Node helper failed on the existing `require is not defined in ES module scope` boot issue; headless Edge/CDP verified Settings > Account rendered the new backup copy and `Choose backup folder...` control.
+- Pushed commit `71da44c` to `origin/main`; Netlify Git-triggered production served `assets/index-B7pva3ri.js` on poll attempt 1 and the asset returned HTTP 200.
+
+## 2026-05-20 NerveCenter Floating Conversation Actions
+
+- Researched current floating/contextual-action practice before editing: promoted actions should stay available near the active content, grouped controls should have clear labels, targets need sufficient size/spacing, and floating controls should leave content reachable.
+- Changed `NerveCenterPhoneSurface.jsx` so expanded text threads keep sticky bottom actions for Call, Reply, and Close instead of only a floating close button.
+- `npm run build` passed in `apps/web`; existing large-bundle warning remains.
+- `git diff --check -- apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx` passed; line-ending normalization warning only.
+- Local Vite preview returned HTTP 200 at `http://127.0.0.1:4317/?suite=nervecenter`; production bundle asset `assets/index-COtoe0KV.js` returned HTTP 200 from the same preview.
+- Local DeskPhone host `/status` returned HTTP 200.
+- In-app Browser verification was attempted, but the existing local helper failed on `require is not defined in ES module scope`; Vite dev mode also hit the existing embedded Shailos asset scanner issue, so preview served the built bundle for local smoke verification.
+- Pushed commit `48a53ab` to `origin/main`; Netlify Git-triggered production served `assets/index-COtoe0KV.js` on poll attempt 3.
 
 ## 2026-05-20 DeskPhone Web Contrast Repair
 
@@ -627,16 +672,6 @@ Current source-grade file count after cleanup: 162 files.
 - In-app Browser verification was attempted first, but the existing local helper failed on `require is not defined in ES module scope`.
 - Headless Edge/CDP seeded 12 queue tasks including one long unbroken token and verified desktop `1365x850` plus mobile `390x820`: document/root scroll width matched viewport width, the queue page stayed bounded (`760px` desktop, available mobile width), and measured queue row overflow count was `0` in both viewports. Screenshots were written under `apps/web/artifacts/queue-layout-*-seeded.png`.
 - Pushed commit `28cfa09` to `origin/main`; Netlify Git-triggered production served `assets/index-BySJo-zy.js` on poll attempt 2, and the deployed asset contained the queue containment marker.
-
-## 2026-05-20 Queue Pastel Row Contrast Repair
-
-- Researched WCAG 2.2 AA contrast expectations for rendered text: normal text should reach 4.5:1, and meaningful UI indicators should remain readable against their actual background.
-- Repaired the shared pastel-row contrast helper so `pBg(...)` RGB backgrounds are parsed and foregrounds are adjusted against the actual row background.
-- Updated queue first-row, group-header, blocked-row, edit-field, priority-change, and row-action controls to use row-specific readable text/accent/action colors instead of theme text on pastel backgrounds.
-- Pastel row audit passed: 20 theme shapes, 17 priority backgrounds, task text/muted-action/accent pairs, 0 failures below 4.5:1.
-- `git diff --check -- apps/web/src/01-core.js apps/web/src/08-app-split/App.jsx` passed; line-ending normalization warnings only.
-- `npm run build` in `apps/web` passed and generated `assets/index-sWvIgPze.js`; existing bundle-size warning remains.
-- Pushed commit `b6b8ea2` to `origin/main`; Netlify Git-triggered production served `assets/index-sWvIgPze.js` on poll attempt 3, and the deployed asset returned HTTP 200.
 
 ## 2026-05-20 Calendar Routing From Brain Dump And Record Anything
 
@@ -694,6 +729,51 @@ Current source-grade file count after cleanup: 162 files.
 - In-app Browser verification was attempted but hit the existing Node ESM helper boot issue (`require is not defined in ES module scope`), so headless Edge/CDP verified the built NerveCenter route hydrated with zero runtime exceptions. Screenshot: `apps/web/artifacts/chief-tweaks-nervecenter-hydrated.png`.
 - Pushed commit `761962b` to `origin/main`; Netlify Git-triggered production served `assets/index-o2Hb_rOw.js` on poll attempt 3, and the deployed asset contained the new Chief suggestion, resolved-missed-call, dialogue pending-response, and secure-link markers.
 
+## 2026-05-20 Chief Learning, Suggestion Suppression, And Timeline Fix
+
+- Researched current recommendation-feedback and human-AI interaction practice before editing: explicit dismiss/accept actions should feed future suggestion display, negative feedback should reduce repeated suggestions quickly, and dynamic assistant replies should remain visible as status updates. Calendar current-time indicators should share the same visual layer as event blocks when an event is active. The local plan aligned with that research, so no confirmation gate was needed.
+- Added local Chief learning storage keyed as `ot_chief_learning_v1`; it records accepted/rejected suggestion decisions as compact hashes plus action type/source/priority metadata, avoiding full email body or task-text storage.
+- Changed Chief task suggestions so accepted and dismissed suggestions are suppressed for the same source freshness; a changed/new Gmail or Calendar source can surface a related suggestion again.
+- Passed the learning profile into `dashboard.task_suggestions.v1` so the AI can favor accepted action types and learned priority patterns while avoiding repeatedly rejected action types.
+- Changed Chief discussion replies to read `job.output` as well as `job.text`, and reserved a visible `role="status"` dialogue area so the assistant response is not hidden behind the card layout.
+- Changed the schedule current-time rule so active events draw the horizontal line through the event row; standalone Now rows remain for gaps between events.
+- `node --check apps/web/backend/functions/_ai-core.cjs` passed.
+- `git diff --check -- apps/web/src/08-app-split/components/NerveCenterPanel.jsx apps/web/backend/functions/_ai-core.cjs` passed; line-ending normalization warnings only.
+- `npm run build` passed in `apps/web` and generated `assets/index-BdNe6hP6.js`; existing large-bundle warning remains.
+- Local preview returned HTTP 200 at `http://127.0.0.1:4328/?suite=nervecenter`.
+- In-app Browser verification was attempted but hit the existing Node ESM helper boot issue (`require is not defined in ES module scope`), so verification used the successful production build and built-asset marker checks for the Chief learning/suppression code path.
+- Pushed commit `b415d03` to `origin/main`; Netlify Git-triggered production served `assets/index-BdNe6hP6.js` on poll attempt 4, and the deployed asset contained the Chief learning, source freshness, and dialogue pending-response markers.
+
+## 2026-05-20 Chief Suggestion Hard Suppression And Resizable Chat
+
+- Researched current recommendation-feedback practice before editing: negative feedback should quickly reduce similar suggestions, dismissed AI services should stay easy to shut down, and user control should be learned over time.
+- Strengthened Chief suggestion suppression so accepted/dismissed rows record `suppressionKey`, normalized `textKey`, `sourceTitleKey`, `sourceBucket`, source key, action type, and the older issue key.
+- Changed future suggestion filtering to suppress on any matching stable issue, matching normalized task text, matching source/action, or strong source-title overlap. This covers AI paraphrases instead of only exact repeated rows.
+- Changed source matching so unknown/paraphrased suggestions no longer fall back blindly to the first Gmail/Calendar row; they need direct or strong token overlap before borrowing a source identity.
+- Made the Chief response history vertically resizable with a persisted `ot_chief_chat_height_v1` height and reset-on-double-click handle.
+- Changed the Chief prompt field from a fixed one-line input to a vertically resizable textarea; Enter submits and Shift+Enter inserts a new line.
+- `node --check apps/web/backend/functions/_ai-core.cjs` passed.
+- `git diff --check -- apps/web/src/08-app-split/components/NerveCenterPanel.jsx apps/web/backend/functions/_ai-core.cjs` passed; line-ending normalization warning only.
+- `npm run build` passed in `apps/web` and generated `assets/index-BqnHW-B-.js`; existing large-bundle warning remains.
+- Local preview returned HTTP 200 at `http://127.0.0.1:4329/?suite=nervecenter`.
+- Built-asset marker check found `ot_chief_chat_height_v1`, `suppressionKey`, `sourceTitleKey`, `row-resize`, and `Discuss next move`.
+
+## 2026-05-20 Chief Cloud Profile And AI Bandwidth Guard
+
+- Researched current AI memory/user-control and AI rate-limit practice before editing: durable assistant memory should be visible, editable, deletable, and scoped to user preferences; background AI work should use caching/throttling and avoid repeated automatic calls. The local plan aligned with the research, so no confirmation gate was needed.
+- Added `/.netlify/functions/chief-profile`, backed by Netlify Blobs store `chief-profile`, to persist Chief preferences and learning outside the local browser/PC.
+- Added a Chief `Profile` editor in NerveCenter. The app reads/writes the profile after Firebase sign-in and stores the generated Markdown profile in the cloud blob key `chief-profile/<user>.md`.
+- Changed Chief dialogue so preference statements such as "don't remind me about those" save a profile note; when a matching Calendar item is visible, Chief asks for explicit confirmation before deleting it.
+- Added a Google Workspace `deleteCalendarEvent` action and carried `calendarId` through calendar rows so confirmed deletes can target the right Google calendar.
+- Added client-side cache/throttle guards for automatic Chief scans and task suggestions: Chief scan cache lasts 30 minutes with a 20-minute minimum auto-AI gap, and task suggestions cache lasts 45 minutes with a 25-minute minimum auto-AI gap. Manual Chief refresh still bypasses the scan cache.
+- `node --check backend/functions/chief-profile.js`, `node --check backend/functions/google-workspace.js`, and `node --check backend/functions/_ai-core.cjs` passed.
+- `npm run build` passed in `apps/web` and generated `assets/index-B4WBSyWK.js`; existing large-bundle warning remains.
+- `node -e "require('@netlify/blobs')"` passed in `apps/web`.
+- `git diff --check` passed; line-ending normalization warnings only.
+- Pushed commit `9a47bf1` to `origin/main`; Netlify Git-triggered production served `assets/index-B4WBSyWK.js` on poll attempt 4.
+- Production asset marker check found `ot_chief_scan_cache_v1`, `ot_chief_task_suggestions_cache_v1`, `Chief profile`, and `deleteCalendarEvent`.
+- Production `/.netlify/functions/chief-profile` returned HTTP 401 without an app sign-in token, confirming the profile endpoint is not publicly writable/readable.
+
 ## 2026-05-20 Chief Smart Response Pills
 
 - Researched current smart-reply/action-chip practice before editing: compact contextual chips should expose clear actions, stay low-friction, give immediate feedback, and write preference/feedback signals into durable user-controlled memory. The local plan aligned with the research, so no confirmation gate was needed.
@@ -723,3 +803,29 @@ Current source-grade file count after cleanup: 162 files.
 - Direct Edge/CDP click-smoke verified `Not now` records a rejected Chief learning event, preserves no horizontal overflow, and shows a useful local-save response when cloud profile sync is unavailable.
 - Direct Edge/CDP chat-smoke verified typing `skip this, I do not want sleep tasks now` records a rejected Chief learning event and shows `Got it. I am dropping... rescanning for a better next move.`
 - Pushed commit `177a60f` to `origin/main`; Netlify Git-triggered production served `assets/index-DOs95XYV.js` on poll attempt 4, and the deployed asset returned HTTP 200.
+
+## 2026-05-20 Before Shavuos Priority And Chief Re-entry
+
+- Researched current task-priority/category and contrast practice before editing: durable priority identities should remain stable while labels are user-editable, urgent lane ordering should be deterministic across surfaces, and normal text should meet WCAG AA 4.5:1 contrast with UI components at 3:1. The local plan aligned with that research, so no confirmation gate was needed.
+- Added the `before_shavuos` priority with editable label `Before Shavuos`, strong blue `#0B57D0`, and a migration helper that adds/repairs it for existing saved accounts without replacing the user's edited title.
+- Changed task ordering so active `before_shavuos` tasks sort above pinned tasks in manual, AI-assisted, and pin-override ordering paths.
+- Surfaced the category in the Task Manager main priority row, Settings priority editor, priority change picker, and NerveCenter compact add controls.
+- Reintroduced a smaller Chief page route at `?suite=chief`, added `Chief` to the suite rail, and added an `Open` action from the NerveCenter Chief card.
+- Changed Chief smart-response and typed-rejection handling so `Not now`, `Next`, `Done`, `skip`, and `stop showing sleep tasks` record local learning first, clear stale Chief caches, and force a rescan even when cloud profile sync is unavailable.
+- `npm run build` passed in `apps/web` and generated `assets/index-DU9qD_Lz.js`; existing large-bundle warning remains.
+- `git diff --check -- apps/web/src/01-core.js apps/web/src/07-settings.jsx apps/web/src/08-app-split/App.jsx apps/web/src/08-app-split/components/AppSuiteChrome.jsx apps/web/src/08-app-split/components/NerveCenterPanel.jsx apps/web/src/08-app-split/ui-tokens.jsx` passed; line-ending normalization warnings only.
+- Local Vite returned HTTP 200 at `http://127.0.0.1:4336/?suite=chief`.
+- Direct ordering smoke verified `before_shavuos` sorts before a pinned `now` task and keeps color `#0B57D0`; white-on-blue contrast measured 6.39:1.
+- Built-asset marker check found `Before Shavuos`, `before_shavuos`, `Chief of Staff`, `Rescanning without that recommendation`, `stop showing sleep tasks`, and `Open Chief page`.
+
+## 2026-05-20 Relay Firestore Migration And LAN IP Auto-Discovery (b272)
+
+- Replaced Netlify Blobs storage in `apps/web/backend/functions/phone-relay.js` with Firestore (`phone-relay/singleton` doc); removes the `external_node_modules` hack and works on any Netlify plan.
+- Dropped the now-unneeded `external_node_modules` line from `apps/web/netlify.toml`.
+- Added `GetLanUrl` callback to `RelayService.cs`; every state push blob now includes `lanUrl` (the PC's LAN IP from `ControlApiService.LanUrl`).
+- Wired `GetLanUrl` to `_api.LanUrl` in `MainViewModel.cs`.
+- Updated `NerveCenterPhoneSurface.jsx` to extract `lanUrl` from the relay state blob and surface a `Use direct` button in the relay panel — one click saves the LAN URL as the remote DeskPhone URL, dropping the relay entirely for zero-latency LAN access.
+- `npm run build` passed in `apps/web`; generated `assets/index-DbCzpLMA.js`; existing large-bundle warning remains.
+- DeskPhone `b272` built and deployed; running host reported `build: b272`.
+- `git diff --check` passed (line-ending normalization warnings only).
+- Pushed commits `428bfed` and `6a02678` to `origin/main`; production root returned HTTP 200.
