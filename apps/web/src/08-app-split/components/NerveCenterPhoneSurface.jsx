@@ -181,6 +181,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
   const usingRelayRef = useRef(false);
   const [usingRelay, setUsingRelay] = useState(false);
   const [relayStatus, setRelayStatus] = useState(null);  // { enabled, key, relayUrl } from DeskPhone
+  const [relayLanUrl, setRelayLanUrl] = useState(null);  // LAN IP embedded in relay state blob by DeskPhone
   const [showRelaySetup, setShowRelaySetup] = useState(false);
   const refreshInFlightRef = useRef(false);
   const expandedConversationEndRef = useRef(null);
@@ -220,6 +221,7 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
           messagesRes = relayState?.messages  || [];
           callsRes    = relayState?.calls     || [];
           contactsRes = relayState?.contacts  || [];
+          if (relayState?.lanUrl) setRelayLanUrl(relayState.lanUrl);
           usingRelayRef.current = true;
           setUsingRelay(true);
         } catch (relayErr) {
@@ -790,6 +792,30 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
               <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
                 DeskPhone on your PC is relaying this session. Commands take ~2 s to execute. SMS only — no call audio.
               </div>
+              {relayLanUrl && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
+                    Your PC is also reachable directly on this network:
+                  </div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <code style={{ flex: 1, fontSize: 11, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 5, padding: "5px 8px", color: C.text, wordBreak: "break-all" }}>
+                      {relayLanUrl}
+                    </code>
+                    <button
+                      onClick={() => {
+                        const val = relayLanUrl.replace(/\/$/, "");
+                        setRemoteUrl(val);
+                        if (typeof localStorage !== "undefined")
+                          localStorage.setItem("shamash_deskphone_url", val);
+                        setShowRelaySetup(false);
+                      }}
+                      style={gvTextButton({ height: 32, fontSize: 11 }, C)}
+                      title="Switch to direct LAN connection — faster, no relay delay">
+                      Use direct
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <>

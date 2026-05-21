@@ -2830,6 +2830,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _relay.MarkRead    = _api.MarkConversationRead;
         _relay.MarkUnread  = _api.MarkConversationUnread;
         _relay.LogLine     = s => AppendDebugThreadSafe(s);
+        _relay.GetLanUrl   = () => _api.LanUrl ?? "";
         _relay.Configure(_settings.Current.RelayKey, _settings.Current.RelayUrl);
         _api.GetRelayStatus = () =>
         {

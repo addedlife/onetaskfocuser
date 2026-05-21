@@ -1,18 +1,18 @@
 /**
  * Phone relay — cloud mailbox between DeskPhone.exe and any remote browser.
+ * Storage: Firestore collection "phone-relay", document "singleton".
  *
  * Routes (via ?action= query param):
  *   GET  ?action=state    → webapp reads latest phone state (public)
  *   POST ?action=push     → DeskPhone pushes state blob (requires X-Relay-Secret)
  *   POST ?action=command  → webapp queues a command (public)
  *   GET  ?action=drain    → DeskPhone drains command queue (requires X-Relay-Secret)
- *
- * Storage: Netlify Blobs, store name "phone-relay", two keys:
- *   "state"    — latest JSON state pushed by DeskPhone
- *   "commands" — JSON array of pending commands
  */
 
-const { getStore } = require("@netlify/blobs");
+const { getApps, initializeApp, cert } = require("firebase-admin/app");
+const { getFirestore } = require("firebase-admin/firestore");
+
+const DOC_PATH = "phone-relay/singleton";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -36,29 +36,47 @@ function err(statusCode, msg) {
   };
 }
 
+function initDb() {
+  if (getApps().length) return getFirestore();
+  const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (rawJson) {
+    initializeApp({ credential: cert(JSON.parse(rawJson)) });
+  } else {
+    const projectId  = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey  = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+    initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+  }
+  return getFirestore();
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 204, headers: CORS, body: "" };
   }
 
-  const action = (event.queryStringParameters?.action || "").toLowerCase();
-  const method = event.httpMethod;
-  const secret = process.env.PHONE_RELAY_SECRET || "";
+  const action   = (event.queryStringParameters?.action || "").toLowerCase();
+  const method   = event.httpMethod;
+  const secret   = process.env.PHONE_RELAY_SECRET || "";
   const incoming = event.headers["x-relay-secret"] || event.headers["X-Relay-Secret"] || "";
 
-  let store;
+  let db;
   try {
-    store = getStore("phone-relay");
+    db = initDb();
   } catch (e) {
-    return err(503, "Blobs store unavailable: " + e.message);
+    return err(503, "DB init failed: " + e.message);
   }
+
+  const docRef = db.doc(DOC_PATH);
 
   // ── GET state ─────────────────────────────────────────────────────────────
   if (action === "state" && method === "GET") {
     try {
-      const state = await store.get("state", { type: "text" });
-      if (!state) return err(404, "No state — DeskPhone has not pushed yet");
-      return ok(state); // already a JSON string, return as-is
+      const snap = await docRef.get();
+      if (!snap.exists || !snap.data()?.state) {
+        return err(404, "No state — DeskPhone has not pushed yet");
+      }
+      return ok(snap.data().state);
     } catch (e) {
       return err(500, "Failed to read state: " + e.message);
     }
@@ -70,7 +88,7 @@ exports.handler = async (event) => {
     const body = event.body || "";
     if (!body) return err(400, "empty body");
     try {
-      await store.set("state", body);
+      await docRef.set({ state: body, updatedAt: new Date() }, { merge: true });
       return ok({ ok: true });
     } catch (e) {
       return err(500, "Failed to write state: " + e.message);
@@ -85,11 +103,11 @@ exports.handler = async (event) => {
     cmd.id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     cmd.queuedAt = Date.now();
     try {
-      const existing = (await store.get("commands", { type: "json" })) || [];
-      // Cap queue to 50 to avoid stale command buildup
+      const snap = await docRef.get();
+      const existing = JSON.parse(snap.data()?.commands || "[]");
       existing.push(cmd);
       const capped = existing.slice(-50);
-      await store.set("commands", JSON.stringify(capped));
+      await docRef.set({ commands: JSON.stringify(capped) }, { merge: true });
       return ok({ ok: true, id: cmd.id });
     } catch (e) {
       return err(500, "Failed to queue command: " + e.message);
@@ -100,8 +118,9 @@ exports.handler = async (event) => {
   if (action === "drain" && method === "GET") {
     if (!secret || incoming !== secret) return err(401, "unauthorized");
     try {
-      const commands = (await store.get("commands", { type: "json" })) || [];
-      if (commands.length > 0) await store.set("commands", JSON.stringify([]));
+      const snap = await docRef.get();
+      const commands = JSON.parse(snap.data()?.commands || "[]");
+      if (commands.length > 0) await docRef.set({ commands: "[]" }, { merge: true });
       return ok(commands);
     } catch (e) {
       return err(500, "Failed to drain commands: " + e.message);

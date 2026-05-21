@@ -33,6 +33,7 @@ public class RelayService : IDisposable
     public Func<string, Task>?                     MarkRead    { get; set; }
     public Func<string, Task>?                     MarkUnread  { get; set; }
     public Action<string>?                         LogLine     { get; set; }
+    public Func<string>?                           GetLanUrl   { get; set; }
 
     // ── Config ────────────────────────────────────────────────────────────────
     private string _relayUrl = DefaultRelayUrl;
@@ -101,7 +102,8 @@ public class RelayService : IDisposable
 
         // Inline-assemble the outer object without deserializing everything —
         // these are already valid JSON strings, just stitch them together.
-        var stateJson = $"{{\"status\":{statusJson},\"messages\":{messagesJson},\"calls\":{callsJson},\"contacts\":{contactsJson},\"pushedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
+        var lanUrl    = GetLanUrl?.Invoke() ?? "";
+        var stateJson = $"{{\"status\":{statusJson},\"messages\":{messagesJson},\"calls\":{callsJson},\"contacts\":{contactsJson},\"lanUrl\":\"{lanUrl}\",\"pushedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
 
         using var content = new StringContent(stateJson, Encoding.UTF8, "application/json");
         using var req     = new HttpRequestMessage(HttpMethod.Post, $"{_relayUrl}?action=push") { Content = content };
