@@ -1888,6 +1888,7 @@ function MessagesSlice({
   onOpenFullCalls,
   onOpenContactEditor,
   onNotice,
+  onRequestDeleteAllCalls,
 }) {
   const [threadSearch, setThreadSearch] = useState("");
   const [threadSearchCursor, setThreadSearchCursor] = useState(0);
@@ -2139,8 +2140,8 @@ function MessagesSlice({
   }, [onCommand, onNotice]);
 
   const deleteAllCalls = useCallback(() => {
-    onDeleteAllCalls?.();
-  }, [onDeleteAllCalls]);
+    onRequestDeleteAllCalls?.();
+  }, [onRequestDeleteAllCalls]);
 
   const toggleCallBlock = useCallback((call) => {
     const normalized = normalizePhoneKey(call?.number);
@@ -2965,6 +2966,7 @@ function SimpleTabContent({
   onContactDraftConsumed,
   onCancelNewMessage,
   onNotice,
+  onRequestDeleteAllCalls,
 }) {
   const [settingsSection, setSettingsSection] = useState("connection");
 
@@ -2996,6 +2998,7 @@ function SimpleTabContent({
         onOpenFullCalls={onOpenFullCalls}
         onOpenContactEditor={onOpenContactEditor}
         onNotice={onNotice}
+        onRequestDeleteAllCalls={onRequestDeleteAllCalls}
       />
     );
   }
@@ -3049,7 +3052,7 @@ function SimpleTabContent({
             if (cleaned) onCommand(`/dial?n=${encodeURIComponent(cleaned)}`, "call");
           }}
           onOpenFullCalls={() => {}}
-          onDeleteAllCalls={() => setDeleteAllCallsConfirm(true)}
+          onDeleteAllCalls={onRequestDeleteAllCalls}
           onToggleCallBlock={(call) => {
             const normalized = normalizePhoneKey(call?.number);
             if (!normalized) {
@@ -6498,6 +6501,7 @@ export function DeskPhoneWebPanel({
               onContactDraftConsumed={() => setContactDraft(null)}
               onCancelNewMessage={() => setActiveTab("messages")}
               onNotice={showNotice}
+              onRequestDeleteAllCalls={() => setDeleteAllCallsConfirm(true)}
             />
           </div>
 
@@ -6507,13 +6511,13 @@ export function DeskPhoneWebPanel({
           {error ? <div className="dp-error-toast">{error}</div> : null}
 
           {deleteAllCallsConfirm && (
-            <div style={{position:"fixed",inset:0,zIndex:9900,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={() => setDeleteAllCallsConfirm(false)}>
+            <div style={{position:"fixed",inset:0,zIndex:9900,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={() => setDeleteAllCallsConfirm(false)}>
               <div onClick={e=>e.stopPropagation()} style={{background:COLORS.bgMain,borderRadius:18,padding:"24px 28px",maxWidth:360,boxShadow:"0 4px 16px rgba(0,0,0,0.15)"}}>
                 <p style={{fontSize:16,fontWeight:600,color:COLORS.textPrimary,margin:"0 0 12px"}}>Delete all call history?</p>
                 <p style={{fontSize:14,color:COLORS.textMuted,margin:"0 0 20px",lineHeight:1.5}}>This will permanently delete all calls from DeskPhone Web.</p>
                 <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
                   <button onClick={() => setDeleteAllCallsConfirm(false)} style={{padding:"8px 16px",borderRadius:8,border:`1px solid ${COLORS.border}`,background:"transparent",color:COLORS.textMuted,cursor:"pointer",fontSize:14,fontWeight:500,fontFamily:"inherit"}}>Cancel</button>
-                  <button onClick={() => {setDeleteAllCallsConfirm(false); onCommand("/delete-all-call-history", "delete all call history");}} style={{padding:"8px 16px",borderRadius:8,border:"none",background:COLORS.accentRed,color:COLORS.textOnAccent,cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:"inherit"}}>Delete All</button>
+                  <button onClick={() => {setDeleteAllCallsConfirm(false); runCommand("/delete-all-call-history", "delete all call history");}} style={{padding:"8px 16px",borderRadius:8,border:"none",background:COLORS.accentRed,color:COLORS.textOnAccent,cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:"inherit"}}>Delete All</button>
                 </div>
               </div>
             </div>

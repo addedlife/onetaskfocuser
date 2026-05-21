@@ -9,7 +9,7 @@ import { SettingsModal } from '../07-settings.jsx';
 import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, listPendingRecordings, PENDING_EVENT, formatPendingAge } from '../09-transcription-pen.js';
 import { DeskPhoneWebPanel } from '../10-deskphone-web.jsx';
 import { isOfflineShellReady } from '../offline-support.js';
-import { buildDeskPhoneThemeQuery, getInitialSuiteView, NC_FONT_STACK, NC_GLOBAL_CSS, suiteIcon, useViewportWidth } from './ui-tokens.jsx';
+import { buildDeskPhoneThemeQuery, getInitialSuiteView, GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, suiteIcon, useViewportWidth } from './ui-tokens.jsx';
 import { AppSuiteChrome } from './components/AppSuiteChrome.jsx';
 import { DeskPhoneSuitePanel, SuiteShailosPanel } from './components/SuitePanels.jsx';
 import { NerveCenterPhoneSurface } from './components/NerveCenterPhoneSurface.jsx';
@@ -1203,7 +1203,7 @@ function App({ user, onSignOut }) {
   const sc = ensureSchemeContrast(SCHEMES[AS?.colorScheme] || AS?.customSchemes?.[AS?.colorScheme] || SCHEMES.claude);
   // Detect dark theme by checking bg luminance
   const isDark = (()=>{const h=sc.bg||"${T.brown6}";const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return(r*299+g*587+b*114)/1000<128;})();
-  const T = {...sc, isDark, glow:!!sc.glow, shadow: isDark?"0 2px 12px rgba(0,0,0,0.3)":"0 2px 12px rgba(0,0,0,0.06)", shadowLg: isDark?"0 6px 24px rgba(0,0,0,0.4)":"0 6px 24px rgba(0,0,0,0.09)"};
+  const T = {...sc, isDark, glow:!!sc.glow, accent: sc.primary || GV_CLEAN.accent, success: sc.success || GV_CLEAN.success, danger: sc.danger || GV_CLEAN.danger, warning: sc.warning || GV_CLEAN.warning, shadow: isDark?"0 2px 12px rgba(0,0,0,0.3)":"0 2px 12px rgba(0,0,0,0.06)", shadowLg: isDark?"0 6px 24px rgba(0,0,0,0.4)":"0 6px 24px rgba(0,0,0,0.09)"};
   const fontWeightNormal = Math.max(320, Math.min(560, Number(AS?.fontWeightScale || 400)));
   const fontWeightStrong = Math.max(420, Math.min(700, fontWeightNormal + 110));
   const deskPhoneThemePalette = AS?.colorScheme === "material"
