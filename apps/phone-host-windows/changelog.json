@@ -1,5 +1,23 @@
 [
     {
+        "timestamp":  "2026-05-20 22:16:56",
+        "version":  "b272",
+        "notes":  "Relay switched from Netlify Blobs to Firestore; relay panel now shows LAN IP for one-click direct switch.",
+        "devNotes":  "phone-relay.js rewritten to store state in Firestore collection phone-relay/singleton instead of Netlify Blobs, removing the external_node_modules hack and the $20/month Blobs quota risk. RelayService.cs now embeds the PC LAN IP (from ControlApiService.LanUrl) in every state push blob. NerveCenterPhoneSurface.jsx extracts lanUrl from relay state and shows a Use direct button in the cloud relay panel when on relay and LAN URL is known — one click sets the remote URL and exits relay mode for zero-latency LAN access. GetLanUrl callback wired in MainViewModel. netlify.toml cleaned of now-unnecessary external_node_modules blob annotation. b270 and b271 were failed deploy attempts due to missing changelog entries; this entry covers all three increments."
+    },
+    {
+        "timestamp":  "2026-05-20 20:45:00",
+        "version":  "b271",
+        "notes":  "Deploy attempt b271: failed due to missing changelog entry, no binary released.",
+        "devNotes":  "build.num auto-incremented from 271 to 272 during Release build before the changelog gate ran. No actual deploy occurred. The Firestore relay and LAN IP discovery code was already compiled but not released. This entry exists only to satisfy the changelog gate for the b271 increment."
+    },
+    {
+        "timestamp":  "2026-05-20 20:44:00",
+        "version":  "b270",
+        "notes":  "Deploy attempt b270: failed due to missing changelog entry, no binary released.",
+        "devNotes":  "build.num auto-incremented from 270 to 271 during Release build before the changelog gate ran. No actual deploy occurred. The Firestore relay and LAN IP discovery code was already compiled but not released. This entry exists only to satisfy the changelog gate for the b270 increment."
+    },
+    {
         "timestamp":  "2026-05-20 19:31:04",
         "version":  "b269",
         "notes":  "Fix relay push error logging: failed pushes (e.g. key mismatch) now log the HTTP error to the debug window.",
