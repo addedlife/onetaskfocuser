@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-05-21 10:30:07",
+        "version":  "b273",
+        "notes":  "Auto-reconnect after stale-session send failure; relay restored to Netlify Blobs.",
+        "devNotes":  "Two fixes: (1) SendMessageAsync in MainViewModel now calls ReconnectToMostRecentAsync() when the MAP send returns false or throws, covering the stale-OBEX-session case where RFCOMM stays open so MAP reports connected but the phone killed the OBEX session internally. Reconnect is dispatched via Dispatch() so UI-thread ops remain safe; _connectLock.WaitAsync(0) in ConnectAsync prevents double-reconnects. (2) phone-relay.js switched back from Firestore to Netlify Blobs with external_node_modules restored in netlify.toml — Firestore requires a Firebase Admin service-account key not configured in Netlify env vars, causing 503 on every relay request; Blobs works without credentials and was the verified-working original relay backend."
+    },
+    {
         "timestamp":  "2026-05-20 22:16:56",
         "version":  "b272",
         "notes":  "Relay switched from Netlify Blobs to Firestore; relay panel now shows LAN IP for one-click direct switch.",

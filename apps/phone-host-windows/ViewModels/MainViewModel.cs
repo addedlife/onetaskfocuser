@@ -6098,7 +6098,11 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                     snapshot = _allMessages.ToList();
                 }
                 _ = Task.Run(() => _store.Save(snapshot));
-                AppendDebug("[SEND FAILED] Phone rejected the message — check Log tab");
+                AppendDebug("[SEND FAILED] Phone rejected the message — OBEX session may be stale; reconnecting automatically");
+                // Stale OBEX session: the RFCOMM channel stays open so MAP still reports
+                // "connected", but the phone's MAP server killed the session internally.
+                // Trigger a reconnect so the next send attempt has a fresh session.
+                Dispatch(() => _ = ReconnectToMostRecentAsync());
             }
         }
         catch (Exception ex)
@@ -6109,7 +6113,10 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 snapshot = _allMessages.ToList();
             }
             _ = Task.Run(() => _store.Save(snapshot));
-            AppendDebug($"[SEND ERROR] {ex.Message}");
+            AppendDebug($"[SEND ERROR] {ex.Message} — reconnecting automatically");
+            // Stream exception during send means the OBEX connection is dead.
+            // Reconnect so the next send has a live session.
+            Dispatch(() => _ = ReconnectToMostRecentAsync());
         }
         finally
         {
