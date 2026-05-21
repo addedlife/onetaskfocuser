@@ -55,5 +55,22 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (isDocOwner() || isAdmin()) && isValidShaila(request.resource.data);
       allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
     }
+
+    // Phone relay — temporary mailbox data for DeskPhone ↔ web bridge.
+    //
+    // State document (PII: messages, contacts, call log):
+    //   - Read: requires Firebase auth — only authenticated users can fetch phone data.
+    //   - Write: open at Firestore layer; the Netlify function enforces X-Relay-Secret before writing.
+    //
+    // Commands document (outgoing command queue):
+    //   - Open read/write: DeskPhone drains it without a Firebase token (uses relay secret).
+    //     The Netlify function gates command writes behind Firebase auth before reaching Firestore.
+    match /phone-relay/state {
+      allow read: if request.auth != null;
+      allow write: if true;
+    }
+    match /phone-relay/commands {
+      allow read, write: if true;
+    }
   }
 }

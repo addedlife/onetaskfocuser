@@ -3153,6 +3153,7 @@ function App({ user, onSignOut }) {
       {!shellHidden && (suiteView === "nervecenter" || suiteView === "chief") && (
         <NerveCenterPanel
           T={T}
+          user={user}
           sections={switchboardSections}
           tasks={switchboardTaskList}
           shailos={switchboardShailaList}

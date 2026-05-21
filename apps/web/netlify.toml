@@ -20,7 +20,6 @@
 
 [functions."phone-relay"]
   timeout = 10
-  external_node_modules = ["@netlify/blobs", "@netlify/runtime-utils"]
 
 [functions."google-workspace"]
   timeout = 60

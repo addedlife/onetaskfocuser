@@ -135,11 +135,11 @@ function linkedMessageParts(text, linkStyle = {}) {
   return parts;
 }
 
-async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS) {
+async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS, extraHeaders = {}) {
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
   try {
-    const response = await fetch(url, { cache: "no-store", signal: controller?.signal });
+    const response = await fetch(url, { cache: "no-store", signal: controller?.signal, headers: extraHeaders });
     if (!response.ok) throw new Error(`${url} returned ${response.status}`);
     return await response.json();
   } finally {
@@ -147,7 +147,7 @@ async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS) {
   }
 }
 
-function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
+function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
   // Dynamic API base: auto-detect when served from DeskPhone (port 8765), else use saved LAN URL or localhost
   const [remoteUrl, setRemoteUrl] = useState(() =>
     typeof localStorage !== "undefined" ? (localStorage.getItem("shamash_deskphone_url") || "") : ""
@@ -214,9 +214,19 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
       } catch { /* fall through to relay */ }
 
       if (!localOk) {
-        // Relay fallback: read the single state blob the PC pushed
+        // Relay fallback: read the single state blob the PC pushed.
+        // Requires a Firebase ID token — phone data is private to the authenticated user.
+        let relayIdToken = null;
+        try { relayIdToken = user?.getIdToken ? await user.getIdToken() : null; } catch {}
+        if (!relayIdToken) {
+          throw new Error("relay:no_auth");
+        }
         try {
-          const relayState = await fetchPhoneJson(`${RELAY_BASE}?action=state`);
+          const relayState = await fetchPhoneJson(
+            `${RELAY_BASE}?action=state`,
+            PHONE_FETCH_TIMEOUT_MS,
+            { Authorization: `Bearer ${relayIdToken}` },
+          );
           statusRes   = relayState?.status   || null;
           messagesRes = relayState?.messages  || [];
           callsRes    = relayState?.calls     || [];
@@ -262,9 +272,11 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
       const msg = String(e?.message || "");
       setError(msg === "relay:no_state"
         ? "Relay reachable — DeskPhone hasn't pushed yet. Is DeskPhone b268 running on your PC?"
-        : msg.startsWith("relay:fail:")
-          ? "Cloud relay unreachable. Check Netlify deploy and env vars."
-          : "Open DeskPhone to use calls and texts.");
+        : msg === "relay:no_auth"
+          ? "Sign in to access DeskPhone remotely."
+          : msg.startsWith("relay:fail:")
+            ? "Cloud relay unreachable. Check Netlify deploy and env vars."
+            : "Open DeskPhone to use calls and texts.");
       usingRelayRef.current = false;
       setUsingRelay(false);
       onOnlineChange?.(false);
@@ -355,10 +367,18 @@ function NerveCenterPhoneSurface({ T, onOnlineChange, onStatusSummary, onActivit
     setBusy(label);
     try {
       if (usingRelayRef.current) {
-        // Route command through the cloud relay — DeskPhone will execute it within 2 s
+        // Route command through the cloud relay — DeskPhone will execute it within 2 s.
+        // Include Firebase ID token so the function can gate on auth.
+        let cmdAuthHeaders = {};
+        try {
+          if (user?.getIdToken) {
+            const tok = await user.getIdToken();
+            cmdAuthHeaders["Authorization"] = `Bearer ${tok}`;
+          }
+        } catch {}
         await fetch(`${RELAY_BASE}?action=command`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...cmdAuthHeaders },
           body: JSON.stringify({ path }),
         });
         setError("");
