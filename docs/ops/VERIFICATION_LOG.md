@@ -829,3 +829,13 @@ Current source-grade file count after cleanup: 162 files.
 - DeskPhone `b272` built and deployed; running host reported `build: b272`.
 - `git diff --check` passed (line-ending normalization warnings only).
 - Pushed commits `428bfed` and `6a02678` to `origin/main`; production root returned HTTP 200.
+
+## 2026-05-24 DeskPhone Native Material 3 UI Refresh
+
+- Researched current Material 3 practice before editing: use a consistent Roboto type scale, semantic color roles, medium/regular font weights, state-layer button feedback, and Material Symbols for iconography. The local WPF theme approach aligned with that guidance, so no confirmation gate was needed.
+- Bundled Roboto Regular, Medium, and Bold font files under `apps/phone-host-windows/Assets/Fonts/` and wired them as WPF resources.
+- Changed the native DeskPhone app font resources to use bundled Roboto for text/display and the existing Material Symbols Rounded font for icon glyphs.
+- Normalized the active WPF style dictionaries and `MainWindow.xaml` typography toward Material 3 sizing/weight rules, including label/button weights and off-scale small text.
+- Left backend, Bluetooth, MAP, PBAP, relay, and ViewModel logic untouched.
+- `git diff --check -- apps/phone-host-windows/DeskPhone.csproj apps/phone-host-windows/App.xaml apps/phone-host-windows/MainWindow.xaml apps/phone-host-windows/Themes/Styles.xaml apps/phone-host-windows/Themes/Skins/Material.xaml` passed; line-ending normalization warnings only.
+- `dotnet build .\DeskPhone.csproj` passed in `apps/phone-host-windows`; existing warnings remain for `InTheHand.Net.Bluetooth` approximate package resolution and pre-existing nullable/async warnings in Bluetooth/MAP/control services.

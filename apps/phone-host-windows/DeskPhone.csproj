@@ -30,8 +30,13 @@
 
   <ItemGroup>
     <Resource Include="Assets\Fonts\MaterialIconsRound-Regular.otf" />
+    <Resource Include="Assets\Fonts\MaterialSymbolsRounded.ttf" />
+    <Resource Include="Assets\Fonts\Roboto-Regular.ttf" />
+    <Resource Include="Assets\Fonts\Roboto-Medium.ttf" />
+    <Resource Include="Assets\Fonts\Roboto-Bold.ttf" />
     <None Update="Assets\Fonts\MaterialIconsRound-Regular.codepoints" />
     <None Update="Assets\Fonts\MaterialSymbols-LICENSE.txt" />
+    <None Update="Assets\Fonts\Roboto-OFL.txt" />
   </ItemGroup>
 
   <ItemGroup>

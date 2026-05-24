@@ -10,7 +10,7 @@
                 <ResourceDictionary Source="Themes/Styles.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- ── Value converters ──────────────────────────────────────────────── -->
+            <!-- Value converters -->
             <local:NullToCollapsedConverter          x:Key="NullToCollapsedConverter"/>
             <local:CountToVisibilityConverter        x:Key="CountToVisibilityConverter"/>
             <local:BoolToVisibilityConverter         x:Key="BoolToVisibilityConverter"/>
@@ -19,8 +19,9 @@
             <local:BubbleWidthConverter              x:Key="BubbleWidthConverter"/>
             <local:BubbleTextSizeConverter           x:Key="BubbleTextSizeConverter"/>
 
-        <FontFamily x:Key="MaterialFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
-        <FontFamily x:Key="MaterialIconsRoundFont">pack://application:,,,/Assets/Fonts/#Material Icons Round</FontFamily>
+        <FontFamily x:Key="MaterialFontFamily">pack://application:,,,/Assets/Fonts/#Roboto</FontFamily>
+        <FontFamily x:Key="MaterialDisplayFontFamily">pack://application:,,,/Assets/Fonts/#Roboto</FontFamily>
+        <FontFamily x:Key="MaterialIconsRoundFont">pack://application:,,,/Assets/Fonts/#Material Symbols Rounded</FontFamily>
         <CornerRadius x:Key="ShapeExtraSmall">4</CornerRadius>
         <CornerRadius x:Key="ShapeSmall">8</CornerRadius>
         <CornerRadius x:Key="ShapeMedium">12</CornerRadius>
@@ -52,7 +53,7 @@
         <Style TargetType="ScrollViewer" BasedOn="{StaticResource TouchScrollViewerStyle}"/>
         <Style TargetType="ListBox" BasedOn="{StaticResource TouchListBoxStyle}"/>
 
-        <!-- ── GridSplitter — hairline rule, no drag thumb visible ──────────── -->
+        <!-- GridSplitter  -  hairline rule, no drag thumb visible -->
         <Style x:Key="MacSplitter" TargetType="GridSplitter">
             <Setter Property="Width"               Value="7"/>
             <Setter Property="Background"          Value="Transparent"/>
@@ -71,7 +72,7 @@
         </Style>
 
 
-        <!-- ── Navigation rail item (RadioButton) ────────────────────────── -->
+        <!-- Navigation rail item (RadioButton) -->
         <Style x:Key="NavButton" TargetType="RadioButton">
             <Setter Property="Foreground"      Value="{DynamicResource TextMuted}"/>
             <Setter Property="Background"      Value="Transparent"/>
@@ -81,7 +82,7 @@
             <Setter Property="Cursor"          Value="Hand"/>
             <Setter Property="FontFamily"      Value="{StaticResource MaterialFontFamily}"/>
             <Setter Property="FontSize"        Value="13"/>
-            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="FontWeight"      Value="Medium"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -114,7 +115,7 @@
             </Setter>
         </Style>
 
-        <!-- ── Card surface ──────────────────────────────────────────────── -->
+        <!-- Card surface -->
         <Style x:Key="Card" TargetType="Border">
             <Setter Property="Background"      Value="{DynamicResource SurfaceContainerLow}"/>
             <Setter Property="CornerRadius"    Value="{StaticResource ShapeMedium}"/>
@@ -135,16 +136,16 @@
             <Setter Property="BorderBrush" Value="{DynamicResource OutlineVariant}"/>
         </Style>
 
-        <!-- ── Section label ─────────────────────────────────────────────── -->
+        <!-- Section label -->
         <Style x:Key="SectionLabel" TargetType="TextBlock">
             <Setter Property="FontFamily"  Value="{StaticResource MaterialFontFamily}"/>
             <Setter Property="FontSize"    Value="11"/>
-            <Setter Property="FontWeight"  Value="SemiBold"/>
+            <Setter Property="FontWeight"  Value="Medium"/>
             <Setter Property="Foreground"  Value="{DynamicResource TextMuted}"/>
             <Setter Property="Margin"      Value="4,0,0,8"/>
         </Style>
 
-        <!-- ── TextBox — Material filled field style ─────────────────────── -->
+        <!-- TextBox  -  Material filled field style -->
         <Style TargetType="TextBox">
             <Setter Property="Background"      Value="{DynamicResource BgInput}"/>
             <Setter Property="Foreground"      Value="{DynamicResource OnSurface}"/>
@@ -185,7 +186,7 @@
             </Setter>
         </Style>
 
-        <!-- ── ComboBox ──────────────────────────────────────────────────── -->
+        <!-- ComboBox -->
         <Style TargetType="ComboBox">
             <Setter Property="Background"                 Value="{DynamicResource BgInput}"/>
             <Setter Property="Foreground"                 Value="{DynamicResource OnSurface}"/>
@@ -242,7 +243,7 @@
                                                       Margin="16,8,0,8"
                                                       VerticalAlignment="Center"
                                                       IsHitTestVisible="False"/>
-                                    <TextBlock Grid.Column="1" Text="▾" FontSize="12"
+                                    <TextBlock Grid.Column="1" Text="v" FontSize="12"
                                                Foreground="{DynamicResource TextMuted}"
                                                VerticalAlignment="Center"
                                                HorizontalAlignment="Center"
@@ -285,7 +286,7 @@
             </Setter>
         </Style>
 
-        <!-- ── Thin, themed scrollbar ───────────────────────────────────── -->
+        <!-- Thin, themed scrollbar -->
         <Style x:Key="ScrollBarPageButtonStyle" TargetType="RepeatButton">
             <Setter Property="OverridesDefaultStyle" Value="True"/>
             <Setter Property="Focusable" Value="False"/>

@@ -1,13 +1,13 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- ══════════════════════════════════════════════════════════════════════ -->
-    <!-- SKIN: Material — Google Material Design 3                             -->
-    <!-- Pill buttons · rounded cards · filled inputs · state-layer hovers    -->
-    <!-- Font: Google Sans / Segoe UI Variable Text                           -->
-    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- ================================================================ -->
+    <!-- SKIN: Material  -  Google Material Design 3                             -->
+    <!-- Pill buttons  -  rounded cards  -  filled inputs  -  state-layer hovers    -->
+    <!-- Font: Roboto and Material Symbols Rounded                            -->
+    <!-- ================================================================ -->
 
-    <!-- ── GridSplitter ─────────────────────────────────────────────────── -->
+    <!-- GridSplitter -->
     <Style x:Key="MacSplitter" TargetType="GridSplitter">
         <Setter Property="Width"               Value="5"/>
         <Setter Property="Background"          Value="Transparent"/>
@@ -25,7 +25,7 @@
         </Setter>
     </Style>
 
-    <!-- ── Navigation rail item ─────────────────────────────────────────── -->
+    <!-- Navigation rail item -->
     <Style x:Key="NavButton" TargetType="RadioButton">
         <Setter Property="Foreground"      Value="{DynamicResource TextSecond}"/>
         <Setter Property="Background"      Value="Transparent"/>
@@ -33,7 +33,7 @@
         <Setter Property="Padding"         Value="16,10"/>
         <Setter Property="Margin"          Value="8,2"/>
         <Setter Property="Cursor"          Value="Hand"/>
-        <Setter Property="FontFamily"      Value="Google Sans, Segoe UI Variable Text, Segoe UI"/>
+        <Setter Property="FontFamily"      Value="{StaticResource MaterialFontFamily}"/>
         <Setter Property="FontSize"        Value="14"/>
         <Setter Property="FontWeight"      Value="Medium"/>
         <Setter Property="Template">
@@ -59,7 +59,7 @@
         </Setter>
     </Style>
 
-    <!-- ── Card surface ─────────────────────────────────────────────────── -->
+    <!-- Card surface -->
     <Style x:Key="Card" TargetType="Border">
         <Setter Property="Background"      Value="{DynamicResource BgMain}"/>
         <Setter Property="CornerRadius"    Value="16"/>
@@ -79,24 +79,24 @@
         <Setter Property="BorderBrush" Value="{DynamicResource BorderFocus}"/>
     </Style>
 
-    <!-- ── Section label ────────────────────────────────────────────────── -->
+    <!-- Section label -->
     <Style x:Key="SectionLabel" TargetType="TextBlock">
-        <Setter Property="FontFamily"  Value="Google Sans, Segoe UI Variable Text, Segoe UI"/>
+        <Setter Property="FontFamily"  Value="{StaticResource MaterialFontFamily}"/>
         <Setter Property="FontSize"    Value="11"/>
-        <Setter Property="FontWeight"  Value="SemiBold"/>
+        <Setter Property="FontWeight"  Value="Medium"/>
         <Setter Property="Foreground"  Value="{DynamicResource TextMuted}"/>
         <Setter Property="Margin"      Value="4,0,0,8"/>
     </Style>
 
-    <!-- ── TextBox — filled pill ────────────────────────────────────────── -->
+    <!-- TextBox  -  filled pill -->
     <Style TargetType="TextBox">
         <Setter Property="Background"      Value="{DynamicResource BgInput}"/>
         <Setter Property="Foreground"      Value="{DynamicResource TextPrimary}"/>
         <Setter Property="BorderBrush"     Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Padding"         Value="16,10"/>
-        <Setter Property="FontFamily"      Value="Google Sans, Segoe UI Variable Text, Segoe UI"/>
-        <Setter Property="FontSize"        Value="18"/>
+        <Setter Property="FontFamily"      Value="{StaticResource MaterialFontFamily}"/>
+        <Setter Property="FontSize"        Value="16"/>
         <Setter Property="CaretBrush"      Value="{DynamicResource AccentBlue}"/>
         <Setter Property="SelectionBrush"  Value="{DynamicResource AccentBlueLight}"/>
         <Setter Property="Template">
@@ -121,14 +121,14 @@
         </Setter>
     </Style>
 
-    <!-- ── ComboBox ─────────────────────────────────────────────────────── -->
+    <!-- ComboBox -->
     <Style TargetType="ComboBox">
         <Setter Property="Background"                 Value="{DynamicResource BgHover}"/>
         <Setter Property="Foreground"                 Value="{DynamicResource TextPrimary}"/>
         <Setter Property="BorderBrush"                Value="Transparent"/>
         <Setter Property="BorderThickness"            Value="0"/>
         <Setter Property="Padding"                    Value="16,10"/>
-        <Setter Property="FontFamily"                 Value="Google Sans, Segoe UI Variable Text, Segoe UI"/>
+        <Setter Property="FontFamily"                 Value="{StaticResource MaterialFontFamily}"/>
         <Setter Property="FontSize"                   Value="14"/>
         <Setter Property="HorizontalContentAlignment" Value="Left"/>
         <Setter Property="VerticalContentAlignment"   Value="Center"/>
@@ -176,7 +176,7 @@
                                                   Margin="16,8,0,8"
                                                   VerticalAlignment="Center"
                                                   IsHitTestVisible="False"/>
-                                <TextBlock Grid.Column="1" Text="▾" FontSize="12"
+                                <TextBlock Grid.Column="1" Text="v" FontSize="12"
                                            Foreground="{DynamicResource TextMuted}"
                                            VerticalAlignment="Center"
                                            HorizontalAlignment="Center"
@@ -214,20 +214,20 @@
         </Setter>
     </Style>
 
-    <!-- ── Thin scrollbar ───────────────────────────────────────────────── -->
+    <!-- Thin scrollbar -->
     <Style TargetType="ScrollBar">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Width"      Value="6"/>
     </Style>
 
-    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- ================================================================ -->
     <!-- BUTTON STYLES                                                         -->
-    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- ================================================================ -->
 
     <Style x:Key="MD3ButtonBase" TargetType="Button">
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Cursor"          Value="Hand"/>
-        <Setter Property="FontFamily"      Value="Google Sans, Segoe UI Variable Text, Segoe UI"/>
+        <Setter Property="FontFamily"      Value="{StaticResource MaterialFontFamily}"/>
         <Setter Property="FontSize"        Value="14"/>
         <Setter Property="FontWeight"      Value="Medium"/>
         <Setter Property="Height"          Value="40"/>
@@ -302,7 +302,7 @@
         <Setter Property="BorderBrush"     Value="{DynamicResource Border}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Cursor"          Value="Hand"/>
-        <Setter Property="FontFamily"      Value="Google Sans, Segoe UI Variable Text, Segoe UI"/>
+        <Setter Property="FontFamily"      Value="{StaticResource MaterialFontFamily}"/>
         <Setter Property="FontSize"        Value="14"/>
         <Setter Property="FontWeight"      Value="Medium"/>
         <Setter Property="Height"          Value="40"/>
@@ -339,12 +339,12 @@
         </Setter>
     </Style>
 
-    <!-- ── Dial Pad Key ─────────────────────────────────────────────────── -->
+    <!-- Dial Pad Key -->
     <Style x:Key="DialKey" TargetType="Button">
         <Setter Property="Background"      Value="{DynamicResource BgHover}"/>
         <Setter Property="Foreground"      Value="{DynamicResource TextPrimary}"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="FontFamily"      Value="Google Sans, Segoe UI Variable Text, Segoe UI"/>
+        <Setter Property="FontFamily"      Value="{StaticResource MaterialDisplayFontFamily}"/>
         <Setter Property="FontSize"        Value="28"/>
         <Setter Property="FontWeight"      Value="Normal"/>
         <Setter Property="Cursor"          Value="Hand"/>

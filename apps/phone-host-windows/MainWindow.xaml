@@ -1,4 +1,4 @@
-﻿<Window x:Class="DeskPhone.MainWindow"
+<Window x:Class="DeskPhone.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:DeskPhone.ViewModels"
@@ -13,7 +13,7 @@
         TextOptions.TextRenderingMode="ClearType"
         TextOptions.TextHintingMode="Fixed"
         RenderOptions.ClearTypeHint="Enabled"
-        FontFamily="Segoe UI Variable Text, Segoe UI">
+        FontFamily="{StaticResource MaterialFontFamily}">
 
     <Window.DataContext>
         <vm:MainViewModel/>
@@ -26,6 +26,7 @@
             <Setter Property="FontSize" Value="20"/>
             <Setter Property="TextAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="LineHeight" Value="20"/>
         </Style>
 
         <Style x:Key="CompactIconButton" TargetType="Button" BasedOn="{StaticResource TonalButton}">
@@ -161,9 +162,9 @@
             <Setter Property="Padding" Value="16,12"/>
             <Setter Property="Margin" Value="8,2,8,0"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontFamily" Value="{StaticResource MaterialFontFamily}"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Medium"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -216,7 +217,7 @@
                             <TextBlock x:Name="OffLabel"
                                        Text="Off"
                                        FontSize="11"
-                                       FontWeight="SemiBold"
+                                       FontWeight="Medium"
                                        Foreground="{DynamicResource TextMuted}"
                                        HorizontalAlignment="Right"
                                        VerticalAlignment="Center"
@@ -224,7 +225,7 @@
                             <TextBlock x:Name="OnLabel"
                                        Text="On"
                                        FontSize="11"
-                                       FontWeight="SemiBold"
+                                       FontWeight="Medium"
                                        Foreground="{DynamicResource TextOnAccent}"
                                        HorizontalAlignment="Left"
                                        VerticalAlignment="Center"
@@ -376,9 +377,9 @@
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- ════════════════════════════════════════════════════════════════ -->
-        <!-- LEFT RAIL — Google Material Navigation Drawer style             -->
-        <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- ================================================================ -->
+        <!-- LEFT RAIL  -  Google Material Navigation Drawer style             -->
+        <!-- ================================================================ -->
         <Border Grid.Column="0"
                 Background="{DynamicResource BgSidebar}"
                 BorderBrush="{DynamicResource Border}"
@@ -418,21 +419,21 @@
                                     MinWidth="0"
                                     Visibility="{Binding ShowNavigationRailLabels, Converter={StaticResource BoolToVisibilityConverter}}">
                             <TextBlock Text="DeskPhone"
-                                       FontSize="19" FontWeight="SemiBold"
+                                       FontSize="22" FontWeight="Medium"
                                        Foreground="{DynamicResource TextPrimary}"
                                        TextTrimming="CharacterEllipsis"/>
                             <TextBlock Text="{Binding BuildNumberLabel}"
                                        Margin="0,2,0,0"
                                        FontSize="11"
-                                       FontWeight="SemiBold"
+                                       FontWeight="Medium"
                                        Foreground="{DynamicResource TextMuted}"
                                        TextWrapping="NoWrap"
                                        TextTrimming="CharacterEllipsis"
                                        ToolTip="{Binding BuildNumberLabel}"/>
                             <TextBlock Text="{Binding BuildTimeLabel}"
                                        Margin="0,2,0,0"
-                                       FontSize="10"
-                                       FontWeight="SemiBold"
+                                       FontSize="11"
+                                       FontWeight="Medium"
                                        Foreground="{DynamicResource TextMuted}"
                                        TextWrapping="NoWrap"
                                        TextTrimming="CharacterEllipsis"
@@ -675,7 +676,7 @@
                                     </Grid>
                                     <TextBlock Text="{Binding ConnectionRailSubtitle}"
                                                Margin="16,7,0,0"
-                                               FontSize="10"
+                                               FontSize="11"
                                                Foreground="{DynamicResource TextMuted}"
                                                TextWrapping="Wrap"
                                                LineHeight="15"/>
@@ -729,7 +730,7 @@
                                     </Ellipse>
                                     <TextBlock Text="BT"
                                                FontSize="11"
-                                               FontWeight="SemiBold"
+                                               FontWeight="Medium"
                                                Foreground="{DynamicResource TextMuted}"
                                                HorizontalAlignment="Center"/>
                                 </StackPanel>
@@ -755,8 +756,8 @@
                                     CornerRadius="10"
                                     ToolTip="{Binding BuildBadge}">
                                 <TextBlock Text="{Binding BuildBadge}"
-                                           FontSize="9"
-                                           FontWeight="SemiBold"
+                                           FontSize="11"
+                                           FontWeight="Medium"
                                            Foreground="{DynamicResource TextMuted}"
                                            TextAlignment="Center"
                                            TextTrimming="CharacterEllipsis"/>
@@ -769,9 +770,9 @@
 
         <GridSplitter x:Name="ShellNavigationSplitter" Grid.Column="1" Style="{StaticResource MacSplitter}"/>
 
-        <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- ================================================================ -->
         <!-- RIGHT CONTENT AREA                                               -->
-        <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- ================================================================ -->
         <Grid Grid.Column="2" Background="{DynamicResource BgSidebar}">
             <Grid.RowDefinitions>
                 <!-- Reconnect prompt banner -->
@@ -784,7 +785,7 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- ── Reconnect prompt ──────────────────────────────────────── -->
+            <!-- Reconnect prompt -->
             <Border Grid.Row="0"
                     Margin="24,16,24,0" CornerRadius="12" Padding="18,13"
                     Background="{DynamicResource AccentBlueLight}"
@@ -851,7 +852,7 @@
                 </Grid>
             </Border>
 
-            <!-- ── Active call / ringing banner ─────────────────────────── -->
+            <!-- Active call / ringing banner -->
             <Border Grid.Row="0" Grid.RowSpan="4"
                     Panel.ZIndex="520"
                     Background="#66081420"
@@ -870,7 +871,7 @@
                         <StackPanel>
                             <TextBlock Text="{Binding BuildUpdateTitle}"
                                        FontSize="22"
-                                       FontWeight="SemiBold"
+                                       FontWeight="Medium"
                                        Foreground="{DynamicResource TextPrimary}"/>
                             <TextBlock Text="{Binding BuildUpdateBody}"
                                        Margin="0,12,0,0"
@@ -912,7 +913,7 @@
                                    VerticalAlignment="Center"/>
                         <TextBlock Text="New Build Available"
                                    FontSize="12"
-                                   FontWeight="SemiBold"
+                                   FontWeight="Medium"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
@@ -965,7 +966,7 @@
                     </Border>
 
                     <TextBlock Grid.Column="1" Text="{Binding CallBannerText}"
-                               FontSize="16" FontWeight="SemiBold"
+                               FontSize="16" FontWeight="Medium"
                                Foreground="{DynamicResource TextPrimary}"
                                VerticalAlignment="Center"/>
 
@@ -1020,9 +1021,9 @@
                 </Grid>
             </Border>
 
-            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- ================================================================ -->
             <!-- TAB: MESSAGES                                                -->
-            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- ================================================================ -->
             <Grid Grid.Row="3" x:Name="MessagesRootGrid">
                 <Grid.Style>
                     <Style TargetType="Grid">
@@ -1042,7 +1043,7 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- ── Left: conversation list ─────────────────────────── -->
+                <!-- Left: conversation list -->
                 <Border Grid.Column="0"
                         Background="{DynamicResource SurfaceContainerLow}"
                         BorderBrush="{DynamicResource Border}"
@@ -1062,7 +1063,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="Messages"
-                                               FontSize="22" FontWeight="SemiBold"
+                                               FontSize="22" FontWeight="Medium"
                                                Foreground="{DynamicResource TextPrimary}"/>
                                     <!-- History loading indicator -->
                                     <Border Grid.Column="1" CornerRadius="10" Padding="8,3"
@@ -1085,10 +1086,10 @@
                                                 Margin="4,0,0,0">
                                             <Button.Style>
                                                 <Style TargetType="Button" BasedOn="{StaticResource CompactIconButton}">
-                                                    <Setter Property="ToolTip" Value="Sort: Recent first — click for Unread first"/>
+                                                    <Setter Property="ToolTip" Value="Sort: Recent first  -  click for Unread first"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsUnreadFirstSortMode}" Value="True">
-                                                            <Setter Property="ToolTip" Value="Sort: Unread first — click for Recent first"/>
+                                                            <Setter Property="ToolTip" Value="Sort: Unread first  -  click for Recent first"/>
                                                             <Setter Property="Foreground" Value="{DynamicResource AccentBlue}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
@@ -1119,7 +1120,7 @@
                                                  AutomationProperties.AutomationId="ConversationSearchBox"
                                                  Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
                                                  BorderThickness="0" Background="Transparent"
-                                                 FontSize="13" VerticalAlignment="Center"
+                                                 FontSize="14" VerticalAlignment="Center"
                                                  MinHeight="32"
                                                  Foreground="{DynamicResource TextPrimary}">
                                             <TextBox.Style>
@@ -1259,7 +1260,7 @@
                             <TextBlock Text="&#xE0CA;" Style="{StaticResource MaterialIconText}" FontSize="48" Foreground="{DynamicResource Border}"
                                        HorizontalAlignment="Center" Margin="0,0,0,12"/>
                             <TextBlock Text="{Binding ConversationEmptyStateText}"
-                                       FontSize="15" FontWeight="Medium"
+                                       FontSize="16" FontWeight="Medium"
                                        Foreground="{DynamicResource TextMuted}"
                                        HorizontalAlignment="Center"/>
                         </StackPanel>
@@ -1325,7 +1326,7 @@
                                                     Background="{DynamicResource AccentBlueLight}"
                                                     VerticalAlignment="Center" Margin="0,0,10,0">
                                                 <TextBlock Text="{Binding AvatarInitial}"
-                                                           FontSize="15" FontWeight="SemiBold"
+                                                           FontSize="16" FontWeight="Medium"
                                                            Foreground="{DynamicResource AccentBlue}"
                                                            HorizontalAlignment="Center"
                                                            VerticalAlignment="Center"/>
@@ -1351,7 +1352,7 @@
                                                            TextTrimming="CharacterEllipsis">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock">
-                                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                                            <Setter Property="FontWeight" Value="Medium"/>
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsUnread}" Value="True">
                                                                     <Setter Property="FontWeight" Value="Bold"/>
@@ -1366,28 +1367,28 @@
                                                             Margin="10,0,0,0">
                                                     <TextBlock Text="Pinned"
                                                                FontSize="11"
-                                                               FontWeight="SemiBold"
+                                                               FontWeight="Medium"
                                                                Foreground="{DynamicResource AccentBlue}"
                                                                Margin="0,0,8,0"
                                                                Visibility="{Binding IsPinned,
                                                                    Converter={StaticResource BoolToVisibilityConverter}}"/>
                                                     <TextBlock Text="Alerts off"
                                                                FontSize="11"
-                                                               FontWeight="SemiBold"
+                                                               FontWeight="Medium"
                                                                Foreground="{DynamicResource TextMuted}"
                                                                Margin="0,0,8,0"
                                                                Visibility="{Binding AreAlertsMuted,
                                                                    Converter={StaticResource BoolToVisibilityConverter}}"/>
                                                     <TextBlock Text="Blocked"
                                                                FontSize="11"
-                                                               FontWeight="SemiBold"
+                                                               FontWeight="Medium"
                                                                Foreground="{DynamicResource AccentRed}"
                                                                Visibility="{Binding IsBlocked,
                                                                    Converter={StaticResource BoolToVisibilityConverter}}"/>
                                                 </StackPanel>
                                                 <TextBlock Grid.Column="2"
                                                            Text="{Binding TimestampDisplay}"
-                                                           FontSize="13"
+                                                           FontSize="14"
                                                            Foreground="{DynamicResource TextMuted}"
                                                            VerticalAlignment="Center"
                                                            Margin="12,0,0,0">
@@ -1397,7 +1398,7 @@
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsUnread}" Value="True">
                                                                     <Setter Property="Foreground" Value="{DynamicResource AccentBlue}"/>
-                                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                    <Setter Property="FontWeight" Value="Medium"/>
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
@@ -1406,7 +1407,7 @@
                                             </Grid>
                                             <TextBlock Grid.Row="1"
                                                        Text="{Binding PreviewText}"
-                                                       FontSize="15"
+                                                       FontSize="16"
                                                        Foreground="{DynamicResource TextMuted}"
                                                        TextTrimming="CharacterEllipsis"
                                                        Margin="0,4,0,0">
@@ -1415,7 +1416,7 @@
                                                         <Setter Property="FontWeight" Value="Normal"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsUnread}" Value="True">
-                                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                <Setter Property="FontWeight" Value="Medium"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -1431,7 +1432,7 @@
 
                 <GridSplitter x:Name="MessagesListSplitter" Grid.Column="1" Style="{StaticResource MacSplitter}"/>
 
-                <!-- ── Right: thread view + compose ───────────────────── -->
+                <!-- Right: thread view + compose -->
                 <Grid Grid.Column="2" Background="{DynamicResource BgMain}">
 
                     <!-- Empty placeholder -->
@@ -1459,7 +1460,7 @@
                                    Foreground="{DynamicResource TextMuted}"
                                    HorizontalAlignment="Center"/>
                         <TextBlock Text="or start a new one"
-                                   FontSize="13" Foreground="{DynamicResource TextDisabled}"
+                                   FontSize="14" Foreground="{DynamicResource TextDisabled}"
                                    HorizontalAlignment="Center" Margin="0,6,0,0"/>
                     </StackPanel>
 
@@ -1485,13 +1486,13 @@
                                 <Border Grid.Column="0" Width="42" Height="42" CornerRadius="12"
                                         Background="{DynamicResource AccentBlueLight}" Margin="0,0,14,0">
                                     <TextBlock Text="{Binding SelectedConversation.AvatarInitial}"
-                                               FontSize="16" FontWeight="SemiBold"
+                                               FontSize="16" FontWeight="Medium"
                                                Foreground="{DynamicResource AccentBlue}"
                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding SelectedConversation.DisplayName}"
-                                               FontSize="17" FontWeight="SemiBold"
+                                               FontSize="16" FontWeight="Medium"
                                                Foreground="{DynamicResource TextPrimary}"/>
                                      <TextBlock Text="{Binding SelectedConversation.FormattedPhone}"
                                                 FontSize="12" Foreground="{DynamicResource TextMuted}"
@@ -1537,28 +1538,28 @@
                                      <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                                         <TextBlock Text="Pinned"
                                                    FontSize="11"
-                                                   FontWeight="SemiBold"
+                                                   FontWeight="Medium"
                                                    Foreground="{DynamicResource AccentBlue}"
                                                    Margin="0,0,10,0"
                                                    Visibility="{Binding IsSelectedConversationPinned,
                                                        Converter={StaticResource BoolToVisibilityConverter}}"/>
                                         <TextBlock Text="Alerts off"
                                                    FontSize="11"
-                                                   FontWeight="SemiBold"
+                                                   FontWeight="Medium"
                                                    Foreground="{DynamicResource TextMuted}"
                                                    Margin="0,0,10,0"
                                                    Visibility="{Binding AreSelectedConversationAlertsMuted,
                                                        Converter={StaticResource BoolToVisibilityConverter}}"/>
                                         <TextBlock Text="{Binding SelectedConversationPinnedSummary}"
                                                    FontSize="11"
-                                                   FontWeight="SemiBold"
+                                                   FontWeight="Medium"
                                                    Foreground="{DynamicResource AccentBlue}"
                                                    Margin="0,0,10,0"
                                                    Visibility="{Binding HasSelectedConversationPinnedMessages,
                                                        Converter={StaticResource BoolToVisibilityConverter}}"/>
                                         <TextBlock Text="Blocked"
                                                    FontSize="11"
-                                                   FontWeight="SemiBold"
+                                                   FontWeight="Medium"
                                                    Foreground="{DynamicResource AccentRed}"
                                                    Visibility="{Binding IsSelectedConversationBlocked,
                                                        Converter={StaticResource BoolToVisibilityConverter}}"/>
@@ -1641,7 +1642,7 @@
                                         <Border Grid.Column="0" Width="34" Height="34" CornerRadius="10"
                                                 Background="{DynamicResource AccentBlueLight}" Margin="0,0,12,0">
                                             <TextBlock Text="{Binding SelectedConversation.AvatarInitial}"
-                                                       FontSize="14" FontWeight="SemiBold"
+                                                       FontSize="14" FontWeight="Medium"
                                                        Foreground="{DynamicResource AccentBlue}"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Border>
@@ -1657,7 +1658,7 @@
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Row="0" Grid.Column="0" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding SelectedConversation.DisplayName}"
-                                                           FontSize="16" FontWeight="SemiBold"
+                                                           FontSize="16" FontWeight="Medium"
                                                            Foreground="{DynamicResource TextPrimary}"
                                                            TextTrimming="CharacterEllipsis"/>
                                                 <TextBlock Text="{Binding SelectedConversation.FormattedPhone}"
@@ -1707,28 +1708,28 @@
                                             <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,4,0,0">
                                                 <TextBlock Text="Pinned"
                                                            FontSize="11"
-                                                           FontWeight="SemiBold"
+                                                           FontWeight="Medium"
                                                            Foreground="{DynamicResource AccentBlue}"
                                                            Margin="0,0,10,0"
                                                            Visibility="{Binding IsSelectedConversationPinned,
                                                                Converter={StaticResource BoolToVisibilityConverter}}"/>
                                                 <TextBlock Text="Alerts off"
                                                            FontSize="11"
-                                                           FontWeight="SemiBold"
+                                                           FontWeight="Medium"
                                                            Foreground="{DynamicResource TextMuted}"
                                                            Margin="0,0,10,0"
                                                            Visibility="{Binding AreSelectedConversationAlertsMuted,
                                                                Converter={StaticResource BoolToVisibilityConverter}}"/>
                                                 <TextBlock Text="{Binding SelectedConversationPinnedSummary}"
                                                            FontSize="11"
-                                                           FontWeight="SemiBold"
+                                                           FontWeight="Medium"
                                                            Foreground="{DynamicResource AccentBlue}"
                                                            Margin="0,0,10,0"
                                                            Visibility="{Binding HasSelectedConversationPinnedMessages,
                                                                Converter={StaticResource BoolToVisibilityConverter}}"/>
                                                 <TextBlock Text="Blocked"
                                                            FontSize="11"
-                                                           FontWeight="SemiBold"
+                                                           FontWeight="Medium"
                                                            Foreground="{DynamicResource AccentRed}"
                                                            Visibility="{Binding IsSelectedConversationBlocked,
                                                                Converter={StaticResource BoolToVisibilityConverter}}"/>
@@ -1801,11 +1802,11 @@
                                                Foreground="{DynamicResource TextMuted}"
                                                HorizontalAlignment="Center"/>
                                     <TextBlock Text="or start a new one"
-                                               FontSize="13" Foreground="{DynamicResource TextDisabled}"
+                                               FontSize="14" Foreground="{DynamicResource TextDisabled}"
                                                HorizontalAlignment="Center" Margin="0,6,0,0"/>
                                 </StackPanel>
 
-                                <!-- Copied toast — appears briefly after single-click copy -->
+                                <!-- Copied toast  -  appears briefly after single-click copy -->
                                 <Border Grid.Row="1"
                                         HorizontalAlignment="Center" VerticalAlignment="Top"
                                         Margin="0,8,0,0" Padding="14,6" CornerRadius="10" Panel.ZIndex="10"
@@ -1813,7 +1814,7 @@
                                         Visibility="{Binding CopiedToast,
                                             Converter={StaticResource NullOrEmptyToCollapsedConverter}}">
                                     <TextBlock Text="{Binding CopiedToast}"
-                                               Foreground="White" FontSize="13" FontWeight="Medium"/>
+                                               Foreground="White" FontSize="14" FontWeight="Medium"/>
                                 </Border>
 
                                 <Border Grid.Row="1"
@@ -1861,8 +1862,8 @@
                                                     MouseLeftButtonUp="BubbleTap_Click"
                                                     Cursor="Hand">
                                             <!-- Date Divider -->
-                                            <TextBlock Text="{Binding DateDividerText}" 
-                                                       FontSize="12" FontWeight="SemiBold"
+                                            <TextBlock Text="{Binding DateDividerText}"
+                                                       FontSize="12" FontWeight="Medium"
                                                        Foreground="{DynamicResource TextMuted}"
                                                        HorizontalAlignment="Center"
                                                        Margin="0,16,0,16">
@@ -1910,7 +1911,7 @@
                                                     <Border.ContextMenu>
                                                         <ContextMenu>
                                                             <MenuItem Header="Copy" Click="BubbleCopy_Click"/>
-                                                            <MenuItem Header="Forward…" Click="BubbleForward_Click"/>
+                                                            <MenuItem Header="Forward..." Click="BubbleForward_Click"/>
                                                             <MenuItem Header="Call" Click="BubbleCall_Click"/>
                                                             <MenuItem Header="{Binding PinActionLabel}" Click="BubblePin_Click"/>
                                                             <Separator/>
@@ -1990,7 +1991,7 @@
                                                                             <StackPanel Grid.Column="1">
                                                                                 <TextBlock Text="{Binding DisplayName}"
                                                                                            FontSize="12"
-                                                                                           FontWeight="SemiBold"
+                                                                                           FontWeight="Medium"
                                                                                            Foreground="{DynamicResource TextPrimary}"
                                                                                            TextTrimming="CharacterEllipsis"/>
                                                                                 <TextBlock Text="{Binding TypeLabel}"
@@ -2020,7 +2021,7 @@
                                                             <TextBlock Grid.Column="0"
                                                                        Text="&#xF10D;"
                                                                        Style="{StaticResource MaterialIconText}"
-                                                                       FontSize="13"
+                                                                       FontSize="14"
                                                                        Foreground="{DynamicResource AccentBlue}"
                                                                        Margin="0,0,6,0"
                                                                        VerticalAlignment="Center"
@@ -2093,7 +2094,7 @@
                                                     <Border.ContextMenu>
                                                         <ContextMenu>
                                                             <MenuItem Header="Copy" Click="BubbleCopy_Click"/>
-                                                            <MenuItem Header="Forward…" Click="BubbleForward_Click"/>
+                                                            <MenuItem Header="Forward..." Click="BubbleForward_Click"/>
                                                             <MenuItem Header="Call" Click="BubbleCall_Click"/>
                                                             <MenuItem Header="{Binding PinActionLabel}" Click="BubblePin_Click"/>
                                                             <Separator/>
@@ -2172,7 +2173,7 @@
                                                                             <StackPanel Grid.Column="1">
                                                                                 <TextBlock Text="{Binding DisplayName}"
                                                                                            FontSize="12"
-                                                                                           FontWeight="SemiBold"
+                                                                                           FontWeight="Medium"
                                                                                            Foreground="#FFFFFFFF"
                                                                                            TextTrimming="CharacterEllipsis"/>
                                                                                 <TextBlock Text="{Binding TypeLabel}"
@@ -2203,7 +2204,7 @@
                                                             </Grid.ColumnDefinitions>
                                                             <TextBlock Grid.Column="0"
                                                                        Text="{Binding OutgoingStatusIcon}"
-                                                                       FontSize="13"
+                                                                       FontSize="14"
                                                                        VerticalAlignment="Center"
                                                                        Margin="0,0,4,0">
                                                                 <TextBlock.Style>
@@ -2235,7 +2236,7 @@
                                                             <TextBlock Grid.Column="2"
                                                                        Text="&#xE5D5;"
                                                                        Style="{StaticResource MaterialIconText}"
-                                                                       FontSize="13"
+                                                                       FontSize="14"
                                                                        Foreground="#FFFFCDD2"
                                                                        Margin="8,0,0,0"
                                                                        VerticalAlignment="Center"
@@ -2250,7 +2251,7 @@
                                                             <TextBlock Grid.Column="3"
                                                                        Text="&#xF10D;"
                                                                        Style="{StaticResource MaterialIconText}"
-                                                                       FontSize="13"
+                                                                       FontSize="14"
                                                                        Foreground="#B3FFFFFF"
                                                                        Margin="0,0,6,0"
                                                                        VerticalAlignment="Center"
@@ -2358,7 +2359,7 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0"
                                                    Text="{Binding UndoMessageDeleteText}"
-                                                   FontSize="13"
+                                                   FontSize="14"
                                                    Foreground="{DynamicResource TextSecond}"
                                                    VerticalAlignment="Center"
                                                    TextTrimming="CharacterEllipsis"/>
@@ -2497,7 +2498,7 @@
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0">
                                                 <TextBlock Text="Phone"
-                                                           FontSize="18" FontWeight="SemiBold"
+                                                           FontSize="18" FontWeight="Medium"
                                                            Foreground="{DynamicResource TextPrimary}"/>
                                                  <TextBlock Text="Recent calls stay visible."
                                                             FontSize="12"
@@ -2529,7 +2530,7 @@
                                                                         <Setter Property="FontWeight" Value="Normal"/>
                                                                         <Style.Triggers>
                                                                             <DataTrigger Binding="{Binding HasMissedCallAlert}" Value="True">
-                                                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                                <Setter Property="FontWeight" Value="Medium"/>
                                                                             </DataTrigger>
                                                                         </Style.Triggers>
                                                                     </Style>
@@ -2610,7 +2611,7 @@
                                                                         Margin="0,0,6,0"/>
                                                              <TextBlock Text="Keypad"
                                                                         FontSize="12"
-                                                                        FontWeight="SemiBold"
+                                                                        FontWeight="Medium"
                                                                         VerticalAlignment="Center"/>
                                                          </StackPanel>
                                                      </Button>
@@ -2678,8 +2679,8 @@
                                         </Border.Style>
                                         <StackPanel>
                                             <TextBlock Text="Pinned Messages"
-                                                       FontSize="15"
-                                                       FontWeight="SemiBold"
+                                                       FontSize="16"
+                                                       FontWeight="Medium"
                                                        Foreground="{DynamicResource TextPrimary}"/>
                                             <TextBlock Text="Pinned notes from this thread stay one click away."
                                                        FontSize="12"
@@ -2711,8 +2712,8 @@
                                                                                VerticalAlignment="Top"/>
                                                                     <StackPanel Grid.Column="1">
                                                                         <TextBlock Text="{Binding PreviewBody}"
-                                                                                   FontSize="13"
-                                                                                   FontWeight="SemiBold"
+                                                                                   FontSize="14"
+                                                                                   FontWeight="Medium"
                                                                                    Foreground="{DynamicResource TextPrimary}"
                                                                                    TextWrapping="Wrap"
                                                                                    LineHeight="18"
@@ -2809,7 +2810,7 @@
                                                         <StackPanel Grid.Column="1">
                                                             <TextBlock Text="{Binding DisplayNumber}"
                                                                        FontSize="18"
-                                                                       FontWeight="SemiBold"
+                                                                       FontWeight="Medium"
                                                                        Foreground="{DynamicResource TextPrimary}"
                                                                        TextTrimming="CharacterEllipsis"
                                                                        ToolTip="{Binding DisplayNumber}"/>
@@ -2889,8 +2890,8 @@
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Grid.Column="0"
                                                            Text="Keypad"
-                                                           FontSize="15"
-                                                           FontWeight="SemiBold"
+                                                           FontSize="16"
+                                                           FontWeight="Medium"
                                                            Foreground="{DynamicResource TextPrimary}"
                                                            VerticalAlignment="Center"/>
                                                 <Button Grid.Column="1"
@@ -2909,7 +2910,7 @@
                                                 <TextBox Grid.Column="0"
                                                          Text="{Binding DialNumber, UpdateSourceTrigger=PropertyChanged}"
                                                          FontSize="22"
-                                                         FontWeight="Light"
+                                                         FontWeight="Normal"
                                                          TextAlignment="Center"
                                                          BorderThickness="0"
                                                          Background="Transparent"
@@ -2945,8 +2946,8 @@
                                                                      </Grid.ColumnDefinitions>
                                                                      <StackPanel Grid.Column="0" Margin="0,0,8,0">
                                                                          <TextBlock Text="{Binding DisplayName}"
-                                                                                    FontSize="13"
-                                                                                    FontWeight="SemiBold"
+                                                                                    FontSize="14"
+                                                                                    FontWeight="Medium"
                                                                                     TextTrimming="CharacterEllipsis"/>
                                                                          <TextBlock Text="{Binding FormattedPhone}"
                                                                                     FontSize="11"
@@ -3007,8 +3008,8 @@
                                                                      Visibility="{Binding HasVoicemailAlert, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                                         </Grid>
                                                         <TextBlock Text="Voicemail"
-                                                                   FontSize="13"
-                                                                   FontWeight="SemiBold"
+                                                                   FontSize="14"
+                                                                   FontWeight="Medium"
                                                                    VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Grid>
@@ -3026,7 +3027,7 @@
                                                                Margin="0,0,8,0"/>
                                                     <TextBlock Text="Call"
                                                                FontSize="14"
-                                                               FontWeight="SemiBold"
+                                                               FontWeight="Medium"
                                                                Foreground="White"
                                                                VerticalAlignment="Center"/>
                                                 </StackPanel>
@@ -3063,7 +3064,7 @@
                                         Height="36" Padding="16,0" Margin="0,0,16,0"
                                         Click="CloseComposeButton_Click"/>
                                 <TextBlock Grid.Column="1" Text="New Message"
-                                           FontSize="17" FontWeight="SemiBold"
+                                           FontSize="16" FontWeight="Medium"
                                            Foreground="{DynamicResource TextPrimary}"
                                            VerticalAlignment="Center"/>
                             </Grid>
@@ -3096,7 +3097,7 @@
                                                         CommandParameter="{Binding}"
                                                         Click="ComposeContactSuggestion_Click">
                                                     <StackPanel>
-                                                        <TextBlock Text="{Binding DisplayName}" FontSize="14" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding DisplayName}" FontSize="14" FontWeight="Medium"/>
                                                         <TextBlock Text="{Binding FormattedPhone}" FontSize="12" Foreground="{DynamicResource TextMuted}" Margin="0,3,0,0"/>
                                                     </StackPanel>
                                                 </Button>
@@ -3107,7 +3108,7 @@
                                 <Border Background="{DynamicResource BgHover}" CornerRadius="12" Padding="12,10" Margin="0,10,0,0"
                                         Visibility="{Binding HasSelectedComposeContact, Converter={StaticResource BoolToVisibilityConverter}}">
                                     <StackPanel>
-                                        <TextBlock Text="{Binding SelectedComposeContactName}" FontSize="14" FontWeight="SemiBold"
+                                        <TextBlock Text="{Binding SelectedComposeContactName}" FontSize="14" FontWeight="Medium"
                                                    Foreground="{DynamicResource TextPrimary}"/>
                                         <TextBlock Text="{Binding SelectedComposeContactPhone}" FontSize="12"
                                                    Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
@@ -3160,7 +3161,7 @@
                                 </Button>
                                 <Button Grid.Column="1" Content="Send Message"
                                         Style="{StaticResource PrimaryButton}"
-                                        FontSize="15" FontWeight="SemiBold" Height="48"
+                                        FontSize="16" FontWeight="Medium" Height="48"
                                         Command="{Binding SendMessageCommand}"/>
                             </Grid>
                             <ItemsControl Grid.Row="2" Grid.ColumnSpan="2" ItemsSource="{Binding ComposeAttachments}" Margin="0,58,0,0"
@@ -3190,9 +3191,9 @@
                 </Grid>
             </Grid>
 
-            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- ================================================================ -->
             <!-- TAB: CALLS                                                   -->
-            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- ================================================================ -->
             <Grid Grid.Row="3" x:Name="CallsRootGrid">
                 <Grid.Style>
                     <Style TargetType="Grid">
@@ -3263,7 +3264,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0"
                                                Text="Recents"
-                                               FontSize="22" FontWeight="SemiBold"
+                                               FontSize="22" FontWeight="Medium"
                                                Foreground="{DynamicResource TextPrimary}"/>
                                     <Button Grid.Column="1"
                                             Content="&#xE872;"
@@ -3319,7 +3320,7 @@
                                                         <Setter Property="FontWeight" Value="Normal"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding HasMissedCallAlert}" Value="True">
-                                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                <Setter Property="FontWeight" Value="Medium"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -3427,7 +3428,7 @@
                             <TextBlock Text="&#xE0B0;" Style="{StaticResource MaterialIconText}" FontSize="48" Foreground="{DynamicResource Border}"
                                        HorizontalAlignment="Center" Margin="0,0,0,12"/>
                             <TextBlock Text="No recent calls"
-                                       FontSize="15" FontWeight="Medium"
+                                       FontSize="16" FontWeight="Medium"
                                        Foreground="{DynamicResource TextMuted}"
                                        HorizontalAlignment="Center"/>
                         </StackPanel>
@@ -3464,7 +3465,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding DisplayNumber}"
-                                                       FontSize="15" FontWeight="SemiBold">
+                                                       FontSize="16" FontWeight="Medium">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
                                                         <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
@@ -3477,11 +3478,11 @@
                                                 </TextBlock.Style>
                                             </TextBlock>
                                             <TextBlock Text="{Binding SubtitleDisplay}"
-                                                       FontSize="13" Foreground="{DynamicResource TextMuted}"
+                                                       FontSize="14" Foreground="{DynamicResource TextMuted}"
                                                        Margin="0,2,0,0"/>
                                         </StackPanel>
                                         <TextBlock Grid.Column="1" Text="{Binding TimeDisplay}"
-                                                   FontSize="13" Foreground="{DynamicResource TextMuted}"
+                                                   FontSize="14" Foreground="{DynamicResource TextMuted}"
                                                    VerticalAlignment="Center"/>
                                         <Border Grid.Column="0"
                                                 Grid.ColumnSpan="2"
@@ -3567,7 +3568,7 @@
                             <TextBlock Grid.Column="0"
                                        Text="Dialer"
                                        FontSize="21"
-                                       FontWeight="SemiBold"
+                                       FontWeight="Medium"
                                        Foreground="{DynamicResource TextPrimary}"/>
                             <Button Grid.Column="1"
                                     Content="&#xE5CD;"
@@ -3587,7 +3588,7 @@
                                      AutomationProperties.Name="Dial number or contact"
                                      AutomationProperties.AutomationId="MainDialNumberBox"
                                      Text="{Binding DialNumber, UpdateSourceTrigger=PropertyChanged}"
-                                     FontSize="26" FontWeight="Light"
+                                     FontSize="24" FontWeight="Normal"
                                      TextAlignment="Left"
                                      BorderThickness="0" Background="Transparent"
                                      Padding="10" VerticalAlignment="Center"/>
@@ -3647,7 +3648,7 @@
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                                        <TextBlock Text="{Binding DisplayName}" FontSize="14" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding DisplayName}" FontSize="14" FontWeight="Medium"/>
                                                         <TextBlock Text="{Binding FormattedPhone}" FontSize="12" Foreground="{DynamicResource TextMuted}" Margin="0,3,0,0"/>
                                                     </StackPanel>
                                                     <Button Grid.Column="1"
@@ -3705,8 +3706,8 @@
                                                  Visibility="{Binding HasVoicemailAlert, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                     </Grid>
                                     <TextBlock Text="Voicemail"
-                                               FontSize="13"
-                                               FontWeight="SemiBold"
+                                               FontSize="14"
+                                               FontWeight="Medium"
                                                VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Grid>
@@ -3749,9 +3750,9 @@
                 </Border>
             </Grid>
 
-            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- ================================================================ -->
             <!-- TAB: CONTACTS                                                -->
-            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- ================================================================ -->
             <Border Grid.Row="3" Padding="40,32" Background="{DynamicResource BgSidebar}">
                 <Border.Style>
                     <Style TargetType="Border">
@@ -3778,7 +3779,7 @@
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="Contacts"
                                        FontSize="28"
-                                       FontWeight="SemiBold"
+                                       FontWeight="Medium"
                                        Foreground="{DynamicResource TextPrimary}"/>
                             <TextBlock Text="Search saved contacts, then call, text, edit, or add from one place instead of hopping through Settings."
                                        Margin="0,8,0,0"
@@ -3844,7 +3845,7 @@
                                                 <StackPanel>
                                                     <TextBlock Text="{Binding DisplayName}"
                                                                FontSize="14"
-                                                               FontWeight="SemiBold"
+                                                               FontWeight="Medium"
                                                                Foreground="{DynamicResource TextPrimary}"/>
                                                     <TextBlock Text="{Binding PrimaryPhone}"
                                                                Margin="0,4,0,0"
@@ -3877,11 +3878,11 @@
                                     <TextBlock Text="CONTACT ACTIONS" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
                                     <TextBlock Text="{Binding SelectedEditableContactDisplayName}"
                                                FontSize="20"
-                                               FontWeight="SemiBold"
+                                               FontWeight="Medium"
                                                Foreground="{DynamicResource TextPrimary}"/>
                                     <TextBlock Text="Use a saved number below to text or call it directly, then edit the contact details underneath."
                                                Margin="0,8,0,0"
-                                               FontSize="13"
+                                               FontSize="14"
                                                Foreground="{DynamicResource TextMuted}"
                                                TextWrapping="Wrap"
                                                LineHeight="20"/>
@@ -3902,8 +3903,8 @@
                                                         </Grid.ColumnDefinitions>
                                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                                             <TextBlock Text="{Binding FormattedPhone}"
-                                                                       FontSize="15"
-                                                                       FontWeight="SemiBold"
+                                                                       FontSize="16"
+                                                                       FontWeight="Medium"
                                                                        Foreground="{DynamicResource TextPrimary}"/>
                                                             <TextBlock Text="Saved number"
                                                                        Margin="0,4,0,0"
@@ -3935,7 +3936,7 @@
                                             Margin="0,12,0,0"
                                             Visibility="{Binding HasSelectedEditableContact, Converter={StaticResource InverseBoolConverter}}">
                                         <TextBlock Text="Select a saved contact to light up its call and text actions here."
-                                                   FontSize="13"
+                                                   FontSize="14"
                                                    Foreground="{DynamicResource TextMuted}"
                                                    TextWrapping="Wrap"
                                                    LineHeight="20"/>
@@ -3957,7 +3958,7 @@
                                     <TextBlock Text="EDITOR" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
                                     <TextBlock Text="{Binding ContactEditorTitle}"
                                                FontSize="18"
-                                               FontWeight="SemiBold"
+                                               FontWeight="Medium"
                                                Foreground="{DynamicResource TextPrimary}"
                                                Margin="0,0,0,14"/>
                                     <TextBlock Text="NAME" Style="{StaticResource SectionLabel}" Margin="4,0,0,6"/>
@@ -3993,9 +3994,9 @@
                 </Grid>
             </Border>
 
-            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- ================================================================ -->
             <!-- TAB: SETTINGS                                                -->
-            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- ================================================================ -->
             <ScrollViewer Grid.Row="3" Padding="40,32" Background="{DynamicResource BgSidebar}">
                 <ScrollViewer.Style>
                     <Style TargetType="ScrollViewer" BasedOn="{StaticResource TouchScrollViewerStyle}">
@@ -4041,7 +4042,7 @@
                     </Border>
 
                     <StackPanel Grid.Column="2">
-                        <TextBlock Text="{Binding SettingsSectionTitle}" FontSize="28" FontWeight="SemiBold"
+                        <TextBlock Text="{Binding SettingsSectionTitle}" FontSize="28" FontWeight="Medium"
                                    Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,6"/>
                         <TextBlock Text="{Binding SettingsSectionDescription}"
                                    FontSize="14" Foreground="{DynamicResource TextMuted}"
@@ -4059,10 +4060,10 @@
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Margin="0,0,16,0">
                                                 <TextBlock Text="{Binding QuickConnectDeviceName}"
-                                                           FontSize="17" FontWeight="SemiBold"
+                                                           FontSize="16" FontWeight="Medium"
                                                            Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,4"/>
                                                 <TextBlock Text="{Binding QuickConnectDeviceSummary}"
-                                                           FontSize="13" Foreground="{DynamicResource TextMuted}"
+                                                           FontSize="14" Foreground="{DynamicResource TextMuted}"
                                                            TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,8"/>
                                                 <TextBlock Text="{Binding QuickConnectDevice.Address}"
                                                            FontSize="12" Foreground="{DynamicResource TextMuted}"
@@ -4119,7 +4120,7 @@
                                                         <TextBlock Grid.Column="2"
                                                                    Text="Default"
                                                                    FontSize="12"
-                                                                   FontWeight="SemiBold"
+                                                                   FontWeight="Medium"
                                                                    Foreground="{DynamicResource AccentGreen}"
                                                                    VerticalAlignment="Center"
                                                                    Margin="0,0,12,0"
@@ -4138,7 +4139,7 @@
                                     </ItemsControl>
 
                                     <TextBlock Text="No saved devices yet."
-                                               FontSize="13" Foreground="{DynamicResource TextMuted}"
+                                               FontSize="14" Foreground="{DynamicResource TextMuted}"
                                                Margin="0,0,0,12">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
@@ -4155,7 +4156,7 @@
                                     <Rectangle Fill="{DynamicResource Border}" Height="1" Margin="0,4,0,16"/>
                                     <TextBlock Text="SCAN AND PAIR" Style="{StaticResource SectionLabel}" Margin="0,0,0,10"/>
                                     <TextBlock Text="{Binding StatusBt}"
-                                               FontSize="13" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,12"/>
+                                               FontSize="14" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,12"/>
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                                         <Button Content="Scan for devices"
                                                 Style="{StaticResource TonalButton}"
@@ -4186,10 +4187,10 @@
                                     Visibility="{Binding HasPairingGuidance, Converter={StaticResource BoolToVisibilityConverter}}">
                                 <StackPanel>
                                     <TextBlock Text="How to connect"
-                                               FontSize="14" FontWeight="SemiBold"
+                                               FontSize="14" FontWeight="Medium"
                                                Foreground="{DynamicResource AccentAmber}" Margin="0,0,0,10"/>
                                     <TextBlock Text="{Binding PairingGuidance}"
-                                               FontSize="13" Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="14" Foreground="{DynamicResource TextPrimary}"
                                                TextWrapping="Wrap" LineHeight="22"/>
                                 </StackPanel>
                             </Border>
@@ -4208,10 +4209,10 @@
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" Margin="0,0,12,0">
                                                     <TextBlock Text="Text size and zoom"
-                                                               FontSize="15" FontWeight="SemiBold"
+                                                               FontSize="16" FontWeight="Medium"
                                                                Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,4"/>
                                                     <TextBlock Text="{Binding UiScaleDescription}"
-                                                               FontSize="13" Foreground="{DynamicResource TextMuted}"
+                                                               FontSize="14" Foreground="{DynamicResource TextMuted}"
                                                                TextWrapping="Wrap"/>
                                                 </StackPanel>
                                                 <Border Grid.Column="1"
@@ -4223,7 +4224,7 @@
                                                         VerticalAlignment="Top">
                                                     <TextBlock Text="{Binding UiScaleLabel}"
                                                                FontSize="12"
-                                                               FontWeight="SemiBold"
+                                                               FontWeight="Medium"
                                                                Foreground="{DynamicResource AccentBlue}"/>
                                                 </Border>
                                             </Grid>
@@ -4275,10 +4276,10 @@
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Margin="0,0,12,0">
                                                 <TextBlock Text="Dark mode"
-                                                           FontSize="15" FontWeight="SemiBold"
+                                                           FontSize="16" FontWeight="Medium"
                                                            Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,4"/>
                                                 <TextBlock Text="{Binding ThemeModeLabel}"
-                                                            FontSize="13" Foreground="{DynamicResource TextMuted}"/>
+                                                            FontSize="14" Foreground="{DynamicResource TextMuted}"/>
                                             </StackPanel>
                                             <ToggleButton Grid.Column="1"
                                                           Margin="0,0,10,0"
@@ -4294,10 +4295,10 @@
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Margin="0,0,12,0">
                                                 <TextBlock Text="Sync theme with Shamash app"
-                                                           FontSize="15" FontWeight="SemiBold"
+                                                           FontSize="16" FontWeight="Medium"
                                                            Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,4"/>
                                                 <TextBlock Text="{Binding ThemeSyncLabel}"
-                                                           FontSize="13"
+                                                           FontSize="14"
                                                            Foreground="{DynamicResource TextMuted}"
                                                            TextWrapping="Wrap"/>
                                                 <TextBlock Text="{Binding ThemeSyncRefreshStatus}"
@@ -4331,7 +4332,7 @@
                                             <TextBlock Grid.Column="0" Text="History Background Fetching"
                                                        VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}"
                                                        FontWeight="Medium" FontSize="14"/>
-                                            <ToggleButton Grid.Column="1" Margin="0,0,10,0" Padding="12,6" FontSize="13"
+                                            <ToggleButton Grid.Column="1" Margin="0,0,10,0" Padding="12,6" FontSize="14"
                                                           IsChecked="{Binding PauseHistoryActivity}">
                                                 <ToggleButton.Style>
                                                     <Style TargetType="ToggleButton">
@@ -4359,12 +4360,12 @@
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" Margin="0,0,12,0">
                                                 <TextBlock Text="UI auditor"
-                                                           FontSize="15"
-                                                           FontWeight="SemiBold"
+                                                           FontSize="16"
+                                                           FontWeight="Medium"
                                                            Foreground="{DynamicResource TextPrimary}"
                                                            Margin="0,0,0,4"/>
                                                 <TextBlock Text="Run the DeskPhone layout and accessibility audit."
-                                                           FontSize="13"
+                                                           FontSize="14"
                                                            Foreground="{DynamicResource TextMuted}"
                                                            TextWrapping="Wrap"/>
                                             </StackPanel>
@@ -4384,7 +4385,7 @@
                                 <StackPanel>
                                     <TextBlock Text="CONTACT SYNC" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
                                     <TextBlock Text="{Binding ContactSyncStatus}"
-                                               FontSize="13" Foreground="{DynamicResource TextMuted}"
+                                               FontSize="14" Foreground="{DynamicResource TextMuted}"
                                                TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,12"/>
                                     <TextBlock Text="DeskPhone now queues local contact adds, edits, and deletes to the per-phone sync outbox when a real helper contract exists. PBAP itself does not write contacts back to the handset."
                                                FontSize="12" Foreground="{DynamicResource TextMuted}"
@@ -4392,7 +4393,7 @@
                                     <Border Background="{DynamicResource BgHover}" CornerRadius="12" Padding="14,10" Margin="0,0,0,12">
                                         <StackPanel>
                                             <TextBlock Text="Starter VCF or synced per-phone folder"
-                                                       FontSize="13" FontWeight="Medium"
+                                                       FontSize="14" FontWeight="Medium"
                                                        Foreground="{DynamicResource TextPrimary}"/>
                                             <TextBlock Text="{Binding ContactSyncFolderPath}"
                                                        FontSize="12" Foreground="{DynamicResource TextMuted}"
@@ -4428,7 +4429,7 @@
                                 <StackPanel>
                                     <TextBlock Text="MESSAGE BACKUP EXPORT" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
                                     <TextBlock Text="{Binding MessageBackupExportStatus}"
-                                               FontSize="13" Foreground="{DynamicResource TextMuted}"
+                                               FontSize="14" Foreground="{DynamicResource TextMuted}"
                                                TextWrapping="Wrap" LineHeight="20" Margin="0,0,0,12"/>
                                     <TextBlock Text="Exports the current DeskPhone message store to a JSON file at a location you choose. This is separate from the app's automatic rotating safety backups."
                                                FontSize="12" Foreground="{DynamicResource TextMuted}"
@@ -4445,17 +4446,17 @@
                                 <StackPanel>
                                     <TextBlock Text="PHONE CALL-LOG SYNC" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
                                     <TextBlock Text="PBAP connection"
-                                               FontSize="16" FontWeight="SemiBold"
+                                               FontSize="16" FontWeight="Medium"
                                                Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,8"/>
                                     <Border Background="{DynamicResource BgHover}" CornerRadius="999" Padding="10,4"
                                             HorizontalAlignment="Left" Margin="0,0,0,12">
                                         <TextBlock Text="{Binding PbapBadgeText}"
                                                    FontSize="12"
-                                                   FontWeight="SemiBold"
+                                                   FontWeight="Medium"
                                                    Foreground="{Binding PbapBadgeForeground}"/>
                                     </Border>
                                     <TextBlock Text="{Binding PbapStatus}"
-                                               FontSize="13" Foreground="{DynamicResource TextMuted}"
+                                               FontSize="14" Foreground="{DynamicResource TextMuted}"
                                                TextWrapping="Wrap" LineHeight="20"/>
                                     <Border Background="{DynamicResource AccentAmberLight}"
                                             CornerRadius="16"
@@ -4467,11 +4468,11 @@
                                         <StackPanel>
                                             <TextBlock Text="{Binding PbapGuidanceTitle}"
                                                        FontSize="14"
-                                                       FontWeight="SemiBold"
+                                                       FontWeight="Medium"
                                                        Foreground="{DynamicResource AccentAmber}"
                                                        Margin="0,0,0,8"/>
                                             <TextBlock Text="{Binding PbapGuidance}"
-                                                       FontSize="13"
+                                                       FontSize="14"
                                                        Foreground="{DynamicResource TextPrimary}"
                                                        TextWrapping="Wrap"
                                                        LineHeight="22"/>
@@ -4492,7 +4493,7 @@
                                 <StackPanel>
                                     <TextBlock Text="AUDIO" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
                                     <TextBlock Text="Audio Routing"
-                                               FontSize="16" FontWeight="SemiBold"
+                                               FontSize="16" FontWeight="Medium"
                                                Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,8"/>
                                     <TextBlock Text="{Binding AudioInfo}"
                                                FontSize="14" Foreground="{DynamicResource TextSecond}"
@@ -4576,7 +4577,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- ─── Call Audio Routing ─── -->
+                            <!-- - Call Audio Routing -->
                             <Border Style="{StaticResource Card}" Margin="0,0,0,32">
                                 <StackPanel>
                                     <TextBlock Text="CALL AUDIO ROUTING" Style="{StaticResource SectionLabel}" Margin="0,0,0,12"/>
@@ -4596,17 +4597,17 @@
                                             </Ellipse.Style>
                                         </Ellipse>
                                         <TextBlock Text="{Binding CallAudioRouteSummary}"
-                                                   FontSize="14" FontWeight="SemiBold"
+                                                   FontSize="14" FontWeight="Medium"
                                                    Foreground="{DynamicResource TextPrimary}"
                                                    TextWrapping="Wrap" VerticalAlignment="Center"/>
                                     </StackPanel>
 
                                     <!-- Current Windows default communications device -->
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                                        <TextBlock Text="Windows default: " FontSize="13" FontWeight="Medium"
+                                        <TextBlock Text="Windows default: " FontSize="14" FontWeight="Medium"
                                                    Foreground="{DynamicResource TextSecond}" VerticalAlignment="Center"/>
                                         <TextBlock Text="{Binding CallAudioRouteDeviceName}"
-                                                   FontSize="13" Foreground="{DynamicResource TextPrimary}"
+                                                   FontSize="14" Foreground="{DynamicResource TextPrimary}"
                                                    VerticalAlignment="Center"/>
                                     </StackPanel>
 
@@ -4615,8 +4616,8 @@
                                             CornerRadius="8" Padding="12" Margin="0,0,0,0">
                                         <TextBlock FontSize="12" Foreground="{DynamicResource TextSecond}"
                                                    TextWrapping="Wrap" LineHeight="18">
-                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}">Why this matters.</Run>
-                                            <Run> Windows on this hardware can't route Bluetooth call audio from a phone to PC speakers — the Microsoft Bluetooth stack only supports the headset-side role. Your phone holds the call audio. To use the PC as a desk speakerphone, plug in a USB Bluetooth speakerphone (Jabra Speak 510, Poly Sync 20+, Yealink CP900, etc.); pair it to the phone and set it as the Windows default communications device. DeskPhone keeps doing call control over Bluetooth either way.</Run>
+                                            <Run FontWeight="Medium" Foreground="{DynamicResource TextPrimary}">Why this matters.</Run>
+                                            <Run> Windows on this hardware can't route Bluetooth call audio from a phone to PC speakers  -  the Microsoft Bluetooth stack only supports the headset-side role. Your phone holds the call audio. To use the PC as a desk speakerphone, plug in a USB Bluetooth speakerphone (Jabra Speak 510, Poly Sync 20+, Yealink CP900, etc.); pair it to the phone and set it as the Windows default communications device. DeskPhone keeps doing call control over Bluetooth either way.</Run>
                                         </TextBlock>
                                     </Border>
                                 </StackPanel>
@@ -4626,9 +4627,9 @@
                 </Grid>
             </ScrollViewer>
 
-            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- ================================================================ -->
             <!-- TAB: DEVELOPER TOOLS                                        -->
-            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- ================================================================ -->
             <ScrollViewer Grid.Row="3" Padding="40,32" Background="{DynamicResource BgSidebar}">
                 <ScrollViewer.Style>
                     <Style TargetType="ScrollViewer" BasedOn="{StaticResource TouchScrollViewerStyle}">
@@ -4641,10 +4642,10 @@
                     </Style>
                 </ScrollViewer.Style>
                 <StackPanel MaxWidth="700" HorizontalAlignment="Left">
-                    <TextBlock Text="Developer Tools" FontSize="28" FontWeight="SemiBold"
+                    <TextBlock Text="Developer Tools" FontSize="28" FontWeight="Medium"
                                Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,8"/>
                     <TextBlock Text="Build history, logs, and diagnostic tools."
-                               FontSize="13"
+                               FontSize="14"
                                Foreground="{DynamicResource TextMuted}"
                                Margin="0,0,0,18"/>
 
@@ -4669,7 +4670,7 @@
                                 Click="OpenUiAuditorButton_Click"/>
                     </WrapPanel>
 
-                    <TextBlock Text="Changelog" FontSize="19" FontWeight="SemiBold"
+                    <TextBlock Text="Changelog" FontSize="22" FontWeight="Medium"
                                Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,12"/>
 
                     <ItemsControl ItemsSource="{Binding Changelog}">
@@ -4682,8 +4683,8 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Text="{Binding Version}" 
-                                                       FontSize="18" FontWeight="SemiBold" 
+                                            <TextBlock Text="{Binding Version}"
+                                                       FontSize="18" FontWeight="Medium"
                                                        Foreground="{DynamicResource AccentBlue}"/>
                                             <TextBlock Grid.Column="1" Text="{Binding Timestamp}"
                                                        FontSize="12" Foreground="{DynamicResource TextMuted}"
@@ -4704,7 +4705,7 @@
                 </StackPanel>
             </ScrollViewer>
 
-            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- ================================================================ -->
         </Grid>
     </Grid>
 </Window>
