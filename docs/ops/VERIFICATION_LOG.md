@@ -839,3 +839,6 @@ Current source-grade file count after cleanup: 162 files.
 - Left backend, Bluetooth, MAP, PBAP, relay, and ViewModel logic untouched.
 - `git diff --check -- apps/phone-host-windows/DeskPhone.csproj apps/phone-host-windows/App.xaml apps/phone-host-windows/MainWindow.xaml apps/phone-host-windows/Themes/Styles.xaml apps/phone-host-windows/Themes/Skins/Material.xaml` passed; line-ending normalization warnings only.
 - `dotnet build .\DeskPhone.csproj` passed in `apps/phone-host-windows`; existing warnings remain for `InTheHand.Net.Bluetooth` approximate package resolution and pre-existing nullable/async warnings in Bluetooth/MAP/control services.
+- Pushed source commit `96c1cc1` to `origin/main`.
+- Added detailed `b274` changelog entry, ran `dotnet build .\DeskPhone.csproj -c Release`, and the release pipeline archived `apps/phone-host-windows/deployed-builds/b274`, built the UI auditor and stable launcher, advanced `build.num` to `275`, and created release commit `c182e42`.
+- Release deploy detected an existing DeskPhone process and did not auto-launch `b274`; the new build is available through the refreshed Desktop latest shortcut and `deployed-builds/b274/DeskPhone.exe`.
