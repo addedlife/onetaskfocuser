@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-05-24 15:42:42",
+        "version":  "b274",
+        "notes":  "Material 3 visual refresh: DeskPhone now uses bundled Roboto typography and Material Symbols iconography.",
+        "devNotes":  "Updates the native WPF UI layer only: App.xaml now resolves the Material font resources to bundled Roboto and Material Symbols Rounded, DeskPhone.csproj includes the Roboto font assets, and the active style dictionaries plus MainWindow typography were normalized toward Material 3 font size and weight rules. Backend, Bluetooth, MAP, PBAP, relay, localhost API, ViewModel logic, launcher identity, and web bridge behavior are unchanged."
+    },
+    {
         "timestamp":  "2026-05-21 10:30:07",
         "version":  "b273",
         "notes":  "Auto-reconnect after stale-session send failure; relay restored to Netlify Blobs.",
