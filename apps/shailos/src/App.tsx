@@ -344,7 +344,7 @@ function AppContent() {
 
   const researchRef = useRef<HTMLDivElement>(null);
 
-  const USER_ID = 'rabbidanziger';
+  const USER_ID = user?.uid ?? 'unauthenticated';
   const shailosCol = () => collection(db, 'users', USER_ID, 'shailos');
 
   const refreshPendingRecordings = async () => {
