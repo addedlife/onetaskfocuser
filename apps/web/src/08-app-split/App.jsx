@@ -2506,10 +2506,10 @@ function App({ user, onSignOut }) {
     {
       id: "focus",
       title: "Focus",
-      icon: "self_improvement",
+      icon: "spa",
       meta: "Stay with one thing",
       actions: [
-        {id:"zen", label:"Zen mode", note:"Fullscreen calm task view", icon:"self_improvement", primary:true, disabled:!curT, run:()=>{if(curT)setZen(true);}},
+        {id:"zen", label:"Zen mode", note:"Fullscreen calm task view", icon:"spa", primary:true, disabled:!curT, run:()=>{if(curT)setZen(true);}},
         {id:"body-double", label:"Body double", note:"Keep a work session going", icon:"person", run:()=>setShowBodyDouble(true)},
         {id:"insights", label:"Insights", note:"Progress and patterns", icon:"insights", run:()=>{openCommandView("focus"); switchTab("insights");}},
       ],
@@ -3217,6 +3217,7 @@ function App({ user, onSignOut }) {
                     </div>
                     <div style={{display:"flex",alignItems:"center",gap:4}}>
                       {AS.legacyCompleteUI && <button onClick={()=>legacyCompTask(curT.id)} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",width:CK,height:CK,opacity:.35,transition:"opacity 0.2s"}} onMouseEnter={e=>e.currentTarget.style.opacity=0.9} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Clock s={CK-4} c={cardColor0}/></button>}
+                      <button onClick={()=>setZen(true)} title="Enter Zen mode" style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",width:CK+8,height:CK+8,opacity:.45,transition:"opacity 0.2s"}} onMouseEnter={e=>e.currentTarget.style.opacity=.95} onMouseLeave={e=>e.currentTarget.style.opacity=.45}><IC.Zen s={CK+4} c={cardColor0}/></button>
                       <button onClick={()=>compTask(curT.id)} title="Done" style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",width:CK,height:CK,opacity:.55,transition:"opacity 0.2s"}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.55}>
                         <IC.Check s={CK} c={cardColor0}/>
                       </button>
@@ -3399,8 +3400,8 @@ function App({ user, onSignOut }) {
                   {icon:<IC.Gear s={14} c={T.tSoft}/>, label:"Settings", action:()=>{setSettingsInitialTab("queue"); setShowSet(true);}},
                 ]},
                 { cat: "Focus", items: [
-                  {icon:<IC.Moon s={14} c={T.tSoft}/>, label:"Enter zen", action:()=>setZen(true)},
-                  {icon:<IC.Moon s={14} c={zenOn?"#2ECC71":T.tFaint}/>, label:zenOn?"Auto-zen ✓":"Auto-zen ✗", action:()=>setAS(p=>({...p,zenEnabled:!p.zenEnabled}))},
+                  {icon:<IC.Zen s={14} c={T.tSoft}/>, label:"Enter zen", action:()=>setZen(true)},
+                  {icon:<IC.Zen s={14} c={zenOn?"#2ECC71":T.tFaint}/>, label:zenOn?"Auto-zen ✓":"Auto-zen ✗", action:()=>setAS(p=>({...p,zenEnabled:!p.zenEnabled}))},
                   {icon:<IC.Timer s={14} c={T.tSoft}/>, label:"Just Start timer", action:()=>{if(curT)setJustStartId(justStartId===curT?.id?null:curT?.id);}},
                   {icon:<IC.Person s={14} c={T.tSoft}/>, label:"Body double", action:()=>setShowBodyDouble(true)},
                 ]},

@@ -56,6 +56,7 @@ const IC = {
   Person:     glyph("person"),
   GoodEnough: glyph("thumb_up"),
   Timer:      glyph("timer"),
+  Zen:        glyph("spa"),
 };
 
 export { IC };
