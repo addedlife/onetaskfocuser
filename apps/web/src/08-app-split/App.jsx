@@ -3422,14 +3422,15 @@ function App({ user, onSignOut }) {
                 ]},
               ];
               return (
-                <div style={{position:"fixed",top:"clamp(12px,2vh,20px)",left:(sidebarW + 12) + "px",zIndex:200}}>
-                  <button onClick={()=>setLpMenu(p=>!p)} style={{width:36,height:36,borderRadius:10,background:T.glow?`${T.card}cc`:T.card,border:`1px solid ${T.brd}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:T.glow?`0 0 12px ${T.brd}80`:T.shadow,transition:"box-shadow 0.2s"}}
+                <div style={{position:"fixed",top:"clamp(12px,2vh,20px)",left:(sidebarW + 12) + "px",zIndex:200,width:"fit-content",height:"fit-content"}}>
+                  {lpMenu && <div onClick={()=>setLpMenu(false)} style={{position:"fixed",inset:0,zIndex:9998}}/>}
+                  <button onClick={()=>setLpMenu(p=>!p)} style={{width:36,height:36,borderRadius:10,background:T.glow?`${T.card}cc`:T.card,border:`1px solid ${T.brd}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:T.glow?`0 0 12px ${T.brd}80`:T.shadow,transition:"box-shadow 0.2s",position:"relative",zIndex:10000}}
                     onMouseEnter={e=>{e.currentTarget.style.boxShadow=T.glow?`0 0 20px ${T.brd}`:"0 4px 16px rgba(0,0,0,0.12)";}}
                     onMouseLeave={e=>{e.currentTarget.style.boxShadow=T.glow?`0 0 12px ${T.brd}80`:T.shadow;}}>
                     <IC.List s={16} c={T.tSoft}/>
                   </button>
                   {lpMenu && (
-                    <div style={{position:"fixed",top:"clamp(56px,calc(2vh + 44px),72px)",left:(sidebarW + 12) + "px",background:T.card,border:`1px solid ${T.brd}`,borderRadius:14,padding:"8px 0",minWidth:200,zIndex:9999,boxShadow:T.glow?`0 4px 30px ${T.bg}cc, 0 0 20px ${T.brd}60`:"0 8px 32px rgba(0,0,0,0.18)",animation:"ot-fade 0.15s",maxHeight:"calc(100vh - 80px)",overflowY:"auto"}}
+                    <div style={{position:"fixed",top:"clamp(56px,calc(2vh + 44px),72px)",left:(sidebarW + 12) + "px",background:T.card,border:`1px solid ${T.brd}`,borderRadius:14,padding:"8px 0",minWidth:200,zIndex:10000,boxShadow:T.glow?`0 4px 30px ${T.bg}cc, 0 0 20px ${T.brd}60`:"0 8px 32px rgba(0,0,0,0.18)",animation:"ot-fade 0.15s",maxHeight:"calc(100vh - 80px)",overflowY:"auto"}}
                       onClick={()=>setLpMenu(false)}>
                       {menuSections.map((sec,si)=>(
                         <div key={si}>
@@ -3452,7 +3453,7 @@ function App({ user, onSignOut }) {
 
             {/* PostIt stack — Tasks screen only */}
             {suiteView === "focus" && tab === "focus" && compT.length > 0 && (
-              <div style={{position:"fixed",bottom:"clamp(24px,4vh,48px)",right:"24px",zIndex:Z.overlay}}>
+              <div style={{position:"fixed",bottom:"clamp(24px,4vh,48px)",right:"24px",zIndex:Z.overlay,width:"fit-content",height:"fit-content"}}>
                 <PostItStack tasks={compT} pris={pris} T={T} open={postItOpen} sidebarW={sidebarW} onToggle={()=>setPostItOpen(p=>!p)} onUncomp={uncompTask} onClone={cloneTask}/>
               </div>
             )}
