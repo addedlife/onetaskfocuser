@@ -3205,7 +3205,7 @@ function App({ user, onSignOut }) {
               {/* ── Above-card row: clock (left) + done checkmark (right) ── */}
               {curT ? (() => {
                 const cp0 = gP(pris, curT.priority);
-                const cardColor0 = cp0.isShaila ? "${T.shailaGreen}" : cp0.color;
+                const cardColor0 = cp0.isShaila ? "#C8A84C" : cp0.color;
                 const CK = 28;
                 return (
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"0 2px",height:CK}}>
@@ -3235,7 +3235,7 @@ function App({ user, onSignOut }) {
               {/* Task card */}
               {curT ? (() => {
                 const cp = gP(pris, curT.priority);
-                const cardColor = cp.isShaila ? "${T.shailaGreen}" : cp.color;
+                const cardColor = cp.isShaila ? "#C8A84C" : cp.color;
                 const _fc = textOnColor(cardColor);
                 const _fc50 = _lum(cardColor) > 0.35 ? "rgba(45,37,32,0.50)" : "rgba(255,255,255,0.55)";
                 const _fc40 = _lum(cardColor) > 0.35 ? "rgba(45,37,32,0.45)" : "rgba(255,255,255,0.45)";
@@ -3316,21 +3316,16 @@ function App({ user, onSignOut }) {
                 <div style={{display:"flex",justifyContent:"space-around",alignItems:"flex-end",width:"100%",paddingTop:4}}>
                   {ap.filter(p=>p.isShaila||[BEFORE_SHAVUOS_PRIORITY_ID,"now","today","eventually"].includes(p.id)).map(p=>{
                     const a = selPri===p.id;
-                    const shailaGreen="${T.shailaGreen}";
+                    const shailaGreen="#C8A84C";
                     const clr = p.isShaila ? shailaGreen : p.color;
                     const sz = a ? "clamp(82px,13vw,104px)" : "clamp(70px,11vw,90px)";
-                    // Glow effect for dark themes with glow:true — circles glow like celestial bodies
-                    const glowShadow = T.glow
-                      ? (a ? `0 0 30px ${clr}90, 0 0 60px ${clr}50, 0 0 100px ${clr}25` : `0 0 18px ${clr}70, 0 0 40px ${clr}30, 0 0 70px ${clr}15`)
-                      : p.isShaila
-                        ? (a?`0 0 28px ${shailaGreen}90,0 0 56px ${shailaGreen}40`:`0 0 16px ${shailaGreen}65,0 0 32px ${shailaGreen}30`)
-                        : (a?`0 6px 28px ${clr}65`:`0 3px 12px ${clr}35`);
+                    const glowShadow = a ? `0 4px 16px ${clr}50` : `0 2px 6px ${clr}30`;
                     return (
                       <div key={p.id} style={{display:"flex",flexDirection:"column",alignItems:"center"}}
                         onMouseEnter={e=>{const m=e.currentTarget.querySelector(".mic-btn");if(m)m.style.opacity=1;}}
                         onMouseLeave={e=>{const m=e.currentTarget.querySelector(".mic-btn");if(m)m.style.opacity=a?1:0;}}>
-                        <button className="mic-btn" onClick={()=>{setSelPri(p.id);setShowVoice(true);}} title="Voice input" style={{width:30,height:30,borderRadius:"50%",background:clr,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:a?1:0,transition:"opacity 0.2s",marginBottom:8,flexShrink:0}}><IC.Mic s={13} c="#fff"/></button>
-                        <button onClick={()=>setSelPri(a?null:p.id)} title={p.label} style={{width:sz,height:sz,borderRadius:"50%",background:T.glow?`radial-gradient(circle at 35% 35%, ${clr}dd, ${clr}88, ${clr}44)`:clr,border:a?`3px solid ${softBorderC}`:"3px solid transparent",cursor:"pointer",transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",boxShadow:glowShadow,flexShrink:0}}/>
+                        <button className="mic-btn" onClick={()=>{setSelPri(p.id);setShowVoice(true);}} title="Voice input" style={{width:30,height:30,border:"none",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:a?1:0,transition:"opacity 0.2s",marginBottom:8,flexShrink:0}}><IC.Mic s={16} c={T.tSoft}/></button>
+                        <button onClick={()=>setSelPri(a?null:p.id)} title={p.label} style={{width:sz,height:sz,borderRadius:"50%",background:clr,border:a?`3px solid ${softBorderC}`:"3px solid transparent",cursor:"pointer",transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",boxShadow:glowShadow,flexShrink:0}}/>
                         <span style={{fontSize:12,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:600,textAlign:"center",marginTop:10,letterSpacing:.3}}>{p.isShaila?"Shaila":p.label}</span>
                       </div>
                     );
@@ -3346,7 +3341,7 @@ function App({ user, onSignOut }) {
                         <div key={p.id} style={{display:"flex",flexDirection:"column",alignItems:"center"}}
                           onMouseEnter={e=>{const m=e.currentTarget.querySelector(".mic-btn");if(m)m.style.opacity=1;}}
                           onMouseLeave={e=>{const m=e.currentTarget.querySelector(".mic-btn");if(m)m.style.opacity=a?1:0;}}>
-                          <button className="mic-btn" onClick={()=>{setSelPri(p.id);setShowVoice(true);}} title="Voice input" style={{width:22,height:22,borderRadius:"50%",background:p.color,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:a?1:0,transition:"opacity 0.2s",marginBottom:6,flexShrink:0}}><IC.Mic s={10} c="#fff"/></button>
+                          <button className="mic-btn" onClick={()=>{setSelPri(p.id);setShowVoice(true);}} title="Voice input" style={{width:22,height:22,border:"none",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:a?1:0,transition:"opacity 0.2s",marginBottom:6,flexShrink:0}}><IC.Mic s={12} c={T.tSoft}/></button>
                           <button onClick={()=>setSelPri(a?null:p.id)} title={p.label} style={{width:a?"clamp(40px,6vw,52px)":"clamp(32px,5vw,44px)",height:a?"clamp(40px,6vw,52px)":"clamp(32px,5vw,44px)",borderRadius:"50%",background:p.color,border:a?`2px solid ${softBorderC}`:"2px solid transparent",cursor:"pointer",transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",boxShadow:a?`0 4px 16px ${p.color}60`:`0 2px 8px ${p.color}25`,flexShrink:0}}/>
                           <span style={{fontSize:10,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:600,textAlign:"center",marginTop:7,letterSpacing:.3}}>{p.label}</span>
                         </div>
@@ -3543,7 +3538,7 @@ function App({ user, onSignOut }) {
                   return b.weight - a.weight;    // then by weight desc
                 }).map((p, idx) => {
                   const sel = qAddPri === p.id;
-                  const clr = p.isShaila ? "${T.shailaGreen}" : p.color;
+                  const clr = p.isShaila ? "#C8A84C" : p.color;
                   // Big = all built-ins (shaila/now/today/eventually); Small = custom priorities (pri_xxx)
                   const isBig = !p.id.startsWith('pri_');
                   return (
@@ -3555,13 +3550,13 @@ function App({ user, onSignOut }) {
               </div>
               {/* Text input — shown once priority selected */}
               {qAddPri && (
-                <form onSubmit={e=>{e.preventDefault();const t=qAddText.trim();if(!t)return;const newQT={id:uid(),text:t,completed:false,priority:qAddPri,createdAt:Date.now()};uT(ts=>doOpt([...ts,newQT]));setQAddText("");setQAddPri(null);clearTimeout(queueToastTmr.current);const clr=gP(pris,newQT.priority).isShaila?"${T.shailaGreen}":gP(pris,newQT.priority).color;setQueueToast(clr);setQueueToastKey(k=>k+1);queueToastTmr.current=setTimeout(()=>setQueueToast(null),5000);triggerAIPrioritize();}} style={{display:"flex",gap:6,animation:"ot-fade 0.2s",minWidth:0}}>
+                <form onSubmit={e=>{e.preventDefault();const t=qAddText.trim();if(!t)return;const newQT={id:uid(),text:t,completed:false,priority:qAddPri,createdAt:Date.now()};uT(ts=>doOpt([...ts,newQT]));setQAddText("");setQAddPri(null);clearTimeout(queueToastTmr.current);const clr=gP(pris,newQT.priority).isShaila?"#C8A84C":gP(pris,newQT.priority).color;setQueueToast(clr);setQueueToastKey(k=>k+1);queueToastTmr.current=setTimeout(()=>setQueueToast(null),5000);triggerAIPrioritize();}} style={{display:"flex",gap:6,animation:"ot-fade 0.2s",minWidth:0}}>
                   <input autoFocus value={qAddText} onChange={e=>setQAddText(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Escape"){setQAddPri(null);setQAddText("");}}}
                     placeholder={qAddPri==="shaila"?"Who + what shaila?":"What needs doing?"}
-                    style={{flex:1,minWidth:0,padding:"7px 12px",fontSize:13,border:`1.5px solid ${gP(pris,qAddPri).isShaila?"${T.shailaGreen}":gP(pris,qAddPri).color}`,borderRadius:10,outline:"none",background:T.bgW,color:T.text,fontFamily:"Georgia,serif"}}/>
-                  <button type="submit" style={{background:gP(pris,qAddPri).isShaila?"${T.shailaGreen}":gP(pris,qAddPri).color,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
-                    <IC.Plus s={14} c={textOnColor(gP(pris,qAddPri).isShaila?"${T.shailaGreen}":gP(pris,qAddPri).color)}/>
+                    style={{flex:1,minWidth:0,padding:"7px 12px",fontSize:13,border:`1.5px solid ${gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color}`,borderRadius:10,outline:"none",background:T.bgW,color:T.text,fontFamily:"Georgia,serif"}}/>
+                  <button type="submit" style={{background:gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color,border:"none",borderRadius:10,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                    <IC.Plus s={14} c={textOnColor(gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color)}/>
                   </button>
                 </form>
               )}
@@ -3743,7 +3738,7 @@ function App({ user, onSignOut }) {
                     const cp = gP(pris, t.priority);
                     return (
                       <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<snoozedT.length-1?`1px solid ${T.brd}`:"none"}}>
-                        <div style={{width:8,height:8,borderRadius:"50%",background:cp.isShaila?"${T.shailaGreen}":cp.color,flexShrink:0,opacity:0.6}}/>
+                        <div style={{width:8,height:8,borderRadius:"50%",background:cp.isShaila?"#C8A84C":cp.color,flexShrink:0,opacity:0.6}}/>
                         <div style={{flex:1,minWidth:0}}>
                           <p style={{margin:0,fontSize:12,color:T.tSoft,fontFamily:"Georgia,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.text}</p>
                           <p style={{margin:"2px 0 0",fontSize:10,color:T.tFaint,fontFamily:NC_FONT_STACK}}>wakes {wakeLabel}</p>

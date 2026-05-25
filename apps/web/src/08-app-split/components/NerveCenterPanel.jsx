@@ -2128,7 +2128,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const secFrac = nowDate.getSeconds() / 60;
                 const secBar = (
                   <div style={{ width: "100%", height: 2, borderRadius: 1, background: C.divider, overflow: "hidden", marginTop: 10 }}>
-                    <div style={{ height: "100%", width: `${secFrac * 100}%`, background: C.accent, opacity: 0.65, borderRadius: 1 }} />
+                    <div style={{ height: "100%", width: `${secFrac * 100}%`, background: C.faint, opacity: 0.4, borderRadius: 1, transition: "width 0.95s linear" }} />
                   </div>
                 );
                 // Word clock
@@ -2163,7 +2163,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   ),
                   minimal: (
                     <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, background: C.bg, padding: "16px 8px 10px" }}>
-                      <div style={{ fontSize: 42, fontWeight: 200, lineHeight: 1, color: C.text, letterSpacing: -2, whiteSpace: "nowrap" }}>{clockParts.timeMain}</div>
+                      <div style={{ fontSize: 36, fontWeight: 200, lineHeight: 1, color: C.text, letterSpacing: -1, textAlign: "center", maxWidth: "100%" }}>{clockParts.timeMain}</div>
                       {secBar}
                     </div>
                   ),
@@ -2271,7 +2271,17 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     </div>
                   ),
                 };
-                return faces[clockStyle] || faces.digital;
+                const face = faces[clockStyle] || faces.digital;
+                return (
+                  <div className="nc-action-row" style={{ position: "relative" }}>
+                    {face}
+                    <button className="nc-hover-actions" onClick={e => { e.stopPropagation(); setClockMenuPos({ x: e.clientX, y: e.clientY }); }}
+                      title="Change clock style"
+                      style={{ position: "absolute", top: 5, right: 5, width: 20, height: 20, borderRadius: 3, border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: C.faint, padding: 0, lineHeight: 1 }}>
+                      ···
+                    </button>
+                  </div>
+                );
               })()}
 
               {/* ── Gmail card ── */}
@@ -2406,7 +2416,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             {clockMenuPos && (
               <>
                 <div style={{ position: "fixed", inset: 0, zIndex: 9090 }} onClick={() => setClockMenuPos(null)} />
-                <div onMouseDown={e => e.stopPropagation()} style={{ position: "fixed", left: Math.min(clockMenuPos.x, window.innerWidth - 212), top: Math.min(clockMenuPos.y, window.innerHeight - 360), zIndex: 9091, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 10, padding: 6, minWidth: 200, boxShadow: "0 8px 32px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", gap: 2 }}>
+                <div onMouseDown={e => e.stopPropagation()} style={{ position: "fixed", left: Math.min(clockMenuPos.x, window.innerWidth - 212), top: Math.min(clockMenuPos.y, window.innerHeight - 415), zIndex: 9091, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 10, padding: 6, minWidth: 200, maxHeight: "min(410px, 85vh)", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", gap: 2 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "6px 8px 4px" }}>Clock Style</div>
                   {[
                     { id: "digital", label: "Digital",  desc: "Date + time + seconds bar"  },
