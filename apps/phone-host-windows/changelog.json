@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-05-25 10:51:55",
+        "version":  "b278",
+        "notes":  "Pane dividers are now a single clean M3 line — no more double-line ghost next to each splitter.",
+        "devNotes":  "Root cause of double-line splitters: every panel adjacent to a GridSplitter also drew its own edge border (BorderThickness 0,0,1,0 or 1,0,0,0), so the panel line and the splitter Rectangle appeared as two parallel lines. Fix: removed BorderBrush and BorderThickness from all five affected panels (nav rail, conversation list, ConversationCallHistoryPane, RecentCallsPane, DialerPane). The GridSplitter Rectangle in each MacSplitter template is now the sole dividing line."
+    },
+    {
         "timestamp":  "2026-05-25 10:06:56",
         "version":  "b277",
         "notes":  "Pane dividers now render as clean single-pixel M3 lines with no opacity reduction.",

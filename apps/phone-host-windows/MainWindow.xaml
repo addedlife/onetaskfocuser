@@ -382,8 +382,6 @@
         <!-- ================================================================ -->
         <Border Grid.Column="0"
                 Background="{DynamicResource BgSidebar}"
-                BorderBrush="{DynamicResource Border}"
-                BorderThickness="0,0,1,0"
                 ClipToBounds="True">
             <Grid>
                 <Grid.RowDefinitions>
@@ -1045,9 +1043,7 @@
 
                 <!-- Left: conversation list -->
                 <Border Grid.Column="0"
-                        Background="{DynamicResource SurfaceContainerLow}"
-                        BorderBrush="{DynamicResource Border}"
-                        BorderThickness="0,0,1,0">
+                        Background="{DynamicResource SurfaceContainerLow}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -2501,8 +2497,7 @@
                             <Border x:Name="ConversationCallHistoryPane"
                                     Grid.Row="0"
                                     Grid.Column="2"
-                                    Background="{DynamicResource BgMain}"
-                                    BorderBrush="{DynamicResource Border}" BorderThickness="1,0,0,0">
+                                    Background="{DynamicResource BgMain}">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
@@ -3268,8 +3263,7 @@
                 <Border x:Name="RecentCallsPane"
                         Grid.Row="0"
                         Grid.Column="0"
-                        Background="{DynamicResource BgMain}"
-                        BorderBrush="{DynamicResource Border}" BorderThickness="0,0,1,0">
+                        Background="{DynamicResource BgMain}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -3574,8 +3568,7 @@
                 <Border x:Name="DialerPane"
                         Grid.Row="0"
                         Grid.Column="2"
-                        Background="{DynamicResource BgMain}"
-                        BorderBrush="{DynamicResource Border}" BorderThickness="1,0,0,0">
+                        Background="{DynamicResource BgMain}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                         <Grid MaxWidth="356" HorizontalAlignment="Center">
