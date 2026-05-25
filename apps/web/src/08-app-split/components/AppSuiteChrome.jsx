@@ -54,7 +54,19 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       {/* NerveCenter identity button */}
       <button onClick={() => onSelect("nervecenter")} title="NerveCenter"
         style={navButton(active === "nervecenter", { marginBottom: 10, fontSize: 15 })}>
-        {suiteIcon("hub", 20)}
+        <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
+          {suiteIcon("hub", 20)}
+          <span style={{
+            position: "absolute", bottom: -3, right: -5,
+            width: 13, height: 13, borderRadius: "50%",
+            background: active === "nervecenter" ? C.accent : C.hover,
+            border: `1.5px solid ${C.bg}`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: active === "nervecenter" ? C.bg : C.faint,
+          }}>
+            {suiteIcon("chevron_right", 9)}
+          </span>
+        </span>
         {displayOpen && "NerveCenter"}
       </button>
 

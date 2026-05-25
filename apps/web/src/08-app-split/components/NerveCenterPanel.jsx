@@ -1680,48 +1680,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: isStacked ? "hidden" : touchLayout ? "auto" : "hidden", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}` }}>
       <div style={isStacked ? { height: "100%", display: "flex", flexDirection: "column", boxSizing: "border-box" } : { minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: touchLayout ? 12 : 4 }}>
 
-        <div style={{
-          minHeight: isStacked ? 58 : 72,
-          padding: isStacked ? "8px 14px" : "0 2px 10px",
-          borderBottom: isStacked ? `1px solid ${C.divider}` : "none",
-          flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap:12,
-          boxSizing: "border-box",
-          position: "relative",
-        }}>
-          <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ width: 34, height: 34, borderRadius:16, display: "flex", alignItems: "center", justifyContent: "center", color: C.accent, background: C.hover, flexShrink: 0 }}>{suiteIcon("hub", 18)}</span>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: isStacked ? 17 : 20, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>NerveCenter</div>
-              <div style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clockParts.date}</div>
-            </div>
-          </div>
-          {!isStacked && (
-            <div aria-label="Current time" style={{
-              position: "absolute",
-              left: "50%",
-              transform: "translateX(-50%)",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              fontFamily: '"Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif',
-              fontVariantNumeric: "tabular-nums",
-              pointerEvents: "none",
-              userSelect: "none",
-            }}>
-              <div style={{ fontSize: 46, fontWeight: 200, lineHeight: 1, color: C.text, letterSpacing: -1 }}>
-                {clockParts.timeMain}
-              </div>
-              <div style={{ fontSize: 12, fontWeight: 400, color: C.faint, marginTop: 3, letterSpacing: 1 }}>
-                {clockParts.timeSec}
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* Panel tab bar — mobile/stacked only */}
         {isStacked && (
           <div style={{ display: "flex", background: C.bg, borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
@@ -1998,7 +1956,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           const selectedEmailBody = selectedEmailDetail?.fullBody || decodeSnippet(selectedEmail?.snippet || "");
           const lowerGridStyle = {
             display: "grid",
-            gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)",
+            gridTemplateColumns: "minmax(0,1fr) 172px minmax(0,1fr)",
             gap: 8,
             flex: `0 0 ${googleH}px`,
             minHeight: 0,
@@ -2152,6 +2110,37 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </div>
               )}
 
+
+              {/* ── Clock card ── */}
+              <div aria-label="Current time" style={{
+                background: C.bg,
+                borderRadius: 10,
+                border: `1px solid ${C.divider}`,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: 0,
+                overflow: "hidden",
+                fontFamily: '"Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif',
+                fontVariantNumeric: "tabular-nums",
+                userSelect: "none",
+                padding: "20px 8px",
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: C.faint, letterSpacing: 2.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 10 }}>
+                  {nowDate.toLocaleDateString([], { weekday: "long" })}
+                </div>
+                <div style={{ fontSize: 34, fontWeight: 200, lineHeight: 1, color: C.text, letterSpacing: -1, whiteSpace: "nowrap" }}>
+                  {clockParts.timeMain}
+                </div>
+                <div style={{ width: 28, height: 1, background: C.divider, margin: "10px auto" }} />
+                <div style={{ fontSize: 18, fontWeight: 300, lineHeight: 1, color: C.faint, letterSpacing: 1 }}>
+                  {clockParts.timeSec}
+                </div>
+                <div style={{ fontSize: 10, fontWeight: 500, color: C.faint, marginTop: 10, fontFamily: NC_FONT_STACK, letterSpacing: 0.5 }}>
+                  {nowDate.toLocaleDateString([], { month: "short", day: "numeric" })}
+                </div>
+              </div>
 
               {/* ── Gmail card ── */}
               {(gmailMessages !== null || (googleLoading && googleToken)) && (
