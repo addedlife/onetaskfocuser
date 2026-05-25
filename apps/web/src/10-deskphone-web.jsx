@@ -2521,7 +2521,10 @@ function MessagesSlice({
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     onKeyDown={(event) => {
-                      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") sendMessage();
+                      if (event.key === "Enter" && !event.ctrlKey && !event.metaKey) {
+                        event.preventDefault();
+                        sendMessage();
+                      }
                     }}
                     minLength={0}
                     placeholder="Message text"
