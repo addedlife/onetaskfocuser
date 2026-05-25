@@ -3,6 +3,8 @@ import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, textOnC
 import { cleanTheme, cleanToolbarButton, gvIconButton, gvTextButton, NC_FONT_STACK, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { NerveCenterPhoneSurface } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
+import { HealthCard } from './HealthCard.jsx';
+import { HealthPage } from './HealthPage.jsx';
 
 function nerveSummarySource(item) {
   return String(item?.parentTask || item?.shaila || item?.question || item?.text || "").trim();
@@ -561,8 +563,11 @@ function buildChiefFallbackBrief(context = {}, suppressed = []) {
   };
 }
 
-function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage }) {
+function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
   const viewportW = useViewportWidth();
+  const [healthCardVisible, setHealthCardVisible] = useState(() => {
+    try { return localStorage.getItem("nc_health_card_visible") !== "0"; } catch { return true; }
+  });
   const [clockStyle, setClockStyle] = useState(() => { try { return localStorage.getItem("nc_clock_style") || "digital"; } catch { return "digital"; } });
   const [clockMenuPos, setClockMenuPos] = useState(null);
   const [clockTimelineOpen, setClockTimelineOpen] = useState(() => { try { return localStorage.getItem("nc_clock_timeline") === "1"; } catch { return false; } });
@@ -1500,6 +1505,23 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       })}
     </div>
   );
+
+  if (healthPage) {
+    return (
+      <HealthPage
+        T={T}
+        C={C}
+        healthData={healthData}
+        healthConfig={healthConfig}
+        healthHistory={healthHistory}
+        onClose={onCloseHealthPage}
+        onSaveHealthData={onSaveHealthData}
+        onSyncNow={onSyncHealth}
+        topOffset={topOffset}
+        sidebarW={sidebarW}
+      />
+    );
+  }
 
   if (chiefPage) {
     const pageLabel = { fontSize: NC_TYPE.small, color: C.faint, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0, fontFamily: NC_FONT_STACK };
@@ -2577,6 +2599,21 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             </React.Fragment>
           );
         })()}
+
+        {/* ── Health Card — bottom row, closeable ── */}
+        {!isStacked && healthCardVisible && (
+          <HealthCard
+            T={T}
+            C={C}
+            healthData={healthData}
+            healthConfig={healthConfig}
+            onOpenHealth={onOpenHealth}
+            onDismiss={() => {
+              setHealthCardVisible(false);
+              try { localStorage.setItem("nc_health_card_visible", "0"); } catch {}
+            }}
+          />
+        )}
 
         {/* Actions drawer */}
         {actionsOpen && (

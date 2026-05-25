@@ -45,6 +45,9 @@ function App({ user, onSignOut }) {
   });
   const [ncActionsOpen, setNcActionsOpen] = useState(false);
   const [ncActionCatId, setNcActionCatId] = useState("tasks");
+  const [healthData, setHealthData] = useState(null);
+  const [healthConfig, setHealthConfig] = useState(null);
+  const [healthHistory, setHealthHistory] = useState(null);
   const [deskPhoneOnline, setDeskPhoneOnline] = useState(false);
   const deskPhoneLaunchAtRef = useRef(0);
   const lastDeskPhoneThemeRef = useRef("");
@@ -2445,10 +2448,60 @@ function App({ user, onSignOut }) {
       syncDeskPhoneTheme(true);
       return;
     }
+    if (view === "health") {
+      setSuiteView("health");
+      loadHealthFromFirebase();
+      return;
+    }
     setSuiteView(view);
     if (view !== "shailos") setShailosAction(null);
     if (view === "focus") setShowShailos(false);
   };
+
+  // ── Health data Firebase helpers ──────────────────────────────────────────
+  async function loadHealthFromFirebase() {
+    if (!db || !user?.uid) return;
+    try {
+      const configDoc = await db.collection("healthConfig").doc(user.uid).get();
+      if (configDoc.exists) setHealthConfig(configDoc.data());
+
+      const today = new Date().toISOString().slice(0, 10);
+      const todayDoc = await db.collection("healthData").doc(user.uid)
+        .collection("log").doc(today).get();
+      if (todayDoc.exists) setHealthData({ ...todayDoc.data(), date: today });
+
+      const snap = await db.collection("healthData").doc(user.uid)
+        .collection("log").orderBy("date", "desc").limit(90).get();
+      if (!snap.empty) {
+        setHealthHistory(snap.docs.map(d => ({ date: d.id, ...d.data() })).reverse());
+      }
+    } catch {}
+  }
+
+  async function saveHealthDataToFirebase(data) {
+    if (!db || !user?.uid || !data?.date) return;
+    try {
+      const { date, ...rest } = data;
+      await db.collection("healthData").doc(user.uid)
+        .collection("log").doc(date).set(rest, { merge: true });
+      setHealthData(prev => ({ ...(prev || {}), ...rest, date, source: data.source || "manual" }));
+      setHealthHistory(prev => {
+        const next = [...(prev || [])];
+        const idx = next.findIndex(d => d.date === date);
+        if (idx >= 0) next[idx] = { date, ...rest };
+        else next.push({ date, ...rest });
+        return next.sort((a, b) => a.date < b.date ? -1 : 1);
+      });
+    } catch {}
+  }
+
+  async function saveHealthConfigToFirebase(config) {
+    if (!db || !user?.uid) return;
+    try {
+      await db.collection("healthConfig").doc(user.uid).set(config, { merge: true });
+      setHealthConfig(prev => ({ ...(prev || {}), ...config }));
+    } catch {}
+  }
   const switchboardSections = [
     {
       id: "priority",
@@ -3174,6 +3227,14 @@ function App({ user, onSignOut }) {
           clockTime={clockTime}
           chiefPage={suiteView === "chief"}
           onCloseChiefPage={()=>openCommandView("nervecenter")}
+          healthPage={suiteView === "health"}
+          onOpenHealth={()=>openCommandView("health")}
+          onCloseHealthPage={()=>openCommandView("nervecenter")}
+          healthData={healthData}
+          healthConfig={healthConfig}
+          healthHistory={healthHistory}
+          onSaveHealthData={saveHealthDataToFirebase}
+          onSyncHealth={null}
         />
       )}
 
