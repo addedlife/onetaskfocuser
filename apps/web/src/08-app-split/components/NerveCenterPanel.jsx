@@ -2112,35 +2112,47 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
 
               {/* ── Clock card ── */}
-              <div aria-label="Current time" style={{
-                background: C.bg,
-                borderRadius: 10,
-                border: `1px solid ${C.divider}`,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                minHeight: 0,
-                overflow: "hidden",
-                fontFamily: '"Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif',
-                fontVariantNumeric: "tabular-nums",
-                userSelect: "none",
-                padding: "20px 8px",
-              }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 12 }}>
-                  {nowDate.toLocaleDateString([], { weekday: "long" })}
-                </div>
-                <div style={{ fontSize: 38, fontWeight: 300, lineHeight: 1, color: C.text, letterSpacing: -1, whiteSpace: "nowrap" }}>
-                  {clockParts.timeMain}
-                </div>
-                <div style={{ width: 32, height: 1, background: C.divider, margin: "12px auto" }} />
-                <div style={{ fontSize: 22, fontWeight: 400, lineHeight: 1, color: C.faint, letterSpacing: 2 }}>
-                  {clockParts.timeSec}
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, marginTop: 12, fontFamily: NC_FONT_STACK }}>
-                  {nowDate.toLocaleDateString([], { month: "long", day: "numeric" })}
-                </div>
-              </div>
+              {(() => {
+                const ampmMatch = clockParts.timeMain.match(/\s?(AM|PM)$/i);
+                const timeDigits = ampmMatch ? clockParts.timeMain.slice(0, -ampmMatch[0].length) : clockParts.timeMain;
+                const timePeriod = ampmMatch ? ampmMatch[1] : "";
+                return (
+                  <div aria-label="Current time" style={{
+                    background: C.bg,
+                    borderRadius: 10,
+                    border: `1px solid ${C.divider}`,
+                    borderTop: `2px solid ${C.accent}`,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minHeight: 0,
+                    overflow: "hidden",
+                    fontFamily: '"Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif',
+                    fontVariantNumeric: "tabular-nums",
+                    userSelect: "none",
+                    padding: "18px 8px",
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 14 }}>
+                      {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric" })}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 5, lineHeight: 1 }}>
+                      <span style={{ fontSize: 38, fontWeight: 300, color: C.text, letterSpacing: -1 }}>
+                        {timeDigits}
+                      </span>
+                      {timePeriod && (
+                        <span style={{ fontSize: 14, fontWeight: 600, color: C.muted, letterSpacing: 0.5 }}>
+                          {timePeriod}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ width: 32, height: 1, background: C.divider, margin: "12px auto" }} />
+                    <div style={{ fontSize: 22, fontWeight: 400, lineHeight: 1, color: C.faint, letterSpacing: 2 }}>
+                      {clockParts.timeSec}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* ── Gmail card ── */}
               {(gmailMessages !== null || (googleLoading && googleToken)) && (
