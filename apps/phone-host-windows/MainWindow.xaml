@@ -349,8 +349,31 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="GridSplitter">
                         <Border Background="Transparent" Height="{TemplateBinding Height}">
-                            <Rectangle Height="1" Fill="{DynamicResource Border}" VerticalAlignment="Center"/>
+                            <Rectangle x:Name="line" Height="1"
+                                       Fill="{DynamicResource Border}"
+                                       VerticalAlignment="Center"
+                                       Opacity="0"/>
                         </Border>
+                        <ControlTemplate.Triggers>
+                            <EventTrigger RoutedEvent="MouseEnter">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="line"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0.45" Duration="0:0:0.15"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                            <EventTrigger RoutedEvent="MouseLeave">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="line"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0" Duration="0:0:0.2"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>

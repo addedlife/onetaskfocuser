@@ -18,8 +18,31 @@
             <Setter.Value>
                 <ControlTemplate TargetType="GridSplitter">
                     <Border Background="Transparent" Width="{TemplateBinding Width}">
-                        <Rectangle Width="1" Fill="{DynamicResource Border}" HorizontalAlignment="Center"/>
+                        <Rectangle x:Name="line" Width="1"
+                                   Fill="{DynamicResource Border}"
+                                   HorizontalAlignment="Center"
+                                   Opacity="0"/>
                     </Border>
+                    <ControlTemplate.Triggers>
+                        <EventTrigger RoutedEvent="MouseEnter">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="line"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0.45" Duration="0:0:0.15"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="MouseLeave">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="line"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0" Duration="0:0:0.2"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

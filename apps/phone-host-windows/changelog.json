@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-05-25 11:00:19",
+        "version":  "b279",
+        "notes":  "Pane dividers are invisible by default and reveal as a wispy grey line on hover — no static chrome between panels.",
+        "devNotes":  "Updated MacSplitter (Material.xaml) and HorizontalMacSplitter (MainWindow.xaml) templates: Rectangle starts at Opacity=0 (invisible), animates to 0.45 on MouseEnter over 150ms via DoubleAnimation, fades back to 0 on MouseLeave over 200ms. Result: zero visible chrome between panes at rest; a soft grey line ghosts in when the cursor approaches the drag zone, matching the ghost-divider pattern used in Google Voice and other M3 apps."
+    },
+    {
         "timestamp":  "2026-05-25 10:51:55",
         "version":  "b278",
         "notes":  "Pane dividers are now a single clean M3 line — no more double-line ghost next to each splitter.",
