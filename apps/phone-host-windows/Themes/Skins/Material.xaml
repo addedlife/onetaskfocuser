@@ -87,8 +87,6 @@
         <Setter Property="Background"      Value="{DynamicResource BgMain}"/>
         <Setter Property="CornerRadius"    Value="16"/>
         <Setter Property="Padding"         Value="20"/>
-        <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="BorderBrush"     Value="{DynamicResource Border}"/>
         <Setter Property="Effect">
             <Setter.Value>
                 <DropShadowEffect BlurRadius="8" ShadowDepth="1" Direction="270"
@@ -98,8 +96,7 @@
     </Style>
 
     <Style x:Key="TonalCard" TargetType="Border" BasedOn="{StaticResource Card}">
-        <Setter Property="Background"  Value="{DynamicResource AccentBlueLight}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource BorderFocus}"/>
+        <Setter Property="Background" Value="{DynamicResource AccentBlueLight}"/>
     </Style>
 
     <!-- Section label -->
@@ -128,15 +125,13 @@
                     <Border x:Name="bd"
                             Background="{TemplateBinding Background}"
                             CornerRadius="24"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="2">
+                            BorderThickness="0">
                         <ScrollViewer x:Name="PART_ContentHost"
                                       Margin="{TemplateBinding Padding}"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsFocused" Value="True">
-                            <Setter TargetName="bd" Property="BorderBrush"  Value="{DynamicResource AccentBlue}"/>
-                            <Setter TargetName="bd" Property="Background"   Value="{DynamicResource BgMain}"/>
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource BgHover}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -217,7 +212,6 @@
                                PopupAnimation="Fade">
                             <Border Background="{DynamicResource BgMain}"
                                     CornerRadius="12" Margin="4"
-                                    BorderBrush="{DynamicResource Border}" BorderThickness="1"
                                     MinWidth="{Binding ActualWidth, ElementName=root}"
                                     MaxHeight="300">
                                 <Border.Effect>
@@ -322,8 +316,8 @@
     <Style x:Key="OutlinedButton" TargetType="Button">
         <Setter Property="Background"      Value="Transparent"/>
         <Setter Property="Foreground"      Value="{DynamicResource AccentBlue}"/>
-        <Setter Property="BorderBrush"     Value="{DynamicResource Border}"/>
-        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderBrush"     Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Cursor"          Value="Hand"/>
         <Setter Property="FontFamily"      Value="{StaticResource MaterialFontFamily}"/>
         <Setter Property="FontSize"        Value="14"/>

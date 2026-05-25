@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-05-25 11:06:56",
+        "version":  "b280",
+        "notes":  "Stripped visible borders from cards, inputs, dropdowns, and buttons — surfaces now separate by shadow and tone, not outlines.",
+        "devNotes":  "Five targeted changes in Material.xaml: (1) Card style: removed BorderThickness=1 and BorderBrush — shadow alone defines the card edge. (2) TonalCard: removed redundant BorderBrush override. (3) TextBox template: BorderThickness 2→0, removed 2px blue focus ring; focus now shifts background to BgHover only. (4) ComboBox popup border: removed BorderBrush and BorderThickness=1, shadow already separates the menu from the surface. (5) OutlinedButton: BorderBrush→Transparent, BorderThickness→0, converting it to a ghost/text-button style. No layout or functional changes — pure visual chrome removal."
+    },
+    {
         "timestamp":  "2026-05-25 11:00:19",
         "version":  "b279",
         "notes":  "Pane dividers are invisible by default and reveal as a wispy grey line on hover — no static chrome between panels.",
