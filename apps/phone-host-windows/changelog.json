@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-05-25 02:53:53",
+        "version":  "b276",
+        "notes":  "Message bubble text is now selectable — click and drag to highlight any text in a received or sent message.",
+        "devNotes":  "Root cause of non-selectable bubble text: MessageBodyFormatter.OnFormattedTextChanged was calling rtb.Focusable = false on every content update, which absolutely prevents text selection regardless of IsReadOnly or event handler logic. Fix: Focusable = true, IsTabStop = false (preserves tab-key navigation past bubbles), IsReadOnlyCaretVisible = true (caret shows on focus so the user knows they are in selection mode). The BubbleTap_Click RichTextBox bypass and SelectionBrush color changes from b275 remain and work correctly now that focus is allowed."
+    },
+    {
         "timestamp":  "2026-05-25 02:47:20",
         "version":  "b275",
         "notes":  "Message text is now selectable; contact name and phone number in thread header can be selected and copied.",

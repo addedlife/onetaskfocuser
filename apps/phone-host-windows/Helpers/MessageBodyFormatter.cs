@@ -42,8 +42,9 @@ public static class MessageBodyFormatter
         var isOutgoing = GetIsOutgoing(rtb);
         rtb.Document = BuildDocument(text, isOutgoing);
         rtb.IsReadOnly = true;
-        rtb.Focusable = false;
-        rtb.IsReadOnlyCaretVisible = false;
+        rtb.Focusable = true;
+        rtb.IsTabStop = false;
+        rtb.IsReadOnlyCaretVisible = true;
         rtb.IsDocumentEnabled = true;
         rtb.BorderThickness = new Thickness(0);
         rtb.Background = System.Windows.Media.Brushes.Transparent;
