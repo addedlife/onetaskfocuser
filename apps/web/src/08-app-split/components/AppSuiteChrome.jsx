@@ -11,6 +11,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
   const C = cleanTheme(T);
   const displayOpen = open && !forceCompact;
   const W = displayOpen ? 184 : 64;
+  const rightPad = displayOpen ? 12 : 10;
   const navButton = (isActive = false, overrides = {}) => ({
     height: 40,
     padding: displayOpen ? "0 12px" : "0",
@@ -36,7 +37,10 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
   const now = Number.isFinite(rawNow.getTime()) ? rawNow : new Date();
   const railTime = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const railDate = now.toLocaleDateString([], { month: "short", day: "numeric" });
+  const ncActive = active === "nervecenter";
+  const arrowLeft = W - rightPad;
   return (
+    <>
     <div
       className="nc-rail"
       style={{
@@ -51,22 +55,14 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       overflow: "hidden",
     }}>
 
-      {/* NerveCenter identity button */}
+      {/* NerveCenter identity button — right side goes flat when active so the arrow cap reads as one shape */}
       <button onClick={() => onSelect("nervecenter")} title="NerveCenter"
-        style={navButton(active === "nervecenter", { marginBottom: 10, fontSize: 15 })}>
-        <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
-          {suiteIcon("hub", 20)}
-          <span style={{
-            position: "absolute", bottom: -3, right: -5,
-            width: 13, height: 13, borderRadius: "50%",
-            background: active === "nervecenter" ? C.accent : C.hover,
-            border: `1.5px solid ${C.bg}`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: active === "nervecenter" ? C.bg : C.faint,
-          }}>
-            {suiteIcon("chevron_right", 9)}
-          </span>
-        </span>
+        style={navButton(ncActive, {
+          marginBottom: 10,
+          fontSize: 15,
+          ...(ncActive ? { borderRadius: "20px 0 0 20px" } : {}),
+        })}>
+        {suiteIcon("hub", 20)}
         {displayOpen && "NerveCenter"}
       </button>
 
@@ -145,6 +141,26 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         {suiteIcon(displayOpen ? "chevron_left" : "chevron_right", 15)}
       </button>
     </div>
+
+    {/* Arrow cap — sibling of sidebar so overflow:hidden doesn't clip it.
+        Flat left face aligns exactly with the button's right edge; tip pokes
+        ~4-6 px past the sidebar border into the NerveCenter pane. */}
+    {ncActive && (
+      <div aria-hidden style={{
+        position: "fixed",
+        left: arrowLeft,
+        top: topOffset + 18,
+        zIndex: 8600,
+        width: 0,
+        height: 0,
+        borderTop: "20px solid transparent",
+        borderBottom: "20px solid transparent",
+        borderLeft: `16px solid ${C.hover}`,
+        pointerEvents: "none",
+        transition: "left 0.20s cubic-bezier(0.4,0,0.2,1)",
+      }} />
+    )}
+    </>
   );
 }
 

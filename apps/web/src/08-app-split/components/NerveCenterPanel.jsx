@@ -2127,18 +2127,18 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 userSelect: "none",
                 padding: "20px 8px",
               }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: C.faint, letterSpacing: 2.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 12 }}>
                   {nowDate.toLocaleDateString([], { weekday: "long" })}
                 </div>
-                <div style={{ fontSize: 34, fontWeight: 200, lineHeight: 1, color: C.text, letterSpacing: -1, whiteSpace: "nowrap" }}>
+                <div style={{ fontSize: 38, fontWeight: 300, lineHeight: 1, color: C.text, letterSpacing: -1, whiteSpace: "nowrap" }}>
                   {clockParts.timeMain}
                 </div>
-                <div style={{ width: 28, height: 1, background: C.divider, margin: "10px auto" }} />
-                <div style={{ fontSize: 18, fontWeight: 300, lineHeight: 1, color: C.faint, letterSpacing: 1 }}>
+                <div style={{ width: 32, height: 1, background: C.divider, margin: "12px auto" }} />
+                <div style={{ fontSize: 22, fontWeight: 400, lineHeight: 1, color: C.faint, letterSpacing: 2 }}>
                   {clockParts.timeSec}
                 </div>
-                <div style={{ fontSize: 10, fontWeight: 500, color: C.faint, marginTop: 10, fontFamily: NC_FONT_STACK, letterSpacing: 0.5 }}>
-                  {nowDate.toLocaleDateString([], { month: "short", day: "numeric" })}
+                <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, marginTop: 12, fontFamily: NC_FONT_STACK }}>
+                  {nowDate.toLocaleDateString([], { month: "long", day: "numeric" })}
                 </div>
               </div>
 
