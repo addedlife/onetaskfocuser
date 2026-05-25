@@ -73,6 +73,27 @@ function SweepBar({ duration, getOffset, baseOpacity = 0.36, style }) {
   return <div ref={barRef} style={{ ...style, transformOrigin: "left center", transform: "scaleX(0)", opacity: 0 }} />;
 }
 
+// SvgSweepHand — rAF-driven rotating second hand for analog clock SVGs.
+// Rotates an SVG <line> around (pivotX, pivotY); duration is full cycle in seconds.
+function SvgSweepHand({ x1, y1, x2, y2, pivotX = 50, pivotY = 50, duration = 60, stroke, strokeWidth = 1, opacity = 0.15 }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    let raf;
+    const tick = () => {
+      const el = ref.current;
+      if (el) {
+        const n = new Date();
+        const secs = (n.getSeconds() + n.getMilliseconds() / 1000) % duration;
+        el.setAttribute('transform', `rotate(${(secs / duration) * 360}, ${pivotX}, ${pivotY})`);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [duration, pivotX, pivotY]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <line ref={ref} x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" opacity={opacity} />;
+}
+
 function decodeBase64UrlText(value) {
   if (!value) return "";
   try {
@@ -544,6 +565,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const viewportW = useViewportWidth();
   const [clockStyle, setClockStyle] = useState(() => { try { return localStorage.getItem("nc_clock_style") || "digital"; } catch { return "digital"; } });
   const [clockMenuPos, setClockMenuPos] = useState(null);
+  const [clockTimelineOpen, setClockTimelineOpen] = useState(() => { try { return localStorage.getItem("nc_clock_timeline") === "1"; } catch { return false; } });
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
@@ -2189,6 +2211,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     hYear = roshH[i].y; hYearFrac = (nowDate - roshH[i].d) / (roshH[i + 1].d - roshH[i].d); break;
                   }
                 }
+                let hMonthName = String(hYear);
+                try { hMonthName = new Intl.DateTimeFormat('en-u-ca-hebrew', { month: 'short' }).format(nowDate); } catch {}
                 const gregYrStart = new Date(nowDate.getFullYear(), 0, 1);
                 const gregYrFrac = (nowDate - gregYrStart) / (new Date(nowDate.getFullYear() + 1, 0, 1) - gregYrStart);
                 const daysInMo = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate();
@@ -2225,6 +2249,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         })}
                         <line x1="50" y1="50" x2={hp(hrA, 26)[0]} y2={hp(hrA, 26)[1]} stroke={C.text} strokeWidth="3.5" strokeLinecap="round" />
                         <line x1="50" y1="50" x2={hp(minA, 36)[0]} y2={hp(minA, 36)[1]} stroke={C.text} strokeWidth="2.5" strokeLinecap="round" />
+                        <SvgSweepHand x1="50" y1="14" x2="50" y2="58" pivotX={50} pivotY={50} duration={60} stroke={C.faint} strokeWidth={0.8} opacity={0.18} />
                         <circle cx="50" cy="50" r="3" fill={C.accent} />
                       </svg>
                       <div style={{ fontSize: 15, fontWeight: 300, color: C.text, letterSpacing: -0.5, lineHeight: 1, fontVariantNumeric: "tabular-nums", fontFamily: clockFF }}>
@@ -2323,7 +2348,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
                       </div>
                       {[
-                        { lbl: "Heb Yr",  val: String(hYear),                                                         frac: hYearFrac,      col: C.accent,  op: 0.92, dur: null,  off: 0,         rk: 0 },
+                        { lbl: "Heb Yr",  val: hMonthName,                                                            frac: hYearFrac,      col: C.accent,  op: 0.92, dur: null,  off: 0,         rk: 0 },
                         { lbl: "Greg Yr", val: nowDate.toLocaleDateString([], { month: "short" }),                     frac: gregYrFrac,     col: C.accent,  op: 0.56, dur: null,  off: 0,         rk: 0 },
                         { lbl: "Month",   val: `${nowDate.getDate()}/${daysInMo}`,                                     frac: dayFrac,        col: C.muted,   op: 0.78, dur: null,  off: 0,         rk: 0 },
                         { lbl: "Day",     val: `${nowDate.getHours()}h`,                                               frac: 0,              col: C.muted,   op: 0.60, dur: 86400, off: secOfDay,  rk: nowDate.getDate() },
@@ -2348,9 +2373,41 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   ),
                 };
                 const face = faces[clockStyle] || faces.digital;
+                const tlSweepOff = () => { const n = new Date(); return n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds() + n.getMilliseconds() / 1000; };
+                const toggleTimeline = () => { const next = !clockTimelineOpen; setClockTimelineOpen(next); try { localStorage.setItem("nc_clock_timeline", next ? "1" : "0"); } catch {} };
                 return (
                   <div className="nc-action-row" style={{ position: "relative" }}>
                     {face}
+                    {clockTimelineOpen && (
+                      <div style={{ padding: "10px 10px 6px", borderTop: `1px solid ${C.divider}` }}>
+                        {[
+                          { lbl: "Heb Yr",  val: hMonthName,                                               frac: hYearFrac,  col: C.accent, op: 0.92, dur: null },
+                          { lbl: "Greg Yr", val: nowDate.toLocaleDateString([], { month: "short" }),        frac: gregYrFrac, col: C.accent, op: 0.56, dur: null },
+                          { lbl: "Month",   val: `${nowDate.getDate()}/${daysInMo}`,                        frac: dayFrac,    col: C.muted,  op: 0.78, dur: null },
+                          { lbl: "Day",     val: `${nowDate.getHours()}h`,                                  frac: 0,          col: C.muted,  op: 0.60, dur: 86400 },
+                          { lbl: "Hour",    val: `${nowDate.getMinutes()}m`,                                frac: 0,          col: C.faint,  op: 0.82, dur: 3600  },
+                          { lbl: "Minute",  val: `${nowDate.getSeconds()}s`,                                frac: 0,          col: C.faint,  op: 0.50, dur: 60    },
+                        ].map(({ lbl, val, frac, col, op, dur }) => (
+                          <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, minWidth: 0 }}>
+                            <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, letterSpacing: 0.3, fontFamily: NC_FONT_STACK, width: 38, textAlign: "right", flexShrink: 0, textTransform: "uppercase", lineHeight: 1 }}>{lbl}</span>
+                            <div style={{ flex: 1, height: 2, borderRadius: 1, background: C.hover, overflow: "hidden", position: "relative", minWidth: 0 }}>
+                              {dur ? (
+                                <SweepBar duration={dur} baseOpacity={op} getOffset={tlSweepOff}
+                                  style={{ position: "absolute", inset: 0, borderRadius: 1, background: col }} />
+                              ) : (
+                                <div style={{ height: "100%", width: `${frac * 100}%`, borderRadius: 1, background: col, opacity: op, transition: "width 3s ease" }} />
+                              )}
+                            </div>
+                            <span style={{ fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, width: 26, flexShrink: 0, textAlign: "right", letterSpacing: 0.2, lineHeight: 1 }}>{val}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <button onClick={toggleTimeline} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "3px 0 4px", border: "none", background: "transparent", cursor: "pointer" }}>
+                      <span style={{ fontSize: 8, fontWeight: 700, color: clockTimelineOpen ? C.muted : C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK }}>
+                        {clockTimelineOpen ? "▲ timeline" : "▼ timeline"}
+                      </span>
+                    </button>
                     <button className="nc-hover-actions" onClick={e => { e.stopPropagation(); setClockMenuPos({ x: e.clientX, y: e.clientY }); }}
                       title="Change clock style"
                       style={{ position: "absolute", top: 5, right: 5, width: 20, height: 20, borderRadius: 3, border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: C.faint, padding: 0, lineHeight: 1 }}>
