@@ -349,7 +349,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="GridSplitter">
                         <Border Background="Transparent" Height="{TemplateBinding Height}">
-                            <Rectangle Height="1" Fill="{DynamicResource Border}" Opacity="0.72" VerticalAlignment="Center"/>
+                            <Rectangle Height="1" Fill="{DynamicResource Border}" VerticalAlignment="Center"/>
                         </Border>
                     </ControlTemplate>
                 </Setter.Value>

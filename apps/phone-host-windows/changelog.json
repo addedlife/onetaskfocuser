@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-05-25 10:06:56",
+        "version":  "b277",
+        "notes":  "Pane dividers now render as clean single-pixel M3 lines with no opacity reduction.",
+        "devNotes":  "HorizontalMacSplitter style in MainWindow.xaml had Opacity=\"0.72\" on its Rectangle, making horizontal splitters look fainter than the vertical MacSplitter defined in Themes/Skins/Material.xaml (which had no opacity). Removed the Opacity attribute from HorizontalMacSplitter so both axes now share the same full-strength 1px Border-colored line appearance, consistent with Material Design 3 divider guidelines."
+    },
+    {
         "timestamp":  "2026-05-25 02:53:53",
         "version":  "b276",
         "notes":  "Message bubble text is now selectable — click and drag to highlight any text in a received or sent message.",
