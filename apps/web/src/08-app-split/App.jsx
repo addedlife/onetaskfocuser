@@ -2502,6 +2502,41 @@ function App({ user, onSignOut }) {
       setHealthConfig(prev => ({ ...(prev || {}), ...config }));
     } catch {}
   }
+
+  async function syncHealthNow() {
+    if (!user?.uid) return;
+    try {
+      const res = await fetch(`/.netlify/functions/google-health?action=sync&user_id=${encodeURIComponent(user.uid)}`);
+      if (!res.ok) return;
+      const entry = await res.json();
+      if (entry?.date) {
+        setHealthData(prev => ({ ...(prev || {}), ...entry }));
+        setHealthHistory(prev => {
+          const next = [...(prev || [])];
+          const idx = next.findIndex(d => d.date === entry.date);
+          if (idx >= 0) next[idx] = entry; else next.push(entry);
+          return next.sort((a, b) => a.date < b.date ? -1 : 1);
+        });
+      }
+      await loadHealthFromFirebase();
+    } catch {}
+  }
+
+  // Handle Google Health OAuth callback (/health-callback?code=...&state=uid)
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code  = params.get("code");
+    const state = params.get("state");
+    const path  = window.location.pathname;
+    if (path === "/health-callback" && code) {
+      window.history.replaceState({}, "", "/");
+      fetch(`/.netlify/functions/google-health?action=exchange&code=${encodeURIComponent(code)}&state=${encodeURIComponent(state || "")}`)
+        .then(r => r.json())
+        .then(() => { loadHealthFromFirebase(); setSuiteView("health"); })
+        .catch(() => {});
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const switchboardSections = [
     {
       id: "priority",
@@ -3164,7 +3199,7 @@ function App({ user, onSignOut }) {
         />
       )}
 
-      {!shellHidden && (suiteView === "nervecenter" || suiteView === "chief") && (
+      {!shellHidden && (suiteView === "nervecenter" || suiteView === "chief" || suiteView === "health") && (
         <NerveCenterPanel
           T={T}
           user={user}
@@ -3234,7 +3269,7 @@ function App({ user, onSignOut }) {
           healthConfig={healthConfig}
           healthHistory={healthHistory}
           onSaveHealthData={saveHealthDataToFirebase}
-          onSyncHealth={null}
+          onSyncHealth={syncHealthNow}
         />
       )}
 

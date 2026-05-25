@@ -24,6 +24,9 @@
 [functions."google-workspace"]
   timeout = 60
 
+[functions."google-health"]
+  timeout = 30
+
 [[headers]]
   for = "/assets/*"
   [headers.values]
@@ -48,6 +51,11 @@
 [[redirects]]
   from = "/mcp"
   to = "/.netlify/functions/mcp"
+  status = 200
+
+[[redirects]]
+  from = "/health-callback"
+  to = "/index.html"
   status = 200
 
 [[redirects]]

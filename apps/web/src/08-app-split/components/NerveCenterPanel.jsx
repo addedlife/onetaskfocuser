@@ -568,6 +568,26 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const [healthCardVisible, setHealthCardVisible] = useState(() => {
     try { return localStorage.getItem("nc_health_card_visible") !== "0"; } catch { return true; }
   });
+  const [healthCardH, setHealthCardH] = useState(() => {
+    try { return Math.max(56, Math.min(140, Number(localStorage.getItem("nc_health_card_h")) || 92)); } catch { return 92; }
+  });
+  const startHealthResize = e => {
+    if (touchLayout) return;
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = healthCardH;
+    const move = ev => {
+      const next = Math.max(56, Math.min(140, startH - (ev.clientY - startY)));
+      setHealthCardH(next);
+      try { localStorage.setItem("nc_health_card_h", String(Math.round(next))); } catch {}
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
   const [clockStyle, setClockStyle] = useState(() => { try { return localStorage.getItem("nc_clock_style") || "digital"; } catch { return "digital"; } });
   const [clockMenuPos, setClockMenuPos] = useState(null);
   const [clockTimelineOpen, setClockTimelineOpen] = useState(() => { try { return localStorage.getItem("nc_clock_timeline") === "1"; } catch { return false; } });
@@ -1519,6 +1539,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         onSyncNow={onSyncHealth}
         topOffset={topOffset}
         sidebarW={sidebarW}
+        healthCardVisible={healthCardVisible}
+        onSetHealthCardVisible={v => {
+          setHealthCardVisible(v);
+          try { localStorage.setItem("nc_health_card_visible", v ? "1" : "0"); } catch {}
+        }}
       />
     );
   }
@@ -2370,12 +2395,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
                       </div>
                       {[
-                        { lbl: "Heb Yr",  val: hMonthName,                                                            frac: hYearFrac,      col: C.accent,  op: 0.92, dur: null,  off: 0,         rk: 0 },
-                        { lbl: "Greg Yr", val: nowDate.toLocaleDateString([], { month: "short" }),                     frac: gregYrFrac,     col: C.accent,  op: 0.56, dur: null,  off: 0,         rk: 0 },
-                        { lbl: "Month",   val: `${nowDate.getDate()}/${daysInMo}`,                                     frac: dayFrac,        col: C.muted,   op: 0.78, dur: null,  off: 0,         rk: 0 },
-                        { lbl: "Day",     val: `${nowDate.getHours()}h`,                                               frac: 0,              col: C.muted,   op: 0.60, dur: 86400, off: secOfDay,  rk: nowDate.getDate() },
-                        { lbl: "Hour",    val: `${nowDate.getMinutes()}m`,                                             frac: 0,              col: C.faint,   op: 0.82, dur: 3600,  off: secOfHr,   rk: nowDate.getHours() },
-                        { lbl: "Minute",  val: `${nowDate.getSeconds()}s`,                                             frac: 0,              col: C.faint,   op: 0.50, dur: 60,    off: nowDate.getSeconds(), rk: nowDate.getMinutes() },
+                        { lbl: String(hYear),                                                                                                    val: hMonthName,                                                            frac: hYearFrac,      col: C.accent,  op: 0.92, dur: null,  off: 0,         rk: 0 },
+                        { lbl: String(nowDate.getFullYear()),                                                                                    val: nowDate.toLocaleDateString([], { month: "short" }),                     frac: gregYrFrac,     col: C.accent,  op: 0.56, dur: null,  off: 0,         rk: 0 },
+                        { lbl: nowDate.toLocaleDateString([], { month: "short" }),                                                               val: `${nowDate.getDate()}/${daysInMo}`,                                     frac: dayFrac,        col: C.muted,   op: 0.78, dur: null,  off: 0,         rk: 0 },
+                        { lbl: nowDate.toLocaleDateString([], { weekday: "short" }),                                                             val: `${nowDate.getHours()}h`,                                               frac: 0,              col: C.muted,   op: 0.60, dur: 86400, off: secOfDay,  rk: nowDate.getDate() },
+                        { lbl: `${nowDate.getHours() % 12 || 12}${nowDate.getHours() < 12 ? "am" : "pm"}`,                                      val: `${nowDate.getMinutes()}m`,                                             frac: 0,              col: C.faint,   op: 0.82, dur: 3600,  off: secOfHr,   rk: nowDate.getHours() },
+                        { lbl: `:${String(nowDate.getMinutes()).padStart(2, "0")}`,                                                              val: `${nowDate.getSeconds()}s`,                                             frac: 0,              col: C.faint,   op: 0.50, dur: 60,    off: nowDate.getSeconds(), rk: nowDate.getMinutes() },
                       ].map(({ lbl, val, frac, col, op, dur, off, rk }) => (
                         <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, minWidth: 0 }}>
                           <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, letterSpacing: 0.3, fontFamily: NC_FONT_STACK, width: 38, textAlign: "right", flexShrink: 0, textTransform: "uppercase", lineHeight: 1 }}>{lbl}</span>
@@ -2403,12 +2428,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     {clockTimelineOpen && (
                       <div style={{ padding: "10px 10px 6px", borderTop: `1px solid ${C.divider}` }}>
                         {[
-                          { lbl: "Heb Yr",  val: hMonthName,                                               frac: hYearFrac,  col: C.accent, op: 0.92, dur: null },
-                          { lbl: "Greg Yr", val: nowDate.toLocaleDateString([], { month: "short" }),        frac: gregYrFrac, col: C.accent, op: 0.56, dur: null },
-                          { lbl: "Month",   val: `${nowDate.getDate()}/${daysInMo}`,                        frac: dayFrac,    col: C.muted,  op: 0.78, dur: null },
-                          { lbl: "Day",     val: `${nowDate.getHours()}h`,                                  frac: 0,          col: C.muted,  op: 0.60, dur: 86400 },
-                          { lbl: "Hour",    val: `${nowDate.getMinutes()}m`,                                frac: 0,          col: C.faint,  op: 0.82, dur: 3600  },
-                          { lbl: "Minute",  val: `${nowDate.getSeconds()}s`,                                frac: 0,          col: C.faint,  op: 0.50, dur: 60    },
+                          { lbl: String(hYear),                                                              val: hMonthName,                                               frac: hYearFrac,  col: C.accent, op: 0.92, dur: null },
+                          { lbl: String(nowDate.getFullYear()),                                             val: nowDate.toLocaleDateString([], { month: "short" }),        frac: gregYrFrac, col: C.accent, op: 0.56, dur: null },
+                          { lbl: nowDate.toLocaleDateString([], { month: "short" }),                       val: `${nowDate.getDate()}/${daysInMo}`,                        frac: dayFrac,    col: C.muted,  op: 0.78, dur: null },
+                          { lbl: nowDate.toLocaleDateString([], { weekday: "short" }),                     val: `${nowDate.getHours()}h`,                                  frac: 0,          col: C.muted,  op: 0.60, dur: 86400 },
+                          { lbl: `${nowDate.getHours() % 12 || 12}${nowDate.getHours() < 12 ? "am" : "pm"}`, val: `${nowDate.getMinutes()}m`,                             frac: 0,          col: C.faint,  op: 0.82, dur: 3600  },
+                          { lbl: `:${String(nowDate.getMinutes()).padStart(2, "0")}`,                       val: `${nowDate.getSeconds()}s`,                                frac: 0,          col: C.faint,  op: 0.50, dur: 60    },
                         ].map(({ lbl, val, frac, col, op, dur }) => (
                           <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, minWidth: 0 }}>
                             <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, letterSpacing: 0.3, fontFamily: NC_FONT_STACK, width: 38, textAlign: "right", flexShrink: 0, textTransform: "uppercase", lineHeight: 1 }}>{lbl}</span>
@@ -2600,19 +2625,22 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           );
         })()}
 
-        {/* ── Health Card — bottom row, closeable ── */}
+        {/* ── Health Card — bottom row, resizable, closeable ── */}
         {!isStacked && healthCardVisible && (
-          <HealthCard
-            T={T}
-            C={C}
-            healthData={healthData}
-            healthConfig={healthConfig}
-            onOpenHealth={onOpenHealth}
-            onDismiss={() => {
-              setHealthCardVisible(false);
-              try { localStorage.setItem("nc_health_card_visible", "0"); } catch {}
-            }}
-          />
+          <div style={{ height: healthCardH, flexShrink: 0 }}>
+            <HealthCard
+              C={C}
+              healthData={healthData}
+              healthHistory={healthHistory}
+              onOpenHealth={onOpenHealth}
+              cardHeight={healthCardH}
+              onResizeStart={startHealthResize}
+              onDismiss={() => {
+                setHealthCardVisible(false);
+                try { localStorage.setItem("nc_health_card_visible", "0"); } catch {}
+              }}
+            />
+          </div>
         )}
 
         {/* Actions drawer */}

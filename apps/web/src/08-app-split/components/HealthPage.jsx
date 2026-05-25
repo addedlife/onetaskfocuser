@@ -426,19 +426,22 @@ function ManualEntryModal({ C, onClose, onSave }) {
 // ── HealthPage ────────────────────────────────────────────────────────────────
 export function HealthPage({
   T, C,
-  healthData,       // today's snapshot { steps, heartRate, sleep, weight, source }
-  healthConfig,     // { goals, fitbitLinked, googleFitLinked }
-  healthHistory,    // array of { date, steps, heartRate, sleep, weight }
+  healthData,
+  healthConfig,
+  healthHistory,
   onClose,
-  onSaveHealthData, // (data) => void — saves manual entry to Firebase
-  onSyncNow,        // () => void
+  onSaveHealthData,
+  onSyncNow,
   topOffset = 0,
   sidebarW = 0,
+  healthCardVisible = true,
+  onSetHealthCardVisible,
 }) {
   const [period, setPeriod]           = useState("week");
   const [showConnect, setShowConnect] = useState(false);
   const [showManual, setShowManual]   = useState(false);
   const [syncing, setSyncing]         = useState(false);
+  const [connectLoading, setConnectLoading] = useState(false);
 
   const config  = healthConfig || {};
   const goals   = config.goals  || {};
@@ -689,6 +692,32 @@ export function HealthPage({
             </div>
           </div>
         )}
+
+        {/* NerveCenter card toggle */}
+        {onSetHealthCardVisible && (
+          <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${C.divider}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK }}>Show on NerveCenter</div>
+              <div style={{ fontSize: 11.5, color: C.muted, fontFamily: NC_FONT_STACK, marginTop: 2 }}>Display a compact health strip in the NerveCenter dashboard</div>
+            </div>
+            <button
+              onClick={() => onSetHealthCardVisible(!healthCardVisible)}
+              style={{
+                width: 42, height: 24, borderRadius: 12, border: "none",
+                background: healthCardVisible ? C.accent : C.divider,
+                cursor: "pointer", padding: 0, position: "relative", flexShrink: 0,
+                transition: "background 0.2s",
+              }}
+            >
+              <span style={{
+                position: "absolute", top: 3, left: healthCardVisible ? 21 : 3,
+                width: 18, height: 18, borderRadius: "50%", background: "#fff",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.18)",
+                transition: "left 0.2s",
+              }} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Modals */}
@@ -696,10 +725,18 @@ export function HealthPage({
         <ConnectModal
           C={C}
           onClose={() => setShowConnect(false)}
-          onStartFitbit={() => { setShowConnect(false); /* TODO: open Fitbit OAuth */ }}
-          onStartGoogleFit={() => { setShowConnect(false); /* TODO: Google Fit link */ }}
+          onStartFitbit={() => {}}
+          onStartGoogleFit={async () => {
+            setConnectLoading(true);
+            try {
+              const userId = config.userId || "";
+              const r = await fetch(`/.netlify/functions/google-health?action=authorize-url&user_id=${encodeURIComponent(userId)}`);
+              const { url } = await r.json();
+              if (url) window.location.href = url;
+            } catch { setConnectLoading(false); }
+          }}
           fitbitLinked={config.fitbitLinked}
-          googleFitLinked={config.googleFitLinked}
+          googleFitLinked={config.googleFitLinked || config.oauthType === "google"}
         />
       )}
       {showManual && (

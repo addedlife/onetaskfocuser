@@ -1,164 +1,188 @@
 import React from 'react';
-import { NC_FONT_STACK, NC_TYPE, suiteIcon } from '../ui-tokens.jsx';
+import { NC_FONT_STACK, NC_TYPE } from '../ui-tokens.jsx';
 
-// Google Health-style color palette
-const METRIC_COLOR = {
-  steps:     "#4285F4",
-  heartRate: "#EA4335",
-  sleep:     "#7C3AED",
-  weight:    "#00897B",
-};
+// Demo data — used only when no real health history is present
+const DEMO_HR_SERIES = [
+  58,57,56,55,54,56,62,68,74,78,80,82,79,77,80,83,78,75,73,70,68,65,62,60
+];
+const DEMO = { steps: 6234, stepsMAvg: 7841, stepsYAvg: 8102, sleep: 7.38, sleepMAvg: 7.75, sleepYAvg: 7.5, weight: 175.2, weightMAvg: 174.8, weightYAvg: 173.5 };
 
 function formatSleep(val) {
-  if (val === null || val === undefined) return "—";
+  if (!val && val !== 0) return "—";
   const h = Math.floor(val);
   const m = Math.round((val % 1) * 60);
   return `${h}h ${m < 10 ? "0" : ""}${m}m`;
 }
 
-function MetricArc({ value, goal, color, size = 64, sw = 5.5 }) {
-  const bg = `${color}20`;
-  const r = (size - sw) / 2;
-  const circ = 2 * Math.PI * r;
-  const pct = goal && value ? Math.min(1, value / goal) : 0;
-  const dash = circ * pct;
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}
-      style={{ transform: "rotate(-90deg)", display: "block", flexShrink: 0 }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={bg} strokeWidth={sw} />
-      {pct > 0 && (
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={sw}
-          strokeDasharray={`${dash} ${circ - dash}`} strokeLinecap="round"
-          style={{ transition: "stroke-dasharray 1.1s cubic-bezier(0.4,0,0.2,1)" }}
-        />
-      )}
-    </svg>
-  );
+function avgField(records, field) {
+  const vals = (records || []).map(r => r[field]).filter(v => v != null && Number.isFinite(v));
+  return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
 }
 
-function MetricSolid({ color, size = 64 }) {
-  const bg = `${color}1A`;
+// Muted small HR line graph
+function HRLine({ series, color, height = 38 }) {
+  const pts = (series || []).filter(v => v != null && Number.isFinite(v));
+  if (pts.length < 2) return <div style={{ height }} />;
+  const min = Math.min(...pts) - 3;
+  const max = Math.max(...pts) + 3;
+  const range = max - min || 1;
+  const w = 110;
+  const coords = pts.map((v, i) => {
+    const x = (i / (pts.length - 1)) * w;
+    const y = height - ((v - min) / range) * height;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const low  = Math.round(Math.min(...pts));
+  const high = Math.round(Math.max(...pts));
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: "block", flexShrink: 0 }}>
-      <circle cx={size / 2} cy={size / 2} r={size / 2 - 3} fill={bg} />
-      <circle cx={size / 2} cy={size / 2} r={size / 2 - 3} fill="none" stroke={color} strokeWidth={1.5} strokeOpacity={0.35} />
-    </svg>
-  );
-}
-
-function MetricCell({ label, icon, color, display, value, goal, useRing }) {
-  return (
-    <div style={{
-      display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-      flex: 1, minWidth: 0, padding: "0 4px",
-    }}>
-      <div style={{ position: "relative", width: 64, height: 64, flexShrink: 0 }}>
-        {useRing
-          ? <MetricArc value={value} goal={goal} color={color} />
-          : <MetricSolid color={color} />
-        }
-        <div style={{
-          position: "absolute", inset: 0, display: "flex",
-          alignItems: "center", justifyContent: "center",
-        }}>
-          <span className="material-symbols-rounded"
-            style={{ fontSize: 18, color, lineHeight: 1 }}>{icon}</span>
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <svg width={w} height={height} viewBox={`0 0 ${w} ${height}`} style={{ display: "block", overflow: "visible" }}>
+        <polyline points={coords} fill="none" stroke={color} strokeWidth={1.5}
+          strokeLinecap="round" strokeLinejoin="round" opacity={0.7} />
+      </svg>
+      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: NC_FONT_STACK, fontSize: 9, opacity: 0.45 }}>
+        <span>{low}</span><span style={{ opacity: 0.5 }}>bpm</span><span>{high}</span>
       </div>
-      <span style={{
-        fontSize: 13, fontWeight: 700, color, fontFamily: NC_FONT_STACK,
-        lineHeight: 1.15, textAlign: "center", whiteSpace: "nowrap",
-        overflow: "hidden", maxWidth: "100%", textOverflow: "ellipsis",
-      }}>{display}</span>
-      <span style={{
-        fontSize: 10, color: "#888", fontFamily: NC_FONT_STACK,
-        textAlign: "center", lineHeight: 1.2,
-      }}>{label}</span>
     </div>
   );
 }
 
-export function HealthCard({ T, C, healthData, healthConfig, onOpenHealth, onDismiss }) {
-  const data = healthData || {};
-  const config = healthConfig || {};
-  const goals = config.goals || {};
-  const isDemo = !healthData || data.source === "demo" || !data.source;
-  const connected = !isDemo;
+// Each metric section: label row + value rows
+function MetricSection({ label, rows, C }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1 }}>{label}</span>
+      {rows.map(([period, val], i) => (
+        <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+          <span style={{ fontSize: 9.5, color: C.faint, fontFamily: NC_FONT_STACK, minWidth: 10, lineHeight: 1.5 }}>{period}</span>
+          <span style={{ fontSize: 12.5, fontWeight: i === 0 ? 600 : 400, color: i === 0 ? C.text : C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.4, whiteSpace: "nowrap" }}>{val}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-  const statusDot = connected ? "#34A853" : C.faint || "#aaa";
-  const statusLabel = connected
-    ? `Synced · ${data.source === "fitbit" ? "Fitbit" : data.source === "googlefit" ? "Google Fit" : "Manual"}`
-    : "Demo — tap Open to connect";
+export function HealthCard({
+  C,
+  healthData,
+  healthHistory,
+  onOpenHealth,
+  onDismiss,
+  cardHeight = 92,
+  onResizeStart,
+}) {
+  const today   = new Date().toISOString().slice(0, 10);
+  const thisM   = today.slice(0, 7);
+  const thisY   = today.slice(0, 4);
+  const data    = healthData || {};
+  const hist    = healthHistory || [];
+  const mRecs   = hist.filter(r => r.date?.startsWith(thisM));
+  const yRecs   = hist.filter(r => r.date?.startsWith(thisY));
+  const isDemo  = !hist.length && !data.source;
 
-  const stepsVal  = data.steps     ?? (isDemo ? 6234  : null);
-  const hrVal     = data.heartRate ?? (isDemo ? 72    : null);
-  const sleepVal  = data.sleep     ?? (isDemo ? 7.38  : null);
-  const weightVal = data.weight    ?? (isDemo ? 175.2 : null);
+  const stepsD    = data.steps        ?? (isDemo ? DEMO.steps     : null);
+  const stepsMAvg = avgField(mRecs, "steps") ?? (isDemo ? DEMO.stepsMAvg : null);
+  const stepsYAvg = avgField(yRecs, "steps") ?? (isDemo ? DEMO.stepsYAvg : null);
 
-  const stepsGoal  = goals.steps || 10000;
-  const sleepGoal  = goals.sleep || 8;
+  const sleepD    = data.sleep        ?? (isDemo ? DEMO.sleep     : null);
+  const sleepMAvg = avgField(mRecs, "sleep") ?? (isDemo ? DEMO.sleepMAvg : null);
+  const sleepYAvg = avgField(yRecs, "sleep") ?? (isDemo ? DEMO.sleepYAvg : null);
+
+  const weightD    = data.weight       ?? (isDemo ? DEMO.weight    : null);
+  const weightMAvg = avgField(mRecs, "weight") ?? (isDemo ? DEMO.weightMAvg : null);
+  const weightYAvg = avgField(yRecs, "weight") ?? (isDemo ? DEMO.weightYAvg : null);
+
+  const hrSeries = data.hrSeries ?? (isDemo ? DEMO_HR_SERIES : null);
+  const hrNow    = data.heartRate ?? (isDemo ? 72 : null);
+
+  const fmtSteps = v => v != null ? Math.round(v).toLocaleString() : "—";
+  const fmtWeight = v => v != null ? `${(+v).toFixed(1)} lb` : "—";
+  const lineColor = C.muted || "#999";
 
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 10,
-      padding: "10px 16px",
-      background: C.bg,
-      border: `1px solid ${C.divider}`,
-      borderRadius: 10,
-      flexShrink: 0,
-    }}>
-      {/* Left: title + status */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 72, flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <span className="material-symbols-rounded" style={{ fontSize: 14, color: METRIC_COLOR.heartRate }}>favorite</span>
-          <span style={{ fontSize: NC_TYPE.label || 12, fontWeight: 700, fontFamily: NC_FONT_STACK, color: C.text }}>Health</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: statusDot, flexShrink: 0 }} />
-          <span style={{ fontSize: 9.5, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.2 }}>{statusLabel}</span>
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
+
+      {/* Drag handle — grab this top bar to resize */}
+      <div
+        onPointerDown={onResizeStart}
+        title="Drag to resize"
+        style={{ height: 8, cursor: "row-resize", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, touchAction: "none" }}
+      >
+        <span style={{ width: 36, height: 2, borderRadius: 2, background: C.divider, opacity: 0.6 }} />
       </div>
 
-      {/* Middle: 4 metric rings */}
-      <div style={{ flex: 1, display: "flex", justifyContent: "space-evenly", alignItems: "flex-start", minWidth: 0, gap: 4 }}>
-        <MetricCell
-          label="Steps" icon="directions_walk" color={METRIC_COLOR.steps}
-          value={stepsVal} goal={stepsGoal} useRing display={stepsVal !== null ? Number(stepsVal).toLocaleString() : "—"}
-        />
-        <MetricCell
-          label="Heart" icon="favorite" color={METRIC_COLOR.heartRate}
-          value={hrVal} goal={null} useRing={false} display={hrVal !== null ? `${hrVal} bpm` : "—"}
-        />
-        <MetricCell
-          label="Sleep" icon="bedtime" color={METRIC_COLOR.sleep}
-          value={sleepVal} goal={sleepGoal} useRing display={formatSleep(sleepVal)}
-        />
-        <MetricCell
-          label="Weight" icon="monitor_weight" color={METRIC_COLOR.weight}
-          value={weightVal} goal={null} useRing={false} display={weightVal !== null ? `${weightVal} lb` : "—"}
-        />
-      </div>
+      {/* Content row */}
+      <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", alignItems: "flex-start", gap: 0, padding: "0 14px 10px" }}>
 
-      {/* Right: Open + Dismiss */}
-      <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
-        <button onClick={onOpenHealth} style={{
-          height: 30, padding: "0 11px", borderRadius: 15,
-          border: `1px solid ${C.divider}`,
-          background: C.bgSoft || "transparent",
-          color: C.text, cursor: "pointer",
-          fontSize: 11.5, fontFamily: NC_FONT_STACK, fontWeight: 500,
-          display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap",
-        }}>
-          {suiteIcon("open_in_full", 11)} Open
-        </button>
-        <button onClick={onDismiss} title="Dismiss health card" style={{
-          width: 22, height: 22, borderRadius: "50%", border: "none",
-          background: "transparent", cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color: C.faint, padding: 0, flexShrink: 0,
-        }}>
-          <span className="material-symbols-rounded" style={{ fontSize: 14 }}>close</span>
-        </button>
+        {/* Label + status */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 56, flexShrink: 0, paddingRight: 14, borderRight: `1px solid ${C.divider}`, marginRight: 14, paddingTop: 2 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0.3 }}>Health</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: data.source && data.source !== "demo" ? "#34A853" : C.faint, flexShrink: 0 }} />
+            <span style={{ fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1.3 }}>
+              {data.source && data.source !== "demo" ? data.source : "demo"}
+            </span>
+          </div>
+          <button
+            onClick={onOpenHealth}
+            style={{ marginTop: 4, fontSize: 9.5, color: C.muted, background: "none", border: `1px solid ${C.divider}`, borderRadius: 5, padding: "2px 7px", cursor: "pointer", fontFamily: NC_FONT_STACK, fontWeight: 500, whiteSpace: "nowrap", lineHeight: 1.4 }}
+          >
+            Open ↗
+          </button>
+        </div>
+
+        {/* Steps */}
+        <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+          <MetricSection label="Steps" C={C} rows={[
+            ["D", fmtSteps(stepsD)],
+            ["M", fmtSteps(stepsMAvg)],
+            ["Y", fmtSteps(stepsYAvg)],
+          ]} />
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, alignSelf: "stretch", background: C.divider, flexShrink: 0, marginRight: 12 }} />
+
+        {/* Sleep */}
+        <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+          <MetricSection label="Sleep" C={C} rows={[
+            ["D", formatSleep(sleepD)],
+            ["M", formatSleep(sleepMAvg)],
+            ["Y", formatSleep(sleepYAvg)],
+          ]} />
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, alignSelf: "stretch", background: C.divider, flexShrink: 0, marginRight: 12 }} />
+
+        {/* Weight */}
+        <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+          <MetricSection label="Weight" C={C} rows={[
+            ["D", fmtWeight(weightD)],
+            ["M", fmtWeight(weightMAvg)],
+            ["Y", fmtWeight(weightYAvg)],
+          ]} />
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, alignSelf: "stretch", background: C.divider, flexShrink: 0, marginRight: 12 }} />
+
+        {/* Heart Rate — line graph */}
+        <div style={{ flex: 1.4, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 }}>
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1 }}>
+            Pulse{hrNow != null ? ` · ${hrNow} bpm` : ""}
+          </span>
+          <div style={{ marginTop: 2 }}>
+            <HRLine series={hrSeries} color={lineColor} height={Math.max(28, cardHeight - 52)} />
+          </div>
+        </div>
+
+        {/* Dismiss */}
+        <button
+          onClick={onDismiss}
+          title="Hide health card"
+          style={{ marginLeft: 8, alignSelf: "flex-start", marginTop: 1, width: 18, height: 18, borderRadius: "50%", border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: C.faint, padding: 0, flexShrink: 0, fontSize: 14, lineHeight: 1 }}
+        >×</button>
       </div>
     </div>
   );
