@@ -10,7 +10,8 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   curEnergy, onSetEnergy, focusModeActive, onToggleFocusMode,
   effectiveCount, overwhelmThreshold, hasAI, aiConfig,
   deskPhoneThemeSync = true, deskPhoneOnline = false,
-  onToggleDeskPhoneThemeSync, onRefreshDeskPhoneTheme, initialTab = "queue"}) {
+  onToggleDeskPhoneThemeSync, onRefreshDeskPhoneTheme, initialTab = "queue",
+  sidebarW = 0}) {
 
   const [sTab, setSTab] = useState(initialTab || "queue");
   const [backupFolderInfo, setBackupFolderInfo] = useState({ available: false, set: false, name: "", permission: "unknown" });
@@ -154,7 +155,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   };
 
   return (
-    <div style={{position:"fixed",inset:0,zIndex:8500,background:sTab==="appearance"?"rgba(0,0,0,0.08)":"rgba(0,0,0,0.32)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto",padding:24,transition:"background 0.3s",fontFamily:NC_FONT_STACK}} onClick={onClose}>
+    <div style={{position:"fixed",inset:0,zIndex:8500,background:sTab==="appearance"?"rgba(0,0,0,0.08)":"rgba(0,0,0,0.32)",display:"flex",alignItems:"center",justifyContent:"flex-start",overflowY:"auto",paddingTop:24,paddingRight:24,paddingBottom:24,paddingLeft:Math.max(24,(sidebarW||0)+12),transition:"background 0.3s",fontFamily:NC_FONT_STACK}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:sTab==="appearance"?T.card+"f7":T.card,borderRadius:8,border:`1px solid ${T.brdS || T.brd}`,padding:"28px 26px",maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:`0 12px 32px rgba(60,64,67,0.22)`,transition:"background 0.3s",fontFamily:NC_FONT_STACK}}>
 
         {/* Header */}

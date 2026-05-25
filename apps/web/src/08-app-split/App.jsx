@@ -56,6 +56,7 @@ function App({ user, onSignOut }) {
   const [justOpt, setJustOpt] = useState(false);
   const [showSet, setShowSet] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState("queue");
+  const [lpMenu, setLpMenu] = useState(false);
   const [showLM, setShowLM] = useState(false);
   const [showListMgr, setShowListMgr] = useState(false);
   // tipIdx/dailyTip removed — replaced by carousel (tipViewIdx)
@@ -2907,7 +2908,7 @@ function App({ user, onSignOut }) {
       )}
       {blockedModal && <BlockedModal task={blockedModal} T={T} pris={pris} onBlock={blockTask} onClose={()=>setBlockedModal(null)}/>}
       {/* Context tags removed */}
-      {showSet && <SettingsModal AS={AS} setAS={setAS} T={T} ap={ap} initialTab={settingsInitialTab} onClose={()=>setShowSet(false)} onSignOut={onSignOut}
+      {showSet && <SettingsModal AS={AS} setAS={setAS} T={T} ap={ap} initialTab={settingsInitialTab} onClose={()=>setShowSet(false)} onSignOut={onSignOut} sidebarW={sidebarW}
         hasAI={hasAI} aiConfig={aiConfig}
         curEnergy={curEnergy} onSetEnergy={e=>setAS(p=>({...p,currentEnergy:e}))}
         focusModeActive={focusModeActive} onToggleFocusMode={()=>setFocusModeActive(f=>!f)}
@@ -3386,6 +3387,68 @@ function App({ user, onSignOut }) {
 
             </div>{/* end spine */}
 
+            {/* ── Hamburger menu — floating access to all task actions ── */}
+            {(()=>{
+              const spinnerIcon = <div style={{width:14,height:14,borderRadius:"50%",border:`2px solid ${T.tSoft}`,borderTopColor:"transparent",animation:"ot-spin 0.7s linear infinite"}}/>;
+              const menuSections = [
+                ...(curT ? [{ cat: "Current Task", items: [
+                  {icon:<span style={{fontSize:14,lineHeight:1,color:T.tSoft,fontFamily:"Georgia,serif"}}>≈</span>, label:"Good enough", action:()=>goodEnoughTask(curT.id)},
+                  {icon:<IC.Pause s={14} c={T.tSoft}/>, label:"Mark blocked", action:()=>setBlockedModal(curT)},
+                  {icon:<IC.PriC s={14} c={T.tSoft}/>, label:"Change priority", action:()=>setChgPri(curT.id)},
+                  ...(curT?.parentTask ? [{icon:<span style={{fontSize:12,lineHeight:1,color:T.tSoft}}>{suiteIcon("nature",14)}</span>, label:"Park rest", action:()=>parkRestOfGroup(curT)}] : []),
+                  {icon:<IC.Trash s={14} c="#C06060"/>, label:"Delete", action:()=>delTask(curT.id)},
+                ]}] : []),
+                { cat: "Navigate", items: [
+                  {icon:<IC.List s={14} c={T.tSoft}/>, label:`Queue (${effectiveCount})`, action:()=>switchTab("queue")},
+                  {icon:<IC.Bulb s={14} c={T.tSoft}/>, label:"Insights", action:()=>switchTab("insights")},
+                  {icon:<IC.Gear s={14} c={T.tSoft}/>, label:"Settings", action:()=>{setSettingsInitialTab("queue"); setShowSet(true);}},
+                ]},
+                { cat: "Focus", items: [
+                  {icon:<IC.Moon s={14} c={T.tSoft}/>, label:"Enter zen", action:()=>setZen(true)},
+                  {icon:<IC.Moon s={14} c={zenOn?"#2ECC71":T.tFaint}/>, label:zenOn?"Auto-zen ✓":"Auto-zen ✗", action:()=>setAS(p=>({...p,zenEnabled:!p.zenEnabled}))},
+                  {icon:<IC.Timer s={14} c={T.tSoft}/>, label:"Just Start timer", action:()=>{if(curT)setJustStartId(justStartId===curT?.id?null:curT?.id);}},
+                  {icon:<IC.Person s={14} c={T.tSoft}/>, label:"Body double", action:()=>setShowBodyDouble(true)},
+                ]},
+                { cat: "Add & Organize", items: [
+                  {icon: optLoading ? spinnerIcon : <IC.Sparkle s={14} c={T.tSoft}/>, label: optLoading?"Thinking…": hasAI?"AI Prioritize":"Prioritize", action: tasksOptimize},
+                  {icon:<IC.Brain s={14} c={T.tSoft}/>, label:"Brain dump", action:()=>setShowBrainDump(true)},
+                  {icon:<IC.Plus s={14} c={T.tSoft}/>, label:"Bulk add", action:()=>setShowBulk(true)},
+                  {icon:<IC.Split s={14} c={T.tSoft}/>, label:"Shatter task", action:()=>setShowBD(true)},
+                ]},
+                { cat: "Data", items: [
+                  {icon: backupLoading ? spinnerIcon : suiteIcon("download",14), label: backupLoading?"Saving…":"Backup", action: doFullBackup},
+                  {icon:suiteIcon("folder",14), label:"Restore", action: doLoadBackup},
+                  {icon:suiteIcon("auto_awesome",14), label:"Shaila log", action:()=>setShowShailaManager(true)},
+                ]},
+              ];
+              return (
+                <div style={{position:"fixed",top:"clamp(12px,2vh,20px)",left:(sidebarW + 12) + "px",zIndex:200}}>
+                  <button onClick={()=>setLpMenu(p=>!p)} style={{width:36,height:36,borderRadius:10,background:T.glow?`${T.card}cc`:T.card,border:`1px solid ${T.brd}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:T.glow?`0 0 12px ${T.brd}80`:T.shadow,transition:"box-shadow 0.2s"}}
+                    onMouseEnter={e=>{e.currentTarget.style.boxShadow=T.glow?`0 0 20px ${T.brd}`:"0 4px 16px rgba(0,0,0,0.12)";}}
+                    onMouseLeave={e=>{e.currentTarget.style.boxShadow=T.glow?`0 0 12px ${T.brd}80`:T.shadow;}}>
+                    <IC.List s={16} c={T.tSoft}/>
+                  </button>
+                  {lpMenu && (
+                    <div style={{position:"fixed",top:"clamp(56px,calc(2vh + 44px),72px)",left:(sidebarW + 12) + "px",background:T.card,border:`1px solid ${T.brd}`,borderRadius:14,padding:"8px 0",minWidth:200,zIndex:9999,boxShadow:T.glow?`0 4px 30px ${T.bg}cc, 0 0 20px ${T.brd}60`:"0 8px 32px rgba(0,0,0,0.18)",animation:"ot-fade 0.15s",maxHeight:"calc(100vh - 80px)",overflowY:"auto"}}
+                      onClick={()=>setLpMenu(false)}>
+                      {menuSections.map((sec,si)=>(
+                        <div key={si}>
+                          <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,color:T.tFaint,padding:"8px 16px 4px",fontFamily:NC_FONT_STACK}}>{sec.cat}</div>
+                          {sec.items.map((item,ii)=>(
+                            <button key={ii} onClick={item.action} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"7px 16px",background:"none",border:"none",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,color:T.text,textAlign:"left",transition:"background 0.1s"}}
+                              onMouseEnter={e=>{e.currentTarget.style.background=T.bgW;}} onMouseLeave={e=>{e.currentTarget.style.background="none";}}>
+                              <span style={{width:20,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{item.icon}</span>
+                              {item.label}
+                            </button>
+                          ))}
+                          {si < menuSections.length-1 && <div style={{height:1,background:T.brdS,margin:"4px 12px"}}/>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* PostIt stack — Tasks screen only */}
             {suiteView === "focus" && tab === "focus" && compT.length > 0 && (
