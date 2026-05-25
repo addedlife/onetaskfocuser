@@ -236,7 +236,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           setUsingRelay(true);
         } catch (relayErr) {
           const msg = String(relayErr?.message || "");
-          throw new Error(msg.includes("404") ? "relay:no_state" : "relay:fail:" + msg);
+          if (msg.includes("404")) throw new Error("relay:no_state");
+          if (msg.includes("401")) throw new Error("relay:no_auth");
+          if (msg.includes("403")) throw new Error("relay:denied");
+          throw new Error("relay:fail:" + msg);
         }
       } else {
         usingRelayRef.current = false;
@@ -271,12 +274,14 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       messagesSigRef.current = ""; callsSigRef.current = ""; contactsSigRef.current = "";
       const msg = String(e?.message || "");
       setError(msg === "relay:no_state"
-        ? "Relay reachable — DeskPhone hasn't pushed yet. Is DeskPhone running on your PC?"
+        ? "Relay reachable — DeskPhone hasn't pushed yet. Is DeskPhone running with relay enabled?"
         : msg === "relay:no_auth"
           ? "Sign in to access DeskPhone remotely."
-          : msg.startsWith("relay:fail:")
-            ? "Cloud relay unreachable. Check Netlify deploy and env vars."
-            : "Open DeskPhone to use calls and texts.");
+          : msg === "relay:denied"
+            ? "Relay blocked by Firestore rules — set allow read, write: if true for phone-relay collection."
+            : msg.startsWith("relay:fail:")
+              ? "Cloud relay unreachable. Check Netlify deploy and env vars."
+              : "Open DeskPhone to use calls and texts.");
       usingRelayRef.current = false;
       setUsingRelay(false);
       onOnlineChange?.(false);

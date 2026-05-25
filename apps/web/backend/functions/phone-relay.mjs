@@ -50,20 +50,22 @@ function err(statusCode, msg) {
 
 /**
  * Read a Firestore document.
- * Pass idToken to call as an authenticated Firebase user (Firestore rules apply).
- * Omit idToken to call with only the API key (unauthenticated — only works where rules allow it).
+ * Pass idToken for authenticated reads (Firestore rules: request.auth != null).
+ * Always includes the API key so Firebase can route the request to the right project.
+ *
+ * Required Firestore security rules for phone-relay collection:
+ *   allow read: if request.auth != null;  // state doc — webapp reads with user token
+ *   allow write: if true;                 // all writes gated at Netlify function layer
+ * For the commands doc, allow read, write: if true (DeskPhone drains without user token).
  */
 async function fsGet(docId, idToken = null) {
-  let url, headers = {};
-  if (idToken) {
-    url = `${FS_BASE}/${docId}`;
-    headers["Authorization"] = `Bearer ${idToken}`;
-  } else {
-    url = `${FS_BASE}/${docId}?key=${FB_API_KEY}`;
-  }
+  const url = `${FS_BASE}/${docId}?key=${FB_API_KEY}`;
+  const headers = {};
+  if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
   const res = await fetch(url, { headers });
   if (res.status === 404) return null;
-  if (res.status === 403) throw new Error("Firestore denied — check auth or security rules");
+  if (res.status === 401) throw new Error("auth:token_invalid");
+  if (res.status === 403) throw new Error("auth:firestore_denied");
   if (!res.ok) throw new Error(`Firestore GET ${docId} → HTTP ${res.status}`);
   const json = await res.json();
   return json.fields?.data?.stringValue ?? null;
@@ -110,7 +112,8 @@ export const handler = async (event) => {
       if (!state) return err(404, "No state — DeskPhone has not pushed yet");
       return ok(state); // already a JSON string — return as-is
     } catch (e) {
-      if (e.message.includes("denied")) return err(403, e.message);
+      if (e.message === "auth:token_invalid") return err(401, "Invalid or expired Firebase token — sign in again");
+      if (e.message === "auth:firestore_denied") return err(403, "Firestore security rules denied access — set allow read: if request.auth != null for phone-relay/state");
       return err(500, "Failed to read state: " + e.message);
     }
   }
