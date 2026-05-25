@@ -724,7 +724,7 @@ function OverwhelmBanner({count, threshold, onShowAll, T}) {
 
 // PostItStack — completed task trophies
 // Cards use PRIORITY COLORS only — no text label needed, color conveys priority
-function PostItStack({tasks, pris, T, open, onToggle, onUncomp, onClone}) {
+function PostItStack({tasks, pris, T, open, onToggle, onUncomp, onClone, sidebarW = 0}) {
   const [sortBy, setSortBy] = useState("completed");
   const [viewMode, setViewMode] = useState("stack"); // "stack" | "board"
   const [fanned, setFanned] = useState(false);
@@ -825,7 +825,7 @@ function PostItStack({tasks, pris, T, open, onToggle, onUncomp, onClone}) {
             onMouseLeave={()=>{if(!selCard)setPaused(false);}}
             style={{
               position:"fixed",
-              left: Math.max(8, btnRect.left - cardW - 14),
+              left: Math.max(sidebarW + 8, btnRect.left - cardW - 14),
               top: 0,
               width: cardW,
               height: "100vh",
@@ -940,7 +940,7 @@ function PostItStack({tasks, pris, T, open, onToggle, onUncomp, onClone}) {
               </>
             ) : (
               <div style={{position:"relative"}}>
-                {recent.map((task, i) => {
+                {sortedTasks.map((task, i) => {
                   const p = gP(pris, task.priority);
                   const xShift = (i % 3 - 1) * 4;
                   const rot = ((i % 5) - 2) * 1.0;
@@ -969,9 +969,6 @@ function PostItStack({tasks, pris, T, open, onToggle, onUncomp, onClone}) {
                     </div>
                   );
                 })}
-                {tasks.length > 30 && (
-                  <p style={{textAlign:"center",fontSize:11,color:T.tFaint,fontFamily:"system-ui",marginTop:16,padding:8}}>Showing most recent 30 of {tasks.length}</p>
-                )}
               </div>
             )}
           </div>

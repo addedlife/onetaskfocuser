@@ -3452,8 +3452,8 @@ function App({ user, onSignOut }) {
 
             {/* PostIt stack — Tasks screen only */}
             {suiteView === "focus" && tab === "focus" && compT.length > 0 && (
-              <div style={{position:"fixed",bottom:"clamp(24px,4vh,48px)",left:(sidebarW + 16) + "px",zIndex:Z.overlay}}>
-                <PostItStack tasks={compT} pris={pris} T={T} open={postItOpen} onToggle={()=>setPostItOpen(p=>!p)} onUncomp={uncompTask} onClone={cloneTask}/>
+              <div style={{position:"fixed",bottom:"clamp(24px,4vh,48px)",right:"24px",zIndex:Z.overlay}}>
+                <PostItStack tasks={compT} pris={pris} T={T} open={postItOpen} sidebarW={sidebarW} onToggle={()=>setPostItOpen(p=>!p)} onUncomp={uncompTask} onClone={cloneTask}/>
               </div>
             )}
 
