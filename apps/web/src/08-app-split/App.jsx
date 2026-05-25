@@ -309,19 +309,28 @@ function App({ user, onSignOut }) {
       }
       // If Firebase failed (not just empty), warn the user — their data might be recoverable
       if (Store._fbLoadStatus === 'error') setFbOffline(true);
-      
-      // USE OFFLINE CACHE ONLY IF FIREBASE IS UNREACHABLE
+
+      // USE LOCAL CACHE if Firebase is unreachable OR if Firebase is empty but local
+      // has real tasks. The second case happens after a rules outage: Firebase was
+      // inaccessible for a period so all saves went to localStorage only. Now that
+      // Firebase is reachable again its docs don't exist yet — we must seed it from
+      // the local copy rather than wiping the user's work with a blank default state.
       const localData = Store.ll();
-      if (Store._fbLoadStatus === 'error' && localData && localData.lists && localData.lists.some(l => l.tasks?.length > 0)) {
-         console.warn("Firebase was unreachable! Fusing with offline local cache.");
-         const fused = {...defS, ...localData, _lsModified: Date.now()};
-         lastSavedModified.current = fused._lsModified;
-         setAS(fused);
-         setLoaded(true);
-         return;
+      const localHasTasks = localData && localData.lists && localData.lists.some(l => l.tasks?.length > 0);
+      if (localHasTasks && (Store._fbLoadStatus === 'error' || Store._fbLoadStatus === 'empty')) {
+        if (Store._fbLoadStatus === 'error') {
+          console.warn("[App] Firebase unreachable — loading from localStorage.");
+        } else {
+          console.log("[App] Firebase empty but localStorage has tasks — seeding Firebase from local copy.");
+        }
+        const fused = {...defS, ...localData, _lsModified: Date.now()};
+        lastSavedModified.current = fused._lsModified;
+        setAS(fused);
+        setLoaded(true);
+        return;
       }
 
-      // New account (Firebase confirmed empty) or Firebase offline fallback
+      // Genuinely new account or no data anywhere
       setAS({...defS, priorities: ensureBeforeShavuosPriority(defS.priorities)}); setLoaded(true);
     });
   }, []);
