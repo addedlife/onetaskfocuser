@@ -1260,7 +1260,8 @@ public partial class MainWindow : Window
     {
         if (e.OriginalSource is DependencyObject source &&
             (FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(source) != null
-             || FindAncestor<System.Windows.Documents.Hyperlink>(source) != null))
+             || FindAncestor<System.Windows.Documents.Hyperlink>(source) != null
+             || FindAncestor<System.Windows.Controls.RichTextBox>(source) != null))
         {
             return;
         }

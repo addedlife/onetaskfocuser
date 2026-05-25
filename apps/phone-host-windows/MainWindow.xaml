@@ -1657,14 +1657,29 @@
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Row="0" Grid.Column="0" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding SelectedConversation.DisplayName}"
-                                                           FontSize="16" FontWeight="Medium"
-                                                           Foreground="{DynamicResource TextPrimary}"
-                                                           TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding SelectedConversation.FormattedPhone}"
-                                                           FontSize="11" Foreground="{DynamicResource TextMuted}"
-                                                           Margin="0,1,0,0"
-                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBox Text="{Binding SelectedConversation.DisplayName, Mode=OneWay}"
+                                                         FontSize="16" FontWeight="Medium"
+                                                         Foreground="{DynamicResource TextPrimary}"
+                                                         IsReadOnly="True"
+                                                         IsTabStop="False"
+                                                         Background="Transparent"
+                                                         BorderThickness="0"
+                                                         Padding="0"
+                                                         FocusVisualStyle="{x:Null}"
+                                                         HorizontalScrollBarVisibility="Hidden"
+                                                         VerticalScrollBarVisibility="Disabled"/>
+                                                <TextBox Text="{Binding SelectedConversation.FormattedPhone, Mode=OneWay}"
+                                                         FontSize="11"
+                                                         Foreground="{DynamicResource TextMuted}"
+                                                         Margin="0,1,0,0"
+                                                         IsReadOnly="True"
+                                                         IsTabStop="False"
+                                                         Background="Transparent"
+                                                         BorderThickness="0"
+                                                         Padding="0"
+                                                         FocusVisualStyle="{x:Null}"
+                                                         HorizontalScrollBarVisibility="Hidden"
+                                                         VerticalScrollBarVisibility="Disabled"/>
                                             </StackPanel>
                                             <Border Style="{StaticResource ThreadSearchBoxContainer}"
                                                     Grid.Row="0"
@@ -1931,7 +1946,10 @@
                                                                      VerticalScrollBarVisibility="Disabled"
                                                                      HorizontalScrollBarVisibility="Disabled"
                                                                      AcceptsTab="False"
-                                                                     IsUndoEnabled="False"/>
+                                                                     IsUndoEnabled="False"
+                                                                     IsReadOnly="True"
+                                                                     SelectionBrush="{DynamicResource AccentBlue}"
+                                                                     SelectionOpacity="0.25"/>
                                                         <!-- Images: MMS can contain several media parts. -->
                                                         <ItemsControl ItemsSource="{Binding ImageAttachments}" Margin="0,2,0,0">
                                                             <ItemsControl.Style>
@@ -2113,7 +2131,10 @@
                                                                      VerticalScrollBarVisibility="Disabled"
                                                                      HorizontalScrollBarVisibility="Disabled"
                                                                      AcceptsTab="False"
-                                                                     IsUndoEnabled="False"/>
+                                                                     IsUndoEnabled="False"
+                                                                     IsReadOnly="True"
+                                                                     SelectionBrush="White"
+                                                                     SelectionOpacity="0.35"/>
                                                         <!-- Images: MMS can contain several media parts. -->
                                                         <ItemsControl ItemsSource="{Binding ImageAttachments}" Margin="0,2,0,0">
                                                             <ItemsControl.Style>

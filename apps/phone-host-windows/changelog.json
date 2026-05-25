@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-05-25 02:47:20",
+        "version":  "b275",
+        "notes":  "Message text is now selectable; contact name and phone number in thread header can be selected and copied.",
+        "devNotes":  "BubbleTap_Click now skips ToggleBubbleActions when the click originates inside a RichTextBox, so drag-to-select works in message bodies without the action tray interfering. Both incoming (bodyIn) and outgoing RichTextBox body controls gain IsReadOnly=True and explicit SelectionBrush colors — AccentBlue at 0.25 opacity for incoming bubbles, White at 0.35 for outgoing — so the highlight is visible against each bubble background. Thread header DisplayName and FormattedPhone TextBlocks replaced with read-only transparent TextBoxes to support text selection of contact names and phone numbers."
+    },
+    {
         "timestamp":  "2026-05-24 15:42:42",
         "version":  "b274",
         "notes":  "Material 3 visual refresh: DeskPhone now uses bundled Roboto typography and Material Symbols iconography.",
