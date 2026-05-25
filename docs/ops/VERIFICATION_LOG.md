@@ -842,3 +842,14 @@ Current source-grade file count after cleanup: 162 files.
 - Pushed source commit `96c1cc1` to `origin/main`.
 - Added detailed `b274` changelog entry, ran `dotnet build .\DeskPhone.csproj -c Release`, and the release pipeline archived `apps/phone-host-windows/deployed-builds/b274`, built the UI auditor and stable launcher, advanced `build.num` to `275`, and created release commit `c182e42`.
 - Release deploy detected an existing DeskPhone process and did not auto-launch `b274`; the new build is available through the refreshed Desktop latest shortcut and `deployed-builds/b274/DeskPhone.exe`.
+
+## 2026-05-25 iPad Cloud Relay Fix
+
+- Root cause: `fsGet` in `phone-relay.mjs` omitted `?key={FB_API_KEY}` from the Firestore URL when an ID token was provided. The Firebase REST API requires the API key for project routing even on authenticated calls; without it Firestore returned 401/403, which the web app collapsed into the generic "Cloud relay unreachable" message.
+- Fixed `fsGet` to always include `?key=${FB_API_KEY}`; ID token still included in `Authorization: Bearer` header for Firestore security rule evaluation (`request.auth != null`).
+- Added distinct 401 (`auth:token_invalid`) and 403 (`auth:firestore_denied`) error codes from `fsGet` so the state handler returns properly typed HTTP responses instead of a generic 500.
+- Fixed `NerveCenterPhoneSurface.jsx` relay error mapping to distinguish `relay:denied` (Firestore rules) from `relay:no_auth` (token missing/invalid) and the generic `relay:fail` bucket — user now sees "Relay blocked by Firestore rules — set allow read, write: if true for phone-relay collection." instead of "Cloud relay unreachable."
+- `npm run build` passed in `apps/web`; generated `assets/index-BvT-S33N.js`; existing large-bundle warning remains.
+- Built asset marker check confirmed `relay:denied` and `Firestore rules` present in bundle.
+- Pushed commit `58a0ed5` to `origin/main`; production deploy `6a1468a3f6c2480c19680d96` live at `https://onetaskfocuser.netlify.app`.
+- Firestore security rules required for relay: `match /phone-relay/{doc} { allow read: if request.auth != null; allow write: if true; }` — commands doc also needs `allow read: if true` for DeskPhone drain.
