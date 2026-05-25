@@ -517,6 +517,8 @@ function buildChiefFallbackBrief(context = {}, suppressed = []) {
 
 function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage }) {
   const viewportW = useViewportWidth();
+  const [clockStyle, setClockStyle] = useState(() => { try { return localStorage.getItem("nc_clock_style") || "digital"; } catch { return "digital"; } });
+  const [clockMenuPos, setClockMenuPos] = useState(null);
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
@@ -2111,47 +2113,86 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               )}
 
 
-              {/* ── Clock card ── */}
+              {/* ── Clock card — right-click to change style ── */}
               {(() => {
                 const ampmMatch = clockParts.timeMain.match(/\s?(AM|PM)$/i);
                 const timeDigits = ampmMatch ? clockParts.timeMain.slice(0, -ampmMatch[0].length) : clockParts.timeMain;
                 const timePeriod = ampmMatch ? ampmMatch[1] : "";
-                return (
-                  <div aria-label="Current time" style={{
-                    background: C.bg,
-                    borderRadius: 10,
-                    border: `1px solid ${C.divider}`,
-                    borderTop: `2px solid ${C.accent}`,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minHeight: 0,
-                    overflow: "hidden",
-                    fontFamily: '"Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif',
-                    fontVariantNumeric: "tabular-nums",
-                    userSelect: "none",
-                    padding: "18px 8px",
-                  }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 14 }}>
-                      {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric" })}
+                const clockFF = '"Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif';
+                const base = { borderRadius: 10, minHeight: 0, overflow: "hidden", fontFamily: clockFF, fontVariantNumeric: "tabular-nums", userSelect: "none", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" };
+                const openMenu = e => { e.preventDefault(); setClockMenuPos({ x: e.clientX, y: e.clientY }); };
+                const hp = (deg, r) => { const a = (deg - 90) * Math.PI / 180; return [50 + Math.cos(a) * r, 50 + Math.sin(a) * r]; };
+                const hrA = ((nowDate.getHours() % 12) / 12) * 360 + (nowDate.getMinutes() / 60) * 30;
+                const minA = (nowDate.getMinutes() / 60) * 360 + (nowDate.getSeconds() / 60) * 6;
+                const secA = (nowDate.getSeconds() / 60) * 360;
+                const faces = {
+                  digital: (
+                    <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, borderTop: `2px solid ${C.accent}`, background: C.bg, padding: "18px 8px" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 14 }}>
+                        {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric" })}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 5, lineHeight: 1 }}>
+                        <span style={{ fontSize: 38, fontWeight: 300, color: C.text, letterSpacing: -1 }}>{timeDigits}</span>
+                        {timePeriod && <span style={{ fontSize: 14, fontWeight: 600, color: C.muted, letterSpacing: 0.5 }}>{timePeriod}</span>}
+                      </div>
+                      <div style={{ width: 32, height: 1, background: C.divider, margin: "12px auto" }} />
+                      <div style={{ fontSize: 22, fontWeight: 400, lineHeight: 1, color: C.faint, letterSpacing: 2 }}>{clockParts.timeSec}</div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 5, lineHeight: 1 }}>
-                      <span style={{ fontSize: 38, fontWeight: 300, color: C.text, letterSpacing: -1 }}>
-                        {timeDigits}
-                      </span>
-                      {timePeriod && (
-                        <span style={{ fontSize: 14, fontWeight: 600, color: C.muted, letterSpacing: 0.5 }}>
-                          {timePeriod}
-                        </span>
-                      )}
+                  ),
+                  minimal: (
+                    <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, background: C.bg, padding: "16px 8px" }}>
+                      <div style={{ fontSize: 42, fontWeight: 200, lineHeight: 1, color: C.text, letterSpacing: -2, whiteSpace: "nowrap" }}>{clockParts.timeMain}</div>
                     </div>
-                    <div style={{ width: 32, height: 1, background: C.divider, margin: "12px auto" }} />
-                    <div style={{ fontSize: 22, fontWeight: 400, lineHeight: 1, color: C.faint, letterSpacing: 2 }}>
-                      {clockParts.timeSec}
+                  ),
+                  analog: (
+                    <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, background: C.bg, padding: "10px 8px", gap: 8 }}>
+                      <svg width="124" height="124" viewBox="0 0 100 100" style={{ flexShrink: 0 }}>
+                        <circle cx="50" cy="50" r="48" fill="none" stroke={C.divider} strokeWidth="1.5" />
+                        {[...Array(12)].map((_, i) => {
+                          const [x1, y1] = hp((i / 12) * 360, i % 3 === 0 ? 37 : 41);
+                          const [x2, y2] = hp((i / 12) * 360, 46);
+                          return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={i % 3 === 0 ? C.muted : C.faint} strokeWidth={i % 3 === 0 ? 2 : 1} strokeLinecap="round" />;
+                        })}
+                        <line x1="50" y1="50" x2={hp(hrA, 26)[0]} y2={hp(hrA, 26)[1]} stroke={C.text} strokeWidth="3.5" strokeLinecap="round" />
+                        <line x1="50" y1="50" x2={hp(minA, 36)[0]} y2={hp(minA, 36)[1]} stroke={C.text} strokeWidth="2.5" strokeLinecap="round" />
+                        <line x1="50" y1="50" x2={hp(secA, 38)[0]} y2={hp(secA, 38)[1]} stroke={C.accent} strokeWidth="1.5" strokeLinecap="round" />
+                        <circle cx="50" cy="50" r="3" fill={C.accent} />
+                      </svg>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK }}>
+                        {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric" })}
+                      </div>
                     </div>
-                  </div>
-                );
+                  ),
+                  tiles: (
+                    <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, background: C.bg, padding: "16px 8px", gap: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        {timeDigits.split("").map((ch, i) => (
+                          ch === ":"
+                            ? <span key={i} style={{ fontSize: 24, fontWeight: 300, color: C.faint, lineHeight: 1, paddingBottom: 6 }}>:</span>
+                            : <span key={i} style={{ fontSize: 30, fontWeight: 700, lineHeight: 1, color: C.text, background: C.hover, borderRadius: 7, padding: "8px 6px", minWidth: 34, textAlign: "center", display: "inline-flex", justifyContent: "center" }}>{ch}</span>
+                        ))}
+                        {timePeriod && <span style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginLeft: 2, alignSelf: "flex-end", paddingBottom: 8 }}>{timePeriod}</span>}
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: C.faint, letterSpacing: 2, fontFamily: NC_FONT_STACK }}>{clockParts.timeSec}</div>
+                    </div>
+                  ),
+                  verbose: (
+                    <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, borderLeft: `3px solid ${C.accent}`, background: C.bg, padding: "14px 10px", alignItems: "flex-start" }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1, marginBottom: 3 }}>
+                        {nowDate.toLocaleDateString([], { weekday: "long" })}
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 400, color: C.faint, fontFamily: NC_FONT_STACK, marginBottom: 10 }}>
+                        {nowDate.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" })}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 4, lineHeight: 1, marginBottom: 6 }}>
+                        <span style={{ fontSize: 34, fontWeight: 300, color: C.text, letterSpacing: -0.5 }}>{timeDigits}</span>
+                        {timePeriod && <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{timePeriod}</span>}
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 500, color: C.faint, fontFamily: NC_FONT_STACK, letterSpacing: 1 }}>:{clockParts.timeSec}</div>
+                    </div>
+                  ),
+                };
+                return faces[clockStyle] || faces.digital;
               })()}
 
               {/* ── Gmail card ── */}
@@ -2281,6 +2322,31 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   <div style={{ fontSize: NC_TYPE.small, color: C.faint, marginTop: 8, textAlign: "right" }}>Cmd/Ctrl+Enter to submit</div>
                 </div>
               </div>
+            )}
+            {/* Clock style picker — opened by right-click on the clock card */}
+            {clockMenuPos && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 9090 }} onClick={() => setClockMenuPos(null)} />
+                <div onMouseDown={e => e.stopPropagation()} style={{ position: "fixed", left: Math.min(clockMenuPos.x, window.innerWidth - 208), top: Math.min(clockMenuPos.y, window.innerHeight - 230), zIndex: 9091, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 10, padding: 6, minWidth: 196, boxShadow: "0 8px 32px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "6px 8px 4px" }}>Clock Style</div>
+                  {[
+                    { id: "digital", label: "Digital",  desc: "AM/PM split · seconds"   },
+                    { id: "minimal", label: "Minimal",  desc: "Time only, ultra clean"   },
+                    { id: "analog",  label: "Analog",   desc: "Classic clock face"        },
+                    { id: "tiles",   label: "Tiles",    desc: "Block digit cards"         },
+                    { id: "verbose", label: "Verbose",  desc: "Full date & detail"        },
+                  ].map(opt => {
+                    const active = clockStyle === opt.id;
+                    return (
+                      <button key={opt.id} onClick={() => { setClockStyle(opt.id); try { localStorage.setItem("nc_clock_style", opt.id); } catch {} setClockMenuPos(null); }}
+                        style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", padding: "7px 10px", borderRadius: 7, border: "none", background: active ? C.hover : "transparent", cursor: "pointer", width: "100%", textAlign: "left" }}>
+                        <span style={{ fontSize: NC_TYPE.control, fontWeight: active ? 600 : 400, color: active ? C.text : C.muted, fontFamily: NC_FONT_STACK }}>{opt.label}</span>
+                        <span style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 1 }}>{opt.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             )}
             </React.Fragment>
           );
