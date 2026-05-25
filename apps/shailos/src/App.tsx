@@ -344,7 +344,9 @@ function AppContent() {
 
   const researchRef = useRef<HTMLDivElement>(null);
 
-  const USER_ID = user?.uid ?? 'unauthenticated';
+  // Derive the canonical document key the same way the main app does:
+  // canonicalUid = email prefix (e.g. rabbidanziger@hocsouthbend.com → "rabbidanziger")
+  const USER_ID = user?.email?.split('@')[0]?.toLowerCase()?.trim() ?? 'unauthenticated';
   const shailosCol = () => collection(db, 'users', USER_ID, 'shailos');
 
   const refreshPendingRecordings = async () => {
