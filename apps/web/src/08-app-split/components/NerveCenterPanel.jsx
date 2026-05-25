@@ -694,7 +694,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const nowDate = Number.isFinite(rawNowDate.getTime()) ? rawNowDate : new Date();
   const nowMs = nowDate.getTime();
   const clockParts = {
-    time: nowDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }),
+    timeMain: nowDate.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+    timeSec: String(nowDate.getSeconds()).padStart(2, "0"),
     date: nowDate.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" }),
   };
 
@@ -1680,7 +1681,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       <div style={isStacked ? { height: "100%", display: "flex", flexDirection: "column", boxSizing: "border-box" } : { minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: touchLayout ? 12 : 4 }}>
 
         <div style={{
-          minHeight: isStacked ? 58 : 62,
+          minHeight: isStacked ? 58 : 72,
           padding: isStacked ? "8px 14px" : "0 2px 10px",
           borderBottom: isStacked ? `1px solid ${C.divider}` : "none",
           flexShrink: 0,
@@ -1689,6 +1690,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           justifyContent: "space-between",
           gap:12,
           boxSizing: "border-box",
+          position: "relative",
         }}>
           <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ width: 34, height: 34, borderRadius:16, display: "flex", alignItems: "center", justifyContent: "center", color: C.accent, background: C.hover, flexShrink: 0 }}>{suiteIcon("hub", 18)}</span>
@@ -1697,17 +1699,27 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               <div style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clockParts.date}</div>
             </div>
           </div>
-          <div aria-label="Current time" style={{
-            textAlign: "right",
-            flexShrink: 0,
-            color: C.text,
-            fontFamily: '"Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif',
-            fontVariantNumeric: "tabular-nums",
-            letterSpacing: 0,
-          }}>
-            <div style={{ fontSize: isStacked ? 25 : 34, fontWeight: 500, lineHeight: 1 }}>{clockParts.time}</div>
-            {!isStacked && <div style={{ fontSize: NC_TYPE.meta, color: C.faint, marginTop: 3, fontFamily: NC_FONT_STACK }}>America/New York</div>}
-          </div>
+          {!isStacked && (
+            <div aria-label="Current time" style={{
+              position: "absolute",
+              left: "50%",
+              transform: "translateX(-50%)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              fontFamily: '"Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif',
+              fontVariantNumeric: "tabular-nums",
+              pointerEvents: "none",
+              userSelect: "none",
+            }}>
+              <div style={{ fontSize: 46, fontWeight: 200, lineHeight: 1, color: C.text, letterSpacing: -1 }}>
+                {clockParts.timeMain}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 400, color: C.faint, marginTop: 3, letterSpacing: 1 }}>
+                {clockParts.timeSec}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Panel tab bar — mobile/stacked only */}
