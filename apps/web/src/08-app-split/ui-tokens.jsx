@@ -190,6 +190,14 @@ export const NC_GLOBAL_CSS = `
 [data-nc-task-grid="true"]::-webkit-scrollbar {
   display: none;
 }
+/* Smooth sweep animation — transform-based so the bar grows left→right at 60fps.
+   Set animation-delay to a negative value (e.g. -30s) to start mid-cycle.
+   Fade-out near the end replaces the jarring width-rewind. */
+@keyframes nc-sec-sweep {
+  0%   { transform: scaleX(0);   opacity: 0.36; }
+  82%  { opacity: 0.36; }
+  100% { transform: scaleX(1.0); opacity: 0; }
+}
 `;
 
 export const cleanTheme = (theme = {}) => ({

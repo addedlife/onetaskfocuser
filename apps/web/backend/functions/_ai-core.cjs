@@ -461,7 +461,7 @@ function normalizeEmailInputs(emails = []) {
   return ensureArray(emails, "emails").slice(0, 20).map((email, index) => ({
     index: index + 1,
     subject: cleanString(email.subject, 180),
-    body: cleanString(email.body || email.snippet, 220),
+    body: cleanString(email.body || email.snippet, 380),
   }));
 }
 
@@ -972,17 +972,20 @@ const AI_JOB_REGISTRY = {
     task: "email-summary",
     output: "json",
     shape: "array",
-    genConfig: { temperature: 0, maxOutputTokens: 600 },
-    schema: '["one sentence of 10 words or fewer"]',
+    genConfig: { temperature: 0, maxOutputTokens: 1400 },
+    schema: '["2-3 sentence summary: what the email is actually about, what action or response it expects (or \'No action needed\'), and any key specific such as a name, date, or amount"]',
     buildPrompt(input = {}) {
       return compactLines([
-        "For each email below, summarize what the body is actually saying in one sentence of 10 words or fewer.",
-        "Focus on body content, not just the subject line.",
+        "For each email, write a 2–3 sentence summary that an executive can act on:",
+        "• What the email is actually about (not a restatement of the subject line).",
+        "• What it asks for, requires, or expects — any reply, decision, or deadline. Write 'No action needed' if purely informational.",
+        "• One key specific if present: a person's name, a dollar amount, a date, or the immediate next step.",
+        "Be direct and concrete. Skip openers like 'This email discusses' or 'The sender is writing to say'.",
         `Emails:\n${jsonBlock(normalizeEmailInputs(input.emails || []))}`,
         responseJsonInstruction("array", this.schema),
       ]);
     },
-    validate: value => normalizeStringArray(value, 20, 160),
+    validate: value => normalizeStringArray(value, 20, 360),
   },
   "dashboard.polish_items.v1": {
     task: "dashboard-polish",
