@@ -747,7 +747,7 @@ function App({ user, onSignOut }) {
     try {
       const emails = msgs.map((m) => {
         const subj = m?.payload?.headers?.find(h => h.name === "Subject")?.value || "";
-        const snip = (m.snippet || "").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim().slice(0, 180);
+        const snip = (m.snippet || "").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim().slice(0, 350);
         return { subject: subj, body: snip };
       });
       const job = await runAIJob("dashboard.email_summaries.v1", { emails }, aiOpts || {});
@@ -2506,10 +2506,10 @@ function App({ user, onSignOut }) {
     {
       id: "focus",
       title: "Focus",
-      icon: "spa",
+      icon: "local_drink",
       meta: "Stay with one thing",
       actions: [
-        {id:"zen", label:"Zen mode", note:"Fullscreen calm task view", icon:"spa", primary:true, disabled:!curT, run:()=>{if(curT)setZen(true);}},
+        {id:"zen", label:"Zen mode", note:"Fullscreen calm task view", icon:"local_drink", primary:true, disabled:!curT, run:()=>{if(curT)setZen(true);}},
         {id:"body-double", label:"Body double", note:"Keep a work session going", icon:"person", run:()=>setShowBodyDouble(true)},
         {id:"insights", label:"Insights", note:"Progress and patterns", icon:"insights", run:()=>{openCommandView("focus"); switchTab("insights");}},
       ],

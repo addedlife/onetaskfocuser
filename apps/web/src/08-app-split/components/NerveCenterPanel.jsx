@@ -1724,7 +1724,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     </button>
                   )}
                   <span style={{ width: 1, height: 13, background: C.divider, margin: "0 3px", flexShrink: 0 }} />
-                  {onOpenZen && <button onClick={onOpenZen} title="Zen mode" aria-label="Zen mode" style={ncSmallIconButton()}>{suiteIcon("spa", 14)}</button>}
+                  {onOpenZen && <button onClick={onOpenZen} title="Zen mode" aria-label="Zen mode" style={ncSmallIconButton()}>{suiteIcon("local_drink", 14)}</button>}
                   <button onClick={onOpenQueue} title="Open full task queue" aria-label="Open full task queue" style={ncSmallIconButton()}>{suiteIcon("list_alt", 14)}</button>
                   <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="Task actions" style={ncSmallIconButton()}>{suiteIcon("apps", 14)}</button>
                 </div>
@@ -2126,9 +2126,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const minA = (nowDate.getMinutes() / 60) * 360 + (nowDate.getSeconds() / 60) * 6;
                 // 60-second fill bar — replaces numeric seconds in all digital faces
                 const secFrac = nowDate.getSeconds() / 60;
+                // CSS-animation bar: browser drives this at 60fps — no JS width updates.
+                // key={nowDate.getMinutes()} forces a remount at each new minute so the
+                // animation restarts at scaleX(0) cleanly instead of rewinding.
                 const secBar = (
-                  <div style={{ width: "100%", height: 2, borderRadius: 1, background: C.divider, overflow: "hidden", marginTop: 10 }}>
-                    <div style={{ height: "100%", width: `${secFrac * 100}%`, background: C.faint, opacity: 0.4, borderRadius: 1, transition: "width 0.95s linear" }} />
+                  <div style={{ width: "100%", height: 2, borderRadius: 1, background: "transparent", overflow: "hidden", marginTop: 10 }}>
+                    <div key={nowDate.getMinutes()} style={{ height: "100%", width: "100%", borderRadius: 1, background: C.faint, transformOrigin: "left center", animation: "nc-sec-sweep 60s linear infinite", animationDelay: `-${nowDate.getSeconds()}s` }} />
                   </div>
                 );
                 // Word clock
@@ -2148,6 +2151,24 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 else if (wM < 50) { wL1 = "QUARTER TO";         wL2 = wNums[wNext]; }
                 else if (wM < 55) { wL1 = "TEN TO";             wL2 = wNums[wNext]; }
                 else              { wL1 = "FIVE TO";             wL2 = wNums[wNext]; }
+                // Timeline face: cascading time-scale sweep bars (Hebrew yr → Greg yr → month → day → hour → minute)
+                const roshH = [
+                  { y: 5785, d: new Date(2024, 9, 2) }, { y: 5786, d: new Date(2025, 8, 22) },
+                  { y: 5787, d: new Date(2026, 8, 11) }, { y: 5788, d: new Date(2027, 9, 1) },
+                  { y: 5789, d: new Date(2028, 8, 20) }, { y: 5790, d: new Date(2029, 8, 10) },
+                ];
+                let hYear = roshH[1].y, hYearFrac = 0;
+                for (let i = 0; i < roshH.length - 1; i++) {
+                  if (nowDate >= roshH[i].d && nowDate < roshH[i + 1].d) {
+                    hYear = roshH[i].y; hYearFrac = (nowDate - roshH[i].d) / (roshH[i + 1].d - roshH[i].d); break;
+                  }
+                }
+                const gregYrStart = new Date(nowDate.getFullYear(), 0, 1);
+                const gregYrFrac = (nowDate - gregYrStart) / (new Date(nowDate.getFullYear() + 1, 0, 1) - gregYrStart);
+                const daysInMo = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate();
+                const dayFrac = (nowDate.getDate() - 1 + (nowDate.getHours() * 3600 + nowDate.getMinutes() * 60 + nowDate.getSeconds()) / 86400) / daysInMo;
+                const secOfDay = nowDate.getHours() * 3600 + nowDate.getMinutes() * 60 + nowDate.getSeconds();
+                const secOfHr = nowDate.getMinutes() * 60 + nowDate.getSeconds();
                 const faces = {
                   digital: (
                     <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, borderTop: `2px solid ${C.accent}`, background: C.bg, padding: "18px 8px 10px" }}>
@@ -2268,6 +2289,33 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         {timePeriod && <span style={{ fontSize: 14, fontWeight: 700, color: C.accent, opacity: 0.72, textShadow: `0 0 10px ${C.accent}55` }}>{timePeriod}</span>}
                       </div>
                       {secBar}
+                    </div>
+                  ),
+                  timeline: (
+                    <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, background: C.bg, padding: "16px 10px 14px", alignItems: "stretch", gap: 0 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 14, textAlign: "center" }}>
+                        {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+                      </div>
+                      {[
+                        { lbl: "Heb Yr",  val: String(hYear),                                                         frac: hYearFrac,      col: C.accent,  op: 0.92, dur: null,  off: 0,         rk: 0 },
+                        { lbl: "Greg Yr", val: nowDate.toLocaleDateString([], { month: "short" }),                     frac: gregYrFrac,     col: C.accent,  op: 0.56, dur: null,  off: 0,         rk: 0 },
+                        { lbl: "Month",   val: `${nowDate.getDate()}/${daysInMo}`,                                     frac: dayFrac,        col: C.muted,   op: 0.78, dur: null,  off: 0,         rk: 0 },
+                        { lbl: "Day",     val: `${nowDate.getHours()}h`,                                               frac: 0,              col: C.muted,   op: 0.60, dur: 86400, off: secOfDay,  rk: nowDate.getDate() },
+                        { lbl: "Hour",    val: `${nowDate.getMinutes()}m`,                                             frac: 0,              col: C.faint,   op: 0.82, dur: 3600,  off: secOfHr,   rk: nowDate.getHours() },
+                        { lbl: "Minute",  val: `${nowDate.getSeconds()}s`,                                             frac: 0,              col: C.faint,   op: 0.50, dur: 60,    off: nowDate.getSeconds(), rk: nowDate.getMinutes() },
+                      ].map(({ lbl, val, frac, col, op, dur, off, rk }) => (
+                        <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, minWidth: 0 }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, letterSpacing: 0.3, fontFamily: NC_FONT_STACK, width: 38, textAlign: "right", flexShrink: 0, textTransform: "uppercase", lineHeight: 1 }}>{lbl}</span>
+                          <div style={{ flex: 1, height: 2, borderRadius: 1, background: C.hover, overflow: "hidden", position: "relative", minWidth: 0 }}>
+                            {dur ? (
+                              <div key={`${lbl}-${rk}`} style={{ position: "absolute", inset: 0, borderRadius: 1, background: col, opacity: op, transformOrigin: "left center", animation: `nc-sec-sweep ${dur}s linear infinite`, animationDelay: `-${off}s` }} />
+                            ) : (
+                              <div style={{ height: "100%", width: `${frac * 100}%`, borderRadius: 1, background: col, opacity: op, transition: "width 3s ease" }} />
+                            )}
+                          </div>
+                          <span style={{ fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, width: 26, flexShrink: 0, textAlign: "right", letterSpacing: 0.2, lineHeight: 1 }}>{val}</span>
+                        </div>
+                      ))}
                     </div>
                   ),
                 };
@@ -2416,7 +2464,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             {clockMenuPos && (
               <>
                 <div style={{ position: "fixed", inset: 0, zIndex: 9090 }} onClick={() => setClockMenuPos(null)} />
-                <div onMouseDown={e => e.stopPropagation()} style={{ position: "fixed", left: Math.min(clockMenuPos.x, window.innerWidth - 212), top: Math.min(clockMenuPos.y, window.innerHeight - 415), zIndex: 9091, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 10, padding: 6, minWidth: 200, maxHeight: "min(410px, 85vh)", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", gap: 2 }}>
+                <div onMouseDown={e => e.stopPropagation()} style={{ position: "fixed", left: Math.min(clockMenuPos.x, window.innerWidth - 212), top: Math.min(clockMenuPos.y, window.innerHeight - 460), zIndex: 9091, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 10, padding: 6, minWidth: 200, maxHeight: "min(455px, 85vh)", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", gap: 2 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "6px 8px 4px" }}>Clock Style</div>
                   {[
                     { id: "digital", label: "Digital",  desc: "Date + time + seconds bar"  },
@@ -2426,7 +2474,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     { id: "verbose", label: "Verbose",  desc: "Full date & time"             },
                     { id: "word",    label: "Word",     desc: "Natural language time"        },
                     { id: "arc",     label: "Arc",      desc: "Concentric progress rings"    },
-                    { id: "neon",    label: "Neon",     desc: "Glowing accent digits"        },
+                    { id: "neon",     label: "Neon",     desc: "Glowing accent digits"        },
+                    { id: "timeline", label: "Timeline", desc: "Sweeping time-scale bars"      },
                   ].map(opt => {
                     const active = clockStyle === opt.id;
                     return (
