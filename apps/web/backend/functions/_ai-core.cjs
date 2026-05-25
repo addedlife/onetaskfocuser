@@ -972,20 +972,19 @@ const AI_JOB_REGISTRY = {
     task: "email-summary",
     output: "json",
     shape: "array",
-    genConfig: { temperature: 0, maxOutputTokens: 1400 },
-    schema: '["2-3 sentence summary: what the email is actually about, what action or response it expects (or \'No action needed\'), and any key specific such as a name, date, or amount"]',
+    genConfig: { temperature: 0, maxOutputTokens: 800 },
+    schema: '["1-2 direct sentences in the sender\'s voice — specific, no meta-commentary"]',
     buildPrompt(input = {}) {
       return compactLines([
-        "For each email, write a 2–3 sentence summary that an executive can act on:",
-        "• What the email is actually about (not a restatement of the subject line).",
-        "• What it asks for, requires, or expects — any reply, decision, or deadline. Write 'No action needed' if purely informational.",
-        "• One key specific if present: a person's name, a dollar amount, a date, or the immediate next step.",
-        "Be direct and concrete. Skip openers like 'This email discusses' or 'The sender is writing to say'.",
+        "Summarize each email in 1–2 punchy sentences written as if you are the sender speaking directly.",
+        "Use the sender's voice and tone. Include specifics: names, amounts, deadlines, links.",
+        "Never begin with 'This email', 'The sender', 'I wanted to', or any phrase that describes the email rather than delivering it.",
+        "Examples of the right style: 'Your invoice for $840 is due Friday.' | 'Tickets available: $18/$36/$72 — book at adireit.com.' | 'Can we reschedule Thursday's call to 3pm?'",
         `Emails:\n${jsonBlock(normalizeEmailInputs(input.emails || []))}`,
         responseJsonInstruction("array", this.schema),
       ]);
     },
-    validate: value => normalizeStringArray(value, 20, 360),
+    validate: value => normalizeStringArray(value, 20, 240),
   },
   "dashboard.polish_items.v1": {
     task: "dashboard-polish",

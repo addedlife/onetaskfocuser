@@ -48,6 +48,31 @@ function softBorder(color, alpha) {
 
 const MIN_COLLAPSED_TASKS = 5;
 
+// SweepBar — rAF-driven sweep indicator for clock faces.
+// Runs at 60fps via requestAnimationFrame; no state updates, no CSS animation tricks.
+// duration: full cycle in seconds. getOffset(): fractional seconds into the cycle (with ms).
+// baseOpacity: peak opacity; bar fades to 0 in the last 3% of each cycle (no rewind).
+function SweepBar({ duration, getOffset, baseOpacity = 0.36, style }) {
+  const barRef = useRef(null);
+  const getOffRef = useRef(getOffset);
+  useEffect(() => { getOffRef.current = getOffset; }); // keep ref in sync without restarting rAF
+  useEffect(() => {
+    let raf;
+    const tick = () => {
+      if (barRef.current) {
+        const frac = Math.min((getOffRef.current() % duration) / duration, 1);
+        const fade = frac > 0.97 ? Math.max(0, (1 - frac) / 0.03) : 1;
+        barRef.current.style.transform = `scaleX(${frac})`;
+        barRef.current.style.opacity = String(baseOpacity * fade);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [duration]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <div ref={barRef} style={{ ...style, transformOrigin: "left center", transform: "scaleX(0)", opacity: 0 }} />;
+}
+
 function decodeBase64UrlText(value) {
   if (!value) return "";
   try {
@@ -2126,12 +2151,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const minA = (nowDate.getMinutes() / 60) * 360 + (nowDate.getSeconds() / 60) * 6;
                 // 60-second fill bar — replaces numeric seconds in all digital faces
                 const secFrac = nowDate.getSeconds() / 60;
-                // CSS-animation bar: browser drives this at 60fps — no JS width updates.
-                // key={nowDate.getMinutes()} forces a remount at each new minute so the
-                // animation restarts at scaleX(0) cleanly instead of rewinding.
+                // rAF-driven sweep bar — perfectly smooth at 60fps, no state nudging.
                 const secBar = (
                   <div style={{ width: "100%", height: 2, borderRadius: 1, background: "transparent", overflow: "hidden", marginTop: 10 }}>
-                    <div key={nowDate.getMinutes()} style={{ height: "100%", width: "100%", borderRadius: 1, background: C.faint, transformOrigin: "left center", animation: "nc-sec-sweep 60s linear infinite", animationDelay: `-${nowDate.getSeconds()}s` }} />
+                    <SweepBar duration={60}
+                      getOffset={() => { const n = new Date(); return n.getSeconds() + n.getMilliseconds() / 1000; }}
+                      baseOpacity={0.36}
+                      style={{ height: "100%", width: "100%", borderRadius: 1, background: C.faint }} />
                   </div>
                 );
                 // Word clock
@@ -2308,7 +2334,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                           <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, letterSpacing: 0.3, fontFamily: NC_FONT_STACK, width: 38, textAlign: "right", flexShrink: 0, textTransform: "uppercase", lineHeight: 1 }}>{lbl}</span>
                           <div style={{ flex: 1, height: 2, borderRadius: 1, background: C.hover, overflow: "hidden", position: "relative", minWidth: 0 }}>
                             {dur ? (
-                              <div key={`${lbl}-${rk}`} style={{ position: "absolute", inset: 0, borderRadius: 1, background: col, opacity: op, transformOrigin: "left center", animation: `nc-sec-sweep ${dur}s linear infinite`, animationDelay: `-${off}s` }} />
+                              <SweepBar duration={dur} baseOpacity={op}
+                                getOffset={() => { const n = new Date(); return n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds() + n.getMilliseconds() / 1000; }}
+                                style={{ position: "absolute", inset: 0, borderRadius: 1, background: col }} />
                             ) : (
                               <div style={{ height: "100%", width: `${frac * 100}%`, borderRadius: 1, background: col, opacity: op, transition: "width 3s ease" }} />
                             )}
@@ -2386,7 +2414,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                               <span style={{ fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
                               <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, flexShrink: 0 }}>{date}</span>
                             </div>
-                            <span style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
+                            <span style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word", lineHeight: 1.4 }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
                           </button>
                           <a href={url} target="_blank" rel="noopener noreferrer" title="Open in Gmail"
                             style={{ color: C.faint, textDecoration: "none", fontSize: NC_TYPE.meta, lineHeight: 1.4, padding: "1px 2px", flexShrink: 0 }}
