@@ -3589,7 +3589,7 @@ function App({ user, onSignOut }) {
                       const dispPos = pos + 1;
                       pos++;
                       const rowBg = isF ? pBg(tp.color) : "transparent";
-                      const rowText = isF ? textOnPastel(AS.colorScheme, T.text, rowBg) : T.tSoft;
+                      const rowText = isF ? textOnPastel(AS.colorScheme, T.text, rowBg) : T.text;
                       const rowSoft = isF ? textOnPastel(AS.colorScheme, T.tSoft, rowBg) : T.tSoft;
                       const rowAccent = isF ? textOnPastel(AS.colorScheme, priText(tp.color), rowBg) : tp.color;
                       const rowActionOpacity = isF ? .82 : .35;
@@ -3672,7 +3672,7 @@ function App({ user, onSignOut }) {
                       pos++;
                       const rowBg = isF ? pBg(tp.color) : (task.blocked ? pBg("${T.amberLight}") : "transparent");
                       const hasPastelRow = isF || task.blocked;
-                      const _qText = hasPastelRow ? textOnPastel(AS.colorScheme, isF ? T.text : T.tSoft, rowBg) : T.tSoft;
+                      const _qText = hasPastelRow ? textOnPastel(AS.colorScheme, T.text, rowBg) : T.text;
                       const _qSoft = hasPastelRow ? textOnPastel(AS.colorScheme, T.tSoft, rowBg) : T.tSoft;
                       const rowAccent = hasPastelRow ? textOnPastel(AS.colorScheme, priText(tp.color), rowBg) : tp.color;
                       const rowActionOpacity = isF ? .82 : .35;
