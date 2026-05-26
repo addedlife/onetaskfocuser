@@ -14,6 +14,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanTheme, NC_FONT_STACK } from '../ui-tokens.jsx';
+import { isNerveTaskShailaWork, isShailaPriority } from '../utils/shailosQueue.js';
 
 // ─── Tiny helpers ─────────────────────────────────────────────────────────────
 
@@ -207,134 +208,149 @@ export function TaskRiverPanel({
   };
 
   // ── Stream builder ──────────────────────────────────────────────────────────
+  //
+  // DEDUP RULE: switchboardTaskList includes shaila-linked tasks (tasks with
+  // shailaId / _nerveKind:"shaila" / isGetBackStep etc.). switchboardShailaList
+  // is built from those same tasks. We must skip shaila-work tasks in the task
+  // loop so they only appear once, in the shailos section.
+  //
+  // FOCUS RULE: only "now" and "today" priority tasks appear. Backlog ("soon",
+  // "eventually", etc.) stays invisible here — the Tasks page is for that.
+  //
   const entries = useMemo(() => {
     const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999);
 
+    // Today section is broken into typed sub-groups so the stream breathes:
+    //   events (chronological) → tasks → shailos → emails
     const nowBucket      = [];
-    const todayBucket    = [];
+    const todayEvents    = [];
+    const todayTasks     = [];
+    const todayShailos   = [];
+    const todayEmails    = [];
     const upcomingBucket = [];
 
     // ── Calendar events ──────────────────────────────────────────────────────
     if (Array.isArray(calendarEvents)) {
+      // Deduplicate by event id (Google sometimes returns recurring instances twice)
+      const seen = new Set();
       for (const evt of calendarEvents) {
         if (!evt?.start) continue;
-        const start = evt.start.dateTime
-          ? new Date(evt.start.dateTime)
-          : new Date(evt.start.date);
-        const end = evt.end?.dateTime
-          ? new Date(evt.end.dateTime)
-          : (evt.end?.date ? new Date(evt.end.date) : new Date(start.getTime() + 3600000));
+        const key = evt.id || evt.iCalUID || `${evt.summary}-${evt.start.dateTime || evt.start.date}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
 
-        const happening = start <= now && end > now;
+        const start = evt.start.dateTime ? new Date(evt.start.dateTime) : new Date(evt.start.date);
+        const end   = evt.end?.dateTime  ? new Date(evt.end.dateTime)
+                    : evt.end?.date      ? new Date(evt.end.date)
+                    : new Date(start.getTime() + 3600000);
+
+        const happening  = start <= now && end > now;
         const laterToday = !happening && start > now && start <= todayEnd;
         const upcoming   = start > todayEnd;
 
         const base = {
           type: 'event',
-          id:    evt.id || `evt-${start.getTime()}`,
-          time:  start,
-          end,
+          id:    key,
+          time:  start, end,
           title: evt.summary || '(no title)',
           sub:   evt.location || null,
           accent: TYPE_ACCENT.event,
           raw:   evt,
         };
 
-        if (happening)   nowBucket.push({ ...base, tag: `ends ${fmtClock(end)}` });
-        else if (laterToday) todayBucket.push({ ...base, tag: fmtClock(start) });
+        if (happening)       nowBucket.push({ ...base, tag: `ends ${fmtClock(end)}` });
+        else if (laterToday) todayEvents.push({ ...base, tag: fmtClock(start) });
         else if (upcoming)   upcomingBucket.push({ ...base, tag: relDay(start, now) });
       }
     }
+    todayEvents.sort((a, b) => (a.time || 0) - (b.time || 0));
 
     // ── Tasks ────────────────────────────────────────────────────────────────
-    const nowPriIds = new Set(
-      priorities.filter(p => p.id === 'now' || p.level === 0 || p.level === 1).map(p => p.id)
-    );
-    nowPriIds.add('now');
-    const todayPriIds = new Set(
-      priorities.filter(p => p.id === 'today' || p.level === 2).map(p => p.id)
-    );
-    todayPriIds.add('today');
+    // Build priority ID sets from the priorities prop
+    const nowPriIds   = new Set(['now']);
+    const todayPriIds = new Set(['today']);
+    for (const p of priorities) {
+      if (!p || p.deleted) continue;
+      if (p.id === 'now'   || p.level === 0) nowPriIds.add(p.id);
+      if (p.id === 'today' || p.level === 1) todayPriIds.add(p.id);
+    }
+    // Also check for shaila priorities so we can detect them without duplicating
+    const shailaPriIds = new Set(['shaila']);
+    for (const p of priorities) {
+      if (p?.isShaila && !p.deleted) shailaPriIds.add(p.id);
+    }
 
+    const seenTaskIds = new Set();
     for (const task of tasks) {
       if (task.completed || task.deleted || task.parked || task.archived) continue;
-      const pId    = task.priority || task.priorityId || '';
-      const isNow  = nowPriIds.has(pId);
+      if (seenTaskIds.has(task.id)) continue;
+      seenTaskIds.add(task.id);
+
+      // Skip shaila-work tasks — they appear in the shailos section instead
+      if (isNerveTaskShailaWork(task, priorities)) continue;
+      if (isShailaPriority(task.priority, priorities)) continue;
+
+      const pId     = task.priority || task.priorityId || '';
+      const isNow   = nowPriIds.has(pId);
       const isToday = !isNow && todayPriIds.has(pId);
+      // Only show now + today — everything else is backlog noise
+      if (!isNow && !isToday) continue;
+
       const display = task.ncSummary || task.frontSummary || task.text || 'Task';
-
-      const base = {
-        type:   'task',
-        id:     task.id,
-        time:   null,
-        title:  display,
-        sub:    null,
-        raw:    task,
+      const entry = {
+        type: 'task', id: task.id, time: null,
+        title: display, sub: null, raw: task,
+        accent: isNow ? TYPE_ACCENT.task : TYPE_ACCENT.taskT,
+        tag:    isNow ? 'now' : 'today',
       };
-
-      if (isNow) {
-        nowBucket.push({ ...base, accent: TYPE_ACCENT.task, tag: 'now' });
-      } else if (isToday) {
-        todayBucket.push({ ...base, accent: TYPE_ACCENT.taskT, tag: 'today' });
-      } else {
-        todayBucket.push({ ...base, accent: TYPE_ACCENT.taskS, tag: '' });
-      }
+      if (isNow) nowBucket.push(entry);
+      else       todayTasks.push(entry);
     }
 
     // ── Shailos ──────────────────────────────────────────────────────────────
-    for (const s of shailos) {
-      if (s.completed || s.archived || s.dismissed) continue;
-      todayBucket.push({
-        type:   'shaila',
-        id:     s.id,
-        time:   null,
-        title:  s.shaila || s.question || s.text || 'Shaila',
-        sub:    s.answerSummary || null,
-        accent: TYPE_ACCENT.shaila,
-        raw:    s,
-        tag:    'shaila',
+    // shailos prop is already deduplicated by buildNerveShailaRows; cap at 4.
+    const seenShailaIds = new Set();
+    for (const s of shailos.slice(0, 4)) {
+      if (s.completed || s.archived || s.dismissed || s.done) continue;
+      const sid = s.id || s.shailaId;
+      if (!sid || seenShailaIds.has(sid)) continue;
+      seenShailaIds.add(sid);
+      const title = s.parentTask || s.shaila || s.question || s.text || 'Shaila';
+      todayShailos.push({
+        type: 'shaila', id: sid, time: null,
+        title, sub: s.answerSummary || s.sourceShaila?.answerSummary || null,
+        accent: TYPE_ACCENT.shaila, raw: s, tag: 'shaila',
       });
     }
 
     // ── Emails ───────────────────────────────────────────────────────────────
+    // Cap at 4; most recent first (array already ordered by Gmail API)
     if (Array.isArray(gmailMessages)) {
-      for (const msg of gmailMessages.slice(0, 7)) {
+      for (const msg of gmailMessages.slice(0, 4)) {
         const from    = fmtSender(gmailHeader(msg, 'From'));
         const subject = gmailHeader(msg, 'Subject') || '(no subject)';
         const dateStr = gmailHeader(msg, 'Date');
         const date    = dateStr ? new Date(dateStr) : null;
-
-        todayBucket.push({
-          type:   'email',
-          id:     msg.id,
-          time:   date,
-          title:  from,
-          sub:    msg.aiSummary || subject,
-          accent: TYPE_ACCENT.email,
-          raw:    msg,
-          tag:    date ? fmtAgo(date, now) : '',
+        todayEmails.push({
+          type: 'email', id: msg.id,
+          time: date, title: from,
+          sub:  msg.aiSummary || subject,
+          accent: TYPE_ACCENT.email, raw: msg,
+          tag: date ? fmtAgo(date, now) : '',
         });
       }
     }
 
-    // ── Sort today bucket: events first (chronological), then tasks, then shailos, then email ──
-    const typeOrder = { event: 0, task: 1, shaila: 2, email: 3 };
-    todayBucket.sort((a, b) => {
-      const to = typeOrder[a.type] - typeOrder[b.type];
-      if (to !== 0) return to;
-      if (a.time && b.time) return a.time - b.time;
-      if (a.time) return -1;
-      if (b.time) return  1;
-      return 0;
-    });
-
-    // Sort upcoming chronologically, cap at 6
+    // Sort upcoming chronologically, cap at 5
     upcomingBucket.sort((a, b) => (a.time || 0) - (b.time || 0));
 
     return {
-      now:      nowBucket,
-      today:    todayBucket,
-      upcoming: upcomingBucket.slice(0, 6),
+      now:           nowBucket,
+      todayEvents,
+      todayTasks,
+      todayShailos,
+      todayEmails,
+      upcoming:      upcomingBucket.slice(0, 5),
     };
   }, [tasks, shailos, calendarEvents, gmailMessages, now, priorities]);
 
@@ -539,11 +555,11 @@ export function TaskRiverPanel({
       return (
         <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.45 }}>
-            {raw.shaila || raw.question || raw.text || 'Shaila'}
+            {raw.parentTask || raw.shaila || raw.question || raw.text || 'Shaila'}
           </div>
-          {(raw.answerSummary || raw.answer) && (
+          {(raw.sourceShaila?.answerSummary || raw.answerSummary || raw.answer) && (
             <div style={{ fontSize: 12, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.6 }}>
-              {raw.answerSummary || raw.answer}
+              {raw.sourceShaila?.answerSummary || raw.answerSummary || raw.answer}
             </div>
           )}
           {onOpenShailos && (
@@ -563,7 +579,25 @@ export function TaskRiverPanel({
   const hasDetail   = !!selected;
   const streamWidth = hasDetail ? 'clamp(260px, 38%, 400px)' : '100%';
 
-  const allEmpty = entries.now.length === 0 && entries.today.length === 0 && entries.upcoming.length === 0;
+  const allEmpty = entries.now.length === 0 &&
+    entries.todayEvents.length === 0 && entries.todayTasks.length === 0 &&
+    entries.todayShailos.length === 0 && entries.todayEmails.length === 0 &&
+    entries.upcoming.length === 0;
+
+  // Thin rule between type-groups within Today — only rendered between groups, not after the last
+  const GroupRule = () => (
+    <div style={{ height: 1, background: 'rgba(128,128,128,0.08)', margin: '6px 2px 2px' }} />
+  );
+
+  // Build the today groups array so we can insert rules only between non-empty groups
+  const todayGroups = [
+    entries.todayEvents,
+    entries.todayTasks,
+    entries.todayShailos,
+    entries.todayEmails,
+  ].filter(g => g.length > 0);
+
+  const hasToday = todayGroups.length > 0;
 
   return (
     <div style={{
@@ -633,10 +667,15 @@ export function TaskRiverPanel({
             </>
           )}
 
-          {entries.today.length > 0 && (
+          {hasToday && (
             <>
               <Section label="Today" />
-              {entries.today.map(renderEntry)}
+              {todayGroups.map((group, gi) => (
+                <React.Fragment key={gi}>
+                  {gi > 0 && <GroupRule />}
+                  {group.map(renderEntry)}
+                </React.Fragment>
+              ))}
             </>
           )}
 
