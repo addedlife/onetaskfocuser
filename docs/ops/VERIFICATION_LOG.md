@@ -1,4 +1,4 @@
-﻿# Verification Log
+# Verification Log
 
 ## 2026-05-10
 
@@ -853,3 +853,11 @@ Current source-grade file count after cleanup: 162 files.
 - Built asset marker check confirmed `relay:denied` and `Firestore rules` present in bundle.
 - Pushed commit `58a0ed5` to `origin/main`; production deploy `6a1468a3f6c2480c19680d96` live at `https://onetaskfocuser.netlify.app`.
 - Firestore security rules required for relay: `match /phone-relay/{doc} { allow read: if request.auth != null; allow write: if true; }` — commands doc also needs `allow read: if true` for DeskPhone drain.
+
+## 2026-05-25 React Hooks-Order White Screen Fix
+
+- Root cause: the Google Health OAuth callback `React.useEffect` was placed after the `if (!AS) return` guard at line 2391 of `apps/web/src/08-app-split/App.jsx`. React's rules of hooks require every hook to run unconditionally on every render; a hook after an early return produces a different hook count on the first render (before Firebase data loads) vs. subsequent renders, triggering the white screen / "hooks changed order" crash.
+- Fix: moved the Health OAuth `useEffect` to immediately above the `!AS` guard (after the DeskPhone poll effect). Removed the now-duplicate copy from below the guard. Added an inline comment explaining the constraint to prevent regression.
+- `npm run build` passed in `apps/web`; generated `assets/index-CK2_Vva9.js`; existing large-bundle warning remains.
+- Pushed commit `d8cbbb1` to `origin/main`; Netlify Git-triggered production served `assets/index-CK2_Vva9.js` (HTTP 200) — hash matches local build exactly.
+
