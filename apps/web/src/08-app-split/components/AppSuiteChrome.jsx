@@ -3,11 +3,12 @@ import { cleanTheme, NC_FONT_STACK, NC_TYPE, suiteIcon } from '../ui-tokens.jsx'
 
 function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreActions, topOffset = 0, forceCompact = false, clockTime = null, onSettings }) {
   const screenApps = [
-    { id: "focus",     label: "Tasks",   icon: "task_alt"   },
-    { id: "chief",     label: "Chief",   icon: "psychology" },
-    { id: "health",    label: "Health",  icon: "monitor_heart" },
-    { id: "shailos",   label: "Shailos", icon: "rule"       },
-    { id: "deskphone", label: "Phone",   icon: "smartphone" },
+    { id: "focus",      label: "Tasks",      icon: "task_alt"      },
+    { id: "taskriver",  label: "TaskRiver",  icon: "water"         },
+    { id: "chief",      label: "Chief",      icon: "psychology"    },
+    { id: "health",     label: "Health",     icon: "monitor_heart" },
+    { id: "shailos",    label: "Shailos",    icon: "rule"          },
+    { id: "deskphone",  label: "Phone",      icon: "smartphone"    },
   ];
   const C = cleanTheme(T);
   const displayOpen = open && !forceCompact;

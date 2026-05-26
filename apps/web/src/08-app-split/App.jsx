@@ -15,6 +15,7 @@ import { DeskPhoneSuitePanel, SuiteShailosPanel } from './components/SuitePanels
 import { NerveCenterPhoneSurface } from './components/NerveCenterPhoneSurface.jsx';
 import { DeskPhoneMiniDock } from './components/DeskPhoneMiniDock.jsx';
 import { compactNerveSummary, nerveSummarySource, NerveCenterPanel } from './components/NerveCenterPanel.jsx';
+import { TaskRiverPanel } from './components/TaskRiverPanel.jsx';
 import { ConvCapture } from './components/ConvCapture.jsx';
 import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack } from './utils/shailosQueue.js';
 
@@ -3296,6 +3297,26 @@ function App({ user, onSignOut }) {
           healthHistory={healthHistory}
           onSaveHealthData={saveHealthDataToFirebase}
           onSyncHealth={syncHealthNow}
+        />
+      )}
+
+      {!shellHidden && suiteView === "taskriver" && (
+        <TaskRiverPanel
+          T={T}
+          tasks={switchboardTaskList}
+          shailos={switchboardShailaList}
+          priorities={ap}
+          calendarEvents={calendarEvents}
+          gmailMessages={gmailMessages}
+          googleToken={googleToken}
+          sidebarW={sidebarW}
+          topOffset={noticeTopOffset}
+          clockTime={clockTime}
+          onCompleteTask={id => compTask(id)}
+          onOpenTasks={() => { openCommandView("focus"); switchTab("focus"); }}
+          onOpenShailos={() => { setShailosAction(null); openCommandView("shailos"); }}
+          onOpenPhone={() => openCommandView("deskphone")}
+          onLoadEmailDetail={loadGoogleEmailDetail}
         />
       )}
 
