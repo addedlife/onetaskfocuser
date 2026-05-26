@@ -2388,6 +2388,23 @@ function App({ user, onSignOut }) {
     };
   }, [deskPhoneOnline, deskPhoneThemeSyncEnabled, syncDeskPhoneTheme]);
 
+  // Handle Google Health OAuth callback (/health-callback?code=...&state=uid)
+  // IMPORTANT: must remain ABOVE the `if (!AS) return` guard — hooks must always
+  // run in the same order on every render (React rules of hooks).
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code  = params.get("code");
+    const state = params.get("state");
+    const path  = window.location.pathname;
+    if (path === "/health-callback" && code) {
+      window.history.replaceState({}, "", "/");
+      fetch(`/.netlify/functions/google-health?action=exchange&code=${encodeURIComponent(code)}&state=${encodeURIComponent(state || "")}`)
+        .then(r => r.json())
+        .then(() => { loadHealthFromFirebase(); setSuiteView("health"); })
+        .catch(() => {});
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:NC_FONT_STACK,color:"#999"}}>Loading...</div>;
 
   const switchboardTaskList = actT.filter(t => !t.completed);
@@ -2521,21 +2538,6 @@ function App({ user, onSignOut }) {
       await loadHealthFromFirebase();
     } catch {}
   }
-
-  // Handle Google Health OAuth callback (/health-callback?code=...&state=uid)
-  React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code  = params.get("code");
-    const state = params.get("state");
-    const path  = window.location.pathname;
-    if (path === "/health-callback" && code) {
-      window.history.replaceState({}, "", "/");
-      fetch(`/.netlify/functions/google-health?action=exchange&code=${encodeURIComponent(code)}&state=${encodeURIComponent(state || "")}`)
-        .then(r => r.json())
-        .then(() => { loadHealthFromFirebase(); setSuiteView("health"); })
-        .catch(() => {});
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const switchboardSections = [
     {
