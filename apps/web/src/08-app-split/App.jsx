@@ -2594,6 +2594,16 @@ function App({ user, onSignOut }) {
       ],
     },
     {
+      id: "health",
+      title: "Health",
+      icon: "monitor_heart",
+      meta: "Steps, sleep, and heart rate",
+      actions: [
+        {id:"health-dashboard", label:"Health dashboard", note:"Open full health history", icon:"monitor_heart", primary:true, run:()=>openCommandView("health")},
+        {id:"health-sync", label:"Sync Health", note:"Pull latest metrics", icon:"sync", run:syncHealthNow},
+      ],
+    },
+    {
       id: "focus",
       title: "Focus",
       icon: "local_drink",
