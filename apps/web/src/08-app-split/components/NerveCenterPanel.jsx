@@ -1541,6 +1541,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         onSyncNow={onSyncHealth}
         topOffset={topOffset}
         sidebarW={sidebarW}
+        userId={user?.uid}
         healthCardVisible={healthCardVisible}
         onSetHealthCardVisible={v => {
           setHealthCardVisible(v);

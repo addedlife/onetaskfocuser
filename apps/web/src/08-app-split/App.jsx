@@ -48,6 +48,9 @@ function App({ user, onSignOut }) {
   const [healthData, setHealthData] = useState(null);
   const [healthConfig, setHealthConfig] = useState(null);
   const [healthHistory, setHealthHistory] = useState(null);
+  // Flag set when /health-callback exchange completes; a second effect watches
+  // for this + user being loaded (Firebase auth is async) before reading Firestore.
+  const [healthOAuthReady, setHealthOAuthReady] = useState(false);
   const [deskPhoneOnline, setDeskPhoneOnline] = useState(false);
   const deskPhoneLaunchAtRef = useRef(0);
   const lastDeskPhoneThemeRef = useRef("");
@@ -2389,8 +2392,8 @@ function App({ user, onSignOut }) {
   }, [deskPhoneOnline, deskPhoneThemeSyncEnabled, syncDeskPhoneTheme]);
 
   // Handle Google Health OAuth callback (/health-callback?code=...&state=uid)
-  // IMPORTANT: must remain ABOVE the `if (!AS) return` guard — hooks must always
-  // run in the same order on every render (React rules of hooks).
+  // IMPORTANT: both effects must remain ABOVE the `if (!AS) return` guard —
+  // React hooks must always be called in the same order on every render.
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code  = params.get("code");
@@ -2400,10 +2403,21 @@ function App({ user, onSignOut }) {
       window.history.replaceState({}, "", "/");
       fetch(`/.netlify/functions/google-health?action=exchange&code=${encodeURIComponent(code)}&state=${encodeURIComponent(state || "")}`)
         .then(r => r.json())
-        .then(() => { loadHealthFromFirebase(); setSuiteView("health"); })
+        // Don't call loadHealthFromFirebase here — user (Firebase auth) may not
+        // be loaded yet. Set a flag instead; the effect below watches for both.
+        .then(() => setHealthOAuthReady(true))
         .catch(() => {});
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fires when exchange is done AND Firebase user is available (whichever comes last).
+  // This handles the race: auth can load before or after the exchange fetch completes.
+  React.useEffect(() => {
+    if (!healthOAuthReady || !user?.uid) return;
+    setHealthOAuthReady(false);
+    loadHealthFromFirebase();
+    setSuiteView("health");
+  }, [healthOAuthReady, user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:NC_FONT_STACK,color:"#999"}}>Loading...</div>;
 

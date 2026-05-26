@@ -409,6 +409,7 @@ export function HealthPage({
   onSyncNow,
   topOffset = 0,
   sidebarW = 0,
+  userId = "",
   healthCardVisible = true,
   onSetHealthCardVisible,
 }) {
@@ -721,7 +722,6 @@ export function HealthPage({
           onStartGoogleHealth={async () => {
             setConnectLoading(true);
             try {
-              const userId = config.userId || "";
               const r = await fetch(`/.netlify/functions/google-health?action=authorize-url&user_id=${encodeURIComponent(userId)}`);
               const { url } = await r.json();
               if (url) window.location.href = url;
