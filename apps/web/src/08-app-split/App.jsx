@@ -2403,11 +2403,16 @@ function App({ user, onSignOut }) {
     if (path === "/health-callback" && code) {
       window.history.replaceState({}, "", "/");
       fetch(`/.netlify/functions/google-health?action=exchange&code=${encodeURIComponent(code)}&state=${encodeURIComponent(state || "")}`)
-        .then(r => r.json())
-        // Don't call loadHealthFromFirebase here — user (Firebase auth) may not
-        // be loaded yet. Set a flag instead; the effect below watches for both.
-        .then(() => setHealthOAuthReady(true))
-        .catch(() => {});
+        .then(async r => {
+          const data = await r.json();
+          console.log("[Health OAuth] exchange status:", r.status, data);
+          if (data?.success) {
+            setHealthOAuthReady(true);
+          } else {
+            console.error("[Health OAuth] exchange failed — check Netlify env vars (GOOGLE_HEALTH_CLIENT_ID, GOOGLE_HEALTH_CLIENT_SECRET) and Google Cloud Console OAuth setup. Error:", data?.error || data);
+          }
+        })
+        .catch(err => console.error("[Health OAuth] exchange fetch error:", err));
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2492,9 +2497,11 @@ function App({ user, onSignOut }) {
 
   // ── Health data Firebase helpers ──────────────────────────────────────────
   async function loadHealthFromFirebase() {
+    console.log("[Health] loadHealthFromFirebase — uid:", user?.uid, "db:", !!db);
     if (!db || !user?.uid) return;
     try {
       const configDoc = await db.collection("healthConfig").doc(user.uid).get();
+      console.log("[Health] healthConfig exists:", configDoc.exists, configDoc.exists ? configDoc.data() : "(none)");
       if (configDoc.exists) setHealthConfig(configDoc.data());
 
       const today = new Date().toISOString().slice(0, 10);
@@ -2507,7 +2514,7 @@ function App({ user, onSignOut }) {
       if (!snap.empty) {
         setHealthHistory(snap.docs.map(d => ({ date: d.id, ...d.data() })).reverse());
       }
-    } catch {}
+    } catch (e) { console.error("[Health] loadHealthFromFirebase error:", e); }
   }
 
   async function saveHealthDataToFirebase(data) {
