@@ -5,6 +5,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
   const screenApps = [
     { id: "focus",     label: "Tasks",   icon: "task_alt"   },
     { id: "chief",     label: "Chief",   icon: "psychology" },
+    { id: "health",    label: "Health",  icon: "monitor_heart" },
     { id: "shailos",   label: "Shailos", icon: "rule"       },
     { id: "deskphone", label: "Phone",   icon: "smartphone" },
   ];

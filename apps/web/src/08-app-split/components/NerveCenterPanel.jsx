@@ -1451,6 +1451,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const collectActions = (...ids) => ids.flatMap(id => bySection[id]?.actions || []);
   const actionCategories = [
     { id: "tasks",   title: "Tasks",   icon: "task_alt",     actions: collectActions("priority", "focus") },
+    { id: "health",  title: "Health",  icon: "monitor_heart",actions: collectActions("health") },
     { id: "shailos", title: "Shailos", icon: "rule",         actions: [...collectActions("shaila"), ...(bySection.record?.actions || []).filter(a => a.id === "record-shaila")] },
     { id: "phone",   title: "Phone",   icon: "phone_in_talk",actions: [...collectActions("phone"), ...(bySection.record?.actions || []).filter(a => a.id === "record-call")] },
     { id: "setup",   title: "Setup",   icon: "settings",     actions: [...(bySection.record?.actions || []).filter(a => !["record-shaila","record-call"].includes(a.id)), ...collectActions("system")] },
