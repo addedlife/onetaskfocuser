@@ -591,6 +591,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const [clockStyle, setClockStyle] = useState(() => { try { return localStorage.getItem("nc_clock_style") || "digital"; } catch { return "digital"; } });
   const [clockMenuPos, setClockMenuPos] = useState(null);
   const [clockTimelineOpen, setClockTimelineOpen] = useState(() => { try { return localStorage.getItem("nc_clock_timeline") === "1"; } catch { return false; } });
+  const [ncViewMode, setNcViewMode] = useState(() => { try { return localStorage.getItem("nc_view_mode") || "full"; } catch { return "full"; } });
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
@@ -2043,10 +2044,26 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           };
 
           // Each card: header (fixed) + content (scrollable)
-          const cardWrap = { background: C.bg, borderRadius: 8, border: `1px solid ${C.divider}`, flex: isStacked ? "1 1 0" : 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" };
-          const cardHead = { minHeight: isStacked ? 28 : 36, padding: isStacked ? "3px 8px" : "11px 14px 8px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 };
-          const cardBody = { flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: isStacked ? "2px 8px 6px" : "4px 14px 8px", overscrollBehavior: "contain", scrollbarGutter: "stable" };
-          const headLabel = { fontSize: isStacked ? NC_TYPE.meta : NC_TYPE.label, fontWeight: 500, color: C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0, display: "inline-flex", alignItems: "center", gap:6, minWidth: 0 };
+          // isFocus: focus mode hides headers and softens borders for a cleaner at-a-glance read.
+          const isFocus = ncViewMode === "focus";
+          const cardWrap = {
+            background: C.bg,
+            borderRadius: isFocus ? 4 : 6,
+            border: `1px solid ${softBorder(C.divider, isFocus ? 0.3 : 0.65)}`,
+            ...(isFocus ? { boxShadow: "0 1px 4px rgba(0,0,0,0.05)" } : {}),
+            flex: isStacked ? "1 1 0" : 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden",
+          };
+          const cardHead = isFocus
+            ? { display: "none" }
+            : {
+                minHeight: isStacked ? 24 : 28,
+                padding: isStacked ? "3px 8px" : "5px 10px 3px",
+                borderBottom: `1px solid ${softBorder(C.divider, 0.5)}`,
+                flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6,
+              };
+          const cardBody = { flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: isStacked ? "2px 8px 6px" : (isFocus ? "6px 12px 8px" : "4px 12px 8px"), overscrollBehavior: "contain", scrollbarGutter: "stable" };
+          // headLabel: ambient watermark — small, spaced, low-opacity; not a structural bar
+          const headLabel = { fontSize: 8, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, letterSpacing: 1.8, textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0, opacity: 0.7 };
           const selectedEmail = selectedEmailId ? (gmailMessages || []).find(msg => msg.id === selectedEmailId) : null;
           const selectedEmailDetail = selectedEmailId ? emailDetails[selectedEmailId] : null;
           const selectedEmailSource = selectedEmailDetail || selectedEmail;
@@ -2084,6 +2101,23 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           return (
             <React.Fragment>
             <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", gap: 6, minHeight: 0 }}>
+              {/* ── Focus / Full mode toggle ── */}
+              <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", padding: "0 2px 2px" }}>
+                {[{ id: "full", lbl: "Full" }, { id: "focus", lbl: "Focus" }].map(({ id, lbl }) => (
+                  <button key={id}
+                    onClick={() => { setNcViewMode(id); try { localStorage.setItem("nc_view_mode", id); } catch {} }}
+                    style={{
+                      background: ncViewMode === id ? softBorder(C.divider, 0.45) : "transparent",
+                      border: "none", borderRadius: 4, padding: "2px 7px",
+                      cursor: "pointer", fontFamily: NC_FONT_STACK,
+                      fontSize: 8, fontWeight: 700, letterSpacing: 1.4,
+                      textTransform: "uppercase",
+                      color: ncViewMode === id ? C.muted : C.faint,
+                      transition: "background 0.12s, color 0.12s",
+                    }}
+                  >{lbl}</button>
+                ))}
+              </div>
               <div style={lowerGridStyle}>
 
               {!googleConfigured && (
@@ -2142,18 +2176,18 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
               {/* ── Calendar card ── */}
               {(calendarEvents !== null || (googleLoading && googleToken)) && (
-                <div style={cardWrap}>
+                <div className="nc-card-group" style={cardWrap}>
                   <div style={cardHead}>
-                    <span style={headLabel}>{suiteIcon("calendar_today", 13)} Today</span>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={headLabel}>{suiteIcon("calendar_today", 11)} Today</span>
+                    <div className="nc-card-action" style={{ display: "flex", gap: 6, alignItems: "center" }}>
                       {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
                       <button onClick={() => setShowAddEvent(true)} title="Add event"
-                         style={{ fontSize: 16, color: T.tFaint, background: "none", border: "none", cursor: "pointer", lineHeight: 1, opacity: .5, padding: 0, display: "flex" }}
-                         onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>+</button>
+                         style={{ fontSize: 16, color: T.tFaint, background: "none", border: "none", cursor: "pointer", lineHeight: 1, opacity: .6, padding: 0, display: "flex" }}
+                         onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .6}>+</button>
                       <a href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer" title="Open Google Calendar"
-                         style={{ fontSize: 14, color: T.tFaint, textDecoration: "none", lineHeight: 1, opacity: .5, display: "flex" }}
-                         onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↗</a>
-                      <button onClick={onRefreshCalendar || onConnectGoogle} title="Refresh" style={{ fontSize: 14, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .5, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↺</button>
+                         style={{ fontSize: 14, color: T.tFaint, textDecoration: "none", lineHeight: 1, opacity: .6, display: "flex" }}
+                         onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .6}>↗</a>
+                      <button onClick={onRefreshCalendar || onConnectGoogle} title="Refresh" style={{ fontSize: 14, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .6, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .6}>↺</button>
                       <button onClick={onDisconnectGoogle} title="Disconnect" style={{ fontSize: 14, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .35, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = .85} onMouseLeave={e => e.currentTarget.style.opacity = .35}>✕</button>
                     </div>
                   </div>
@@ -2467,15 +2501,15 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
               {/* ── Gmail card ── */}
               {(gmailMessages !== null || (googleLoading && googleToken)) && (
-                <div style={cardWrap}>
+                <div className="nc-card-group" style={cardWrap}>
                   <div style={cardHead}>
-                    <span style={headLabel}>{suiteIcon("mail", 13)} Mail</span>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={headLabel}>{suiteIcon("mail", 11)} Mail</span>
+                    <div className="nc-card-action" style={{ display: "flex", gap: 6, alignItems: "center" }}>
                       {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
                       <a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" title="Open Gmail"
-                         style={{ fontSize: 14, color: T.tFaint, textDecoration: "none", opacity: .5, lineHeight: 1 }}
-                         onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↗</a>
-                      <button onClick={onRefreshCalendar || onConnectGoogle} title="Refresh mail and calendar" style={{ fontSize: 14, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .5, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .5}>↺</button>
+                         style={{ fontSize: 14, color: T.tFaint, textDecoration: "none", opacity: .6, lineHeight: 1 }}
+                         onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .6}>↗</a>
+                      <button onClick={onRefreshCalendar || onConnectGoogle} title="Refresh mail and calendar" style={{ fontSize: 14, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .6, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .6}>↺</button>
                     </div>
                   </div>
                   <div style={cardBody}>
@@ -2496,7 +2530,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       const selected = selectedEmailId === msg.id;
                       return (
                         <React.Fragment key={msg.id || i}>
-                        <div
+                        <div className="nc-action-row"
                           style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: isStacked ? "5px 2px" : "8px 4px", borderRadius: 4, background: selected ? (T.bgW || 'rgba(255,255,255,0.05)') : "transparent" }}
                           onMouseEnter={e => {
                             e.currentTarget.style.background = T.bgW || 'rgba(255,255,255,0.05)';
@@ -2522,6 +2556,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                             <span style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word", lineHeight: 1.4 }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
                           </button>
                           <a href={url} target="_blank" rel="noopener noreferrer" title="Open in Gmail"
+                            className="nc-hover-actions"
                             style={{ color: C.faint, textDecoration: "none", fontSize: NC_TYPE.meta, lineHeight: 1.4, padding: "1px 2px", flexShrink: 0 }}
                             onClick={e => e.stopPropagation()}>↗</a>
                         </div>

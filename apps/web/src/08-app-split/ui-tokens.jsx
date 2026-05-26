@@ -178,6 +178,27 @@ export const NC_GLOBAL_CSS = `
     transform: none;
   }
 }
+/* Card-group: card wrapper is the hover context; nc-card-action elements
+   fade in on hover instead of cluttering the header at rest.          */
+.nc-card-group {
+  position: relative;
+}
+.nc-card-action {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease;
+}
+.nc-card-group:hover .nc-card-action,
+.nc-card-group:focus-within .nc-card-action {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .nc-card-action {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
 /* Use dynamic viewport height so the app doesn't overflow on mobile when
    browser chrome (address bar, nav bar) changes the visible area */
 .nc-suite-root {
