@@ -2633,6 +2633,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               C={C}
               healthData={healthData}
               healthHistory={healthHistory}
+              healthConfig={healthConfig}
               onOpenHealth={onOpenHealth}
               cardHeight={healthCardH}
               onResizeStart={startHealthResize}

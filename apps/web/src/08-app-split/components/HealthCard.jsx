@@ -66,6 +66,7 @@ export function HealthCard({
   C,
   healthData,
   healthHistory,
+  healthConfig,
   onOpenHealth,
   onDismiss,
   cardHeight = 92,
@@ -78,7 +79,8 @@ export function HealthCard({
   const hist    = healthHistory || [];
   const mRecs   = hist.filter(r => r.date?.startsWith(thisM));
   const yRecs   = hist.filter(r => r.date?.startsWith(thisY));
-  const isDemo  = !hist.length && !data.source;
+  const connected = !!(healthConfig?.oauthType || healthConfig?.fitbitLinked);
+  const isDemo  = !connected && !hist.length && !data.source;
 
   const stepsD    = data.steps        ?? (isDemo ? DEMO.steps     : null);
   const stepsMAvg = avgField(mRecs, "steps") ?? (isDemo ? DEMO.stepsMAvg : null);
@@ -118,9 +120,9 @@ export function HealthCard({
         <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 56, flexShrink: 0, paddingRight: 14, borderRight: `1px solid ${C.divider}`, marginRight: 14, paddingTop: 2 }}>
           <span style={{ fontSize: 10, fontWeight: 700, color: C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0.3 }}>Health</span>
           <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: data.source && data.source !== "demo" ? "#34A853" : C.faint, flexShrink: 0 }} />
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: connected ? "#34A853" : C.faint, flexShrink: 0 }} />
             <span style={{ fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1.3 }}>
-              {data.source && data.source !== "demo" ? data.source : "demo"}
+              {connected ? (healthConfig?.oauthType === "google" ? "google" : data.source || "live") : "demo"}
             </span>
           </div>
           <button

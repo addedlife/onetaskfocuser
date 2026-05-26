@@ -228,129 +228,104 @@ function MetricCard({ metricKey, values, todayVal, period, C }) {
 }
 
 // ── Connect Modal ─────────────────────────────────────────────────────────────
-function ConnectModal({ C, onClose, onStartFitbit, onStartGoogleFit, fitbitLinked, googleFitLinked }) {
-  const row = (icon, title, desc, badge, action, actionLabel, linked) => (
-    <div style={{
-      border: `1px solid ${C.divider}`, borderRadius: 10, padding: "14px 16px",
-      display: "flex", gap: 12, alignItems: "flex-start",
-      background: linked ? `${C.success || "#34A853"}08` : C.bg,
-    }}>
-      <div style={{
-        width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        background: `${C.accent}18`,
-      }}>
-        <span className="material-symbols-rounded" style={{ fontSize: 20, color: C.accent }}>{icon}</span>
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 2 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK }}>{title}</span>
-          {badge && (
-            <span style={{ fontSize: 9.5, fontWeight: 600, padding: "1px 6px", borderRadius: 8,
-              background: badge === "Live" ? `${C.success || "#34A853"}20` : `${C.warning || "#F9AB00"}18`,
-              color: badge === "Live" ? C.success || "#34A853" : C.warning || "#F9AB00",
-              fontFamily: NC_FONT_STACK,
-            }}>{badge}</span>
-          )}
-          {linked && (
-            <span style={{ fontSize: 9.5, fontWeight: 600, padding: "1px 6px", borderRadius: 8,
-              background: `${C.success || "#34A853"}20`, color: C.success || "#34A853",
-              fontFamily: NC_FONT_STACK,
-            }}>Connected</span>
-          )}
-        </div>
-        <div style={{ fontSize: 11.5, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.5 }}>{desc}</div>
-      </div>
-      {!linked && action && (
-        <button onClick={action} style={{
-          flexShrink: 0, height: 30, padding: "0 14px", borderRadius: 15,
-          border: `1px solid ${C.divider}`, background: C.accent, color: "#fff",
-          cursor: "pointer", fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 500,
-          whiteSpace: "nowrap",
-        }}>{actionLabel || "Connect"}</button>
-      )}
-    </div>
-  );
-
+function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, connectLoading }) {
+  const [showOther, setShowOther] = React.useState(false);
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 9980, background: "rgba(0,0,0,0.52)",
       display: "flex", alignItems: "center", justifyContent: "center",
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
-        width: "min(500px,94vw)", background: C.bg,
+        width: "min(420px,94vw)", background: C.bg,
         border: `1px solid ${C.divider}`, borderRadius: 16,
         boxShadow: "0 20px 60px rgba(0,0,0,0.28)",
         fontFamily: NC_FONT_STACK, overflow: "hidden",
-        maxHeight: "90vh", display: "flex", flexDirection: "column",
       }}>
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "18px 20px 14px", borderBottom: `1px solid ${C.divider}`,
-        }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "18px 20px 14px", borderBottom: `1px solid ${C.divider}` }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Connect Health Data</span>
-          <button onClick={onClose} style={{
-            width: 28, height: 28, borderRadius: "50%", border: "none",
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: "50%", border: "none",
             background: C.hover || "transparent", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", color: C.muted,
-          }}>
+            display: "flex", alignItems: "center", justifyContent: "center", color: C.muted }}>
             <span className="material-symbols-rounded" style={{ fontSize: 16 }}>close</span>
           </button>
         </div>
-        <div style={{ padding: "16px 20px 20px", display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
-          {row(
-            "watch",
-            "Fitbit",
-            "Syncs steps, heart rate, sleep, and weight from your Fitbit device via the Fitbit Web API. Register your app at dev.fitbit.com — verify the API is still active (status uncertain post-2025 as Google completes the Fitbit acquisition).",
-            "Live",
-            onStartFitbit,
-            "Connect Fitbit",
-            fitbitLinked,
-          )}
-          {row(
-            "account_circle",
-            "Google Fit REST API",
-            "Uses your already-connected Google account to pull steps, HR, and weight from Google Fit. Note: Google Fit is deprecated and sunsetting — may have limited data after mid-2025.",
-            "Deprecated",
-            onStartGoogleFit,
-            "Link Google Fit",
-            googleFitLinked,
-          )}
+
+        <div style={{ padding: "18px 20px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* Google Health — primary option */}
           <div style={{
-            border: `1px solid ${C.divider}`, borderRadius: 10, padding: "14px 16px",
-            background: C.bgSoft || C.bg,
+            border: `2px solid ${googleHealthLinked ? C.success || "#34A853" : C.accent}`,
+            borderRadius: 12, padding: "16px 18px",
+            background: googleHealthLinked ? `${C.success || "#34A853"}08` : `${C.accent}06`,
+            display: "flex", gap: 14, alignItems: "center",
           }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 6 }}>Apple Health</div>
-            <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.55 }}>
-              Apple Health is iOS-native and cannot be accessed directly from a web app.
-              <br /><br />
-              <strong style={{ color: C.text }}>Option A — Health Auto Export app (recommended):</strong>
-              {" "}Install "Health Auto Export" on iPhone → configure it to push to a Firebase webhook →
-              this dashboard reads the data automatically.
-              <br /><br />
-              <strong style={{ color: C.text }}>Option B — iOS Shortcuts:</strong>
-              {" "}Create a Shortcut that reads Health data and POSTs it to{" "}
-              <code style={{ fontSize: 10.5, background: C.hover, padding: "1px 4px", borderRadius: 4 }}>
-                /api/health-ingest
-              </code>.
-              <br /><br />
-              <strong style={{ color: C.text }}>Option C — Manual entry:</strong>
-              {" "}Log values directly in the dashboard below.
+            <div style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: `${C.accent}18` }}>
+              <span className="material-symbols-rounded" style={{ fontSize: 22, color: C.accent }}>monitor_heart</span>
             </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Google Health API</span>
+                <span style={{ fontSize: 9.5, fontWeight: 600, padding: "1px 7px", borderRadius: 8,
+                  background: googleHealthLinked ? `${C.success || "#34A853"}20` : `${C.accent}18`,
+                  color: googleHealthLinked ? C.success || "#34A853" : C.accent }}>
+                  {googleHealthLinked ? "Connected" : "Recommended"}
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>
+                Steps, heart rate, sleep &amp; weight — syncs from Wear OS or paired Android.
+              </div>
+            </div>
+            {!googleHealthLinked && (
+              <button onClick={onStartGoogleHealth} disabled={connectLoading} style={{
+                flexShrink: 0, height: 34, padding: "0 16px", borderRadius: 17,
+                border: "none", background: connectLoading ? C.divider : C.accent, color: "#fff",
+                cursor: connectLoading ? "wait" : "pointer", fontSize: 13,
+                fontFamily: NC_FONT_STACK, fontWeight: 600, whiteSpace: "nowrap",
+              }}>
+                {connectLoading ? "Opening…" : "Connect"}
+              </button>
+            )}
           </div>
-          <div style={{
-            border: `1px solid ${C.divider}`, borderRadius: 10, padding: "14px 16px",
-            background: C.bgSoft || C.bg,
+
+          {/* Manual log shortcut */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "10px 14px", border: `1px solid ${C.divider}`, borderRadius: 10 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 1 }}>Manual entry</div>
+              <div style={{ fontSize: 11.5, color: C.muted }}>Log today's values yourself</div>
+            </div>
+            <button onClick={onClose} style={{ height: 30, padding: "0 14px", borderRadius: 15,
+              border: `1px solid ${C.divider}`, background: "none", color: C.muted,
+              cursor: "pointer", fontSize: 12, fontFamily: NC_FONT_STACK }}>
+              Use Log button ↗
+            </button>
+          </div>
+
+          {/* Other sources — collapsible */}
+          <button onClick={() => setShowOther(v => !v)} style={{
+            width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 5,
+            background: "none", border: "none", cursor: "pointer", padding: "2px 0",
+            color: C.faint, fontSize: 12, fontFamily: NC_FONT_STACK,
           }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 4 }}>
-              Google Health Connect
+            <span className="material-symbols-rounded" style={{ fontSize: 14,
+              transition: "transform 0.15s", transform: showOther ? "rotate(180deg)" : "none" }}>
+              expand_more
+            </span>
+            Other sources (Fitbit, Apple Health)
+          </button>
+
+          {showOther && (
+            <div style={{ border: `1px solid ${C.divider}`, borderRadius: 10, padding: "12px 14px",
+              background: C.bgSoft || C.bg, fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
+              <strong style={{ color: C.text }}>Fitbit:</strong>{" "}
+              Fitbit Web API migrated to Google Health in 2026 — use the Google Health option above.<br /><br />
+              <strong style={{ color: C.text }}>Apple Health:</strong>{" "}
+              iOS-native, not accessible from the web. Install "Health Auto Export" on iPhone and point it at this app's Firebase endpoint, or use Manual entry.
             </div>
-            <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.55 }}>
-              Health Connect is Android-native and not accessible from a web browser.
-              Use the Google Fit REST API (above) as the web-accessible alternative —
-              or sync via a companion Android app that pushes to Firebase.
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
@@ -447,7 +422,10 @@ export function HealthPage({
   const goals   = config.goals  || {};
   const today   = healthData    || {};
   const history = (healthHistory && healthHistory.length > 0) ? healthHistory : null;
-  const isDemo  = !healthHistory || !healthHistory.length || today.source === "demo" || !today.source;
+  const connected = config.oauthType === "google" || config.fitbitLinked || config.googleFitLinked;
+  const hasData   = !!history || (!!today.source && today.source !== "demo");
+  const isDemo    = !connected && !hasData;
+  const isConnectedNoData = connected && !hasData;
 
   const periodHistory = useMemo(() => {
     const src = history || (period === "year" ? DEMO_YEAR : period === "month" ? DEMO_MONTH : DEMO_WEEK);
@@ -470,8 +448,8 @@ export function HealthPage({
     setSyncing(false);
   }
 
-  const connected = config.fitbitLinked || config.googleFitLinked;
-  const sourceLabel = config.fitbitLinked     ? "Fitbit"
+  const sourceLabel = config.oauthType === "google" ? "Google Health"
+    : config.fitbitLinked    ? "Fitbit"
     : config.googleFitLinked ? "Google Fit"
     : isDemo                 ? "Demo data"
     : "Manual";
@@ -579,13 +557,33 @@ export function HealthPage({
           }}>
             <span className="material-symbols-rounded" style={{ fontSize: 16, color: C.accent }}>info</span>
             <span style={{ fontSize: 12, color: C.text, fontFamily: NC_FONT_STACK }}>
-              Showing demo data. Tap <strong>Connect</strong> to link Fitbit, Google Fit, or log manually.
+              Showing demo data. Connect Google Health to see your real stats.
             </span>
             <button onClick={() => setShowConnect(true)} style={{
               marginLeft: "auto", flexShrink: 0, height: 28, padding: "0 12px",
               borderRadius: 14, border: `1px solid ${C.accent}`, background: "none",
               color: C.accent, cursor: "pointer", fontSize: 11.5, fontFamily: NC_FONT_STACK, fontWeight: 600,
             }}>Connect</button>
+          </div>
+        )}
+
+        {/* Connected but no data synced yet */}
+        {isConnectedNoData && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "10px 14px", borderRadius: 10, marginBottom: 18,
+            background: `${C.success || "#34A853"}10`, border: `1px solid ${C.success || "#34A853"}30`,
+          }}>
+            <span className="material-symbols-rounded" style={{ fontSize: 16, color: C.success || "#34A853" }}>check_circle</span>
+            <span style={{ fontSize: 12, color: C.text, fontFamily: NC_FONT_STACK }}>
+              Google Health connected — hit <strong>Sync</strong> to pull your first data.
+            </span>
+            <button onClick={handleSync} disabled={syncing} style={{
+              marginLeft: "auto", flexShrink: 0, height: 28, padding: "0 12px",
+              borderRadius: 14, border: `1px solid ${C.success || "#34A853"}`, background: "none",
+              color: C.success || "#34A853", cursor: syncing ? "wait" : "pointer",
+              fontSize: 11.5, fontFamily: NC_FONT_STACK, fontWeight: 600, opacity: syncing ? 0.6 : 1,
+            }}>{syncing ? "Syncing…" : "Sync now"}</button>
           </div>
         )}
 
@@ -656,37 +654,30 @@ export function HealthPage({
           ))}
         </div>
 
-        {/* Setup instructions section */}
+        {/* Setup instructions — only when not connected */}
         {!connected && (
           <div style={{ marginTop: 28 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 12 }}>
               Setup Guide
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <SetupStep num={1} color="#4285F4" title="Fitbit (recommended for Fitbit devices)"
+              <SetupStep num={1} color="#4285F4" title="Enable Google Health API (one-time, admin)"
                 C={C} steps={[
-                  "Go to dev.fitbit.com and sign in with your Fitbit account",
-                  'Click "Register an App" → fill in name (e.g. "Shamash Health"), description, and set OAuth 2.0 Application Type to "Personal"',
-                  'Set Callback URL to: https://onetaskfocuser.netlify.app/health-callback',
+                  "Go to console.cloud.google.com and open (or create) your project",
+                  'Search for "Google Health API" and click Enable',
+                  'Go to APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID (Web application)',
+                  'Add authorized redirect URI: https://onetaskfocuser.netlify.app/health-callback',
                   "Copy the Client ID and Client Secret",
-                  'Click "Connect" above → enter your Client ID → complete the OAuth login on Fitbit',
-                  "Fitbit will sync steps, HR, sleep, and weight automatically",
+                  "In Netlify dashboard → Site config → Env vars, add GOOGLE_HEALTH_CLIENT_ID and GOOGLE_HEALTH_CLIENT_SECRET",
                 ]}
               />
-              <SetupStep num={2} color="#EA4335" title="Google Fit (if you already use Google)"
+              <SetupStep num={2} color="#EA4335" title="Connect your Google account"
                 C={C} steps={[
-                  "Your Google account is already connected — just tap Connect → Link Google Fit",
-                  "This uses the Google Fit REST API with your existing Google token",
-                  "Warning: Google Fit is deprecated. Check status at developers.google.com/fit",
-                ]}
-              />
-              <SetupStep num={3} color="#7C3AED" title="Apple Health (iPhone users)"
-                C={C} steps={[
-                  'Install "Health Auto Export" from the App Store on your iPhone',
-                  "In the app, add a Firebase export destination with your project credentials",
-                  "Select metrics: Steps, Heart Rate, Sleep Analysis, Body Mass",
-                  "Set export frequency to daily or on change",
-                  "Your data will appear in this dashboard automatically",
+                  'Click the "Connect" button above',
+                  "Google will ask which account to use — choose ydanziger20@gmail.com (the account with your health data)",
+                  "Grant the requested permissions (steps, heart rate, sleep, weight)",
+                  'You\'ll be redirected back here automatically',
+                  'Hit "Sync" to pull your first data',
                 ]}
               />
             </div>
@@ -725,8 +716,9 @@ export function HealthPage({
         <ConnectModal
           C={C}
           onClose={() => setShowConnect(false)}
-          onStartFitbit={() => {}}
-          onStartGoogleFit={async () => {
+          googleHealthLinked={config.oauthType === "google"}
+          connectLoading={connectLoading}
+          onStartGoogleHealth={async () => {
             setConnectLoading(true);
             try {
               const userId = config.userId || "";
@@ -735,8 +727,6 @@ export function HealthPage({
               if (url) window.location.href = url;
             } catch { setConnectLoading(false); }
           }}
-          fitbitLinked={config.fitbitLinked}
-          googleFitLinked={config.googleFitLinked || config.oauthType === "google"}
         />
       )}
       {showManual && (
