@@ -557,7 +557,7 @@ export function HealthPage({
         flex: 1, overflowY: "auto", overscrollBehavior: "contain",
         padding: "20px clamp(16px,3vw,32px) 28px",
       }}>
-        {/* Demo notice */}
+        {/* Demo notice — informational only; Connect lives in the header */}
         {isDemo && (
           <div style={{
             display: "flex", alignItems: "center", gap: 10,
@@ -566,13 +566,8 @@ export function HealthPage({
           }}>
             <span className="material-symbols-rounded" style={{ fontSize: 16, color: C.accent }}>info</span>
             <span style={{ fontSize: 12, color: C.text, fontFamily: NC_FONT_STACK }}>
-              Showing demo data. Connect Google Health to see your real stats.
+              Showing demo data. Use <strong>Connect</strong> above to link Google Health.
             </span>
-            <button onClick={() => setShowConnect(true)} style={{
-              marginLeft: "auto", flexShrink: 0, height: 28, padding: "0 12px",
-              borderRadius: 14, border: `1px solid ${C.accent}`, background: "none",
-              color: C.accent, cursor: "pointer", fontSize: 11.5, fontFamily: NC_FONT_STACK, fontWeight: 600,
-            }}>Connect</button>
           </div>
         )}
 

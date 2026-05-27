@@ -2436,6 +2436,14 @@ function App({ user, onSignOut }) {
     setSuiteView("health");
   }, [healthOAuthReady, user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Initial health load — fires once when Firebase auth + Firestore are ready.
+  // Without this, healthConfig stays null on every page load and the app
+  // thinks the user is unconnected even though Firestore has their tokens.
+  React.useEffect(() => {
+    if (!db || !user?.uid) return;
+    loadHealthFromFirebase();
+  }, [user?.uid, db]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:NC_FONT_STACK,color:"#999"}}>Loading...</div>;
 
   const switchboardTaskList = actT.filter(t => !t.completed);
@@ -2508,11 +2516,15 @@ function App({ user, onSignOut }) {
 
   // ── Health data Firebase helpers ──────────────────────────────────────────
   async function loadHealthFromFirebase() {
-    console.log("[Health] loadHealthFromFirebase — uid:", user?.uid, "db:", !!db);
+    const dlog = (msg, data) => fetch("/.netlify/functions/debug-log", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: "fe:loadHealth", msg, data }),
+    }).catch(() => {});
+    dlog("called", { uid: user?.uid, hasDb: !!db });
     if (!db || !user?.uid) return;
     try {
       const configDoc = await db.collection("healthConfig").doc(user.uid).get();
-      console.log("[Health] healthConfig exists:", configDoc.exists, configDoc.exists ? configDoc.data() : "(none)");
+      dlog("healthConfig fetched", { exists: configDoc.exists, oauthType: configDoc.data()?.oauthType, hasRefresh: !!configDoc.data()?.googleRefreshToken });
       if (configDoc.exists) setHealthConfig(configDoc.data());
 
       const today = new Date().toISOString().slice(0, 10);
@@ -2525,7 +2537,11 @@ function App({ user, onSignOut }) {
       if (!snap.empty) {
         setHealthHistory(snap.docs.map(d => ({ date: d.id, ...d.data() })).reverse());
       }
-    } catch (e) { console.error("[Health] loadHealthFromFirebase error:", e); }
+      dlog("done", { historyDays: snap.size });
+    } catch (e) {
+      dlog("ERROR", { err: String(e?.message || e) });
+      console.error("[Health] loadHealthFromFirebase error:", e);
+    }
   }
 
   async function saveHealthDataToFirebase(data) {

@@ -199,24 +199,11 @@ export const handler = async (event) => {
 
     const db = getDb();
 
-    let googleUserId = null;
-    try {
-      const idRes  = await fetch(`${HEALTH_V4}/users/me/identity`, {
-        headers: { Authorization: `Bearer ${tokens.access_token}` },
-      });
-      const idData = await idRes.json();
-      googleUserId = idData?.name || null;
-      await dlog("exchange", `identity status ${idRes.status}`, { status: idRes.status, googleUserId, body: idData });
-    } catch (err) {
-      await dlog("exchange", "identity fetch threw", { err: String(err) });
-    }
-
     await db.collection("healthConfig").doc(userId).set({
       oauthType:          "google",
       googleAccessToken:  tokens.access_token,
       googleRefreshToken: tokens.refresh_token || null,
       googleTokenExpiry:  Date.now() + ((tokens.expires_in || 3600) - 60) * 1000,
-      googleUserId,
       fitbitToken:        null,
       userId,
       updatedAt:          Date.now(),
