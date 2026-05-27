@@ -228,7 +228,7 @@ function MetricCard({ metricKey, values, todayVal, period, C }) {
 }
 
 // ── Connect Modal ─────────────────────────────────────────────────────────────
-function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, connectLoading }) {
+function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, connectLoading, connectError }) {
   const [showOther, setShowOther] = React.useState(false);
   return (
     <div style={{
@@ -255,7 +255,7 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
         <div style={{ padding: "18px 20px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
           {/* Google Health — primary option */}
           <div style={{
-            border: `2px solid ${googleHealthLinked ? C.success || "#34A853" : C.accent}`,
+            border: `2px solid ${googleHealthLinked ? C.success || "#34A853" : connectError ? C.danger || "#EA4335" : C.accent}`,
             borderRadius: 12, padding: "16px 18px",
             background: googleHealthLinked ? `${C.success || "#34A853"}08` : `${C.accent}06`,
             display: "flex", gap: 14, alignItems: "center",
@@ -267,16 +267,25 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Google Fit</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Google Health</span>
                 <span style={{ fontSize: 9.5, fontWeight: 600, padding: "1px 7px", borderRadius: 8,
                   background: googleHealthLinked ? `${C.success || "#34A853"}20` : `${C.accent}18`,
                   color: googleHealthLinked ? C.success || "#34A853" : C.accent }}>
                   {googleHealthLinked ? "Connected" : "Recommended"}
                 </span>
               </div>
-              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>
-                Steps, heart rate, sleep &amp; weight from Google Fit / Wear OS data.
-              </div>
+              {connectError ? (
+                <div style={{ fontSize: 12, color: C.danger || "#EA4335", lineHeight: 1.4, fontWeight: 500 }}>
+                  {connectError}
+                  {connectError.includes("not set") && (
+                    <span style={{ color: C.muted, fontWeight: 400 }}>{" "}— follow the Setup Guide on this page.</span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>
+                  Steps, heart rate, sleep &amp; weight from Google Health / Wear OS.
+                </div>
+              )}
             </div>
             {!googleHealthLinked && (
               <button onClick={onStartGoogleHealth} disabled={connectLoading} style={{
@@ -285,7 +294,7 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
                 cursor: connectLoading ? "wait" : "pointer", fontSize: 13,
                 fontFamily: NC_FONT_STACK, fontWeight: 600, whiteSpace: "nowrap",
               }}>
-                {connectLoading ? "Opening…" : "Connect"}
+                {connectLoading ? "Opening…" : connectError ? "Retry" : "Connect"}
               </button>
             )}
           </div>
@@ -314,14 +323,12 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
               transition: "transform 0.15s", transform: showOther ? "rotate(180deg)" : "none" }}>
               expand_more
             </span>
-            Other sources (Fitbit, Apple Health)
+            Other sources (Apple Health)
           </button>
 
           {showOther && (
             <div style={{ border: `1px solid ${C.divider}`, borderRadius: 10, padding: "12px 14px",
               background: C.bgSoft || C.bg, fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
-              <strong style={{ color: C.text }}>Fitbit:</strong>{" "}
-              Fitbit Web API migrated to Google Health in 2026 — use the Google Health option above.<br /><br />
               <strong style={{ color: C.text }}>Apple Health:</strong>{" "}
               iOS-native, not accessible from the web. Install "Health Auto Export" on iPhone and point it at this app's Firebase endpoint, or use Manual entry.
             </div>
@@ -418,6 +425,7 @@ export function HealthPage({
   const [showManual, setShowManual]   = useState(false);
   const [syncing, setSyncing]         = useState(false);
   const [connectLoading, setConnectLoading] = useState(false);
+  const [connectError, setConnectError]     = useState(null);
 
   const config  = healthConfig || {};
   const goals   = config.goals  || {};
@@ -662,25 +670,24 @@ export function HealthPage({
               Setup Guide
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <SetupStep num={1} color="#4285F4" title="Enable Fitness API in Google Cloud (one-time)"
+              <SetupStep num={1} color="#4285F4" title="Enable Google Health API (one-time)"
                 C={C} steps={[
                   "Go to console.cloud.google.com and open (or create) your project",
-                  'Go to APIs & Services → Library, search for "Fitness API", and click Enable',
-                  'Go to APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID',
-                  'Application type: Web application',
-                  'Authorized redirect URIs: https://onetaskfocuser.netlify.app/health-callback',
+                  'Go to APIs & Services → Library, search for "Google Health API", and click Enable',
+                  'Go to APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID (Web application)',
+                  'Add authorized redirect URI: https://onetaskfocuser.netlify.app/health-callback',
                   "Copy the Client ID and Client Secret",
                   "In Netlify dashboard → Site configuration → Environment variables, add GOOGLE_HEALTH_CLIENT_ID and GOOGLE_HEALTH_CLIENT_SECRET",
-                  "Redeploy the Netlify site after adding env vars (or trigger a new deploy)",
+                  "Trigger a new Netlify deploy after setting the env vars",
                 ]}
               />
               <SetupStep num={2} color="#EA4335" title="Connect your Google account"
                 C={C} steps={[
                   'Click the "Connect" button above',
-                  "Sign in with the Google account that has your Wear OS / Google Fit data",
-                  "Grant the requested fitness permissions (activity, heart rate, sleep, body)",
+                  "Sign in with the Google account linked to your Wear OS / health data",
+                  "Grant the requested health permissions",
                   "You'll be redirected back here automatically",
-                  'Hit "Sync" to pull your first 30 days of data',
+                  'Hit "Sync" to pull your first data',
                 ]}
               />
             </div>
@@ -718,16 +725,26 @@ export function HealthPage({
       {showConnect && (
         <ConnectModal
           C={C}
-          onClose={() => setShowConnect(false)}
+          onClose={() => { setShowConnect(false); setConnectError(null); }}
           googleHealthLinked={config.oauthType === "google"}
           connectLoading={connectLoading}
+          connectError={connectError}
           onStartGoogleHealth={async () => {
             setConnectLoading(true);
+            setConnectError(null);
             try {
-              const r = await fetch(`/.netlify/functions/google-health?action=authorize-url&user_id=${encodeURIComponent(userId)}`);
-              const { url } = await r.json();
-              if (url) window.location.href = url;
-            } catch { setConnectLoading(false); }
+              const r    = await fetch(`/.netlify/functions/google-health?action=authorize-url&user_id=${encodeURIComponent(userId)}`);
+              const data = await r.json();
+              if (!r.ok || !data.url) {
+                setConnectError(data.error || "Could not start Google Health authorization.");
+                setConnectLoading(false);
+                return;
+              }
+              window.location.href = data.url;
+            } catch (err) {
+              setConnectError("Network error — check that the app is deployed.");
+              setConnectLoading(false);
+            }
           }}
         />
       )}
