@@ -2436,13 +2436,12 @@ function App({ user, onSignOut }) {
     setSuiteView("health");
   }, [healthOAuthReady, user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Initial health load — fires once when Firebase auth + Firestore are ready.
-  // Without this, healthConfig stays null on every page load and the app
-  // thinks the user is unconnected even though Firestore has their tokens.
+  // Initial health load — fires once Firebase auth is ready. Goes through
+  // the backend (Firebase Admin), so Firestore rules don't block the read.
   React.useEffect(() => {
-    if (!db || !user?.uid) return;
+    if (!user?.uid) return;
     loadHealthFromFirebase();
-  }, [user?.uid, db]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:NC_FONT_STACK,color:"#999"}}>Loading...</div>;
 
@@ -2514,48 +2513,43 @@ function App({ user, onSignOut }) {
     if (view === "focus") setShowShailos(false);
   };
 
-  // ── Health data Firebase helpers ──────────────────────────────────────────
+  // ── Health data helpers (go through backend so Firestore rules don't apply) ─
   async function loadHealthFromFirebase() {
     const dlog = (msg, data) => fetch("/.netlify/functions/debug-log", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source: "fe:loadHealth", msg, data }),
     }).catch(() => {});
-    dlog("called", { uid: user?.uid, hasDb: !!db });
-    if (!db || !user?.uid) return;
+    dlog("called", { uid: user?.uid });
+    if (!user?.uid) return;
     try {
-      const configDoc = await db.collection("healthConfig").doc(user.uid).get();
-      dlog("healthConfig fetched", { exists: configDoc.exists, oauthType: configDoc.data()?.oauthType, hasRefresh: !!configDoc.data()?.googleRefreshToken });
-      if (configDoc.exists) setHealthConfig(configDoc.data());
-
-      const today = new Date().toISOString().slice(0, 10);
-      const todayDoc = await db.collection("healthData").doc(user.uid)
-        .collection("log").doc(today).get();
-      if (todayDoc.exists) setHealthData({ ...todayDoc.data(), date: today });
-
-      const snap = await db.collection("healthData").doc(user.uid)
-        .collection("log").orderBy("date", "desc").limit(90).get();
-      if (!snap.empty) {
-        setHealthHistory(snap.docs.map(d => ({ date: d.id, ...d.data() })).reverse());
-      }
-      dlog("done", { historyDays: snap.size });
+      const res  = await fetch(`/.netlify/functions/google-health?action=load&user_id=${encodeURIComponent(user.uid)}`);
+      const json = await res.json();
+      dlog(`load response status ${res.status}`, { status: res.status, hasConfig: !!json?.config, oauthType: json?.config?.oauthType, historyDays: json?.history?.length });
+      if (!res.ok) return;
+      if (json.config)         setHealthConfig(json.config);
+      if (json.today)          setHealthData(json.today);
+      if (json.history?.length) setHealthHistory(json.history);
     } catch (e) {
       dlog("ERROR", { err: String(e?.message || e) });
-      console.error("[Health] loadHealthFromFirebase error:", e);
+      console.error("[Health] loadHealth error:", e);
     }
   }
 
   async function saveHealthDataToFirebase(data) {
-    if (!db || !user?.uid || !data?.date) return;
+    if (!user?.uid || !data?.date) return;
     try {
+      const res = await fetch(`/.netlify/functions/google-health?action=save-entry&user_id=${encodeURIComponent(user.uid)}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) return;
       const { date, ...rest } = data;
-      await db.collection("healthData").doc(user.uid)
-        .collection("log").doc(date).set(rest, { merge: true });
       setHealthData(prev => ({ ...(prev || {}), ...rest, date, source: data.source || "manual" }));
       setHealthHistory(prev => {
         const next = [...(prev || [])];
-        const idx = next.findIndex(d => d.date === date);
+        const idx  = next.findIndex(d => d.date === date);
         if (idx >= 0) next[idx] = { date, ...rest };
-        else next.push({ date, ...rest });
+        else          next.push({ date, ...rest });
         return next.sort((a, b) => a.date < b.date ? -1 : 1);
       });
     } catch {}

@@ -280,6 +280,62 @@ export const handler = async (event) => {
     return json(200, entry, origin);
   }
 
+  // ── 3b. Load config + history for the browser (bypasses Firestore rules) ─
+  if (action === "load") {
+    const userId = q.user_id || "";
+    if (!userId) return json(400, { error: "Missing user_id" }, origin);
+    const db = getDb();
+
+    try {
+      const configDoc = await db.collection("healthConfig").doc(userId).get();
+      // Strip tokens — browser never needs them
+      const cfg = configDoc.exists ? configDoc.data() : null;
+      const config = cfg ? {
+        oauthType:      cfg.oauthType      || null,
+        fitbitLinked:   !!cfg.fitbitLinked,
+        googleFitLinked:!!cfg.googleFitLinked,
+        goals:          cfg.goals          || {},
+        updatedAt:      cfg.updatedAt      || null,
+      } : null;
+
+      const today    = new Date().toISOString().slice(0, 10);
+      const todayDoc = await db.collection("healthData").doc(userId).collection("log").doc(today).get();
+      const todayEntry = todayDoc.exists ? { ...todayDoc.data(), date: today } : null;
+
+      const histSnap = await db.collection("healthData").doc(userId).collection("log")
+        .orderBy("date", "desc").limit(90).get();
+      const history = histSnap.docs.map(d => ({ date: d.id, ...d.data() })).reverse();
+
+      await dlog("load", "ok", { hasConfig: !!config, oauthType: config?.oauthType, hasToday: !!todayEntry, historyDays: history.length });
+      return json(200, { config, today: todayEntry, history }, origin);
+    } catch (err) {
+      await dlog("load", "ERROR", { err: String(err.message || err) });
+      return json(500, { error: String(err.message || err) }, origin);
+    }
+  }
+
+  // ── 3c. Save a manual entry (browser can't write to Firestore directly) ──
+  if (action === "save-entry") {
+    if (event.httpMethod !== "POST") return json(405, { error: "Use POST" }, origin);
+    const userId = q.user_id || "";
+    if (!userId) return json(400, { error: "Missing user_id" }, origin);
+
+    let body;
+    try { body = JSON.parse(event.body || "{}"); }
+    catch { return json(400, { error: "Invalid JSON body" }, origin); }
+    if (!body.date) return json(400, { error: "Missing date" }, origin);
+
+    const db = getDb();
+    const { date, ...rest } = body;
+    try {
+      await db.collection("healthData").doc(userId).collection("log").doc(date)
+        .set({ ...rest, date, source: rest.source || "manual" }, { merge: true });
+      return json(200, { ok: true, date }, origin);
+    } catch (err) {
+      return json(500, { error: String(err.message || err) }, origin);
+    }
+  }
+
   // ── 4. Disconnect / revoke ────────────────────────────────────────────────
   if (action === "disconnect") {
     const userId = q.user_id || "";
