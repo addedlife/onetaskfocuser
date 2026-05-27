@@ -287,16 +287,17 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
                 </div>
               )}
             </div>
-            {!googleHealthLinked && (
-              <button onClick={onStartGoogleHealth} disabled={connectLoading} style={{
-                flexShrink: 0, height: 34, padding: "0 16px", borderRadius: 17,
-                border: "none", background: connectLoading ? C.divider : C.accent, color: "#fff",
-                cursor: connectLoading ? "wait" : "pointer", fontSize: 13,
-                fontFamily: NC_FONT_STACK, fontWeight: 600, whiteSpace: "nowrap",
-              }}>
-                {connectLoading ? "Opening…" : connectError ? "Retry" : "Connect"}
-              </button>
-            )}
+            <button onClick={onStartGoogleHealth} disabled={connectLoading} style={{
+              flexShrink: 0, height: 34, padding: "0 16px", borderRadius: 17,
+              border: "none", background: connectLoading ? C.divider : C.accent, color: "#fff",
+              cursor: connectLoading ? "wait" : "pointer", fontSize: 13,
+              fontFamily: NC_FONT_STACK, fontWeight: 600, whiteSpace: "nowrap",
+            }}>
+              {connectLoading ? "Opening…"
+                : connectError ? "Retry"
+                : googleHealthLinked ? "Reconnect"
+                : "Connect"}
+            </button>
           </div>
 
           {/* Manual log shortcut */}

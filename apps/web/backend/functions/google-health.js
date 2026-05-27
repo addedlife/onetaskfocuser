@@ -12,10 +12,15 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const HEALTH_V4 = "https://health.googleapis.com/v4";
 const REDIRECT  = "https://onetaskfocuser.netlify.app/health-callback";
 
+// NOTE: All Google Health API scopes require the explicit .readonly suffix —
+// the suffix-less variants are accepted at OAuth time but grant no data access
+// (API calls return 403 ACCESS_TOKEN_SCOPE_INSUFFICIENT).
+// Heart rate + weight live under health_metrics_and_measurements; sleep is its
+// own scope; steps live under activity_and_fitness.
 const SCOPES = [
-  "https://www.googleapis.com/auth/googlehealth.activity_and_fitness",
-  "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements",
-  "https://www.googleapis.com/auth/googlehealth.sleep",
+  "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
+  "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
+  "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
 ].join(" ");
 
 // ── Firebase Admin (same pattern as google-workspace.js) ─────────────────────
