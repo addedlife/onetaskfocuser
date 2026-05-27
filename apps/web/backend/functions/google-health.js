@@ -236,7 +236,11 @@ export const handler = async (event) => {
 
     const today = new Date().toISOString().slice(0, 10);
     const [yr, mo, dy] = today.split("-").map(Number);
-    const range = { start: { year: yr, month: mo, day: dy }, end: { year: yr, month: mo, day: dy } };
+    // range.start/end are CivilDateTime — must wrap year/month/day in a `date` object.
+    const range = {
+      start: { date: { year: yr, month: mo, day: dy } },
+      end:   { date: { year: yr, month: mo, day: dy } },
+    };
 
     const [stepsRp, hrRp, weightRp, sleepHours] = await Promise.all([
       rollup(accessToken, "steps",      range),
@@ -244,6 +248,8 @@ export const handler = async (event) => {
       rollup(accessToken, "weight",     range),
       fetchSleepHours(accessToken, today),
     ]);
+
+    await dlog("sync", "parsed rollups", { stepsRp, hrRp, weightRp, sleepHours });
 
     const entry = {
       date:      today,
@@ -262,8 +268,8 @@ export const handler = async (event) => {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 86_400_000);
       const histStart     = thirtyDaysAgo.toISOString().slice(0, 10).split("-").map(Number);
       const histRange     = {
-        start: { year: histStart[0], month: histStart[1], day: histStart[2] },
-        end:   { year: yr, month: mo, day: dy },
+        start: { date: { year: histStart[0], month: histStart[1], day: histStart[2] } },
+        end:   { date: { year: yr,          month: mo,          day: dy          } },
       };
       const histRes  = await fetch(`${HEALTH_V4}/users/me/dataTypes/steps/dataPoints:dailyRollUp`, {
         method: "POST",
@@ -273,7 +279,7 @@ export const handler = async (event) => {
       const histData = await histRes.json();
       const batch    = db.batch();
       (histData?.rollupDataPoints || []).forEach(pt => {
-        const { year, month, day } = pt.civilStartTime || {};
+        const { year, month, day } = pt.civilStartTime?.date || pt.civilStartTime || {};
         if (!year) return;
         const dateKey = `${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
         const ref = db.collection("healthData").doc(userId).collection("log").doc(dateKey);

@@ -679,11 +679,21 @@ const Store = {
   listenShailos(callback) {
     const col = this.shailosCol();
     if (!col) return () => {};
+    const dlog = (msg, data) => fetch("/.netlify/functions/debug-log", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: "fe:shailaListener", msg, data }),
+    }).catch(() => {});
+    dlog("subscribed");
     return col.onSnapshot(snap => {
       const shailos = [];
+      const changes = snap.docChanges().map(c => ({ type: c.type, id: c.doc.id }));
       snap.forEach(doc => shailos.push({ id: doc.id, ...doc.data() }));
+      dlog("snapshot fired", { count: shailos.length, changes: changes.slice(0, 10), fromCache: snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites });
       callback(shailos);
-    }, err => console.warn("[Store] Shaila listener error:", err));
+    }, err => {
+      dlog("listener ERROR", { err: String(err?.message || err) });
+      console.warn("[Store] Shaila listener error:", err);
+    });
   },
 
   // ── Extract settings fields from AS (everything except lists and tasks) ──
