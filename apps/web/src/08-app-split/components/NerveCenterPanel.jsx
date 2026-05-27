@@ -2664,7 +2664,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
         {/* ── Health Card — bottom row, resizable, closeable ── */}
         {!isStacked && healthCardVisible && (
-          <div style={{ height: healthCardH, flexShrink: 0 }}>
+          <div style={{ height: healthCardH, flexShrink: 0, position: "sticky", bottom: 0, zIndex: 2, background: C.bg }}>
             <HealthCard
               C={C}
               healthData={healthData}

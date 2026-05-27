@@ -102,7 +102,7 @@ export function HealthCard({
   const lineColor = C.muted || "#999";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
 
       {/* Drag handle — grab this top bar to resize */}
       <div

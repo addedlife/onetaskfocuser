@@ -267,7 +267,7 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Google Health API</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Google Fit</span>
                 <span style={{ fontSize: 9.5, fontWeight: 600, padding: "1px 7px", borderRadius: 8,
                   background: googleHealthLinked ? `${C.success || "#34A853"}20` : `${C.accent}18`,
                   color: googleHealthLinked ? C.success || "#34A853" : C.accent }}>
@@ -275,7 +275,7 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
                 </span>
               </div>
               <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>
-                Steps, heart rate, sleep &amp; weight — syncs from Wear OS or paired Android.
+                Steps, heart rate, sleep &amp; weight from Google Fit / Wear OS data.
               </div>
             </div>
             {!googleHealthLinked && (
@@ -662,23 +662,25 @@ export function HealthPage({
               Setup Guide
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <SetupStep num={1} color="#4285F4" title="Enable Google Health API (one-time, admin)"
+              <SetupStep num={1} color="#4285F4" title="Enable Fitness API in Google Cloud (one-time)"
                 C={C} steps={[
                   "Go to console.cloud.google.com and open (or create) your project",
-                  'Search for "Google Health API" and click Enable',
-                  'Go to APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID (Web application)',
-                  'Add authorized redirect URI: https://onetaskfocuser.netlify.app/health-callback',
+                  'Go to APIs & Services → Library, search for "Fitness API", and click Enable',
+                  'Go to APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID',
+                  'Application type: Web application',
+                  'Authorized redirect URIs: https://onetaskfocuser.netlify.app/health-callback',
                   "Copy the Client ID and Client Secret",
-                  "In Netlify dashboard → Site config → Env vars, add GOOGLE_HEALTH_CLIENT_ID and GOOGLE_HEALTH_CLIENT_SECRET",
+                  "In Netlify dashboard → Site configuration → Environment variables, add GOOGLE_HEALTH_CLIENT_ID and GOOGLE_HEALTH_CLIENT_SECRET",
+                  "Redeploy the Netlify site after adding env vars (or trigger a new deploy)",
                 ]}
               />
               <SetupStep num={2} color="#EA4335" title="Connect your Google account"
                 C={C} steps={[
                   'Click the "Connect" button above',
-                  "Google will ask which account to use — choose ydanziger20@gmail.com (the account with your health data)",
-                  "Grant the requested permissions (steps, heart rate, sleep, weight)",
-                  'You\'ll be redirected back here automatically',
-                  'Hit "Sync" to pull your first data',
+                  "Sign in with the Google account that has your Wear OS / Google Fit data",
+                  "Grant the requested fitness permissions (activity, heart rate, sleep, body)",
+                  "You'll be redirected back here automatically",
+                  'Hit "Sync" to pull your first 30 days of data',
                 ]}
               />
             </div>
