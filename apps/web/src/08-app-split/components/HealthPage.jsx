@@ -732,16 +732,24 @@ export function HealthPage({
           onStartGoogleHealth={async () => {
             setConnectLoading(true);
             setConnectError(null);
+            const dlog = (msg, data) => fetch("/.netlify/functions/debug-log", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ source: "fe:connect", msg, data }),
+            }).catch(() => {});
+            dlog("Connect clicked", { userId });
             try {
               const r    = await fetch(`/.netlify/functions/google-health?action=authorize-url&user_id=${encodeURIComponent(userId)}`);
               const data = await r.json();
+              dlog(`authorize-url response status ${r.status}`, { status: r.status, hasUrl: !!data.url, error: data.error, urlPrefix: data.url?.slice(0, 120) });
               if (!r.ok || !data.url) {
                 setConnectError(data.error || "Could not start Google Health authorization.");
                 setConnectLoading(false);
                 return;
               }
+              dlog("redirecting to Google", { urlPrefix: data.url.slice(0, 120) });
               window.location.href = data.url;
             } catch (err) {
+              dlog("authorize-url fetch threw", { err: String(err) });
               setConnectError("Network error — check that the app is deployed.");
               setConnectLoading(false);
             }

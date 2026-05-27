@@ -57,6 +57,20 @@ function json(statusCode, body, origin) {
   return { statusCode, headers: { ...corsHeaders(origin), "Content-Type": "application/json" }, body: JSON.stringify(body) };
 }
 
+// Fire-and-forget log into Firestore "debugLogs" collection (read via debug-log fn).
+async function dlog(source, msg, data) {
+  try {
+    const db = getDb();
+    await db.collection("debugLogs").add({
+      ts:     Date.now(),
+      source: `gh:${source}`,
+      level:  "info",
+      msg:    String(msg).slice(0, 2000),
+      data:   data != null ? JSON.stringify(data).slice(0, 5000) : null,
+    });
+  } catch {}
+}
+
 // ── Token refresh ─────────────────────────────────────────────────────────────
 async function ensureFreshToken(db, userId) {
   const snap = await db.collection("healthConfig").doc(userId).get();
@@ -95,9 +109,11 @@ async function rollup(accessToken, dataType, range) {
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({ range, windowSizeDays: 1 }),
   });
+  const body = await res.text();
+  let parsed = null; try { parsed = JSON.parse(body); } catch {}
+  await dlog(`rollup:${dataType}`, `status ${res.status}`, { status: res.status, body: body.slice(0, 800) });
   if (!res.ok) return null;
-  const data = await res.json();
-  return data?.rollupDataPoints?.[0] || null;
+  return parsed?.rollupDataPoints?.[0] || null;
 }
 
 // ── Sleep duration parser ─────────────────────────────────────────────────────
@@ -132,10 +148,11 @@ export const handler = async (event) => {
 
   // ── 1. Return the Google OAuth authorization URL ──────────────────────────
   if (action === "authorize-url") {
-    if (!clientId) return json(503, {
-      error: "GOOGLE_HEALTH_CLIENT_ID not set in Netlify env vars",
-      setup: true,
-    }, origin);
+    await dlog("authorize-url", "start", { clientIdSet: !!clientId, clientIdPrefix: clientId.slice(0, 16), origin });
+    if (!clientId) {
+      await dlog("authorize-url", "MISSING GOOGLE_HEALTH_CLIENT_ID");
+      return json(503, { error: "GOOGLE_HEALTH_CLIENT_ID not set in Netlify env vars", setup: true }, origin);
+    }
     const userId = q.user_id || "";
     const url = "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
       client_id:     clientId,
@@ -146,6 +163,7 @@ export const handler = async (event) => {
       prompt:        "select_account consent",
       state:         userId,
     });
+    await dlog("authorize-url", "built URL", { userId, redirect: REDIRECT, scopes: SCOPES, urlLen: url.length });
     return json(200, { url }, origin);
   }
 
@@ -153,8 +171,9 @@ export const handler = async (event) => {
   if (action === "exchange") {
     const code   = q.code  || "";
     const userId = q.state || "";
-    if (!code || !userId)           return json(400, { error: "Missing code or state" }, origin);
-    if (!clientId || !clientSecret) return json(503, { error: "Client credentials not configured", setup: true }, origin);
+    await dlog("exchange", "start", { codeLen: code.length, userId, hasClientId: !!clientId, hasSecret: !!clientSecret });
+    if (!code || !userId)           { await dlog("exchange", "missing code or state"); return json(400, { error: "Missing code or state" }, origin); }
+    if (!clientId || !clientSecret) { await dlog("exchange", "missing client creds"); return json(503, { error: "Client credentials not configured", setup: true }, origin); }
 
     const res = await fetch(TOKEN_URL, {
       method: "POST",
@@ -168,6 +187,14 @@ export const handler = async (event) => {
       }),
     });
     const tokens = await res.json();
+    await dlog("exchange", `token endpoint status ${res.status}`, {
+      status: res.status,
+      hasAccess: !!tokens.access_token,
+      hasRefresh: !!tokens.refresh_token,
+      scope: tokens.scope,
+      error: tokens.error,
+      errorDesc: tokens.error_description,
+    });
     if (!tokens.access_token) return json(400, { error: tokens.error_description || tokens.error || "Token exchange failed" }, origin);
 
     const db = getDb();
@@ -179,7 +206,10 @@ export const handler = async (event) => {
       });
       const idData = await idRes.json();
       googleUserId = idData?.name || null;
-    } catch {}
+      await dlog("exchange", `identity status ${idRes.status}`, { status: idRes.status, googleUserId, body: idData });
+    } catch (err) {
+      await dlog("exchange", "identity fetch threw", { err: String(err) });
+    }
 
     await db.collection("healthConfig").doc(userId).set({
       oauthType:          "google",
@@ -192,16 +222,25 @@ export const handler = async (event) => {
       updatedAt:          Date.now(),
     }, { merge: true });
 
+    await dlog("exchange", "saved healthConfig — success", { userId });
     return json(200, { success: true, userId }, origin);
   }
 
   // ── 3. Sync today's health data ───────────────────────────────────────────
   if (action === "sync") {
     const userId = q.user_id || "";
+    await dlog("sync", "start", { userId });
     if (!userId) return json(400, { error: "Missing user_id" }, origin);
 
     const db          = getDb();
-    const accessToken = await ensureFreshToken(db, userId);
+    let accessToken;
+    try {
+      accessToken = await ensureFreshToken(db, userId);
+      await dlog("sync", "got fresh token");
+    } catch (err) {
+      await dlog("sync", "ensureFreshToken threw", { err: String(err.message || err) });
+      return json(500, { error: String(err.message || err) }, origin);
+    }
 
     const today = new Date().toISOString().slice(0, 10);
     const [yr, mo, dy] = today.split("-").map(Number);

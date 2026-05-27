@@ -2402,17 +2402,28 @@ function App({ user, onSignOut }) {
     const path  = window.location.pathname;
     if (path === "/health-callback" && code) {
       window.history.replaceState({}, "", "/");
+      const dlog = (msg, data) => fetch("/.netlify/functions/debug-log", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: "fe:callback", msg, data }),
+      }).catch(() => {});
+      const err = params.get("error");
+      const errDesc = params.get("error_description");
+      dlog("hit /health-callback", { hasCode: !!code, hasState: !!state, error: err, errDesc });
+      if (err) {
+        dlog("Google returned error in callback", { error: err, errDesc });
+      }
       fetch(`/.netlify/functions/google-health?action=exchange&code=${encodeURIComponent(code)}&state=${encodeURIComponent(state || "")}`)
         .then(async r => {
           const data = await r.json();
+          dlog(`exchange response status ${r.status}`, { status: r.status, success: !!data?.success, error: data?.error });
           console.log("[Health OAuth] exchange status:", r.status, data);
           if (data?.success) {
             setHealthOAuthReady(true);
           } else {
-            console.error("[Health OAuth] exchange failed — check Netlify env vars (GOOGLE_HEALTH_CLIENT_ID, GOOGLE_HEALTH_CLIENT_SECRET) and Google Cloud Console OAuth setup. Error:", data?.error || data);
+            console.error("[Health OAuth] exchange failed:", data?.error || data);
           }
         })
-        .catch(err => console.error("[Health OAuth] exchange fetch error:", err));
+        .catch(err => { dlog("exchange fetch threw", { err: String(err) }); console.error("[Health OAuth] exchange fetch error:", err); });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
