@@ -2,13 +2,15 @@ import React from 'react';
 import { cleanTheme, NC_FONT_STACK, NC_TYPE, suiteIcon } from '../ui-tokens.jsx';
 
 function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreActions, topOffset = 0, forceCompact = false, clockTime = null, onSettings }) {
-  const screenApps = [
+  const mainApps = [
     { id: "focus",      label: "Tasks",      icon: "task_alt"      },
-    { id: "taskriver",  label: "TaskRiver",  icon: "water"         },
-    { id: "chief",      label: "Chief",      icon: "psychology"    },
-    { id: "health",     label: "Health",     icon: "monitor_heart" },
     { id: "shailos",    label: "Shailos",    icon: "rule"          },
     { id: "deskphone",  label: "Phone",      icon: "smartphone"    },
+  ];
+  const experimentalApps = [
+    { id: "health",     label: "Health",     icon: "monitor_heart" },
+    { id: "taskriver",  label: "TaskRiver",  icon: "water"         },
+    { id: "chief",      label: "Chief",      icon: "psychology"    },
   ];
   const C = cleanTheme(T);
   const displayOpen = open && !forceCompact;
@@ -68,11 +70,34 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         {displayOpen && "NerveCenter"}
       </button>
 
-      {/* Three app-screen buttons */}
-      {screenApps.map(app => {
+      {/* Main app buttons */}
+      {mainApps.map(app => {
         const isActive = active === app.id;
         return (
           <button key={app.id} onClick={() => onSelect(app.id)} title={app.label}
+            style={navButton(isActive)}>
+            {suiteIcon(app.icon, 17)}
+            {displayOpen && app.label}
+          </button>
+        );
+      })}
+
+      {/* Experimental section divider + label */}
+      <div style={{ marginTop: 10, marginBottom: 2, flexShrink: 0 }}>
+        <div style={{ height: 1, background: C.divider, margin: displayOpen ? "0 8px 6px" : "0 4px 6px" }} />
+        {displayOpen && (
+          <div style={{
+            fontSize: 9, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase",
+            color: C.faint, fontFamily: NC_FONT_STACK, padding: "2px 14px 4px",
+          }}>Experimental</div>
+        )}
+      </div>
+
+      {/* Experimental app buttons */}
+      {experimentalApps.map(app => {
+        const isActive = active === app.id;
+        return (
+          <button key={app.id} onClick={() => onSelect(app.id)} title={`${app.label} (experimental)`}
             style={navButton(isActive)}>
             {suiteIcon(app.icon, 17)}
             {displayOpen && app.label}

@@ -236,10 +236,12 @@ export const handler = async (event) => {
 
     const today = new Date().toISOString().slice(0, 10);
     const [yr, mo, dy] = today.split("-").map(Number);
-    // range.start/end are CivilDateTime — must wrap year/month/day in a `date` object.
+    // range.end is EXCLUSIVE and must be > start. For "today", pass [today, tomorrow).
+    // range.start/end are CivilDateTime → wrap year/month/day in a `date` object.
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10).split("-").map(Number);
     const range = {
-      start: { date: { year: yr, month: mo, day: dy } },
-      end:   { date: { year: yr, month: mo, day: dy } },
+      start: { date: { year: yr,          month: mo,          day: dy          } },
+      end:   { date: { year: tomorrow[0], month: tomorrow[1], day: tomorrow[2] } },
     };
 
     const [stepsRp, hrRp, weightRp, sleepHours] = await Promise.all([
@@ -267,9 +269,10 @@ export const handler = async (event) => {
     try {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 86_400_000);
       const histStart     = thirtyDaysAgo.toISOString().slice(0, 10).split("-").map(Number);
+      // end is exclusive — use tomorrow so today is included in the history
       const histRange     = {
         start: { date: { year: histStart[0], month: histStart[1], day: histStart[2] } },
-        end:   { date: { year: yr,          month: mo,          day: dy          } },
+        end:   { date: { year: tomorrow[0],  month: tomorrow[1],  day: tomorrow[2]  } },
       };
       const histRes  = await fetch(`${HEALTH_V4}/users/me/dataTypes/steps/dataPoints:dailyRollUp`, {
         method: "POST",
