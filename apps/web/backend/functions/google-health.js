@@ -121,21 +121,18 @@ async function rollup(accessToken, dataType, range) {
   return parsed?.rollupDataPoints?.[0] || null;
 }
 
-// ── Sleep duration parser ─────────────────────────────────────────────────────
-async function fetchSleepHours(accessToken, dateStr) {
-  const filter = `sleep.interval.civil_start_time >= "${dateStr}T00:00:00" AND sleep.interval.civil_start_time < "${dateStr}T23:59:59"`;
-  const res = await fetch(
-    `${HEALTH_V4}/users/me/dataTypes/sleep/dataPoints?filter=${encodeURIComponent(filter)}&pageSize=10`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
+// ── Sleep duration via dailyRollUp (same shape as steps/HR/weight) ───────────
+async function fetchSleepRollup(accessToken, range) {
+  const res = await fetch(`${HEALTH_V4}/users/me/dataTypes/sleep/dataPoints:dailyRollUp`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ range, windowSizeDays: 1 }),
+  });
+  const body = await res.text();
+  let parsed = null; try { parsed = JSON.parse(body); } catch {}
+  await dlog("rollup:sleep", `status ${res.status}`, { status: res.status, body: body.slice(0, 800) });
   if (!res.ok) return null;
-  const data = await res.json();
-  const totalMs = (data?.dataPoints || []).reduce((sum, pt) => {
-    const startMs = new Date(pt?.interval?.startTime || 0).getTime();
-    const endMs   = new Date(pt?.interval?.endTime   || 0).getTime();
-    return sum + Math.max(0, endMs - startMs);
-  }, 0);
-  return totalMs > 0 ? +(totalMs / 3_600_000).toFixed(2) : null;
+  return parsed?.rollupDataPoints?.[0] || null;
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -244,24 +241,38 @@ export const handler = async (event) => {
       end:   { date: { year: tomorrow[0], month: tomorrow[1], day: tomorrow[2] } },
     };
 
-    const [stepsRp, hrRp, weightRp, sleepHours] = await Promise.all([
+    const [stepsRp, hrRp, weightRp, sleepRp] = await Promise.all([
       rollup(accessToken, "steps",      range),
       rollup(accessToken, "heart-rate", range),
       rollup(accessToken, "weight",     range),
-      fetchSleepHours(accessToken, today),
+      fetchSleepRollup(accessToken, range),
     ]);
 
-    await dlog("sync", "parsed rollups", { stepsRp, hrRp, weightRp, sleepHours });
+    await dlog("sync", "parsed rollups", { stepsRp, hrRp, weightRp, sleepRp });
+
+    // Field-name notes (from observed API responses):
+    //   steps.countSum            string of integer
+    //   heartRate.beatsPerMinuteAvg / .restingHeartRate
+    //   weight.weightAvg / .weight (likely kg, may be empty {} if no data today)
+    //   sleep — field shape TBD, just log for now
+    const stepsRaw  = stepsRp?.steps?.countSum            ?? stepsRp?.steps?.count;
+    const hrRaw     = hrRp?.heartRate?.restingHeartRate    ?? hrRp?.heartRate?.beatsPerMinuteAvg;
+    const weightRaw = weightRp?.weight?.weightAvg          ?? weightRp?.weight?.weight;
+    const sleepRaw  = sleepRp?.sleep?.durationSecondsSum
+                   ?? sleepRp?.sleep?.totalDurationSecondsSum
+                   ?? sleepRp?.sleep?.durationSeconds;
 
     const entry = {
       date:      today,
       source:    "google",
-      steps:     stepsRp?.steps?.count                 ?? null,
-      heartRate: hrRp?.heartRate?.restingHeartRate      ?? null,
-      sleep:     sleepHours,
-      weight:    weightRp?.weight?.weight               ?? null,
+      steps:     stepsRaw  != null ? Number(stepsRaw)                : null,
+      heartRate: hrRaw     != null ? Math.round(Number(hrRaw))       : null,
+      sleep:     sleepRaw  != null ? +(Number(sleepRaw) / 3600).toFixed(2) : null,
+      weight:    weightRaw != null ? +(Number(weightRaw) * 2.20462).toFixed(1) : null, // kg → lb
       syncedAt:  Date.now(),
     };
+
+    await dlog("sync", "built entry", entry);
 
     await db.collection("healthData").doc(userId).collection("log").doc(today).set(entry, { merge: true });
 
