@@ -250,16 +250,19 @@ export const handler = async (event) => {
 
     await dlog("sync", "parsed rollups", { stepsRp, hrRp, weightRp, sleepRp });
 
-    // Google Health API v4 dailyRollUp field names (verified against docs & RPC spec):
-    //   steps    → steps.countSum  (string integer)
-    //   heart-rate → heartRate.beatsPerMinuteAvg  (avg HR across day)
-    //               heartRate.restingHeartRate is a *separate* data type, not returned here
-    //   weight   → weight.weightKg  (most recent sample in kg); older shape may use weightAvg
-    //   sleep    → sleep.durationSecondsSum  (total sleep seconds for the day)
+    // Google Health API v4 dailyRollUp field names (fallback chains for API version variance):
+    //   steps      → steps.countSum
+    //   heart-rate → heartRate.beatsPerMinuteAvg
+    //   weight     → weight.weightAvg | weightKg | weight | value  (varies by API version)
+    //   sleep      → sleep.durationSecondsSum | totalDurationSecondsSum | totalSleepDurationSeconds | durationSeconds
     const stepsRaw  = stepsRp?.steps?.countSum;
     const hrRaw     = hrRp?.heartRate?.beatsPerMinuteAvg ?? hrRp?.heartRate?.beatsPerMinuteAverage;
-    const weightRaw = weightRp?.weight?.weightKg ?? weightRp?.weight?.weightAvg ?? weightRp?.weight?.weight;
+    const weightRaw = weightRp?.weight?.weightAvg
+                   ?? weightRp?.weight?.weightKg
+                   ?? weightRp?.weight?.weight
+                   ?? weightRp?.weight?.value;
     const sleepRaw  = sleepRp?.sleep?.durationSecondsSum
+                   ?? sleepRp?.sleep?.totalDurationSecondsSum
                    ?? sleepRp?.sleep?.totalSleepDurationSeconds
                    ?? sleepRp?.sleep?.durationSeconds;
 

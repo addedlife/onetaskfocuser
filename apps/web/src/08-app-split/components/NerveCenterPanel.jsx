@@ -1906,7 +1906,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileSection>
 
           {/* Calendar */}
-          {(calendarEvents !== null || (googleLoading && googleToken)) && (
+          {(googleToken || calendarEvents !== null) && (
             <MobileSection id="cal" icon="calendar_today" title="Calendar" accentColor={C.accent}
               menuItems={[
                 { icon: "add",         label: "Add event",            run: () => setShowAddEvent(true) },
@@ -1948,7 +1948,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           )}
 
           {/* Gmail */}
-          {gmailMessages !== null && (
+          {(googleToken || gmailMessages !== null) && (
             <MobileSection id="mail" icon="mail" title="Mail" count={(gmailMessages||[]).length}
               menuItems={[
                 { icon: "refresh",     label: "Refresh",    run: onRefreshCalendar || onConnectGoogle },
