@@ -395,7 +395,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
       </div>
 
       {/* Focus track — above brain dump, bottom right */}
-      <audio ref={audioRef} src="https://drive.google.com/uc?export=download&id=1Y560vpBe5GezqxyX1REfsR2zM936st-w" loop preload="none"/>
+      <audio ref={audioRef} src="https://drive.usercontent.google.com/download?id=1Y560vpBe5GezqxyX1REfsR2zM936st-w&export=download" loop preload="none"/>
       <div
         onClick={toggleMusic}
         title={isPlaying ? "Pause focus track" : "Play focus track"}
