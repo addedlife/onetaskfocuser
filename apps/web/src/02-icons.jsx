@@ -49,6 +49,7 @@ const IC = {
   Download:   glyph("download"),
   Merge:      glyph("merge"),
   Clock:      glyph("schedule"),
+  Play:       glyph("play_arrow"),
   Pause:      glyph("pause"),
   Tag:        glyph("label"),
   Brain:      glyph("psychology"),

@@ -182,9 +182,11 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
   const [showDump, setShowDump] = useState(false);
   const [dumpText, setDumpText] = useState("");
   const [dumpConfirmed, setDumpConfirmed] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const idleRef = useRef(null);
   const zenRef = useRef(null);
   const clockRef = useRef(null);
+  const audioRef = useRef(null);
 
   useEffect(() => {
     clockRef.current = setInterval(() => setZenClock(new Date()), 1000);
@@ -208,6 +210,15 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
     el.addEventListener("touchstart", h);
     return () => { clearTimeout(idleRef.current); el.removeEventListener("mousemove", h); el.removeEventListener("touchstart", h); };
   }, [resetFade]);
+
+  useEffect(() => { return () => { audioRef.current?.pause(); }; }, []);
+
+  const toggleMusic = (e) => {
+    e.stopPropagation();
+    if (!audioRef.current) return;
+    if (isPlaying) { audioRef.current.pause(); setIsPlaying(false); }
+    else { audioRef.current.play().catch(()=>{}); setIsPlaying(true); }
+  };
 
   // Keyboard: Enter = complete, any other key = exit (dump overlay intercepts when open)
   useEffect(() => {
@@ -381,6 +392,18 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
         onMouseLeave={e=>e.currentTarget.style.opacity=showUI?0.55:0.08}
       >
         <span style={{fontSize:14}}>🎙️</span>
+      </div>
+
+      {/* Focus track — above brain dump, bottom right */}
+      <audio ref={audioRef} src="https://drive.google.com/uc?id=1Y560vpBe5GezqxyX1REfsR2zM936st-w" loop preload="none"/>
+      <div
+        onClick={toggleMusic}
+        title={isPlaying ? "Pause focus track" : "Play focus track"}
+        style={{position:"absolute",bottom:"clamp(108px,17vh,148px)",right:24,zIndex:10,width:36,height:36,borderRadius:"50%",background:isPlaying?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.07)",border:`1px solid ${isPlaying?"rgba(255,255,255,0.35)":"rgba(255,255,255,0.13)"}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"opacity 0.5s, background 0.3s, border-color 0.3s",opacity:showUI?(isPlaying?0.9:0.55):(isPlaying?0.35:0.08)}}
+        onMouseEnter={e=>e.currentTarget.style.opacity=1}
+        onMouseLeave={e=>e.currentTarget.style.opacity=showUI?(isPlaying?0.9:0.55):(isPlaying?0.35:0.08)}
+      >
+        {isPlaying ? <IC.Pause s={15} c="rgba(255,255,255,0.85)"/> : <IC.Play s={15} c="rgba(255,255,255,0.75)"/>}
       </div>
 
       {/* Brain dump icon — bottom right, subtle */}
