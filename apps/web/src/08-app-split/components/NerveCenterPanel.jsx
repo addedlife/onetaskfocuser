@@ -652,6 +652,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     }
     setChiefProfileDraft(markdownFromChiefProfile(chiefProfile));
   }, [chiefProfile?.updatedAt]); // eslint-disable-line
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(null); // id of section whose ··· menu is open
   const [phoneActivitySummary, setPhoneActivitySummary] = useState({ online: false, status: "DeskPhone offline", unreadTexts: 0, missedCalls: 0, voicemailCount: 0, texts: [], calls: [] });
   const phoneActivitySigRef = useRef("");
   const [phoneStatusSummary, setPhoneStatusSummary] = useState({ online: false, tone: "offline", label: "DeskPhone offline", voicemailCount: 0 });
@@ -1771,6 +1772,292 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             )}
           </section>
         </div>
+      </div>
+    );
+  }
+
+  // ── Mobile "nerve center" — all sections on one screen ──────────────────────
+  if (isStacked && !healthPage && !chiefPage) {
+    const mobileMenuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
+    const mobileMenuClose  = () => setMobileMenuOpen(null);
+
+    const MobileSection = ({ id, icon, title, accentColor, count, primaryBtn, menuItems, children }) => (
+      <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, overflow: "visible" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px 7px 12px", minHeight: 34 }}>
+          <span style={{ color: accentColor || C.muted, display: "flex", flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flex: 1, letterSpacing: 0.1 }}>{title}</span>
+          {count > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
+          {primaryBtn}
+          {menuItems?.length > 0 && (
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              <button onClick={() => mobileMenuToggle(id)} style={gvIconButton({ width: 26, height: 26, color: C.faint }, C)} aria-label={`${title} menu`}>
+                {suiteIcon("more_vert", 13)}
+              </button>
+              {mobileMenuOpen === id && (
+                <>
+                  <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={mobileMenuClose} />
+                  <div style={{ position: "absolute", right: 0, top: 28, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, minWidth: 168, boxShadow: "0 6px 24px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+                    {menuItems.map((item, i) => (
+                      <button key={i} onClick={() => { mobileMenuClose(); item.run?.(); }}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "11px 14px", border: "none", borderBottom: i < menuItems.length - 1 ? `1px solid ${C.divider}` : "none", background: "transparent", color: C.text, cursor: "pointer", fontSize: 13, fontFamily: NC_FONT_STACK, textAlign: "left" }}>
+                        {suiteIcon(item.icon || "arrow_forward", 14)} {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        {children}
+      </div>
+    );
+
+    const fmtTimeM = (raw) => { try { const d = new Date(raw); const now = new Date(); return d.toDateString()===now.toDateString() ? d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : d.toLocaleDateString([],{month:"short",day:"numeric"}); } catch { return ""; } };
+    const gmailHdr = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || "";
+    const fmtFromM = (raw) => { const m = raw?.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : (raw || "").split("@")[0]; };
+    const decodeSnipM = s => (s || "").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g," ").trim();
+
+    const hd = healthData || {};
+    const fmtStepsM  = v => v != null ? Math.round(v).toLocaleString() : "—";
+    const fmtSleepM  = v => { if (v == null) return "—"; const h = Math.floor(v); const m = Math.round((v%1)*60); return `${h}h${m>0?(m<10?"0":"")+m:""}`; };
+
+    const taskMax = 4;
+    const topTasks = primaryTaskQueue.slice(0, taskMax);
+    const hiddenMobileTasks = Math.max(0, primaryTaskQueue.length - taskMax);
+
+    return (
+      <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflowY: "auto", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}`, WebkitOverflowScrolling: "touch" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 7, padding: "10px 10px 28px", boxSizing: "border-box" }}>
+
+          {/* Time strip */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 2px 4px" }}>
+            <div>
+              <span style={{ fontSize: 24, fontWeight: 300, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: -0.5 }}>{clockParts.timeMain}</span>
+              <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK, marginLeft: 10 }}>{nowDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
+            </div>
+            <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" style={gvIconButton({ width: 34, height: 34 }, C)}>{suiteIcon("apps", 16)}</button>
+          </div>
+
+          {/* Health mini-strip */}
+          <button onClick={onOpenHealth} style={{ display: "flex", alignItems: "center", gap: 12, padding: "7px 12px", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, cursor: "pointer", textAlign: "left", width: "100%", boxSizing: "border-box" }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, letterSpacing: 0.8, textTransform: "uppercase", flexShrink: 0 }}>Health</span>
+            {[["👣", fmtStepsM(hd.steps)], ["😴", fmtSleepM(hd.sleep)], ["♥", hd.heartRate != null ? `${Math.round(hd.heartRate)} bpm` : "—"], ["⚖", hd.weight != null ? `${(+hd.weight).toFixed(1)} lb` : "—"]].map(([ico, val]) => (
+              <span key={ico} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 12, color: val === "—" ? C.faint : C.text, fontFamily: NC_FONT_STACK, fontWeight: val === "—" ? 400 : 600 }}>
+                <span style={{ fontSize: 11 }}>{ico}</span>{val}
+              </span>
+            ))}
+            <span style={{ marginLeft: "auto", fontSize: 11, color: C.faint }}>↗</span>
+          </button>
+
+          {/* Tasks */}
+          <MobileSection id="tasks" icon="task_alt" title="Tasks" count={primaryTaskQueue.length}
+            primaryBtn={<button onClick={() => openTaskComposer(taskPriority)} style={gvIconButton({ width: 26, height: 26, color: C.muted }, C)} title="Add task">{suiteIcon("add", 14)}</button>}
+            menuItems={[
+              { icon: "list_alt",    label: "Open full queue", run: onOpenQueue },
+              { icon: "local_drink", label: "Zen mode",        run: onOpenZen },
+              ...(onAddMrsWTask ? [{ icon: "person", label: "Add Mrs W task", run: () => openTaskComposer(taskPriority, { mrsW: true }) }] : []),
+            ]}
+          >
+            {taskComposerOpen && (
+              <div style={{ padding: "8px 12px", borderBottom: `1px solid ${C.divider}` }}>
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 32px 32px", gap: 6, alignItems: "start" }}>
+                  <textarea ref={stackedTaskInputRef} value={taskDraft} rows={1} autoFocus
+                    onChange={e => { setTaskDraft(e.target.value); e.target.style.height="34px"; e.target.style.height=Math.min(e.target.scrollHeight,88)+"px"; }}
+                    onKeyDown={e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addDraft(taskPriority,{mrsW:taskComposerMrsW});} if(e.key==="Escape"){setTaskComposerOpen(false);setTaskDraft("");} }}
+                    placeholder="New task"
+                    style={{ width:"100%",minWidth:0,height:34,maxHeight:88,boxSizing:"border-box",borderRadius:7,border:`1px solid ${activePriColor}`,background:C.bgSoft,color:C.text,padding:"7px 10px",fontSize:ncType.body,fontFamily:NC_FONT_STACK,outline:"none",resize:"none",overflowY:"hidden" }} />
+                  <button onClick={() => addDraft(taskPriority,{mrsW:taskComposerMrsW})} disabled={!taskDraft.trim()} style={{ width:32,height:32,borderRadius:8,border:"none",background:activePriColor,color:"#fff",cursor:taskDraft.trim()?"pointer":"default",opacity:taskDraft.trim()?1:0.38,display:"flex",alignItems:"center",justifyContent:"center" }}>{suiteIcon("check",15)}</button>
+                  <button onClick={() => {setTaskComposerOpen(false);setTaskDraft("");}} style={gvIconButton({width:32,height:32,borderRadius:8},C)}>{suiteIcon("close",14)}</button>
+                </div>
+              </div>
+            )}
+            {topTasks.length === 0 && !taskComposerOpen && <div style={{ padding:"12px 14px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK }}>No open tasks.</div>}
+            {topTasks.map(t => {
+              const pri = gP(priorities, t.priority);
+              const priColor = pri?.color || T.primary || "#7EB0DE";
+              const isEditing = editingTaskId === t.id;
+              return (
+                <div key={t.id} data-nc-task-row="true" style={{ display:"grid",gridTemplateColumns:"3px minmax(0,1fr) auto",alignItems:"start",padding:"10px 12px 10px 0",gap:10,borderTop:`1px solid ${C.divider}`,minHeight:40 }}>
+                  <span style={{ width:3,alignSelf:"stretch",minHeight:20,borderRadius:"0 3px 3px 0",background:priColor,flexShrink:0 }} />
+                  {isEditing ? (
+                    <textarea value={editText} autoFocus rows={2}
+                      onChange={e => setEditText(e.target.value)}
+                      onKeyDown={e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();if(editText.trim())onEditTask?.(t.id,editText.trim());setEditingTaskId(null);} if(e.key==="Escape")setEditingTaskId(null); }}
+                      onBlur={() => { if(editText.trim()&&editText!==t.text)onEditTask?.(t.id,editText.trim());setEditingTaskId(null); }}
+                      style={{ width:"100%",boxSizing:"border-box",borderRadius:6,border:`1px solid ${priColor}`,background:C.bgSoft,color:C.text,padding:"6px 8px",fontSize:ncType.body,fontFamily:"system-ui",resize:"none",outline:"none" }} />
+                  ) : (
+                    <span onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ display:"block",fontSize:ncType.body,lineHeight:ncType.line,color:C.text,wordBreak:"break-word",cursor:"text",paddingTop:1 }}>{nerveDisplaySummary(t,"Untitled task")}</span>
+                  )}
+                  {!isEditing && (
+                    <div style={{ display:"flex",gap:3 }}>
+                      <button onClick={() => onCompleteTask?.(t.id)} style={gvIconButton({width:30,height:30,color:C.success,background:"transparent"},C)} title="Done">{suiteIcon("check",14)}</button>
+                      <button onClick={() => onDeleteTask?.(t.id)} style={gvIconButton({width:30,height:30,color:C.danger,background:"transparent"},C)} title="Delete">{suiteIcon("close",13)}</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {hiddenMobileTasks > 0 && (
+              <button onClick={onOpenQueue} style={{ width:"100%",padding:"8px 0",border:"none",borderTop:`1px solid ${C.divider}`,background:"transparent",color:C.faint,cursor:"pointer",fontSize:ncType.meta,fontFamily:NC_FONT_STACK }}>
+                +{hiddenMobileTasks} more — open queue
+              </button>
+            )}
+          </MobileSection>
+
+          {/* Calendar */}
+          {(calendarEvents !== null || (googleLoading && googleToken)) && (
+            <MobileSection id="cal" icon="calendar_today" title="Calendar" accentColor={C.accent}
+              menuItems={[
+                { icon: "add",         label: "Add event",            run: () => setShowAddEvent(true) },
+                { icon: "refresh",     label: "Refresh",              run: onRefreshCalendar || onConnectGoogle },
+                { icon: "open_in_new", label: "Open Google Calendar", run: () => window.open("https://calendar.google.com/calendar/r","_blank") },
+                { icon: "link_off",    label: "Disconnect",           run: onDisconnectGoogle },
+              ]}
+            >
+              {!calendarEvents ? (
+                <div style={{ padding:"12px 14px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,display:"flex",gap:8,alignItems:"center",borderTop:`1px solid ${C.divider}` }}>
+                  <div style={{width:10,height:10,borderRadius:"50%",border:`2px solid ${C.faint}`,borderTopColor:"transparent",animation:"ot-spin 0.8s linear infinite"}} /> Loading…
+                </div>
+              ) : calendarRows.filter(r=>!r.past).length === 0 ? (
+                <div style={{ padding:"12px 14px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Nothing upcoming today.</div>
+              ) : calendarRows.filter(r=>!r.past).slice(0,3).map(row => (
+                <div key={row.evt?.id||row.index} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:8,padding:"9px 12px",borderTop:`1px solid ${C.divider}`,alignItems:"start" }}>
+                  <span style={{ fontSize:ncType.meta,color:row.now?C.accent:C.faint,fontFamily:NC_FONT_STACK,whiteSpace:"nowrap",paddingTop:1,fontWeight:row.now?700:400,minWidth:54 }}>
+                    {row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
+                  </span>
+                  <span style={{ fontSize:ncType.body,color:row.now||row.special?C.text:C.muted,fontFamily:NC_FONT_STACK,fontWeight:row.now||row.special?600:400,lineHeight:ncType.line,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                    {row.now && <span style={{width:6,height:6,borderRadius:"50%",background:C.accent,display:"inline-block",marginRight:5,verticalAlign:"middle"}} />}
+                    {row.evt?.summary||"(no title)"}
+                  </span>
+                </div>
+              ))}
+              {showAddEvent && (
+                <div style={{ padding:"10px 12px",borderTop:`1px solid ${C.divider}` }}>
+                  <textarea autoFocus value={addEventText} onChange={e=>setAddEventText(e.target.value)} rows={2} placeholder='e.g. "Call David Mon at 3pm"'
+                    onKeyDown={e=>{if((e.metaKey||e.ctrlKey)&&e.key==="Enter"){e.preventDefault();handleAddEvent();}}}
+                    style={{width:"100%",boxSizing:"border-box",borderRadius:7,border:`1px solid ${C.divider}`,background:C.bgSoft,color:C.text,fontSize:ncType.body,padding:"7px 10px",resize:"none",fontFamily:NC_FONT_STACK,outline:"none"}} />
+                  {addEventError && <div style={{fontSize:ncType.meta,color:C.danger,marginTop:4}}>{addEventError}</div>}
+                  <div style={{display:"flex",gap:6,marginTop:6,justifyContent:"flex-end"}}>
+                    <button onClick={()=>{setShowAddEvent(false);setAddEventText("");setAddEventError(null);}} style={{padding:"6px 12px",borderRadius:6,border:`1px solid ${C.divider}`,background:"none",color:C.muted,cursor:"pointer",fontSize:ncType.meta,fontFamily:NC_FONT_STACK}}>Cancel</button>
+                    <button onClick={handleAddEvent} disabled={addEventLoading||!addEventText.trim()} style={{padding:"6px 14px",borderRadius:6,border:"none",background:C.accent,color:"#fff",cursor:addEventLoading?"wait":"pointer",fontSize:ncType.meta,fontFamily:NC_FONT_STACK,opacity:(!addEventText.trim()||addEventLoading)?0.55:1}}>{addEventLoading?"Adding…":"Add"}</button>
+                  </div>
+                </div>
+              )}
+            </MobileSection>
+          )}
+
+          {/* Gmail */}
+          {gmailMessages !== null && (
+            <MobileSection id="mail" icon="mail" title="Mail" count={(gmailMessages||[]).length}
+              menuItems={[
+                { icon: "refresh",     label: "Refresh",    run: onRefreshCalendar || onConnectGoogle },
+                { icon: "open_in_new", label: "Open Gmail", run: () => window.open("https://mail.google.com/mail/u/0/#inbox","_blank") },
+              ]}
+            >
+              {!gmailMessages || gmailMessages.length === 0 ? (
+                <div style={{ padding:"12px 14px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Inbox clear.</div>
+              ) : gmailMessages.slice(0,3).map((msg,i) => {
+                const subj = gmailHdr(msg,"Subject")||"(no subject)";
+                const from = fmtFromM(gmailHdr(msg,"From"));
+                const date = fmtTimeM(gmailHdr(msg,"Date"));
+                const url  = `https://mail.google.com/mail/u/0/#inbox/${msg.id}`;
+                return (
+                  <a key={msg.id||i} href={url} target="_blank" rel="noopener noreferrer"
+                    style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:6,padding:"9px 12px",borderTop:`1px solid ${C.divider}`,textDecoration:"none",color:"inherit",alignItems:"start" }}>
+                    <div style={{minWidth:0}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:6,marginBottom:2}}>
+                        <span style={{fontSize:ncType.body,fontWeight:600,color:C.text,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{from}</span>
+                        <span style={{fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,flexShrink:0}}>{date}</span>
+                      </div>
+                      <span style={{fontSize:ncType.meta,color:C.muted,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
+                    </div>
+                  </a>
+                );
+              })}
+            </MobileSection>
+          )}
+
+          {/* Shailos */}
+          <MobileSection id="shailos" icon="rule" title="Shailos" accentColor={GOLD} count={visibleShailos.length}
+            primaryBtn={<button onClick={onOpenShailaAdd} style={gvIconButton({width:26,height:26,color:GOLD},C)} title="Add shaila">{suiteIcon("add",14)}</button>}
+            menuItems={[{ icon: "open_in_full", label: "Open Shailos", run: onOpenShailos }]}
+          >
+            {visibleShailos.length === 0 ? (
+              <div style={{ padding:"12px 14px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>No pending shailos.</div>
+            ) : visibleShailos.slice(0,2).map(s => {
+              const text = nerveDisplaySummary(s,"Open shaila");
+              const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
+              return (
+                <button key={s.id} onClick={onOpenShailos}
+                  style={{ width:"100%",textAlign:"left",display:"grid",gridTemplateColumns:"3px minmax(0,1fr)",gap:10,padding:"9px 12px 9px 0",border:"none",background:"transparent",color:C.text,cursor:"pointer",alignItems:"start",borderTop:`1px solid ${C.divider}` }}>
+                  <span style={{width:3,alignSelf:"stretch",minHeight:20,borderRadius:"0 3px 3px 0",background:GOLD,flexShrink:0}} />
+                  <span>
+                    <span style={{display:"block",fontSize:ncType.body,fontWeight:500,lineHeight:ncType.line,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{text}</span>
+                    <span style={{fontSize:ncType.meta,color:GOLD,fontWeight:500}}>{isGetBack?"waiting to reply":"pending answer"}</span>
+                  </span>
+                </button>
+              );
+            })}
+            {visibleShailos.length > 2 && (
+              <button onClick={onOpenShailos} style={{width:"100%",padding:"7px 0",border:"none",borderTop:`1px solid ${C.divider}`,background:"transparent",color:C.faint,cursor:"pointer",fontSize:ncType.meta,fontFamily:NC_FONT_STACK}}>
+                +{visibleShailos.length-2} more
+              </button>
+            )}
+          </MobileSection>
+
+          {/* Phone */}
+          <MobileSection id="phone" icon="phone_in_talk" title="Phone"
+            menuItems={[{ icon: "open_in_full", label: "Open phone view", run: onOpenPhone }]}
+          >
+            <div style={{ padding: "4px 12px 10px", borderTop: `1px solid ${C.divider}` }}>
+              <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
+            </div>
+          </MobileSection>
+
+          {/* Connect Google prompt (no token yet) */}
+          {googleClientId && !googleToken && !googleLoading && calendarEvents === null && gmailMessages === null && (
+            <button onClick={onConnectGoogle}
+              style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"10px 14px",background:"none",border:`1px dashed ${C.divider}`,borderRadius:8,cursor:"pointer",color:C.muted,fontFamily:NC_FONT_STACK,fontSize:ncType.body,width:"100%",boxSizing:"border-box" }}>
+              {suiteIcon("add_link",15)} Connect Google Calendar &amp; Gmail
+            </button>
+          )}
+
+        </div>
+
+        {/* Actions drawer (same as desktop) */}
+        {actionsOpen && (
+          <div style={{ position:"fixed",inset:`0 0 0 ${sidebarW}px`,zIndex:7800,display:"flex",justifyContent:"flex-end",background:"rgba(0,0,0,0.28)" }} onClick={()=>setActionsOpen(false)}>
+            <aside onClick={e=>e.stopPropagation()} style={{ width:"min(540px,94vw)",height:"100%",background:C.bg,borderLeft:`1px solid ${C.divider}`,boxShadow:"-10px 0 28px rgba(60,64,67,0.18)",display:"flex",flexDirection:"column" }}>
+              <div style={{height:64,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 18px",borderBottom:`1px solid ${C.divider}`,flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,fontSize:NC_TYPE.title,fontWeight:500,fontFamily:NC_FONT_STACK,color:C.text}}>{suiteIcon("apps",20)} More Actions</div>
+                <button onClick={()=>setActionsOpen(false)} style={gvIconButton({},C)}>{suiteIcon("close",17)}</button>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"130px minmax(0,1fr)",minHeight:0,flex:1}}>
+                <div style={{borderRight:`1px solid ${C.divider}`,padding:12,display:"grid",alignContent:"start",gap:6,background:C.bgSoft,overflow:"auto"}}>
+                  {actionCategories.map(cat => {
+                    const isCatActive = activeActionCategory?.id === cat.id;
+                    return (
+                      <button key={cat.id} onClick={()=>setActionCategoryId(cat.id)}
+                        style={{height:40,borderRadius:20,border:"none",background:isCatActive?C.hover:"transparent",color:isCatActive?C.text:C.muted,cursor:"pointer",display:"flex",alignItems:"center",gap:8,padding:"0 12px",fontWeight:500,fontFamily:NC_FONT_STACK,fontSize:NC_TYPE.control,textAlign:"left"}}>
+                        {suiteIcon(cat.icon,17)} {cat.title}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{padding:14,overflow:"auto",display:"grid",alignContent:"start",gap:8}}>
+                  {(activeActionCategory?.actions||[]).map(action=>(
+                    <button key={action.id||action.label} onClick={()=>{if(action.disabled)return;setActionsOpen(false);action.run?.();}} disabled={action.disabled}
+                      style={{minHeight:48,borderRadius:8,border:`1px solid ${action.primary?"transparent":C.divider}`,background:action.primary?C.accent:C.bg,color:action.primary?"#fff":C.text,cursor:action.disabled?"default":"pointer",opacity:action.disabled?0.5:1,padding:"0 14px",display:"grid",gridTemplateColumns:"32px minmax(0,1fr)",gap:10,alignItems:"center",fontFamily:NC_FONT_STACK,textAlign:"left"}}>
+                      <span style={{width:32,height:32,borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",background:action.primary?"rgba(255,255,255,0.16)":C.hover,color:action.primary?"#fff":C.muted,flexShrink:0}}>{suiteIcon(action.icon,16)}</span>
+                      <span style={{fontSize:NC_TYPE.control,fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{action.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </aside>
+          </div>
+        )}
       </div>
     );
   }

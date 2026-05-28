@@ -11,6 +11,15 @@ import { App } from './08-app-split/index.jsx';
 
 const _AUTH_DOMAIN = "onetaskapp.local";
 const _AUTH_STAY_SIGNED_IN_KEY = "ot_auth_stay_signed_in";
+const _AUTH_LAST_UID_KEY = "ot_last_uid";
+const _AUTH_FRESH_LOGIN_KEY = "ot_fresh_login";
+
+// Use redirect auth on iOS / Android — popups are blocked by iOS Safari
+function _isMobileOrTablet() {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
 
 function _toEmail(username) {
   return `${username.toLowerCase().trim()}@${_AUTH_DOMAIN}`;
@@ -44,21 +53,59 @@ function AuthGate() {
   const [user, setUser] = React.useState(window.__OT_DEV_USER);
 
   React.useEffect(() => {
-    if (window.__OT_DEV) return; // skip Firebase auth on localhost
+    if (window.__OT_DEV) return;
     if (typeof firebase === "undefined" || !firebase.auth) {
       setAuthState("anon"); return;
     }
     let alive = true;
     let unsub = null;
-    _setAuthPersistence(_readStaySignedIn())
-      .catch(e => console.warn("[Auth] Could not set durable persistence:", e?.message || e))
-      .finally(() => {
-        if (!alive) return;
-        unsub = firebase.auth().onAuthStateChanged(u => {
-          setUser(u || null);
-          setAuthState(u ? "authed" : "anon");
-        });
+
+    async function boot() {
+      // On mobile the previous page may have done signInWithRedirect;
+      // capture the result before setting up onAuthStateChanged.
+      try {
+        const result = await firebase.auth().getRedirectResult();
+        if (result?.user && alive) {
+          const u = result.user;
+          // Mark as a fresh login so downstream code can skip stale caches.
+          try { sessionStorage.setItem(_AUTH_FRESH_LOGIN_KEY, u.uid); } catch {}
+          try { localStorage.setItem(_AUTH_STAY_SIGNED_IN_KEY, "1"); } catch {}
+          const emailPrefix = (u.email || "").split("@")[0].toLowerCase();
+          if (emailPrefix && (!u.displayName || u.displayName !== emailPrefix)) {
+            try { await u.updateProfile({ displayName: emailPrefix }); } catch {}
+          }
+        }
+      } catch (e) {
+        // auth/unauthorized-domain etc. — fall through to onAuthStateChanged
+        if (e.code && e.code !== "auth/no-auth-event") {
+          console.warn("[Auth] getRedirectResult error:", e.code);
+        }
+      }
+
+      if (!alive) return;
+
+      await _setAuthPersistence(_readStaySignedIn())
+        .catch(e => console.warn("[Auth] Could not set persistence:", e?.message || e));
+
+      if (!alive) return;
+
+      unsub = firebase.auth().onAuthStateChanged(u => {
+        if (u) {
+          // Detect UID switch (different Google account, etc.) and bust stale caches.
+          try {
+            const prev = localStorage.getItem(_AUTH_LAST_UID_KEY);
+            if (prev && prev !== u.uid) {
+              sessionStorage.setItem(_AUTH_FRESH_LOGIN_KEY, u.uid);
+            }
+            localStorage.setItem(_AUTH_LAST_UID_KEY, u.uid);
+          } catch {}
+        }
+        setUser(u || null);
+        setAuthState(u ? "authed" : "anon");
       });
+    }
+
+    boot();
     return () => {
       alive = false;
       if (unsub) unsub();
@@ -136,18 +183,26 @@ function LoginScreen({ onLogin }) {
       await _setAuthPersistence(staySignedIn);
       try { localStorage.setItem(_AUTH_STAY_SIGNED_IN_KEY, staySignedIn ? "1" : "0"); } catch(_) {}
       const provider = new firebase.auth.GoogleAuthProvider();
+
+      if (_isMobileOrTablet()) {
+        // iOS Safari blocks popups; use redirect flow.
+        // The result is captured in AuthGate boot() via getRedirectResult().
+        await firebase.auth().signInWithRedirect(provider);
+        return; // page will reload after the redirect
+      }
+
       const cred = await firebase.auth().signInWithPopup(provider);
-      // Ensure displayName is set to the email prefix for canonical UID matching
       const u = cred.user;
       const emailPrefix = (u.email || "").split("@")[0].toLowerCase();
       if (emailPrefix && (!u.displayName || u.displayName !== emailPrefix)) {
         try { await u.updateProfile({ displayName: emailPrefix }); } catch(_) {}
       }
+      try { sessionStorage.setItem(_AUTH_FRESH_LOGIN_KEY, u.uid); } catch(_) {}
       onLogin(cred.user);
     } catch(e) {
       if (e.code !== "auth/popup-closed-by-user") {
         if (e.code === "auth/web-storage-unsupported") {
-          setErr("This browser is blocking saved sign-in storage. Allow site data for this app, then sign in again.");
+          setErr("This browser blocks saved sign-in. Allow site data for this app, then try again.");
         } else if (e.code === "auth/unauthorized-domain") {
           setErr("Domain not authorized — add onetaskfocuser.netlify.app to Firebase → Auth → Settings → Authorized domains.");
         } else {
