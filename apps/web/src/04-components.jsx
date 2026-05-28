@@ -330,7 +330,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
       ref={zenRef}
       style={{position:"fixed",inset:0,zIndex:9999,background:"#201E22",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-zen 1.2s ease forwards",overflow:"hidden",cursor:cursorVis?"pointer":"none"}}
       onClick={onExit}
-      onTouchStart={resetFade}
+      onTouchStart={e=>{ if (!e.target.closest('[data-track-pill]')) resetFade(); }}
     >
       {/* Clock — always visible */}
       <div style={{position:"absolute",top:"clamp(18px,3vh,32px)",left:"50%",transform:"translateX(-50%)",zIndex:10,pointerEvents:"none"}}>
@@ -430,15 +430,13 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
           const active = activeTrack === track;
           return (
             <div
+              data-track-pill="1"
               onClick={e=>playTrack(e,track)}
-              onTouchStart={e=>e.stopPropagation()}
               title={active ? `Pause ${label}` : `Play ${label}`}
-              style={{position:"absolute",bottom,right:24,zIndex:10,background:active?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.07)",border:`1px solid ${active?"rgba(255,255,255,0.35)":"rgba(255,255,255,0.13)"}`,borderRadius:20,padding:"6px 14px 6px 10px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",transition:"opacity 0.5s, background 0.3s, border-color 0.3s",opacity:showUI?(active?0.9:0.55):(active?0.35:0.08)}}
-              onMouseEnter={e=>e.currentTarget.style.opacity=1}
-              onMouseLeave={e=>e.currentTarget.style.opacity=showUI?(active?0.9:0.55):(active?0.35:0.08)}
+              style={{position:"absolute",bottom,right:24,zIndex:10,background:active?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.07)",border:`1px solid ${active?"rgba(255,255,255,0.35)":"rgba(255,255,255,0.13)"}`,borderRadius:20,padding:`5px ${showLabel?"12px":"8px"} 5px 8px`,display:"flex",alignItems:"center",gap:0,cursor:"pointer",overflow:"hidden",transition:"opacity 0.5s, background 0.3s, border-color 0.3s, padding 0.4s cubic-bezier(0.4,0,0.2,1)",opacity:showUI?(active?0.9:0.55):(active?0.35:0.08)}}
             >
-              {active ? <IC.Pause s={12} c="rgba(255,255,255,0.85)"/> : <IC.Play s={12} c="rgba(255,255,255,0.75)"/>}
-              <span style={{fontSize:11,fontFamily:"system-ui",fontWeight:600,color:"rgba(255,255,255,0.8)",whiteSpace:"nowrap",pointerEvents:"none",opacity:showLabel?1:0,transform:showLabel?"translateX(0)":"translateX(8px)",transition:"opacity 0.4s cubic-bezier(0.4,0,0.2,1), transform 0.4s cubic-bezier(0.4,0,0.2,1)"}}>{label}</span>
+              {active ? <IC.Pause s={11} c="rgba(255,255,255,0.85)"/> : <IC.Play s={11} c="rgba(255,255,255,0.75)"/>}
+              <span style={{fontSize:11,fontFamily:"system-ui",fontWeight:600,color:"rgba(255,255,255,0.8)",whiteSpace:"nowrap",overflow:"hidden",pointerEvents:"none",maxWidth:showLabel?"160px":"0px",paddingLeft:showLabel?"6px":"0px",opacity:showLabel?1:0,transform:showLabel?"translateX(0)":"translateX(8px)",transition:"max-width 0.4s cubic-bezier(0.4,0,0.2,1), padding-left 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease, transform 0.4s cubic-bezier(0.4,0,0.2,1)"}}>{label}</span>
             </div>
           );
         };
