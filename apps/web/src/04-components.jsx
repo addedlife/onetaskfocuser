@@ -330,8 +330,10 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
       ref={zenRef}
       style={{position:"fixed",inset:0,zIndex:9999,background:"#201E22",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-zen 1.2s ease forwards",overflow:"hidden",cursor:cursorVis?"pointer":"none"}}
       onClick={onExit}
-      onTouchStart={e=>{ if (!e.target.closest('[data-track-pill]')) resetFade(); }}
     >
+      {/* Touch catch for idle reset — sits below all interactive elements (zIndex 10+) so
+          taps on buttons never reach it; only background taps trigger resetFade */}
+      <div style={{position:"absolute",inset:0,zIndex:1}} onTouchStart={resetFade}/>
       {/* Clock — always visible */}
       <div style={{position:"absolute",top:"clamp(18px,3vh,32px)",left:"50%",transform:"translateX(-50%)",zIndex:10,pointerEvents:"none"}}>
         <span style={{fontSize:"clamp(22px,4vw,34px)",fontFamily:"system-ui",fontWeight:300,color:"rgba(255,255,255,0.55)",letterSpacing:2}}>
@@ -430,7 +432,6 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
           const active = activeTrack === track;
           return (
             <div
-              data-track-pill="1"
               onClick={e=>playTrack(e,track)}
               title={active ? `Pause ${label}` : `Play ${label}`}
               style={{position:"absolute",bottom,right:24,zIndex:10,background:active?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.07)",border:`1px solid ${active?"rgba(255,255,255,0.35)":"rgba(255,255,255,0.13)"}`,borderRadius:20,padding:`5px ${showLabel?"12px":"8px"} 5px 8px`,display:"flex",alignItems:"center",gap:0,cursor:"pointer",overflow:"hidden",transition:"opacity 0.5s, background 0.3s, border-color 0.3s, padding 0.4s cubic-bezier(0.4,0,0.2,1)",opacity:showUI?(active?0.9:0.55):(active?0.35:0.08)}}
