@@ -207,8 +207,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
     if (!el) return;
     const h = () => resetFade();
     el.addEventListener("mousemove", h);
-    el.addEventListener("touchstart", h);
-    return () => { clearTimeout(idleRef.current); el.removeEventListener("mousemove", h); el.removeEventListener("touchstart", h); };
+    return () => { clearTimeout(idleRef.current); el.removeEventListener("mousemove", h); };
   }, [resetFade]);
 
   useEffect(() => { return () => { audioRef.current?.pause(); }; }, []);
@@ -310,6 +309,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
       ref={zenRef}
       style={{position:"fixed",inset:0,zIndex:9999,background:"#201E22",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-zen 1.2s ease forwards",overflow:"hidden",cursor:cursorVis?"pointer":"none"}}
       onClick={onExit}
+      onTouchStart={resetFade}
     >
       {/* Clock — always visible */}
       <div style={{position:"absolute",top:"clamp(18px,3vh,32px)",left:"50%",transform:"translateX(-50%)",zIndex:10,pointerEvents:"none"}}>
