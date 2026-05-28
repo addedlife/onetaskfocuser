@@ -182,7 +182,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
   const [showDump, setShowDump] = useState(false);
   const [dumpText, setDumpText] = useState("");
   const [dumpConfirmed, setDumpConfirmed] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [activeTrack, setActiveTrack] = useState(null);
   const [labelVisible, setLabelVisible] = useState(true);
   const idleRef = useRef(null);
   const zenRef = useRef(null);
@@ -216,11 +216,19 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
   // Restore label whenever the UI fade-cycles back on (mouse activity)
   useEffect(() => { if (showUI) setLabelVisible(true); }, [showUI]);
 
-  const toggleMusic = (e) => {
+  const TRACKS = { calm: "/just-this-calm.mp3", energy: "/just-this-energy.mp3" };
+  const playTrack = (e, track) => {
     e.stopPropagation();
     if (!audioRef.current) return;
-    if (isPlaying) { audioRef.current.pause(); setIsPlaying(false); setLabelVisible(false); }
-    else { audioRef.current.play().catch(()=>{}); setIsPlaying(true); }
+    if (activeTrack === track) {
+      audioRef.current.pause(); setActiveTrack(null); setLabelVisible(false);
+    } else {
+      audioRef.current.pause();
+      audioRef.current.src = TRACKS[track];
+      audioRef.current.load();
+      audioRef.current.play().catch(()=>{});
+      setActiveTrack(track);
+    }
   };
 
   // Keyboard: Enter = complete, any other key = exit (dump overlay intercepts when open)
@@ -397,20 +405,30 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
         <span style={{fontSize:14}}>🎙️</span>
       </div>
 
-      {/* Focus track — above brain dump, bottom right */}
-      {(()=>{ const showLabel = showUI && labelVisible; return (<>
-      <audio ref={audioRef} src="/just-this-calm.mp3" loop preload="none"/>
-      <div
-        onClick={toggleMusic}
-        title={isPlaying ? "Pause focus track" : "Play focus track"}
-        style={{position:"absolute",bottom:"clamp(108px,17vh,148px)",right:24,zIndex:10,background:isPlaying?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.07)",border:`1px solid ${isPlaying?"rgba(255,255,255,0.35)":"rgba(255,255,255,0.13)"}`,borderRadius:20,padding:`5px ${showLabel?"12px":"8px"} 5px 8px`,display:"flex",alignItems:"center",gap:0,cursor:"pointer",overflow:"hidden",transition:"opacity 0.5s, background 0.3s, border-color 0.3s, padding 0.35s ease",opacity:showUI?(isPlaying?0.9:0.55):(isPlaying?0.35:0.08)}}
-        onMouseEnter={e=>e.currentTarget.style.opacity=1}
-        onMouseLeave={e=>e.currentTarget.style.opacity=showUI?(isPlaying?0.9:0.55):(isPlaying?0.35:0.08)}
-      >
-        {isPlaying ? <IC.Pause s={11} c="rgba(255,255,255,0.85)"/> : <IC.Play s={11} c="rgba(255,255,255,0.75)"/>}
-        <span style={{fontSize:11,fontFamily:"system-ui",fontWeight:600,color:"rgba(255,255,255,0.8)",whiteSpace:"nowrap",overflow:"hidden",maxWidth:showLabel?"140px":"0px",paddingLeft:showLabel?"6px":"0px",opacity:showLabel?1:0,transition:"max-width 0.35s ease, padding-left 0.35s ease, opacity 0.25s ease"}}>Just This (Calm)</span>
-      </div>
-      </>);})()}
+      {/* Focus tracks — stacked above brain dump, bottom right */}
+      {(()=>{
+        const showLabel = showUI && labelVisible;
+        const TrackPill = ({track, label, bottom}) => {
+          const active = activeTrack === track;
+          return (
+            <div
+              onClick={e=>playTrack(e,track)}
+              title={active ? `Pause ${label}` : `Play ${label}`}
+              style={{position:"absolute",bottom,right:24,zIndex:10,background:active?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.07)",border:`1px solid ${active?"rgba(255,255,255,0.35)":"rgba(255,255,255,0.13)"}`,borderRadius:20,padding:`5px ${showLabel?"12px":"8px"} 5px 8px`,display:"flex",alignItems:"center",gap:0,cursor:"pointer",overflow:"hidden",transition:"opacity 0.5s, background 0.3s, border-color 0.3s, padding 0.35s ease",opacity:showUI?(active?0.9:0.55):(active?0.35:0.08)}}
+              onMouseEnter={e=>e.currentTarget.style.opacity=1}
+              onMouseLeave={e=>e.currentTarget.style.opacity=showUI?(active?0.9:0.55):(active?0.35:0.08)}
+            >
+              {active ? <IC.Pause s={11} c="rgba(255,255,255,0.85)"/> : <IC.Play s={11} c="rgba(255,255,255,0.75)"/>}
+              <span style={{fontSize:11,fontFamily:"system-ui",fontWeight:600,color:"rgba(255,255,255,0.8)",whiteSpace:"nowrap",overflow:"hidden",maxWidth:showLabel?"160px":"0px",paddingLeft:showLabel?"6px":"0px",opacity:showLabel?1:0,transition:"max-width 0.35s ease, padding-left 0.35s ease, opacity 0.25s ease"}}>{label}</span>
+            </div>
+          );
+        };
+        return (<>
+          <audio ref={audioRef} loop preload="none"/>
+          <TrackPill track="energy" label="Just This (Energy)" bottom="clamp(152px,23vh,192px)"/>
+          <TrackPill track="calm"   label="Just This (Calm)"   bottom="clamp(108px,17vh,148px)"/>
+        </>);
+      })()}
 
       {/* Brain dump icon — bottom right, subtle */}
       <div
