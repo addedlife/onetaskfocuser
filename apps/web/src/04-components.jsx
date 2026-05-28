@@ -183,6 +183,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
   const [dumpText, setDumpText] = useState("");
   const [dumpConfirmed, setDumpConfirmed] = useState(false);
   const [activeTrack, setActiveTrack] = useState(null);
+  const activeTrackRef = useRef(null);
   const idleRef = useRef(null);
   const zenRef = useRef(null);
   const clockRef = useRef(null);
@@ -212,18 +213,38 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
 
   useEffect(() => { return () => { audioRef.current?.pause(); }; }, []);
 
+  // BT headphone media keys — register once; handlers read refs to avoid stale closures
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.setActionHandler('play', () => {
+      const track = activeTrackRef.current;
+      if (!track || !audioRef.current) return;
+      audioRef.current.play().catch(()=>{});
+      setActiveTrack(track);
+    });
+    navigator.mediaSession.setActionHandler('pause', () => {
+      audioRef.current?.pause();
+      setActiveTrack(null);
+      activeTrackRef.current = null;
+    });
+    return () => {
+      navigator.mediaSession.setActionHandler('play', null);
+      navigator.mediaSession.setActionHandler('pause', null);
+    };
+  }, []); // eslint-disable-line
+
   const TRACKS = { calm: "/just-this-calm.mp3", energy: "/just-this-energy.mp3" };
   const playTrack = (e, track) => {
     e.stopPropagation();
     if (!audioRef.current) return;
     if (activeTrack === track) {
-      audioRef.current.pause(); setActiveTrack(null);
+      audioRef.current.pause(); setActiveTrack(null); activeTrackRef.current = null;
     } else {
       audioRef.current.pause();
       audioRef.current.src = TRACKS[track];
       audioRef.current.load();
       audioRef.current.play().catch(()=>{});
-      setActiveTrack(track);
+      setActiveTrack(track); activeTrackRef.current = track;
     }
   };
 
