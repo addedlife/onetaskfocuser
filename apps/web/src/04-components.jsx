@@ -206,9 +206,9 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
     resetFade();
     const el = zenRef.current;
     if (!el) return;
-    const h = () => resetFade();
-    el.addEventListener("mousemove", h);
-    return () => { clearTimeout(idleRef.current); el.removeEventListener("mousemove", h); };
+    const h = (e) => { if (e.pointerType === "mouse") resetFade(); };
+    el.addEventListener("pointermove", h);
+    return () => { clearTimeout(idleRef.current); el.removeEventListener("pointermove", h); };
   }, [resetFade]);
 
   useEffect(() => { return () => { audioRef.current?.pause(); }; }, []);
