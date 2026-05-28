@@ -183,6 +183,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
   const [dumpText, setDumpText] = useState("");
   const [dumpConfirmed, setDumpConfirmed] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [labelVisible, setLabelVisible] = useState(true);
   const idleRef = useRef(null);
   const zenRef = useRef(null);
   const clockRef = useRef(null);
@@ -212,11 +213,13 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
   }, [resetFade]);
 
   useEffect(() => { return () => { audioRef.current?.pause(); }; }, []);
+  // Restore label whenever the UI fade-cycles back on (mouse activity)
+  useEffect(() => { if (showUI) setLabelVisible(true); }, [showUI]);
 
   const toggleMusic = (e) => {
     e.stopPropagation();
     if (!audioRef.current) return;
-    if (isPlaying) { audioRef.current.pause(); setIsPlaying(false); }
+    if (isPlaying) { audioRef.current.pause(); setIsPlaying(false); setLabelVisible(false); }
     else { audioRef.current.play().catch(()=>{}); setIsPlaying(true); }
   };
 
@@ -395,7 +398,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
       </div>
 
       {/* Focus track — above brain dump, bottom right */}
-      {(()=>{ const showLabel = showUI && isPlaying; return (<>
+      {(()=>{ const showLabel = showUI && labelVisible; return (<>
       <audio ref={audioRef} src="/just-this-calm.mp3" loop preload="none"/>
       <div
         onClick={toggleMusic}
