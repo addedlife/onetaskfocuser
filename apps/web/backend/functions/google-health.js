@@ -250,16 +250,17 @@ export const handler = async (event) => {
 
     await dlog("sync", "parsed rollups", { stepsRp, hrRp, weightRp, sleepRp });
 
-    // Field-name notes (from observed API responses):
-    //   steps.countSum            string of integer
-    //   heartRate.beatsPerMinuteAvg / .restingHeartRate
-    //   weight.weightAvg / .weight (likely kg, may be empty {} if no data today)
-    //   sleep — field shape TBD, just log for now
-    const stepsRaw  = stepsRp?.steps?.countSum            ?? stepsRp?.steps?.count;
-    const hrRaw     = hrRp?.heartRate?.restingHeartRate    ?? hrRp?.heartRate?.beatsPerMinuteAvg;
-    const weightRaw = weightRp?.weight?.weightAvg          ?? weightRp?.weight?.weight;
+    // Google Health API v4 dailyRollUp field names (verified against docs & RPC spec):
+    //   steps    → steps.countSum  (string integer)
+    //   heart-rate → heartRate.beatsPerMinuteAvg  (avg HR across day)
+    //               heartRate.restingHeartRate is a *separate* data type, not returned here
+    //   weight   → weight.weightKg  (most recent sample in kg); older shape may use weightAvg
+    //   sleep    → sleep.durationSecondsSum  (total sleep seconds for the day)
+    const stepsRaw  = stepsRp?.steps?.countSum;
+    const hrRaw     = hrRp?.heartRate?.beatsPerMinuteAvg ?? hrRp?.heartRate?.beatsPerMinuteAverage;
+    const weightRaw = weightRp?.weight?.weightKg ?? weightRp?.weight?.weightAvg ?? weightRp?.weight?.weight;
     const sleepRaw  = sleepRp?.sleep?.durationSecondsSum
-                   ?? sleepRp?.sleep?.totalDurationSecondsSum
+                   ?? sleepRp?.sleep?.totalSleepDurationSeconds
                    ?? sleepRp?.sleep?.durationSeconds;
 
     const entry = {
@@ -297,7 +298,7 @@ export const handler = async (event) => {
         if (!year) return;
         const dateKey = `${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
         const ref = db.collection("healthData").doc(userId).collection("log").doc(dateKey);
-        batch.set(ref, { date: dateKey, steps: pt.steps?.count ?? null, source: "google" }, { merge: true });
+        batch.set(ref, { date: dateKey, steps: pt.steps?.countSum != null ? Number(pt.steps.countSum) : null, source: "google" }, { merge: true });
       });
       await batch.commit();
     } catch {}
