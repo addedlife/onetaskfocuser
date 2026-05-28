@@ -395,17 +395,19 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
       </div>
 
       {/* Focus track — above brain dump, bottom right */}
+      {(()=>{ const showLabel = showUI && isPlaying; return (<>
       <audio ref={audioRef} src="/just-this-calm.mp3" loop preload="none"/>
       <div
         onClick={toggleMusic}
         title={isPlaying ? "Pause focus track" : "Play focus track"}
-        style={{position:"absolute",bottom:"clamp(108px,17vh,148px)",right:24,zIndex:10,background:isPlaying?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.07)",border:`1px solid ${isPlaying?"rgba(255,255,255,0.35)":"rgba(255,255,255,0.13)"}`,borderRadius:20,padding:"5px 12px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",transition:"opacity 0.5s, background 0.3s, border-color 0.3s",opacity:showUI?(isPlaying?0.9:0.55):(isPlaying?0.35:0.08)}}
+        style={{position:"absolute",bottom:"clamp(108px,17vh,148px)",right:24,zIndex:10,background:isPlaying?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.07)",border:`1px solid ${isPlaying?"rgba(255,255,255,0.35)":"rgba(255,255,255,0.13)"}`,borderRadius:20,padding:`5px ${showLabel?"12px":"8px"} 5px 8px`,display:"flex",alignItems:"center",gap:0,cursor:"pointer",overflow:"hidden",transition:"opacity 0.5s, background 0.3s, border-color 0.3s, padding 0.35s ease",opacity:showUI?(isPlaying?0.9:0.55):(isPlaying?0.35:0.08)}}
         onMouseEnter={e=>e.currentTarget.style.opacity=1}
         onMouseLeave={e=>e.currentTarget.style.opacity=showUI?(isPlaying?0.9:0.55):(isPlaying?0.35:0.08)}
       >
         {isPlaying ? <IC.Pause s={11} c="rgba(255,255,255,0.85)"/> : <IC.Play s={11} c="rgba(255,255,255,0.75)"/>}
-        <span style={{fontSize:11,fontFamily:"system-ui",fontWeight:600,color:"rgba(255,255,255,0.8)",whiteSpace:"nowrap"}}>Just This (Calm)</span>
+        <span style={{fontSize:11,fontFamily:"system-ui",fontWeight:600,color:"rgba(255,255,255,0.8)",whiteSpace:"nowrap",overflow:"hidden",maxWidth:showLabel?"140px":"0px",paddingLeft:showLabel?"6px":"0px",opacity:showLabel?1:0,transition:"max-width 0.35s ease, padding-left 0.35s ease, opacity 0.25s ease"}}>Just This (Calm)</span>
       </div>
+      </>);})()}
 
       {/* Brain dump icon — bottom right, subtle */}
       <div
