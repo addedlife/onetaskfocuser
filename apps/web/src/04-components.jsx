@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { IC } from './02-icons.jsx';
 import { isTaskAged, getTaskAgeHours, gP, pBg, textOnColor, _lum, priText, runAIJob, uid, db, Store, DEF_PRI, PALETTE, cleanYT, aiDetectShailaAnswers } from './01-core.js';
+import { getShabbosWindow, getCachedLocation, requestLocation } from './shabbos.js';
 
 function Ripple({color}) {
   return <div style={{position:"absolute",inset:0,zIndex:0,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -276,17 +277,33 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
   const isSub = !!task.parentTask;
   const stepInfo = isSub ? `Step ${task.stepIndex||1} of ${task.totalSteps||"?"} of ${task.parentTask}` : null;
 
-  // ─── Shabbos mode (Friday or ?shabbosTimer=1) ───────────────────────
-  const isShabbosMode = (() => {
-    const now = new Date();
-    const isFriday = now.getDay() === 5;
-    const params = new URLSearchParams(window.location.search);
-    return isFriday || !!params.get("shabbosTimer");
+  // ─── Shabbos mode ───────────────────────────────────────────────────
+  // Candles show only from candle-lighting (sunset Friday) until 72 minutes
+  // after sunset Saturday night, computed from the user's geolocation each
+  // week. `?shabbosTimer=1` forces it on for testing; `?shabbosTimer=0` off.
+  const shabbosForce = (() => {
+    const v = new URLSearchParams(window.location.search).get("shabbosTimer");
+    if (v === "1") return true;
+    if (v === "0") return false;
+    return null;
   })();
 
-  // Shabbos 24h countdown — starts when zen mode opens
-  const [shabbosStart] = useState(() => isShabbosMode ? Date.now() : null);
-  const shabbosMs = shabbosStart ? Math.max(0, (shabbosStart + 24*60*60*1000) - zenClock.getTime()) : null;
+  const [geo, setGeo] = useState(() => getCachedLocation());
+  useEffect(() => {
+    if (geo || shabbosForce !== null) return;
+    let alive = true;
+    requestLocation().then(g => { if (alive && g) setGeo(g); });
+    return () => { alive = false; };
+  }, [geo, shabbosForce]);
+
+  const shabbosWin = useMemo(
+    () => getShabbosWindow(zenClock, geo?.lat, geo?.lng),
+    [zenClock, geo]
+  );
+  const isShabbosMode = shabbosForce !== null ? shabbosForce : shabbosWin.active;
+
+  // Countdown to the end of Shabbos (Saturday sunset + 72 min).
+  const shabbosMs = shabbosWin.end ? Math.max(0, shabbosWin.end.getTime() - zenClock.getTime()) : null;
   const sHrs = shabbosMs != null ? Math.floor(shabbosMs / 3600000) : null;
   const sMins = shabbosMs != null ? Math.floor((shabbosMs % 3600000) / 60000) : null;
 

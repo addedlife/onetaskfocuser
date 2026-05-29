@@ -121,18 +121,39 @@ async function rollup(accessToken, dataType, range) {
   return parsed?.rollupDataPoints?.[0] || null;
 }
 
-// ── Sleep duration via dailyRollUp (same shape as steps/HR/weight) ───────────
-async function fetchSleepRollup(accessToken, range) {
-  const res = await fetch(`${HEALTH_V4}/users/me/dataTypes/sleep/dataPoints:dailyRollUp`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ range, windowSizeDays: 1 }),
+// ── Sleep total minutes via the list endpoint ────────────────────────────────
+// Sleep is a SESSION data type and has NO dailyRollUp support (confirmed against
+// the v4 discovery doc — the rollup value union excludes sleep). We list the
+// sleep sessions whose civil END time falls on the requested day, then sum
+// `sleep.summary.minutesAsleep` (int64 minutes) across all sessions.
+async function fetchSleepMinutes(accessToken, dayParts) {
+  // dayParts = [year, month, day] for the night that ENDS on this calendar day
+  const ymd      = `${dayParts[0]}-${String(dayParts[1]).padStart(2,"0")}-${String(dayParts[2]).padStart(2,"0")}`;
+  const next     = new Date(Date.UTC(dayParts[0], dayParts[1] - 1, dayParts[2] + 1));
+  const ymdNext  = next.toISOString().slice(0, 10);
+  const filter   = `sleep.interval.civil_end_time >= "${ymd}" AND sleep.interval.civil_end_time < "${ymdNext}"`;
+  const url      = `${HEALTH_V4}/users/me/dataTypes/sleep/dataPoints?` +
+    new URLSearchParams({ filter, pageSize: "25" });
+
+  const res  = await fetch(url, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
   const body = await res.text();
   let parsed = null; try { parsed = JSON.parse(body); } catch {}
-  await dlog("rollup:sleep", `status ${res.status}`, { status: res.status, body: body.slice(0, 800) });
+  await dlog("list:sleep", `status ${res.status}`, { status: res.status, filter, body: body.slice(0, 800) });
   if (!res.ok) return null;
-  return parsed?.rollupDataPoints?.[0] || null;
+
+  const points = parsed?.dataPoints || [];
+  let totalMin = 0, found = false;
+  for (const pt of points) {
+    const s = pt?.sleep?.summary;
+    if (!s) continue;
+    // Prefer minutes actually asleep; fall back to the in-bed sleep period.
+    const m = s.minutesAsleep ?? s.minutesInSleepPeriod;
+    if (m != null) { totalMin += Number(m); found = true; }
+  }
+  return found ? totalMin : null;
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -241,38 +262,33 @@ export const handler = async (event) => {
       end:   { date: { year: tomorrow[0], month: tomorrow[1], day: tomorrow[2] } },
     };
 
-    const [stepsRp, hrRp, weightRp, sleepRp] = await Promise.all([
+    const [stepsRp, hrRp, weightRp, sleepMin] = await Promise.all([
       rollup(accessToken, "steps",      range),
       rollup(accessToken, "heart-rate", range),
       rollup(accessToken, "weight",     range),
-      fetchSleepRollup(accessToken, range),
+      fetchSleepMinutes(accessToken, [yr, mo, dy]),
     ]);
 
-    await dlog("sync", "parsed rollups", { stepsRp, hrRp, weightRp, sleepRp });
+    await dlog("sync", "parsed rollups", { stepsRp, hrRp, weightRp, sleepMin });
 
-    // Google Health API v4 dailyRollUp field names (fallback chains for API version variance):
-    //   steps      → steps.countSum
-    //   heart-rate → heartRate.beatsPerMinuteAvg
-    //   weight     → weight.weightAvg | weightKg | weight | value  (varies by API version)
-    //   sleep      → sleep.durationSecondsSum | totalDurationSecondsSum | totalSleepDurationSeconds | durationSeconds
+    // Google Health API v4 field names (verified against the live v4 discovery doc):
+    //   steps      → rollupDataPoints[].steps.countSum            (int64, string)
+    //   heart-rate → rollupDataPoints[].heartRate.beatsPerMinuteAvg (double)
+    //   weight     → rollupDataPoints[].weight.weightGramsAvg     (double, GRAMS)
+    //   sleep      → list endpoint → dataPoints[].sleep.summary.minutesAsleep (int64 minutes)
+    //               (sleep has NO dailyRollUp — see fetchSleepMinutes)
+    const GRAMS_TO_LB = 0.00220462;
     const stepsRaw  = stepsRp?.steps?.countSum;
-    const hrRaw     = hrRp?.heartRate?.beatsPerMinuteAvg ?? hrRp?.heartRate?.beatsPerMinuteAverage;
-    const weightRaw = weightRp?.weight?.weightAvg
-                   ?? weightRp?.weight?.weightKg
-                   ?? weightRp?.weight?.weight
-                   ?? weightRp?.weight?.value;
-    const sleepRaw  = sleepRp?.sleep?.durationSecondsSum
-                   ?? sleepRp?.sleep?.totalDurationSecondsSum
-                   ?? sleepRp?.sleep?.totalSleepDurationSeconds
-                   ?? sleepRp?.sleep?.durationSeconds;
+    const hrRaw     = hrRp?.heartRate?.beatsPerMinuteAvg;
+    const weightG   = weightRp?.weight?.weightGramsAvg;
 
     const entry = {
       date:      today,
       source:    "google",
-      steps:     stepsRaw  != null ? Number(stepsRaw)                : null,
-      heartRate: hrRaw     != null ? Math.round(Number(hrRaw))       : null,
-      sleep:     sleepRaw  != null ? +(Number(sleepRaw) / 3600).toFixed(2) : null,
-      weight:    weightRaw != null ? +(Number(weightRaw) * 2.20462).toFixed(1) : null, // kg → lb
+      steps:     stepsRaw  != null ? Number(stepsRaw)               : null,
+      heartRate: hrRaw     != null ? Math.round(Number(hrRaw))      : null,
+      sleep:     sleepMin  != null ? +(Number(sleepMin) / 60).toFixed(2) : null,   // minutes → hours
+      weight:    weightG   != null ? +(Number(weightG) * GRAMS_TO_LB).toFixed(1) : null, // grams → lb
       syncedAt:  Date.now(),
     };
 
