@@ -7,6 +7,9 @@ import { HealthCard } from './HealthCard.jsx';
 import { HealthPage } from './HealthPage.jsx';
 
 function nerveSummarySource(item) {
+  // Subtasks store the parent's name in parentTask and their own text in text —
+  // show the subtask's own text so sibling steps don't all read as the parent.
+  if (item?.parentTask && item?.text) return String(item.text).trim();
   return String(item?.parentTask || item?.shaila || item?.question || item?.text || "").trim();
 }
 
