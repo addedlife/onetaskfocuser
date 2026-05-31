@@ -18,6 +18,12 @@ try {
   if (typeof firebase !== "undefined") {
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
+    // iOS Safari/Chrome — and proxies, VPNs, and content blockers — intermittently
+    // kill Firestore's default WebChannel stream, which surfaces as the recurring
+    // "can't reach Firebase". Auto-detecting long-polling transparently falls back to
+    // plain HTTP long-polling when the streaming transport is blocked, so the client
+    // stays reachable everywhere. settings() must run before any other Firestore call.
+    try { db.settings({ experimentalAutoDetectLongPolling: true }); } catch (_) {}
     db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
   }
 } catch(e) {}
