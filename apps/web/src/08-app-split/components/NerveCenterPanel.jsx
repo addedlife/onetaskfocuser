@@ -2569,7 +2569,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 else if (wM < 50) { wL1 = "QUARTER TO";         wL2 = wNums[wNext]; }
                 else if (wM < 55) { wL1 = "TEN TO";             wL2 = wNums[wNext]; }
                 else              { wL1 = "FIVE TO";             wL2 = wNums[wNext]; }
-                // Timeline face: cascading time-scale sweep bars (Hebrew yr → Greg yr → month → day → hour → minute)
+                // Timeline face: cascading time-scale sweep bars (seconds → minute → hour → day → month → Hebrew yr → English yr)
                 const roshH = [
                   { y: 5785, d: new Date(2024, 9, 2) }, { y: 5786, d: new Date(2025, 8, 22) },
                   { y: 5787, d: new Date(2026, 8, 11) }, { y: 5788, d: new Date(2027, 9, 1) },
@@ -2581,8 +2581,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     hYear = roshH[i].y; hYearFrac = (nowDate - roshH[i].d) / (roshH[i + 1].d - roshH[i].d); break;
                   }
                 }
-                let hMonthName = String(hYear);
-                try { hMonthName = new Intl.DateTimeFormat('en-u-ca-hebrew', { month: 'short' }).format(nowDate); } catch {}
+                let hMonthName = String(hYear), hDay = "";
+                try {
+                  const hParts = new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric', month: 'short' }).formatToParts(nowDate);
+                  hMonthName = hParts.find(p => p.type === 'month')?.value || hMonthName;
+                  hDay = hParts.find(p => p.type === 'day')?.value || "";
+                } catch {}
                 const gregYrStart = new Date(nowDate.getFullYear(), 0, 1);
                 const gregYrFrac = (nowDate - gregYrStart) / (new Date(nowDate.getFullYear() + 1, 0, 1) - gregYrStart);
                 const daysInMo = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate();
@@ -2718,13 +2722,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
                       </div>
                       {[
-                        { lbl: String(hYear),                                                                                                    val: hMonthName,                                                            frac: hYearFrac,      col: C.accent,  op: 0.92, dur: null,  off: 0,         rk: 0 },
-                        { lbl: String(nowDate.getFullYear()),                                                                                    val: nowDate.toLocaleDateString([], { month: "short" }),                     frac: gregYrFrac,     col: C.accent,  op: 0.56, dur: null,  off: 0,         rk: 0 },
-                        { lbl: nowDate.toLocaleDateString([], { month: "short" }),                                                               val: `${nowDate.getDate()}/${daysInMo}`,                                     frac: dayFrac,        col: C.muted,   op: 0.78, dur: null,  off: 0,         rk: 0 },
-                        { lbl: nowDate.toLocaleDateString([], { weekday: "short" }),                                                             val: `${nowDate.getHours()}h`,                                               frac: 0,              col: C.muted,   op: 0.60, dur: 86400, off: secOfDay,  rk: nowDate.getDate() },
-                        { lbl: `${nowDate.getHours() % 12 || 12}${nowDate.getHours() < 12 ? "am" : "pm"}`,                                      val: `${nowDate.getMinutes()}m`,                                             frac: 0,              col: C.faint,   op: 0.82, dur: 3600,  off: secOfHr,   rk: nowDate.getHours() },
-                        { lbl: `:${String(nowDate.getMinutes()).padStart(2, "0")}`,                                                              val: `${nowDate.getSeconds()}s`,                                             frac: 0,              col: C.faint,   op: 0.50, dur: 60,    off: nowDate.getSeconds(), rk: nowDate.getMinutes() },
-                      ].map(({ lbl, val, frac, col, op, dur, off, rk }) => (
+                        { lbl: `:${String(nowDate.getMinutes()).padStart(2, "0")}`,                                                              val: `${nowDate.getSeconds()}s`,                                             frac: 0,              col: C.faint,   op: 0.50, dur: 60,    off: nowDate.getSeconds(), rk: nowDate.getMinutes(), vw: 26 },
+                        { lbl: `${nowDate.getHours() % 12 || 12}${nowDate.getHours() < 12 ? "am" : "pm"}`,                                      val: `${nowDate.getMinutes()}m`,                                             frac: 0,              col: C.faint,   op: 0.82, dur: 3600,  off: secOfHr,   rk: nowDate.getHours(), vw: 26 },
+                        { lbl: nowDate.toLocaleDateString([], { weekday: "short" }),                                                             val: `${nowDate.getHours()}h`,                                               frac: 0,              col: C.muted,   op: 0.60, dur: 86400, off: secOfDay,  rk: nowDate.getDate(), vw: 26 },
+                        { lbl: nowDate.toLocaleDateString([], { month: "short" }),                                                               val: `${nowDate.getDate()}/${daysInMo}`,                                     frac: dayFrac,        col: C.muted,   op: 0.78, dur: null,  off: 0,         rk: 0, vw: 26 },
+                        { lbl: String(hYear),                                                                                                    val: `${hDay} ${hMonthName}`.trim(),                                         frac: hYearFrac,      col: C.accent,  op: 0.92, dur: null,  off: 0,         rk: 0, vw: 52 },
+                        { lbl: String(nowDate.getFullYear()),                                                                                    val: nowDate.toLocaleDateString([], { month: "short" }),                     frac: gregYrFrac,     col: C.accent,  op: 0.56, dur: null,  off: 0,         rk: 0, vw: 26 },
+                      ].map(({ lbl, val, frac, col, op, dur, off, rk, vw }) => (
                         <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, minWidth: 0 }}>
                           <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, letterSpacing: 0.3, fontFamily: NC_FONT_STACK, width: 38, textAlign: "right", flexShrink: 0, textTransform: "uppercase", lineHeight: 1 }}>{lbl}</span>
                           <div style={{ flex: 1, height: 2, borderRadius: 1, background: C.hover, overflow: "hidden", position: "relative", minWidth: 0 }}>
@@ -2736,7 +2740,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                               <div style={{ height: "100%", width: `${frac * 100}%`, borderRadius: 1, background: col, opacity: op, transition: "width 3s ease" }} />
                             )}
                           </div>
-                          <span style={{ fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, width: 26, flexShrink: 0, textAlign: "right", letterSpacing: 0.2, lineHeight: 1 }}>{val}</span>
+                          <span style={{ fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, width: vw, flexShrink: 0, textAlign: "right", letterSpacing: 0.2, lineHeight: 1 }}>{val}</span>
                         </div>
                       ))}
                     </div>

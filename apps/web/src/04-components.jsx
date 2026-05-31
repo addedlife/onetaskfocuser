@@ -184,6 +184,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
   const [dumpText, setDumpText] = useState("");
   const [dumpConfirmed, setDumpConfirmed] = useState(false);
   const [activeTrack, setActiveTrack] = useState(null);
+  const [trackProg, setTrackProg] = useState(0);
   const activeTrackRef = useRef(null);
   const idleRef = useRef(null);
   const zenRef = useRef(null);
@@ -213,6 +214,16 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
   }, [resetFade]);
 
   useEffect(() => { return () => { audioRef.current?.pause(); }; }, []);
+
+  // Track the active song's playback position for its seek bar (loops back to 0 on repeat)
+  useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    const onTime = () => setTrackProg(a.duration ? a.currentTime / a.duration : 0);
+    a.addEventListener("timeupdate", onTime);
+    a.addEventListener("loadedmetadata", onTime);
+    return () => { a.removeEventListener("timeupdate", onTime); a.removeEventListener("loadedmetadata", onTime); };
+  }, []);
 
   // BT headphone media keys — register once; handlers read refs to avoid stale closures
   useEffect(() => {
@@ -245,7 +256,7 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
       audioRef.current.src = TRACKS[track];
       audioRef.current.load();
       audioRef.current.play().catch(()=>{});
-      setActiveTrack(track); activeTrackRef.current = track;
+      setActiveTrack(track); activeTrackRef.current = track; setTrackProg(0);
     }
   };
 
@@ -447,14 +458,35 @@ function ZenMode({task, pris, onExit, onDone, T, justStartId, curTaskId, onDoneJ
         const showLabel = showUI;
         const TrackPill = ({track, label, bottom}) => {
           const active = activeTrack === track;
+          // Click/scrub anywhere on the bar to seek; audio keeps looping
+          const seek = (e) => {
+            e.stopPropagation();
+            const a = audioRef.current;
+            if (!a || !a.duration) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+            a.currentTime = ratio * a.duration; setTrackProg(ratio);
+          };
           return (
-            <div
-              onClick={e=>playTrack(e,track)}
-              title={active ? `Pause ${label}` : `Play ${label}`}
-              style={{position:"absolute",bottom,right:24,zIndex:10,background:active?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.07)",border:`1px solid ${active?"rgba(255,255,255,0.35)":"rgba(255,255,255,0.13)"}`,borderRadius:20,padding:`5px ${showLabel?"12px":"8px"} 5px 8px`,display:"flex",alignItems:"center",gap:0,cursor:"pointer",overflow:"hidden",transition:"opacity 0.5s, background 0.3s, border-color 0.3s, padding 0.4s cubic-bezier(0.4,0,0.2,1)",opacity:showUI?(active?0.9:0.55):(active?0.35:0.08)}}
-            >
-              {active ? <IC.Pause s={11} c="rgba(255,255,255,0.85)"/> : <IC.Play s={11} c="rgba(255,255,255,0.75)"/>}
-              <span style={{fontSize:11,fontFamily:"system-ui",fontWeight:600,color:"rgba(255,255,255,0.8)",whiteSpace:"nowrap",overflow:"hidden",pointerEvents:"none",maxWidth:showLabel?"160px":"0px",paddingLeft:showLabel?"6px":"0px",opacity:showLabel?1:0,transform:showLabel?"translateX(0)":"translateX(8px)",transition:"max-width 0.4s cubic-bezier(0.4,0,0.2,1), padding-left 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease, transform 0.4s cubic-bezier(0.4,0,0.2,1)"}}>{label}</span>
+            <div style={{position:"absolute",bottom,right:24,zIndex:10,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+              <div
+                onClick={e=>playTrack(e,track)}
+                title={active ? `Pause ${label}` : `Play ${label}`}
+                style={{background:active?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.07)",border:`1px solid ${active?"rgba(255,255,255,0.35)":"rgba(255,255,255,0.13)"}`,borderRadius:20,padding:`5px ${showLabel?"12px":"8px"} 5px 8px`,display:"flex",alignItems:"center",gap:0,cursor:"pointer",overflow:"hidden",transition:"opacity 0.5s, background 0.3s, border-color 0.3s, padding 0.4s cubic-bezier(0.4,0,0.2,1)",opacity:showUI?(active?0.9:0.55):(active?0.35:0.08)}}
+              >
+                {active ? <IC.Pause s={11} c="rgba(255,255,255,0.85)"/> : <IC.Play s={11} c="rgba(255,255,255,0.75)"/>}
+                <span style={{fontSize:11,fontFamily:"system-ui",fontWeight:600,color:"rgba(255,255,255,0.8)",whiteSpace:"nowrap",overflow:"hidden",pointerEvents:"none",maxWidth:showLabel?"160px":"0px",paddingLeft:showLabel?"6px":"0px",opacity:showLabel?1:0,transform:showLabel?"translateX(0)":"translateX(8px)",transition:"max-width 0.4s cubic-bezier(0.4,0,0.2,1), padding-left 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease, transform 0.4s cubic-bezier(0.4,0,0.2,1)"}}>{label}</span>
+              </div>
+              {/* Seek/progress bar — only the active track, only while the UI is awake (fades out with the idle dark) */}
+              {active && (
+                <div
+                  onClick={seek}
+                  title="Seek"
+                  style={{width:160,height:4,borderRadius:2,background:"rgba(255,255,255,0.12)",overflow:"hidden",cursor:cursorVis?"pointer":"none",transition:"opacity 0.5s",opacity:showUI?0.85:0,pointerEvents:showUI?"auto":"none"}}
+                >
+                  <div style={{height:"100%",width:`${Math.max(0,Math.min(1,trackProg))*100}%`,background:"rgba(255,255,255,0.75)",borderRadius:2}}/>
+                </div>
+              )}
             </div>
           );
         };
