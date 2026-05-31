@@ -78,6 +78,68 @@ function SweepBar({ duration, getOffset, baseOpacity = 0.36, style }) {
   return <div ref={barRef} style={{ ...style, transformOrigin: "left center", transform: "scaleX(0)", opacity: 0 }} />;
 }
 
+// TimelineFace — cascading time-scale sweep bars, ordered finest→coarsest
+// (seconds → minute → hour → day → month → Hebrew year → English year).
+// Shared by the desktop clock "timeline" face, the desktop "▼ timeline"
+// expander, and the mobile time hero so all three stay identical.
+// compact=true renders just the bar rows (no header/border/date line).
+function TimelineFace({ nowDate, C, base = null, openMenu = null, compact = false }) {
+  const roshH = [
+    { y: 5785, d: new Date(2024, 9, 2) }, { y: 5786, d: new Date(2025, 8, 22) },
+    { y: 5787, d: new Date(2026, 8, 11) }, { y: 5788, d: new Date(2027, 9, 1) },
+    { y: 5789, d: new Date(2028, 8, 20) }, { y: 5790, d: new Date(2029, 8, 10) },
+  ];
+  let hYear = roshH[1].y, hYearFrac = 0;
+  for (let i = 0; i < roshH.length - 1; i++) {
+    if (nowDate >= roshH[i].d && nowDate < roshH[i + 1].d) {
+      hYear = roshH[i].y; hYearFrac = (nowDate - roshH[i].d) / (roshH[i + 1].d - roshH[i].d); break;
+    }
+  }
+  let hMonthName = String(hYear), hDay = "";
+  try {
+    const hParts = new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric', month: 'short' }).formatToParts(nowDate);
+    hMonthName = hParts.find(p => p.type === 'month')?.value || hMonthName;
+    hDay = hParts.find(p => p.type === 'day')?.value || "";
+  } catch {}
+  const gregYrStart = new Date(nowDate.getFullYear(), 0, 1);
+  const gregYrFrac = (nowDate - gregYrStart) / (new Date(nowDate.getFullYear() + 1, 0, 1) - gregYrStart);
+  const daysInMo = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate();
+  const dayFrac = (nowDate.getDate() - 1 + (nowDate.getHours() * 3600 + nowDate.getMinutes() * 60 + nowDate.getSeconds()) / 86400) / daysInMo;
+  const tlSweepOff = () => { const n = new Date(); return n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds() + n.getMilliseconds() / 1000; };
+  const rows = [
+    { lbl: `:${String(nowDate.getMinutes()).padStart(2, "0")}`,                        val: `${nowDate.getSeconds()}s`,                          frac: 0,         col: C.faint,  op: 0.50, dur: 60,    vw: 26 },
+    { lbl: `${nowDate.getHours() % 12 || 12}${nowDate.getHours() < 12 ? "am" : "pm"}`, val: `${nowDate.getMinutes()}m`,                          frac: 0,         col: C.faint,  op: 0.82, dur: 3600,  vw: 26 },
+    { lbl: nowDate.toLocaleDateString([], { weekday: "short" }),                       val: `${nowDate.getHours()}h`,                            frac: 0,         col: C.muted,  op: 0.60, dur: 86400, vw: 26 },
+    { lbl: nowDate.toLocaleDateString([], { month: "short" }),                         val: `${nowDate.getDate()}/${daysInMo}`,                  frac: dayFrac,   col: C.muted,  op: 0.78, dur: null,  vw: 26 },
+    { lbl: String(hYear),                                                              val: `${hDay} ${hMonthName}`.trim(),                      frac: hYearFrac, col: C.accent, op: 0.92, dur: null,  vw: 54 },
+    { lbl: String(nowDate.getFullYear()),                                              val: nowDate.toLocaleDateString([], { month: "short" }),  frac: gregYrFrac,col: C.accent, op: 0.56, dur: null,  vw: 26 },
+  ];
+  const mb = compact ? 7 : 9;
+  const bars = rows.map(({ lbl, val, frac, col, op, dur, vw }) => (
+    <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: mb, minWidth: 0 }}>
+      <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, letterSpacing: 0.3, fontFamily: NC_FONT_STACK, width: 38, textAlign: "right", flexShrink: 0, textTransform: "uppercase", lineHeight: 1 }}>{lbl}</span>
+      <div style={{ flex: 1, height: 2, borderRadius: 1, background: C.hover, overflow: "hidden", position: "relative", minWidth: 0 }}>
+        {dur ? (
+          <SweepBar duration={dur} baseOpacity={op} getOffset={tlSweepOff}
+            style={{ position: "absolute", inset: 0, borderRadius: 1, background: col }} />
+        ) : (
+          <div style={{ height: "100%", width: `${frac * 100}%`, borderRadius: 1, background: col, opacity: op, transition: "width 3s ease" }} />
+        )}
+      </div>
+      <span style={{ fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, width: vw, flexShrink: 0, textAlign: "right", letterSpacing: 0.2, lineHeight: 1 }}>{val}</span>
+    </div>
+  ));
+  if (compact) return <>{bars}</>;
+  return (
+    <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, background: C.bg, padding: "16px 10px 14px", alignItems: "stretch", gap: 0 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 14, textAlign: "center" }}>
+        {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+      </div>
+      {bars}
+    </div>
+  );
+}
+
 // SvgSweepHand — rAF-driven rotating second hand for analog clock SVGs.
 // Rotates an SVG <line> around (pivotX, pivotY); duration is full cycle in seconds.
 function SvgSweepHand({ x1, y1, x2, y2, pivotX = 50, pivotY = 50, duration = 60, stroke, strokeWidth = 1, opacity = 0.15 }) {
@@ -656,6 +718,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     setChiefProfileDraft(markdownFromChiefProfile(chiefProfile));
   }, [chiefProfile?.updatedAt]); // eslint-disable-line
   const [mobileMenuOpen, setMobileMenuOpen] = useState(null); // id of section whose ··· menu is open
+  const [mobileExpanded, setMobileExpanded] = useState(null); // id of the single expanded accordion section (Tasks is always open)
+  const [mobileTimelineOpen, setMobileTimelineOpen] = useState(false); // mobile hero timeline reveal
   const [phoneActivitySummary, setPhoneActivitySummary] = useState({ online: false, status: "DeskPhone offline", unreadTexts: 0, missedCalls: 0, voicemailCount: 0, texts: [], calls: [] });
   const phoneActivitySigRef = useRef("");
   const [phoneStatusSummary, setPhoneStatusSummary] = useState({ online: false, tone: "offline", label: "DeskPhone offline", voicemailCount: 0 });
@@ -1784,37 +1848,56 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const mobileMenuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
     const mobileMenuClose  = () => setMobileMenuOpen(null);
 
-    const MobileSection = ({ id, icon, title, accentColor, count, primaryBtn, menuItems, children }) => (
-      <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, overflow: "visible" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px 7px 12px", minHeight: 34 }}>
-          <span style={{ color: accentColor || C.muted, display: "flex", flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flex: 1, letterSpacing: 0.1 }}>{title}</span>
-          {count > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
-          {primaryBtn}
-          {menuItems?.length > 0 && (
-            <div style={{ position: "relative", flexShrink: 0 }}>
-              <button onClick={() => mobileMenuToggle(id)} style={gvIconButton({ width: 26, height: 26, color: C.faint }, C)} aria-label={`${title} menu`}>
-                {suiteIcon("more_vert", 13)}
-              </button>
-              {mobileMenuOpen === id && (
-                <>
-                  <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={mobileMenuClose} />
-                  <div style={{ position: "absolute", right: 0, top: 28, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, minWidth: 168, boxShadow: "0 6px 24px rgba(0,0,0,0.18)", overflow: "hidden" }}>
-                    {menuItems.map((item, i) => (
-                      <button key={i} onClick={() => { mobileMenuClose(); item.run?.(); }}
-                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "11px 14px", border: "none", borderBottom: i < menuItems.length - 1 ? `1px solid ${C.divider}` : "none", background: "transparent", color: C.text, cursor: "pointer", fontSize: 13, fontFamily: NC_FONT_STACK, textAlign: "left" }}>
-                        {suiteIcon(item.icon || "arrow_forward", 14)} {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
+    // Accordion section. `expandable` sections collapse to a one-line glance
+    // preview so every area's signal stays on one screen; tapping the header
+    // opens it (single-open). `keepMounted` hides via display so embedded
+    // pollers (Phone) keep running while collapsed.
+    const MobileSection = ({ id, icon, title, accentColor, count, primaryBtn, menuItems, preview, expandable = true, keepMounted = false, children }) => {
+      const expanded = !expandable || mobileExpanded === id;
+      return (
+        <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, overflow: "visible" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px 7px 12px", minHeight: 34 }}>
+            <button
+              onClick={expandable ? () => setMobileExpanded(prev => prev === id ? null : id) : undefined}
+              style={{ all: "unset", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0, cursor: expandable ? "pointer" : "default" }}
+              aria-expanded={expandable ? expanded : undefined}
+            >
+              <span style={{ color: accentColor || C.muted, display: "flex", flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0.1 }}>{title}</span>
+              {count > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
+              {expandable && !expanded && preview != null && (
+                <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{preview}</span>
               )}
-            </div>
-          )}
+              {expandable && (
+                <span style={{ marginLeft: "auto", color: C.faint, display: "flex", flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("expand_more", 16)}</span>
+              )}
+            </button>
+            {primaryBtn}
+            {menuItems?.length > 0 && (
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                <button onClick={() => mobileMenuToggle(id)} style={gvIconButton({ width: 26, height: 26, color: C.faint }, C)} aria-label={`${title} menu`}>
+                  {suiteIcon("more_vert", 13)}
+                </button>
+                {mobileMenuOpen === id && (
+                  <>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={mobileMenuClose} />
+                    <div style={{ position: "absolute", right: 0, top: 28, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, minWidth: 168, boxShadow: "0 6px 24px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+                      {menuItems.map((item, i) => (
+                        <button key={i} onClick={() => { mobileMenuClose(); item.run?.(); }}
+                          style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "11px 14px", border: "none", borderBottom: i < menuItems.length - 1 ? `1px solid ${C.divider}` : "none", background: "transparent", color: C.text, cursor: "pointer", fontSize: 13, fontFamily: NC_FONT_STACK, textAlign: "left" }}>
+                          {suiteIcon(item.icon || "arrow_forward", 14)} {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          {keepMounted ? <div style={{ display: expanded ? "block" : "none" }}>{children}</div> : (expanded && children)}
         </div>
-        {children}
-      </div>
-    );
+      );
+    };
 
     const fmtTimeM = (raw) => { try { const d = new Date(raw); const now = new Date(); return d.toDateString()===now.toDateString() ? d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : d.toLocaleDateString([],{month:"short",day:"numeric"}); } catch { return ""; } };
     const gmailHdr = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || "";
@@ -1830,17 +1913,27 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const hiddenMobileTasks = Math.max(0, primaryTaskQueue.length - taskMax);
 
     return (
-      <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflowY: "auto", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}`, WebkitOverflowScrolling: "touch" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 7, padding: "10px 10px 28px", boxSizing: "border-box" }}>
+      // height uses 100dvh (dynamic viewport) + safe-area padding so the iOS
+      // toolbar / home indicator never chops the last card off the bottom.
+      <div style={{ position: "fixed", top: topOffset, left: sidebarW, right: 0, height: `calc(100dvh - ${topOffset}px)`, zIndex: 7600, background: C.bg, overflowY: "auto", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}`, WebkitOverflowScrolling: "touch" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 7, padding: "10px 10px calc(34px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }}>
 
-          {/* Time strip */}
+          {/* Time strip — tap the time to reveal the timeline */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 2px 4px" }}>
-            <div>
+            <button onClick={() => setMobileTimelineOpen(o => !o)} style={{ all: "unset", display: "flex", alignItems: "baseline", gap: 10, minWidth: 0, cursor: "pointer" }} aria-expanded={mobileTimelineOpen} title="Show timeline">
               <span style={{ fontSize: 24, fontWeight: 300, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: -0.5 }}>{clockParts.timeMain}</span>
-              <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK, marginLeft: 10 }}>{nowDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
-            </div>
+              <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK }}>{nowDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
+              <span style={{ alignSelf: "center", color: C.faint, display: "flex", transform: mobileTimelineOpen ? "rotate(180deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("expand_more", 14)}</span>
+            </button>
             <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" style={gvIconButton({ width: 34, height: 34 }, C)}>{suiteIcon("apps", 16)}</button>
           </div>
+
+          {/* Timeline reveal (seconds → English year, with Hebrew date) */}
+          {mobileTimelineOpen && (
+            <div style={{ padding: "10px 12px 5px", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8 }}>
+              <TimelineFace nowDate={nowDate} C={C} compact />
+            </div>
+          )}
 
           {/* Health mini-strip */}
           <button onClick={onOpenHealth} style={{ display: "flex", alignItems: "center", gap: 12, padding: "7px 12px", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, cursor: "pointer", textAlign: "left", width: "100%", boxSizing: "border-box" }}>
@@ -1853,8 +1946,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             <span style={{ marginLeft: "auto", fontSize: 11, color: C.faint }}>↗</span>
           </button>
 
-          {/* Tasks */}
-          <MobileSection id="tasks" icon="task_alt" title="Tasks" count={primaryTaskQueue.length}
+          {/* Tasks — primary, always expanded */}
+          <MobileSection id="tasks" icon="task_alt" title="Tasks" count={primaryTaskQueue.length} expandable={false}
             primaryBtn={<button onClick={() => openTaskComposer(taskPriority)} style={gvIconButton({ width: 26, height: 26, color: C.muted }, C)} title="Add task">{suiteIcon("add", 14)}</button>}
             menuItems={[
               { icon: "list_alt",    label: "Open full queue", run: onOpenQueue },
@@ -1911,8 +2004,16 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Calendar */}
           {(googleToken || calendarEvents !== null) && (
             <MobileSection id="cal" icon="calendar_today" title="Calendar" accentColor={C.accent}
+              preview={(() => {
+                if (!calendarEvents) return "Loading…";
+                const up = calendarRows.filter(r => !r.past);
+                if (!up.length) return "Nothing upcoming";
+                const r = up[0];
+                const t = r.evt?.start?.date ? "All day" : new Date(r.evt?.start?.dateTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+                return `${t} · ${r.evt?.summary || "(no title)"}`;
+              })()}
               menuItems={[
-                { icon: "add",         label: "Add event",            run: () => setShowAddEvent(true) },
+                { icon: "add",         label: "Add event",            run: () => { setMobileExpanded("cal"); setShowAddEvent(true); } },
                 { icon: "refresh",     label: "Refresh",              run: onRefreshCalendar || onConnectGoogle },
                 { icon: "open_in_new", label: "Open Google Calendar", run: () => window.open("https://calendar.google.com/calendar/r","_blank") },
                 { icon: "link_off",    label: "Disconnect",           run: onDisconnectGoogle },
@@ -1953,6 +2054,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Gmail */}
           {(googleToken || gmailMessages !== null) && (
             <MobileSection id="mail" icon="mail" title="Mail" count={(gmailMessages||[]).length}
+              preview={(!gmailMessages || !gmailMessages.length) ? "Inbox clear" : `${fmtFromM(gmailHdr(gmailMessages[0], "From"))} · ${gmailMessages[0].aiSummary || decodeSnipM(gmailMessages[0].snippet) || gmailHdr(gmailMessages[0], "Subject") || "(no subject)"}`}
               menuItems={[
                 { icon: "refresh",     label: "Refresh",    run: onRefreshCalendar || onConnectGoogle },
                 { icon: "open_in_new", label: "Open Gmail", run: () => window.open("https://mail.google.com/mail/u/0/#inbox","_blank") },
@@ -1983,6 +2085,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
           {/* Shailos */}
           <MobileSection id="shailos" icon="rule" title="Shailos" accentColor={GOLD} count={visibleShailos.length}
+            preview={visibleShailos.length ? nerveDisplaySummary(visibleShailos[0], "Open shaila") : "None pending"}
             primaryBtn={<button onClick={onOpenShailaAdd} style={gvIconButton({width:26,height:26,color:GOLD},C)} title="Add shaila">{suiteIcon("add",14)}</button>}
             menuItems={[{ icon: "open_in_full", label: "Open Shailos", run: onOpenShailos }]}
           >
@@ -2009,8 +2112,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             )}
           </MobileSection>
 
-          {/* Phone */}
-          <MobileSection id="phone" icon="phone_in_talk" title="Phone"
+          {/* Phone — keepMounted so the DeskPhone poller keeps running while collapsed */}
+          <MobileSection id="phone" icon="phone_in_talk" title="Phone" keepMounted
+            preview={phoneStatusSummary?.label || "DeskPhone"}
             menuItems={[{ icon: "open_in_full", label: "Open phone view", run: onOpenPhone }]}
           >
             <div style={{ padding: "4px 12px 10px", borderTop: `1px solid ${C.divider}` }}>
@@ -2572,30 +2676,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 else if (wM < 50) { wL1 = "QUARTER TO";         wL2 = wNums[wNext]; }
                 else if (wM < 55) { wL1 = "TEN TO";             wL2 = wNums[wNext]; }
                 else              { wL1 = "FIVE TO";             wL2 = wNums[wNext]; }
-                // Timeline face: cascading time-scale sweep bars (seconds → minute → hour → day → month → Hebrew yr → English yr)
-                const roshH = [
-                  { y: 5785, d: new Date(2024, 9, 2) }, { y: 5786, d: new Date(2025, 8, 22) },
-                  { y: 5787, d: new Date(2026, 8, 11) }, { y: 5788, d: new Date(2027, 9, 1) },
-                  { y: 5789, d: new Date(2028, 8, 20) }, { y: 5790, d: new Date(2029, 8, 10) },
-                ];
-                let hYear = roshH[1].y, hYearFrac = 0;
-                for (let i = 0; i < roshH.length - 1; i++) {
-                  if (nowDate >= roshH[i].d && nowDate < roshH[i + 1].d) {
-                    hYear = roshH[i].y; hYearFrac = (nowDate - roshH[i].d) / (roshH[i + 1].d - roshH[i].d); break;
-                  }
-                }
-                let hMonthName = String(hYear), hDay = "";
-                try {
-                  const hParts = new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric', month: 'short' }).formatToParts(nowDate);
-                  hMonthName = hParts.find(p => p.type === 'month')?.value || hMonthName;
-                  hDay = hParts.find(p => p.type === 'day')?.value || "";
-                } catch {}
-                const gregYrStart = new Date(nowDate.getFullYear(), 0, 1);
-                const gregYrFrac = (nowDate - gregYrStart) / (new Date(nowDate.getFullYear() + 1, 0, 1) - gregYrStart);
-                const daysInMo = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate();
-                const dayFrac = (nowDate.getDate() - 1 + (nowDate.getHours() * 3600 + nowDate.getMinutes() * 60 + nowDate.getSeconds()) / 86400) / daysInMo;
-                const secOfDay = nowDate.getHours() * 3600 + nowDate.getMinutes() * 60 + nowDate.getSeconds();
-                const secOfHr = nowDate.getMinutes() * 60 + nowDate.getSeconds();
                 const faces = {
                   digital: (
                     <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, borderTop: `2px solid ${C.accent}`, background: C.bg, padding: "18px 8px 10px" }}>
@@ -2719,65 +2799,16 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       {secBar}
                     </div>
                   ),
-                  timeline: (
-                    <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, background: C.bg, padding: "16px 10px 14px", alignItems: "stretch", gap: 0 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 14, textAlign: "center" }}>
-                        {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
-                      </div>
-                      {[
-                        { lbl: `:${String(nowDate.getMinutes()).padStart(2, "0")}`,                                                              val: `${nowDate.getSeconds()}s`,                                             frac: 0,              col: C.faint,   op: 0.50, dur: 60,    off: nowDate.getSeconds(), rk: nowDate.getMinutes(), vw: 26 },
-                        { lbl: `${nowDate.getHours() % 12 || 12}${nowDate.getHours() < 12 ? "am" : "pm"}`,                                      val: `${nowDate.getMinutes()}m`,                                             frac: 0,              col: C.faint,   op: 0.82, dur: 3600,  off: secOfHr,   rk: nowDate.getHours(), vw: 26 },
-                        { lbl: nowDate.toLocaleDateString([], { weekday: "short" }),                                                             val: `${nowDate.getHours()}h`,                                               frac: 0,              col: C.muted,   op: 0.60, dur: 86400, off: secOfDay,  rk: nowDate.getDate(), vw: 26 },
-                        { lbl: nowDate.toLocaleDateString([], { month: "short" }),                                                               val: `${nowDate.getDate()}/${daysInMo}`,                                     frac: dayFrac,        col: C.muted,   op: 0.78, dur: null,  off: 0,         rk: 0, vw: 26 },
-                        { lbl: String(hYear),                                                                                                    val: `${hDay} ${hMonthName}`.trim(),                                         frac: hYearFrac,      col: C.accent,  op: 0.92, dur: null,  off: 0,         rk: 0, vw: 52 },
-                        { lbl: String(nowDate.getFullYear()),                                                                                    val: nowDate.toLocaleDateString([], { month: "short" }),                     frac: gregYrFrac,     col: C.accent,  op: 0.56, dur: null,  off: 0,         rk: 0, vw: 26 },
-                      ].map(({ lbl, val, frac, col, op, dur, off, rk, vw }) => (
-                        <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, minWidth: 0 }}>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, letterSpacing: 0.3, fontFamily: NC_FONT_STACK, width: 38, textAlign: "right", flexShrink: 0, textTransform: "uppercase", lineHeight: 1 }}>{lbl}</span>
-                          <div style={{ flex: 1, height: 2, borderRadius: 1, background: C.hover, overflow: "hidden", position: "relative", minWidth: 0 }}>
-                            {dur ? (
-                              <SweepBar duration={dur} baseOpacity={op}
-                                getOffset={() => { const n = new Date(); return n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds() + n.getMilliseconds() / 1000; }}
-                                style={{ position: "absolute", inset: 0, borderRadius: 1, background: col }} />
-                            ) : (
-                              <div style={{ height: "100%", width: `${frac * 100}%`, borderRadius: 1, background: col, opacity: op, transition: "width 3s ease" }} />
-                            )}
-                          </div>
-                          <span style={{ fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, width: vw, flexShrink: 0, textAlign: "right", letterSpacing: 0.2, lineHeight: 1 }}>{val}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ),
+                  timeline: <TimelineFace nowDate={nowDate} C={C} base={base} openMenu={openMenu} />,
                 };
                 const face = faces[clockStyle] || faces.digital;
-                const tlSweepOff = () => { const n = new Date(); return n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds() + n.getMilliseconds() / 1000; };
                 const toggleTimeline = () => { const next = !clockTimelineOpen; setClockTimelineOpen(next); try { localStorage.setItem("nc_clock_timeline", next ? "1" : "0"); } catch {} };
                 return (
                   <div className="nc-action-row" style={{ position: "relative" }}>
                     {face}
                     {clockTimelineOpen && (
-                      <div style={{ padding: "10px 10px 6px", borderTop: `1px solid ${C.divider}` }}>
-                        {[
-                          { lbl: String(hYear),                                                              val: hMonthName,                                               frac: hYearFrac,  col: C.accent, op: 0.92, dur: null },
-                          { lbl: String(nowDate.getFullYear()),                                             val: nowDate.toLocaleDateString([], { month: "short" }),        frac: gregYrFrac, col: C.accent, op: 0.56, dur: null },
-                          { lbl: nowDate.toLocaleDateString([], { month: "short" }),                       val: `${nowDate.getDate()}/${daysInMo}`,                        frac: dayFrac,    col: C.muted,  op: 0.78, dur: null },
-                          { lbl: nowDate.toLocaleDateString([], { weekday: "short" }),                     val: `${nowDate.getHours()}h`,                                  frac: 0,          col: C.muted,  op: 0.60, dur: 86400 },
-                          { lbl: `${nowDate.getHours() % 12 || 12}${nowDate.getHours() < 12 ? "am" : "pm"}`, val: `${nowDate.getMinutes()}m`,                             frac: 0,          col: C.faint,  op: 0.82, dur: 3600  },
-                          { lbl: `:${String(nowDate.getMinutes()).padStart(2, "0")}`,                       val: `${nowDate.getSeconds()}s`,                                frac: 0,          col: C.faint,  op: 0.50, dur: 60    },
-                        ].map(({ lbl, val, frac, col, op, dur }) => (
-                          <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, minWidth: 0 }}>
-                            <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, letterSpacing: 0.3, fontFamily: NC_FONT_STACK, width: 38, textAlign: "right", flexShrink: 0, textTransform: "uppercase", lineHeight: 1 }}>{lbl}</span>
-                            <div style={{ flex: 1, height: 2, borderRadius: 1, background: C.hover, overflow: "hidden", position: "relative", minWidth: 0 }}>
-                              {dur ? (
-                                <SweepBar duration={dur} baseOpacity={op} getOffset={tlSweepOff}
-                                  style={{ position: "absolute", inset: 0, borderRadius: 1, background: col }} />
-                              ) : (
-                                <div style={{ height: "100%", width: `${frac * 100}%`, borderRadius: 1, background: col, opacity: op, transition: "width 3s ease" }} />
-                              )}
-                            </div>
-                            <span style={{ fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, width: 26, flexShrink: 0, textAlign: "right", letterSpacing: 0.2, lineHeight: 1 }}>{val}</span>
-                          </div>
-                        ))}
+                      <div style={{ padding: "10px 10px 3px", borderTop: `1px solid ${C.divider}` }}>
+                        <TimelineFace nowDate={nowDate} C={C} compact />
                       </div>
                     )}
                     <button onClick={toggleTimeline} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "3px 0 4px", border: "none", background: "transparent", cursor: "pointer" }}>
