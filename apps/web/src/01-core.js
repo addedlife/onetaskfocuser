@@ -27,6 +27,22 @@ try {
     // by the self-resubscribing shaila listener in listenShailos() below.
     try { db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (_) {}
     db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+
+    // Android/iOS PWAs freeze backgrounded tabs; on resume the Firestore stream is
+    // often silently stale (alive but delivering no updates), which surfaces as
+    // "ultra-stale" data. Force a fresh connection when the app is foregrounded after
+    // being hidden a while, or when the network returns. disableNetwork→enableNetwork
+    // re-establishes the stream and flushes any queued writes.
+    let _hiddenSince = 0;
+    const _kickFirestore = () => { db.disableNetwork().then(() => db.enableNetwork()).catch(() => {}); };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") { _hiddenSince = Date.now(); return; }
+        if (_hiddenSince && Date.now() - _hiddenSince > 30000) _kickFirestore();
+        _hiddenSince = 0;
+      });
+    }
+    if (typeof window !== "undefined") window.addEventListener("online", _kickFirestore);
   }
 } catch(e) {}
 
@@ -710,7 +726,10 @@ const Store = {
         const changes = snap.docChanges().map(c => ({ type: c.type, id: c.doc.id }));
         snap.forEach(doc => shailos.push({ id: doc.id, ...doc.data() }));
         dlog("snapshot fired", { count: shailos.length, changes: changes.slice(0, 10), fromCache: snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites });
-        callback(shailos);
+        // Pass fromCache so the consumer can avoid destructive deletions off a cached
+        // (possibly stale/partial) snapshot — important now that this listener
+        // resubscribes and re-emits cache snapshots after a transport drop.
+        callback(shailos, snap.metadata.fromCache);
       }, err => {
         dlog("listener ERROR", { err: String(err?.message || err), attempt });
         console.warn("[Store] Shaila listener error — resubscribing:", err);
@@ -980,41 +999,82 @@ const Store = {
       return { ...settings, lists, _lsModified: Date.now() };
     };
 
-    // Listen to tasks collection
-    const unsubTasks = col.onSnapshot(snap => {
-      let changed = false;
-      snap.docChanges().forEach(change => {
-        if (change.type === "added" || change.type === "modified") {
-          taskCache.set(change.doc.id, change.doc.data());
-          changed = true;
-        } else if (change.type === "removed") {
-          taskCache.delete(change.doc.id);
-          changed = true;
+    // A Firestore onSnapshot listener is TERMINAL after its error callback fires — it
+    // never reconnects on its own. With the old empty error handlers, a single transport
+    // drop (backgrounded mobile PWA, WebChannel kill, flaky network) silently killed the
+    // task/settings stream, so the app froze on cached data ("ultra-stale") until a full
+    // reload. Resubscribe with capped exponential backoff so the stream self-heals.
+    let stopped = false;
+    let unsubTasks = null, unsubSettings = null;
+    let taskRetry = null, settRetry = null;
+    let taskAttempt = 0, settAttempt = 0;
+
+    const subscribeTasks = () => {
+      if (stopped) return;
+      unsubTasks = col.onSnapshot(snap => {
+        taskAttempt = 0; // healthy stream resets backoff
+        let changed = false;
+        snap.docChanges().forEach(change => {
+          if (change.type === "added" || change.type === "modified") {
+            taskCache.set(change.doc.id, change.doc.data());
+            changed = true;
+          } else if (change.type === "removed") {
+            taskCache.delete(change.doc.id);
+            changed = true;
+          }
+        });
+        if (changed && initialized) {
+          const newState = rebuild();
+          this._lastSavedState = JSON.parse(JSON.stringify(newState));
+          onUpdate(newState);
         }
+        if (!initialized && snap.size > 0) initialized = true;
+      }, err => {
+        console.warn("[Store] V5 task listener error — resubscribing:", err);
+        try { unsubTasks && unsubTasks(); } catch (_) {}
+        unsubTasks = null;
+        if (stopped) return;
+        const delay = Math.min(30000, 1000 * Math.pow(2, taskAttempt));
+        taskAttempt += 1;
+        taskRetry = setTimeout(subscribeTasks, delay);
       });
-      if (changed && initialized) {
-        const newState = rebuild();
-        this._lastSavedState = JSON.parse(JSON.stringify(newState));
-        onUpdate(newState);
-      }
-      if (!initialized && snap.size > 0) initialized = true;
-    }, () => {});
+    };
 
-    // Listen to settings document
-    const unsubSettings = settRef.onSnapshot(snap => {
-      if (!snap.exists) return;
-      const data = snap.data();
-      listMeta = data._lists || listMeta;
-      const { _lists, _lastModified, ...rest } = data;
-      settings = rest;
-      if (initialized) {
-        const newState = rebuild();
-        this._lastSavedState = JSON.parse(JSON.stringify(newState));
-        onUpdate(newState);
-      }
-    }, () => {});
+    const subscribeSettings = () => {
+      if (stopped) return;
+      unsubSettings = settRef.onSnapshot(snap => {
+        settAttempt = 0;
+        if (!snap.exists) return;
+        const data = snap.data();
+        listMeta = data._lists || listMeta;
+        const { _lists, _lastModified, ...rest } = data;
+        settings = rest;
+        if (initialized) {
+          const newState = rebuild();
+          this._lastSavedState = JSON.parse(JSON.stringify(newState));
+          onUpdate(newState);
+        }
+      }, err => {
+        console.warn("[Store] V5 settings listener error — resubscribing:", err);
+        try { unsubSettings && unsubSettings(); } catch (_) {}
+        unsubSettings = null;
+        if (stopped) return;
+        const delay = Math.min(30000, 1000 * Math.pow(2, settAttempt));
+        settAttempt += 1;
+        settRetry = setTimeout(subscribeSettings, delay);
+      });
+    };
 
-    return () => { unsubTasks(); unsubSettings(); };
+    subscribeTasks();
+    subscribeSettings();
+
+    return () => {
+      stopped = true;
+      if (taskRetry) clearTimeout(taskRetry);
+      if (settRetry) clearTimeout(settRetry);
+      try { unsubTasks && unsubTasks(); } catch (_) {}
+      try { unsubSettings && unsubSettings(); } catch (_) {}
+    };
   }
 };
 

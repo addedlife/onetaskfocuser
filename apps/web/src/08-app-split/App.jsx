@@ -931,7 +931,7 @@ function App({ user, onSignOut }) {
   // uT only sees active list, which caused duplicates when shaila tasks existed in other lists.
   useEffect(() => {
     if (!loaded || !db) return;
-    const unsub = Store.listenShailos((shailos) => {
+    const unsub = Store.listenShailos((shailos, fromCache = false) => {
       shailosRef.current = shailos; // keep ref current for combined backup
       setShailosSnapshot(shailos);
       setAS(prev => {
@@ -1003,12 +1003,17 @@ function App({ user, onSignOut }) {
           }
         });
 
-        // Detect deletions: tasks with shailaId no longer in shailos collection
-        allTasks.forEach(t => {
-          if (t.shailaId && !t.completed && !shailaIdSet.has(t.shailaId)) {
-            toDeleteIds.add(t.id);
-          }
-        });
+        // Detect deletions: tasks with shailaId no longer in shailos collection.
+        // Skip when the snapshot came from cache — a stale/partial cached snapshot
+        // (e.g. right after load, or on listener resubscribe) would otherwise wrongly
+        // delete shaila tasks whose docs simply haven't synced from the server yet.
+        if (!fromCache) {
+          allTasks.forEach(t => {
+            if (t.shailaId && !t.completed && !shailaIdSet.has(t.shailaId)) {
+              toDeleteIds.add(t.id);
+            }
+          });
+        }
 
         if (!toAdd.length && !toCompleteIds.size && !toDeleteIds.size) return prev;
 

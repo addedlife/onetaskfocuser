@@ -424,7 +424,7 @@ function stringifyAsciiJson(value) {
   );
 }
 
-async function postJson(host, path, payload) {
+async function postJson(host, path, payload, { timeoutMs = HOST_FETCH_TIMEOUT_MS } = {}) {
   const options = {
     method: "POST",
     cache: "no-store",
@@ -433,9 +433,21 @@ async function postJson(host, path, payload) {
     options.headers = { "Content-Type": "application/json" };
     options.body = stringifyAsciiJson(payload);
   }
-  const response = await fetch(`${host}${path}`, {
-    ...options,
-  });
+  // Mirror readJson(): abort on timeout so a hung DeskPhone can't freeze the UI on
+  // POST commands (dial, send, hang up, etc.) the way it previously could.
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller && typeof window !== "undefined"
+    ? window.setTimeout(() => controller.abort(), timeoutMs)
+    : null;
+  let response;
+  try {
+    response = await fetch(`${host}${path}`, { ...options, signal: controller?.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error(`${path} timed out`);
+    throw error;
+  } finally {
+    if (timer) window.clearTimeout(timer);
+  }
   if (!response.ok) throw new Error(`${path} returned ${response.status}`);
   const text = await response.text();
   if (!text) return {};

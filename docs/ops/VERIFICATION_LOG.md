@@ -1,5 +1,17 @@
 # Verification Log
 
+## 2026-06-01 Round 2 — Live-Listener Resilience, Backgrounded-PWA Staleness, Review Triage
+
+- Follow-up report: Android tablet task data still ultra-stale, shailos still not repopulating; requested a top-to-bottom review.
+- Found the real cause of persisting staleness: the task live-listener `_listenV5` (01-core.js) had an EMPTY error handler `}, () => {}` for BOTH the tasks and settings `onSnapshot` listeners — same terminal-listener bug as shailos, but only shailos was fixed in round 1. A transport drop (backgrounded mobile PWA, WebChannel kill) killed the task stream permanently → frozen on cached data. Fixed: both now resubscribe with capped exponential backoff; cleanup stops retries.
+- Added a foreground/online Firestore reconnect (01-core.js init): backgrounded mobile PWAs get a silently-stale stream on resume; `disableNetwork()→enableNetwork()` on `visibilitychange→visible` (after >30s hidden) and on `online` forces a fresh connection and flushes queued writes.
+- Closed a data-loss path amplified by round-1's resubscribe: the shaila→task sync (App.jsx ~1007) deleted tasks whose `shailaId` was absent from a snapshot; resubscribe re-emits CACHED snapshots, so a stale/partial cache could wrongly delete shaila tasks. Threaded `snap.metadata.fromCache` through `listenShailos` and now skip deletions on cached snapshots (server-confirmed only). This also fixes a pre-existing latent bug.
+- `postJson` (10-deskphone-web.jsx) had no timeout/abort (unlike `readJson`) — a hung DeskPhone froze the UI on POST commands. Added the same AbortController timeout (HOST_FETCH_TIMEOUT_MS).
+- Service worker `networkFirst` (public/sw.js) had no fetch timeout — slow/half-open connections hung navigation. Bounded to 6s, then cache fallback.
+- Reviewed broader agent findings and TRIAGED rather than blanket-applying (to avoid regressions): rejected the "cross-account localStorage leak" claim (lsKey is already UID-namespaced, 01-core.js:44) and the "conditional useEffect = hooks violation" claim (early return inside an effect body is legal). Deferred riskier/lower-value items (V5 `initialized` race rework, adoptedRemote re-entry, Shabbos DST math, relay backend hardening, IndexedDB quota handling) as they need targeted testing and were not the reported failure.
+- `npm run build` passed in `apps/web`; generated `assets/index-DK0tKNoa.js`; large-bundle warning remains. Markers verified in bundle: `resubscribing`, `disableNetwork`/`enableNetwork`, `timed out`, `fromCache`; `dist/sw.js` shows `onetask-offline-v2` with AbortController.
+- Pushed to `origin/main` per standing instruction.
+
 ## 2026-06-01 Firebase Reachability, Shailos Resilience, Mobile Menu, Login Error, Stale-Cache Purge
 
 - Reported regressions: Firebase not connecting / shailos empty (worked the prior day), Android installed app serving very stale data, mobile login broken, mobile Tasks ··· menu not working, and the NerveCenter Chief tile saying "quiet" when the phone is simply not connected.

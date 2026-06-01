@@ -25,7 +25,16 @@ async function cacheFirst(request) {
 async function networkFirst(request) {
   const cache = await caches.open(CACHE_NAME);
   try {
-    const response = await fetch(request);
+    // Bound the network wait so a slow/half-open connection can't hang navigation —
+    // fall back to cache after 6s instead of spinning indefinitely.
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 6000) : null;
+    let response;
+    try {
+      response = await fetch(request, controller ? { signal: controller.signal } : undefined);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
     if (response && response.ok) cache.put(request, response.clone());
     return response;
   } catch {
