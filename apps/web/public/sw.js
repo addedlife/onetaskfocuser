@@ -1,6 +1,6 @@
 // Bump this version whenever stale-asset purging is needed; the activate handler
 // deletes every cache that doesn't match, so installed PWAs drop old bundles on update.
-const CACHE_NAME = "onetask-offline-v2";
+const CACHE_NAME = "onetask-offline-v3";
 const STATIC_URLS = ["/", "/index.html", "/manifest.webmanifest"];
 
 function shouldRuntimeCache(request) {
@@ -55,6 +55,19 @@ self.addEventListener("activate", (event) => {
     caches.keys()
       .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
+      .then(async () => {
+        // Escape hatch for stale installed PWAs (Android resumes the old page without
+        // re-navigating, so it runs old code forever). When THIS newer worker activates,
+        // force every controlled window to navigate to fresh code. activate() only runs
+        // once per worker version, and the reload re-uses the already-active worker, so
+        // this can't loop.
+        try {
+          const clients = await self.clients.matchAll({ type: "window" });
+          for (const client of clients) {
+            if ("navigate" in client) { try { await client.navigate(client.url); } catch (_) {} }
+          }
+        } catch (_) {}
+      })
   );
 });
 

@@ -18,14 +18,12 @@ try {
   if (typeof firebase !== "undefined") {
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
-    // iOS Safari/Chrome — plus proxies, VPNs, and content blockers — intermittently
-    // kill Firestore's default WebChannel stream, surfacing as the recurring "can't
-    // reach Firebase" and leaving the app stuck on stale IndexedDB-cached data.
-    // Auto-detect transparently falls back to HTTP long-polling ONLY when streaming is
-    // blocked, so desktop keeps the fast WebChannel path while mobile stays reachable.
-    // The earlier regression (shailos vanishing on a transport hiccup) is now guarded
-    // by the self-resubscribing shaila listener in listenShailos() below.
-    try { db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (_) {}
+    // iOS works fine on WebChannel, but Android (and restrictive proxies/VPNs) keep
+    // killing it, leaving the app stuck on stale IndexedDB-cached data. Auto-detect was
+    // not reliably falling back, so FORCE long-polling: every client uses plain HTTP
+    // long-polling, which is the reliable transport everywhere. Slightly higher latency
+    // is an acceptable trade for data that actually stays fresh on Android.
+    try { db.settings({ experimentalForceLongPolling: true, merge: true }); } catch (_) {}
     db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 
     // Android/iOS PWAs freeze backgrounded tabs; on resume the Firestore stream is
