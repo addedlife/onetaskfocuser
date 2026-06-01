@@ -24,7 +24,28 @@ try {
     // long-polling, which is the reliable transport everywhere. Slightly higher latency
     // is an acceptable trade for data that actually stays fresh on Android.
     try { db.settings({ experimentalForceLongPolling: true, merge: true }); } catch (_) {}
-    db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+
+    // ?resetCache=1 — recovery hatch for a corrupted/stuck IndexedDB cache, a documented
+    // Firestore failure mode (firebase-js-sdk#8593) that serves stale/null docs forever
+    // with no other fix but wiping site data. clearPersistence() must run before
+    // enablePersistence() and before any listener attaches, so it's handled here first;
+    // we then reload without the flag into the normal path.
+    const _params = (typeof window !== "undefined") ? new URLSearchParams(window.location.search) : null;
+    if (_params && _params.get("resetCache") === "1") {
+      db.clearPersistence().catch(() => {}).then(() => {
+        try {
+          const u = new URL(window.location.href);
+          u.searchParams.delete("resetCache");
+          window.location.replace(u.toString());
+        } catch (_) { window.location.reload(); }
+      });
+    } else {
+      // Single-tab persistence (NOT synchronizeTabs). Multi-tab persistence is a
+      // documented source of stale-data emission — mutating from a non-leader tab makes
+      // Firestore emit correct→STALE→correct (firebase-js-sdk#6511). A phone/tablet PWA
+      // never needs cross-tab sync, so single-tab is both safer and best-practice here.
+      db.enablePersistence().catch(() => {});
+    }
 
     // Android/iOS PWAs freeze backgrounded tabs; on resume the Firestore stream is
     // often silently stale (alive but delivering no updates), which surfaces as
