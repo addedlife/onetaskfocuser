@@ -51,6 +51,7 @@ window.__OT_DEV_USER = window.__OT_DEV ? {
 function AuthGate() {
   const [authState, setAuthState] = React.useState(window.__OT_DEV ? "authed" : "loading");
   const [user, setUser] = React.useState(window.__OT_DEV_USER);
+  const [authError, setAuthError] = React.useState("");
 
   React.useEffect(() => {
     if (window.__OT_DEV) return;
@@ -76,9 +77,18 @@ function AuthGate() {
           }
         }
       } catch (e) {
-        // auth/unauthorized-domain etc. — fall through to onAuthStateChanged
+        // Redirect sign-in returned an error. This used to be logged only, so the user
+        // silently landed back on the login screen with no idea why. Surface the
+        // actionable cases (this is the likely "login is broken" report on mobile).
         if (e.code && e.code !== "auth/no-auth-event") {
           console.warn("[Auth] getRedirectResult error:", e.code);
+          if (e.code === "auth/unauthorized-domain") {
+            setAuthError("This domain isn't authorized for Google sign-in. Add it under Firebase → Authentication → Settings → Authorized domains, then try again.");
+          } else if (e.code === "auth/web-storage-unsupported" || e.code === "auth/operation-not-supported-in-this-environment") {
+            setAuthError("Your browser is blocking the storage Google sign-in needs (common in private mode or strict tracking prevention). Allow site data for this app, then try again — or sign in with a username and password.");
+          } else {
+            setAuthError(`Google sign-in didn't complete [${e.code}]. Try again, or use a username and password.`);
+          }
         }
       }
 
@@ -119,18 +129,18 @@ function AuthGate() {
   );
 
   if (authState === "anon") return (
-    <LoginScreen onLogin={u => { setUser(u); setAuthState("authed"); }} />
+    <LoginScreen onLogin={u => { setUser(u); setAuthState("authed"); }} initialError={authError} />
   );
 
   return <App user={user} onSignOut={() => firebase.auth().signOut()} />;
 }
 
 // ── Login / Sign-up screen ──────────────────────────────────────────────────
-function LoginScreen({ onLogin }) {
+function LoginScreen({ onLogin, initialError = "" }) {
   const [mode, setMode]         = React.useState("login"); // "login"|"signup"
   const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [err, setErr]           = React.useState("");
+  const [err, setErr]           = React.useState(initialError);
   const [loading, setLoading]   = React.useState(false);
   const [showPw, setShowPw]     = React.useState(false);
   const [staySignedIn, setStaySignedIn] = React.useState(_readStaySignedIn);

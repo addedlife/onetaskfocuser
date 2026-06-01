@@ -628,6 +628,61 @@ function buildChiefFallbackBrief(context = {}, suppressed = []) {
   };
 }
 
+// Mobile "nerve center" accordion section. Hoisted to module scope (NOT defined inside
+// NerveCenterPanel) so its component identity stays stable across renders — otherwise the
+// per-second clock re-render recreated the function, remounting every section and dropping
+// in-flight taps/keystrokes. `expandable` sections collapse to a one-line preview; tapping
+// the header opens one at a time. `keepMounted` hides via display:none so embedded pollers
+// (Phone) keep running while collapsed. State arrives via props (expandedId/menuId + the
+// on* callbacks) so React re-renders instead of remounting.
+function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuItems, preview, expandable = true, keepMounted = false, children, C, expandedId, menuId, onExpand, onMenuToggle, onMenuClose }) {
+  const expanded = !expandable || expandedId === id;
+  const menuOpen = menuId === id;
+  return (
+    <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, overflow: "visible" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px 7px 12px", minHeight: 34 }}>
+        <button
+          onClick={expandable ? () => onExpand(id) : undefined}
+          style={{ all: "unset", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0, cursor: expandable ? "pointer" : "default" }}
+          aria-expanded={expandable ? expanded : undefined}
+        >
+          <span style={{ color: accentColor || C.muted, display: "flex", flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0.1 }}>{title}</span>
+          {count > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
+          {expandable && !expanded && preview != null && (
+            <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{preview}</span>
+          )}
+          {expandable && (
+            <span style={{ marginLeft: "auto", color: C.faint, display: "flex", flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("expand_more", 16)}</span>
+          )}
+        </button>
+        {primaryBtn}
+        {menuItems?.length > 0 && (
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <button onClick={e => { e.stopPropagation(); onMenuToggle(id); }} style={gvIconButton({ width: 26, height: 26, color: C.faint }, C)} aria-label={`${title} menu`}>
+              {suiteIcon("more_vert", 13)}
+            </button>
+            {menuOpen && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={onMenuClose} />
+                <div style={{ position: "absolute", right: 0, top: 28, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, minWidth: 168, boxShadow: "0 6px 24px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+                  {menuItems.map((item, i) => (
+                    <button key={i} onClick={() => { onMenuClose(); item.run?.(); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "11px 14px", border: "none", borderBottom: i < menuItems.length - 1 ? `1px solid ${C.divider}` : "none", background: "transparent", color: C.text, cursor: "pointer", fontSize: 13, fontFamily: NC_FONT_STACK, textAlign: "left" }}>
+                      {suiteIcon(item.icon || "arrow_forward", 14)} {item.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+      {keepMounted ? <div style={{ display: expanded ? "block" : "none" }}>{children}</div> : (expanded && children)}
+    </div>
+  );
+}
+
 function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
   const viewportW = useViewportWidth();
   const [healthCardVisible, setHealthCardVisible] = useState(() => {
@@ -1635,7 +1690,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       ["Tasks", `${dueSignals.tasks} open`, "task_alt", dueSignals.tasks ? C.text : C.muted],
       ["Shailos", `${dueSignals.shailos} open`, "rule", dueSignals.shailos ? C.warning || C.accent : C.muted],
       ["Mail", dueSignals.mail ? `${dueSignals.mail} visible` : "clear", "mail", dueSignals.mail ? C.text : C.muted],
-      ["Phone", dueSignals.phone ? `${dueSignals.phone} signal${dueSignals.phone === 1 ? "" : "s"}` : "quiet", "smartphone", dueSignals.phone ? C.danger : C.muted],
+      ["Phone", dueSignals.phone ? `${dueSignals.phone} signal${dueSignals.phone === 1 ? "" : "s"}` : (phoneActivitySummary?.online ? "quiet" : "not connected"), "smartphone", dueSignals.phone ? C.danger : (phoneActivitySummary?.online ? C.muted : C.faint)],
     ];
     const chiefPri = gP(taskSuggestionPriorities, chiefTaskPriority || defaultSuggestionPriorityId);
     return (
@@ -1847,57 +1902,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   if (isStacked && !healthPage && !chiefPage) {
     const mobileMenuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
     const mobileMenuClose  = () => setMobileMenuOpen(null);
+    const mobileExpandToggle = id => setMobileExpanded(prev => prev === id ? null : id);
 
-    // Accordion section. `expandable` sections collapse to a one-line glance
-    // preview so every area's signal stays on one screen; tapping the header
-    // opens it (single-open). `keepMounted` hides via display so embedded
-    // pollers (Phone) keep running while collapsed.
-    const MobileSection = ({ id, icon, title, accentColor, count, primaryBtn, menuItems, preview, expandable = true, keepMounted = false, children }) => {
-      const expanded = !expandable || mobileExpanded === id;
-      return (
-        <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, overflow: "visible" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px 7px 12px", minHeight: 34 }}>
-            <button
-              onClick={expandable ? () => setMobileExpanded(prev => prev === id ? null : id) : undefined}
-              style={{ all: "unset", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0, cursor: expandable ? "pointer" : "default" }}
-              aria-expanded={expandable ? expanded : undefined}
-            >
-              <span style={{ color: accentColor || C.muted, display: "flex", flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0.1 }}>{title}</span>
-              {count > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
-              {expandable && !expanded && preview != null && (
-                <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{preview}</span>
-              )}
-              {expandable && (
-                <span style={{ marginLeft: "auto", color: C.faint, display: "flex", flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("expand_more", 16)}</span>
-              )}
-            </button>
-            {primaryBtn}
-            {menuItems?.length > 0 && (
-              <div style={{ position: "relative", flexShrink: 0 }}>
-                <button onClick={() => mobileMenuToggle(id)} style={gvIconButton({ width: 26, height: 26, color: C.faint }, C)} aria-label={`${title} menu`}>
-                  {suiteIcon("more_vert", 13)}
-                </button>
-                {mobileMenuOpen === id && (
-                  <>
-                    <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={mobileMenuClose} />
-                    <div style={{ position: "absolute", right: 0, top: 28, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, minWidth: 168, boxShadow: "0 6px 24px rgba(0,0,0,0.18)", overflow: "hidden" }}>
-                      {menuItems.map((item, i) => (
-                        <button key={i} onClick={() => { mobileMenuClose(); item.run?.(); }}
-                          style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "11px 14px", border: "none", borderBottom: i < menuItems.length - 1 ? `1px solid ${C.divider}` : "none", background: "transparent", color: C.text, cursor: "pointer", fontSize: 13, fontFamily: NC_FONT_STACK, textAlign: "left" }}>
-                          {suiteIcon(item.icon || "arrow_forward", 14)} {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-          {keepMounted ? <div style={{ display: expanded ? "block" : "none" }}>{children}</div> : (expanded && children)}
-        </div>
-      );
-    };
+    // Shared props for the module-level <MobileSection>. The component is hoisted out
+    // of this render (see top of file) so it is NOT recreated on every clock tick —
+    // that per-second remount was tearing down and rebuilding each section mid-gesture,
+    // which dropped taps on the ··· menu and reset focus in the task composer. With a
+    // stable component type React now just re-renders with fresh props.
+    const sectionCtx = { C, expandedId: mobileExpanded, menuId: mobileMenuOpen, onExpand: mobileExpandToggle, onMenuToggle: mobileMenuToggle, onMenuClose: mobileMenuClose };
 
     const fmtTimeM = (raw) => { try { const d = new Date(raw); const now = new Date(); return d.toDateString()===now.toDateString() ? d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : d.toLocaleDateString([],{month:"short",day:"numeric"}); } catch { return ""; } };
     const gmailHdr = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || "";
@@ -1947,7 +1959,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </button>
 
           {/* Tasks — primary, always expanded */}
-          <MobileSection id="tasks" icon="task_alt" title="Tasks" count={primaryTaskQueue.length} expandable={false}
+          <MobileSection {...sectionCtx} id="tasks" icon="task_alt" title="Tasks" count={primaryTaskQueue.length} expandable={false}
             primaryBtn={<button onClick={() => openTaskComposer(taskPriority)} style={gvIconButton({ width: 26, height: 26, color: C.muted }, C)} title="Add task">{suiteIcon("add", 14)}</button>}
             menuItems={[
               { icon: "list_alt",    label: "Open full queue", run: onOpenQueue },
@@ -2003,7 +2015,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
           {/* Calendar */}
           {(googleToken || calendarEvents !== null) && (
-            <MobileSection id="cal" icon="calendar_today" title="Calendar" accentColor={C.accent}
+            <MobileSection {...sectionCtx} id="cal" icon="calendar_today" title="Calendar" accentColor={C.accent}
               preview={(() => {
                 if (!calendarEvents) return "Loading…";
                 const up = calendarRows.filter(r => !r.past);
@@ -2053,7 +2065,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
           {/* Gmail */}
           {(googleToken || gmailMessages !== null) && (
-            <MobileSection id="mail" icon="mail" title="Mail" count={(gmailMessages||[]).length}
+            <MobileSection {...sectionCtx} id="mail" icon="mail" title="Mail" count={(gmailMessages||[]).length}
               preview={(!gmailMessages || !gmailMessages.length) ? "Inbox clear" : `${fmtFromM(gmailHdr(gmailMessages[0], "From"))} · ${gmailMessages[0].aiSummary || decodeSnipM(gmailMessages[0].snippet) || gmailHdr(gmailMessages[0], "Subject") || "(no subject)"}`}
               menuItems={[
                 { icon: "refresh",     label: "Refresh",    run: onRefreshCalendar || onConnectGoogle },
@@ -2084,7 +2096,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           )}
 
           {/* Shailos */}
-          <MobileSection id="shailos" icon="rule" title="Shailos" accentColor={GOLD} count={visibleShailos.length}
+          <MobileSection {...sectionCtx} id="shailos" icon="rule" title="Shailos" accentColor={GOLD} count={visibleShailos.length}
             preview={visibleShailos.length ? nerveDisplaySummary(visibleShailos[0], "Open shaila") : "None pending"}
             primaryBtn={<button onClick={onOpenShailaAdd} style={gvIconButton({width:26,height:26,color:GOLD},C)} title="Add shaila">{suiteIcon("add",14)}</button>}
             menuItems={[{ icon: "open_in_full", label: "Open Shailos", run: onOpenShailos }]}
@@ -2113,7 +2125,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileSection>
 
           {/* Phone — keepMounted so the DeskPhone poller keeps running while collapsed */}
-          <MobileSection id="phone" icon="phone_in_talk" title="Phone" keepMounted
+          <MobileSection {...sectionCtx} id="phone" icon="phone_in_talk" title="Phone" keepMounted
             preview={phoneStatusSummary?.label || "DeskPhone"}
             menuItems={[{ icon: "open_in_full", label: "Open phone view", run: onOpenPhone }]}
           >

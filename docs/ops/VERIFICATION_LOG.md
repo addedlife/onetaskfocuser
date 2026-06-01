@@ -1,6 +1,14 @@
 # Verification Log
 
-## 2026-05-10
+## 2026-06-01 Firebase Reachability, Shailos Resilience, Mobile Menu, Login Error, Stale-Cache Purge
+
+- Reported regressions: Firebase not connecting / shailos empty (worked the prior day), Android installed app serving very stale data, mobile login broken, mobile Tasks ··· menu not working, and the NerveCenter Chief tile saying "quiet" when the phone is simply not connected.
+- Confirmed `origin/main` == working branch HEAD (`423bb90`), so the prior long-polling revert is live; today's breakage is device-side reachability, not the reverted init.
+- Root-cause map: (a) iOS/Android WebChannel transport gets killed → "can't reach Firebase" + Firestore serves stale IndexedDB cache; (b) `listenShailos` onSnapshot is terminal on error and never resubscribed, and shailos have no localStorage fallback, so one transport drop empties the lane permanently; (c) service worker `cacheFirst` assets never purged (static `CACHE_NAME`); (d) mobile `MobileSection` was defined inside render → recreated every clock tick → remount dropped taps/keystrokes (broken ··· menu + task composer focus loss); (e) mobile `signInWithRedirect` errors were only `console.warn`-ed, leaving the user on a silent login screen; (f) Chief snapshot tile showed "quiet" regardless of phone connectivity.
+- Fixes (apps/web): `01-core.js` re-added `db.settings({ experimentalAutoDetectLongPolling: true, merge: true })` (desktop keeps WebChannel, blocked networks fall back to long-polling) and rewrote `listenShailos` to self-resubscribe with capped exponential backoff so a transport hiccup can't empty shailos; `public/sw.js` bumped `CACHE_NAME` to `onetask-offline-v2` so installed PWAs purge stale bundles on activate; `NerveCenterPanel.jsx` hoisted `MobileSection` to module scope (state via props) so it re-renders instead of remounting, and made the Phone Chief tile read `phoneActivitySummary.online` → "not connected" vs "quiet"; `00-auth.jsx` surfaces redirect sign-in errors (`unauthorized-domain`, `web-storage-unsupported`, generic) to the LoginScreen instead of swallowing them.
+- `npm run build` passed in `apps/web`; generated `assets/index-DEkOnu5N.js`; existing large-bundle warning remains. `dist/sw.js` shows `onetask-offline-v2`. Bundle marker check found `experimentalAutoDetectLongPolling`, `resubscribe`, `not connected`, `isn't authorized for Google sign-in`, and `expandedId`.
+- `git diff --check` clean. Pushed to branch `claude/firebase-shailos-debug-Zm62h` (NOT main — needs merge to main for Netlify to deploy).
+- Action item NOT fixable in code: the default `*.firebaseapp.com` authDomain + Safari/iOS tracking-prevention is the likely deeper mobile-login blocker; verify `onetaskfocuser.netlify.app` and `onetaskonly-app.firebaseapp.com` are in Firebase → Auth → Settings → Authorized domains. On-device verification of mobile menu/login still required (cannot reproduce iOS/Android from CI container).
 
 ### `apps/web`
 

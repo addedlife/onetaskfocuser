@@ -1,4 +1,6 @@
-const CACHE_NAME = "onetask-offline-v1";
+// Bump this version whenever stale-asset purging is needed; the activate handler
+// deletes every cache that doesn't match, so installed PWAs drop old bundles on update.
+const CACHE_NAME = "onetask-offline-v2";
 const STATIC_URLS = ["/", "/index.html", "/manifest.webmanifest"];
 
 function shouldRuntimeCache(request) {

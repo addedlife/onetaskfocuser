@@ -18,6 +18,14 @@ try {
   if (typeof firebase !== "undefined") {
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
+    // iOS Safari/Chrome — plus proxies, VPNs, and content blockers — intermittently
+    // kill Firestore's default WebChannel stream, surfacing as the recurring "can't
+    // reach Firebase" and leaving the app stuck on stale IndexedDB-cached data.
+    // Auto-detect transparently falls back to HTTP long-polling ONLY when streaming is
+    // blocked, so desktop keeps the fast WebChannel path while mobile stays reachable.
+    // The earlier regression (shailos vanishing on a transport hiccup) is now guarded
+    // by the self-resubscribing shaila listener in listenShailos() below.
+    try { db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (_) {}
     db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
   }
 } catch(e) {}
@@ -683,17 +691,45 @@ const Store = {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source: "fe:shailaListener", msg, data }),
     }).catch(() => {});
-    dlog("subscribed");
-    return col.onSnapshot(snap => {
-      const shailos = [];
-      const changes = snap.docChanges().map(c => ({ type: c.type, id: c.doc.id }));
-      snap.forEach(doc => shailos.push({ id: doc.id, ...doc.data() }));
-      dlog("snapshot fired", { count: shailos.length, changes: changes.slice(0, 10), fromCache: snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites });
-      callback(shailos);
-    }, err => {
-      dlog("listener ERROR", { err: String(err?.message || err) });
-      console.warn("[Store] Shaila listener error:", err);
-    });
+    // A Firestore onSnapshot listener is TERMINAL after its error callback fires — it
+    // never reconnects on its own. Shailos have no localStorage fallback (unlike tasks),
+    // so a single transport drop (iOS WebChannel kill, VPN, flaky network) used to empty
+    // the shailos lane permanently until a full page reload. Tear down and resubscribe
+    // with capped exponential backoff so the lane self-heals.
+    let stopped = false;
+    let unsub = null;
+    let retryTimer = null;
+    let attempt = 0;
+
+    const subscribe = () => {
+      if (stopped) return;
+      dlog(attempt ? `resubscribe #${attempt}` : "subscribed");
+      unsub = col.onSnapshot(snap => {
+        attempt = 0; // a healthy snapshot resets the backoff
+        const shailos = [];
+        const changes = snap.docChanges().map(c => ({ type: c.type, id: c.doc.id }));
+        snap.forEach(doc => shailos.push({ id: doc.id, ...doc.data() }));
+        dlog("snapshot fired", { count: shailos.length, changes: changes.slice(0, 10), fromCache: snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites });
+        callback(shailos);
+      }, err => {
+        dlog("listener ERROR", { err: String(err?.message || err), attempt });
+        console.warn("[Store] Shaila listener error — resubscribing:", err);
+        try { unsub && unsub(); } catch (_) {}
+        unsub = null;
+        if (stopped) return;
+        const delay = Math.min(30000, 1000 * Math.pow(2, attempt));
+        attempt += 1;
+        retryTimer = setTimeout(subscribe, delay);
+      });
+    };
+
+    subscribe();
+
+    return () => {
+      stopped = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      try { unsub && unsub(); } catch (_) {}
+    };
   },
 
   // ── Extract settings fields from AS (everything except lists and tasks) ──
