@@ -1764,13 +1764,18 @@ async function aiParseShailos(text, aiOpts) {
   const job = await runAIJob("shaila.parse.simple.v1", { transcript: text }, aiOpts, { genConfig: { temperature: 0.1 } });
   const items = Array.isArray(job?.output) ? job.output : [];
   if (!items.length) throw new Error("no shailos parsed");
-  return items.filter(i => i?.shaila?.trim()).map(i => ({
-    id: uid(),
-    shaila: i.shaila.trim(),
-    answer: i.answer ? i.answer.trim() : null,
-    askedBy: i.askedBy ? i.askedBy.trim() : null,
-    answeredBy: i.answeredBy ? i.answeredBy.trim() : null,
-  }));
+  // Coerce every field to a string before trimming — the model occasionally returns a
+  // number/null for a field, and calling .trim() on that used to crash the whole parse.
+  const str = v => (v == null ? "" : String(v)).trim();
+  return items
+    .map(i => ({
+      id: uid(),
+      shaila: str(i?.shaila),
+      answer: str(i?.answer) || null,
+      askedBy: str(i?.askedBy) || null,
+      answeredBy: str(i?.answeredBy) || null,
+    }))
+    .filter(i => i.shaila);
 }
 
 // Generate new calm color schemes via Gemini

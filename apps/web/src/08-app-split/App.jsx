@@ -1488,10 +1488,19 @@ function App({ user, onSignOut }) {
     const approved = (items || []).filter(item => String(item?.text || "").trim());
     const scheduleItems = approved.filter(item => (item.cat || "tasks") === "scheduleItems");
     const taskItems = approved.filter(item => (item.cat || "tasks") === "tasks");
+    let scheduleFailures = 0;
     for (const item of scheduleItems) {
-      const eventBody = await aiParseCalendarEvent(scheduleItemDescription(item), aiOpts);
-      await createGoogleCalendarEvent(eventBody);
+      // Per-item guard: one bad parse/create must not abort the whole batch or
+      // leave the rest of the approved items silently dropped.
+      try {
+        const eventBody = await aiParseCalendarEvent(scheduleItemDescription(item), aiOpts);
+        await createGoogleCalendarEvent(eventBody);
+      } catch (e) {
+        scheduleFailures += 1;
+        console.warn("[ZenDump] schedule item failed:", e?.message || e);
+      }
     }
+    if (scheduleFailures) showToast(`${scheduleFailures} schedule item${scheduleFailures > 1 ? "s" : ""} couldn't be added`, 3500);
     if (scheduleItems.length) setCalendarRefreshKey(k => k + 1);
     if (taskItems.length) {
       const activePris = pris.filter(p=>!p.deleted).sort((a,b)=>a.weight-b.weight);
@@ -2008,9 +2017,15 @@ function App({ user, onSignOut }) {
   async function manOpt() {
     if (hasAI && actT.length >= 3) {
       setOptLoading(true);
-      const optimized = await aiOptTasks(tasks, pris, aiOpts);
-      uT(() => optimized);
-      setOptLoading(false);
+      try {
+        const optimized = await aiOptTasks(tasks, pris, aiOpts);
+        uT(() => optimized);
+      } catch (e) {
+        // Never leave the spinner stuck if the AI reorder fails.
+        showToast("Reorder failed — try again", 2500);
+      } finally {
+        setOptLoading(false);
+      }
     } else {
       uT(ts => doOpt(ts));
     }

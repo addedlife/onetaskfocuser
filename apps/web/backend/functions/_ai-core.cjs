@@ -1545,7 +1545,10 @@ async function callGemini({ body, prompt, base64, mimeType, model, genConfig, cr
 
 function maxOutputTokensFrom(genConfig = {}, fallback = 4096) {
   const value = Number.parseInt(genConfig.maxOutputTokens || genConfig.max_output_tokens || genConfig.max_tokens || "", 10);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
+  // Cap client-supplied token counts so a bad/hostile config can't run up cost.
+  const MAX_ALLOWED = 32768;
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  return Math.min(value, MAX_ALLOWED);
 }
 
 async function callOpenAI({ body, prompt, model, genConfig }) {
@@ -1559,14 +1562,24 @@ async function callOpenAI({ body, prompt, model, genConfig }) {
     max_output_tokens: maxOutputTokensFrom(genConfig, 4096),
   };
 
-  const r = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(requestBody),
-  });
+  // Bound the request like callGeminiOnce does — without this a hung OpenAI endpoint
+  // hangs the whole Netlify function.
+  const controller = new AbortController();
+  const fetchTimeout = setTimeout(() => controller.abort(), 2 * 60 * 1000);
+  let r;
+  try {
+    r = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(fetchTimeout);
+  }
   const data = await r.json().catch(() => ({}));
   if (!r.ok || data.error) {
     throw httpError(r.status || 502, data?.error?.message || r.statusText || "OpenAI API error", retryAfterSeconds(r.headers, data));
@@ -1586,19 +1599,27 @@ async function callClaude({ body, prompt, model, genConfig }) {
   if (!apiKey) throw httpError(500, "ANTHROPIC_API_KEY not configured in Netlify env vars");
 
   const input = prompt || geminiBodyToPrompt(body);
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxOutputTokensFrom(genConfig, 4096),
-      messages: [{ role: "user", content: input }],
-    }),
-  });
+  const controller = new AbortController();
+  const fetchTimeout = setTimeout(() => controller.abort(), 2 * 60 * 1000);
+  let r;
+  try {
+    r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxOutputTokensFrom(genConfig, 4096),
+        messages: [{ role: "user", content: input }],
+      }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(fetchTimeout);
+  }
   const data = await r.json().catch(() => ({}));
   if (!r.ok || data.error) {
     throw httpError(r.status || 502, data?.error?.message || r.statusText || "Claude API error", retryAfterSeconds(r.headers, data));
@@ -1701,7 +1722,13 @@ async function runAiJobPayload(payload = {}) {
         model: aiResult.model,
       });
       const repairedText = cleanString(repaired.text || "", 100000);
-      parsed = parseJsonOutput(repairedText, job.shape);
+      // Guard the second parse: if even the repaired output is invalid JSON, return a
+      // clear 422 instead of throwing an opaque 500 from the catch block.
+      try {
+        parsed = parseJsonOutput(repairedText, job.shape);
+      } catch (repairParseError) {
+        throw httpError(422, `AI job '${jobId}' returned invalid JSON even after repair: ${repairParseError?.message || repairParseError}`);
+      }
       output = job.validate ? job.validate(parsed, input) : parsed;
       return {
         job: jobId,
