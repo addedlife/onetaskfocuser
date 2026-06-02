@@ -1274,7 +1274,7 @@ const AI_JOB_REGISTRY = {
         `Search results:\n${truncateText(input.articlesText, 24000)}`,
         "For each search result produce two parallel arrays:",
         "articleSourceLabels: a short attribution label — the organization name and/or author (e.g. 'OU (Rabbi Hauer)', 'Star-K', 'Halachipedia', 'Chabad.org', 'Rabbi Falk on Ohr Olam') — 2–5 words max.",
-        "articleSummaries: one plain sentence stating what that source says about this shaila (e.g. 'rules the bracha is ha-eitz'). Do NOT repeat the source name in the summary — it will appear as the link label. Leave both as empty strings for articles irrelevant to the shaila.",
+        "articleSummaries: one plain sentence stating what that source says about this shaila (e.g. 'rules the bracha is ha-eitz'). CRITICAL: do NOT start with the source name or 'states that' — begin directly with the ruling (e.g. 'Rules the bracha is ha-eitz', not 'Star-K rules...'). Leave both as empty strings for articles irrelevant to the shaila.",
         "Indexes must match: articleSourceLabels[0] and articleSummaries[0] both describe result [1], etc.",
         responseJsonInstruction("object", this.schema),
       ]);

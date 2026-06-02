@@ -218,12 +218,11 @@ export async function performResearch(shaila: string) {
   const parsed = await runAiJob("shaila.research_summarize_sources.v1", { shaila, articlesText }, "research");
   if (!parsed?.articleSummaries?.length) throw new Error("No research data generated from search results.");
 
-  // Build output — document all search queries used, then list each source with what it says
+  // Build output — searched queries header, then one source per bullet (label + finding on two lines)
   const lines: string[] = [
     `*Searched: ${queries.join(" · ")}*`,
     "",
-    "---",
-    "**Sources found:**",
+    "## Sources",
     "",
   ];
 
@@ -237,11 +236,12 @@ export async function performResearch(shaila: string) {
     const sourceLabel = parsed.articleSourceLabels?.[i]?.trim() || (() => {
       try { return new URL(r.link).hostname.replace(/^www\./, ''); } catch { return r.title.substring(0, 35); }
     })();
-    lines.push(`- [${sourceLabel}](${url}) — ${summary}`);
+    // Two-line bullet: bold link on first line, finding on second (soft break = two spaces + newline)
+    lines.push(`- **[${sourceLabel}](${url})**  \n  ${summary}`);
   }
 
   if (parsed.seforim?.length) {
-    lines.push("", "**Seforim mentioned:**", "");
+    lines.push("", "## Seforim", "");
     for (const s of parsed.seforim) {
       const deepLink = buildSeferiaDeepLink(s.name, s.location);
       const link = deepLink || buildSeferiaSearchLink(s.name, s.location);

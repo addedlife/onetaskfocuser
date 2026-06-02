@@ -1464,40 +1464,48 @@ function AppContent() {
                             Redo Research
                           </Button>
                         </div>
-                        <div className="bg-white rounded-xl border border-indigo-100 p-5">
+                        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                           <ReactMarkdown
                             components={{
+                              // "Searched: ..." italic line at top
                               p: ({ children }) => (
-                                <p className="text-xs mb-3 leading-relaxed">{children}</p>
+                                <p className="text-[11px] text-slate-400 px-5 pt-4 pb-2 leading-relaxed">{children}</p>
                               ),
                               em: ({ children }) => (
-                                <em className="text-slate-400 not-italic">{children}</em>
+                                <em className="not-italic">{children}</em>
                               ),
-                              strong: ({ children }) => (
-                                <strong className="text-[10px] font-extrabold text-slate-500 uppercase tracking-[0.1em]">
-                                  {children}
-                                </strong>
+                              // "## Sources" / "## Seforim" section dividers
+                              h2: ({ children }) => (
+                                <div className="px-5 pt-4 pb-2 border-t border-slate-100 first:border-0">
+                                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-[0.12em]">{children}</span>
+                                </div>
                               ),
-                              hr: () => <hr className="border-slate-100 my-3" />,
+                              hr: () => null,
                               ul: ({ children }) => (
-                                <ul className="flex flex-col gap-3 mb-4">{children}</ul>
+                                <ul className="divide-y divide-slate-100">{children}</ul>
                               ),
+                              // Each bullet: bold link on line 1, finding on line 2
                               li: ({ children }) => (
-                                <li className="flex items-baseline gap-2.5">
-                                  <span className="text-indigo-300 text-sm leading-none select-none flex-shrink-0">•</span>
-                                  <span className="text-sm text-slate-700 leading-relaxed">{children}</span>
+                                <li className="flex gap-3 px-5 py-3.5 items-start">
+                                  <span className="text-indigo-300 mt-[3px] text-[10px] select-none flex-shrink-0">●</span>
+                                  <span className="text-sm text-slate-700 leading-snug">{children}</span>
                                 </li>
                               ),
+                              // Bold wrapper around the link — passthrough so link styles dominate
+                              strong: ({ children }) => <>{children}</>,
+                              // The clickable source label
                               a: ({ href, children }) => (
                                 <a
                                   href={href}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="font-semibold text-indigo-700 underline underline-offset-[3px] decoration-indigo-300 hover:text-indigo-900 hover:decoration-indigo-600 transition-colors"
+                                  className="font-semibold text-indigo-700 underline underline-offset-2 decoration-indigo-200 hover:text-indigo-900 hover:decoration-indigo-500 transition-colors"
                                 >
                                   {children}
                                 </a>
                               ),
+                              // Soft break separates link line from finding line
+                              br: () => <span className="block mt-1 mb-0" />,
                             }}
                           >
                             {selectedShaila.researchReport}
