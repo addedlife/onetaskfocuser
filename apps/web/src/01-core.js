@@ -461,9 +461,16 @@ const Store = {
     const ref = this.docRef();
     if (!ref || !db) return;
     const hasTasks = s?.lists?.some(l => l.tasks?.length > 0);
-    if (!hasTasks && this._fbLoadStatus !== 'ok' && this._fbLoadStatus !== 'empty') {
-      console.log("[Store] Skipping blank-state save — protecting existing data");
-      return;
+    if (!hasTasks) {
+      // Catastrophic-delete guard: never wipe tasks that were present in last save
+      if (this._lastSavedState?.lists?.some(l => l.tasks?.length > 0)) {
+        console.warn("[Store] CATASTROPHIC DELETE BLOCKED (V4 path) — refusing to overwrite tasks with empty state");
+        return;
+      }
+      if (this._fbLoadStatus !== 'ok' && this._fbLoadStatus !== 'empty') {
+        console.log("[Store] Skipping blank-state save — protecting existing data");
+        return;
+      }
     }
     try {
       const localTs = s._lsModified || Date.now();
@@ -954,11 +961,19 @@ const Store = {
     const settRef = this.settingsDoc();
     if (!col || !settRef) return;
 
-    // SAFETY: never save blank state
+    // SAFETY: catastrophic-delete guard
     const hasTasks = s?.lists?.some(l => l.tasks?.length > 0);
-    if (!hasTasks && this._fbLoadStatus !== 'ok' && this._fbLoadStatus !== 'empty') {
-      console.log("[Store] V5: Skipping blank-state save");
-      return;
+    if (!hasTasks) {
+      // Never wipe tasks that were present when we last saved
+      if (this._lastSavedState?.lists?.some(l => l.tasks?.length > 0)) {
+        console.warn("[Store] V5: CATASTROPHIC DELETE BLOCKED — refusing to overwrite tasks with empty state");
+        return;
+      }
+      // Never save empty state if we haven't confirmed the Firebase load status
+      if (this._fbLoadStatus !== 'ok' && this._fbLoadStatus !== 'empty') {
+        console.log("[Store] V5: Skipping blank-state save");
+        return;
+      }
     }
 
     try {
@@ -1017,20 +1032,25 @@ const Store = {
   },
 
   // ── V5 collection listener — returns unsubscribe function ──
-  // Instead of listening to ONE document, listens to the tasks COLLECTION.
-  // Each change is a single task add/modify/remove — surgical, not a blob replace.
+  // Listens to the tasks COLLECTION (not a single document). Each change is
+  // a single task add/modify/remove — surgical, not a blob replace.
+  // Self-healing: a Firestore onSnapshot listener is terminal after its error
+  // callback fires. We resubscribe with exponential backoff so a transport drop
+  // (backgrounded PWA, flaky network) doesn't silently kill the stream forever.
   _listenV5(onUpdate) {
     const col = this.tasksCol();
     const settRef = this.settingsDoc();
     if (!col || !settRef) return () => {};
 
-    // Maintain an in-memory cache of all tasks
     const taskCache = new Map();
     let settings = {};
     let listMeta = [{ id: "default", name: "My Tasks", order: 0 }];
     let initialized = false;
+    let stopped = false;
+    let unsubTasks = null, unsubSettings = null;
+    let taskRetry = null, settRetry = null;
+    let taskAttempt = 0, settAttempt = 0;
 
-    // Helper: reconstruct AS from cache
     const rebuild = () => {
       const lists = listMeta
         .sort((a, b) => (a.order || 0) - (b.order || 0))
@@ -1043,16 +1063,6 @@ const Store = {
         }));
       return { ...settings, lists, _lsModified: Date.now() };
     };
-
-    // A Firestore onSnapshot listener is TERMINAL after its error callback fires — it
-    // never reconnects on its own. With the old empty error handlers, a single transport
-    // drop (backgrounded mobile PWA, WebChannel kill, flaky network) silently killed the
-    // task/settings stream, so the app froze on cached data ("ultra-stale") until a full
-    // reload. Resubscribe with capped exponential backoff so the stream self-heals.
-    let stopped = false;
-    let unsubTasks = null, unsubSettings = null;
-    let taskRetry = null, settRetry = null;
-    let taskAttempt = 0, settAttempt = 0;
 
     const subscribeTasks = () => {
       if (stopped) return;
@@ -1069,12 +1079,15 @@ const Store = {
             changed = true;
           }
         });
-        if (changed && initialized) {
+        const wasInitialized = initialized;
+        // Always mark initialized after first snapshot, even if collection is empty,
+        // so subsequent real changes are not silently dropped.
+        initialized = true;
+        if (changed && wasInitialized) {
           const newState = rebuild();
           this._lastSavedState = JSON.parse(JSON.stringify(newState));
           onUpdate(newState);
         }
-        if (!initialized && snap.size > 0) initialized = true;
       }, err => {
         console.warn("[Store] V5 task listener error — resubscribing:", err);
         try { unsubTasks && unsubTasks(); } catch (_) {}
@@ -1116,8 +1129,7 @@ const Store = {
 
     return () => {
       stopped = true;
-      if (taskRetry) clearTimeout(taskRetry);
-      if (settRetry) clearTimeout(settRetry);
+      clearTimeout(taskRetry); clearTimeout(settRetry);
       try { unsubTasks && unsubTasks(); } catch (_) {}
       try { unsubSettings && unsubSettings(); } catch (_) {}
     };

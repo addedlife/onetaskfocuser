@@ -333,12 +333,14 @@ function App({ user, onSignOut }) {
         }
         const fused = {...defS, ...localData, _lsModified: Date.now()};
         lastSavedModified.current = fused._lsModified;
+        justLoaded.current = true;
         setAS(fused);
         setLoaded(true);
         return;
       }
 
       // Genuinely new account or no data anywhere
+      justLoaded.current = true;
       setAS({...defS, priorities: ensureBeforeShavuosPriority(defS.priorities)}); setLoaded(true);
     });
   }, []);
