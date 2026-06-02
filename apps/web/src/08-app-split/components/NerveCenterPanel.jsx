@@ -101,6 +101,19 @@ function TimelineFace({ nowDate, C, base = null, openMenu = null, compact = fals
     hMonthName = hParts.find(p => p.type === 'month')?.value || hMonthName;
     hDay = hParts.find(p => p.type === 'day')?.value || "";
   } catch {}
+  // Day-of-month within the current Hebrew month + that month's length (29 or 30
+  // days). Lets the dedicated month row (e.g. "Sivan") show a real progress bar
+  // for where we are inside the month, separate from the year row.
+  const hDayNum = parseInt(hDay, 10) || 1;
+  let hMonthLen = 30;
+  try {
+    const monthShortOf = d => new Intl.DateTimeFormat('en-u-ca-hebrew', { month: 'short' }).formatToParts(d).find(p => p.type === 'month')?.value;
+    const probe = new Date(nowDate);
+    probe.setDate(probe.getDate() - (hDayNum - 1) + 29); // the would-be 30th of this Hebrew month
+    hMonthLen = monthShortOf(probe) === hMonthName ? 30 : 29;
+  } catch {}
+  const hTimeOfDayFrac = (nowDate.getHours() * 3600 + nowDate.getMinutes() * 60 + nowDate.getSeconds()) / 86400;
+  const hMonthFrac = (hDayNum - 1 + hTimeOfDayFrac) / hMonthLen;
   const gregYrStart = new Date(nowDate.getFullYear(), 0, 1);
   const gregYrFrac = (nowDate - gregYrStart) / (new Date(nowDate.getFullYear() + 1, 0, 1) - gregYrStart);
   const daysInMo = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate();
@@ -111,7 +124,8 @@ function TimelineFace({ nowDate, C, base = null, openMenu = null, compact = fals
     { lbl: `${nowDate.getHours() % 12 || 12}${nowDate.getHours() < 12 ? "am" : "pm"}`, val: `${nowDate.getMinutes()}m`,                          frac: 0,         col: C.faint,  op: 0.82, dur: 3600,  vw: 26 },
     { lbl: nowDate.toLocaleDateString([], { weekday: "short" }),                       val: `${nowDate.getHours()}h`,                            frac: 0,         col: C.muted,  op: 0.60, dur: 86400, vw: 26 },
     { lbl: nowDate.toLocaleDateString([], { month: "short" }),                         val: `${nowDate.getDate()}/${daysInMo}`,                  frac: dayFrac,   col: C.muted,  op: 0.78, dur: null,  vw: 26 },
-    { lbl: String(hYear),                                                              val: `${hDay} ${hMonthName}`.trim(),                      frac: hYearFrac, col: C.accent, op: 0.92, dur: null,  vw: 54 },
+    { lbl: String(hYear),                                                              val: hMonthName,                                          frac: hYearFrac, col: C.accent, op: 0.92, dur: null,  vw: 26 },
+    { lbl: hMonthName,                                                                 val: `${hDayNum}/${hMonthLen}`,                           frac: hMonthFrac,col: C.accent, op: 0.74, dur: null,  vw: 26 },
     { lbl: String(nowDate.getFullYear()),                                              val: nowDate.toLocaleDateString([], { month: "short" }),  frac: gregYrFrac,col: C.accent, op: 0.56, dur: null,  vw: 26 },
   ];
   const mb = compact ? 7 : 9;

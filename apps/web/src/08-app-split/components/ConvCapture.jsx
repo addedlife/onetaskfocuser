@@ -4,14 +4,19 @@ import { deletePendingRecording, savePendingRecording, transcribePendingRecordin
 import { NC_FONT_STACK } from '../ui-tokens.jsx';
 
 function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalendar, tasks, shailos, pris, aiOpts, T, callMode=false }) {
-  // callMode starts in 'ready' phase (waiting for user to share screen)
-  const [phase, setPhase] = useState(callMode ? 'ready' : 'recording');
+  // callMode (phone call)  → 'ready' phase (waiting for user to share screen).
+  // mic mode ("Record anything") → 'choose' phase so the user can pick between
+  // their microphone or capturing another screen's/app's audio output.
+  const [phase, setPhase] = useState(callMode ? 'ready' : 'choose');
   const [liveText, setLiveText] = useState('');
   const [items, setItems] = useState([]);
   const [err, setErr] = useState('');
   const [applying, setApplying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const phaseRef = useRef(callMode ? 'ready' : 'recording');
+  // Tracks which source the current recording is using ('mic' | 'system'),
+  // so the recording UI and transcription label can reflect it.
+  const [source, setSource] = useState(callMode ? 'system' : 'mic');
+  const phaseRef = useRef(callMode ? 'ready' : 'choose');
   const streamRef = useRef(null);
   const mediaRecRef = useRef(null);
   const chunksRef = useRef([]);
@@ -55,9 +60,13 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
     elapsedTmrRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
   }
 
-  // Mic mode: start recording immediately on mount
-  useEffect(() => {
-    if (callMode) return; // call mode waits for user gesture (startCallCapture)
+  // Mic capture: triggered when the user picks "My microphone" on the choose
+  // screen (or immediately in legacy flows). Records the user's own voice via
+  // getUserMedia and live-transcribes with the browser's SpeechRecognition.
+  function startMicCapture() {
+    setErr('');
+    setSource('mic');
+    goPhase('recording');
     chunksRef.current = [];
     segBufRef.current = '';
     liveRef.current = '';
@@ -81,7 +90,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       try { r.start(); } catch(_) {}
     }
 
-    const t = setTimeout(async () => {
+    setTimeout(async () => {
       if (phaseRef.current !== 'recording') return;
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -89,9 +98,11 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
         startMediaRecorder(stream);
       } catch(_) { setErr('Mic permission denied. Enable mic and try again.'); }
     }, 300);
+  }
 
+  // Unmount cleanup — always tear down recognizer, recorder, stream and timers.
+  useEffect(() => {
     return () => {
-      clearTimeout(t);
       clearInterval(elapsedTmrRef.current);
       if (recogRef.current) { try { recogRef.current.onend = null; recogRef.current.abort(); } catch(_) {} }
       if (mediaRecRef.current && mediaRecRef.current.state !== 'inactive') { try { mediaRecRef.current.stop(); } catch(_) {} }
@@ -99,9 +110,12 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
     };
   }, []); // eslint-disable-line
 
-  // Call mode: triggered by user clicking "Start capturing"
+  // System-audio capture: triggered by "Start capturing" (call mode) or by
+  // picking "Other screen's audio" on the choose screen. Captures another
+  // tab/window/app's audio output via getDisplayMedia — no mic involved.
   async function startCallCapture() {
     setErr('');
+    setSource('system');
     try {
       const displayStream = await navigator.mediaDevices.getDisplayMedia({
         audio: { echoCancellation: false, noiseSuppression: false, sampleRate: 44100 },
@@ -110,7 +124,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       const audioTracks = displayStream.getAudioTracks();
       if (!audioTracks.length) {
         displayStream.getTracks().forEach(t => t.stop());
-        setErr('No audio captured. Make sure to check "Share tab audio" in the browser dialog.');
+        setErr('No audio captured. Make sure to check "Share tab/system audio" in the browser dialog.');
         return;
       }
       // Stop the video track immediately — we only need audio
@@ -142,9 +156,9 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       let transcript = webSpeechText;
 
       if (webmBlob.size >= 500 && aiOpts) {
-        pending = await savePendingRecording(webmBlob, callMode ? 'conversation_call' : 'conversation_mic', {
+        pending = await savePendingRecording(webmBlob, source === 'system' ? 'conversation_call' : 'conversation_mic', {
           source: 'main',
-          label: callMode ? 'Conversation call capture' : 'Conversation mic capture',
+          label: source === 'system' ? 'Conversation system-audio capture' : 'Conversation mic capture',
         });
         // If Gemini transcription fails, fall back to Web Speech text — never kill the whole flow
         try {
@@ -160,7 +174,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       }
 
       if (!transcript.trim()) {
-        setErr(callMode ? 'No audio was captured from the call. Make sure audio was playing and you checked "Share tab audio".' : 'Nothing was captured. Check mic permissions and try again.');
+        setErr(source === 'system' ? 'No audio was captured. Make sure audio was playing and you checked "Share tab/system audio".' : 'Nothing was captured. Check mic permissions and try again.');
         setItems([]);
         goPhase('review');
         return;
@@ -267,6 +281,40 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
   const cardS    = { background: T.card, borderRadius: 16, maxWidth: 560, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', fontFamily: 'inherit' };
   const btnClose = { background: 'none', border: 'none', cursor: 'pointer', color: T.tFaint, fontSize: 22, lineHeight: 1, padding: 4, fontFamily: NC_FONT_STACK };
 
+  // ── Choose source: mic vs. another screen's audio ─────────────────────────
+  if (phase === 'choose') return (
+    <div style={overlayS} onClick={onClose}>
+      <div style={cardS} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '22px 24px 18px', borderBottom: `1px solid ${T.brd}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <span style={{ fontSize: 18, fontWeight: 500, color: T.t }}>Record anything</span>
+            <button style={btnClose} onClick={onClose}>×</button>
+          </div>
+          <div style={{ fontSize: 14, color: T.tSoft, fontFamily: NC_FONT_STACK, lineHeight: 1.55 }}>
+            What should I listen to?
+          </div>
+          {err && <div style={{ fontSize: 13, color: T.danger, fontFamily: NC_FONT_STACK, marginTop: 10 }}>{err}</div>}
+        </div>
+        <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <button onClick={startMicCapture} style={{ display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', background: T.bgW, border: `1px solid ${T.brd}`, borderRadius: 12, padding: '14px 16px', cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+            <span style={{ fontSize: 22 }}>🎤</span>
+            <span style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: 14, fontWeight: 500, color: T.t }}>My microphone</span>
+              <span style={{ fontSize: 12, color: T.tFaint }}>Record what you say out loud</span>
+            </span>
+          </button>
+          <button onClick={startCallCapture} style={{ display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', background: T.bgW, border: `1px solid ${T.brd}`, borderRadius: 12, padding: '14px 16px', cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+            <span style={{ fontSize: 22 }}>🔊</span>
+            <span style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: 14, fontWeight: 500, color: T.t }}>Another screen's audio</span>
+              <span style={{ fontSize: 12, color: T.tFaint }}>Capture a tab/window/app's sound — check "Share audio" in the dialog</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   // ── Call mode: waiting for user to share screen ───────────────────────────
   if (phase === 'ready') return (
     <div style={overlayS} onClick={onClose}>
@@ -301,13 +349,13 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       <div style={cardS} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '22px 24px 18px', borderBottom: `1px solid ${T.brd}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <span style={{ fontSize: 18, fontWeight: 500, color: T.t }}>{callMode ? 'Capturing Call Audio' : 'Recording Conversation'}</span>
+            <span style={{ fontSize: 18, fontWeight: 500, color: T.t }}>{source === 'system' ? 'Capturing Screen Audio' : 'Recording Conversation'}</span>
             <button style={btnClose} onClick={onClose}>×</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <div style={{ width: 10, height: 10, borderRadius: '50%', background: T.danger, animation: 'conv-pulse 1.4s ease infinite' }}/>
             <span style={{ fontSize: 13, color: T.tSoft, fontFamily: NC_FONT_STACK, fontVariantNumeric: 'tabular-nums' }}>{fmtElapsed}</span>
-            <span style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Speak freely — AI will extract everything</span>
+            <span style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK }}>{source === 'system' ? 'Listening to the shared audio — AI will extract everything' : 'Speak freely — AI will extract everything'}</span>
           </div>
           {liveText && (
             <div style={{ fontSize: 13, color: T.tFaint, fontFamily: NC_FONT_STACK, lineHeight: 1.5, maxHeight: 72, overflowY: 'auto', background: T.bgW, borderRadius: 8, padding: '8px 12px', border: `1px solid ${T.brdS}` }}>
