@@ -1265,19 +1265,24 @@ const AI_JOB_REGISTRY = {
     output: "json",
     shape: "object",
     genConfig: { temperature: 0, maxOutputTokens: 4096 },
-    schema: '{"articleSummaries":["source says..."],"articleHighlights":["short phrase"],"seforim":[{"name":"Shulchan Aruch OC","location":"451:1"}]}',
+    schema: '{"articleSourceLabels":["OU (Rabbi Hauer)"],"articleSummaries":["rules the bracha is ha-eitz"],"articleHighlights":["short phrase"],"seforim":[{"name":"Shulchan Aruch OC","location":"451:1"}]}',
     buildPrompt(input = {}) {
       return compactLines([
         YESHIVISH_SYSTEM,
         "You are a research assistant finding sources for a posek. Report only what each article says. Do not draw conclusions, synthesize, or add your own reasoning.",
         `Shaila: "${cleanString(input.shaila, 1200)}"`,
         `Search results:\n${truncateText(input.articlesText, 24000)}`,
+        "For each search result produce two parallel arrays:",
+        "articleSourceLabels: a short attribution label — the organization name and/or author (e.g. 'OU (Rabbi Hauer)', 'Star-K', 'Halachipedia', 'Chabad.org', 'Rabbi Falk on Ohr Olam') — 2–5 words max.",
+        "articleSummaries: one plain sentence stating what that source says about this shaila (e.g. 'rules the bracha is ha-eitz'). Do NOT repeat the source name in the summary — it will appear as the link label. Leave both as empty strings for articles irrelevant to the shaila.",
+        "Indexes must match: articleSourceLabels[0] and articleSummaries[0] both describe result [1], etc.",
         responseJsonInstruction("object", this.schema),
       ]);
     },
     validate(value) {
       const o = ensureObject(value);
       return {
+        articleSourceLabels: normalizeStringArray(o.articleSourceLabels || [], 40, 60),
         articleSummaries: normalizeStringArray(o.articleSummaries || [], 40, 1000),
         articleHighlights: normalizeStringArray(o.articleHighlights || [], 40, 120),
         seforim: ensureArray(o.seforim || []).map(s => ({

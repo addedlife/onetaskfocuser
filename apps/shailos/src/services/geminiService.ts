@@ -234,7 +234,10 @@ export async function performResearch(shaila: string) {
     const phrase = parsed.articleHighlights?.[i]?.trim();
     // Text Fragment API: #:~:text=phrase scrolls browser to that text on the page
     const url = phrase ? `${r.link}#:~:text=${encodeURIComponent(phrase)}` : r.link;
-    lines.push(`- [${r.title}](${url}) — ${summary}`);
+    const sourceLabel = parsed.articleSourceLabels?.[i]?.trim() || (() => {
+      try { return new URL(r.link).hostname.replace(/^www\./, ''); } catch { return r.title.substring(0, 35); }
+    })();
+    lines.push(`- [${sourceLabel}](${url}) — ${summary}`);
   }
 
   if (parsed.seforim?.length) {
