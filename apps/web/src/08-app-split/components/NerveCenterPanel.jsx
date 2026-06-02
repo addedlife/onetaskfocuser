@@ -123,9 +123,9 @@ function TimelineFace({ nowDate, C, base = null, openMenu = null, compact = fals
     { lbl: `:${String(nowDate.getMinutes()).padStart(2, "0")}`,                        val: `${nowDate.getSeconds()}s`,                          frac: 0,         col: C.faint,  op: 0.50, dur: 60,    vw: 26 },
     { lbl: `${nowDate.getHours() % 12 || 12}${nowDate.getHours() < 12 ? "am" : "pm"}`, val: `${nowDate.getMinutes()}m`,                          frac: 0,         col: C.faint,  op: 0.82, dur: 3600,  vw: 26 },
     { lbl: nowDate.toLocaleDateString([], { weekday: "short" }),                       val: `${nowDate.getHours()}h`,                            frac: 0,         col: C.muted,  op: 0.60, dur: 86400, vw: 26 },
-    { lbl: nowDate.toLocaleDateString([], { month: "short" }),                         val: `${nowDate.getDate()}/${daysInMo}`,                  frac: dayFrac,   col: C.muted,  op: 0.78, dur: null,  vw: 26 },
-    { lbl: String(hYear),                                                              val: hMonthName,                                          frac: hYearFrac, col: C.accent, op: 0.92, dur: null,  vw: 26 },
     { lbl: hMonthName,                                                                 val: `${hDayNum}/${hMonthLen}`,                           frac: hMonthFrac,col: C.accent, op: 0.74, dur: null,  vw: 26 },
+    { lbl: String(hYear),                                                              val: hMonthName,                                          frac: hYearFrac, col: C.accent, op: 0.92, dur: null,  vw: 26 },
+    { lbl: nowDate.toLocaleDateString([], { month: "short" }),                         val: `${nowDate.getDate()}/${daysInMo}`,                  frac: dayFrac,   col: C.muted,  op: 0.78, dur: null,  vw: 26 },
     { lbl: String(nowDate.getFullYear()),                                              val: nowDate.toLocaleDateString([], { month: "short" }),  frac: gregYrFrac,col: C.accent, op: 0.56, dur: null,  vw: 26 },
   ];
   const mb = compact ? 7 : 9;
