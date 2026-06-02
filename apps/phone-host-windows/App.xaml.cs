@@ -2,6 +2,7 @@ using System.Windows;
 using DeskPhone.ViewModels;
 using System.IO;
 using System.Runtime.InteropServices;
+using Microsoft.Toolkit.Uwp.Notifications;
 
 namespace DeskPhone;
 
@@ -12,6 +13,14 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         SetCurrentProcessExplicitAppUserModelID(AppUserModelId);
+
+        // Register the toast-notification activation handler BEFORE any toasts are shown.
+        // ToastNotificationManagerCompat registers a COM activator in HKCU on first call so
+        // that Windows routes "background" activation (reply button, quick-reply chips) back
+        // into THIS running process — no window opens, no shell launch, completely silent.
+        ToastNotificationManagerCompat.OnActivated += toastArgs =>
+            Current.Dispatcher.Invoke(() => GetViewModel()?.HandleToastActivation(toastArgs));
+
         base.OnStartup(e);
 
         // Wire up process-exit hooks so BT is disconnected cleanly even on

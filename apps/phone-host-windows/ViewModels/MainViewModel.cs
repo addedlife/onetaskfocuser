@@ -1,6 +1,7 @@
 using DeskPhone.Models;
 using DeskPhone.Services;
 using InTheHand.Net;
+using Microsoft.Toolkit.Uwp.Notifications;
 using System.IO;
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
@@ -1362,7 +1363,92 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             _notif.ShowVoicemail(GetMessageSenderDisplay(message), message.PreviewBody);
         }
         else
-            _notif.ShowNewMessage(GetMessageSenderDisplay(message), message.PreviewBody);
+            _notif.ShowNewMessage(
+                GetMessageSenderDisplay(message),
+                message.NormalizedPhone ?? message.From ?? "",
+                message.PreviewBody);
+    }
+
+    // ── Toast notification activation ─────────────────────────────────────
+    // Called by App.xaml.cs via ToastNotificationManagerCompat.OnActivated.
+    // Fires on the UI dispatcher thread, already dispatched by App.xaml.cs.
+    // Handles: reply (free-text), quickreply (chip tap), openphone (body/Open click).
+    public void HandleToastActivation(ToastNotificationActivatedEventArgsCompat e)
+    {
+        var args = ToastArguments.Parse(e.Argument ?? "");
+        if (!args.TryGetValue("action", out var action)) return;
+
+        switch (action)
+        {
+            case "reply":
+            {
+                // "Send" button — phone number in args, typed text in UserInput
+                args.TryGetValue("phone", out var phone);
+                e.UserInput.TryGetValue("replyInput", out var inputObj);
+                var body = inputObj?.ToString();
+                if (!string.IsNullOrWhiteSpace(phone) && !string.IsNullOrWhiteSpace(body))
+                    _ = SendMessageFromNotificationAsync(Uri.UnescapeDataString(phone), body);
+                break;
+            }
+            case "quickreply":
+            {
+                // Quick-reply chip — both phone and body are in args
+                args.TryGetValue("phone", out var phone);
+                args.TryGetValue("body",  out var body);
+                if (!string.IsNullOrWhiteSpace(phone) && !string.IsNullOrWhiteSpace(body))
+                    _ = SendMessageFromNotificationAsync(
+                            Uri.UnescapeDataString(phone),
+                            Uri.UnescapeDataString(body));
+                break;
+            }
+            case "openphone":
+                OpenShamashPhonePage();
+                break;
+        }
+    }
+
+    private void OpenShamashPhonePage()
+    {
+        try
+        {
+            // Opens the OneTask/Shamash web app at the phone/messages view.
+            // ?view=deskphone is parsed by getInitialSuiteView() in the web app.
+            Process.Start(new ProcessStartInfo(
+                "http://127.0.0.1:3002/?view=deskphone") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            AppendDebug($"[NOTIF] Could not open OneTask phone page: {ex.Message}");
+        }
+    }
+
+    private async Task SendMessageFromNotificationAsync(string phone, string body)
+    {
+        if (_map == null || !_map.IsConnected)
+        {
+            AppendDebug("[NOTIF REPLY] MAP not connected — reply discarded");
+            return;
+        }
+        try
+        {
+            var ok = await _map.SendMessageAsync(phone, body, ct: _sessionCts.Token);
+            AppendDebug(ok
+                ? $"[NOTIF REPLY] Sent to {phone}: {body}"
+                : $"[NOTIF REPLY] Send failed for {phone}");
+            if (ok)
+            {
+                // Refresh so the sent bubble appears in the conversation list
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(1500, _sessionCts.Token);
+                    await RefreshMessagesAsync();
+                }, _sessionCts.Token);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendDebug($"[NOTIF REPLY] Error: {ex.Message}");
+        }
     }
 
     private void HandlePhoneIndicator(string indicatorName, int value)
@@ -2971,14 +3057,11 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 Application.Current.MainWindow.Activate();
             }
         });
+        // Balloon tip click is now only used for CALL notifications (incoming/missed).
+        // Message notifications use Windows Toast and are handled by HandleToastActivation.
+        // Clicking a call balloon → open DeskPhone to handle the call.
         _notif.OnBalloonTipClicked += () => Dispatch(() =>
         {
-            if (Application.Current.MainWindow is DeskPhone.MainWindow window &&
-                window.OpenMessageBannerTarget(showCompose: false))
-            {
-                return;
-            }
-
             Application.Current.MainWindow?.Show();
             if (Application.Current.MainWindow != null)
             {
@@ -5700,8 +5783,14 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                                 Dispatch(() =>
                                 {
                                     MarkIncomingUnread(fromPhone);
+                                    // Only notify for messages that are UNREAD on the phone.
+                                    // Without the !m.IsRead guard, messages that arrived while
+                                    // DeskPhone was closed but were already read elsewhere
+                                    // (phone, other device) would still fire a Windows alert
+                                    // on every reconnect — which is what caused the "always
+                                    // sends an alert upon open" bug.
                                     var newestIncoming = fromPhone
-                                        .Where(m => !m.IsSent && ShouldSurfaceConversationAlert(m.NormalizedPhone))
+                                        .Where(m => !m.IsSent && !m.IsRead && ShouldSurfaceConversationAlert(m.NormalizedPhone))
                                         .OrderByDescending(m => m.Timestamp)
                                         .FirstOrDefault();
                                     if (newestIncoming != null)
@@ -5989,7 +6078,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                     {
                         MarkIncomingUnread(fromPhone);
                         var newestIncoming = fromPhone
-                            .Where(m => !m.IsSent && ShouldSurfaceConversationAlert(m.NormalizedPhone))
+                            .Where(m => !m.IsSent && !m.IsRead && ShouldSurfaceConversationAlert(m.NormalizedPhone))
                             .OrderByDescending(m => m.Timestamp)
                             .FirstOrDefault();
                         if (newestIncoming != null)

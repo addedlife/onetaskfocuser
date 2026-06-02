@@ -1,6 +1,7 @@
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using System.Drawing;
+using Microsoft.Toolkit.Uwp.Notifications;
 
 // Alias Windows.Forms types to avoid ambiguity with System.Windows.Application
 using WinForms = System.Windows.Forms;
@@ -8,8 +9,12 @@ using WinForms = System.Windows.Forms;
 namespace DeskPhone.Services;
 
 /// <summary>
-/// Handles system-tray balloon tips, ringtone playback, and SMS chimes.
-/// Uses Windows Forms NotifyIcon (project has UseWindowsForms=true).
+/// Handles Windows Toast notifications (interactive, with quick-reply), system-tray
+/// balloon tips for calls, ringtone playback, and SMS chimes.
+///
+/// SMS/MMS notifications use Windows 10/11 Toast so the user can reply directly from
+/// the notification without opening any app.  Call alerts still use balloon tips
+/// because they fire while a call is in-progress and need the lightweight path.
 /// </summary>
 public class NotificationService : IDisposable
 {
@@ -57,12 +62,48 @@ public class NotificationService : IDisposable
         _tray.ShowBalloonTip(3000, "DeskPhone", "Call ended",
             WinForms.ToolTipIcon.None);
 
-    // ── SMS notification ──────────────────────────────────────────────────
-    public void ShowNewMessage(string from, string preview)
+    // ── SMS notification — Windows 10/11 interactive Toast ───────────────
+    // Clicking the notification body → opens OneTask phone page (handled by
+    //   HandleToastActivation in MainViewModel via action=openphone).
+    // "Send" button → sends the typed reply silently in DeskPhone (background activation).
+    // Quick-reply chips → send predefined responses silently.
+    public void ShowNewMessage(string from, string phone, string preview)
     {
-        var text = string.IsNullOrWhiteSpace(preview) ? "Photo" : preview;
-        _tray.ShowBalloonTip(15000, $"Message from {from}", text,
-            WinForms.ToolTipIcon.Info);
+        try
+        {
+            var text = string.IsNullOrWhiteSpace(preview) ? "📷 Photo" : preview;
+
+            // Encode phone for safe embedding in the action argument string.
+            // Using plain key=value pairs so ToastArguments can parse them back.
+            var p = Uri.EscapeDataString(phone ?? "");
+
+            new ToastContentBuilder()
+                // Body click → open OneTask phone/messages view in the browser
+                .AddArgument("action", "openphone")
+                .AddText($"Message from {from}")
+                .AddText(text)
+                // Free-text reply box (reply → "Send" button below)
+                .AddInputTextBox("replyInput", "Reply…")
+                // "Send" — fires background activation so no window opens
+                .AddButton(
+                    new ToastButton("Send", $"action=reply&phone={p}")
+                        .SetBackgroundActivation())
+                // Quick-reply chips — one tap, sends immediately
+                .AddButton(
+                    new ToastButton("👍 On my way", $"action=quickreply&phone={p}&body={Uri.EscapeDataString("On my way!")}")
+                        .SetBackgroundActivation())
+                .AddButton(
+                    new ToastButton("Can't talk", $"action=quickreply&phone={p}&body={Uri.EscapeDataString("Can't talk right now, will call back")}")
+                        .SetBackgroundActivation())
+                .Show();
+        }
+        catch
+        {
+            // Fallback: if Toast fails (e.g. Notification Center disabled), use balloon tip
+            var text = string.IsNullOrWhiteSpace(preview) ? "Photo" : preview;
+            _tray.ShowBalloonTip(15000, $"Message from {from}", text, WinForms.ToolTipIcon.Info);
+        }
+
         PlayChime();
     }
 
