@@ -62,7 +62,10 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private readonly ConcurrentQueue<string> _priorityMessageHandles = new();
     private static readonly TimeSpan MessagePollInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan BusyMessagePollRetryInterval = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan AutoReconnectRetryWindow = TimeSpan.FromSeconds(30);
+    // 90 s: wide enough to cover the full MAP retry cycle (8 attempts × 15 s worst-case)
+    // so a failed connect doesn't immediately trigger another attempt before the OS has
+    // had time to release the RFCOMM channel.
+    private static readonly TimeSpan AutoReconnectRetryWindow = TimeSpan.FromSeconds(90);
     private static readonly TimeSpan PhoneReadStatePollInterval = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan MessageDeleteReconcileInterval = TimeSpan.FromMinutes(1);
     private const int AutomaticDeleteReconcilePhoneWindowPerFolder = 150;
@@ -4884,7 +4887,11 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         AppendDebug("[CONNECT] Clean Bluetooth profile disconnect before reconnect.");
         _sessionCts.Cancel();
-        await Task.Delay(200);
+        // 2 s: give background tasks time to observe the cancellation and exit before
+        // we dispose the services they're using.  200 ms was too short — tasks mid-RFCOMM
+        // would race the dispose, and the OS wouldn't have released the socket channel
+        // by the time the next ConnectAsync started, causing WSAEADDRINUSE on every retry.
+        await Task.Delay(2000);
 
         if (_hfp is not null)
         {

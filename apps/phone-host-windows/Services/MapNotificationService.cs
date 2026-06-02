@@ -229,6 +229,16 @@ public sealed class MapNotificationService : IAsyncDisposable
     // ── MAP event-report XML parser ───────────────────────────────────────
     private void ParseEventReport(string xml)
     {
+        // Phone occasionally sends a zero-byte (empty) MAP event notification —
+        // this is a known quirk on some Android firmware. Guard here so we never
+        // pass an empty string to XmlDocument.LoadXml, which throws
+        // "Root element is missing" and pollutes the debug log.
+        if (string.IsNullOrWhiteSpace(xml))
+        {
+            LogLine?.Invoke("[MNS] Event body empty — phone sent empty notification, ignoring");
+            return;
+        }
+
         try
         {
             var doc   = new XmlDocument();

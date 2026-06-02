@@ -66,9 +66,18 @@ public class MapService : IAsyncDisposable
         const int MaxAttempts = 8;
         for (int attempt = 1; attempt <= MaxAttempts; attempt++)
         {
+            bool isAddressInUse = false;
             try
             {
+                // Dispose the previous socket AND force the GC to finalize it before
+                // creating a new one.  Without this, Windows keeps the RFCOMM channel
+                // bound (WSAEADDRINUSE / error 10048) even after Dispose() returns,
+                // because the finalizer hasn't run yet and the kernel handle is still open.
                 _client?.Dispose();
+                _client = null;
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+
                 _client = new BluetoothClient();
                 await Task.Run(() => _client.Connect(deviceAddress, MapMasUuidStd), ct);
                 MapLogLine?.Invoke($"[MAP] RFCOMM connected (attempt {attempt})");
@@ -85,11 +94,16 @@ public class MapService : IAsyncDisposable
             catch (Exception ex)
             {
                 lastEx = ex;
+                // WSAEADDRINUSE (10048): Windows hasn't fully released the previous RFCOMM
+                // channel yet.  A longer wait (15 s) gives the OS time to reclaim it.
+                isAddressInUse = ex is System.Net.Sockets.SocketException sex && sex.NativeErrorCode == 10048;
                 MapLogLine?.Invoke($"[MAP] Connect attempt {attempt} error: {ex.Message}");
+                if (isAddressInUse)
+                    MapLogLine?.Invoke("[MAP] RFCOMM channel still bound by OS — waiting 15 s for release…");
             }
 
             if (attempt < MaxAttempts)
-                await Task.Delay(5000, ct);
+                await Task.Delay(isAddressInUse ? 15000 : 5000, ct);
         }
 
         if (!ok)
