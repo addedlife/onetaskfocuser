@@ -155,6 +155,105 @@ async function deletePendingRecording(id: string): Promise<void> {
   await withPendingStore('readwrite', store => { store.delete(id); });
 }
 
+// --- Research Report Renderer ---
+// Parses the structured research markdown directly into styled JSX.
+// Avoids ReactMarkdown component-override brittleness entirely.
+function ResearchReport({ text }: { text: string }) {
+  const lines = text.split('\n');
+  const nodes: React.ReactNode[] = [];
+  let key = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const line = raw.trimEnd();
+
+    if (!line) continue;
+
+    // Searched: *Searched: ...*
+    if (line.startsWith('*Searched:')) {
+      const content = line.replace(/^\*/, '').replace(/\*$/, '');
+      nodes.push(
+        <p key={key++} style={{ fontSize: 11, color: '#94a3b8', padding: '14px 20px 6px', lineHeight: 1.6 }}>
+          {content}
+        </p>
+      );
+      continue;
+    }
+
+    // Section header: ## Sources / ## Seforim
+    if (line.startsWith('## ')) {
+      nodes.push(
+        <div key={key++} style={{ padding: '14px 20px 6px', borderTop: '1px solid #f1f5f9', marginTop: 4 }}>
+          <span style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+            {line.slice(3)}
+          </span>
+        </div>
+      );
+      continue;
+    }
+
+    // Bullet: - **[label](url)**   (with optional summary on next line)
+    if (line.startsWith('- ')) {
+      const body = line.slice(2).trimEnd();
+
+      // Bold link bullet: - **[label](url)**
+      const boldMatch = body.match(/^\*\*\[(.+?)\]\((.+?)\)\*\*/);
+
+      // Peek at next line for the summary (two-space continuation)
+      const nextRaw = lines[i + 1] ?? '';
+      const nextTrimmed = nextRaw.trim();
+      const isSummaryLine =
+        nextTrimmed.length > 0 &&
+        !nextTrimmed.startsWith('-') &&
+        !nextTrimmed.startsWith('#') &&
+        !nextTrimmed.startsWith('*');
+      const summary = isSummaryLine ? nextTrimmed : '';
+      if (summary) i++;
+
+      if (boldMatch) {
+        const [, label, url] = boldMatch;
+        nodes.push(
+          <div key={key++} style={{ display: 'flex', gap: 12, padding: '12px 20px', borderTop: '1px solid #f1f5f9', alignItems: 'flex-start' }}>
+            <span style={{ color: '#a5b4fc', fontSize: 9, marginTop: 4, flexShrink: 0, userSelect: 'none' }}>●</span>
+            <div style={{ flex: 1 }}>
+              <a href={url} target="_blank" rel="noopener noreferrer"
+                 style={{ fontWeight: 600, color: '#4338ca', textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#c7d2fe', fontSize: 14, lineHeight: 1.4 }}>
+                {label}
+              </a>
+              {summary && (
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#475569', lineHeight: 1.55 }}>
+                  {summary}
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      } else {
+        // Plain link bullet (seforim): - [label](url)
+        const linkMatch = body.match(/^\[(.+?)\]\((.+?)\)/);
+        if (linkMatch) {
+          const [, label, url] = linkMatch;
+          nodes.push(
+            <div key={key++} style={{ display: 'flex', gap: 12, padding: '10px 20px', borderTop: '1px solid #f1f5f9', alignItems: 'flex-start' }}>
+              <span style={{ color: '#a5b4fc', fontSize: 9, marginTop: 4, flexShrink: 0, userSelect: 'none' }}>●</span>
+              <a href={url} target="_blank" rel="noopener noreferrer"
+                 style={{ fontWeight: 600, color: '#4338ca', textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#c7d2fe', fontSize: 14 }}>
+                {label}
+              </a>
+            </div>
+          );
+        }
+      }
+    }
+  }
+
+  return (
+    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', paddingBottom: 8 }}>
+      {nodes}
+    </div>
+  );
+}
+
 // --- Components ---
 
 const Button = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'ghost', size?: 'sm' | 'md' | 'lg' }>(
@@ -1464,53 +1563,7 @@ function AppContent() {
                             Redo Research
                           </Button>
                         </div>
-                        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                          <ReactMarkdown
-                            components={{
-                              // "Searched: ..." italic line at top
-                              p: ({ children }) => (
-                                <p className="text-[11px] text-slate-400 px-5 pt-4 pb-2 leading-relaxed">{children}</p>
-                              ),
-                              em: ({ children }) => (
-                                <em className="not-italic">{children}</em>
-                              ),
-                              // "## Sources" / "## Seforim" section dividers
-                              h2: ({ children }) => (
-                                <div className="px-5 pt-4 pb-2 border-t border-slate-100 first:border-0">
-                                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-[0.12em]">{children}</span>
-                                </div>
-                              ),
-                              hr: () => null,
-                              ul: ({ children }) => (
-                                <ul className="divide-y divide-slate-100">{children}</ul>
-                              ),
-                              // Each bullet: bold link on line 1, finding on line 2
-                              li: ({ children }) => (
-                                <li className="flex gap-3 px-5 py-3.5 items-start">
-                                  <span className="text-indigo-300 mt-[3px] text-[10px] select-none flex-shrink-0">●</span>
-                                  <span className="text-sm text-slate-700 leading-snug">{children}</span>
-                                </li>
-                              ),
-                              // Bold wrapper around the link — passthrough so link styles dominate
-                              strong: ({ children }) => <>{children}</>,
-                              // The clickable source label
-                              a: ({ href, children }) => (
-                                <a
-                                  href={href}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-semibold text-indigo-700 underline underline-offset-2 decoration-indigo-200 hover:text-indigo-900 hover:decoration-indigo-500 transition-colors"
-                                >
-                                  {children}
-                                </a>
-                              ),
-                              // Soft break separates link line from finding line
-                              br: () => <span className="block mt-1 mb-0" />,
-                            }}
-                          >
-                            {selectedShaila.researchReport}
-                          </ReactMarkdown>
-                        </div>
+                        <ResearchReport text={selectedShaila.researchReport} />
                       </div>
                     )}
                   </Card>
