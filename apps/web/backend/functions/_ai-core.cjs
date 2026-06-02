@@ -1269,13 +1269,13 @@ const AI_JOB_REGISTRY = {
     buildPrompt(input = {}) {
       return compactLines([
         YESHIVISH_SYSTEM,
-        "You are a research assistant finding sources for a posek. Report only what each article says. Do not draw conclusions, synthesize, or add your own reasoning.",
+        "You are a research assistant finding sources for a posek. Your job is quality over quantity — surface only the directly relevant rulings, and skip everything else.",
         `Shaila: "${cleanString(input.shaila, 1200)}"`,
         `Search results:\n${truncateText(input.articlesText, 24000)}`,
-        "For each search result produce two parallel arrays:",
-        "articleSourceLabels: a short attribution label — the organization name and/or author (e.g. 'OU (Rabbi Hauer)', 'Star-K', 'Halachipedia', 'Chabad.org', 'Rabbi Falk on Ohr Olam') — 2–5 words max.",
-        "articleSummaries: one plain sentence stating what that source says about this shaila (e.g. 'rules the bracha is ha-eitz'). CRITICAL: do NOT start with the source name or 'states that' — begin directly with the ruling (e.g. 'Rules the bracha is ha-eitz', not 'Star-K rules...'). Leave both as empty strings for articles irrelevant to the shaila.",
-        "Indexes must match: articleSourceLabels[0] and articleSummaries[0] both describe result [1], etc.",
+        "Produce two parallel arrays. Index N must describe result [N+1]:",
+        "articleSourceLabels: short attribution — org name and/or posek (e.g. 'Nishmat Yoatzot', 'Dinonline', 'Star-K', 'Rav Moshe Feinstein'). 2–5 words max. Empty string if irrelevant.",
+        "articleSummaries: ONE sentence, the specific ruling or halachic finding for THIS shaila. START with the ruling itself — never with the source name, 'states that', 'notes that', or any attribution phrase. GOOD: 'Tevilah may be delayed when there is genuine need.' BAD: 'Nishmat Yoatzot states that tevilah may be delayed...' Empty string if the article is not directly about this shaila.",
+        "FILTER AGGRESSIVELY: leave both fields as empty strings for any result that is (a) only tangentially related, (b) about a different halachic topic that merely shares a keyword, (c) a YouTube video, product listing, or general overview with no specific psak. Aim to include only 5–8 genuinely relevant sources.",
         responseJsonInstruction("object", this.schema),
       ]);
     },

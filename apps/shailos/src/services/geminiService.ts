@@ -209,16 +209,15 @@ export async function performResearch(shaila: string) {
     });
   }
 
-  const articlesText = results
+  // Cap at 15 before sending to AI — keeps prompt focused and cost down
+  const scoredResults = results.slice(0, 15);
+  const articlesText = scoredResults
     .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.link}\nExcerpt: ${r.snippet}`)
     .join("\n\n");
 
-  // Step 3: Gemini reads snippets → per-article one-line summary + seforim + highlight phrase
-  // CRITICAL: No synthesis, no conclusions, no psak. Each article gets its own line.
   const parsed = await runAiJob("shaila.research_summarize_sources.v1", { shaila, articlesText }, "research");
   if (!parsed?.articleSummaries?.length) throw new Error("No research data generated from search results.");
 
-  // Build output — searched queries header, then one source per bullet (label + finding on two lines)
   const lines: string[] = [
     `*Searched: ${queries.join(" · ")}*`,
     "",
@@ -226,10 +225,11 @@ export async function performResearch(shaila: string) {
     "",
   ];
 
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
+  let shown = 0;
+  for (let i = 0; i < scoredResults.length && shown < 8; i++) {
+    const r = scoredResults[i];
     const summary = parsed.articleSummaries?.[i]?.trim();
-    if (!summary) continue; // skip irrelevant results
+    if (!summary) continue; // AI marked irrelevant
     const phrase = parsed.articleHighlights?.[i]?.trim();
     // Text Fragment API: #:~:text=phrase scrolls browser to that text on the page
     const url = phrase ? `${r.link}#:~:text=${encodeURIComponent(phrase)}` : r.link;
@@ -238,6 +238,7 @@ export async function performResearch(shaila: string) {
     })();
     // Two-line bullet: bold link on first line, finding on second (soft break = two spaces + newline)
     lines.push(`- **[${sourceLabel}](${url})**  \n  ${summary}`);
+    shown++;
   }
 
   if (parsed.seforim?.length) {
