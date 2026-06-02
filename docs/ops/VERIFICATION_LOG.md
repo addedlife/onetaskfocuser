@@ -1,5 +1,14 @@
 # Verification Log
 
+## 2026-06-02 On-Device Diagnostics + Cache-Layer Fixes (stop guessing the Android staleness)
+
+- After repeated remote misdiagnosis of "Android ultra-stale", switched approach to instrumentation. Research-first per Operating Law (firebase-js-sdk#6511 multi-tab stale-emit; #8593 corrupted IndexedDB; Firestore offline docs recommend surfacing `fromCache`).
+- Data layer (01-core.js): dropped multi-tab persistence (`enablePersistence()` single-tab) to avoid the #6511 stale-emit bug; added `?resetCache=1` recovery hatch (`clearPersistence()` then clean reload) for #8593; kept `experimentalForceLongPolling`. Added sync telemetry (`_noteSync` on every task/shaila snapshot records server-vs-cache + timestamps) and `getDiagnostics()` / `forceResync()`.
+- New `?diag=1` overlay (src/diagnostics.jsx, mounted from AuthGate) reports build commit/time, account uid, online state, latest-snapshot source (server vs CACHE), last server-sync age, load status, and whether a SW controls the page — plus Force-resync, Reset-Firestore-cache, and full-reset (unregister SW + clear caches + reload) buttons. This makes staleness observable from the device instead of guessed remotely.
+- Build stamp injected via vite `define` (`__BUILD_COMMIT__`/`__BUILD_TIME__`) from Netlify `COMMIT_REF`.
+- `npm run build` passes (COMMIT_REF stamped); diagnostics + telemetry markers present in bundle.
+- Next step is data-driven: read the device's `?diag=1` values to determine stale-code vs stale-data before any further change.
+
 ## 2026-06-01 Round 2 — Live-Listener Resilience, Backgrounded-PWA Staleness, Review Triage
 
 - Follow-up report: Android tablet task data still ultra-stale, shailos still not repopulating; requested a top-to-bottom review.

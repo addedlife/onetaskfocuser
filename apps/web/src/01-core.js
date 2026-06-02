@@ -75,6 +75,31 @@ const Store = {
   _fbLoadedTs: 0,              // _lsModified timestamp of the data we loaded FROM Firebase — our freshness baseline
   uid: null,
 
+  // ── Sync telemetry (powers the ?diag=1 readout so staleness is observable) ──
+  _lastServerSyncTs: 0,        // Date.now() of most recent server-confirmed snapshot
+  _lastCacheSyncTs: 0,         // Date.now() of most recent cache-only snapshot
+  _lastFromCache: null,        // did the latest snapshot come from cache?
+  _noteSync(fromCache) {
+    this._lastFromCache = !!fromCache;
+    if (fromCache) this._lastCacheSyncTs = Date.now();
+    else this._lastServerSyncTs = Date.now();
+  },
+  getDiagnostics() {
+    return {
+      uid: this.uid,
+      online: (typeof navigator !== "undefined") ? navigator.onLine : null,
+      loadStatus: this._fbLoadStatus,
+      lastFromCache: this._lastFromCache,
+      lastServerSyncTs: this._lastServerSyncTs,
+      lastCacheSyncTs: this._lastCacheSyncTs,
+      hasDb: !!db,
+    };
+  },
+  async forceResync() {
+    if (!db) return false;
+    try { await db.disableNetwork(); await db.enableNetwork(); return true; } catch (_) { return false; }
+  },
+
   setUid(uid) { if (this.uid !== uid) { this.uid = uid; this._fbLoadStatus = null; } },
   lsKey()  { return `onetaskonly_v4_${this.uid || "anon"}`; },
   docRef() {
@@ -745,6 +770,7 @@ const Store = {
         const changes = snap.docChanges().map(c => ({ type: c.type, id: c.doc.id }));
         snap.forEach(doc => shailos.push({ id: doc.id, ...doc.data() }));
         dlog("snapshot fired", { count: shailos.length, changes: changes.slice(0, 10), fromCache: snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites });
+        this._noteSync(snap.metadata.fromCache);
         // Pass fromCache so the consumer can avoid destructive deletions off a cached
         // (possibly stale/partial) snapshot — important now that this listener
         // resubscribes and re-emits cache snapshots after a transport drop.
@@ -1032,6 +1058,7 @@ const Store = {
       if (stopped) return;
       unsubTasks = col.onSnapshot(snap => {
         taskAttempt = 0; // healthy stream resets backoff
+        this._noteSync(snap.metadata.fromCache);
         let changed = false;
         snap.docChanges().forEach(change => {
           if (change.type === "added" || change.type === "modified") {

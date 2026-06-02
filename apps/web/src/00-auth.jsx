@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import firebase from 'firebase/compat/app';
 import { App } from './08-app-split/index.jsx';
+import { DiagnosticsOverlay } from './diagnostics.jsx';
 // AuthGate: Listens to Firebase Auth state.
 // Shows LoginScreen when signed out; renders <App user={...} onSignOut={...} /> when signed in.
 //
@@ -122,17 +123,22 @@ function AuthGate() {
     };
   }, []);
 
-  if (authState === "loading") return (
+  // ?diag=1 overlays the on-device diagnostics readout on top of whatever is rendering.
+  let showDiag = false;
+  try { showDiag = new URLSearchParams(window.location.search).get("diag") === "1"; } catch (_) {}
+  const withDiag = (node) => <>{node}{showDiag && <DiagnosticsOverlay />}</>;
+
+  if (authState === "loading") return withDiag(
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#EDE5D8" }}>
       <div style={{ width:26, height:26, border:"3px solid #D8CEBC", borderTopColor:"#3D3633", borderRadius:"50%", animation:"ot-spin 0.8s linear infinite" }} />
     </div>
   );
 
-  if (authState === "anon") return (
+  if (authState === "anon") return withDiag(
     <LoginScreen onLogin={u => { setUser(u); setAuthState("authed"); }} initialError={authError} />
   );
 
-  return <App user={user} onSignOut={() => firebase.auth().signOut()} />;
+  return withDiag(<App user={user} onSignOut={() => firebase.auth().signOut()} />);
 }
 
 // ── Login / Sign-up screen ──────────────────────────────────────────────────
