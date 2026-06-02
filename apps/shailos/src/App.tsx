@@ -1464,8 +1464,44 @@ function AppContent() {
                             Redo Research
                           </Button>
                         </div>
-                        <div className="prose prose-slate prose-sm max-w-none bg-indigo-50/50 p-4 rounded-xl border border-indigo-100/50">
-                          <ReactMarkdown>{selectedShaila.researchReport}</ReactMarkdown>
+                        <div className="bg-white rounded-xl border border-indigo-100 p-5">
+                          <ReactMarkdown
+                            components={{
+                              p: ({ children }) => (
+                                <p className="text-xs mb-3 leading-relaxed">{children}</p>
+                              ),
+                              em: ({ children }) => (
+                                <em className="text-slate-400 not-italic">{children}</em>
+                              ),
+                              strong: ({ children }) => (
+                                <strong className="text-[10px] font-extrabold text-slate-500 uppercase tracking-[0.1em]">
+                                  {children}
+                                </strong>
+                              ),
+                              hr: () => <hr className="border-slate-100 my-3" />,
+                              ul: ({ children }) => (
+                                <ul className="flex flex-col gap-3 mb-4">{children}</ul>
+                              ),
+                              li: ({ children }) => (
+                                <li className="flex items-baseline gap-2.5">
+                                  <span className="text-indigo-300 text-sm leading-none select-none flex-shrink-0">•</span>
+                                  <span className="text-sm text-slate-700 leading-relaxed">{children}</span>
+                                </li>
+                              ),
+                              a: ({ href, children }) => (
+                                <a
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-semibold text-indigo-700 underline underline-offset-[3px] decoration-indigo-300 hover:text-indigo-900 hover:decoration-indigo-600 transition-colors"
+                                >
+                                  {children}
+                                </a>
+                              ),
+                            }}
+                          >
+                            {selectedShaila.researchReport}
+                          </ReactMarkdown>
                         </div>
                       </div>
                     )}
