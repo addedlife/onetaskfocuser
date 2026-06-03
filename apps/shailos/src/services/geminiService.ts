@@ -236,17 +236,20 @@ export async function performResearch(shaila: string): Promise<ResearchData> {
     .join("\n\n");
 
   const parsed = await runAiJob("shaila.research_summarize_sources.v1", { shaila, articlesText }, "research");
-  if (!parsed?.articleSummaries?.length) throw new Error("No research data generated from search results.");
+  if (!parsed?.articles?.length) throw new Error("No research data generated from search results.");
 
   const sources: ResearchSource[] = [];
-  for (let i = 0; i < candidates.length && sources.length < 8; i++) {
-    const summary = parsed.articleSummaries?.[i]?.trim();
-    if (!summary) continue;
-    const phrase = parsed.articleHighlights?.[i]?.trim();
-    const r = candidates[i];
+  for (const a of parsed.articles) {
+    if (sources.length >= 8) break;
+    // a.i is the 1-based result number the AI was shown ([N] in articlesText),
+    // so the link, summary, and label all come from this one object — they can't drift apart.
+    const r = candidates[a.i - 1];
+    const summary = a.summary?.trim();
+    if (!r || !summary) continue;
+    const phrase = a.highlight?.trim();
     // Text Fragment API: #:~:text=phrase scrolls browser to that text on the page
     const url = phrase ? `${r.link}#:~:text=${encodeURIComponent(phrase)}` : r.link;
-    const label = parsed.articleSourceLabels?.[i]?.trim() || fallbackLabel(r.link, r.title);
+    const label = a.label?.trim() || fallbackLabel(r.link, r.title);
     sources.push({ label, url, summary });
   }
 

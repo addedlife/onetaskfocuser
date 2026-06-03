@@ -1265,26 +1265,36 @@ const AI_JOB_REGISTRY = {
     output: "json",
     shape: "object",
     genConfig: { temperature: 0, maxOutputTokens: 4096 },
-    schema: '{"articleSourceLabels":["OU (Rabbi Hauer)"],"articleSummaries":["rules the bracha is ha-eitz"],"articleHighlights":["short phrase"],"seforim":[{"name":"Shulchan Aruch OC","location":"451:1"}]}',
+    schema: '{"articles":[{"i":1,"label":"OU (Rabbi Hauer)","summary":"rules the bracha is ha-eitz","highlight":"short verbatim phrase"}],"seforim":[{"name":"Shulchan Aruch OC","location":"451:1"}]}',
     buildPrompt(input = {}) {
       return compactLines([
         YESHIVISH_SYSTEM,
         "You are a research assistant finding sources for a posek. Your job is quality over quantity — surface only the directly relevant rulings, and skip everything else.",
         `Shaila: "${cleanString(input.shaila, 1200)}"`,
         `Search results:\n${truncateText(input.articlesText, 24000)}`,
-        "Produce two parallel arrays. Index N must describe result [N+1]:",
-        "articleSourceLabels: short attribution — org name and/or posek (e.g. 'Nishmat Yoatzot', 'Dinonline', 'Star-K', 'Rav Moshe Feinstein'). 2–5 words max. Empty string if irrelevant.",
-        "articleSummaries: ONE sentence, the specific ruling or halachic finding for THIS shaila. START with the ruling itself — never with the source name, 'states that', 'notes that', or any attribution phrase. GOOD: 'Tevilah may be delayed when there is genuine need.' BAD: 'Nishmat Yoatzot states that tevilah may be delayed...' Empty string if the article is not directly about this shaila.",
-        "FILTER AGGRESSIVELY: leave both fields as empty strings for any result that is (a) only tangentially related, (b) about a different halachic topic that merely shares a keyword, (c) a YouTube video, product listing, or general overview with no specific psak. Aim to include only 5–8 genuinely relevant sources.",
+        "Return an 'articles' array with ONE object for each search result that is directly relevant. SKIP irrelevant results entirely — do not emit an object for them.",
+        "Each article object has exactly these fields:",
+        "  i: the result number shown in brackets — result [3] has i=3. This MUST equal the bracketed number, because the citation link is taken from that exact result. Getting i wrong sends the reader to the wrong webpage.",
+        "  label: short attribution — org name and/or posek (e.g. 'Nishmat Yoatzot', 'Dinonline', 'Star-K', 'Rav Moshe Feinstein'). 2–5 words max.",
+        "  summary: ONE sentence, the specific ruling or halachic finding for THIS shaila. START with the ruling itself — never with the source name, 'states that', 'notes that', or any attribution phrase. GOOD: 'Tevilah may be delayed when there is genuine need.' BAD: 'Nishmat Yoatzot states that tevilah may be delayed...'",
+        "  highlight: a short verbatim phrase (3–10 words) copied exactly from THIS result's excerpt, used to scroll the reader to the relevant text.",
+        "FILTER AGGRESSIVELY: omit any result that is (a) only tangentially related, (b) about a different halachic topic that merely shares a keyword, (c) a YouTube video, product listing, or general overview with no specific psak. Aim for only 5–8 genuinely relevant articles.",
         responseJsonInstruction("object", this.schema),
       ]);
     },
     validate(value) {
       const o = ensureObject(value);
+      const articles = ensureArray(o.articles || [])
+        .map(a => ({
+          i: Number.parseInt(a?.i, 10),
+          label: cleanString(a?.label, 60),
+          summary: cleanString(a?.summary, 1000),
+          highlight: cleanString(a?.highlight, 120),
+        }))
+        .filter(a => Number.isFinite(a.i) && a.summary)
+        .slice(0, 15);
       return {
-        articleSourceLabels: normalizeStringArray(o.articleSourceLabels || [], 40, 60),
-        articleSummaries: normalizeStringArray(o.articleSummaries || [], 40, 1000),
-        articleHighlights: normalizeStringArray(o.articleHighlights || [], 40, 120),
+        articles,
         seforim: ensureArray(o.seforim || []).map(s => ({
           name: cleanString(s?.name, 160),
           location: cleanString(s?.location, 80),
