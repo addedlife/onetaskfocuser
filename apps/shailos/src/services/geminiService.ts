@@ -184,11 +184,31 @@ async function buildSearchQueries(shaila: string): Promise<string[]> {
   return [`${shaila.substring(0, 80)} halacha`];
 }
 
-export async function performResearch(shaila: string) {
-  // Step 1: Generate 3 search angles in parallel
+export interface ResearchSource {
+  label: string;
+  url: string;
+  summary: string;
+}
+
+export interface ResearchSefar {
+  label: string;
+  url: string;
+}
+
+export interface ResearchData {
+  queries: string[];
+  sources: ResearchSource[];
+  seforim: ResearchSefar[];
+}
+
+function fallbackLabel(link: string, title: string): string {
+  try { return new URL(link).hostname.replace(/^www\./, ''); }
+  catch { return title.substring(0, 35); }
+}
+
+export async function performResearch(shaila: string): Promise<ResearchData> {
   const queries = await buildSearchQueries(shaila);
 
-  // Step 2: Run all 3 searches simultaneously — deduplicate by URL
   const allResultArrays = await Promise.all(queries.map(q => searchWeb(q).catch(() => [])));
   const seen = new Set<string>();
   let results = allResultArrays.flat().filter(r => {
@@ -198,7 +218,7 @@ export async function performResearch(shaila: string) {
   });
   if (!results.length) throw new Error("No search results found for this shaila.");
 
-  // Step 3: Gemini identifies gaps → generates 1-2 targeted follow-up queries
+  // Follow-up queries to fill gaps
   const initialSnippets = results.slice(0, 6).map((r, i) => `[${i+1}] ${r.title}: ${r.snippet}`).join("\n");
   const followUpData = await runAiJob("shaila.research_followups.v1", { shaila, initialSnippets }, "research");
   const followUps: string[] = (followUpData?.followUpQueries || []).slice(0, 2);
@@ -209,49 +229,33 @@ export async function performResearch(shaila: string) {
     });
   }
 
-  // Cap at 15 before sending to AI — keeps prompt focused and cost down
-  const scoredResults = results.slice(0, 15);
-  const articlesText = scoredResults
+  // Cap at 15 for AI cost; display cap of 8 applied below
+  const candidates = results.slice(0, 15);
+  const articlesText = candidates
     .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.link}\nExcerpt: ${r.snippet}`)
     .join("\n\n");
 
   const parsed = await runAiJob("shaila.research_summarize_sources.v1", { shaila, articlesText }, "research");
   if (!parsed?.articleSummaries?.length) throw new Error("No research data generated from search results.");
 
-  const lines: string[] = [
-    `*Searched: ${queries.join(" · ")}*`,
-    "",
-    "## Sources",
-    "",
-  ];
-
-  let shown = 0;
-  for (let i = 0; i < scoredResults.length && shown < 8; i++) {
-    const r = scoredResults[i];
+  const sources: ResearchSource[] = [];
+  for (let i = 0; i < candidates.length && sources.length < 8; i++) {
     const summary = parsed.articleSummaries?.[i]?.trim();
-    if (!summary) continue; // AI marked irrelevant
+    if (!summary) continue;
     const phrase = parsed.articleHighlights?.[i]?.trim();
+    const r = candidates[i];
     // Text Fragment API: #:~:text=phrase scrolls browser to that text on the page
     const url = phrase ? `${r.link}#:~:text=${encodeURIComponent(phrase)}` : r.link;
-    const sourceLabel = parsed.articleSourceLabels?.[i]?.trim() || (() => {
-      try { return new URL(r.link).hostname.replace(/^www\./, ''); } catch { return r.title.substring(0, 35); }
-    })();
-    // Two-line bullet: bold link on first line, finding on second (soft break = two spaces + newline)
-    lines.push(`- **[${sourceLabel}](${url})**  \n  ${summary}`);
-    shown++;
+    const label = parsed.articleSourceLabels?.[i]?.trim() || fallbackLabel(r.link, r.title);
+    sources.push({ label, url, summary });
   }
 
-  if (parsed.seforim?.length) {
-    lines.push("", "## Seforim", "");
-    for (const s of parsed.seforim) {
-      const deepLink = buildSeferiaDeepLink(s.name, s.location);
-      const link = deepLink || buildSeferiaSearchLink(s.name, s.location);
-      const label = s.location ? `${s.name} ${s.location}` : s.name;
-      lines.push(`- [${label}](${link})`);
-    }
-  }
+  const seforim: ResearchSefar[] = (parsed.seforim ?? []).map((s: any) => ({
+    label: s.location ? `${s.name} ${s.location}` : s.name,
+    url: buildSeferiaDeepLink(s.name, s.location) || buildSeferiaSearchLink(s.name, s.location),
+  }));
 
-  return lines.join("\n");
+  return { queries, sources, seforim };
 }
 
 export async function generateAnswerSummary(answerText: string): Promise<string> {

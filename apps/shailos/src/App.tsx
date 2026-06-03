@@ -37,6 +37,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { transcribeAndParse, performResearch, findPotentialMatches, transcribeAudio, generateSynopsis, generateAnswerSummary } from './services/geminiService';
+import type { ResearchData } from './services/geminiService';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
@@ -156,100 +157,66 @@ async function deletePendingRecording(id: string): Promise<void> {
 }
 
 // --- Research Report Renderer ---
-// Parses the structured research markdown directly into styled JSX.
-// Avoids ReactMarkdown component-override brittleness entirely.
+
+const LINK_STYLE: React.CSSProperties = {
+  fontWeight: 600, color: '#4338ca', textDecoration: 'underline',
+  textUnderlineOffset: 3, textDecorationColor: '#c7d2fe', fontSize: 14, lineHeight: 1.4,
+};
+
+function BulletRow({ label, url, summary }: { label: string; url: string; summary?: string }) {
+  return (
+    <div style={{ display: 'flex', gap: 12, padding: summary ? '12px 20px' : '10px 20px', borderTop: '1px solid #f1f5f9', alignItems: 'flex-start' }}>
+      <span style={{ color: '#a5b4fc', fontSize: 9, marginTop: 4, flexShrink: 0, userSelect: 'none' }}>●</span>
+      <div style={{ flex: 1 }}>
+        <a href={url} target="_blank" rel="noopener noreferrer" style={LINK_STYLE}>{label}</a>
+        {summary && <p style={{ margin: '4px 0 0', fontSize: 13, color: '#475569', lineHeight: 1.55 }}>{summary}</p>}
+      </div>
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ padding: '14px 20px 6px', borderTop: '1px solid #f1f5f9', marginTop: 4 }}>
+      <span style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+        {children}
+      </span>
+    </div>
+  );
+}
+
 function ResearchReport({ text }: { text: string }) {
-  const lines = text.split('\n');
-  const nodes: React.ReactNode[] = [];
-  let key = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i];
-    const line = raw.trimEnd();
-
-    if (!line) continue;
-
-    // Searched: *Searched: ...*
-    if (line.startsWith('*Searched:')) {
-      const content = line.replace(/^\*/, '').replace(/\*$/, '');
-      nodes.push(
-        <p key={key++} style={{ fontSize: 11, color: '#94a3b8', padding: '14px 20px 6px', lineHeight: 1.6 }}>
-          {content}
-        </p>
-      );
-      continue;
-    }
-
-    // Section header: ## Sources / ## Seforim
-    if (line.startsWith('## ')) {
-      nodes.push(
-        <div key={key++} style={{ padding: '14px 20px 6px', borderTop: '1px solid #f1f5f9', marginTop: 4 }}>
-          <span style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-            {line.slice(3)}
-          </span>
-        </div>
-      );
-      continue;
-    }
-
-    // Bullet: - **[label](url)**   (with optional summary on next line)
-    if (line.startsWith('- ')) {
-      const body = line.slice(2).trimEnd();
-
-      // Bold link bullet: - **[label](url)**
-      const boldMatch = body.match(/^\*\*\[(.+?)\]\((.+?)\)\*\*/);
-
-      // Peek at next line for the summary (two-space continuation)
-      const nextRaw = lines[i + 1] ?? '';
-      const nextTrimmed = nextRaw.trim();
-      const isSummaryLine =
-        nextTrimmed.length > 0 &&
-        !nextTrimmed.startsWith('-') &&
-        !nextTrimmed.startsWith('#') &&
-        !nextTrimmed.startsWith('*');
-      const summary = isSummaryLine ? nextTrimmed : '';
-      if (summary) i++;
-
-      if (boldMatch) {
-        const [, label, url] = boldMatch;
-        nodes.push(
-          <div key={key++} style={{ display: 'flex', gap: 12, padding: '12px 20px', borderTop: '1px solid #f1f5f9', alignItems: 'flex-start' }}>
-            <span style={{ color: '#a5b4fc', fontSize: 9, marginTop: 4, flexShrink: 0, userSelect: 'none' }}>●</span>
-            <div style={{ flex: 1 }}>
-              <a href={url} target="_blank" rel="noopener noreferrer"
-                 style={{ fontWeight: 600, color: '#4338ca', textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#c7d2fe', fontSize: 14, lineHeight: 1.4 }}>
-                {label}
-              </a>
-              {summary && (
-                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#475569', lineHeight: 1.55 }}>
-                  {summary}
-                </p>
-              )}
-            </div>
-          </div>
-        );
-      } else {
-        // Plain link bullet (seforim): - [label](url)
-        const linkMatch = body.match(/^\[(.+?)\]\((.+?)\)/);
-        if (linkMatch) {
-          const [, label, url] = linkMatch;
-          nodes.push(
-            <div key={key++} style={{ display: 'flex', gap: 12, padding: '10px 20px', borderTop: '1px solid #f1f5f9', alignItems: 'flex-start' }}>
-              <span style={{ color: '#a5b4fc', fontSize: 9, marginTop: 4, flexShrink: 0, userSelect: 'none' }}>●</span>
-              <a href={url} target="_blank" rel="noopener noreferrer"
-                 style={{ fontWeight: 600, color: '#4338ca', textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: '#c7d2fe', fontSize: 14 }}>
-                {label}
-              </a>
-            </div>
-          );
-        }
-      }
-    }
-  }
+  // New records are stored as JSON; old records are a legacy markdown string.
+  const data = useMemo<ResearchData | null>(() => {
+    try { return JSON.parse(text) as ResearchData; } catch { return null; }
+  }, [text]);
 
   return (
     <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', paddingBottom: 8 }}>
-      {nodes}
+      {data ? (
+        <>
+          <p style={{ fontSize: 11, color: '#94a3b8', padding: '14px 20px 6px', lineHeight: 1.6 }}>
+            Searched: {data.queries.join(' · ')}
+          </p>
+          {data.sources.length > 0 && (
+            <>
+              <SectionLabel>Sources</SectionLabel>
+              {data.sources.map((s, i) => <BulletRow key={i} label={s.label} url={s.url} summary={s.summary} />)}
+            </>
+          )}
+          {data.seforim.length > 0 && (
+            <>
+              <SectionLabel>Seforim</SectionLabel>
+              {data.seforim.map((s, i) => <BulletRow key={i} label={s.label} url={s.url} />)}
+            </>
+          )}
+        </>
+      ) : (
+        // Legacy fallback for old markdown-format records — strip syntax, show readable text
+        <p style={{ fontSize: 13, color: '#475569', padding: '16px 20px', lineHeight: 1.8, whiteSpace: 'pre-line' }}>
+          {text.replace(/\*\*/g, '').replace(/^\*|^##\s*|^-\s/gm, '').replace(/\[(.+?)\]\(.+?\)/g, '$1').trim()}
+        </p>
+      )}
     </div>
   );
 }
@@ -854,9 +821,9 @@ function AppContent() {
       const query = shaila.synopsis
         ? `${shaila.synopsis}\n\n${shaila.content}`
         : shaila.content;
-      const report = await performResearch(query);
+      const data = await performResearch(query);
       await updateDoc(doc(shailosCol(), shaila.id), {
-        researchReport: report,
+        researchReport: JSON.stringify(data),
         updatedAt: Timestamp.now()
       });
     } catch (err) {
