@@ -161,6 +161,8 @@ function App({ user, onSignOut }) {
   const deletedTmr = useRef(null);
   const [parkedUndo, setParkedUndo] = useState(null); // {task, listId} for undo park
   const parkedTmr = useRef(null);
+  const [compUndo, setCompUndo] = useState(null);     // {id, shailaId, isGetBackStep} for undo
+  const compUndoTmr = useRef(null);
   // ─── New feature state ───────────────────────────────────────────────────
   const [compFlash, setCompFlash] = useState(false);      // brief ✓ overlay on card
   const [showStreak, setShowStreak] = useState(false);    // "On a roll!" celebration
@@ -1024,7 +1026,7 @@ function App({ user, onSignOut }) {
           // _listenV5 snapshot (which fires right after save) doesn't re-create them.
           const newIds = [...new Set(toAdd.map(t => t.shailaId).filter(Boolean))];
           newIds.forEach(id => pendingShailaIds.current.add(id));
-          setTimeout(() => newIds.forEach(id => pendingShailaIds.current.delete(id)), 5000);
+          setTimeout(() => newIds.forEach(id => pendingShailaIds.current.delete(id)), 30000);
           const newShailaCount = Math.ceil(toAdd.length / 2);
           showToast(`📋 ${newShailaCount} new shaila${newShailaCount!==1?"s":""} from transcriber`, 5000);
         }
@@ -1095,10 +1097,12 @@ function App({ user, onSignOut }) {
   useEffect(() => {
     if (!loaded || !db) return;
     async function syncFromServer() {
-      // V5: collection listener handles reconnection automatically.
-      // Do NOT reload from server here — _loadV5() stamps a fresh timestamp
-      // that makes empty results look "newer", wiping real data.
-      if (Store._v5) return;
+      // V5: kick the Firestore transport so the existing per-task listener
+      // re-handshakes with the server. We do NOT call _loadV5() here because
+      // it stamps a fresh _lsModified that can make a stale/empty result look
+      // "newer" and overwrite real data. forceResync() is safe — it only
+      // cycles the network layer and lets the live listener do its job.
+      if (Store._v5) { Store.forceResync(); return; }
       // V4 fallback
       const ref = Store.docRef();
       if (!ref) return;
@@ -1703,6 +1707,12 @@ function App({ user, onSignOut }) {
             Store.markShailaAnswered(task.shailaId, task.text);
           }
         }
+        // Arm 8-second undo window (non-legacy completions only)
+        if (!isLegacy && task) {
+          clearTimeout(compUndoTmr.current);
+          setCompUndo({ id, shailaId: task.shailaId, isGetBackStep: !!task.isGetBackStep });
+          compUndoTmr.current = setTimeout(() => setCompUndo(null), 8000);
+        }
         const u = ts.map(t => t.id===id ? {...t, completed:true, completedAt:isLegacy?null:Date.now(), goodEnough} : t);
         if (task?.parentTask) {
           const r = u.filter(t => t.parentTask === task.parentTask && !t.completed);
@@ -1727,6 +1737,17 @@ function App({ user, onSignOut }) {
   function legacyCompTask(id) { compTask(id, false, true); showToast("Logged ✓ (no timestamp)", 2000); }
 
   function uncompTask(id) { uT(ts => doOpt(ts.map(t => t.id===id ? {...t, completed:false, completedAt:undefined, goodEnough:undefined} : t))); }
+
+  function undoCompTask() {
+    if (!compUndo) return;
+    clearTimeout(compUndoTmr.current);
+    const { id, shailaId, isGetBackStep } = compUndo;
+    uncompTask(id);
+    // Reverse the shaila status change that was written on completion
+    if (shailaId) Store.markShailaStatus(shailaId, isGetBackStep ? "answered" : "pending");
+    setCompUndo(null);
+  }
+
   const [shailaDelPrompt, setShailaDelPrompt] = useState(null); // {shailaId, taskText}
   const [shailaReconcile, setShailaReconcile] = useState(null); // {missingTasks, missingShailos, statusMismatches}
   const [reconcileLoading, setReconcileLoading] = useState(false);
@@ -2882,6 +2903,12 @@ function App({ user, onSignOut }) {
         <div style={{position:"fixed",bottom:"clamp(55px,9vh,80px)",left:"50%",transform:"translateX(-50%)",background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,padding:"8px 14px",fontSize:12,fontFamily:NC_FONT_STACK,color:T.tSoft,whiteSpace:"nowrap",boxShadow:T.shadowLg,display:"flex",alignItems:"center",gap:10,zIndex:Z.toast,animation:"ot-fade 0.2s"}}>
           <span style={{color:T.tFaint}}>Task deleted</span>
           <button onClick={()=>{clearTimeout(deletedTmr.current);setAS(p=>({...p,lists:p.lists.map(l=>l.id===deletedUndo.listId?{...l,tasks:[...l.tasks,deletedUndo.task]}:l)}));setDeletedUndo(null);}} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 10px",cursor:"pointer",fontSize:13,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK}}>Undo</button>
+        </div>
+      )}
+      {compUndo && (
+        <div style={{position:"fixed",bottom:"clamp(55px,9vh,80px)",left:"50%",transform:"translateX(-50%)",background:T.card,border:`1px solid ${T.brd}`,borderRadius:16,padding:"8px 14px",fontSize:12,fontFamily:NC_FONT_STACK,color:T.tSoft,whiteSpace:"nowrap",boxShadow:T.shadowLg,display:"flex",alignItems:"center",gap:10,zIndex:Z.toast,animation:"ot-fade 0.2s"}}>
+          <span style={{color:T.tFaint}}>Task completed</span>
+          <button onClick={undoCompTask} style={{background:"none",border:`1px solid ${T.brd}`,borderRadius:8,padding:"3px 10px",cursor:"pointer",fontSize:13,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK}}>Undo</button>
         </div>
       )}
       {parkedUndo && (

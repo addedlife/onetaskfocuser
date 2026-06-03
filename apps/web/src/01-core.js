@@ -57,7 +57,7 @@ try {
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "hidden") { _hiddenSince = Date.now(); return; }
-        if (_hiddenSince && Date.now() - _hiddenSince > 30000) _kickFirestore();
+        if (_hiddenSince && Date.now() - _hiddenSince > 5000) _kickFirestore();
         _hiddenSince = 0;
       });
     }
@@ -774,9 +774,7 @@ const Store = {
       unsub = col.onSnapshot(snap => {
         attempt = 0; // a healthy snapshot resets the backoff
         const shailos = [];
-        const changes = snap.docChanges().map(c => ({ type: c.type, id: c.doc.id }));
         snap.forEach(doc => shailos.push({ id: doc.id, ...doc.data() }));
-        dlog("snapshot fired", { count: shailos.length, changes: changes.slice(0, 10), fromCache: snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites });
         this._noteSync(snap.metadata.fromCache);
         // Pass fromCache so the consumer can avoid destructive deletions off a cached
         // (possibly stale/partial) snapshot — important now that this listener
@@ -846,46 +844,50 @@ const Store = {
     if (!db || !this.uid || !blobState?.lists) return false;
     console.log("[Store] Starting V4 → V5 migration...");
     try {
-      const batch = db.batch();
-      let docCount = 0;
+      const CHUNK = 400; // stay well under Firestore's 500-op batch limit
 
-      // Write each task as its own document
+      // Collect all task write ops up front
+      const taskOps = [];
       for (const list of blobState.lists) {
         for (const task of (list.tasks || [])) {
-          // Firestore doc IDs must be non-empty strings. Some legacy tasks
-          // may have numeric IDs or missing IDs — sanitize them.
           let docId = task.id;
           if (typeof docId === 'number') docId = String(docId);
           if (typeof docId !== 'string' || !docId || docId.includes('/')) {
             docId = 't_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
           }
-          const taskDoc = this.tasksCol().doc(docId);
-          const cleaned = this._clean({ ...task, id: docId, listId: list.id, _lastModified: Date.now() });
-          batch.set(taskDoc, cleaned);
-          docCount++;
+          taskOps.push({
+            ref: this.tasksCol().doc(docId),
+            data: this._clean({ ...task, id: docId, listId: list.id, _lastModified: Date.now() }),
+          });
         }
       }
 
-      // Write settings
       const settings = this._extractSettings(blobState);
-      // Include list metadata (names, order) inside settings for simplicity
       settings._lists = blobState.lists.map((l, i) => ({ id: l.id, name: l.name, order: i }));
       settings._lastModified = Date.now();
-      batch.set(this.settingsDoc(), this._clean(settings));
-      docCount++;
 
-      // Mark migration complete
-      batch.set(this.metaDoc(), { schema: 'v5_pertask', migratedAt: Date.now(), taskCount: docCount - 1 });
-      docCount++;
-
-      // Firestore batches support up to 500 operations
-      if (docCount > 499) {
-        console.warn("[Store] Too many docs for single batch:", docCount, "— splitting");
-        // For safety, just write what we can. This shouldn't happen with ~290 tasks.
+      // Commit tasks in chunks of CHUNK. Settings + meta go in the FINAL batch
+      // so migration is only marked complete when every task is written.
+      if (taskOps.length === 0) {
+        const batch = db.batch();
+        batch.set(this.settingsDoc(), this._clean(settings));
+        batch.set(this.metaDoc(), { schema: 'v5_pertask', migratedAt: Date.now(), taskCount: 0 });
+        await batch.commit();
+      } else {
+        for (let i = 0; i < taskOps.length; i += CHUNK) {
+          const chunk = taskOps.slice(i, i + CHUNK);
+          const batch = db.batch();
+          chunk.forEach(({ ref, data }) => batch.set(ref, data));
+          if (i + CHUNK >= taskOps.length) {
+            // Last chunk — attach settings + meta so the whole migration is atomic per-chunk
+            batch.set(this.settingsDoc(), this._clean(settings));
+            batch.set(this.metaDoc(), { schema: 'v5_pertask', migratedAt: Date.now(), taskCount: taskOps.length });
+          }
+          await batch.commit();
+        }
       }
 
-      await batch.commit();
-      console.log("[Store] V5 migration complete:", docCount, "documents written");
+      console.log("[Store] V5 migration complete:", taskOps.length, "tasks written");
       return true;
     } catch(e) {
       console.error("[Store] V5 migration FAILED:", e);
@@ -1022,9 +1024,6 @@ const Store = {
       this._fbLoadStatus = 'ok';
       this._fbSaveError = null;
       console.log("[Store] V5 saved:", ops, "document(s) written");
-
-      // Also keep the old blob updated as backup during transition period
-      try { await this.docRef()?.set({ state: this._clean(s), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }); } catch(e) {}
     } catch(e) {
       console.warn("[Store] V5 save failed:", e);
       this._fbSaveError = e;
