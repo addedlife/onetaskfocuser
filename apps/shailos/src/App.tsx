@@ -987,6 +987,31 @@ function AppContent() {
     );
   }
 
+  // Signed in, but the session carried no readable email — so USER_ID collapsed to
+  // 'unauthenticated' and we'd silently read an empty folder and look broken. Say so
+  // honestly, and show exactly what this device's session looks like so we can diagnose it.
+  if (USER_ID === 'unauthenticated') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-8 text-center">
+          <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-slate-900 mb-2">Couldn't identify your account</h2>
+          <p className="text-slate-600 mb-4">
+            You're signed in, but this device's session didn't include an email address, so the app
+            can't tell which data folder is yours. That's why the list looks empty here.
+          </p>
+          <div className="text-left text-xs bg-slate-100 rounded-lg p-3 mb-6 text-slate-700 space-y-1 break-all">
+            <div>User ID: {user.uid || '(none)'}</div>
+            <div>Email: {user.email || '(none)'}</div>
+            <div>Anonymous session: {String(user.isAnonymous)}</div>
+            <div>Sign-in providers: {user.providerData.map(p => p.providerId).join(', ') || '(none)'}</div>
+          </div>
+          <Button onClick={() => window.location.reload()} className="w-full">Reload</Button>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Header */}
@@ -1188,6 +1213,9 @@ function AppContent() {
               {filteredShailos.length === 0 ? (
                 <div className="text-center py-12 bg-white rounded-xl border border-dashed border-slate-300 text-slate-500">
                   No shailos found
+                  <div className="text-[11px] text-slate-400 mt-2 break-all">
+                    Signed in as {user.email || '(no email)'} · reading folder “{USER_ID}”
+                  </div>
                 </div>
               ) : (
                 filteredShailos.map((shaila) => (
