@@ -1044,7 +1044,11 @@ const Store = {
     const taskCache = new Map();
     let settings = {};
     let listMeta = [{ id: "default", name: "My Tasks", order: 0 }];
-    let initialized = false;
+    // Two independent lanes (tasks collection + settings doc) feed one rebuilt
+    // state. We must not push to the UI until BOTH lanes have reported at least
+    // once, otherwise a tasks-first snapshot would render with default list
+    // metadata and silently drop tasks that live in custom lists.
+    let tasksReady = false, settingsReady = false, firstDelivered = false;
     let stopped = false;
     let unsubTasks = null, unsubSettings = null;
     let taskRetry = null, settRetry = null;
@@ -1063,6 +1067,28 @@ const Store = {
       return { ...settings, lists, _lsModified: Date.now() };
     };
 
+    // Single delivery gate for both lanes. The FIRST combined snapshot is pushed
+    // to the UI only when it actually carries tasks — this is the fix for the
+    // chronic "device shows 0 tasks" bug: when Store.load() comes back empty due
+    // to a transient server-fetch failure (the Android/iOS case after a cache
+    // reset), the live listener's first server snapshot holds the real tasks and
+    // MUST reach the UI instead of being suppressed. Delivering a non-empty first
+    // snapshot is purely additive — it can only fill in data the UI was missing.
+    // An empty first snapshot is suppressed so it can never blank a state that
+    // load() populated from a fallback source.
+    const deliver = (changed) => {
+      if (!tasksReady || !settingsReady) return;
+      if (!firstDelivered) {
+        firstDelivered = true;
+        if (taskCache.size === 0) return;
+      } else if (!changed) {
+        return;
+      }
+      const newState = rebuild();
+      this._lastSavedState = JSON.parse(JSON.stringify(newState));
+      onUpdate(newState);
+    };
+
     const subscribeTasks = () => {
       if (stopped) return;
       unsubTasks = col.onSnapshot(snap => {
@@ -1078,15 +1104,8 @@ const Store = {
             changed = true;
           }
         });
-        const wasInitialized = initialized;
-        // Always mark initialized after first snapshot, even if collection is empty,
-        // so subsequent real changes are not silently dropped.
-        initialized = true;
-        if (changed && wasInitialized) {
-          const newState = rebuild();
-          this._lastSavedState = JSON.parse(JSON.stringify(newState));
-          onUpdate(newState);
-        }
+        tasksReady = true;
+        deliver(changed);
       }, err => {
         console.warn("[Store] V5 task listener error — resubscribing:", err);
         try { unsubTasks && unsubTasks(); } catch (_) {}
@@ -1102,16 +1121,19 @@ const Store = {
       if (stopped) return;
       unsubSettings = settRef.onSnapshot(snap => {
         settAttempt = 0;
-        if (!snap.exists) return;
-        const data = snap.data();
-        listMeta = data._lists || listMeta;
-        const { _lists, _lastModified, ...rest } = data;
-        settings = rest;
-        if (initialized) {
-          const newState = rebuild();
-          this._lastSavedState = JSON.parse(JSON.stringify(newState));
-          onUpdate(newState);
+        // Mark the settings lane ready even when the doc doesn't exist yet (new
+        // account / not-yet-migrated) so the tasks lane is never blocked from
+        // delivering. A missing settings doc just means default list metadata.
+        let changed = false;
+        if (snap.exists) {
+          const data = snap.data();
+          listMeta = data._lists || listMeta;
+          const { _lists, _lastModified, ...rest } = data;
+          settings = rest;
+          changed = true;
         }
+        settingsReady = true;
+        deliver(changed);
       }, err => {
         console.warn("[Store] V5 settings listener error — resubscribing:", err);
         try { unsubSettings && unsubSettings(); } catch (_) {}

@@ -1,5 +1,13 @@
 # Verification Log
 
+## 2026-06-03 Storage Listener Refresh Fix — "device shows 0 tasks" dropped first snapshot
+
+- Reported: Android/iOS not refreshing robustly on a new task; a device shows 0 tasks.
+- Root cause (01-core.js `_listenV5`): the live task listener **suppressed its entire first snapshot** (`changed && wasInitialized`, with `wasInitialized` false on the first emit), assuming `Store.load()` had already populated the UI. But the chronic Android/iOS failure is exactly when `load()` returns empty — `_loadV5` does `col.get({source:"server"}).catch(()=>col.get({source:"cache"}))`, so a transient server-fetch failure (or a freshly-cleared IndexedDB cache) yields 0 tasks. The listener's first *server* snapshot then carries the real tasks but was dropped on the floor, leaving the UI stuck at 0 until some unrelated change happened to fire another snapshot.
+- Fix: replaced the single `initialized` flag with a two-lane readiness model (`tasksReady`/`settingsReady`) feeding one `deliver(changed)` gate. The first combined snapshot is now pushed to the UI when it carries tasks (purely additive — fills in data the UI was missing, never blanks a loaded state); an empty first snapshot is still suppressed so it can't wipe a state `load()` populated from a fallback. Waiting for BOTH lanes also fixes a latent bug where a tasks-first snapshot rendered with default list metadata and dropped tasks in custom lists. The settings lane now reports ready even when the settings doc doesn't exist, so it never blocks the tasks lane. Self-healing resubscribe/backoff and the catastrophic-delete save guards are unchanged.
+- `npm run build` passed in `apps/web` (vite v6.4.1, `dist/assets/index-AvRnmByW.js`). Pre-existing eslint `sourceType: module` parsing errors are an eslint-config issue across many files, not from this change (01-core.js is not among them).
+- Verify on device via `?diag=1`: latest-snapshot source = server, last server-sync recent, tasks present after a cold open with a cleared cache.
+
 ## 2026-06-02 On-Device Diagnostics + Cache-Layer Fixes (stop guessing the Android staleness)
 
 - After repeated remote misdiagnosis of "Android ultra-stale", switched approach to instrumentation. Research-first per Operating Law (firebase-js-sdk#6511 multi-tab stale-emit; #8593 corrupted IndexedDB; Firestore offline docs recommend surfacing `fromCache`).
