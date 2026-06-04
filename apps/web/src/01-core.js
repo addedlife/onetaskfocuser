@@ -144,6 +144,34 @@ const Store = {
     }
   },
 
+  // Dump the live auth identity + token claims so ?diag=1 can reveal WHY a 403 happens:
+  // the data folder is named by email-prefix, but the rules authorize by the token's
+  // claims. If the token's email/email_verified/sign-in method differ from desktop, or
+  // the folder doesn't match the token email prefix, the rules deny the read.
+  async authReport() {
+    const folder = this.uid || "(none)";
+    try {
+      const u = (typeof firebase !== "undefined") ? firebase.auth().currentUser : null;
+      if (!u) return { lines: [`Signed in: NO`, `Folder: ${folder}`] };
+      let claims = {}, signInProvider = "(unknown)";
+      try { const r = await u.getIdTokenResult(); claims = r.claims || {}; signInProvider = claims.sign_in_provider || "(unknown)"; } catch (_) {}
+      const tokenEmail = claims.email || u.email || "(none)";
+      const prefixMatches = String(tokenEmail).split("@")[0].toLowerCase() === String(folder).toLowerCase();
+      return { lines: [
+        `Signed in: YES`,
+        `Auth uid: ${u.uid}`,
+        `Token email: ${tokenEmail}`,
+        `Email verified: ${claims.email_verified === undefined ? u.emailVerified : claims.email_verified}`,
+        `Sign-in method: ${signInProvider}`,
+        `Providers: ${(u.providerData || []).map(p => p.providerId).join(", ") || "(none)"}`,
+        `Reading folder: ${folder}`,
+        `Folder matches token email: ${prefixMatches ? "YES" : "NO <- mismatch"}`,
+      ] };
+    } catch (e) {
+      return { lines: [`authReport error: ${(e && e.message) || e}`] };
+    }
+  },
+
   setUid(uid) { if (this.uid !== uid) { this.uid = uid; this._fbLoadStatus = null; } },
   lsKey()  { return `onetaskonly_v4_${this.uid || "anon"}`; },
   docRef() {

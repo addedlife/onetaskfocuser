@@ -21,6 +21,7 @@ export function DiagnosticsOverlay() {
   const [, setTick] = React.useState(0);
   const [busy, setBusy] = React.useState('');
   const [probe, setProbe] = React.useState('');
+  const [authLines, setAuthLines] = React.useState(null);
 
   React.useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 1500);
@@ -77,6 +78,14 @@ export function DiagnosticsOverlay() {
           </div>
         )}
 
+        {authLines && (
+          <div style={{ background: '#141414', border: '1px solid #3a3a3a', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 12, lineHeight: 1.6, color: '#cfead0', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+            {authLines.map((l, i) => (
+              <div key={i} style={{ color: l.includes('mismatch') || l.includes('false') ? '#ffb4b4' : '#cfead0' }}>{l}</div>
+            ))}
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
           {btn('Test database connection', async () => {
             setBusy('Pinging database…'); setProbe('');
@@ -84,6 +93,12 @@ export function DiagnosticsOverlay() {
             setProbe(r.verdict);
             setBusy('');
           }, '#0d9488')}
+          {btn('Show login details', async () => {
+            setBusy('Reading token…'); setAuthLines(null);
+            const r = await Store.authReport();
+            setAuthLines(r.lines);
+            setBusy('');
+          }, '#7c3aed')}
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
