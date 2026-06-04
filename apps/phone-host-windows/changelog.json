@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-04 14:59:11",
+        "version":  "b281",
+        "notes":  "Incoming texts now reach every signed-in device within a second or two, instead of lagging up to ten seconds or quietly going stale.",
+        "devNotes":  "RelayService gains PushNow() — a gated, coalescing immediate push (idle fires now; a burst collapses to one trailing push that always carries the latest state). It is fired from RebuildConversations (the single funnel for every inbound/sent/read-state change) and after each relayed command, so the cloud no longer waits on the 5s heartbeat. The web client (NerveCenterPhoneSurface) now subscribes to phone-relay/state via a self-healing Firestore onSnapshot listener that resubscribes on capped backoff (a listener is terminal after its error callback), replacing the 6.5s poll which stays only as a safety net. Cloud state blob trimmed 500 to 150 messages since onSnapshot resends the whole doc per change; the LAN path and full 5000-message local history are unchanged. New-text latency drops from ~11s to ~1-2s across all devices and dropped listeners self-heal."
+    },
+    {
         "timestamp":  "2026-05-25 11:06:56",
         "version":  "b280",
         "notes":  "Stripped visible borders from cards, inputs, dropdowns, and buttons — surfaces now separate by shadow and tone, not outlines.",
