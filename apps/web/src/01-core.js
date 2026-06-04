@@ -109,7 +109,11 @@ const Store = {
   //                                  long-polling transport is the thing failing)
   async probeFirestore() {
     const projectId = firebaseConfig.projectId;
-    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/__diag_probe__/__diag_probe__`;
+    // Probe the user's REAL document path so the result mirrors the actual read and the
+    // security rules apply identically. (Reserved __names__ are rejected with HTTP 400,
+    // so never use them here.) Falls back to a valid generic path if not signed in yet.
+    const path = this.uid ? `users/${this.uid}/appData/appState_v4` : "users/diagprobe";
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${path}`;
     let token = null;
     try {
       const u = (typeof firebase !== "undefined") ? firebase.auth().currentUser : null;
@@ -129,7 +133,7 @@ const Store = {
         return { ok: true, verdict: `REACHABLE — HTTP ${res.status} in ${ms}ms. Database + login are fine; the live-sync transport is what's failing.` };
       if (res.status === 401 || res.status === 403)
         return { ok: false, verdict: `DENIED — HTTP ${res.status} in ${ms}ms. Server reachable but your auth token was rejected (rules/account issue, not network).` };
-      return { ok: false, verdict: `UNEXPECTED — HTTP ${res.status} in ${ms}ms.` };
+      return { ok: false, verdict: `REACHED — HTTP ${res.status} in ${ms}ms. The server answered (so it's NOT a network block); status ${res.status} is unusual — tell Claude this number.` };
     } catch (e) {
       if (timer) clearTimeout(timer);
       const ms = Date.now() - started;
