@@ -81,11 +81,13 @@ public class RelayService : IDisposable
     // ── Push loop: state → cloud ──────────────────────────────────────────────
     private async Task PushLoopAsync(CancellationToken ct)
     {
+        // Push FIRST, then wait — so the cloud mailbox is fresh the instant the relay
+        // starts. (Previously it waited a full interval before the first push, leaving
+        // remote phones staring at an empty/stale mailbox for the first ~5 seconds.)
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                await Task.Delay(PushIntervalMs, ct);
                 await PushStateAsync();
                 _pushErrors = 0;
             }
@@ -96,6 +98,9 @@ public class RelayService : IDisposable
                 if (_pushErrors <= 3)
                     LogLine?.Invoke($"[RELAY PUSH] {ex.GetType().Name}: {ex.Message}");
             }
+
+            try { await Task.Delay(PushIntervalMs, ct); }
+            catch (OperationCanceledException) { break; }
         }
     }
 
