@@ -48,6 +48,24 @@
   [headers.values]
     Cache-Control = "no-cache, must-revalidate"
 
+# Firebase Auth on our OWN domain. The default authDomain is a shared Google domain
+# (onetaskonly-app.firebaseapp.com); serving the sign-in handler cross-domain trips
+# modern mobile browsers' anti-tracking storage block, so signInWithRedirect silently
+# fails and dumps the user back at login. The documented fix is to set authDomain to
+# our domain and proxy the reserved /__/auth/* helper paths back to Firebase. status=200
+# is a transparent rewrite (not a 30x), so the browser sees one same-origin round-trip.
+[[redirects]]
+  from = "/__/auth/*"
+  to = "https://onetaskonly-app.firebaseapp.com/__/auth/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/__/firebase/*"
+  to = "https://onetaskonly-app.firebaseapp.com/__/firebase/:splat"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/mcp"
   to = "/.netlify/functions/mcp"
