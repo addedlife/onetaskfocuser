@@ -100,6 +100,46 @@ const Store = {
     try { await db.disableNetwork(); await db.enableNetwork(); return true; } catch (_) { return false; }
   },
 
+  // Direct REST probe of the Firestore backend, used by ?diag=1 to explain WHY the
+  // real-time listener never syncs. The live SDK swallows transport failures silently,
+  // so we bypass it with a plain fetch and classify the raw result:
+  //   • fetch rejects / times out  → BLOCKED  (network/browser can't reach the server)
+  //   • HTTP 401/403               → DENIED   (server reachable, auth token rejected)
+  //   • HTTP 200/404               → REACHABLE (backend + auth fine; the streaming/
+  //                                  long-polling transport is the thing failing)
+  async probeFirestore() {
+    const projectId = firebaseConfig.projectId;
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/__diag_probe__/__diag_probe__`;
+    let token = null;
+    try {
+      const u = (typeof firebase !== "undefined") ? firebase.auth().currentUser : null;
+      token = u ? await u.getIdToken() : null;
+    } catch (_) {}
+    const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 12000) : null;
+    const started = Date.now();
+    try {
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        signal: ctrl ? ctrl.signal : undefined,
+      });
+      if (timer) clearTimeout(timer);
+      const ms = Date.now() - started;
+      if (res.status === 200 || res.status === 404)
+        return { ok: true, verdict: `REACHABLE — HTTP ${res.status} in ${ms}ms. Database + login are fine; the live-sync transport is what's failing.` };
+      if (res.status === 401 || res.status === 403)
+        return { ok: false, verdict: `DENIED — HTTP ${res.status} in ${ms}ms. Server reachable but your auth token was rejected (rules/account issue, not network).` };
+      return { ok: false, verdict: `UNEXPECTED — HTTP ${res.status} in ${ms}ms.` };
+    } catch (e) {
+      if (timer) clearTimeout(timer);
+      const ms = Date.now() - started;
+      const aborted = e && e.name === "AbortError";
+      return { ok: false, verdict: aborted
+        ? `BLOCKED — no answer after ${ms}ms (timed out). The network or browser is blocking firestore.googleapis.com.`
+        : `BLOCKED — network error after ${ms}ms: ${(e && e.message) || e}. Can't reach firestore.googleapis.com at all.` };
+    }
+  },
+
   setUid(uid) { if (this.uid !== uid) { this.uid = uid; this._fbLoadStatus = null; } },
   lsKey()  { return `onetaskonly_v4_${this.uid || "anon"}`; },
   docRef() {

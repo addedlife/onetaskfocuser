@@ -20,6 +20,7 @@ function rel(ts) {
 export function DiagnosticsOverlay() {
   const [, setTick] = React.useState(0);
   const [busy, setBusy] = React.useState('');
+  const [probe, setProbe] = React.useState('');
 
   React.useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 1500);
@@ -69,6 +70,21 @@ export function DiagnosticsOverlay() {
         </div>
 
         {busy && <div style={{ color: '#9cf', fontSize: 13, marginBottom: 10 }}>{busy}</div>}
+
+        {probe && (
+          <div style={{ background: '#141414', border: '1px solid #3a3a3a', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, lineHeight: 1.5, color: probe.startsWith('REACHABLE') ? '#cfead0' : '#ffb4b4', fontFamily: 'monospace', wordBreak: 'break-word' }}>
+            {probe}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          {btn('Test database connection', async () => {
+            setBusy('Pinging database…'); setProbe('');
+            const r = await Store.probeFirestore();
+            setProbe(r.verdict);
+            setBusy('');
+          }, '#0d9488')}
+        </div>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
           {btn('Force resync', async () => { setBusy('Resyncing…'); await Store.forceResync(); setTimeout(() => setBusy(''), 600); })}
