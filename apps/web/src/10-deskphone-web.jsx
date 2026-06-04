@@ -3161,18 +3161,7 @@ function SimpleTabContent({
             </div>
             <div className="dp-settings-actions">
               <ShellButton className="dp-primary" iconName="refresh" onClick={onRefresh}>Check now</ShellButton>
-              {isLocalMobileBridgeHost(hostInput) ? <ShellButton className="dp-tonal" iconName="open_in_new" onClick={onOpenBridge}>Open phone service</ShellButton> : null}
             </div>
-            <details className="dp-bridge-details">
-              <summary>Device address</summary>
-              <label className="dp-host-label">
-                Address
-                <input value={hostInput} onChange={(event) => setHostInput(event.target.value)} spellCheck={false} />
-              </label>
-              <div className="dp-settings-actions">
-                <ShellButton className="dp-tonal" iconName="save" onClick={onSaveHost}>Save</ShellButton>
-              </div>
-            </details>
             {canManagePhoneConnection ? (
               <div className="dp-settings-actions dp-settings-tools">
                 <ShellButton className="dp-tonal" iconName="sync" nativeSource="MainWindow.xaml:808" onClick={() => onCommand("/connect", "reconnect phone")}>Reconnect phone</ShellButton>

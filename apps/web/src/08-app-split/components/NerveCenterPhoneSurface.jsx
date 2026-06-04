@@ -5,6 +5,19 @@ import { db } from '../../01-core.js';
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 const PHONE_FETCH_TIMEOUT_MS = 4500;
 
+// True on a real phone/tablet (Android, iPhone, iPad) — by user-agent and touch,
+// NOT by window width, so a narrow desktop window is still treated as desktop.
+// Mobile devices can't reach the PC's localhost, so they use the cloud relay only.
+export function isMobilePhoneDevice() {
+  if (typeof navigator === "undefined") return false;
+  const ua = `${navigator.userAgent || ""} ${navigator.platform || ""}`.toLowerCase();
+  if (/android|iphone|ipod|ipad/.test(ua)) return true;
+  // iPadOS 13+ reports as desktop Safari — detect by touch + Mac.
+  if (/mac/.test(ua) && (navigator.maxTouchPoints || 0) > 1) return true;
+  const coarse = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches;
+  return !!coarse && (navigator.maxTouchPoints || 0) > 0;
+}
+
 function phoneDigits(value) {
   return String(value || "").replace(/\D/g, "");
 }
@@ -149,15 +162,12 @@ async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS, extraHead
 }
 
 function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
-  // Dynamic API base: auto-detect when served from DeskPhone (port 8765), else use saved LAN URL or localhost
-  const [remoteUrl, setRemoteUrl] = useState(() =>
-    typeof localStorage !== "undefined" ? (localStorage.getItem("shamash_deskphone_url") || "") : ""
-  );
-  const [showRemoteConfig, setShowRemoteConfig] = useState(false);
-  const [remoteInput, setRemoteInput] = useState("");
+  // Phone connection is now exactly two paths: direct DeskPhone on a PC, cloud relay on a phone.
+  const isMobile = useMemo(() => isMobilePhoneDevice(), []);
+  // Direct DeskPhone API base (desktop only): origin when served from DeskPhone:8765, else localhost.
   const api = (typeof window !== "undefined" && window.location.port === "8765")
     ? window.location.origin
-    : (remoteUrl.replace(/\/$/, "") || "http://127.0.0.1:8765");
+    : "http://127.0.0.1:8765";
 
   const viewportW = useViewportWidth();
   const touchActions = viewportW < 980;
@@ -181,9 +191,6 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const [expandedPhoneMessageId, setExpandedPhoneMessageId] = useState(null);
   const usingRelayRef = useRef(false);
   const [usingRelay, setUsingRelay] = useState(false);
-  const [relayStatus, setRelayStatus] = useState(null);  // { enabled, key, relayUrl } from DeskPhone
-  const [relayLanUrl, setRelayLanUrl] = useState(null);  // LAN IP embedded in relay state blob by DeskPhone
-  const [showRelaySetup, setShowRelaySetup] = useState(false);
   const refreshInFlightRef = useRef(false);
   const expandedConversationEndRef = useRef(null);
   const composeBodyRef = useRef(null);
@@ -230,28 +237,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       setError("");
       let statusRes, messagesRes, callsRes, contactsRes;
 
-      // Try the direct DeskPhone API first (short timeout so fallback is fast)
-      let localOk = false;
-      try {
-        [statusRes, messagesRes, callsRes, contactsRes] = await Promise.all([
-          fetchPhoneJson(`${api}/status`, 2500),
-          fetchPhoneJson(`${api}/messages?limit=5000`, 2500),
-          fetchPhoneJson(`${api}/calls`, 2500).catch(() => null),
-          fetchPhoneJson(`${api}/contacts`, 2500).catch(() => null),
-        ]);
-        localOk = true;
-        // Opportunistically grab relay setup info while we have local access
-        fetchPhoneJson(`${api}/relay-status`, 2500).then(s => setRelayStatus(s)).catch(() => {});
-      } catch { /* fall through to relay */ }
-
-      if (!localOk) {
-        // Relay fallback: read the single state blob the PC pushed.
-        // Requires a Firebase ID token — phone data is private to the authenticated user.
+      if (isMobile) {
+        // ── Phone: cloud relay only (localhost is unreachable from a phone). ──
+        // Reads the single state blob DeskPhone pushed. Private to the signed-in
+        // user — gated by a Firebase ID token. Live updates arrive via onSnapshot.
         let relayIdToken = null;
         try { relayIdToken = user?.getIdToken ? await user.getIdToken() : null; } catch {}
-        if (!relayIdToken) {
-          throw new Error("relay:no_auth");
-        }
+        if (!relayIdToken) throw new Error("relay:no_auth");
         try {
           const relayState = await fetchPhoneJson(
             `${RELAY_BASE}?action=state`,
@@ -262,7 +254,6 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           messagesRes = relayState?.messages  || [];
           callsRes    = relayState?.calls     || [];
           contactsRes = relayState?.contacts  || [];
-          if (relayState?.lanUrl) setRelayLanUrl(relayState.lanUrl);
           usingRelayRef.current = true;
           setUsingRelay(true);
         } catch (relayErr) {
@@ -273,6 +264,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           throw new Error("relay:fail:" + msg);
         }
       } else {
+        // ── PC: direct DeskPhone only (no relay fallback). ──
+        [statusRes, messagesRes, callsRes, contactsRes] = await Promise.all([
+          fetchPhoneJson(`${api}/status`, 2500),
+          fetchPhoneJson(`${api}/messages?limit=5000`, 2500),
+          fetchPhoneJson(`${api}/calls`, 2500).catch(() => null),
+          fetchPhoneJson(`${api}/contacts`, 2500).catch(() => null),
+        ]);
         usingRelayRef.current = false;
         setUsingRelay(false);
       }
@@ -281,22 +279,24 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       setStatus(null); setMessages([]); setCalls([]);
       messagesSigRef.current = ""; callsSigRef.current = ""; contactsSigRef.current = "";
       const msg = String(e?.message || "");
-      setError(msg === "relay:no_state"
-        ? "Relay reachable — DeskPhone hasn't pushed yet. Is DeskPhone running with relay enabled?"
-        : msg === "relay:no_auth"
-          ? "Sign in to access DeskPhone remotely."
-          : msg === "relay:denied"
-            ? "Relay blocked by Firestore rules — set allow read, write: if true for phone-relay collection."
-            : msg.startsWith("relay:fail:")
-              ? "Cloud relay unreachable. Check Netlify deploy and env vars."
-              : "Open DeskPhone to use calls and texts.");
+      setError(
+        isMobile
+          ? (msg === "relay:no_state"
+              ? "Waiting for your PC — open DeskPhone so it can relay your texts."
+              : msg === "relay:no_auth"
+                ? "Sign in to see your phone here."
+                : msg === "relay:denied"
+                  ? "Phone relay blocked by security rules."
+                  : "Cloud relay unreachable — try again in a moment.")
+          : "Open DeskPhone on this PC to use calls and texts.")
+      ;
       usingRelayRef.current = false;
       setUsingRelay(false);
       onOnlineChange?.(false);
     } finally {
       refreshInFlightRef.current = false;
     }
-  }, [api, onOnlineChange, user, applyPhoneState]);
+  }, [api, isMobile, onOnlineChange, user, applyPhoneState]);
 
   // Build phone-number → name map from contacts, covering many possible field names from the DeskPhone API
   const contactMap = useMemo(() => {
@@ -361,19 +361,6 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     }));
   }, [contacts, number, composeSearch, composeIsNew]);
 
-  const saveRemoteUrl = useCallback(() => {
-    const val = remoteInput.trim().replace(/\/$/, "");
-    setRemoteUrl(val);
-    if (typeof localStorage !== "undefined")
-      val ? localStorage.setItem("shamash_deskphone_url", val) : localStorage.removeItem("shamash_deskphone_url");
-    setShowRemoteConfig(false);
-  }, [remoteInput]);
-
-  const clearRemoteUrl = useCallback(() => {
-    setRemoteUrl(""); setRemoteInput("");
-    if (typeof localStorage !== "undefined") localStorage.removeItem("shamash_deskphone_url");
-  }, []);
-
   useEffect(() => { refresh(); const id = setInterval(refresh, 6500); return () => clearInterval(id); }, [refresh]);
 
   // ── Real-time relay: when we're on the cloud relay (away from the PC's LAN),
@@ -400,7 +387,6 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         let blob;
         try { blob = JSON.parse(raw); } catch { return; }
         applyPhoneState(blob.status, blob.messages, blob.calls, blob.contacts);
-        if (blob.lanUrl) setRelayLanUrl(blob.lanUrl);
       }, err => {
         console.warn("[Phone] relay listener error — resubscribing:", err);
         try { unsub && unsub(); } catch (_) {}
@@ -821,109 +807,15 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           style={phoneIconButton(showDialer)}>
           {suiteIcon("dialpad", 15)}
         </button>
-        {/* Remote connection config */}
-        <button onClick={() => { setShowRemoteConfig(v => !v); setRemoteInput(remoteUrl); }}
-          title={remoteUrl ? `Remote DeskPhone: ${remoteUrl}` : "Connect remote DeskPhone"}
-          style={phoneIconButton(showRemoteConfig || !!remoteUrl)}>
-          {suiteIcon("settings_ethernet", 15)}
-        </button>
-        {/* Cloud relay indicator + setup */}
-        <button onClick={() => setShowRelaySetup(v => !v)}
-          title={usingRelay ? "Live via cloud relay" : "Cloud relay setup"}
-          style={{ ...phoneIconButton(showRelaySetup || usingRelay), ...(usingRelay ? { background: C.success, color: "#fff" } : {}) }}>
-          {suiteIcon("cloud", 15)}
-        </button>
+        {/* Cloud-relay live indicator (mobile only) — the single connection marker we keep */}
+        {isMobile && (
+          <span title={usingRelay ? "Live via your PC's cloud relay" : "Waiting for your PC"}
+            style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600,
+              color: usingRelay ? C.success : C.faint, padding: "0 4px", flexShrink: 0 }}>
+            {suiteIcon("cloud", 15)}
+          </span>
+        )}
       </div>
-
-      {/* ── Remote DeskPhone config panel ── */}
-      {showRemoteConfig && window.location.port !== "8765" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, background: C.bgSoft, borderRadius: 8, padding: "10px 12px" }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: C.muted }}>Remote DeskPhone URL</div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <input
-              value={remoteInput}
-              onChange={e => setRemoteInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && saveRemoteUrl()}
-              placeholder="http://192.168.x.x:8765"
-              style={{ flex: 1, height: 32, boxSizing: "border-box", padding: "0 10px", borderRadius: 6, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: 13, outline: "none" }}
-            />
-            <button onClick={saveRemoteUrl} style={gvTextButton({ height: 32, fontSize: 12 }, C)}>Save</button>
-            <button onClick={() => setShowRemoteConfig(false)} style={gvIconButton({ width: 32, height: 32 }, C)}>{suiteIcon("close", 13)}</button>
-          </div>
-          {remoteUrl && (
-            <button onClick={clearRemoteUrl} style={gvTextButton({ height: 28, fontSize: 11 }, C)}>
-              Clear (use localhost)
-            </button>
-          )}
-          <div style={{ fontSize: 11, color: C.faint, lineHeight: 1.5 }}>
-            On your home network: navigate to <strong>http://[PC‑IP]:8765</strong> for zero‑config auto‑connect.
-          </div>
-        </div>
-      )}
-
-      {/* ── Cloud relay setup / status panel ── */}
-      {showRelaySetup && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, background: C.bgSoft, borderRadius: 8, padding: "12px 14px" }}>
-          {usingRelay ? (
-            <>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.success }}>Connected via cloud relay</div>
-              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-                DeskPhone on your PC is relaying this session. Commands take ~2 s to execute. SMS only — no call audio.
-              </div>
-              {relayLanUrl && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
-                    Your PC is also reachable directly on this network:
-                  </div>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <code style={{ flex: 1, fontSize: 11, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 5, padding: "5px 8px", color: C.text, wordBreak: "break-all" }}>
-                      {relayLanUrl}
-                    </code>
-                    <button
-                      onClick={() => {
-                        const val = relayLanUrl.replace(/\/$/, "");
-                        setRemoteUrl(val);
-                        if (typeof localStorage !== "undefined")
-                          localStorage.setItem("shamash_deskphone_url", val);
-                        setShowRelaySetup(false);
-                      }}
-                      style={gvTextButton({ height: 32, fontSize: 11 }, C)}
-                      title="Switch to direct LAN connection — faster, no relay delay">
-                      Use direct
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <div style={{ fontSize: 13, fontWeight: 500, color: C.muted }}>Cloud relay lets any browser reach your home PC</div>
-              {relayStatus ? (
-                <>
-                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-                    Your relay key (auto-generated by DeskPhone — copy it once to Netlify):
-                  </div>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <code style={{ flex: 1, fontSize: 11, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 5, padding: "5px 8px", userSelect: "all", wordBreak: "break-all", color: C.text }}>
-                      {relayStatus.key}
-                    </code>
-                    <button onClick={() => navigator.clipboard?.writeText(relayStatus.key)} style={gvTextButton({ height: 32, fontSize: 11 }, C)}>
-                      {suiteIcon("content_copy", 12)} Copy
-                    </button>
-                  </div>
-                  <div style={{ fontSize: 11, color: C.faint, lineHeight: 1.6 }}>
-                    Go to <strong>netlify.com → Your site → Site configuration → Environment variables</strong>, add <code>PHONE_RELAY_SECRET</code> = the key above, then re-deploy. One-time setup.
-                  </div>
-                </>
-              ) : (
-                <div style={{ fontSize: 12, color: C.faint }}>
-                  Open this panel while DeskPhone is running on your PC to see your relay key.
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
 
       {/* ── Dialer — only when keypad is open ── */}
       {showDialer && (

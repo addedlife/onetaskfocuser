@@ -12,7 +12,7 @@ import { isOfflineShellReady } from '../offline-support.js';
 import { buildDeskPhoneThemeQuery, getInitialSuiteView, GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, suiteIcon, useViewportWidth, Z } from './ui-tokens.jsx';
 import { AppSuiteChrome } from './components/AppSuiteChrome.jsx';
 import { DeskPhoneSuitePanel, SuiteShailosPanel } from './components/SuitePanels.jsx';
-import { NerveCenterPhoneSurface } from './components/NerveCenterPhoneSurface.jsx';
+import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './components/NerveCenterPhoneSurface.jsx';
 import { DeskPhoneMiniDock } from './components/DeskPhoneMiniDock.jsx';
 import { compactNerveSummary, nerveSummarySource, NerveCenterPanel } from './components/NerveCenterPanel.jsx';
 import { TaskRiverPanel } from './components/TaskRiverPanel.jsx';
@@ -30,6 +30,10 @@ function clearStoredGoogleBrowserToken() {
     localStorage.removeItem('ot_google_token_expiry');
   } catch {}
 }
+
+// Phones/tablets can't reach the PC's localhost, so they get the cloud-relay phone
+// surface; desktops get the full direct-to-DeskPhone web panel. Evaluated once.
+const IS_MOBILE_DEVICE = isMobilePhoneDevice();
 
 function App({ user, onSignOut }) {
   Store.setUid(canonicalUid(user));
@@ -3403,12 +3407,30 @@ function App({ user, onSignOut }) {
 
       {!shellHidden && suiteView === "deskphone" && (
         <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: Z.panel, overflow: "hidden", background: T.bg, borderLeft: `1px solid ${T.brdS || T.brd}` }}>
-          <DeskPhoneWebPanel
-            T={T}
-            onOnlineChange={setDeskPhoneOnline}
-            onClose={()=>openCommandView("focus")}
-            onLaunchNative={bringDeskPhoneForward}
-          />
+          {IS_MOBILE_DEVICE ? (
+            // Phone: cloud-relay surface only — the direct/LAN DeskPhone panel can't reach a PC from a phone.
+            <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "12px 14px", boxSizing: "border-box", minHeight: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexShrink: 0 }}>
+                <button onClick={()=>openCommandView("focus")} title="Back"
+                  style={{ width: 36, height: 36, borderRadius: 99, border: `1px solid ${T.brdS || T.brd}`, background: T.card || T.bg, color: T.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>←</button>
+                <span style={{ fontWeight: 600, fontSize: 16, color: T.text }}>Phone</span>
+              </div>
+              <NerveCenterPhoneSurface
+                T={T}
+                user={user}
+                onOnlineChange={setDeskPhoneOnline}
+                onRecordConversation={()=>{setConvCallMode(false); setShowConvCapture(true);}}
+                onRecordCall={()=>{setConvCallMode(true); setShowConvCapture(true);}}
+              />
+            </div>
+          ) : (
+            <DeskPhoneWebPanel
+              T={T}
+              onOnlineChange={setDeskPhoneOnline}
+              onClose={()=>openCommandView("focus")}
+              onLaunchNative={bringDeskPhoneForward}
+            />
+          )}
         </div>
       )}
 
