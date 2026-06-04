@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-04 18:14:55",
+        "version":  "b282",
+        "notes":  "The cloud relay now sends your phone data the instant it starts, so a phone opening the app sees your texts right away instead of waiting a few seconds for the first update.",
+        "devNotes":  "RelayService.PushLoopAsync now pushes first and waits after, instead of running Task.Delay(5s) before its first push. Previously the cloud relay mailbox sat empty/stale for the first ~5 seconds after the relay came up, so a remote phone that opened during that window saw nothing until the first heartbeat. The 5s heartbeat cadence and all other relay behavior are unchanged."
+    },
+    {
         "timestamp":  "2026-06-04 14:59:11",
         "version":  "b281",
         "notes":  "Incoming texts now reach every signed-in device within a second or two, instead of lagging up to ten seconds or quietly going stale.",
