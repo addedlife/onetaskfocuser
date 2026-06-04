@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cleanTheme, gvIconButton, gvTextButton, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
+import { db } from '../../01-core.js';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 const PHONE_FETCH_TIMEOUT_MS = 4500;
@@ -192,6 +193,36 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const C = cleanTheme(T);
   const RELAY_BASE = "/.netlify/functions/phone-relay";
 
+  // Apply a phone-state payload (from either the direct LAN poll or the cloud-relay
+  // listener) to component state. Signature refs short-circuit redundant re-renders,
+  // so it's safe for the poll and the onSnapshot listener to both feed this.
+  const applyPhoneState = useCallback((statusRes, messagesRes, callsRes, contactsRes) => {
+    const nextStatus = statusRes;
+    const parsed = messagesRes || [];
+    const nextMessages = Array.isArray(parsed) ? parsed : (parsed?.messages || []);
+    const callsParsed = callsRes || [];
+    const nextCalls = Array.isArray(callsParsed) ? callsParsed : (callsParsed?.calls || nextStatus?.recentCalls || []);
+    const contactsParsed = contactsRes || [];
+    const nextContacts = Array.isArray(contactsParsed) ? contactsParsed : (contactsParsed?.contacts || []);
+    setStatus(nextStatus);
+    const msgSig = `${nextMessages.length}|${nextMessages[0]?.id ?? nextMessages[0]?.handle ?? ""}|${nextMessages[nextMessages.length - 1]?.id ?? nextMessages[nextMessages.length - 1]?.handle ?? ""}`;
+    if (msgSig !== messagesSigRef.current) {
+      messagesSigRef.current = msgSig;
+      setMessages(nextMessages);
+    }
+    const callSig = `${nextCalls.length}|${nextCalls[0]?.id ?? nextCalls[0]?.number ?? ""}|${nextCalls[0]?.timestamp ?? nextCalls[0]?.time ?? ""}`;
+    if (callSig !== callsSigRef.current) {
+      callsSigRef.current = callSig;
+      setCalls(nextCalls);
+    }
+    const contactsSig = `${nextContacts.length}|${nextContacts[0]?.id ?? nextContacts[0]?.displayName ?? ""}|${nextContacts[nextContacts.length - 1]?.id ?? nextContacts[nextContacts.length - 1]?.displayName ?? ""}`;
+    if (contactsSig !== contactsSigRef.current) {
+      contactsSigRef.current = contactsSig;
+      setContacts(nextContacts);
+    }
+    onOnlineChange?.(true);
+  }, [onOnlineChange]);
+
   const refresh = useCallback(async () => {
     if (refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
@@ -245,30 +276,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         usingRelayRef.current = false;
         setUsingRelay(false);
       }
-      const nextStatus = statusRes;
-      const parsed = messagesRes || [];
-      const nextMessages = Array.isArray(parsed) ? parsed : (parsed?.messages || []);
-      const callsParsed = callsRes || [];
-      const nextCalls = Array.isArray(callsParsed) ? callsParsed : (callsParsed?.calls || nextStatus?.recentCalls || []);
-      const contactsParsed = contactsRes || [];
-      const nextContacts = Array.isArray(contactsParsed) ? contactsParsed : (contactsParsed?.contacts || []);
-      setStatus(nextStatus);
-      const msgSig = `${nextMessages.length}|${nextMessages[0]?.id ?? nextMessages[0]?.handle ?? ""}|${nextMessages[nextMessages.length - 1]?.id ?? nextMessages[nextMessages.length - 1]?.handle ?? ""}`;
-      if (msgSig !== messagesSigRef.current) {
-        messagesSigRef.current = msgSig;
-        setMessages(nextMessages);
-      }
-      const callSig = `${nextCalls.length}|${nextCalls[0]?.id ?? nextCalls[0]?.number ?? ""}|${nextCalls[0]?.timestamp ?? nextCalls[0]?.time ?? ""}`;
-      if (callSig !== callsSigRef.current) {
-        callsSigRef.current = callSig;
-        setCalls(nextCalls);
-      }
-      const contactsSig = `${nextContacts.length}|${nextContacts[0]?.id ?? nextContacts[0]?.displayName ?? ""}|${nextContacts[nextContacts.length - 1]?.id ?? nextContacts[nextContacts.length - 1]?.displayName ?? ""}`;
-      if (contactsSig !== contactsSigRef.current) {
-        contactsSigRef.current = contactsSig;
-        setContacts(nextContacts);
-      }
-      onOnlineChange?.(true);
+      applyPhoneState(statusRes, messagesRes, callsRes, contactsRes);
     } catch (e) {
       setStatus(null); setMessages([]); setCalls([]);
       messagesSigRef.current = ""; callsSigRef.current = ""; contactsSigRef.current = "";
@@ -288,7 +296,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     } finally {
       refreshInFlightRef.current = false;
     }
-  }, [api, onOnlineChange, user]);
+  }, [api, onOnlineChange, user, applyPhoneState]);
 
   // Build phone-number → name map from contacts, covering many possible field names from the DeskPhone API
   const contactMap = useMemo(() => {
@@ -367,6 +375,51 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   }, []);
 
   useEffect(() => { refresh(); const id = setInterval(refresh, 6500); return () => clearInterval(id); }, [refresh]);
+
+  // ── Real-time relay: when we're on the cloud relay (away from the PC's LAN),
+  // subscribe to the phone-relay/state doc directly instead of relying only on the
+  // 6.5 s poll. DeskPhone PushNow()'s the instant a text arrives, so this lands the
+  // update on every signed-in device in ~1 s. The poll above stays as a safety net.
+  //
+  // A Firestore onSnapshot listener is TERMINAL after its error callback fires (it
+  // never reconnects itself), so — exactly like Store.listenShailos — we tear down
+  // and resubscribe on capped exponential backoff so a transport drop self-heals.
+  useEffect(() => {
+    if (!usingRelay || !db || !user) return;
+    let stopped = false;
+    let unsub = null;
+    let retryTimer = null;
+    let attempt = 0;
+
+    const subscribe = () => {
+      if (stopped) return;
+      unsub = db.collection("phone-relay").doc("state").onSnapshot(snap => {
+        attempt = 0; // a healthy snapshot resets the backoff
+        const raw = snap.data()?.data;
+        if (!raw) return;
+        let blob;
+        try { blob = JSON.parse(raw); } catch { return; }
+        applyPhoneState(blob.status, blob.messages, blob.calls, blob.contacts);
+        if (blob.lanUrl) setRelayLanUrl(blob.lanUrl);
+      }, err => {
+        console.warn("[Phone] relay listener error — resubscribing:", err);
+        try { unsub && unsub(); } catch (_) {}
+        unsub = null;
+        if (stopped) return;
+        const delay = Math.min(30000, 1000 * Math.pow(2, attempt));
+        attempt += 1;
+        retryTimer = setTimeout(subscribe, delay);
+      });
+    };
+
+    subscribe();
+
+    return () => {
+      stopped = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      try { unsub && unsub(); } catch (_) {}
+    };
+  }, [usingRelay, user, applyPhoneState]);
 
   const post = async (path, label) => {
     setBusy(label);

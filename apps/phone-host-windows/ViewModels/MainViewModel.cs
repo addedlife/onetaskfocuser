@@ -6415,6 +6415,11 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         ApplySearch();
         NotifySelectedConversationDetailsChanged();
+
+        // Any message change (inbound, sent, read-state) just reshaped the
+        // conversation list — push it to the cloud now so every signed-in browser
+        // updates in ~1 s instead of on the 5 s heartbeat. PushNow self-throttles.
+        _relay.PushNow();
     }
 
     // ── KnownDevices list (Settings tab) ─────────────────────────────────

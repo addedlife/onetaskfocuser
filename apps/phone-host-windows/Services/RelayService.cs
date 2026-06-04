@@ -14,10 +14,14 @@ namespace DeskPhone.Services;
 public class RelayService : IDisposable
 {
     private const string DefaultRelayUrl = "https://onetaskfocuser.netlify.app/.netlify/functions/phone-relay";
-    private const int PushIntervalMs     = 5_000;   // push state every 5 s
+    private const int PushIntervalMs     = 5_000;   // background heartbeat push every 5 s
     private const int DrainIntervalMs    = 2_000;   // poll for commands every 2 s
-    private const int MessageRelayLimit  = 500;     // messages to include in state blob
+    private const int MessageRelayLimit  = 150;     // messages in the cloud blob — onSnapshot re-sends the
+                                                    // WHOLE doc to every device on each change, so keep it
+                                                    // small (mobile-data friendly, well under Firestore's
+                                                    // 1 MiB doc cap). The LAN /messages path keeps full 5000.
     private const int HttpTimeoutMs      = 8_000;
+    private const int MinPushGapMs       = 900;     // floor between pushes so a burst of texts coalesces
 
     // ── Callbacks wired by MainViewModel (same sources as ControlApiService) ─
     public Func<string>?                           GetStatus   { get; set; }
@@ -46,6 +50,11 @@ public class RelayService : IDisposable
     private DateTime                _lastPush = DateTime.MinValue;
     private int                     _pushErrors;
     private int                     _drainErrors;
+
+    // PushNow coalescing: serialize all pushes through one gate, and collapse a
+    // burst of PushNow() calls (e.g. 5 texts at once) into a single trailing push.
+    private readonly SemaphoreSlim  _pushGate        = new(1, 1);
+    private volatile bool           _pushNowScheduled;
 
     public void Configure(string relayKey, string? relayUrl)
     {
@@ -94,27 +103,68 @@ public class RelayService : IDisposable
     {
         if (GetStatus is null) return;
 
-        // Build state blob: status + recent messages + calls + contacts
-        var statusJson   = GetStatus();
-        var messagesJson = GetMessages?.Invoke(MessageRelayLimit, false) ?? "[]";
-        var callsJson    = GetCalls?.Invoke() ?? "[]";
-        var contactsJson = GetContacts?.Invoke() ?? "[]";
-
-        // Inline-assemble the outer object without deserializing everything —
-        // these are already valid JSON strings, just stitch them together.
-        var lanUrl    = GetLanUrl?.Invoke() ?? "";
-        var stateJson = $"{{\"status\":{statusJson},\"messages\":{messagesJson},\"calls\":{callsJson},\"contacts\":{contactsJson},\"lanUrl\":\"{lanUrl}\",\"pushedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
-
-        using var content = new StringContent(stateJson, Encoding.UTF8, "application/json");
-        using var req     = new HttpRequestMessage(HttpMethod.Post, $"{_relayUrl}?action=push") { Content = content };
-        req.Headers.Add("X-Relay-Secret", _relayKey);
-        using var resp = await _http.SendAsync(req);
-        if (!resp.IsSuccessStatusCode)
+        // Serialize every push (heartbeat loop + PushNow) so two writes never race
+        // the same Firestore doc. The gate is released in finally.
+        await _pushGate.WaitAsync();
+        try
         {
-            var body = await resp.Content.ReadAsStringAsync();
-            throw new Exception($"HTTP {(int)resp.StatusCode} — {body[..Math.Min(200, body.Length)]}");
+            // Build state blob: status + recent messages + calls + contacts
+            var statusJson   = GetStatus();
+            var messagesJson = GetMessages?.Invoke(MessageRelayLimit, false) ?? "[]";
+            var callsJson    = GetCalls?.Invoke() ?? "[]";
+            var contactsJson = GetContacts?.Invoke() ?? "[]";
+
+            // Inline-assemble the outer object without deserializing everything —
+            // these are already valid JSON strings, just stitch them together.
+            var lanUrl    = GetLanUrl?.Invoke() ?? "";
+            var stateJson = $"{{\"status\":{statusJson},\"messages\":{messagesJson},\"calls\":{callsJson},\"contacts\":{contactsJson},\"lanUrl\":\"{lanUrl}\",\"pushedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
+
+            using var content = new StringContent(stateJson, Encoding.UTF8, "application/json");
+            using var req     = new HttpRequestMessage(HttpMethod.Post, $"{_relayUrl}?action=push") { Content = content };
+            req.Headers.Add("X-Relay-Secret", _relayKey);
+            using var resp = await _http.SendAsync(req);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync();
+                throw new Exception($"HTTP {(int)resp.StatusCode} — {body[..Math.Min(200, body.Length)]}");
+            }
+            _lastPush = DateTime.UtcNow;
         }
-        _lastPush = DateTime.UtcNow;
+        finally { _pushGate.Release(); }
+    }
+
+    /// <summary>
+    /// Push state to the cloud immediately instead of waiting for the 5 s heartbeat.
+    /// Call this whenever the phone state changes (new text, sent text, read-state,
+    /// command result) so all remote browsers see it within ~1 s.
+    ///
+    /// Coalescing: idle → fires right away; mid-burst → collapses to a single trailing
+    /// push (≥ MinPushGapMs apart) that always carries the latest state, because the
+    /// blob is rebuilt from the live callbacks at send time.
+    /// </summary>
+    public void PushNow()
+    {
+        if (!IsEnabled) return;
+        if (_pushNowScheduled) return;     // a push is already queued for this burst
+        _pushNowScheduled = true;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var since = DateTime.UtcNow - _lastPush;
+                var wait  = MinPushGapMs - (int)since.TotalMilliseconds;
+                if (wait > 0) await Task.Delay(wait);
+                _pushNowScheduled = false;  // reset BEFORE sending so changes during the
+                                            // send schedule the next trailing push
+                await PushStateAsync();
+            }
+            catch (Exception ex)
+            {
+                _pushNowScheduled = false;
+                LogLine?.Invoke($"[RELAY PUSHNOW] {ex.GetType().Name}: {ex.Message}");
+            }
+        });
     }
 
     // ── Drain loop: cloud commands → execute on DeskPhone ────────────────────
@@ -205,6 +255,11 @@ public class RelayService : IDisposable
                     LogLine?.Invoke($"[RELAY CMD] unhandled: {path}");
                     break;
             }
+
+            // Push the resulting state right away so the remote browser sees the
+            // effect of its command (call state, sent text, read flag) within ~1 s
+            // instead of waiting for the next heartbeat.
+            PushNow();
         }
         catch (Exception ex)
         {
@@ -222,5 +277,6 @@ public class RelayService : IDisposable
     {
         Stop();
         _http.Dispose();
+        _pushGate.Dispose();
     }
 }
