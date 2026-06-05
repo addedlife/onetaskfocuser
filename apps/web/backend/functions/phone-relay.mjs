@@ -31,6 +31,10 @@ const FB_PROJECT = "onetaskonly-app";
 // Firebase web API key — public by design; security enforced by Firestore rules + secret header.
 const FB_API_KEY = "AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA";
 const FS_BASE = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents/phone-relay`;
+// Picture-text images are too big for the 1 MiB state doc, so each one lives in its
+// own document in a separate "phone-media" collection. DeskPhone uploads a resized
+// preview; the webapp reads it back by id (Firestore rule: read if request.auth != null).
+const FS_MEDIA_BASE = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents/phone-media`;
 
 function ok(body) {
   return {
@@ -82,6 +86,20 @@ async function fsSet(docId, value) {
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Firestore PATCH ${docId} → HTTP ${res.status}: ${text}`);
+  }
+}
+
+/** Write an image preview (a data: URL string) into phone-media/{id}. Create-or-update. */
+async function fsSetMedia(docId, dataUrl) {
+  const url = `${FS_MEDIA_BASE}/${encodeURIComponent(docId)}?key=${FB_API_KEY}&updateMask.fieldPaths=data`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fields: { data: { stringValue: dataUrl } } }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Firestore PATCH media ${docId} → HTTP ${res.status}: ${text}`);
   }
 }
 
@@ -139,6 +157,21 @@ export const handler = async (event) => {
       return ok({ ok: true });
     } catch (e) {
       return err(500, "Failed to write state: " + e.message);
+    }
+  }
+
+  // ── POST push-media (DeskPhone → cloud, relay secret required) ───────────
+  // Body: { id, dataUrl }. Stores one resized picture-text image in phone-media/{id}.
+  if (action === "push-media" && method === "POST") {
+    if (!secret || incoming !== secret) return err(401, "unauthorized");
+    let payload;
+    try { payload = JSON.parse(event.body || "{}"); } catch { return err(400, "invalid JSON"); }
+    if (!payload.id || !payload.dataUrl) return err(400, "missing id or dataUrl");
+    try {
+      await fsSetMedia(String(payload.id), String(payload.dataUrl));
+      return ok({ ok: true, id: payload.id });
+    } catch (e) {
+      return err(500, "Failed to write media: " + e.message);
     }
   }
 

@@ -78,5 +78,14 @@ service cloud.firestore {
     match /phone-relay/commands {
       allow read, write: if true;
     }
+
+    // Picture-text image previews — one resized image per document.
+    //   - Read: requires Firebase auth (only the signed-in user sees their pictures).
+    //   - Write: open at the Firestore layer; the Netlify function gates push-media
+    //     behind the X-Relay-Secret before writing.
+    match /phone-media/{imageId} {
+      allow read: if request.auth != null;
+      allow write: if true;
+    }
   }
 }

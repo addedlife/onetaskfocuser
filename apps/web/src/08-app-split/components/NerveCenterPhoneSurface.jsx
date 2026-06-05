@@ -1041,7 +1041,11 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                             return (
                               <div key={`${thread._who}-${messageTimeMs(msg)}-${msgIdx}`} style={{ alignSelf: outgoing ? "flex-end" : "flex-start", maxWidth: "92%", minWidth: 0 }}>
                                 <div style={{ borderRadius: 8, border: `1px solid ${outgoing ? "transparent" : C.divider}`, background: outgoing ? C.hover : C.bgSoft, color: C.text, padding: "7px 9px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                                  {linkedMessageParts(msgText || "(no text)", { color: C.accent })}
+                                  {msgText && linkedMessageParts(msgText, { color: C.accent })}
+                                  {(msg.attachments || []).filter(a => a.isImage).map((a, ai) => (
+                                    <PhoneMmsImage key={a.mediaId || ai} attachment={a} C={C} />
+                                  ))}
+                                  {!msgText && !(msg.attachments || []).some(a => a.isImage) && "(no text)"}
                                 </div>
                                 {msgTime && <div style={{ fontSize: 11, color: C.faint, marginTop: 2, textAlign: outgoing ? "right" : "left" }}>{msgTime}</div>}
                               </div>
