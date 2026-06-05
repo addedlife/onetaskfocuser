@@ -161,6 +161,45 @@ async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS, extraHead
   }
 }
 
+// Cross-render cache of fetched picture-text previews (mediaId → data: URL) so a thread
+// re-render or reopen doesn't refetch the same image.
+const mediaCache = new Map();
+
+// Renders one MMS image. On the LAN path the bytes arrive inline (attachment.dataUrl);
+// on the cloud-relay path only a small mediaId comes through, so we fetch the resized
+// preview from the phone-media/{mediaId} Firestore doc (gated by the signed-in user).
+function PhoneMmsImage({ attachment, C }) {
+  const inline = attachment?.dataUrl || "";
+  const mediaId = attachment?.mediaId || "";
+  const [src, setSrc] = useState(inline || (mediaId ? mediaCache.get(mediaId) || "" : ""));
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (inline) { setSrc(inline); return; }
+    if (!mediaId || !db) return;
+    const cached = mediaCache.get(mediaId);
+    if (cached) { setSrc(cached); return; }
+    let cancelled = false;
+    db.collection("phone-media").doc(mediaId).get()
+      .then(snap => {
+        if (cancelled) return;
+        const url = snap.exists ? (snap.data()?.data || "") : "";
+        if (url) { mediaCache.set(mediaId, url); setSrc(url); }
+        else setFailed(true);
+      })
+      .catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
+  }, [inline, mediaId]);
+
+  if (src) {
+    return <img src={src} alt="" loading="lazy"
+      style={{ maxWidth: "100%", maxHeight: 280, borderRadius: 6, marginTop: 4, display: "block", objectFit: "contain" }} />;
+  }
+  return <div style={{ fontSize: 12, color: C.faint, padding: "4px 0", display: "flex", alignItems: "center", gap: 4 }}>
+    {suiteIcon("image", 14)} {failed ? "image unavailable" : "loading image…"}
+  </div>;
+}
+
 function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
   // Phone connection is now exactly two paths: direct DeskPhone on a PC, cloud relay on a phone.
   const isMobile = useMemo(() => isMobilePhoneDevice(), []);
@@ -382,6 +421,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       if (stopped) return;
       unsub = db.collection("phone-relay").doc("state").onSnapshot(snap => {
         attempt = 0; // a healthy snapshot resets the backoff
+        // IGNORE cache emissions. The Firestore SDK replays a locally-cached copy of
+        // the doc first (snap.metadata.fromCache) — which on a phone can be a STALE,
+        // empty snapshot (e.g. cached before DeskPhone first pushed). Applying it would
+        // destructively wipe the fresh data the REST poll just loaded, leaving a green
+        // "connected" icon over an empty feed. Trust only server snapshots; the 6.5s
+        // REST poll is the baseline. (Same hard-won lesson as Store.listenShailos.)
+        if (snap.metadata.fromCache) return;
         const raw = snap.data()?.data;
         if (!raw) return;
         let blob;
