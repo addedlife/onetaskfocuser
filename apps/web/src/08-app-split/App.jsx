@@ -1068,6 +1068,10 @@ function App({ user, onSignOut }) {
         if (he) {
           newState = { ...newState, priorities: newState.priorities.filter(p => p.id !== he.id) };
         }
+        // Retire Before Shavuos priority arriving from Firestore (holiday has passed)
+        if (newState.priorities) {
+          newState = { ...newState, priorities: ensureBeforeShavuosPriority(newState.priorities) };
+        }
         adoptedRemote.current = true;
         lastSavedModified.current = newState._lsModified || Date.now();
         Store.ls(newState);
@@ -1084,6 +1088,7 @@ function App({ user, onSignOut }) {
       if (!fbState) return;
       const fbTs = fbState._lsModified || 0;
       if (fbTs > lastSavedModified.current) {
+        if (fbState.priorities) fbState = { ...fbState, priorities: ensureBeforeShavuosPriority(fbState.priorities) };
         adoptedRemote.current = true;
         lastSavedModified.current = fbTs;
         Store._fbLoadedTs = fbTs;
