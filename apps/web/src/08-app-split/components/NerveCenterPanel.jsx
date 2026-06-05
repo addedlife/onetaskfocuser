@@ -2018,7 +2018,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Phone */}
           <MobileBox {...boxCtx} menuKey="phone" icon="phone_in_talk" title="Phone" style={{ gridColumn: span(1) }}
             menuItems={[{ icon:"open_in_full", label:"Open phone view", run: onOpenPhone }]}>
-            <div style={{ padding:"4px 10px 8px", height:"100%", boxSizing:"border-box" }}>
+            {/* Flex column with a real height so the phone surface's flex:1 activity feed
+                gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
+            <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0, padding:"4px 10px 8px", boxSizing:"border-box" }}>
               <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </MobileBox>
