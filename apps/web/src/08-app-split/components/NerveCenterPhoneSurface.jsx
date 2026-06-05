@@ -4,6 +4,19 @@ import { db } from '../../01-core.js';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 const PHONE_FETCH_TIMEOUT_MS = 4500;
+// How fresh the relayed phone state must be for the PC to count as "currently connected".
+// DeskPhone heartbeats to the relay every ~5s, so a gap beyond this (≈6 missed beats)
+// means the PC/DeskPhone is offline and new texts/calls are NOT arriving live.
+const RELAY_LIVE_WINDOW_MS = 30000;
+
+// Compact "27s" / "4m" / "2h" age label for the relay's last-connected time.
+function relayAgeLabel(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  if (s < 86400) return `${Math.round(s / 3600)}h`;
+  return `${Math.round(s / 86400)}d`;
+}
 
 // True on a real phone/tablet (Android, iPhone, iPad) — by user-agent and touch,
 // NOT by window width, so a narrow desktop window is still treated as desktop.
@@ -230,6 +243,11 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const [expandedPhoneMessageId, setExpandedPhoneMessageId] = useState(null);
   const usingRelayRef = useRef(false);
   const [usingRelay, setUsingRelay] = useState(false);
+  // Server-stamped time the relay last received a push from the PC (relayReceivedAt in
+  // the state blob). Drives the live/stale connection indicator on mobile.
+  const [relayReceivedAt, setRelayReceivedAt] = useState(0);
+  // Ticks so staleness re-evaluates over time even when no new data arrives (PC went away).
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const refreshInFlightRef = useRef(false);
   const expandedConversationEndRef = useRef(null);
   const composeBodyRef = useRef(null);
@@ -242,7 +260,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // Apply a phone-state payload (from either the direct LAN poll or the cloud-relay
   // listener) to component state. Signature refs short-circuit redundant re-renders,
   // so it's safe for the poll and the onSnapshot listener to both feed this.
-  const applyPhoneState = useCallback((statusRes, messagesRes, callsRes, contactsRes) => {
+  const applyPhoneState = useCallback((statusRes, messagesRes, callsRes, contactsRes, receivedAt = 0) => {
     const nextStatus = statusRes;
     const parsed = messagesRes || [];
     const nextMessages = Array.isArray(parsed) ? parsed : (parsed?.messages || []);
@@ -266,8 +284,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       contactsSigRef.current = contactsSig;
       setContacts(nextContacts);
     }
-    onOnlineChange?.(true);
-  }, [onOnlineChange]);
+    // Record when the relay last heard from the PC. On the LAN path there's no relay
+    // stamp (receivedAt=0) — that path's liveness is the just-completed fetch itself.
+    if (receivedAt) setRelayReceivedAt(receivedAt);
+  }, []);
 
   const refresh = useCallback(async () => {
     if (refreshInFlightRef.current) return;
@@ -275,6 +295,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     try {
       setError("");
       let statusRes, messagesRes, callsRes, contactsRes;
+      let relayReceivedAtRes = 0;
 
       if (isMobile) {
         // ── Phone: cloud relay only (localhost is unreachable from a phone). ──
@@ -293,6 +314,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           messagesRes = relayState?.messages  || [];
           callsRes    = relayState?.calls     || [];
           contactsRes = relayState?.contacts  || [];
+          relayReceivedAtRes = Number(relayState?.relayReceivedAt) || 0;
           usingRelayRef.current = true;
           setUsingRelay(true);
         } catch (relayErr) {
@@ -313,9 +335,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         usingRelayRef.current = false;
         setUsingRelay(false);
       }
-      applyPhoneState(statusRes, messagesRes, callsRes, contactsRes);
+      applyPhoneState(statusRes, messagesRes, callsRes, contactsRes, relayReceivedAtRes);
     } catch (e) {
-      setStatus(null); setMessages([]); setCalls([]);
+      setStatus(null); setMessages([]); setCalls([]); setRelayReceivedAt(0);
       messagesSigRef.current = ""; callsSigRef.current = ""; contactsSigRef.current = "";
       const msg = String(e?.message || "");
       setError(
@@ -402,6 +424,14 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
 
   useEffect(() => { refresh(); const id = setInterval(refresh, 6500); return () => clearInterval(id); }, [refresh]);
 
+  // Re-evaluate relay freshness on a clock even when no new data arrives, so the
+  // "Live" indicator flips to "PC offline" once the PC stops heartbeating.
+  useEffect(() => {
+    if (!isMobile) return undefined;
+    const id = setInterval(() => setNowTick(Date.now()), 5000);
+    return () => clearInterval(id);
+  }, [isMobile]);
+
   // ── Real-time relay: when we're on the cloud relay (away from the PC's LAN),
   // subscribe to the phone-relay/state doc directly instead of relying only on the
   // 6.5 s poll. DeskPhone PushNow()'s the instant a text arrives, so this lands the
@@ -432,7 +462,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         if (!raw) return;
         let blob;
         try { blob = JSON.parse(raw); } catch { return; }
-        applyPhoneState(blob.status, blob.messages, blob.calls, blob.contacts);
+        applyPhoneState(blob.status, blob.messages, blob.calls, blob.contacts, Number(blob.relayReceivedAt) || 0);
       }, err => {
         console.warn("[Phone] relay listener error — resubscribing:", err);
         try { unsub && unsub(); } catch (_) {}
@@ -510,9 +540,27 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const isIncoming = /ring|incoming/i.test(callState);
   const isOnCall = !!callState && !isIncoming && /^(active|dialing|oncall|callactive)$/i.test(callState.replace(/\s+/g, ""));
   const statusOnline = !!status;
+  // Relay liveness: on mobile the green light means the PC is *currently* pushing — i.e.
+  // the relay heard from it within RELAY_LIVE_WINDOW_MS. A stale stamp = PC/DeskPhone
+  // closed, so incoming texts/calls are NOT reaching this device live. On the LAN path
+  // there's no relay; liveness is simply whether the just-completed /status fetch worked.
+  const relayAgeMs = relayReceivedAt > 0 ? Math.max(0, nowTick - relayReceivedAt) : 0;
+  const relayStale = isMobile && usingRelay && relayReceivedAt > 0 && relayAgeMs >= RELAY_LIVE_WINDOW_MS;
+  const phoneLinkLive = isMobile ? (usingRelay && statusOnline && relayReceivedAt > 0 && !relayStale) : statusOnline;
   const deviceName = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
   const idleLabel = deviceName ? `Connected · ${deviceName}` : "Connected";
-  const statusText = status ? (isIncoming ? "Incoming call" : isOnCall ? "On call" : callState ? "Call status changed" : idleLabel) : "DeskPhone offline";
+  const statusText = !statusOnline
+    ? "DeskPhone offline"
+    : (isMobile && relayStale)
+      ? `PC offline · last seen ${relayAgeLabel(relayAgeMs)} ago`
+      : (isIncoming ? "Incoming call" : isOnCall ? "On call" : callState ? "Call status changed" : idleLabel);
+
+  // Report true liveness to the NerveCenter (not just "we have a blob"), and flip it to
+  // offline as soon as the relay goes stale, so the dashboard tile can't claim "connected"
+  // over data from a PC that closed an hour ago.
+  useEffect(() => {
+    onOnlineChange?.(phoneLinkLive);
+  }, [onOnlineChange, phoneLinkLive]);
   const callerName = status?.callerName || status?.CallerName || status?.callerDisplay || status?.CallerDisplay || status?.callerID || status?.CallerID || "";
   const callerNumber = status?.callerNumber || status?.CallerNumber || status?.incomingNumber || status?.IncomingNumber || status?.callNumber || status?.CallNumber || "";
   const callerDisplay = callerName || (callerNumber ? (lookupName(callerNumber) || callerNumber) : "");
@@ -572,12 +620,12 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   }, [expandedPhoneMessageId, expandedConversationSig]);
   useEffect(() => {
     onStatusSummary?.({
-      online: statusOnline,
-      tone: isIncoming ? "incoming" : isOnCall ? "call" : statusOnline ? "online" : "offline",
-      label: callerDisplay && (isIncoming || isOnCall) ? `${isIncoming ? "Incoming" : "On call"}: ${callerDisplay}` : statusText,
+      online: phoneLinkLive,
+      tone: relayStale ? "offline" : isIncoming ? "incoming" : isOnCall ? "call" : phoneLinkLive ? "online" : "offline",
+      label: callerDisplay && (isIncoming || isOnCall) && !relayStale ? `${isIncoming ? "Incoming" : "On call"}: ${callerDisplay}` : statusText,
       voicemailCount: vmCount,
     });
-  }, [onStatusSummary, statusOnline, isIncoming, isOnCall, callerDisplay, statusText, vmCount]);
+  }, [onStatusSummary, phoneLinkLive, relayStale, isIncoming, isOnCall, callerDisplay, statusText, vmCount]);
   const phoneIconButton = (active = false) => gvIconButton({
     width: compact ? 32 : 36,
     height: compact ? 32 : 36,
@@ -672,7 +720,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const actionableMissedCalls = recentCalls.filter(c => callKindLabel(c) === "missed" && !isMissedCallResolved(c));
 
   const phoneActivitySnapshot = useMemo(() => ({
-    online: statusOnline,
+    online: phoneLinkLive,
+    stale: relayStale,
+    lastSeenLabel: relayStale ? relayAgeLabel(relayAgeMs) : "",
     status: statusText,
     unreadTexts: threads.reduce((sum, thread) => sum + (thread._unreadCount || 0), 0),
     missedCalls: actionableMissedCalls.length,
@@ -696,7 +746,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         time: fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime),
       };
     }),
-  }), [statusOnline, statusText, threads, recentCalls, actionableMissedCalls.length, vmCount, lookupName, messages]);
+  }), [phoneLinkLive, relayStale, relayAgeMs, statusText, threads, recentCalls, actionableMissedCalls.length, vmCount, lookupName, messages]);
 
   useEffect(() => {
     onActivitySnapshot?.(phoneActivitySnapshot);
@@ -808,6 +858,22 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         </div>
       )}
 
+      {/* ── PC-link status banner (mobile relay only) — tells you whether your PC is
+            actually connected right now, so you know live texts/calls are arriving. ── */}
+      {isMobile && usingRelay && (
+        relayStale ? (
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, lineHeight: 1.4, color: C.warning, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 8, padding: "8px 10px" }}>
+            <span style={{ marginTop: 1, flexShrink: 0, color: C.warning }}>{suiteIcon("cloud_off", 16)}</span>
+            <span>Your PC looks offline — last update {relayAgeLabel(relayAgeMs)} ago. New texts &amp; calls won't arrive here until DeskPhone reconnects on your PC.</span>
+          </div>
+        ) : phoneLinkLive ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: C.success, padding: "0 2px" }}>
+            <span style={{ width: 7, height: 7, borderRadius: 99, flexShrink: 0, background: C.success }} />
+            <span>Live · connected to your PC{deviceName ? ` · ${deviceName}` : ""}</span>
+          </div>
+        ) : null
+      )}
+
       {composeOpen && !composeAnchorId && renderComposeBox()}
 
       {/* ── Control bar: answer/hangup | record | new-msg | keypad toggle ── */}
@@ -853,12 +919,19 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           style={phoneIconButton(showDialer)}>
           {suiteIcon("dialpad", 15)}
         </button>
-        {/* Cloud-relay live indicator (mobile only) — the single connection marker we keep */}
+        {/* Cloud-relay live indicator (mobile only). Green "Live" = the relay heard from
+            your PC within the last ~30s. "PC offline · age" = stale; the data on screen is
+            a snapshot from before your PC closed and new texts/calls are NOT coming in. */}
         {isMobile && (
-          <span title={usingRelay ? "Live via your PC's cloud relay" : "Waiting for your PC"}
-            style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600,
-              color: usingRelay ? C.success : C.faint, padding: "0 4px", flexShrink: 0 }}>
-            {suiteIcon("cloud", 15)}
+          <span title={
+            phoneLinkLive ? "Live — connected to your PC's cloud relay"
+              : relayStale ? `PC offline — last update ${relayAgeLabel(relayAgeMs)} ago`
+                : "Waiting for your PC"
+          }
+            style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700,
+              color: phoneLinkLive ? C.success : relayStale ? C.warning : C.faint, padding: "0 4px", flexShrink: 0 }}>
+            {suiteIcon(phoneLinkLive ? "cloud" : "cloud_off", 15)}
+            <span>{phoneLinkLive ? "Live" : relayStale ? relayAgeLabel(relayAgeMs) : "…"}</span>
           </span>
         )}
       </div>

@@ -123,8 +123,19 @@ export const handler = async (event) => {
     if (!secret || incoming !== secret) return err(401, "unauthorized");
     const body = event.body || "";
     if (!body) return err(400, "empty body");
+    // Stamp the server-side receive time into the blob. DeskPhone heartbeats on a short
+    // interval, so a recent relayReceivedAt means the PC is *currently* connected — that's
+    // how remote devices tell live texts/calls from a stale snapshot of a closed PC.
+    // Stamped here (not on the PC) so it works without a DeskPhone rebuild and doesn't
+    // depend on the PC's clock. Falls back to storing the raw body if it isn't JSON.
+    let toStore = body;
     try {
-      await fsSet("state", body);
+      const parsed = JSON.parse(body);
+      parsed.relayReceivedAt = Date.now();
+      toStore = JSON.stringify(parsed);
+    } catch (_) { /* non-JSON payload — store untouched */ }
+    try {
+      await fsSet("state", toStore);
       return ok({ ok: true });
     } catch (e) {
       return err(500, "Failed to write state: " + e.message);

@@ -14,6 +14,22 @@ const _AUTH_DOMAIN = "onetaskapp.local";
 const _AUTH_STAY_SIGNED_IN_KEY = "ot_auth_stay_signed_in";
 const _AUTH_LAST_UID_KEY = "ot_last_uid";
 const _AUTH_FRESH_LOGIN_KEY = "ot_fresh_login";
+// Remember the last working Google account so cold starts can pre-select it (login_hint)
+// and so the recovery screen can show "Continue as <email>". Only Google emails are
+// stored here — that's the verified identity the Firestore rules authorize.
+const _AUTH_LAST_GOOGLE_EMAIL_KEY = "ot_last_google_email";
+// Set just before an auto-recovery sign-out so we don't loop, cleared on a good load.
+const _AUTH_RECOVERY_KEY = "ot_access_recovery";
+
+function _readLastGoogleEmail() {
+  try { return localStorage.getItem(_AUTH_LAST_GOOGLE_EMAIL_KEY) || ""; } catch (_) { return ""; }
+}
+
+function _rememberGoogleEmail(email) {
+  const e = String(email || "").trim();
+  if (!e) return;
+  try { localStorage.setItem(_AUTH_LAST_GOOGLE_EMAIL_KEY, e); } catch (_) {}
+}
 
 // Use redirect auth on iOS / Android — popups are blocked by iOS Safari
 function _isMobileOrTablet() {
@@ -53,6 +69,22 @@ function AuthGate() {
   const [authState, setAuthState] = React.useState(window.__OT_DEV ? "authed" : "loading");
   const [user, setUser] = React.useState(window.__OT_DEV_USER);
   const [authError, setAuthError] = React.useState("");
+  const [recoveryNotice, setRecoveryNotice] = React.useState("");
+
+  // Called by App when a cold-started session is restored but Firestore denies it
+  // (a "bad profile" with no access). Rather than leaving the user on a silently-empty
+  // app that they have to manually sign out of, route straight back to Google sign-in
+  // with an explanation. Guarded by a session flag so it can't loop.
+  const handleSessionLostAccess = React.useCallback(() => {
+    try { sessionStorage.setItem(_AUTH_RECOVERY_KEY, "1"); } catch (_) {}
+    const last = _readLastGoogleEmail();
+    setRecoveryNotice(
+      last
+        ? `This sign-in lost access to your data. Sign in with Google${last ? ` as ${last}` : ""} to restore your tasks and shailos.`
+        : "This sign-in lost access to your data. Sign in with Google to restore your tasks and shailos."
+    );
+    try { firebase.auth().signOut(); } catch (_) {}
+  }, []);
 
   React.useEffect(() => {
     if (window.__OT_DEV) return;
@@ -72,6 +104,8 @@ function AuthGate() {
           // Mark as a fresh login so downstream code can skip stale caches.
           try { sessionStorage.setItem(_AUTH_FRESH_LOGIN_KEY, u.uid); } catch {}
           try { localStorage.setItem(_AUTH_STAY_SIGNED_IN_KEY, "1"); } catch {}
+          // Remember the working Google identity for next cold start's login_hint.
+          _rememberGoogleEmail(u.email);
           const emailPrefix = (u.email || "").split("@")[0].toLowerCase();
           if (emailPrefix && (!u.displayName || u.displayName !== emailPrefix)) {
             try { await u.updateProfile({ displayName: emailPrefix }); } catch {}
@@ -135,10 +169,10 @@ function AuthGate() {
   );
 
   if (authState === "anon") return withDiag(
-    <LoginScreen onLogin={u => { setUser(u); setAuthState("authed"); }} initialError={authError} />
+    <LoginScreen onLogin={u => { setUser(u); setAuthState("authed"); }} initialError={recoveryNotice || authError} />
   );
 
-  return withDiag(<App user={user} onSignOut={() => firebase.auth().signOut()} />);
+  return withDiag(<App user={user} onSignOut={() => firebase.auth().signOut()} onSessionLostAccess={handleSessionLostAccess} />);
 }
 
 // ── Login / Sign-up screen ──────────────────────────────────────────────────
@@ -199,6 +233,9 @@ function LoginScreen({ onLogin, initialError = "" }) {
       await _setAuthPersistence(staySignedIn);
       try { localStorage.setItem(_AUTH_STAY_SIGNED_IN_KEY, staySignedIn ? "1" : "0"); } catch(_) {}
       const provider = new firebase.auth.GoogleAuthProvider();
+      // Pre-select the last working Google account so recovery / cold start is one tap.
+      const lastEmail = _readLastGoogleEmail();
+      if (lastEmail) provider.setCustomParameters({ login_hint: lastEmail });
 
       if (_isMobileOrTablet()) {
         // iOS Safari blocks popups; use redirect flow.
@@ -214,6 +251,7 @@ function LoginScreen({ onLogin, initialError = "" }) {
         try { await u.updateProfile({ displayName: emailPrefix }); } catch(_) {}
       }
       try { sessionStorage.setItem(_AUTH_FRESH_LOGIN_KEY, u.uid); } catch(_) {}
+      _rememberGoogleEmail(u.email);
       onLogin(cred.user);
     } catch(e) {
       if (e.code !== "auth/popup-closed-by-user") {

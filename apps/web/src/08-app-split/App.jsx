@@ -35,7 +35,7 @@ function clearStoredGoogleBrowserToken() {
 // surface; desktops get the full direct-to-DeskPhone web panel. Evaluated once.
 const IS_MOBILE_DEVICE = isMobilePhoneDevice();
 
-function App({ user, onSignOut }) {
+function App({ user, onSignOut, onSessionLostAccess }) {
   Store.setUid(canonicalUid(user));
   const viewportW = useViewportWidth();
   // ─── State ───────────────────────────────────────────────────────────────
@@ -250,8 +250,32 @@ function App({ user, onSignOut }) {
 
   // ─── Load / Save ─────────────────────────────────────────────────────────
   useEffect(() => {
-    Store.load().then(s => {
+    // Auto-recover a "bad profile": a cold-started session that Firebase restores but
+    // Firestore DENIES (e.g. a non-Google / unverified account that maps to the same
+    // data folder but isn't authorized by the deployed rules). We only act on a
+    // DEFINITIVE auth denial (HTTP 401/403 from probeFirestore) — never a network block,
+    // which would falsely sign out an offline user — and only when there's no usable
+    // local data to fall back on. Guarded so it can't loop within a session.
+    const isDev = !!(user?._isDev || (typeof window !== "undefined" && window.__OT_DEV));
+    const alreadyRecovered = () => {
+      try { return sessionStorage.getItem("ot_access_recovery") === "1"; } catch { return false; }
+    };
+    const tryRecoverDenied = async () => {
+      if (isDev || !onSessionLostAccess || alreadyRecovered()) return false;
+      let probe = null;
+      try { probe = await Store.probeFirestore(); } catch { probe = null; }
+      if (probe && probe.ok === false && /^DENIED/.test(probe.verdict || "")) {
+        console.warn("[App] Restored session denied Firestore access — recovering to Google sign-in.");
+        onSessionLostAccess();
+        return true;
+      }
+      return false;
+    };
+
+    Store.load().then(async s => {
       if (s && s.lists) {
+        // A confirmed-good load clears the recovery guard so a future genuine denial can recover.
+        try { sessionStorage.removeItem("ot_access_recovery"); } catch {}
         if (!s.priorities) s.priorities = defS.priorities.map(p=>({...p}));
         s.priorities = ensureBeforeShavuosPriority(s.priorities);
         if (!s.colorScheme) s.colorScheme = "claude";
@@ -321,9 +345,6 @@ function App({ user, onSignOut }) {
         lastSavedModified.current = s._lsModified || 0; // baseline for sync comparison
         setAS(s); setLoaded(true); return;
       }
-      // If Firebase failed (not just empty), warn the user — their data might be recoverable
-      if (Store._fbLoadStatus === 'error') setFbOffline(true);
-
       // USE LOCAL CACHE if Firebase is unreachable OR if Firebase is empty but local
       // has real tasks. The second case happens after a rules outage: Firebase was
       // inaccessible for a period so all saves went to localStorage only. Now that
@@ -333,6 +354,7 @@ function App({ user, onSignOut }) {
       const localHasTasks = localData && localData.lists && localData.lists.some(l => l.tasks?.length > 0);
       if (localHasTasks && (Store._fbLoadStatus === 'error' || Store._fbLoadStatus === 'empty')) {
         if (Store._fbLoadStatus === 'error') {
+          setFbOffline(true);
           console.warn("[App] Firebase unreachable — loading from localStorage.");
         } else {
           console.log("[App] Firebase empty but localStorage has tasks — seeding Firebase from local copy.");
@@ -345,11 +367,35 @@ function App({ user, onSignOut }) {
         return;
       }
 
+      // No server data AND no usable local data. 'empty' means the server confirmed a
+      // brand-new (authorized) account; anything else may be a denied "bad profile" —
+      // probe and, on a real auth denial, route back to Google sign-in instead of
+      // rendering a silently-empty app.
+      if (Store._fbLoadStatus !== 'empty' && await tryRecoverDenied()) return;
+      if (Store._fbLoadStatus === 'error') setFbOffline(true);
+
       // Genuinely new account or no data anywhere
       justLoaded.current = true;
       setAS({...defS, priorities: ensureBeforeShavuosPriority(defS.priorities)}); setLoaded(true);
+    }).catch(async (e) => {
+      // Store.load itself rejected — most commonly a Firestore permission-denied on a
+      // restored bad profile. Classify and recover; otherwise fall back so the app renders.
+      console.warn("[App] Store.load failed:", e);
+      if (await tryRecoverDenied()) return;
+      const localData = Store.ll();
+      const localHasTasks = localData && localData.lists && localData.lists.some(l => l.tasks?.length > 0);
+      justLoaded.current = true;
+      if (localHasTasks) {
+        const fused = {...defS, ...localData, _lsModified: Date.now()};
+        lastSavedModified.current = fused._lsModified;
+        setAS(fused);
+      } else {
+        setFbOffline(true);
+        setAS({...defS, priorities: ensureBeforeShavuosPriority(defS.priorities)});
+      }
+      setLoaded(true);
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!loaded || !AS) return;
