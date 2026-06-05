@@ -1220,44 +1220,23 @@ const BEFORE_SHAVUOS_PRIORITY = {
   superPinned: true,
 };
 
+// Shavuos has passed — retire the priority from the picker while preserving
+// its label/color on any tasks that were already assigned to it.
 function ensureBeforeShavuosPriority(priorities = []) {
   const list = Array.isArray(priorities) ? priorities.filter(Boolean) : [];
-  const activeOthers = list.filter(p => p.id !== BEFORE_SHAVUOS_PRIORITY_ID && !p.deleted);
-  const maxOtherWeight = Math.max(5, ...activeOthers.map(p => Number(p.weight) || 0));
-  const targetWeight = maxOtherWeight + 1;
-  const found = list.find(p => p.id === BEFORE_SHAVUOS_PRIORITY_ID);
-  const normalize = p => ({
-    ...BEFORE_SHAVUOS_PRIORITY,
-    ...p,
-    label: String(p?.label || BEFORE_SHAVUOS_PRIORITY.label).trim() || BEFORE_SHAVUOS_PRIORITY.label,
-    color: BEFORE_SHAVUOS_PRIORITY.color,
-    weight: Math.max(Number(p?.weight) || 0, targetWeight),
-    deleted: false,
-    superPinned: true,
-  });
-  if (found) return list.map(p => p.id === BEFORE_SHAVUOS_PRIORITY_ID ? normalize(p) : p);
-  return [normalize(BEFORE_SHAVUOS_PRIORITY), ...list];
+  return list.map(p => p.id === BEFORE_SHAVUOS_PRIORITY_ID ? { ...p, deleted: true } : p);
 }
 
-function beforeShavuosFirst(tasks = []) {
-  const top = [];
-  const rest = [];
-  tasks.forEach(t => {
-    const bucket = !t?.completed && !t?.blocked && t.priority === BEFORE_SHAVUOS_PRIORITY_ID ? top : rest;
-    bucket.push(t);
-  });
-  return [...top, ...rest];
-}
+function beforeShavuosFirst(tasks = []) { return tasks; }
 
 const DEF_PRI = [
-  BEFORE_SHAVUOS_PRIORITY,
   {id:"shaila", label:"Shaila", color:"#C8A84C", weight:5, isShaila:true},
   {id:"now",    label:"Now",    color:"#E09AB8", weight:3},
   {id:"today",  label:"Today",  color:"#E0B472", weight:2},
   {id:"eventually", label:"Eventually", color:"#7EB0DE", weight:1}
 ];
 
-const DEF_AGE_THRESHOLDS = {before_shavuos: 24, shaila: 24, now: 48, today: 120, eventually: 336};
+const DEF_AGE_THRESHOLDS = {shaila: 24, now: 48, today: 120, eventually: 336};
 
 const SCHEMES = {
   googleVoice:{name:"Google Voice",     bg:"#FFFFFF",bgW:"#F8F9FA",card:"#FFFFFF",text:"#202124",tSoft:"#5F6368",tFaint:"#5F6368",brd:"#DADCE0",brdS:"#E8EAED",grad:["#FFFFFF","#F8F9FA","#F1F3F4"],primary:"#00796B",onPrimary:"#FFFFFF",tonal:"#E0F2F1",onTonal:"#00695C",success:"#137333",danger:"#D93025",warning:"#8A5A00"},
@@ -1388,7 +1367,7 @@ function canonicalUid(user) {
   return prefix || user.uid;
 }
 function gG() { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; }
-function gP(p, id) { return p.find(x => x.id === id && !x.deleted) || p.filter(x => !x.deleted).slice(-1)[0] || DEF_PRI[3]; }
+function gP(p, id) { return p.find(x => x.id === id) || p.filter(x => !x.deleted).slice(-1)[0] || DEF_PRI[3]; }
 function pBg(c) {
   const r = parseInt(c.slice(1,3),16), g = parseInt(c.slice(3,5),16), b = parseInt(c.slice(5,7),16);
   return `rgb(${Math.round(r+(255-r)*.82)},${Math.round(g+(255-g)*.82)},${Math.round(b+(255-b)*.82)})`;
