@@ -5394,13 +5394,62 @@ const css = `
     max-height: 260px;
   }
 }
+/* Mobile top-nav bar — visible only on ≤560px; hidden on wider screens */
+.dp-mobile-topnav {
+  display: none;
+}
 @media (max-width: 560px) {
   .dp-web-root {
-    padding-top: 64px;
+    padding-top: 48px;
   }
+  /* Rail collapses entirely — replaced by the top-nav bar */
   .dp-shell,
   .dp-shell.is-collapsed {
-    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dp-rail,
+  .dp-splitter {
+    display: none;
+  }
+  .dp-mobile-topnav {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    background: var(--dp-bg-rail);
+    border-bottom: 1px solid var(--dp-border);
+    align-items: center;
+    justify-content: flex-start;
+    gap: 2px;
+    padding: 0 8px;
+    z-index: 200;
+    box-sizing: border-box;
+  }
+  .dp-mobile-topnav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 19px;
+    background: transparent;
+    color: var(--dp-muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .dp-mobile-topnav-btn.is-active {
+    background: var(--dp-bg-selected);
+    color: var(--dp-text);
+  }
+  .dp-mobile-topnav-spacer {
+    flex: 1;
   }
   .dp-nav-item.is-collapsed,
   .dp-nav-item {
@@ -5795,6 +5844,23 @@ export function DeskPhoneWebPanel({
             onChange: setRailWidth,
           })}
         />
+
+        {/* Mobile top-nav — replaces the left rail on phones (≤560px) */}
+        <nav className="dp-mobile-topnav" aria-label="DeskPhone navigation">
+          {NAV_ITEMS.filter(it => it.visible).map(it => (
+            <button
+              key={it.id}
+              type="button"
+              className={`dp-mobile-topnav-btn${activeTab === it.id || (activeTab === "messages" && it.id === "messages") ? " is-active" : ""}`}
+              title={it.tooltip}
+              aria-label={it.tooltip}
+              onClick={() => handleNavSelect(it.id)}
+            >
+              {icon(it.icon, 20)}
+              {it.label}
+            </button>
+          ))}
+        </nav>
 
         <section className="dp-content" data-native-source="MainWindow.xaml:775">
           <div className="dp-prompts">

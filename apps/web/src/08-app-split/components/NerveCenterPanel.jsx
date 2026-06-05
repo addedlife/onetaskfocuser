@@ -697,20 +697,20 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
   );
 }
 
-// Mobile phone/tablet "box": an always-open card with NO header bar — just an
-// extremely thin corner icon identifying the card type (and opening its full view on
-// tap), so records get nearly the entire card. Used by the 5-box grid (Mail · Phone ·
-// Tasks · Shailos · Calendar). Hoisted to module scope for stable identity.
+// Mobile phone/tablet "box": no header bar — the section icon sits ON the top border
+// (positioned with a card-bg background to visually cut through the border line).
+// No height consumed by a header row; content fills the full card.
+// Hoisted to module scope for stable identity.
 function MobileBox({ icon, title, accentColor, children, C, onOpen, style }) {
   return (
-    <div style={{ position: "relative", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
-      {/* Thin type marker: ~18px tall, just the icon — no title/buttons. Tapping opens
-          the card's full view. Records fill the rest of the card. */}
+    <div style={{ position: "relative", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, ...style }}>
+      {/* Icon sits on the top border: absolute at top:-7px so it's centered on the 1px
+          border line. The C.bg background cuts through the border visually. */}
       <button onClick={onOpen} title={title} aria-label={title}
-        style={{ flexShrink: 0, display: "flex", alignItems: "center", height: 18, padding: "0 0 0 7px", border: "none", background: "transparent", color: accentColor || C.faint, cursor: onOpen ? "pointer" : "default" }}>
+        style={{ position: "absolute", top: -7, left: 7, background: C.bg, border: "none", padding: "1px 3px", lineHeight: 0, display: "flex", alignItems: "center", color: accentColor || C.faint, cursor: onOpen ? "pointer" : "default", zIndex: 1, borderRadius: 3 }}>
         {suiteIcon(icon, 13)}
       </button>
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", borderRadius: 7 }}>
         {children}
       </div>
     </div>
@@ -1956,6 +1956,50 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const span = idx => isPortrait ? undefined : (idx < 3 ? "span 2" : "span 3");
     const emptyMsg = txt => <div style={{ padding:"12px 14px", fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{txt}</div>;
 
+    // Concise per-section topline summaries — derived from live data, no AI call.
+    const tlCopy = txt => { try { navigator.clipboard.writeText(txt); } catch {} };
+    const topline = txt => (
+      <div style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px 4px", borderBottom:`1px solid ${C.divider}`, flexShrink:0 }}>
+        <span style={{ flex:1, fontSize:ncType.meta, color:C.muted, fontFamily:NC_FONT_STACK, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{txt}</span>
+        <button onClick={() => tlCopy(txt)} style={{ border:"none", background:"transparent", color:C.faint, cursor:"pointer", padding:2, lineHeight:0, flexShrink:0 }} title="Copy summary">{suiteIcon("content_copy", 10)}</button>
+      </div>
+    );
+    const mailTL = (() => {
+      if (!gmailMessages?.length) return "Inbox clear";
+      const from = fmtFromM(gmailHdr(gmailMessages[0], "From"));
+      const subj = gmailHdr(gmailMessages[0], "Subject") || "(no subject)";
+      return `${gmailMessages.length} email${gmailMessages.length === 1 ? "" : "s"} · ${from}: ${subj}`;
+    })();
+    const phoneTL = (() => {
+      const u = Number(phoneActivitySummary?.unreadTexts || 0);
+      const m = Number(phoneActivitySummary?.missedCalls || 0);
+      const v = Number(phoneActivitySummary?.voicemailCount || 0);
+      const parts = [];
+      if (u) parts.push(`${u} unread`);
+      if (m) parts.push(`${m} missed`);
+      if (v) parts.push(`${v} voicemail${v > 1 ? "s" : ""}`);
+      return parts.length ? parts.join(" · ") : (phoneActivitySummary?.online ? "All clear" : "Phone offline");
+    })();
+    const tasksTL = (() => {
+      const n = primaryTaskQueue.length;
+      if (!n) return "No tasks";
+      const label = nerveDisplaySummary(primaryTaskQueue[0], "");
+      return `${n} task${n === 1 ? "" : "s"}${label ? " · " + label : ""}`;
+    })();
+    const shailosTL = (() => {
+      const n = visibleShailos.length;
+      if (!n) return "No pending shailos";
+      const label = nerveDisplaySummary(visibleShailos[0], "");
+      return `${n} pending${label ? " · " + label : ""}`;
+    })();
+    const calTL = (() => {
+      if (!upcomingCal.length) return "Nothing upcoming";
+      const ev = upcomingCal[0];
+      const t = fmtTimeM(ev.start || ev.startTime || ev.date);
+      const title = compactNerveSummary(ev.summary || ev.title || ev.name || "", "Event");
+      return `Next: ${title}${t ? " · " + t : ""}`;
+    })();
+
     return (
       <div style={{ position:"fixed", top:topOffset, left:sidebarW, right:0, height:`calc(100dvh - ${topOffset}px)`, zIndex:7600, background:C.bg, display:"flex", flexDirection:"column", borderLeft:`1px solid ${C.divider}`, boxSizing:"border-box", padding:"8px 8px calc(8px + env(safe-area-inset-bottom,0px))" }}>
 
@@ -1976,6 +2020,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Mail */}
           <MobileBox {...boxCtx} icon="mail" title="Mail" style={{ gridColumn: span(0) }}
             onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}>
+            {topline(mailTL)}
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : gmailMessages.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
               const from = fmtFromM(gmailHdr(msg,"From"));
@@ -1996,6 +2041,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Phone */}
           <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" style={{ gridColumn: span(1) }}
             onOpen={onOpenPhone}>
+            {topline(phoneTL)}
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
             <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0, padding:"4px 10px 8px", boxSizing:"border-box" }}>
@@ -2006,6 +2052,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Tasks */}
           <MobileBox {...boxCtx} icon="task_alt" title="Tasks" style={{ gridColumn: span(2) }}
             onOpen={onOpenQueue}>
+            {topline(tasksTL)}
             {taskComposerOpen && (
               <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.divider}` }}>
                 <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) 32px 32px", gap:6, alignItems:"start" }}>
@@ -2049,6 +2096,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Shailos */}
           <MobileBox {...boxCtx} icon="rule" title="Shailos" accentColor={GOLD} style={{ gridColumn: span(3) }}
             onOpen={onOpenShailos}>
+            {topline(shailosTL)}
             {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : visibleShailos.map(s => {
               const text = nerveDisplaySummary(s,"Open shaila");
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
@@ -2068,6 +2116,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Calendar */}
           <MobileBox {...boxCtx} icon="calendar_today" title="Calendar" accentColor={C.accent} style={{ gridColumn: span(4) }}
             onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}>
+            {topline(calTL)}
             {showAddEvent && (
               <div style={{ padding:"10px 12px", borderBottom:`1px solid ${C.divider}` }}>
                 <textarea autoFocus value={addEventText} onChange={e=>setAddEventText(e.target.value)} rows={2} placeholder='e.g. "Call David Mon at 3pm"'

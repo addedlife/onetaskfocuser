@@ -504,9 +504,14 @@ function AppContent() {
           updated.answerSummary !== prev.answerSummary ||
           updated.status !== prev.status
         ) {
+          // Don't downgrade a valid JSON report to a stale non-JSON value from cache.
+          const isJson = (s?: string) => { try { return !!s && JSON.parse(s) !== null; } catch { return false; } };
+          const nextReport = (isJson(prev.researchReport) && !isJson(updated.researchReport))
+            ? prev.researchReport
+            : updated.researchReport;
           return {
             ...prev,
-            researchReport: updated.researchReport,
+            researchReport: nextReport,
             answerSummary: updated.answerSummary,
             status: updated.status,
           };
