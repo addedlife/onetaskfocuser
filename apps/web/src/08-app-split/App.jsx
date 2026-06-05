@@ -488,6 +488,17 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
   const requestSilentGoogleAccessToken = useCallback((delayMs = 0) => {
     if (!gTokenClientRef.current) return false;
+    // On a phone/tablet, requestAccessToken({prompt:''}) is NOT actually silent — iOS
+    // Safari's tracking prevention blocks the hidden token flow, so GIS falls back to a
+    // full Google sign-in. Firing it automatically on every token expiry was popping a
+    // sign-in every ~5 minutes (the Calendar/Gmail refresh cadence). On mobile, don't
+    // auto-reauth: surface a one-tap "Connect Google" notice and let the user refresh on
+    // their terms. The current token keeps working until it expires (~55 min). Desktop,
+    // where the silent flow works, is unchanged.
+    if (IS_MOBILE_DEVICE) {
+      setGoogleError("Tap “Connect Google” to refresh Calendar and Gmail.");
+      return false;
+    }
     const now = Date.now();
     try {
       const last = Number(localStorage.getItem(GOOGLE_SILENT_REAUTH_LAST_KEY) || 0);
