@@ -1,5 +1,16 @@
 # Verification Log
 
+## 2026-06-05 DeskPhone Connection Reliability — Auto-Reconnect + Ghost-Connected Fix (b285)
+
+- Reported: DeskPhone does not auto-reconnect when default phone comes back in range after being lost. Also reports "Connected" when the link has silently dropped and won't update calls/texts until user manually refreshes connection.
+- Root cause 1 (no auto-reconnect after failed attempt): A failed reconnect attempt calls `ResetConnectionSessionAsync`, which cancels `_sessionCts` — killing the MAP poll loop. If MAP connect also fails (phone still out of range), `StartPollLoop` is never called, leaving nothing to invoke `QueueAutoReconnect` again after the 90s rate-limit window. The watchdog loop was missing.
+- Root cause 2 (HFP disconnect doesn't trigger reconnect): `QueueAutoReconnect` was only called from the MAP poll loop. If MAP's RFCOMM was in a ghost-connected state (Windows BT RFCOMM holds sockets open for 30-120s after radio link loss), `_map.IsConnected` stayed true and the poll loop never detected the drop — even though HFP correctly fired "HFP disconnected". Nobody acted on that event.
+- Root cause 3 (ghost connection undetected): No liveness probe on HFP. A quiet-but-dead connection looked identical to a quiet-but-alive one indefinitely.
+- Fix 1 (HFP keepalive — `HfpService.cs`): `ReadLoopAsync` now sets a 30s read deadline per iteration via a linked `CancellationTokenSource`. On timeout (no AT traffic for 30s, not user-cancel), sends `AT+NREC=0` as a liveness probe. If the write throws (socket dead), exception propagates to outer catch → `StatusChanged("HFP disconnected")` fires. Ghost-connection detection window: max 30s (was: never / up to 120s).
+- Fix 2 (HFP disconnect triggers reconnect — `MainViewModel.cs` `StatusHfp` setter): Added `QueueAutoReconnect("HFP status: " + value)` call when the new status is non-connected. Existing guards in `QueueAutoReconnect` (`IsConnecting`, `_nextAutoReconnectUtc`, `_autoReconnectInFlight`) make this safe: fires are suppressed during active connect/reset, during the 90s rate-limit window, and if a reconnect is already in flight.
+- Fix 3 (persistent watchdog — `MainViewModel.cs`): Added `_appCts` (app-lifetime `CancellationTokenSource`, cancelled only in `Shutdown()`) and `StartConnectionWatchdog`. Watchdog runs every 30s on a background thread, calls `QueueAutoReconnect` when `!IsFullyConnected && !IsConnecting`. Because it uses `_appCts` (not `_sessionCts`), it survives any number of failed reconnect attempts that cancel `_sessionCts`. Started from `InitializeDataAsync` after initial auto-connect. Cancelled and disposed in `Shutdown()`.
+- Gates: `dotnet build DeskPhone.csproj -p:Platform=ARM64 -c Release` → 0 errors, 2 pre-existing NU1603 warnings. b285 deployed and running DeskPhone notified. BUILD-VERIFIED ONLY — end-to-end (real drop + recovery) requires runtime verification on device.
+
 ## 2026-06-05 Profile Autoload Recovery + Phone-Relay Liveness
 
 - Reported (two issues): (1) After signing in with Google, shailos + tasks access is restored, but a cold app start autoloads a "bad profile" with no access, forcing a manual sign-out/sign-in; (2) the phone relay works but the webapp can't tell whether the PC/DeskPhone is *currently* connected, so the user can't trust that live texts/calls are arriving.
