@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-05 14:40:13",
+        "version":  "b286",
+        "notes":  "Fix desktop notification quick-replies and reply box — tapping Send or a chip now actually sends the message. Clicking the notification body now opens the Shamash Pro 4 phone screen instead of trying to open a browser.",
+        "devNotes":  "Removed SetBackgroundActivation() from all three toast buttons (Send, On my way, Can\u0027t talk) — background COM activation silently fails for unpackaged Win32 apps; foreground activation is reliable. Fixed OpenShamashPhonePage() to call window.BringToFront() + window.OpenMessageBannerTarget() instead of launching a dead localhost:3002 URL. Reply action also calls OpenShamashPhonePage so user lands on the sent conversation."
+    },
+    {
         "timestamp":  "2026-06-05 14:31:44",
         "version":  "b285",
         "notes":  "DeskPhone now reliably reconnects when your phone comes back in range, and no longer gets stuck showing \"Connected\" when the link has silently dropped.",
