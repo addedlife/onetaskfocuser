@@ -84,17 +84,14 @@ public class NotificationService : IDisposable
                 .AddText(text)
                 // Free-text reply box (reply → "Send" button below)
                 .AddInputTextBox("replyInput", "Reply…")
-                // "Send" — fires background activation so no window opens
+                // "Send" — foreground activation; app handles it via HandleToastActivation
                 .AddButton(
-                    new ToastButton("Send", $"action=reply&phone={p}")
-                        .SetBackgroundActivation())
+                    new ToastButton("Send", $"action=reply&phone={p}"))
                 // Quick-reply chips — one tap, sends immediately
                 .AddButton(
-                    new ToastButton("👍 On my way", $"action=quickreply&phone={p}&body={Uri.EscapeDataString("On my way!")}")
-                        .SetBackgroundActivation())
+                    new ToastButton("👍 On my way", $"action=quickreply&phone={p}&body={Uri.EscapeDataString("On my way!")}"))
                 .AddButton(
-                    new ToastButton("Can't talk", $"action=quickreply&phone={p}&body={Uri.EscapeDataString("Can't talk right now, will call back")}")
-                        .SetBackgroundActivation())
+                    new ToastButton("Can't talk", $"action=quickreply&phone={p}&body={Uri.EscapeDataString("Can't talk right now, will call back")}"))
                 .Show();
         }
         catch

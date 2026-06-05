@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-05 14:31:44",
+        "version":  "b285",
+        "notes":  "DeskPhone now reliably reconnects when your phone comes back in range, and no longer gets stuck showing \"Connected\" when the link has silently dropped.",
+        "devNotes":  "Three-part fix for two persistent connection reliability bugs. (1) HFP keepalive: ReadLoopAsync now sets a 30s read deadline per iteration. If 30s pass with no AT traffic, it sends AT+NREC=0 as a liveness probe; if the write throws the link is confirmed dead and disconnect fires immediately. This closes the ghost-connected window from up to 120s down to max 30s. (2) HFP-disconnect triggers reconnect: the StatusHfp setter now calls QueueAutoReconnect when the status is non-connected. Previously only the MAP poll loop called QueueAutoReconnect; if MAP\u0027s RFCOMM was in a ghost-connected state the poll loop never noticed the drop and no reconnect was queued. All existing guards (IsConnecting, _nextAutoReconnectUtc, _autoReconnectInFlight) make this safe. (3) Persistent watchdog: StartConnectionWatchdog runs on _appCts (app-lifetime, never cancelled by ResetConnectionSessionAsync) and calls QueueAutoReconnect every 30s when not fully connected. This closes the root bug where a failed reconnect attempt cancelled _sessionCts (killing the MAP poll loop) and if MAP connect also failed StartPollLoop was never called, leaving nothing to retry after the 90s rate-limit window."
+    },
+    {
         "timestamp":  "2026-06-04 18:14:55",
         "version":  "b282",
         "notes":  "The cloud relay now sends your phone data the instant it starts, so a phone opening the app sees your texts right away instead of waiting a few seconds for the first update.",

@@ -57,6 +57,9 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private readonly CallAudioRouteService _audioRoute = new();
 
     private CancellationTokenSource _sessionCts = new();
+    // App-lifetime CTS — cancelled only in Shutdown(), never by ResetConnectionSessionAsync.
+    // Owned by the persistent connection watchdog so the watchdog survives failed reconnects.
+    private readonly CancellationTokenSource _appCts = new();
     private readonly SemaphoreSlim _messageSyncLock = new(1, 1);
     private readonly SemaphoreSlim _messageDeleteReconcileLock = new(1, 1);
     private readonly SemaphoreSlim _messagePollWakeSignal = new(0, 1);
@@ -367,6 +370,13 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             OnPropertyChanged();
             OnPropertyChanged(nameof(CallsConnectionLabel));
             UpdateConnectionStatus();
+            // HFP fired a disconnect or error at runtime — trigger a reconnect immediately
+            // rather than waiting for the MAP poll loop to notice (which may never happen
+            // if MAP's RFCOMM is in a ghost-connected state and IsConnected stays true).
+            // QueueAutoReconnect's own guards (IsConnecting, _nextAutoReconnectUtc,
+            // _autoReconnectInFlight) make this call safe to fire freely.
+            if (!ConnectionTextLooksConnected(value))
+                QueueAutoReconnect("HFP status: " + value);
         }
     }
 
@@ -1388,6 +1398,8 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 var body = inputObj?.ToString();
                 if (!string.IsNullOrWhiteSpace(phone) && !string.IsNullOrWhiteSpace(body))
                     _ = SendMessageFromNotificationAsync(Uri.UnescapeDataString(phone), body);
+                // Open the phone screen so the user sees the sent bubble
+                OpenShamashPhonePage();
                 break;
             }
             case "quickreply":
@@ -1409,16 +1421,21 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private void OpenShamashPhonePage()
     {
-        try
+        // Bring the Shamash Pro 4 DeskPhone window to the foreground and navigate
+        // to the active message conversation.  No browser needed — this IS the app.
+        if (Application.Current.MainWindow is DeskPhone.MainWindow window)
         {
-            // Opens the OneTask/Shamash web app at the phone/messages view.
-            // ?view=deskphone is parsed by getInitialSuiteView() in the web app.
-            Process.Start(new ProcessStartInfo(
-                "http://127.0.0.1:3002/?view=deskphone") { UseShellExecute = true });
+            window.BringToFront();
+            window.OpenMessageBannerTarget(showCompose: false);
         }
-        catch (Exception ex)
+        else
         {
-            AppendDebug($"[NOTIF] Could not open OneTask phone page: {ex.Message}");
+            Application.Current.MainWindow?.Show();
+            if (Application.Current.MainWindow != null)
+            {
+                Application.Current.MainWindow.WindowState = WindowState.Normal;
+                Application.Current.MainWindow.Activate();
+            }
         }
     }
 
@@ -2717,6 +2734,10 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                     isImage = a.IsImage,
                     isContactCard = a.IsContactCard,
                     size = a.Data.Length,
+                    // Stable id so the relay path can deliver the image out-of-band
+                    // (uploaded to phone-media/{mediaId}); the webapp fetches it by id
+                    // when dataUrl is absent (relay) and uses dataUrl inline on LAN.
+                    mediaId = a.IsImage && a.Data.Length > 0 ? MediaId(a.Data) : null,
                     dataUrl = includeAttachmentData && a.IsImage && a.Data.Length > 0
                         ? $"data:{a.ContentType};base64,{Convert.ToBase64String(a.Data)}"
                         : null
@@ -2920,6 +2941,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _relay.MarkUnread  = _api.MarkConversationUnread;
         _relay.LogLine     = s => AppendDebugThreadSafe(s);
         _relay.GetLanUrl   = () => _api.LanUrl ?? "";
+        _relay.GetRelayMedia = BuildRelayMedia;
         _relay.Configure(_settings.Current.RelayKey, _settings.Current.RelayUrl);
         _api.GetRelayStatus = () =>
         {
@@ -3158,6 +3180,13 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             AppendDebug($"[STARTUP] Auto-connecting to {recent.Name} ({recent.Address})…");
             await ReconnectToMostRecentAsync();
         }
+
+        // ── Persistent connection watchdog ────────────────────────────────
+        // Started after the initial auto-connect attempt so it doesn't race it.
+        // The watchdog uses _appCts (not _sessionCts) so it survives any number
+        // of failed reconnect attempts — each attempt cancels _sessionCts and
+        // kills the MAP poll loop, but the watchdog keeps firing every 30 s.
+        StartConnectionWatchdog(_appCts.Token);
     }
 
     private Task<bool> OfferBuildUpdateAsync(string exePath, string buildVersion)
@@ -5647,6 +5676,82 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         });
     }
 
+    // ── Picture-text relay media (resized previews, uploaded out-of-band) ─────
+    private readonly object _mediaCacheLock = new();
+    private readonly Dictionary<string, string?> _mediaPreviewCache = new();
+    private const int RelayMediaScanLimit = 150;
+
+    // Build (mediaId, dataUrl) previews for image attachments in the recent relay
+    // window. Each image is resized once and cached; RelayService uploads any that
+    // haven't been sent to phone-media/{id} yet.
+    private List<(string id, string dataUrl)> BuildRelayMedia()
+    {
+        List<SmsMessage> snapshot;
+        lock (_msgLock)
+            snapshot = _allMessages
+                .Where(MessageBelongsToActiveDevice)
+                .OrderByDescending(m => m.Timestamp)
+                .Take(RelayMediaScanLimit)
+                .ToList();
+
+        var result = new List<(string, string)>();
+        foreach (var m in snapshot)
+        foreach (var a in m.Attachments)
+        {
+            if (!a.IsImage || a.Data.Length == 0) continue;
+            var id = MediaId(a.Data);
+            string? url;
+            lock (_mediaCacheLock)
+            {
+                if (!_mediaPreviewCache.TryGetValue(id, out url))
+                {
+                    url = DownscaleImageToDataUrl(a.Data);
+                    if (_mediaPreviewCache.Count > 400) _mediaPreviewCache.Clear();
+                    _mediaPreviewCache[id] = url;
+                }
+            }
+            if (!string.IsNullOrEmpty(url)) result.Add((id, url!));
+        }
+        return result;
+    }
+
+    // Short stable id from the original image bytes — must match the serializer's mediaId.
+    private static string MediaId(byte[] data)
+        => Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(data), 0, 8).ToLowerInvariant();
+
+    // Resize an image to a phone-screen-sized JPEG data: URL (keeps it under Firestore's
+    // 1 MiB doc cap). Returns null if the bytes aren't a decodable image.
+    private static string? DownscaleImageToDataUrl(byte[] data, int maxDim = 1280, int quality = 72)
+    {
+        try
+        {
+            using var ms = new MemoryStream(data);
+            var decoder = System.Windows.Media.Imaging.BitmapDecoder.Create(
+                ms,
+                System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,
+                System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames[0];
+            double scale = Math.Min(1.0, (double)maxDim / Math.Max(frame.PixelWidth, frame.PixelHeight));
+            System.Windows.Media.Imaging.BitmapSource src = frame;
+            if (scale < 1.0)
+            {
+                var t = new System.Windows.Media.Imaging.TransformedBitmap(
+                    frame, new System.Windows.Media.ScaleTransform(scale, scale));
+                t.Freeze();
+                src = t;
+            }
+            var encoder = new System.Windows.Media.Imaging.JpegBitmapEncoder { QualityLevel = quality };
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(src));
+            using var outMs = new MemoryStream();
+            encoder.Save(outMs);
+            return $"data:image/jpeg;base64,{Convert.ToBase64String(outMs.ToArray())}";
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private void RequestMessageSync(string reason, string? handle = null)
     {
         if (!string.IsNullOrWhiteSpace(handle))
@@ -5864,6 +5969,32 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 Interlocked.Exchange(ref _autoReconnectInFlight, 0);
             }
         });
+    }
+
+    /// <summary>
+    /// Persistent watchdog that runs for the full lifetime of the app (uses _appCts,
+    /// not _sessionCts).  Every 30 s: if not fully connected and not already in the
+    /// middle of a connect attempt, queue a reconnect.
+    ///
+    /// This closes the "dead poll loop" bug: a failed reconnect attempt cancels
+    /// _sessionCts (killing the MAP poll loop), and if MAP never re-establishes,
+    /// nothing would call QueueAutoReconnect again — the watchdog fills that gap.
+    /// </summary>
+    private void StartConnectionWatchdog(CancellationToken ct)
+    {
+        _ = Task.Run(async () =>
+        {
+            AppendDebugThreadSafe("[WATCHDOG] Connection watchdog started (30 s interval)");
+            while (!ct.IsCancellationRequested)
+            {
+                try { await Task.Delay(TimeSpan.FromSeconds(30), ct); }
+                catch (OperationCanceledException) { break; }
+
+                if (!IsFullyConnected && !IsConnecting)
+                    QueueAutoReconnect("watchdog: not fully connected");
+            }
+            AppendDebugThreadSafe("[WATCHDOG] Connection watchdog stopped");
+        }, ct);
     }
 
     private void StartContactSyncLoop(CancellationToken ct)
@@ -6640,6 +6771,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
             // Cancel all background work immediately so nothing races the disconnect.
             _sessionCts.Cancel();
+            _appCts.Cancel();   // stops the persistent connection watchdog
             _api.Stop();
             _notif.StopCallAlert();
             _backup.CreateExitBackup();
@@ -6670,6 +6802,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         finally
         {
             try { _sessionCts.Dispose(); } catch { }
+            try { _appCts.Dispose();     } catch { }
             try { _backup.Dispose();     } catch { }
             try { _audio.Dispose();      } catch { }
             try { _notif.Dispose();      } catch { }

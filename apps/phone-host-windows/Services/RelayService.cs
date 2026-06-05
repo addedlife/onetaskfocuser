@@ -38,6 +38,8 @@ public class RelayService : IDisposable
     public Func<string, Task>?                     MarkUnread  { get; set; }
     public Action<string>?                         LogLine     { get; set; }
     public Func<string>?                           GetLanUrl   { get; set; }
+    // Returns (mediaId, dataUrl) for resized picture-text previews to upload out-of-band.
+    public Func<List<(string id, string dataUrl)>>? GetRelayMedia { get; set; }
 
     // ── Config ────────────────────────────────────────────────────────────────
     private string _relayUrl = DefaultRelayUrl;
@@ -55,6 +57,7 @@ public class RelayService : IDisposable
     // burst of PushNow() calls (e.g. 5 texts at once) into a single trailing push.
     private readonly SemaphoreSlim  _pushGate        = new(1, 1);
     private volatile bool           _pushNowScheduled;
+    private readonly HashSet<string> _uploadedMedia  = new();   // mediaIds already in phone-media
 
     public void Configure(string relayKey, string? relayUrl)
     {
@@ -113,6 +116,10 @@ public class RelayService : IDisposable
         await _pushGate.WaitAsync();
         try
         {
+            // Upload any new picture-text images first, so the state blob's mediaId
+            // references resolve the moment a phone reads it.
+            await UploadPendingMediaAsync();
+
             // Build state blob: status + recent messages + calls + contacts
             var statusJson   = GetStatus();
             var messagesJson = GetMessages?.Invoke(MessageRelayLimit, false) ?? "[]";
@@ -136,6 +143,35 @@ public class RelayService : IDisposable
             _lastPush = DateTime.UtcNow;
         }
         finally { _pushGate.Release(); }
+    }
+
+    // Upload resized picture-text previews to phone-media/{id}, once each. Runs inside
+    // the push gate so _uploadedMedia is touched single-threaded. A failed upload is
+    // simply retried on the next push (the id isn't marked done).
+    private async Task UploadPendingMediaAsync()
+    {
+        var media = GetRelayMedia?.Invoke();
+        if (media is null || media.Count == 0) return;
+
+        foreach (var (id, dataUrl) in media)
+        {
+            if (_uploadedMedia.Contains(id)) continue;
+            try
+            {
+                // id is hex and dataUrl is a base64 data: URL — no JSON-special chars.
+                var body = $"{{\"id\":\"{id}\",\"dataUrl\":\"{dataUrl}\"}}";
+                using var content = new StringContent(body, Encoding.UTF8, "application/json");
+                using var req = new HttpRequestMessage(HttpMethod.Post, $"{_relayUrl}?action=push-media") { Content = content };
+                req.Headers.Add("X-Relay-Secret", _relayKey);
+                using var resp = await _http.SendAsync(req);
+                if (resp.IsSuccessStatusCode) _uploadedMedia.Add(id);
+                else LogLine?.Invoke($"[RELAY MEDIA] {id} → HTTP {(int)resp.StatusCode}");
+            }
+            catch (Exception ex)
+            {
+                LogLine?.Invoke($"[RELAY MEDIA] {id}: {ex.Message}");
+            }
+        }
     }
 
     /// <summary>

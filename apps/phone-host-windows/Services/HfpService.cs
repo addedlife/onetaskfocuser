@@ -209,8 +209,32 @@ public class HfpService : IAsyncDisposable
         {
             while (!ct.IsCancellationRequested)
             {
-                var line = await _reader!.ReadLineAsync(ct);
-                if (line is null) break;           // stream closed
+                // 30 s read deadline.  Windows RFCOMM can hold a socket in a
+                // half-open "connected" state for 30-120 s after the radio link
+                // drops — the stream won't throw until we actually try to use it.
+                // A per-iteration timeout lets us probe the link before declaring it dead.
+                using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                readCts.CancelAfter(TimeSpan.FromSeconds(30));
+
+                string? line;
+                try
+                {
+                    line = await _reader!.ReadLineAsync(readCts.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // 30 s passed with no URC from the phone.
+                    // Send a benign keepalive AT command.  If the write throws
+                    // (IOException / ObjectDisposedException), the socket is dead
+                    // and the exception propagates to the outer catch below.
+                    // If the write succeeds the phone replies "OK", which falls
+                    // through HandleUrcLineAsync as an unrecognised line (logged, ignored).
+                    AtLogLine?.Invoke("[keepalive] 30 s idle — probing HFP link with AT+NREC=0");
+                    await SendAsync("AT+NREC=0");
+                    continue;
+                }
+
+                if (line is null) break;           // stream closed normally
 
                 line = line.Trim();
                 if (string.IsNullOrEmpty(line)) continue;
