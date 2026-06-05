@@ -1,5 +1,17 @@
 [
     {
+        "timestamp":  "2026-06-05 14:49:04",
+        "version":  "b289",
+        "notes":  "Notification quick-replies now actually send. Clicking the notification opens the browser phone screen. Incoming calls now show quick-reply chips to text back instead of answering.",
+        "devNotes":  "Replaced ToastArguments.Parse with manual \u0026-split query parser — multi-param button args were not splitting correctly. Restored OpenShamashPhonePage to production browser URL. Converted ShowIncomingCall from balloon tip to toast with quickreply chips; updated both callers to pass rawPhone alongside displayNumber."
+    },
+    {
+        "timestamp":  "2026-06-05 18:30:00",
+        "version":  "b287",
+        "notes":  "Notification quick-replies now actually send. Clicking the notification opens the browser phone screen. Incoming calls now show quick-reply chips to text back instead of answering.",
+        "devNotes":  "Replaced ToastArguments.Parse with manual \u0026-split query parser — multi-param button args were not splitting correctly. Restored OpenShamashPhonePage to production browser URL. Converted ShowIncomingCall from balloon tip to toast with quickreply chips; updated both callers to pass rawPhone alongside displayNumber."
+    },
+    {
         "timestamp":  "2026-06-05 14:40:13",
         "version":  "b286",
         "notes":  "Fix desktop notification quick-replies and reply box — tapping Send or a chip now actually sends the message. Clicking the notification body now opens the Shamash Pro 4 phone screen instead of trying to open a browser.",

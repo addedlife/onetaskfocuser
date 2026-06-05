@@ -1385,32 +1385,39 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     // Handles: reply (free-text), quickreply (chip tap), openphone (body/Open click).
     public void HandleToastActivation(ToastNotificationActivatedEventArgsCompat e)
     {
-        var args = ToastArguments.Parse(e.Argument ?? "");
-        if (!args.TryGetValue("action", out var action)) return;
+        // ToastArguments.Parse uses an internal format that is not always compatible
+        // with the plain key=value&key=value strings we embed in button arguments.
+        // Parse manually so the split is guaranteed to work.
+        var query = (e.Argument ?? "")
+            .Split('&')
+            .Select(pair => pair.Split(new[] { '=' }, 2))
+            .Where(parts => parts.Length == 2)
+            .ToDictionary(
+                parts => Uri.UnescapeDataString(parts[0]),
+                parts => Uri.UnescapeDataString(parts[1]),
+                StringComparer.OrdinalIgnoreCase);
+
+        if (!query.TryGetValue("action", out var action)) return;
 
         switch (action)
         {
             case "reply":
             {
-                // "Send" button — phone number in args, typed text in UserInput
-                args.TryGetValue("phone", out var phone);
+                // "Send" button — phone number in query, typed text in UserInput
+                query.TryGetValue("phone", out var phone);
                 e.UserInput.TryGetValue("replyInput", out var inputObj);
                 var body = inputObj?.ToString();
                 if (!string.IsNullOrWhiteSpace(phone) && !string.IsNullOrWhiteSpace(body))
-                    _ = SendMessageFromNotificationAsync(Uri.UnescapeDataString(phone), body);
-                // Open the phone screen so the user sees the sent bubble
-                OpenShamashPhonePage();
+                    _ = SendMessageFromNotificationAsync(phone, body);
                 break;
             }
             case "quickreply":
             {
-                // Quick-reply chip — both phone and body are in args
-                args.TryGetValue("phone", out var phone);
-                args.TryGetValue("body",  out var body);
+                // Quick-reply chip — phone and body already decoded by manual parser
+                query.TryGetValue("phone", out var phone);
+                query.TryGetValue("body",  out var body);
                 if (!string.IsNullOrWhiteSpace(phone) && !string.IsNullOrWhiteSpace(body))
-                    _ = SendMessageFromNotificationAsync(
-                            Uri.UnescapeDataString(phone),
-                            Uri.UnescapeDataString(body));
+                    _ = SendMessageFromNotificationAsync(phone, body);
                 break;
             }
             case "openphone":
@@ -1421,21 +1428,15 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private void OpenShamashPhonePage()
     {
-        // Bring the Shamash Pro 4 DeskPhone window to the foreground and navigate
-        // to the active message conversation.  No browser needed — this IS the app.
-        if (Application.Current.MainWindow is DeskPhone.MainWindow window)
+        try
         {
-            window.BringToFront();
-            window.OpenMessageBannerTarget(showCompose: false);
+            // Opens the Shamash Pro 4 web app at the phone/messages view.
+            Process.Start(new ProcessStartInfo(
+                "https://onetaskfocuser.netlify.app/?view=deskphone") { UseShellExecute = true });
         }
-        else
+        catch (Exception ex)
         {
-            Application.Current.MainWindow?.Show();
-            if (Application.Current.MainWindow != null)
-            {
-                Application.Current.MainWindow.WindowState = WindowState.Normal;
-                Application.Current.MainWindow.Activate();
-            }
+            AppendDebug($"[NOTIF] Could not open phone page: {ex.Message}");
         }
     }
 
@@ -5270,7 +5271,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             // Only show notification if we have a phone number (wait for +CLIP event)
             // If number is missing, the next state update will have it and show the notification then
             if (!string.IsNullOrWhiteSpace(newCall.Number))
-                _notif.ShowIncomingCall(newCall.DisplayNumber);
+                _notif.ShowIncomingCall(newCall.DisplayNumber, newCall.Number);
         }
         else if (newCall.Status == CallStatus.IncomingRinging &&
                  prev.Status   == CallStatus.IncomingRinging &&
@@ -5278,7 +5279,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                  !string.IsNullOrWhiteSpace(newCall.Number))
         {
             // Number just arrived from +CLIP event while call is ringing—show notification now
-            _notif.ShowIncomingCall(newCall.DisplayNumber);
+            _notif.ShowIncomingCall(newCall.DisplayNumber, newCall.Number);
         }
 
         if (newCall.Status != CallStatus.IncomingRinging)

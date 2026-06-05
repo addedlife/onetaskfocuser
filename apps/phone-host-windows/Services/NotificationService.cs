@@ -42,10 +42,29 @@ public class NotificationService : IDisposable
     }
 
     // ── Call notifications ────────────────────────────────────────────────
-    public void ShowIncomingCall(string number)
+    // Shows a toast with quick-reply chips so the user can text back without answering.
+    // displayNumber is the formatted name/number for the title; rawPhone is the
+    // digits-only number used in the action argument for sending the reply.
+    public void ShowIncomingCall(string displayNumber, string rawPhone)
     {
-        _tray.ShowBalloonTip(10000, "Incoming Call", number,
-            WinForms.ToolTipIcon.Info);
+        try
+        {
+            var p = Uri.EscapeDataString(rawPhone ?? "");
+            new ToastContentBuilder()
+                .AddArgument("action", "openphone")
+                .AddText($"Incoming Call: {displayNumber}")
+                .AddText("Tap a reply to text back instead of answering.")
+                .AddButton(
+                    new ToastButton("👍 On my way", $"action=quickreply&phone={p}&body={Uri.EscapeDataString("On my way!")}"))
+                .AddButton(
+                    new ToastButton("Can't talk", $"action=quickreply&phone={p}&body={Uri.EscapeDataString("Can't talk right now, will call back")}"))
+                .Show();
+        }
+        catch
+        {
+            _tray.ShowBalloonTip(10000, "Incoming Call", displayNumber,
+                WinForms.ToolTipIcon.Info);
+        }
         StartRingtone();
     }
 
