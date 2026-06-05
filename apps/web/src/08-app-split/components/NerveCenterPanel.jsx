@@ -697,41 +697,19 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
   );
 }
 
-// Mobile phone/tablet "box": an always-open card with a sticky header and an
-// internally scrolling body. Used by the 5-box grid so each section (Mail · Phone ·
-// Tasks · Shailos · Calendar) gets an equal slice of the screen and scrolls on its own
-// instead of overrunning. Hoisted to module scope for stable identity (see MobileSection).
-function MobileBox({ icon, title, accentColor, count, primaryBtn, menuItems, children, C, menuId, menuKey, onMenuToggle, onMenuClose, style }) {
-  const menuOpen = menuId === menuKey;
+// Mobile phone/tablet "box": an always-open card with NO header bar — just an
+// extremely thin corner icon identifying the card type (and opening its full view on
+// tap), so records get nearly the entire card. Used by the 5-box grid (Mail · Phone ·
+// Tasks · Shailos · Calendar). Hoisted to module scope for stable identity.
+function MobileBox({ icon, title, accentColor, children, C, onOpen, style }) {
   return (
-    <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 6px 6px 10px", minHeight: 30, flexShrink: 0, borderBottom: `1px solid ${C.divider}` }}>
-        <span style={{ color: accentColor || C.muted, display: "flex", flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0.1 }}>{title}</span>
-        {count > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
-        <span style={{ flex: 1 }} />
-        {primaryBtn}
-        {menuItems?.length > 0 && (
-          <div style={{ position: "relative", flexShrink: 0 }}>
-            <button onClick={e => { e.stopPropagation(); onMenuToggle(menuKey); }} style={gvIconButton({ width: 26, height: 26, color: C.faint }, C)} aria-label={`${title} menu`}>
-              {suiteIcon("more_vert", 13)}
-            </button>
-            {menuOpen && (
-              <>
-                <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={onMenuClose} />
-                <div style={{ position: "absolute", right: 0, top: 28, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, minWidth: 168, boxShadow: "0 6px 24px rgba(0,0,0,0.18)", overflow: "hidden" }}>
-                  {menuItems.map((item, i) => (
-                    <button key={i} onClick={() => { onMenuClose(); item.run?.(); }}
-                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "11px 14px", border: "none", borderBottom: i < menuItems.length - 1 ? `1px solid ${C.divider}` : "none", background: "transparent", color: C.text, cursor: "pointer", fontSize: 13, fontFamily: NC_FONT_STACK, textAlign: "left" }}>
-                      {suiteIcon(item.icon || "arrow_forward", 14)} {item.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
+    <div style={{ position: "relative", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
+      {/* Thin type marker: ~18px tall, just the icon — no title/buttons. Tapping opens
+          the card's full view. Records fill the rest of the card. */}
+      <button onClick={onOpen} title={title} aria-label={title}
+        style={{ flexShrink: 0, display: "flex", alignItems: "center", height: 18, padding: "0 0 0 7px", border: "none", background: "transparent", color: accentColor || C.faint, cursor: onOpen ? "pointer" : "default" }}>
+        {suiteIcon(icon, 13)}
+      </button>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
         {children}
       </div>
@@ -1996,8 +1974,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           gridTemplateRows: isPortrait ? "repeat(5, minmax(0,1fr))" : "repeat(2, minmax(0,1fr))" }}>
 
           {/* Mail */}
-          <MobileBox {...boxCtx} menuKey="mail" icon="mail" title="Mail" count={(gmailMessages||[]).length} style={{ gridColumn: span(0) }}
-            menuItems={[{ icon:"refresh", label:"Refresh", run: onRefreshCalendar || onConnectGoogle }, { icon:"open_in_new", label:"Open Gmail", run: () => window.open("https://mail.google.com/mail/u/0/#inbox","_blank") }]}>
+          <MobileBox {...boxCtx} icon="mail" title="Mail" style={{ gridColumn: span(0) }}
+            onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}>
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : gmailMessages.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
               const from = fmtFromM(gmailHdr(msg,"From"));
@@ -2016,8 +1994,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Phone */}
-          <MobileBox {...boxCtx} menuKey="phone" icon="phone_in_talk" title="Phone" style={{ gridColumn: span(1) }}
-            menuItems={[{ icon:"open_in_full", label:"Open phone view", run: onOpenPhone }]}>
+          <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" style={{ gridColumn: span(1) }}
+            onOpen={onOpenPhone}>
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
             <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0, padding:"4px 10px 8px", boxSizing:"border-box" }}>
@@ -2026,9 +2004,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Tasks */}
-          <MobileBox {...boxCtx} menuKey="tasks" icon="task_alt" title="Tasks" count={primaryTaskQueue.length} style={{ gridColumn: span(2) }}
-            primaryBtn={<button onClick={() => openTaskComposer(taskPriority)} style={gvIconButton({ width:26, height:26, color:C.muted }, C)} title="Add task">{suiteIcon("add",14)}</button>}
-            menuItems={[{ icon:"list_alt", label:"Open full queue", run: onOpenQueue }, { icon:"local_drink", label:"Zen mode", run: onOpenZen }]}>
+          <MobileBox {...boxCtx} icon="task_alt" title="Tasks" style={{ gridColumn: span(2) }}
+            onOpen={onOpenQueue}>
             {taskComposerOpen && (
               <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.divider}` }}>
                 <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) 32px 32px", gap:6, alignItems:"start" }}>
@@ -2070,9 +2047,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Shailos */}
-          <MobileBox {...boxCtx} menuKey="shailos" icon="rule" title="Shailos" accentColor={GOLD} count={visibleShailos.length} style={{ gridColumn: span(3) }}
-            primaryBtn={<button onClick={onOpenShailaAdd} style={gvIconButton({width:26,height:26,color:GOLD},C)} title="Add shaila">{suiteIcon("add",14)}</button>}
-            menuItems={[{ icon:"open_in_full", label:"Open Shailos", run: onOpenShailos }]}>
+          <MobileBox {...boxCtx} icon="rule" title="Shailos" accentColor={GOLD} style={{ gridColumn: span(3) }}
+            onOpen={onOpenShailos}>
             {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : visibleShailos.map(s => {
               const text = nerveDisplaySummary(s,"Open shaila");
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
@@ -2090,9 +2066,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Calendar */}
-          <MobileBox {...boxCtx} menuKey="cal" icon="calendar_today" title="Calendar" accentColor={C.accent} count={upcomingCal.length} style={{ gridColumn: span(4) }}
-            primaryBtn={<button onClick={() => setShowAddEvent(true)} style={gvIconButton({width:26,height:26,color:C.accent},C)} title="Add event">{suiteIcon("add",14)}</button>}
-            menuItems={[{ icon:"refresh", label:"Refresh", run: onRefreshCalendar || onConnectGoogle }, { icon:"open_in_new", label:"Open Google Calendar", run: () => window.open("https://calendar.google.com/calendar/r","_blank") }]}>
+          <MobileBox {...boxCtx} icon="calendar_today" title="Calendar" accentColor={C.accent} style={{ gridColumn: span(4) }}
+            onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}>
             {showAddEvent && (
               <div style={{ padding:"10px 12px", borderBottom:`1px solid ${C.divider}` }}>
                 <textarea autoFocus value={addEventText} onChange={e=>setAddEventText(e.target.value)} rows={2} placeholder='e.g. "Call David Mon at 3pm"'
