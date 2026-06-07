@@ -531,7 +531,7 @@ function isCalendarEventPast(evt, nowMs) {
 }
 
 function formatCalendarWindow(evt) {
-  if (evt?.start?.date) return "All day";
+  if (evt?.start?.date) return "(all day)";
   const start = new Date(evt?.start?.dateTime);
   const end = new Date(evt?.end?.dateTime);
   if (!Number.isFinite(start.getTime())) return "";
@@ -1776,21 +1776,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // Capture timerId so the cleanup doesn't depend on the mutable ref value after unmount.
     return () => { clearInterval(timerId); streamRef.current.timer = null; };
   }, [activeChiefTaskText]);
-  const nextActionBar = (chiefSummaryText || activeChiefTaskText) ? (
-    <div style={{ flexShrink: 0, minWidth: 0, margin: "0 2px 7px", padding: "10px 12px", borderRadius: 10, background: hexToRgba(C.accent, 0.06) || C.bgSoft, borderLeft: `3px solid ${C.accent}`, display: "flex", alignItems: "flex-start", gap: 8 }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {chiefSummaryText && (
-          <div style={{ fontSize: 15, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.4, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>{chiefSummaryText}</div>
-        )}
-        {activeChiefTaskText && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, marginTop: chiefSummaryText ? 5 : 0 }}>
-            <span style={{ display: "flex", color: C.accent, flexShrink: 0 }}>{suiteIcon("bolt", 17)}</span>
-            <span style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
-            </span>
-          </div>
-        )}
-      </div>
+  // nextActionBar: only the ⚡ recommendation — the items summary (supercrunch) lives above
+  // it in the layout so the user sees concrete items first, then the action to take.
+  const nextActionBar = activeChiefTaskText ? (
+    <div style={{ flexShrink: 0, minWidth: 0, margin: "0 2px 7px", padding: "8px 12px", borderRadius: 10, background: hexToRgba(C.accent, 0.06) || C.bgSoft, borderLeft: `3px solid ${C.accent}`, display: "flex", alignItems: "center", gap: 8 }}>
+      <span style={{ display: "flex", color: C.accent, flexShrink: 0 }}>{suiteIcon("bolt", 17)}</span>
+      <span style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
+      </span>
       {/* Resuggest — force a fresh Chief scan / new suggestion */}
       <button type="button" onClick={() => setChiefRefreshNonce(n => n + 1)} title="Re-suggest" aria-label="Re-suggest"
         disabled={chiefLoading}
@@ -2191,9 +2184,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const calRich = (() => {
       if (!upcomingCal.length) return "Nothing upcoming";
       const top = upcomingCal.slice(0, 3);
-      const items = top.map(ev => {
-        const t = fmtTimeM(ev.start || ev.startTime || ev.date);
-        const title = trunc(compactNerveSummary(ev.summary || ev.title || ev.name || "", "Event"), 20);
+      const items = top.map(row => {
+        const evt = row.evt;
+        const allDay = !evt?.start?.dateTime;
+        const t = allDay ? "(all day)" : fmtTimeM(evt?.start?.dateTime);
+        const title = trunc(compactNerveSummary(evt?.summary || evt?.title || evt?.name || "", "Event"), 20);
         return t ? `${title} ${t}` : title;
       });
       return joinTop(items, upcomingCal.length - top.length);
@@ -2202,11 +2197,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // cardSummary: prefer chief AI signal per area, fall back to rich deterministic text.
     const cardSummary = (area, fallback) => signalNote(area) || fallback;
 
-    // Supercrunched universal summary — ONE synthesized line of the most notable CONCRETE
-    // items across everything. Prefers the chief AI overview. No category nouns or counts
-    // ("3 tasks", "shailos open", "N unread") — just the actual things that matter, named.
+    // Supercrunched items summary — ONE concrete line of the most notable items across
+    // everything. Always built deterministically from live data (never the AI overview,
+    // which lives in nextActionBar below). No category nouns or counts — just named things.
     const supercrunch = (() => {
-      if (chiefSummaryText) return chiefSummaryText;
       const parts = [];
       // Lead with the most urgent concrete task (its text, not a count)
       if (primaryTaskQueue.length) {
@@ -2214,11 +2208,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         const lead = trunc(nerveDisplaySummary(p1 || primaryTaskQueue[0], ""), 30);
         if (lead) parts.push(p1 ? `${lead} (P1)` : lead);
       }
-      // Next calendar commitment (title + time)
+      // Next calendar commitment (title + time or "all day")
       if (upcomingCal.length) {
-        const ev = upcomingCal[0];
-        const t = fmtTimeM(ev.start || ev.startTime || ev.date);
-        const title = trunc(compactNerveSummary(ev.summary || ev.title || ev.name || "", ""), 22);
+        const row = upcomingCal[0];
+        const evt = row.evt;
+        const allDay = !evt?.start?.dateTime;
+        const t = allDay ? "(all day)" : fmtTimeM(evt?.start?.dateTime);
+        const title = trunc(compactNerveSummary(evt?.summary || evt?.title || evt?.name || "", ""), 22);
         if (title) parts.push(t ? `${title} ${t}` : title);
       }
       // Who you missed a call from (name, not "N missed calls")
@@ -2240,15 +2236,15 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     return (
       <div style={{ position:"fixed", top:topOffset, left:sidebarW, right:0, bottom:0, zIndex:7600, background:C.bg, display:"flex", flexDirection:"column", overflow:"hidden", borderLeft:`1px solid ${C.divider}`, boxSizing:"border-box", padding:"8px 8px calc(8px + env(safe-area-inset-bottom,0px))" }}>
 
-        {nextActionBar}
-
-        {/* Supercrunched universal summary — one synthesized sentence covering the whole
-            situation at a glance. Prefers chief AI overview; builds deterministically otherwise. */}
+        {/* Items summary — always-on concrete snapshot of the top item from each area.
+            Appears first so you see what's happening at a glance, then the recommendation. */}
         {supercrunch && (
-          <div style={{ flexShrink:0, padding:"7px 12px", borderRadius:8, background: C.bgSoft, fontSize:14, color:C.muted, fontFamily:NC_FONT_STACK, lineHeight:1.4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+          <div style={{ flexShrink:0, padding:"7px 12px", borderRadius:8, background: C.bgSoft, fontSize:15, color:C.text, fontFamily:NC_FONT_STACK, lineHeight:1.4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
             {supercrunch}
           </div>
         )}
+
+        {nextActionBar}
 
         {/* slim time + actions bar */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 2px 6px", flexShrink:0 }}>
@@ -2396,7 +2392,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             {!calendarEvents ? emptyMsg("Loading…") : upcomingCal.length === 0 ? emptyMsg("Nothing upcoming.") : upcomingCal.map(row => (
               <div key={row.evt?.id||row.index} style={{ display:"grid", gridTemplateColumns:"auto minmax(0,1fr)", gap:8, padding:`${padY}px 12px`, alignItems:"start" }}>
                 <span style={{ fontSize:metaF, color:row.now?C.accent:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap", paddingTop:1, fontWeight:row.now?700:400, minWidth:54 }}>
-                  {row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
+                  {row.evt?.start?.date ? "(all day)" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                 </span>
                 <span style={{ fontSize:bodyF, color:row.now||row.special?C.text:C.muted, fontFamily:NC_FONT_STACK, fontWeight:row.now||row.special?600:400, lineHeight:lineH }}>
                   {row.evt?.summary||"(no title)"}
@@ -2574,7 +2570,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const up = calendarRows.filter(r => !r.past);
                 if (!up.length) return "Nothing upcoming";
                 const r = up[0];
-                const t = r.evt?.start?.date ? "All day" : new Date(r.evt?.start?.dateTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+                const t = r.evt?.start?.date ? "(all day)" : new Date(r.evt?.start?.dateTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
                 return `${r.evt?.summary || "(no title)"} ${t}`;
               })()}
               menuItems={[
@@ -2593,7 +2589,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               ) : calendarRows.filter(r=>!r.past).slice(0,40).map(row => (
                 <div key={row.evt?.id||row.index} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:8,padding:"9px 12px",borderTop:`1px solid ${C.divider}`,alignItems:"start" }}>
                   <span style={{ fontSize:ncType.meta,color:row.now?C.accent:C.faint,fontFamily:NC_FONT_STACK,whiteSpace:"nowrap",paddingTop:1,fontWeight:row.now?700:400,minWidth:54 }}>
-                    {row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
+                    {row.evt?.start?.date ? "(all day)" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                   </span>
                   <span style={{ fontSize:ncType.body,color:row.now||row.special?C.text:C.muted,fontFamily:NC_FONT_STACK,fontWeight:row.now||row.special?600:400,lineHeight:ncType.line,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
                     {row.now && <span style={{width:6,height:6,borderRadius:"50%",background:C.accent,display:"inline-block",marginRight:5,verticalAlign:"middle"}} />}
@@ -2994,7 +2990,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             } catch { return ''; }
           };
           const fmtEvtTime = (evt) => {
-            if (evt.start?.date) return 'All day';
+            if (evt.start?.date) return '(all day)';
             const s = new Date(evt.start?.dateTime);
             const e = new Date(evt.end?.dateTime);
             return `${s.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} – ${e.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;

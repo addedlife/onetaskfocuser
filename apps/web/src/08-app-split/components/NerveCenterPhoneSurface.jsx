@@ -513,6 +513,8 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     };
   }, [usingRelay, user, applyPhoneState]);
 
+  // Returns true on success, false on any failure. Callers must check the return
+  // value before treating the action as complete (e.g. clearing the compose body).
   const post = async (path, label) => {
     setBusy(label);
     try {
@@ -526,11 +528,16 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             cmdAuthHeaders["Authorization"] = `Bearer ${tok}`;
           }
         } catch {}
-        await fetch(`${RELAY_BASE}?action=command`, {
+        const relayRes = await fetch(`${RELAY_BASE}?action=command`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...cmdAuthHeaders },
           body: JSON.stringify({ path }),
         });
+        if (!relayRes.ok) {
+          const d = await relayRes.json().catch(() => ({}));
+          setError(d?.error || `Relay error (${relayRes.status}) — sign in to use phone commands`);
+          return false;
+        }
         setError("");
         // Short wait then refresh so the UI reflects the command result
         await new Promise(r => setTimeout(r, 2500));
@@ -540,18 +547,21 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           let msg = `DeskPhone error (${res.status})`;
           try { const d = await res.json(); if (d?.error || d?.message) msg = d.error || d.message; } catch {}
           setError(msg);
+          return false;
         } else {
           const data = await res.json().catch(() => ({}));
           if (data?.success === false || data?.ok === false) {
             setError(data?.error || data?.message || data?.reason || "DeskPhone reported failure.");
+            return false;
           } else {
             setError("");
           }
         }
       }
       await refresh();
+      return true;
     }
-    catch { setError("DeskPhone did not answer."); onOnlineChange?.(false); }
+    catch { setError("DeskPhone did not answer."); onOnlineChange?.(false); return false; }
     finally { setBusy(""); }
   };
 
@@ -560,8 +570,8 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const sendSms = async () => {
     const to = selected?.number || number;
     if (!to?.trim() || !body.trim()) return;
-    await post(`/send?to=${encodeURIComponent(to.trim())}&body=${encodeURIComponent(body.trim())}`, "send");
-    setBody(""); closeCompose();
+    const ok = await post(`/send?to=${encodeURIComponent(to.trim())}&body=${encodeURIComponent(body.trim())}`, "send");
+    if (ok) { setBody(""); closeCompose(); }
   };
 
   // Normalize callState so "Idle", "None", "Available" etc. all collapse to "" (shows "Connected · device")
