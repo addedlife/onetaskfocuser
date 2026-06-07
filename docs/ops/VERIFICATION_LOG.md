@@ -1,5 +1,13 @@
 # Verification Log
 
+## 2026-06-07 DeskPhone Connection Reliability — Faster Reconnect + Ghost-Connection Detection (b291)
+
+- Reported: Connection still flaky and droppy after b285 fixes; requires frequent manual resets; phone coming back into range takes too long to auto-reconnect.
+- Root cause 1 (slow reconnect after phone returns): `AutoReconnectRetryWindow` was 90s. After a failed attempt, the watchdog (30s interval) was rate-limited for 90s, meaning the phone could be back in range for up to 89s before the next attempt. The 90s was originally to cover the MAP retry cycle, but the in-flight guards (`_autoReconnectInFlight`, `IsConnecting`) already prevent concurrent reconnects. Fixed: 90s → 30s, matching the watchdog interval.
+- Root cause 2 (HFP ghost-connection hangup): `SendAsync` had no write timeout. Ghost RFCOMM sockets accept `WriteLineAsync` silently (Windows buffers the write) without throwing, so the 30s keepalive probe write never failed and the read loop was permanently stuck. Fixed: added a 5s `CancelAfter` on the write in `SendAsync`; write timeout propagates to the outer `finally` → `StatusChanged("HFP disconnected")` → reconnect fires.
+- Root cause 3 (MAP ghost-connection / silent poll-loop death): `PerformDeltaSyncAsync` had no wall-clock timeout — a dead RFCOMM socket could block the OBEX read indefinitely, freezing the poll loop. Worse: `catch (OperationCanceledException) { break; }` was not guarded by `ct.IsCancellationRequested`, so any `OperationCanceledException` (including a future sync timeout) would silently kill the poll loop. Fixed: (a) changed guard to `when (ct.IsCancellationRequested)` so non-shutdown OCEs fall to `catch (Exception ex) → QueueAutoReconnect`; (b) wrapped all per-round OBEX calls (FetchHandlesAsync, PerformDeltaSyncAsync, RefreshPhoneReadStates, ReconcileDeletes) in a 20s linked `CancellationTokenSource`.
+- Gates: `dotnet build DeskPhone.csproj -p:Platform=ARM64 -c Release` → 0 errors, 2 pre-existing NU1603 warnings. b291 deployed (build.num → 292). Pushed `d332412` to origin/main. BUILD-VERIFIED ONLY — end-to-end requires runtime testing with a phone that drops in and out of range.
+
 ## 2026-06-07 Six NerveCenter / Phone Recurring Issues
 
 - Issues: (1) missed-call resolve check insufficient; (2) no manual resolve button on web phone screen; (3) call/thread history capped too low; (4) accordion card fonts too small; (5) supercrunch brief sounding like advice; (7) task list diverges across devices.
