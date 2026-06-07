@@ -750,7 +750,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
-    const eventsUrl = (calId) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=25`;
+    const eventsUrl = (calId) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&showDeleted=false&orderBy=startTime&maxResults=25`;
 
     // Step 1: try to get all subscribed calendars via calendarList
     let cals = null;
@@ -775,7 +775,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       if (r.status === 401) throw new Error('token_expired');
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + r.status}`); }
       const d = await r.json();
-      return sortCalEvents((d.items || []).map(evt => ({ ...evt, calendarId: "primary" }))).slice(0, 20);
+      return sortCalEvents((d.items || []).filter(evt => evt.status !== "cancelled").map(evt => ({ ...evt, calendarId: "primary" }))).slice(0, 20);
     }
 
     // Step 2: fetch events from each calendar in parallel
@@ -783,7 +783,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       cals.map(cal =>
         fetch(eventsUrl(cal.id), { headers: { Authorization: `Bearer ${token}` } })
           .then(r => { if (r.status === 401) throw new Error('token_expired'); return r.json(); })
-          .then(d => (d.items || []).map(evt => ({ ...evt, calendarId: cal.id, calendarSummary: cal.summary || "" })))
+          .then(d => (d.items || []).filter(evt => evt.status !== "cancelled").map(evt => ({ ...evt, calendarId: cal.id, calendarSummary: cal.summary || "" })))
       )
     );
     // Re-throw token_expired if any calendar hit it

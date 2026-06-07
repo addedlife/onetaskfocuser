@@ -237,9 +237,24 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     setResolvedMissed(prev => {
       const next = new Set(prev);
       if (resolved) next.add(key); else next.delete(key);
-      try { localStorage.setItem("nc_missed_resolved", JSON.stringify([...next].slice(-300))); } catch {}
+      const arr = [...next].slice(-300);
+      try { localStorage.setItem("nc_missed_resolved", JSON.stringify(arr)); } catch {}
+      // Broadcast so EVERY mounted phone surface (compact card + full phone screen) updates
+      // immediately — resolving in one place drops the call from summaries/suggestions
+      // everywhere without waiting for a remount.
+      try { window.dispatchEvent(new CustomEvent("nc-missed-resolved-sync", { detail: arr })); } catch {}
       return next;
     });
+  }, []);
+  // Listen for resolve toggles from OTHER phone-surface instances and storage changes from
+  // other tabs, so the resolved set stays in sync across all instances.
+  useEffect(() => {
+    const apply = (arr) => setResolvedMissed(new Set(Array.isArray(arr) ? arr : []));
+    const onSync = e => apply(e.detail);
+    const onStorage = e => { if (e.key === "nc_missed_resolved") { try { apply(JSON.parse(e.newValue || "[]")); } catch {} } };
+    window.addEventListener("nc-missed-resolved-sync", onSync);
+    window.addEventListener("storage", onStorage);
+    return () => { window.removeEventListener("nc-missed-resolved-sync", onSync); window.removeEventListener("storage", onStorage); };
   }, []);
   const [contacts, setContacts] = useState([]);
   const [number, setNumber] = useState("");

@@ -772,9 +772,9 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
       ) : (
         // Collapsing header: hides when the card content scrolls (mobile default)
         <button onClick={onOpen} title={title} aria-label={title}
-          style={{ display: "flex", alignItems: "flex-start", gap: 6, width: "100%", textAlign: "left", border: "none", background: "transparent", padding: headerCollapsed ? "0 10px" : "6px 10px 5px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0, maxHeight: headerCollapsed ? 0 : 48, opacity: headerCollapsed ? 0 : 1, overflow: "hidden", pointerEvents: headerCollapsed ? "none" : "auto", transition: "max-height 0.2s ease, opacity 0.15s ease, padding 0.2s ease" }}>
-          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
-          <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>{summary}</span>
+          style={{ display: "flex", alignItems: "flex-start", gap: 7, width: "100%", textAlign: "left", border: "none", background: "transparent", padding: headerCollapsed ? "0 10px" : "7px 11px 6px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0, maxHeight: headerCollapsed ? 0 : 56, opacity: headerCollapsed ? 0 : 1, overflow: "hidden", pointerEvents: headerCollapsed ? "none" : "auto", transition: "max-height 0.2s ease, opacity 0.15s ease, padding 0.2s ease" }}>
+          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 14)}</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.3, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>{summary}</span>
         </button>
       )}
       <div ref={scrollRef} onScroll={measure}
@@ -877,7 +877,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     setChiefProfileDraft(markdownFromChiefProfile(chiefProfile));
   }, [chiefProfile?.updatedAt]); // eslint-disable-line
   const [mobileMenuOpen, setMobileMenuOpen] = useState(null); // id of section whose ··· menu is open
-  const [mobileExpanded, setMobileExpanded] = useState(() => new Set(["tasks"])); // ids of expanded accordion sections — multiple may stay open
+  const [mobileExpanded, setMobileExpanded] = useState(() => new Set()); // ids of expanded accordion sections — all collapsed by default; multiple may stay open
   const [expandedRows, setExpandedRows] = useState(() => new Set()); // box-mode rows tapped open to reveal full text
   const toggleRow = key => setExpandedRows(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
   const [mobileTimelineOpen, setMobileTimelineOpen] = useState(false); // mobile hero timeline reveal
@@ -1075,7 +1075,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const primaryTasks = (isStacked || showAllTasks) ? primaryTaskQueue : primaryTaskQueue.slice(0, collapsedTaskLimit);
   const visibleShailos = shailos.filter(Boolean);
   const timeBucket = Math.floor(nowMs / CHIEF_TIME_BUCKET_MS);
-  const calendarRows = useMemo(() => (calendarEvents || []).map((evt, index) => {
+  const calendarRows = useMemo(() => (calendarEvents || [])
+    // Drop events cancelled in Google Calendar — the API can still return them as
+    // status:"cancelled" (e.g. a deleted instance of a recurring series), and stale
+    // caches can hold a one-off after it's deleted. Either way it must not show.
+    .filter(evt => evt && evt.status !== "cancelled")
+    .map((evt, index) => {
     const routine = isRoutineCalendarEvent(evt);
     const now = isCalendarEventCurrent(evt, nowMs);
     const past = isCalendarEventPast(evt, nowMs);
@@ -1772,18 +1777,26 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     return () => { clearInterval(timerId); streamRef.current.timer = null; };
   }, [activeChiefTaskText]);
   const nextActionBar = (chiefSummaryText || activeChiefTaskText) ? (
-    <div style={{ flexShrink: 0, minWidth: 0, margin: "0 2px 7px", padding: "8px 11px", borderRadius: 10, background: hexToRgba(C.accent, 0.06) || C.bgSoft, border: `1px solid ${C.divider}`, borderLeft: `3px solid ${C.accent}` }}>
-      {chiefSummaryText && (
-        <div style={{ fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.35, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>{chiefSummaryText}</div>
-      )}
-      {activeChiefTaskText && (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, marginTop: chiefSummaryText ? 4 : 0 }}>
-          <span style={{ display: "flex", color: C.accent, flexShrink: 0 }}>{suiteIcon("bolt", 15)}</span>
-          <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
-          </span>
-        </div>
-      )}
+    <div style={{ flexShrink: 0, minWidth: 0, margin: "0 2px 7px", padding: "10px 12px", borderRadius: 10, background: hexToRgba(C.accent, 0.06) || C.bgSoft, borderLeft: `3px solid ${C.accent}`, display: "flex", alignItems: "flex-start", gap: 8 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {chiefSummaryText && (
+          <div style={{ fontSize: 15, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.4, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>{chiefSummaryText}</div>
+        )}
+        {activeChiefTaskText && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, marginTop: chiefSummaryText ? 5 : 0 }}>
+            <span style={{ display: "flex", color: C.accent, flexShrink: 0 }}>{suiteIcon("bolt", 17)}</span>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
+            </span>
+          </div>
+        )}
+      </div>
+      {/* Resuggest — force a fresh Chief scan / new suggestion */}
+      <button type="button" onClick={() => setChiefRefreshNonce(n => n + 1)} title="Re-suggest" aria-label="Re-suggest"
+        disabled={chiefLoading}
+        style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 8, border: "none", background: "transparent", color: C.accent, cursor: chiefLoading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: chiefLoading ? 0.5 : 1, ...(chiefLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }}>
+        {suiteIcon("autorenew", 17)}
+      </button>
     </div>
   ) : null;
   useEffect(() => {
@@ -2189,44 +2202,50 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // cardSummary: prefer chief AI signal per area, fall back to rich deterministic text.
     const cardSummary = (area, fallback) => signalNote(area) || fallback;
 
-    // Supercrunched universal summary — ONE synthesized sentence covering the most notable
-    // things across all categories. Prefers the chief AI overview; builds deterministically
-    // when chief isn't running. Reads like a situation report, not a list of headings.
+    // Supercrunched universal summary — ONE synthesized line of the most notable CONCRETE
+    // items across everything. Prefers the chief AI overview. No category nouns or counts
+    // ("3 tasks", "shailos open", "N unread") — just the actual things that matter, named.
     const supercrunch = (() => {
       if (chiefSummaryText) return chiefSummaryText;
       const parts = [];
+      // Lead with the most urgent concrete task (its text, not a count)
       if (primaryTaskQueue.length) {
         const p1 = primaryTaskQueue.find(t => { const l = (gP(priorities, t.priority)?.label || "").toLowerCase(); return l.includes("urgent") || l.includes("p1"); });
-        const lead = trunc(nerveDisplaySummary(p1 || primaryTaskQueue[0], "task"), 26);
-        parts.push(`${primaryTaskQueue.length} task${primaryTaskQueue.length > 1 ? "s" : ""}${lead ? ` — ${lead}${p1 ? " (P1)" : ""}` : ""}`);
+        const lead = trunc(nerveDisplaySummary(p1 || primaryTaskQueue[0], ""), 30);
+        if (lead) parts.push(p1 ? `${lead} (P1)` : lead);
       }
-      if (gmailMessages?.length) {
-        const from = fmtFromM(gmailHdr(gmailMessages[0], "From"));
-        parts.push(gmailMessages.length > 1 ? `${gmailMessages.length} unread, ${from}` : `mail — ${from}`);
-      }
-      const missed = Number(phoneActivitySummary?.missedCalls || 0);
-      const texts = Number(phoneActivitySummary?.unreadTexts || 0);
-      if (missed) parts.push(`${missed} missed call${missed > 1 ? "s" : ""}`);
-      else if (texts) parts.push(`${texts} text${texts > 1 ? "s" : ""}`);
+      // Next calendar commitment (title + time)
       if (upcomingCal.length) {
         const ev = upcomingCal[0];
         const t = fmtTimeM(ev.start || ev.startTime || ev.date);
-        const title = trunc(compactNerveSummary(ev.summary || ev.title || ev.name || "", "Event"), 20);
-        parts.push(t ? `${title} ${t}` : title);
+        const title = trunc(compactNerveSummary(ev.summary || ev.title || ev.name || "", ""), 22);
+        if (title) parts.push(t ? `${title} ${t}` : title);
       }
-      if (visibleShailos.length) parts.push(`${visibleShailos.length} shailo${visibleShailos.length > 1 ? "s" : ""} open`);
+      // Who you missed a call from (name, not "N missed calls")
+      const missedCall = (phoneActivitySummary?.calls || []).find(c => c.needsReturnCall);
+      if (missedCall?.name) parts.push(`${missedCall.name} called`);
+      // Top unread email (sender, not "N unread")
+      if (gmailMessages?.length) {
+        const from = fmtFromM(gmailHdr(gmailMessages[0], "From"));
+        if (from) parts.push(from);
+      }
+      // Lead open shaila (its text, not "N shailos")
+      if (visibleShailos.length) {
+        const s = trunc(nerveDisplaySummary(visibleShailos[0], ""), 26);
+        if (s) parts.push(s);
+      }
       return parts.length ? parts.join(" · ") : "All clear";
     })();
 
     return (
-      <div style={{ position:"fixed", top:topOffset, left:sidebarW, right:0, height:`calc(100dvh - ${topOffset}px)`, zIndex:7600, background:C.bg, display:"flex", flexDirection:"column", borderLeft:`1px solid ${C.divider}`, boxSizing:"border-box", padding:"8px 8px calc(8px + env(safe-area-inset-bottom,0px))" }}>
+      <div style={{ position:"fixed", top:topOffset, left:sidebarW, right:0, bottom:0, zIndex:7600, background:C.bg, display:"flex", flexDirection:"column", overflow:"hidden", borderLeft:`1px solid ${C.divider}`, boxSizing:"border-box", padding:"8px 8px calc(8px + env(safe-area-inset-bottom,0px))" }}>
 
         {nextActionBar}
 
         {/* Supercrunched universal summary — one synthesized sentence covering the whole
             situation at a glance. Prefers chief AI overview; builds deterministically otherwise. */}
         {supercrunch && (
-          <div style={{ flexShrink:0, padding:"5px 12px", borderRadius:8, background: C.bgSoft, border:`1px solid ${C.divider}`, fontSize:12, color:C.muted, fontFamily:NC_FONT_STACK, lineHeight:1.4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+          <div style={{ flexShrink:0, padding:"7px 12px", borderRadius:8, background: C.bgSoft, fontSize:14, color:C.muted, fontFamily:NC_FONT_STACK, lineHeight:1.4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
             {supercrunch}
           </div>
         )}
