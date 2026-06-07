@@ -653,7 +653,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
   const expanded = !expandable || expandedId === id;
   const menuOpen = menuId === id;
   return (
-    <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, overflow: "visible" }}>
+    <div style={{ background: C.bgSoft, borderRadius: 10, overflow: "visible" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px 7px 12px", minHeight: 34 }}>
         <button
           onClick={expandable ? () => onExpand(id) : undefined}
@@ -697,20 +697,20 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
   );
 }
 
-// Mobile phone/tablet "box": no header bar — the section icon sits ON the top border
-// (positioned with a card-bg background to visually cut through the border line).
-// No height consumed by a header row; content fills the full card.
+// Mobile phone/tablet "box": borderless surface (subtle bgSoft tint + grid gap do the
+// separating, no 1px chrome). The top line is the card's identity AND its summary: a
+// pinned [icon + one-line chief summary] row that does not scroll. That single line
+// replaces the old header row — tapping it opens the full surface. Content scrolls below.
 // Hoisted to module scope for stable identity.
-function MobileBox({ icon, title, accentColor, children, C, onOpen, style }) {
+function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style }) {
   return (
-    <div style={{ position: "relative", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, ...style }}>
-      {/* Icon sits on the top border: absolute at top:-7px so it's centered on the 1px
-          border line. The C.bg background cuts through the border visually. */}
+    <div style={{ position: "relative", background: C.bgSoft, borderRadius: 10, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
       <button onClick={onOpen} title={title} aria-label={title}
-        style={{ position: "absolute", top: -7, left: 7, background: C.bg, border: "none", padding: "1px 3px", lineHeight: 0, display: "flex", alignItems: "center", color: accentColor || C.faint, cursor: onOpen ? "pointer" : "default", zIndex: 1, borderRadius: 3 }}>
-        {suiteIcon(icon, 13)}
+        style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "6px 10px 5px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0 }}>
+        <span style={{ color: accentColor || C.faint, display: "flex", flexShrink: 0, lineHeight: 0 }}>{suiteIcon(icon, 13)}</span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</span>
       </button>
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", borderRadius: 7 }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
         {children}
       </div>
     </div>
@@ -1103,7 +1103,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   useEffect(() => {
     let cancelled = false;
     const now = Date.now();
-    if (!chiefPage) {
+    // The chief brief feeds two surfaces now: the full chief page AND the mobile
+    // nerve-center card summaries (each card's top line is the chief's per-category
+    // signal). So the scan must run when EITHER is visible. The cache + min-gap
+    // throttle + debounce below keep this cheap — stale-while-revalidate: cards show
+    // a deterministic line instantly and silently upgrade to the AI line when ready.
+    // Both surfaces share one cache key, so neither pays for the call twice.
+    if (!chiefPage && !isMobileDevice) {
       setChiefLoading(false);
       setChiefError("");
       return undefined;
@@ -1956,14 +1962,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const span = idx => isPortrait ? undefined : (idx < 3 ? "span 2" : "span 3");
     const emptyMsg = txt => <div style={{ padding:"12px 14px", fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{txt}</div>;
 
-    // Concise per-section topline summaries — derived from live data, no AI call.
-    const tlCopy = txt => { try { navigator.clipboard.writeText(txt); } catch {} };
-    const topline = txt => (
-      <div style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 12px 4px", borderBottom:`1px solid ${C.divider}`, flexShrink:0 }}>
-        <span style={{ flex:1, fontSize:ncType.meta, color:C.muted, fontFamily:NC_FONT_STACK, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{txt}</span>
-        <button onClick={() => tlCopy(txt)} style={{ border:"none", background:"transparent", color:C.faint, cursor:"pointer", padding:2, lineHeight:0, flexShrink:0 }} title="Copy summary">{suiteIcon("content_copy", 10)}</button>
-      </div>
-    );
+    // Each card's top line is the chief's per-category summary (same summarizer as the
+    // chief page — it emits one factual `signals` line per area). We prefer that AI line
+    // and fall back to the deterministic line below so the card is never blank, even
+    // before the scan resolves or when offline (stale-while-revalidate).
+    const signalNote = area => (activeChiefBrief.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || "";
+    const cardSummary = (area, fallback) => signalNote(area) || fallback;
     const mailTL = (() => {
       if (!gmailMessages?.length) return "Inbox clear";
       const from = fmtFromM(gmailHdr(gmailMessages[0], "From"));
@@ -2018,9 +2022,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           gridTemplateRows: isPortrait ? "repeat(5, minmax(0,1fr))" : "repeat(2, minmax(0,1fr))" }}>
 
           {/* Mail */}
-          <MobileBox {...boxCtx} icon="mail" title="Mail" style={{ gridColumn: span(0) }}
+          <MobileBox {...boxCtx} icon="mail" title="Mail" summary={cardSummary("Mail", mailTL)} style={{ gridColumn: span(0) }}
             onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}>
-            {topline(mailTL)}
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : gmailMessages.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
               const from = fmtFromM(gmailHdr(msg,"From"));
@@ -2039,9 +2042,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Phone */}
-          <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" style={{ gridColumn: span(1) }}
+          <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" summary={cardSummary("Phone", phoneTL)} style={{ gridColumn: span(1) }}
             onOpen={onOpenPhone}>
-            {topline(phoneTL)}
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
             <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0, padding:"4px 10px 8px", boxSizing:"border-box" }}>
@@ -2050,9 +2052,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Tasks */}
-          <MobileBox {...boxCtx} icon="task_alt" title="Tasks" style={{ gridColumn: span(2) }}
+          <MobileBox {...boxCtx} icon="task_alt" title="Tasks" summary={cardSummary("Tasks", tasksTL)} style={{ gridColumn: span(2) }}
             onOpen={onOpenQueue}>
-            {topline(tasksTL)}
             {taskComposerOpen && (
               <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.divider}` }}>
                 <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) 32px 32px", gap:6, alignItems:"start" }}>
@@ -2094,9 +2095,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Shailos */}
-          <MobileBox {...boxCtx} icon="rule" title="Shailos" accentColor={GOLD} style={{ gridColumn: span(3) }}
+          <MobileBox {...boxCtx} icon="rule" title="Shailos" accentColor={GOLD} summary={cardSummary("Shailos", shailosTL)} style={{ gridColumn: span(3) }}
             onOpen={onOpenShailos}>
-            {topline(shailosTL)}
             {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : visibleShailos.map(s => {
               const text = nerveDisplaySummary(s,"Open shaila");
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
@@ -2114,9 +2114,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Calendar */}
-          <MobileBox {...boxCtx} icon="calendar_today" title="Calendar" accentColor={C.accent} style={{ gridColumn: span(4) }}
+          <MobileBox {...boxCtx} icon="calendar_today" title="Calendar" accentColor={C.accent} summary={cardSummary("Calendar", calTL)} style={{ gridColumn: span(4) }}
             onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}>
-            {topline(calTL)}
             {showAddEvent && (
               <div style={{ padding:"10px 12px", borderBottom:`1px solid ${C.divider}` }}>
                 <textarea autoFocus value={addEventText} onChange={e=>setAddEventText(e.target.value)} rows={2} placeholder='e.g. "Call David Mon at 3pm"'
@@ -2191,6 +2190,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // which dropped taps on the ··· menu and reset focus in the task composer. With a
     // stable component type React now just re-renders with fresh props.
     const sectionCtx = { C, expandedId: mobileExpanded, menuId: mobileMenuOpen, onExpand: mobileExpandToggle, onMenuToggle: mobileMenuToggle, onMenuClose: mobileMenuClose };
+
+    // Each collapsed section's preview line prefers the chief's per-category summary
+    // (same summarizer as the chief page), falling back to a deterministic line.
+    const signalNote = area => (activeChiefBrief.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || "";
 
     const fmtTimeM = (raw) => { try { const d = new Date(raw); const now = new Date(); return d.toDateString()===now.toDateString() ? d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : d.toLocaleDateString([],{month:"short",day:"numeric"}); } catch { return ""; } };
     const gmailHdr = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || "";
@@ -2297,7 +2300,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Calendar */}
           {(googleToken || calendarEvents !== null) && (
             <MobileSection {...sectionCtx} id="cal" icon="calendar_today" title="Calendar" accentColor={C.accent}
-              preview={(() => {
+              preview={signalNote("Calendar") || (() => {
                 if (!calendarEvents) return "Loading…";
                 const up = calendarRows.filter(r => !r.past);
                 if (!up.length) return "Nothing upcoming";
@@ -2347,7 +2350,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Gmail */}
           {(googleToken || gmailMessages !== null) && (
             <MobileSection {...sectionCtx} id="mail" icon="mail" title="Mail" count={(gmailMessages||[]).length}
-              preview={(!gmailMessages || !gmailMessages.length) ? "Inbox clear" : `${fmtFromM(gmailHdr(gmailMessages[0], "From"))} · ${gmailMessages[0].aiSummary || decodeSnipM(gmailMessages[0].snippet) || gmailHdr(gmailMessages[0], "Subject") || "(no subject)"}`}
+              preview={signalNote("Mail") || ((!gmailMessages || !gmailMessages.length) ? "Inbox clear" : `${fmtFromM(gmailHdr(gmailMessages[0], "From"))} · ${gmailMessages[0].aiSummary || decodeSnipM(gmailMessages[0].snippet) || gmailHdr(gmailMessages[0], "Subject") || "(no subject)"}`)}
               menuItems={[
                 { icon: "refresh",     label: "Refresh",    run: onRefreshCalendar || onConnectGoogle },
                 { icon: "open_in_new", label: "Open Gmail", run: () => window.open("https://mail.google.com/mail/u/0/#inbox","_blank") },
@@ -2378,7 +2381,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
           {/* Shailos */}
           <MobileSection {...sectionCtx} id="shailos" icon="rule" title="Shailos" accentColor={GOLD} count={visibleShailos.length}
-            preview={visibleShailos.length ? nerveDisplaySummary(visibleShailos[0], "Open shaila") : "None pending"}
+            preview={signalNote("Shailos") || (visibleShailos.length ? nerveDisplaySummary(visibleShailos[0], "Open shaila") : "None pending")}
             primaryBtn={<button onClick={onOpenShailaAdd} style={gvIconButton({width:26,height:26,color:GOLD},C)} title="Add shaila">{suiteIcon("add",14)}</button>}
             menuItems={[{ icon: "open_in_full", label: "Open Shailos", run: onOpenShailos }]}
           >
@@ -2407,7 +2410,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
           {/* Phone — keepMounted so the DeskPhone poller keeps running while collapsed */}
           <MobileSection {...sectionCtx} id="phone" icon="phone_in_talk" title="Phone" keepMounted
-            preview={phoneStatusSummary?.label || "DeskPhone"}
+            preview={signalNote("Phone") || phoneStatusSummary?.label || "DeskPhone"}
             menuItems={[{ icon: "open_in_full", label: "Open phone view", run: onOpenPhone }]}
           >
             <div style={{ padding: "4px 12px 10px", borderTop: `1px solid ${C.divider}` }}>
