@@ -1154,11 +1154,17 @@ const Store = {
             changed = true;
           }
         });
-        const wasInitialized = initialized;
         // Always mark initialized after first snapshot, even if collection is empty,
         // so subsequent real changes are not silently dropped.
         initialized = true;
-        if (changed && wasInitialized) {
+        // Always push state on any change — including the first snapshot.
+        // The wasInitialized guard previously skipped the first snapshot assuming
+        // load() already had the same data. But tasks added on another device between
+        // load() and the first snapshot land in taskCache and never reach the UI
+        // until a subsequent change triggers onUpdate. Removing the guard means
+        // the first snapshot is always authoritative; App.jsx's adoptedRemote guard
+        // prevents this from bouncing back as a save. Safe because setAS() is idempotent.
+        if (changed) {
           const newState = rebuild();
           this._lastSavedState = JSON.parse(JSON.stringify(newState));
           onUpdate(newState);

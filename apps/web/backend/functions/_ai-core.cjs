@@ -882,7 +882,7 @@ const AI_JOB_REGISTRY = {
     output: "json",
     shape: "object",
     genConfig: { temperature: 0.1, maxOutputTokens: 1200 },
-    schema: '{"brief":"3-5 sentence natural language synthesis of everything on the plate","summary":"1-2 sentence headline of the top priority","nextAction":"single concrete next move","why":"clear reason why this is the top priority right now","focusArea":"calendar|tasks|shailos|mail|phone|operations","urgency":"now|today|soon|watch","sources":["Calendar","Tasks"],"signals":[{"area":"Calendar","note":"terse Apple-notification-style condensed status for this area"}]}',
+    schema: '{"brief":"2-4 short declarative status statements — same clipped factual tone as signals, no framing or advice","summary":"1-2 sentence headline of the top priority","nextAction":"single concrete next move","why":"clear reason why this is the top priority right now","focusArea":"calendar|tasks|shailos|mail|phone|operations","urgency":"now|today|soon|watch","sources":["Calendar","Tasks"],"signals":[{"area":"Calendar","note":"terse Apple-notification-style condensed status for this area"}]}',
     buildPrompt(input = {}) {
       const context = normalizeChiefContext(input.context || input);
       return compactLines([
@@ -894,7 +894,7 @@ const AI_JOB_REGISTRY = {
         "Missed calls, unread texts, unanswered shailos, and emails with clear asks are as valid as calendar events. Weigh them by real consequence, not source type.",
         "Routine calendar items (regular davening, standard learning sessions, recurring meetings) are background context only — not the next action unless happening right now or actively blocking work.",
         "Treat a missed call as actionable only when phone.missedCalls is positive or a call row has needsReturnCall true.",
-        "Write 'brief': 3–5 sentences of natural language synthesizing the full picture. Cover what is on the plate, what is active or imminent, and what stands out. Write as a calm, steady aide giving the user situational awareness — factual and clear, not alarming.",
+        "Write 'brief': 2–4 short, clipped, declarative status statements. Same factual tone as the signals — state what is there, not what to do. No framing phrases, no 'you should', no advice. Write each sentence like a status line, e.g. 'You have 3 Now tasks. 1 missed call from Reuven. Next calendar item is Mincha at 4pm. 2 unread emails, top from Dr. Cohen.'",
         "Write 'summary': 1–2 sentence headline of the single most relevant item right now.",
         "Pick 'nextAction': the single most useful concrete move across all sources. Write 'why' with clear reasoning — explain why this is the right next step.",
         "Write 'signals': one entry per area that has active data (Calendar, Mail, Tasks, Shailos, Phone). Each note is the area's status — what is there, not advice.",

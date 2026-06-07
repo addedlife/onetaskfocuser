@@ -678,8 +678,11 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
           aria-expanded={expandable ? expanded : undefined}
         >
           <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0.1 }}>{title}</span>
-          {count > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0.1 }}>{title}</span>
+          {count > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
+          {expandable && !expanded && preview != null && (
+            <span style={{ fontSize: 13, color: C.faint, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{preview}</span>
+          )}
           {expandable && (
             <span style={{ marginLeft: "auto", color: expanded ? C.muted : C.faint, display: "flex", flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("expand_more", 18)}</span>
           )}
@@ -1924,8 +1927,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               {activeChiefBrief.signals?.length > 0 && (
                 <div style={{ display: "grid", gap:8, borderTop: activeChiefBrief.brief ? `1px solid ${C.divider}` : "none", paddingTop: activeChiefBrief.brief ? 12 : 0 }}>
                   {activeChiefBrief.signals.map((sig, i) => (
-                    <div key={i} style={{ display: "grid", gridTemplateColumns: "80px minmax(0,1fr)", gap: 10, fontSize: NC_TYPE.control, fontFamily: NC_FONT_STACK, lineHeight: 1.45 }}>
-                      <span style={{ color: C.faint, fontWeight: 700, fontSize: NC_TYPE.small, textTransform: "uppercase", letterSpacing: "0.04em", paddingTop: 2 }}>{sig.area}</span>
+                    <div key={i} style={{ display: "grid", gridTemplateColumns: "80px minmax(0,1fr)", gap: 10, fontSize: 15, fontFamily: NC_FONT_STACK, lineHeight: 1.45 }}>
+                      <span style={{ color: C.faint, fontWeight: 700, fontSize: NC_TYPE.meta, textTransform: "uppercase", letterSpacing: "0.04em", paddingTop: 2 }}>{sig.area}</span>
                       <span style={{ color: C.muted }}>{sig.note}</span>
                     </div>
                   ))}

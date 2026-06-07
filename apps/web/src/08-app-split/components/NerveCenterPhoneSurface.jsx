@@ -630,9 +630,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         _messages: thread._messages.sort((a, b) => messageTimeMs(a) - messageTimeMs(b)),
       }))
       .sort((a, b) => b._latestAt - a._latestAt)
-      .slice(0, 10);
+      .slice(0, 20);
   }, [messages, lookupName]);
-  const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, 10);
+  const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, 20);
   const hasMessages = threads.length > 0;
   const hasCalls = recentCalls.length > 0;
   const expandedConversationSig = useMemo(() => {
@@ -696,7 +696,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const activityItems = [
     ...threads.map((thread, idx) => ({ kind: "message", item: thread, idx, at: thread._latestAt })),
     ...recentCalls.map((c, idx) => ({ kind: "call", item: c, idx, at: timeMs(c.timestamp || c.date || c.time || c.startTime || c.StartTime) })),
-  ].sort((a, b) => b.at - a.at).slice(0, compact ? 8 : 14);
+  ].sort((a, b) => b.at - a.at).slice(0, compact ? 12 : 20);
 
   const callDirIcon = c => {
     // Numeric type codes: 1=incoming, 2=outgoing/dialed, 3=missed, 4=unknown
@@ -736,14 +736,17 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     const at = callAtMs(c);
     return num && at ? `${num}:${at}` : "";
   };
-  const isMissedCallResolved = c => {
+  const isMissedCallResolved = useCallback(c => {
     if (callKindLabel(c) !== "missed") return false;
     const mKey = missedKey(c);
     if (mKey && resolvedMissed.has(mKey)) return true;
     const num = callNumber(c);
     const missedAt = callAtMs(c);
     if (!num || !missedAt) return false;
-    const laterHandledCall = recentCalls.some(other => {
+    // Check full calls array (not just the sliced recentCalls) so calls handled
+    // earlier in a long history still count as resolving a missed call.
+    const allCalls = Array.isArray(calls) ? calls : [];
+    const laterHandledCall = allCalls.some(other => {
       if (other === c || callKindLabel(other) === "missed") return false;
       return callAtMs(other) > missedAt && phoneKeyMatch(callNumber(other), num);
     });
@@ -753,7 +756,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       messageTimeMs(message) > missedAt &&
       phoneKeyMatch(messagePeerNumber(message), num)
     );
-  };
+  }, [calls, messages, resolvedMissed]);
   const actionableMissedCalls = recentCalls.filter(c => callKindLabel(c) === "missed" && !isMissedCallResolved(c));
 
   const phoneActivitySnapshot = useMemo(() => ({
