@@ -226,6 +226,21 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const [status, setStatus] = useState(null);
   const [messages, setMessages] = useState([]);
   const [calls, setCalls] = useState([]);
+  // Manually resolved missed calls — not every missed call needs a callback, so the user
+  // can confirm one as handled. Persisted (keyed by number:timestamp) so it sticks across
+  // reloads and feeds the chief's actionable missed-call count.
+  const [resolvedMissed, setResolvedMissed] = useState(() => {
+    try { const a = JSON.parse(localStorage.getItem("nc_missed_resolved") || "[]"); return new Set(Array.isArray(a) ? a : []); } catch { return new Set(); }
+  });
+  const toggleMissedResolved = useCallback((key, resolved) => {
+    if (!key) return;
+    setResolvedMissed(prev => {
+      const next = new Set(prev);
+      if (resolved) next.add(key); else next.delete(key);
+      try { localStorage.setItem("nc_missed_resolved", JSON.stringify([...next].slice(-300))); } catch {}
+      return next;
+    });
+  }, []);
   const [contacts, setContacts] = useState([]);
   const [number, setNumber] = useState("");
   const [body, setBody] = useState("");
@@ -701,8 +716,15 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     const bKeys = phoneKeys(b);
     return aKeys.some(key => bKeys.includes(key));
   };
+  const missedKey = c => {
+    const num = (callNumber(c) || "").replace(/[^\d]/g, "").slice(-10);
+    const at = callAtMs(c);
+    return num && at ? `${num}:${at}` : "";
+  };
   const isMissedCallResolved = c => {
     if (callKindLabel(c) !== "missed") return false;
+    const mKey = missedKey(c);
+    if (mKey && resolvedMissed.has(mKey)) return true;
     const num = callNumber(c);
     const missedAt = callAtMs(c);
     if (!num || !missedAt) return false;
@@ -746,7 +768,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         time: fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime),
       };
     }),
-  }), [phoneLinkLive, relayStale, relayAgeMs, statusText, threads, recentCalls, actionableMissedCalls.length, vmCount, lookupName, messages]);
+  }), [phoneLinkLive, relayStale, relayAgeMs, statusText, threads, recentCalls, actionableMissedCalls.length, vmCount, lookupName, messages, resolvedMissed]);
 
   useEffect(() => {
     onActivitySnapshot?.(phoneActivitySnapshot);
@@ -1115,15 +1137,23 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                 const time = fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime);
                 const actionId = `call-${idx}`;
                 const actionsOpen = openPhoneActionId === actionId;
+                const isMissed = callKindLabel(c) === "missed";
+                const mKey = missedKey(c);
+                const resolved = isMissed && isMissedCallResolved(c);
+                const needsCallback = isMissed && !resolved;
                 return (
-                  <div key={`call-${idx}`} className="nc-action-row" style={phoneRowStyle}>
+                  <div key={`call-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, opacity: resolved ? 0.62 : 1 }}>
                     <span style={{ width: 32, height: 32, borderRadius: 99, background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0, marginTop: 2 }}>{suiteIcon(icon, 15)}</span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
                         <span style={{ flex: 1, fontSize: 15, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
                         {time && <span style={{ fontSize: 13, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
                       </div>
-                      {num && num !== name && <span style={{ display: "block", fontSize: 14, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{num}</span>}
+                      {needsCallback ? (
+                        <span style={{ display: "inline-block", marginTop: 3, fontSize: 11, fontWeight: 700, color: C.danger, background: C.bgSoft, borderRadius: 99, padding: "1px 8px" }}>Needs callback</span>
+                      ) : resolved ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, marginTop: 3, fontSize: 11, fontWeight: 600, color: C.success }}>{suiteIcon("check_circle", 11)} Resolved</span>
+                      ) : (num && num !== name && <span style={{ display: "block", fontSize: 14, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{num}</span>)}
                     </div>
                     <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
                       {suiteIcon("more_horiz", 17)}
@@ -1132,6 +1162,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                       <div style={phoneActionGroupStyle}>
                         <AB icon="call" title="Call back" onClick={() => { setOpenPhoneActionId(null); dialNum(num); }} />
                         <AB icon="sms" title="Text back" onClick={() => { setOpenPhoneActionId(null); openCompose(name, num, actionId); }} />
+                        {isMissed && mKey && (resolved
+                          ? <AB icon="undo" title="Reopen" onClick={() => { setOpenPhoneActionId(null); toggleMissedResolved(mKey, false); }} />
+                          : <AB icon="check" title="Resolve" onClick={() => { setOpenPhoneActionId(null); toggleMissedResolved(mKey, true); }} />)}
                       </div>
                     )}
                     {composeOpen && composeAnchorId === actionId && !composeIsNew && (

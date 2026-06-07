@@ -653,7 +653,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
   const expanded = !expandable || expandedId === id;
   const menuOpen = menuId === id;
   return (
-    <div style={{ background: C.bgSoft, borderRadius: 10, overflow: "visible" }}>
+    <div style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 10, overflow: "visible" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px 7px 12px", minHeight: 34 }}>
         <button
           onClick={expandable ? () => onExpand(id) : undefined}
@@ -704,11 +704,11 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
 // Hoisted to module scope for stable identity.
 function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style }) {
   return (
-    <div style={{ position: "relative", background: C.bgSoft, borderRadius: 10, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
+    <div style={{ position: "relative", background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 10, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
       <button onClick={onOpen} title={title} aria-label={title}
-        style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "6px 10px 5px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0 }}>
-        <span style={{ color: accentColor || C.faint, display: "flex", flexShrink: 0, lineHeight: 0 }}>{suiteIcon(icon, 13)}</span>
-        <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</span>
+        style={{ display: "flex", alignItems: "flex-start", gap: 6, width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "6px 10px 5px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0 }}>
+        <span style={{ color: accentColor || C.faint, display: "flex", flexShrink: 0, lineHeight: 0, marginTop: 1 }}>{suiteIcon(icon, 13)}</span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>{summary}</span>
       </button>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
         {children}

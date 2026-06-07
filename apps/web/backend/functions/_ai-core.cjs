@@ -882,7 +882,7 @@ const AI_JOB_REGISTRY = {
     output: "json",
     shape: "object",
     genConfig: { temperature: 0.1, maxOutputTokens: 1200 },
-    schema: '{"brief":"3-5 sentence natural language synthesis of everything on the plate","summary":"1-2 sentence headline of the top priority","nextAction":"single concrete next move","why":"clear reason why this is the top priority right now","focusArea":"calendar|tasks|shailos|mail|phone|operations","urgency":"now|today|soon|watch","sources":["Calendar","Tasks"],"signals":[{"area":"Calendar","note":"one-line factual status for this area"}]}',
+    schema: '{"brief":"3-5 sentence natural language synthesis of everything on the plate","summary":"1-2 sentence headline of the top priority","nextAction":"single concrete next move","why":"clear reason why this is the top priority right now","focusArea":"calendar|tasks|shailos|mail|phone|operations","urgency":"now|today|soon|watch","sources":["Calendar","Tasks"],"signals":[{"area":"Calendar","note":"terse Apple-notification-style condensed status for this area"}]}',
     buildPrompt(input = {}) {
       const context = normalizeChiefContext(input.context || input);
       return compactLines([
@@ -897,7 +897,8 @@ const AI_JOB_REGISTRY = {
         "Write 'brief': 3–5 sentences of natural language synthesizing the full picture. Cover what is on the plate, what is active or imminent, and what stands out. Write as a calm, steady aide giving the user situational awareness — factual and clear, not alarming.",
         "Write 'summary': 1–2 sentence headline of the single most relevant item right now.",
         "Pick 'nextAction': the single most useful concrete move across all sources. Write 'why' with clear reasoning — explain why this is the right next step.",
-        "Write 'signals': one short factual entry per area that has active data (Calendar, Mail, Tasks, Shailos, Phone). Each is a status line — what is there, not advice.",
+        "Write 'signals': one entry per area that has active data (Calendar, Mail, Tasks, Shailos, Phone). Each note is the area's status — what is there, not advice.",
+        "Write every 'note' in Apple's notification-summary style: a terse, telegraphic condensation of the key facts. Drop articles, filler, and weak verbs where the meaning survives; lead with the most concrete fact; pack multiple items with commas or semicolons; sentence case; no preamble like 'You have' or 'There are'. Examples: 'Dentist 3pm; lunch with David 1pm'; 'From Chase: overdraft transfer made, split purchases with Pay in 4'; '3 missed: David, Mom, unknown'.",
         "Use profile notes as durable preferences. If a note says avoid a reminder class, skip it unless clearly consequential.",
         "Do not invent facts, do not claim actions were taken, and do not give halachic rulings. If data is thin, say what is visible.",
         `Current snapshot:\n${jsonBlock(context)}`,
