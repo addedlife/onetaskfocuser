@@ -727,8 +727,18 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
 // the row opens the full surface. Hoisted to module scope for stable identity.
 function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style }) {
   const [scrolled, setScrolled] = useState(false);
+  const [fade, setFade] = useState(false); // more content below → show a bottom fade so the
+  const scrollRef = useRef(null);          // last (partial) row dissolves instead of hard-cutting
   const tint = hexToRgba(accentColor, 0.05);
   const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
+  const measure = () => {
+    const el = scrollRef.current; if (!el) return;
+    const more = el.scrollHeight - el.scrollTop - el.clientHeight > 4;
+    setFade(p => p !== more ? more : p);
+    const s = el.scrollTop > 8;
+    setScrolled(p => p !== s ? s : p);
+  };
+  useEffect(measure); // re-measure after each render (content can change)
   return (
     <div style={{ position: "relative", background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 10, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
       <button onClick={onOpen} title={title} aria-label={title}
@@ -736,10 +746,11 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
         <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
         <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden", maxHeight: scrolled ? 0 : 40, opacity: scrolled ? 0 : 1, transition: "max-height 0.2s ease, opacity 0.15s ease" }}>{summary}</span>
       </button>
-      <div onScroll={e => { const s = e.currentTarget.scrollTop > 8; setScrolled(p => p !== s ? s : p); }}
+      <div ref={scrollRef} onScroll={measure}
         style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
         {children}
       </div>
+      {fade && <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 22, pointerEvents: "none", background: `linear-gradient(to bottom, transparent, ${C.bgSoft})` }} />}
     </div>
   );
 }

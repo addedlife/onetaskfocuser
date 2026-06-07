@@ -881,8 +881,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       )}
 
       {/* ── PC-link status banner (mobile relay only) — tells you whether your PC is
-            actually connected right now, so you know live texts/calls are arriving. ── */}
-      {isMobile && usingRelay && (
+            actually connected right now, so you know live texts/calls are arriving. On the
+            compact nerve-center card this is suppressed (the card's summary line already
+            states online/offline); it only shows in the full phone view. ── */}
+      {isMobile && usingRelay && !compact && (
         relayStale ? (
           <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, lineHeight: 1.4, color: C.warning, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 8, padding: "8px 10px" }}>
             <span style={{ marginTop: 1, flexShrink: 0, color: C.warning }}>{suiteIcon("cloud_off", 16)}</span>
@@ -898,7 +900,11 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
 
       {composeOpen && !composeAnchorId && renderComposeBox()}
 
-      {/* ── Control bar: answer/hangup | record | new-msg | keypad toggle ── */}
+      {/* ── Control bar: answer/hangup | record | new-msg | keypad toggle ──
+            On the compact card this whole row of PC-oriented controls is hidden so the
+            activity feed gets the space; it returns only for a live/incoming call (where
+            answer/hang-up matter). Full controls live in the expanded phone view. ── */}
+      {(!compact || isIncoming || isOnCall) && (
       <div style={{ display: "flex", gap: 6, alignItems: "center", minHeight: compact ? 30 : 44 }}>
         {isIncoming ? (
           <>
@@ -957,9 +963,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           </span>
         )}
       </div>
+      )}
 
-      {/* ── Dialer — only when keypad is open ── */}
-      {showDialer && (
+      {/* ── Dialer — only when keypad is open (never on the compact card) ── */}
+      {showDialer && !compact && (
         <div style={{ display: "flex", flexDirection: "column", gap:6 }}>
           {/* Number input */}
           <div style={{ position: "relative" }}>
