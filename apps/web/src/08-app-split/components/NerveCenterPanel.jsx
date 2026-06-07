@@ -732,6 +732,9 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
   const scrollRef = useRef(null);          // last (partial) row dissolves instead of hard-cutting
   const tint = hexToRgba(accentColor, 0.05);
   const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
+  const measureRef = useRef(null);
+  // Store the latest measure fn in a ref so the ResizeObserver always calls the current version
+  // without needing to be recreated (avoids observe/unobserve churn on every render).
   const measure = () => {
     const el = scrollRef.current; if (!el) return;
     const more = el.scrollHeight - el.scrollTop - el.clientHeight > 4;
@@ -739,7 +742,18 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
     const s = el.scrollTop > 8;
     setScrolled(p => p !== s ? s : p);
   };
-  useEffect(measure); // re-measure after each render (content can change)
+  measureRef.current = measure;
+  // Set up once on mount: run an initial measurement, then watch for content-height changes
+  // via ResizeObserver so we don't run on every parent re-render (saves work & avoids loops).
+  useEffect(() => {
+    const el = scrollRef.current; if (!el) return;
+    measureRef.current?.();
+    if (typeof ResizeObserver === "undefined") return;
+    const obs = new ResizeObserver(() => measureRef.current?.());
+    // Observe the scroll container itself — its scrollHeight grows when children are added.
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div style={{ position: "relative", background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 10, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
       <button onClick={onOpen} title={title} aria-label={title}
@@ -1708,12 +1722,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     setStreamNext("");
     if (!activeChiefTaskText) return undefined;
     let i = 0;
-    streamRef.current.timer = window.setInterval(() => {
+    const timerId = window.setInterval(() => {
       i += 1;
       setStreamNext(activeChiefTaskText.slice(0, i));
-      if (i >= activeChiefTaskText.length) { clearInterval(streamRef.current.timer); streamRef.current.timer = null; }
+      if (i >= activeChiefTaskText.length) { clearInterval(timerId); streamRef.current.timer = null; }
     }, 18);
-    return () => { if (streamRef.current.timer) { clearInterval(streamRef.current.timer); streamRef.current.timer = null; } };
+    streamRef.current.timer = timerId;
+    // Capture timerId so the cleanup doesn't depend on the mutable ref value after unmount.
+    return () => { clearInterval(timerId); streamRef.current.timer = null; };
   }, [activeChiefTaskText]);
   const nextActionBar = activeChiefTaskText ? (
     <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "1px 4px 7px", flexShrink: 0, minWidth: 0 }}>

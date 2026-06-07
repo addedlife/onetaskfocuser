@@ -1141,7 +1141,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     const ref = Store.docRef(); if (!ref) return;
     const unsub = ref.onSnapshot(snap => {
       if (!snap.exists) return;
-      const fbState = snap.data()?.state;
+      let fbState = snap.data()?.state;
       if (!fbState) return;
       const fbTs = fbState._lsModified || 0;
       if (fbTs > lastSavedModified.current) {
