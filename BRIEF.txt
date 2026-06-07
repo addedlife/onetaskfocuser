@@ -1,4 +1,4 @@
-Shamash Pro 4 — context kernel. Read this first, then only the matching row in docs/ops/CONTEXT_INDEX.md.
+Shamash Pro 4 — context kernel. Read this, then open only the file(s) listed in NAV.
 
 FACTS
 - Live: https://onetaskfocuser.netlify.app | Origin: github.com/addedlife/onetaskfocuser | Push target: origin/main
@@ -8,9 +8,19 @@ FACTS
 - Gates: apps/web `npm run build`; apps/shailos `npm run build`; apps/phone-host-windows `dotnet build`. Smoke affected surface.
 - Before edits: check docs/ops/VERIFICATION_LOG.md. Log results there, migration decisions in MIGRATION_MANIFEST.md.
 
+NAV — match area → open file → grep term to land on the right spot
+  nervecenter   apps/web/src/08-app-split/components/NerveCenterPanel.jsx        supercrunch · calRich · nextActionBar
+  phone         apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx  sendSms · post · usingRelayRef
+  deskphone-web apps/web/src/10-deskphone-web.jsx                                 ConversationCallHistory · MessageBubble
+  app/calendar  apps/web/src/08-app-split/App.jsx                                 refreshGoogleData · onConnectGoogle
+  functions     apps/web/backend/functions/                                        phone-relay.mjs · google-workspace.js
+  native-phone  apps/phone-host-windows/                                           /status · dotnet build
+  ui-tokens     apps/web/src/08-app-split/ui-tokens.jsx                           NC_FONT_STACK · suiteIcon
+  shailos       apps/shailos/
+
 FINDS & FIXES — append-only ledger. One line each. Format:
   YYYY-MM-DD [area] symptom → root cause → fix (file:loc)
-Keep terse: no prose, no blank lines between entries, newest at bottom. Promote anything load-bearing into FACTS/CONTEXT_INDEX and delete the line.
+Keep terse: no prose, no blank lines between entries, newest at bottom. Promote anything load-bearing into FACTS/NAV and delete the line.
 - 2026-06-07 [phone] SMS reply silently failed → post() ignored relay HTTP errors, still cleared compose → return ok flag, gate clear on success (NerveCenterPhoneSurface.jsx post/sendSms)
 - 2026-06-07 [nervecenter] summary line showed AI text twice → supercrunch short-circuited to chiefSummaryText (same as nextActionBar) → supercrunch always builds from items; bar shows only ⚡action (NerveCenterPanel.jsx)
 - 2026-06-07 [nervecenter] calendar items showed "Event" fallback → read ev.summary on rows that only have ev.evt → use ev.evt.* (calRich/supercrunch)
