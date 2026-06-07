@@ -872,6 +872,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // the whole page scrolls). Persisted so the choice sticks.
   const [mobileLayout, setMobileLayout] = useState(() => { try { return localStorage.getItem("nc_mobile_layout") || "boxes"; } catch { return "boxes"; } });
   const toggleMobileLayout = () => setMobileLayout(prev => { const next = prev === "accordion" ? "boxes" : "accordion"; try { localStorage.setItem("nc_mobile_layout", next); } catch {} return next; });
+  // Desktop layout mode: "full" (the normal 3-column panel layout), "boxes" (same 5-card
+  // grid as mobile, scales to fill the desktop width), or "accordion". Persisted.
+  const [desktopLayout, setDesktopLayout] = useState(() => { try { return localStorage.getItem("nc_desktop_layout") || "full"; } catch { return "full"; } });
+  const setDesktopLayoutPersist = val => { setDesktopLayout(val); try { localStorage.setItem("nc_desktop_layout", val); } catch {} };
   // Row density for the mobile lists: "comfortable" (default) or "compact" (tighter padding,
   // more rows on screen — Gmail-style). Persisted.
   const [mobileDensity, setMobileDensity] = useState(() => { try { return localStorage.getItem("nc_mobile_density") || "comfortable"; } catch { return "comfortable"; } });
@@ -2058,7 +2062,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // enough to skip the width-based accordion and fall through to the desktop layout,
   // which overran. This catches BOTH orientations. Boxes: Mail · Phone · Tasks ·
   // Shailos · Calendar, each scrolling internally so nothing overflows the screen.
-  if (isMobileDevice && mobileLayout !== "accordion" && !healthPage && !chiefPage) {
+  if ((isMobileDevice ? mobileLayout !== "accordion" : desktopLayout === "boxes") && !healthPage && !chiefPage) {
     const menuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
     const menuClose  = () => setMobileMenuOpen(null);
     const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose };
@@ -2074,7 +2078,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // Portrait: 5 stacked equal rows. Landscape: 3 boxes on top (each 2 of 6 cols),
     // 2 on the bottom (each 3 of 6) — fills the screen evenly with no empty cell.
     const isPortrait = typeof window === "undefined" || window.innerHeight >= window.innerWidth;
-    const span = idx => isPortrait ? undefined : (idx < 3 ? "span 2" : "span 3");
+    // Mobile landscape: 3+2 spanning layout (idx<3 → span 2 of 6, idx≥3 → span 3 of 6).
+    // Desktop: 5 equal columns, no spanning needed.
+    const span = idx => !isMobileDevice ? undefined : isPortrait ? undefined : (idx < 3 ? "span 2" : "span 3");
     const emptyMsg = txt => <div style={{ padding:"12px 14px", fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{txt}</div>;
     // Density: compact tightens padding AND type (toward the TaskRiver feed's density) so a lot
     // more fits. Comfortable keeps the roomier defaults.
@@ -2146,15 +2152,24 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
             <button onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density" style={gvIconButton({ width:32, height:32 }, C)}>{suiteIcon(dense ? "density_medium" : "density_small", 16)}</button>
-            <button onClick={toggleMobileLayout} title="Accordion view" aria-label="Switch to accordion view" style={gvIconButton({ width:32, height:32 }, C)}>{suiteIcon("view_agenda", 16)}</button>
+            {isMobileDevice ? (
+              <button onClick={toggleMobileLayout} title="Accordion view" aria-label="Switch to accordion view" style={gvIconButton({ width:32, height:32 }, C)}>{suiteIcon("view_agenda", 16)}</button>
+            ) : (
+              <>
+                {[{ id:"accordion", icon:"view_agenda" }, { id:"full", icon:"view_column" }].map(({ id, icon }) => (
+                  <button key={id} onClick={() => setDesktopLayoutPersist(id)} title={id === "full" ? "Full panel view" : "Accordion view"} style={gvIconButton({ width:32, height:32, background: desktopLayout === id ? C.hover : "transparent" }, C)}>{suiteIcon(icon, 16)}</button>
+                ))}
+              </>
+            )}
             <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" style={gvIconButton({ width:32, height:32 }, C)}>{suiteIcon("apps", 16)}</button>
           </div>
         </div>
 
-        {/* 5-box grid */}
+        {/* 5-box grid: portrait/phone → 1 col 5 rows; landscape/phone → 3+2 cols;
+            desktop → 5 equal columns in a single row for maximum density */}
         <div style={{ flex:1, minHeight:0, display:"grid", gap:7,
-          gridTemplateColumns: isPortrait ? "1fr" : "repeat(6, 1fr)",
-          gridTemplateRows: isPortrait ? "repeat(5, minmax(0,1fr))" : "repeat(2, minmax(0,1fr))" }}>
+          gridTemplateColumns: isMobileDevice ? (isPortrait ? "1fr" : "repeat(6, 1fr)") : "repeat(5, minmax(0,1fr))",
+          gridTemplateRows: isMobileDevice ? (isPortrait ? "repeat(5, minmax(0,1fr))" : "repeat(2, minmax(0,1fr))") : "minmax(0,1fr)" }}>
 
           {/* Mail */}
           <MobileBox {...boxCtx} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail", mailTL)} style={{ gridColumn: span(0) }}
@@ -2322,7 +2337,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   }
 
   // ── Mobile "nerve center" — all sections on one screen ──────────────────────
-  if ((isStacked || (isMobileDevice && mobileLayout === "accordion")) && !healthPage && !chiefPage) {
+  if ((isStacked || (isMobileDevice ? mobileLayout === "accordion" : desktopLayout === "accordion")) && !healthPage && !chiefPage) {
     const mobileMenuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
     const mobileMenuClose  = () => setMobileMenuOpen(null);
     const mobileExpandToggle = id => setMobileExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -2369,8 +2384,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               <span style={{ alignSelf: "center", color: C.faint, display: "flex", transform: mobileTimelineOpen ? "rotate(180deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("expand_more", 14)}</span>
             </button>
             <div style={{ display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
-              {isMobileDevice && (
+              {isMobileDevice ? (
                 <button onClick={toggleMobileLayout} title="Box view" aria-label="Switch to box view" style={gvIconButton({ width: 34, height: 34 }, C)}>{suiteIcon("grid_view", 16)}</button>
+              ) : (
+                <>
+                  {[{ id:"boxes", icon:"grid_view" }, { id:"full", icon:"view_column" }].map(({ id, icon }) => (
+                    <button key={id} onClick={() => setDesktopLayoutPersist(id)} title={id === "full" ? "Full panel view" : "Card grid view"} style={gvIconButton({ width:34, height:34, background: desktopLayout === id ? C.hover : "transparent" }, C)}>{suiteIcon(icon, 16)}</button>
+                  ))}
+                </>
               )}
               <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" style={gvIconButton({ width: 34, height: 34 }, C)}>{suiteIcon("apps", 16)}</button>
             </div>
@@ -2935,9 +2956,26 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           return (
             <React.Fragment>
             <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", gap: 6, minHeight: 0 }}>
-              {/* ── Focus / Full mode toggle ── */}
-              <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", padding: "0 2px 2px" }}>
-                {[{ id: "full", lbl: "Full" }, { id: "focus", lbl: "Focus" }].map(({ id, lbl }) => (
+              {/* ── Layout + view mode toggles ── */}
+              <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, padding: "0 2px 2px" }}>
+                {/* Layout: Boxes / Accordion / Full (desktop-only alternatives to the 3-column view) */}
+                <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  {[
+                    { id: "boxes",     icon: "grid_view",   title: "Card grid view" },
+                    { id: "accordion", icon: "view_agenda", title: "Accordion view" },
+                    { id: "full",      icon: "view_column", title: "Full panel view" },
+                  ].map(({ id, icon, title }) => (
+                    <button key={id} onClick={() => setDesktopLayoutPersist(id)} title={title}
+                      style={gvIconButton({
+                        width: 28, height: 24, borderRadius: 4,
+                        background: desktopLayout === id ? softBorder(C.divider, 0.55) : "transparent",
+                        color: desktopLayout === id ? C.muted : C.faint,
+                      }, C)}>{suiteIcon(icon, 15)}</button>
+                  ))}
+                </div>
+                <span style={{ width: 1, height: 14, background: C.divider, flexShrink: 0 }} />
+                {/* View: Full / Focus (only meaningful in full panel mode) */}
+                {desktopLayout === "full" && [{ id: "full", lbl: "Full" }, { id: "focus", lbl: "Focus" }].map(({ id, lbl }) => (
                   <button key={id}
                     onClick={() => { setNcViewMode(id); try { localStorage.setItem("nc_view_mode", id); } catch {} }}
                     style={{
