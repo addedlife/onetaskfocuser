@@ -809,6 +809,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const [mobileMenuOpen, setMobileMenuOpen] = useState(null); // id of section whose ··· menu is open
   const [mobileExpanded, setMobileExpanded] = useState(null); // id of the single expanded accordion section (Tasks is always open)
   const [mobileTimelineOpen, setMobileTimelineOpen] = useState(false); // mobile hero timeline reveal
+  // Mobile nerve-center display mode: "boxes" (the fixed 5-card grid, everything visible at
+  // once, each card scrolls internally) or "accordion" (one expandable section open at a time,
+  // the whole page scrolls). Persisted so the choice sticks.
+  const [mobileLayout, setMobileLayout] = useState(() => { try { return localStorage.getItem("nc_mobile_layout") || "boxes"; } catch { return "boxes"; } });
+  const toggleMobileLayout = () => setMobileLayout(prev => { const next = prev === "accordion" ? "boxes" : "accordion"; try { localStorage.setItem("nc_mobile_layout", next); } catch {} return next; });
   const [phoneActivitySummary, setPhoneActivitySummary] = useState({ online: false, status: "DeskPhone offline", unreadTexts: 0, missedCalls: 0, voicemailCount: 0, texts: [], calls: [] });
   const phoneActivitySigRef = useRef("");
   const [phoneStatusSummary, setPhoneStatusSummary] = useState({ online: false, tone: "offline", label: "DeskPhone offline", voicemailCount: 0 });
@@ -1945,7 +1950,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // enough to skip the width-based accordion and fall through to the desktop layout,
   // which overran. This catches BOTH orientations. Boxes: Mail · Phone · Tasks ·
   // Shailos · Calendar, each scrolling internally so nothing overflows the screen.
-  if (isMobileDevice && !healthPage && !chiefPage) {
+  if (isMobileDevice && mobileLayout !== "accordion" && !healthPage && !chiefPage) {
     const menuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
     const menuClose  = () => setMobileMenuOpen(null);
     const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose };
@@ -1968,11 +1973,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // before the scan resolves or when offline (stale-while-revalidate).
     const signalNote = area => (activeChiefBrief.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || "";
     const cardSummary = (area, fallback) => signalNote(area) || fallback;
+    // Deterministic fallbacks, written in the same terse Apple-notification style as the
+    // AI signals: lead with the concrete fact, trailing "+N more" instead of a leading count.
+    const moreTail = n => (n > 1 ? ` +${n - 1} more` : "");
     const mailTL = (() => {
       if (!gmailMessages?.length) return "Inbox clear";
       const from = fmtFromM(gmailHdr(gmailMessages[0], "From"));
       const subj = gmailHdr(gmailMessages[0], "Subject") || "(no subject)";
-      return `${gmailMessages.length} email${gmailMessages.length === 1 ? "" : "s"} · ${from}: ${subj}`;
+      return `${from}: ${subj}${moreTail(gmailMessages.length)}`;
     })();
     const phoneTL = (() => {
       const u = Number(phoneActivitySummary?.unreadTexts || 0);
@@ -1982,26 +1990,24 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       if (u) parts.push(`${u} unread`);
       if (m) parts.push(`${m} missed`);
       if (v) parts.push(`${v} voicemail${v > 1 ? "s" : ""}`);
-      return parts.length ? parts.join(" · ") : (phoneActivitySummary?.online ? "All clear" : "Phone offline");
+      return parts.length ? parts.join(", ") : (phoneActivitySummary?.online ? "All clear" : "Phone offline");
     })();
     const tasksTL = (() => {
       const n = primaryTaskQueue.length;
       if (!n) return "No tasks";
-      const label = nerveDisplaySummary(primaryTaskQueue[0], "");
-      return `${n} task${n === 1 ? "" : "s"}${label ? " · " + label : ""}`;
+      return `${nerveDisplaySummary(primaryTaskQueue[0], "") || "Task"}${moreTail(n)}`;
     })();
     const shailosTL = (() => {
       const n = visibleShailos.length;
-      if (!n) return "No pending shailos";
-      const label = nerveDisplaySummary(visibleShailos[0], "");
-      return `${n} pending${label ? " · " + label : ""}`;
+      if (!n) return "No open shailos";
+      return `${nerveDisplaySummary(visibleShailos[0], "") || "Open shaila"}${moreTail(n)}`;
     })();
     const calTL = (() => {
       if (!upcomingCal.length) return "Nothing upcoming";
       const ev = upcomingCal[0];
       const t = fmtTimeM(ev.start || ev.startTime || ev.date);
       const title = compactNerveSummary(ev.summary || ev.title || ev.name || "", "Event");
-      return `Next: ${title}${t ? " · " + t : ""}`;
+      return `${title}${t ? ` ${t}` : ""}`;
     })();
 
     return (
@@ -2013,7 +2019,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             <span style={{ fontSize:20, fontWeight:300, color:C.text, fontFamily:NC_FONT_STACK, letterSpacing:-0.5 }}>{clockParts.timeMain}</span>
             <span style={{ fontSize:11, color:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>{nowDate.toLocaleDateString([], { weekday:"short", month:"short", day:"numeric" })}</span>
           </div>
-          <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" style={gvIconButton({ width:32, height:32 }, C)}>{suiteIcon("apps", 16)}</button>
+          <div style={{ display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
+            <button onClick={toggleMobileLayout} title="Accordion view" aria-label="Switch to accordion view" style={gvIconButton({ width:32, height:32 }, C)}>{suiteIcon("view_agenda", 16)}</button>
+            <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" style={gvIconButton({ width:32, height:32 }, C)}>{suiteIcon("apps", 16)}</button>
+          </div>
         </div>
 
         {/* 5-box grid */}
@@ -2030,7 +2039,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const date = fmtTimeM(gmailHdr(msg,"Date"));
               return (
                 <a key={msg.id||i} href={`https://mail.google.com/mail/u/0/#inbox/${msg.id}`} target="_blank" rel="noopener noreferrer"
-                  style={{ display:"block", padding:"9px 12px", borderBottom:`1px solid ${C.divider}`, textDecoration:"none", color:"inherit" }}>
+                  style={{ display:"block", padding:"8px 12px", textDecoration:"none", color:"inherit" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:6, marginBottom:2 }}>
                     <span style={{ fontSize:ncType.body, fontWeight:600, color:C.text, fontFamily:NC_FONT_STACK, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{from}</span>
                     <span style={{ fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK, flexShrink:0 }}>{date}</span>
@@ -2072,7 +2081,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const priColor = pri?.color || T.primary || "#7EB0DE";
               const isEditing = editingTaskId === t.id;
               return (
-                <div key={t.id} style={{ display:"grid", gridTemplateColumns:"3px minmax(0,1fr) auto", alignItems:"start", padding:"10px 12px 10px 0", gap:10, borderBottom:`1px solid ${C.divider}`, minHeight:40 }}>
+                <div key={t.id} style={{ display:"grid", gridTemplateColumns:"3px minmax(0,1fr) auto", alignItems:"start", padding:"9px 12px 9px 0", gap:10, minHeight:40 }}>
                   <span style={{ width:3, alignSelf:"stretch", minHeight:20, borderRadius:"0 3px 3px 0", background:priColor, flexShrink:0 }} />
                   {isEditing ? (
                     <textarea value={editText} autoFocus rows={2}
@@ -2102,7 +2111,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
               return (
                 <button key={s.id} onClick={onOpenShailos}
-                  style={{ width:"100%", textAlign:"left", display:"grid", gridTemplateColumns:"3px minmax(0,1fr)", gap:10, padding:"9px 12px 9px 0", border:"none", background:"transparent", color:C.text, cursor:"pointer", alignItems:"start", borderBottom:`1px solid ${C.divider}` }}>
+                  style={{ width:"100%", textAlign:"left", display:"grid", gridTemplateColumns:"3px minmax(0,1fr)", gap:10, padding:"8px 12px 8px 0", border:"none", background:"transparent", color:C.text, cursor:"pointer", alignItems:"start" }}>
                   <span style={{ width:3, alignSelf:"stretch", minHeight:20, borderRadius:"0 3px 3px 0", background:GOLD, flexShrink:0 }} />
                   <span style={{ minWidth:0 }}>
                     <span style={{ display:"block", fontSize:ncType.body, fontWeight:500, lineHeight:ncType.line, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{text}</span>
@@ -2129,7 +2138,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               </div>
             )}
             {!calendarEvents ? emptyMsg("Loading…") : upcomingCal.length === 0 ? emptyMsg("Nothing upcoming.") : upcomingCal.map(row => (
-              <div key={row.evt?.id||row.index} style={{ display:"grid", gridTemplateColumns:"auto minmax(0,1fr)", gap:8, padding:"9px 12px", borderBottom:`1px solid ${C.divider}`, alignItems:"start" }}>
+              <div key={row.evt?.id||row.index} style={{ display:"grid", gridTemplateColumns:"auto minmax(0,1fr)", gap:8, padding:"8px 12px", alignItems:"start" }}>
                 <span style={{ fontSize:ncType.meta, color:row.now?C.accent:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap", paddingTop:1, fontWeight:row.now?700:400, minWidth:54 }}>
                   {row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                 </span>
@@ -2179,7 +2188,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   }
 
   // ── Mobile "nerve center" — all sections on one screen ──────────────────────
-  if (isStacked && !healthPage && !chiefPage) {
+  if ((isStacked || (isMobileDevice && mobileLayout === "accordion")) && !healthPage && !chiefPage) {
     const mobileMenuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
     const mobileMenuClose  = () => setMobileMenuOpen(null);
     const mobileExpandToggle = id => setMobileExpanded(prev => prev === id ? null : id);
@@ -2221,7 +2230,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK }}>{nowDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
               <span style={{ alignSelf: "center", color: C.faint, display: "flex", transform: mobileTimelineOpen ? "rotate(180deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("expand_more", 14)}</span>
             </button>
-            <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" style={gvIconButton({ width: 34, height: 34 }, C)}>{suiteIcon("apps", 16)}</button>
+            <div style={{ display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
+              {isMobileDevice && (
+                <button onClick={toggleMobileLayout} title="Box view" aria-label="Switch to box view" style={gvIconButton({ width: 34, height: 34 }, C)}>{suiteIcon("grid_view", 16)}</button>
+              )}
+              <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" style={gvIconButton({ width: 34, height: 34 }, C)}>{suiteIcon("apps", 16)}</button>
+            </div>
           </div>
 
           {/* Timeline reveal (seconds → English year, with Hebrew date) */}
@@ -2306,7 +2320,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 if (!up.length) return "Nothing upcoming";
                 const r = up[0];
                 const t = r.evt?.start?.date ? "All day" : new Date(r.evt?.start?.dateTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-                return `${t} · ${r.evt?.summary || "(no title)"}`;
+                return `${r.evt?.summary || "(no title)"} ${t}`;
               })()}
               menuItems={[
                 { icon: "add",         label: "Add event",            run: () => { setMobileExpanded("cal"); setShowAddEvent(true); } },
@@ -2350,7 +2364,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Gmail */}
           {(googleToken || gmailMessages !== null) && (
             <MobileSection {...sectionCtx} id="mail" icon="mail" title="Mail" count={(gmailMessages||[]).length}
-              preview={signalNote("Mail") || ((!gmailMessages || !gmailMessages.length) ? "Inbox clear" : `${fmtFromM(gmailHdr(gmailMessages[0], "From"))} · ${gmailMessages[0].aiSummary || decodeSnipM(gmailMessages[0].snippet) || gmailHdr(gmailMessages[0], "Subject") || "(no subject)"}`)}
+              preview={signalNote("Mail") || ((!gmailMessages || !gmailMessages.length) ? "Inbox clear" : `${fmtFromM(gmailHdr(gmailMessages[0], "From"))}: ${gmailMessages[0].aiSummary || decodeSnipM(gmailMessages[0].snippet) || gmailHdr(gmailMessages[0], "Subject") || "(no subject)"}`)}
               menuItems={[
                 { icon: "refresh",     label: "Refresh",    run: onRefreshCalendar || onConnectGoogle },
                 { icon: "open_in_new", label: "Open Gmail", run: () => window.open("https://mail.google.com/mail/u/0/#inbox","_blank") },
