@@ -726,7 +726,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
 // its summary: a pinned [colored icon chip + chief summary] row. Once the card's content is
 // scrolled, that summary line collapses away into just the icon to reclaim space; tapping
 // the row opens the full surface. Hoisted to module scope for stable identity.
-function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style }) {
+function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null }) {
   const [scrolled, setScrolled] = useState(false);
   const [fade, setFade] = useState(false); // more content below → show a bottom fade so the
   const scrollRef = useRef(null);          // last (partial) row dissolves instead of hard-cutting
@@ -757,15 +757,18 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
   return (
     <div style={{ position: "relative", background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 10, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
       <button onClick={onOpen} title={title} aria-label={title}
-        style={{ display: "flex", alignItems: "flex-start", gap: 6, width: "100%", textAlign: "left", border: "none", background: "transparent", padding: scrolled ? "5px 10px 4px" : "6px 10px 5px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0 }}>
+        style={{ display: "flex", alignItems: "flex-start", gap: 6, width: "100%", textAlign: "left", border: "none", background: "transparent", padding: scrolled ? "0 10px" : "6px 10px 5px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0, maxHeight: scrolled ? 0 : 48, opacity: scrolled ? 0 : 1, overflow: "hidden", pointerEvents: scrolled ? "none" : "auto", transition: "max-height 0.2s ease, opacity 0.15s ease, padding 0.2s ease" }}>
         <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
-        <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden", maxHeight: scrolled ? 0 : 40, opacity: scrolled ? 0 : 1, transition: "max-height 0.2s ease, opacity 0.15s ease" }}>{summary}</span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>{summary}</span>
       </button>
       <div ref={scrollRef} onScroll={measure}
         style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
         {children}
       </div>
       {fade && <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 22, pointerEvents: "none", background: `linear-gradient(to bottom, transparent, ${C.bgSoft})` }} />}
+      {/* Persistent status dot, top-right corner — stays visible even when the header collapses
+          on scroll, so phone live/offline state is always glanceable without costing a row. */}
+      {statusDot && <span style={{ position: "absolute", top: 7, right: 7, width: 8, height: 8, borderRadius: 99, background: statusDot, boxShadow: `0 0 0 2px ${C.bgSoft}`, pointerEvents: "none" }} />}
     </div>
   );
 }
@@ -963,6 +966,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const GOLD = "#C9923C";
   const GOLD_BG = "rgba(201,146,60,0.055)";
   const GOLD_BRD = "rgba(201,146,60,0.16)";
+  // Category accent colors. Mail and Phone deliberately avoid red/green — those read as
+  // urgency/status signals, not neutral category identity. Each hue is distinct so the cards
+  // stay glanceable: Mail = slate blue, Phone = violet, Tasks = teal, Shailos = gold,
+  // Calendar = amber.
+  const CAT_MAIL = "#3D6CB5";
+  const CAT_PHONE = "#8A63B5";
   const C = cleanTheme(T);
   const ncType = NC_TYPE;
   const availableW = Math.max(0, viewportW - sidebarW);
@@ -1709,6 +1718,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const activeChiefTone = activeChiefBrief?.urgency === "now" ? C.danger : activeChiefBrief?.urgency === "today" ? C.accent : C.muted;
   const activeChiefSources = (activeChiefBrief?.sources || []).slice(0, 5);
   const activeChiefTaskText = cleanOneLine(activeChiefBrief?.nextAction || "", 260);
+  // Concise complete summary of everything across all sources (the chief's overview line),
+  // shown as the top card above the category grid. Distinct from the do-this-next action below.
+  const chiefSummaryText = cleanOneLine(activeChiefBrief?.summary || "", 220);
 
   // Streamed "do this next" line above the page: the single most urgent+effective move across
   // all categories (the chief's nextAction), no explanation — revealed with a typewriter so it
@@ -1731,12 +1743,19 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // Capture timerId so the cleanup doesn't depend on the mutable ref value after unmount.
     return () => { clearInterval(timerId); streamRef.current.timer = null; };
   }, [activeChiefTaskText]);
-  const nextActionBar = activeChiefTaskText ? (
-    <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "1px 4px 7px", flexShrink: 0, minWidth: 0 }}>
-      <span style={{ display: "flex", color: C.accent, flexShrink: 0 }}>{suiteIcon("bolt", 16)}</span>
-      <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
-      </span>
+  const nextActionBar = (chiefSummaryText || activeChiefTaskText) ? (
+    <div style={{ flexShrink: 0, minWidth: 0, margin: "0 2px 7px", padding: "8px 11px", borderRadius: 10, background: hexToRgba(C.accent, 0.06) || C.bgSoft, border: `1px solid ${C.divider}`, borderLeft: `3px solid ${C.accent}` }}>
+      {chiefSummaryText && (
+        <div style={{ fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.35, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>{chiefSummaryText}</div>
+      )}
+      {activeChiefTaskText && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, marginTop: chiefSummaryText ? 4 : 0 }}>
+          <span style={{ display: "flex", color: C.accent, flexShrink: 0 }}>{suiteIcon("bolt", 15)}</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
+          </span>
+        </div>
+      )}
     </div>
   ) : null;
   useEffect(() => {
@@ -2072,6 +2091,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // before the scan resolves or when offline (stale-while-revalidate).
     const signalNote = area => (activeChiefBrief.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || "";
     const cardSummary = (area, fallback) => signalNote(area) || fallback;
+    // Phone link state as a single dot color: green = live, accent = active call/incoming,
+    // gray = offline/stale. Shown in the Phone card's corner so status reads at a glance.
+    const phoneDotColor = phoneStatusSummary?.online
+      ? ((phoneStatusSummary.tone === "incoming" || phoneStatusSummary.tone === "call") ? C.accent : C.success)
+      : C.faint;
     // Deterministic fallbacks, written in the same terse Apple-notification style as the
     // AI signals: lead with the concrete fact, trailing "+N more" instead of a leading count.
     const moreTail = n => (n > 1 ? ` +${n - 1} more` : "");
@@ -2133,7 +2157,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           gridTemplateRows: isPortrait ? "repeat(5, minmax(0,1fr))" : "repeat(2, minmax(0,1fr))" }}>
 
           {/* Mail */}
-          <MobileBox {...boxCtx} icon="mail" title="Mail" accentColor={C.danger} summary={cardSummary("Mail", mailTL)} style={{ gridColumn: span(0) }}
+          <MobileBox {...boxCtx} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail", mailTL)} style={{ gridColumn: span(0) }}
             onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}>
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : gmailMessages.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
@@ -2159,8 +2183,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Phone */}
-          <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" accentColor={C.success} summary={cardSummary("Phone", phoneTL)} style={{ gridColumn: span(1) }}
-            onOpen={onOpenPhone}>
+          <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} summary={cardSummary("Phone", phoneTL)} style={{ gridColumn: span(1) }}
+            statusDot={phoneDotColor} onOpen={onOpenPhone}>
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
             <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0, padding:"4px 10px 8px", boxSizing:"border-box" }}>
@@ -2466,7 +2490,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
           {/* Gmail */}
           {(googleToken || gmailMessages !== null) && (
-            <MobileSection {...sectionCtx} id="mail" icon="mail" title="Mail" accentColor={C.danger} count={(gmailMessages||[]).length}
+            <MobileSection {...sectionCtx} id="mail" icon="mail" title="Mail" accentColor={CAT_MAIL} count={(gmailMessages||[]).length}
               preview={signalNote("Mail") || ((!gmailMessages || !gmailMessages.length) ? "Inbox clear" : `${fmtFromM(gmailHdr(gmailMessages[0], "From"))}: ${gmailMessages[0].aiSummary || decodeSnipM(gmailMessages[0].snippet) || gmailHdr(gmailMessages[0], "Subject") || "(no subject)"}`)}
               menuItems={[
                 { icon: "refresh",     label: "Refresh",    run: onRefreshCalendar || onConnectGoogle },
@@ -2526,7 +2550,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileSection>
 
           {/* Phone — keepMounted so the DeskPhone poller keeps running while collapsed */}
-          <MobileSection {...sectionCtx} id="phone" icon="phone_in_talk" title="Phone" accentColor={C.success} keepMounted
+          <MobileSection {...sectionCtx} id="phone" icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} keepMounted
             preview={signalNote("Phone") || phoneStatusSummary?.label || "DeskPhone"}
             menuItems={[{ icon: "open_in_full", label: "Open phone view", run: onOpenPhone }]}
           >

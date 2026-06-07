@@ -1149,7 +1149,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                 const resolved = isMissed && isMissedCallResolved(c);
                 const needsCallback = isMissed && !resolved;
                 return (
-                  <div key={`call-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, opacity: resolved ? 0.62 : 1 }}>
+                  <div key={`call-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, gridTemplateColumns: "32px minmax(0,1fr) auto", opacity: resolved ? 0.62 : 1 }}>
                     <span style={{ width: 32, height: 32, borderRadius: 99, background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0, marginTop: 2 }}>{suiteIcon(icon, 15)}</span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
@@ -1162,16 +1162,19 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 3, marginTop: 3, fontSize: 11, fontWeight: 600, color: C.success }}>{suiteIcon("check_circle", 11)} Resolved</span>
                       ) : (num && num !== name && <span style={{ display: "block", fontSize: 14, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{num}</span>)}
                     </div>
-                    <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
-                      {suiteIcon("more_horiz", 17)}
-                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+                      {/* Direct resolve/reopen toggle for missed calls — one tap, no menu. */}
+                      {isMissed && mKey && (resolved
+                        ? <button onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, false); }} title="Reopen missed call" aria-label="Reopen missed call" style={phoneIconButton(false)}>{suiteIcon("undo", 16)}</button>
+                        : <button onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, true); }} title="Mark resolved" aria-label="Mark resolved" style={{ ...phoneIconButton(false), color: C.success }}>{suiteIcon("check_circle", 17)}</button>)}
+                      <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
+                        {suiteIcon("more_horiz", 17)}
+                      </button>
+                    </div>
                     {actionsOpen && (
                       <div style={phoneActionGroupStyle}>
                         <AB icon="call" title="Call back" onClick={() => { setOpenPhoneActionId(null); dialNum(num); }} />
                         <AB icon="sms" title="Text back" onClick={() => { setOpenPhoneActionId(null); openCompose(name, num, actionId); }} />
-                        {isMissed && mKey && (resolved
-                          ? <AB icon="undo" title="Reopen" onClick={() => { setOpenPhoneActionId(null); toggleMissedResolved(mKey, false); }} />
-                          : <AB icon="check" title="Resolve" onClick={() => { setOpenPhoneActionId(null); toggleMissedResolved(mKey, true); }} />)}
                       </div>
                     )}
                     {composeOpen && composeAnchorId === actionId && !composeIsNew && (
