@@ -2,7 +2,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: './',
+  base: '/',  // Fixed for Netlify root SPA deploy (was './')
   plugins: [react()],
   // Build identity — surfaced in the ?diag=1 readout so we can tell, from the device
   // itself, whether it is running the latest deploy or a stale cached bundle.
