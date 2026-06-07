@@ -642,30 +642,43 @@ function buildChiefFallbackBrief(context = {}, suppressed = []) {
   };
 }
 
+// Translucent rgba from a #hex color (for subtle per-category tints). Returns null for
+// non-hex input so callers can fall back to a plain token.
+function hexToRgba(hex, a) {
+  if (typeof hex !== "string") return null;
+  let h = hex.trim().replace(/^#/, "");
+  if (h.length === 3) h = h.split("").map(c => c + c).join("");
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+  const n = parseInt(h, 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
+
 // Mobile "nerve center" accordion section. Hoisted to module scope (NOT defined inside
 // NerveCenterPanel) so its component identity stays stable across renders — otherwise the
 // per-second clock re-render recreated the function, remounting every section and dropping
-// in-flight taps/keystrokes. `expandable` sections collapse to a one-line preview; tapping
-// the header opens one at a time. `keepMounted` hides via display:none so embedded pollers
-// (Phone) keep running while collapsed. State arrives via props (expandedId/menuId + the
-// on* callbacks) so React re-renders instead of remounting.
+// in-flight taps/keystrokes. Sections collapse to a full-summary preview line; multiple may
+// stay open. When expanded the content scrolls internally so the page stays bounded.
+// `keepMounted` hides via display:none so embedded pollers (Phone) keep running while
+// collapsed. State arrives via props (expandedIds/menuId + the on* callbacks).
 function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuItems, preview, expandable = true, keepMounted = false, children, C, expandedIds, menuId, onExpand, onMenuToggle, onMenuClose }) {
   const expanded = !expandable || !!expandedIds?.has(id);
   const menuOpen = menuId === id;
+  const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
+  const tint = hexToRgba(accentColor, 0.05);
+  // Expanded content scrolls inside the section (capped) so several open sections never
+  // grow the page unbounded.
+  const scrollStyle = { maxHeight: "min(52vh, 460px)", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" };
   return (
-    <div style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 10, overflow: "visible" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px 7px 12px", minHeight: 34 }}>
+    <div style={{ background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 10, overflow: "visible" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px 7px 10px", minHeight: 34 }}>
         <button
           onClick={expandable ? () => onExpand(id) : undefined}
-          style={{ all: "unset", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0, cursor: expandable ? "pointer" : "default" }}
+          style={{ all: "unset", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0, cursor: expandable ? "pointer" : "default" }}
           aria-expanded={expandable ? expanded : undefined}
         >
-          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, background: C.hover, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
+          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
           <span style={{ fontSize: 11, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0.1 }}>{title}</span>
           {count > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
-          {expandable && !expanded && preview != null && (
-            <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{preview}</span>
-          )}
           {expandable && (
             <span style={{ marginLeft: "auto", color: expanded ? C.muted : C.faint, display: "flex", flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("expand_more", 18)}</span>
           )}
@@ -692,25 +705,39 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
           </div>
         )}
       </div>
-      {keepMounted ? <div style={{ display: expanded ? "block" : "none" }}>{children}</div> : (expanded && children)}
+      {/* Collapsed: the full chief summary on its own line (wraps up to 2 lines), aligned
+          under the title. Tapping it expands the section. */}
+      {expandable && !expanded && preview != null && (
+        <button onClick={() => onExpand(id)}
+          style={{ all: "unset", boxSizing: "border-box", width: "100%", cursor: "pointer", padding: "0 12px 8px 40px", fontSize: 11, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.3, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>
+          {preview}
+        </button>
+      )}
+      {keepMounted
+        ? <div style={{ display: expanded ? "block" : "none", ...(expanded ? scrollStyle : {}) }}>{children}</div>
+        : (expanded && <div style={scrollStyle}>{children}</div>)}
     </div>
   );
 }
 
-// Mobile phone/tablet "box": borderless surface (subtle bgSoft tint + grid gap do the
-// separating, no 1px chrome). The top line is the card's identity AND its summary: a
-// pinned [icon + one-line chief summary] row that does not scroll. That single line
-// replaces the old header row — tapping it opens the full surface. Content scrolls below.
-// Hoisted to module scope for stable identity.
+// Mobile phone/tablet "box": borderless-ish surface tinted subtly toward the category color
+// (so cards are differentiable without clashing). The top line is the card's identity AND
+// its summary: a pinned [colored icon chip + chief summary] row. Once the card's content is
+// scrolled, that summary line collapses away into just the icon to reclaim space; tapping
+// the row opens the full surface. Hoisted to module scope for stable identity.
 function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style }) {
+  const [scrolled, setScrolled] = useState(false);
+  const tint = hexToRgba(accentColor, 0.05);
+  const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
   return (
-    <div style={{ position: "relative", background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 10, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
+    <div style={{ position: "relative", background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 10, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
       <button onClick={onOpen} title={title} aria-label={title}
-        style={{ display: "flex", alignItems: "flex-start", gap: 6, width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "6px 10px 5px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0 }}>
-        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: 6, background: C.hover, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
-        <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>{summary}</span>
+        style={{ display: "flex", alignItems: "flex-start", gap: 6, width: "100%", textAlign: "left", border: "none", background: "transparent", padding: scrolled ? "5px 10px 4px" : "6px 10px 5px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0 }}>
+        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden", maxHeight: scrolled ? 0 : 40, opacity: scrolled ? 0 : 1, transition: "max-height 0.2s ease, opacity 0.15s ease" }}>{summary}</span>
       </button>
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
+      <div onScroll={e => { const s = e.currentTarget.scrollTop > 8; setScrolled(p => p !== s ? s : p); }}
+        style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
         {children}
       </div>
     </div>
@@ -807,7 +834,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     setChiefProfileDraft(markdownFromChiefProfile(chiefProfile));
   }, [chiefProfile?.updatedAt]); // eslint-disable-line
   const [mobileMenuOpen, setMobileMenuOpen] = useState(null); // id of section whose ··· menu is open
-  const [mobileExpanded, setMobileExpanded] = useState(() => new Set()); // ids of expanded accordion sections — multiple may stay open
+  const [mobileExpanded, setMobileExpanded] = useState(() => new Set(["tasks"])); // ids of expanded accordion sections — multiple may stay open
+  const [expandedRows, setExpandedRows] = useState(() => new Set()); // box-mode rows tapped open to reveal full text
+  const toggleRow = key => setExpandedRows(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
   const [mobileTimelineOpen, setMobileTimelineOpen] = useState(false); // mobile hero timeline reveal
   // Mobile nerve-center display mode: "boxes" (the fixed 5-card grid, everything visible at
   // once, each card scrolls internally) or "accordion" (one expandable section open at a time,
@@ -2048,15 +2077,21 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
               const from = fmtFromM(gmailHdr(msg,"From"));
               const date = fmtRelM(gmailHdr(msg,"Date"));
+              const snip = msg.aiSummary||decodeSnipM(msg.snippet)||subj;
+              const rk = `mail-${msg.id||i}`;
+              const exp = expandedRows.has(rk);
               return (
-                <a key={msg.id||i} href={`https://mail.google.com/mail/u/0/#inbox/${msg.id}`} target="_blank" rel="noopener noreferrer"
-                  style={{ display:"block", padding:`${padY}px 12px`, textDecoration:"none", color:"inherit" }}>
+                <div key={msg.id||i} onClick={()=>toggleRow(rk)} style={{ padding:`${padY}px 12px`, cursor:"pointer" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:6, marginBottom:2 }}>
                     <span style={{ fontSize:ncType.body, fontWeight:600, color:C.text, fontFamily:NC_FONT_STACK, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{from}</span>
-                    <span style={{ fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK, flexShrink:0 }}>{date}</span>
+                    <span style={{ display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
+                      <span style={{ fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{date}</span>
+                      <a href={`https://mail.google.com/mail/u/0/#inbox/${msg.id}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} title="Open in Gmail" style={{ display:"flex", color:C.faint, lineHeight:0 }}>{suiteIcon("open_in_new",13)}</a>
+                    </span>
                   </div>
-                  <span style={{ fontSize:ncType.meta, color:C.muted, fontFamily:NC_FONT_STACK, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", display:"block" }}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
-                </a>
+                  {exp && subj && subj !== snip && <span style={{ display:"block", fontSize:ncType.meta, fontWeight:600, color:C.text, fontFamily:NC_FONT_STACK, marginBottom:2 }}>{subj}</span>}
+                  <span style={{ fontSize:ncType.meta, color:C.muted, fontFamily:NC_FONT_STACK, display:"block", ...(exp ? { whiteSpace:"normal", wordBreak:"break-word" } : { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }) }}>{snip}</span>
+                </div>
               );
             })}
           </MobileBox>
@@ -2120,12 +2155,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : visibleShailos.map(s => {
               const text = nerveDisplaySummary(s,"Open shaila");
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
+              const rk = `shaila-${s.id}`;
+              const exp = expandedRows.has(rk);
               return (
-                <button key={s.id} onClick={onOpenShailos}
+                <button key={s.id} onClick={()=>toggleRow(rk)}
                   style={{ width:"100%", textAlign:"left", display:"grid", gridTemplateColumns:"3px minmax(0,1fr)", gap:10, padding:`${padY}px 12px ${padY}px 0`, border:"none", background:"transparent", color:C.text, cursor:"pointer", alignItems:"start" }}>
                   <span style={{ width:3, alignSelf:"stretch", minHeight:20, borderRadius:"0 3px 3px 0", background:GOLD, flexShrink:0 }} />
                   <span style={{ minWidth:0 }}>
-                    <span style={{ display:"block", fontSize:ncType.body, fontWeight:500, lineHeight:ncType.line, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{text}</span>
+                    <span style={{ display:"block", fontSize:ncType.body, fontWeight:500, lineHeight:ncType.line, color:C.text, ...(exp ? { whiteSpace:"normal", wordBreak:"break-word" } : { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }) }}>{text}</span>
                     <span style={{ fontSize:ncType.meta, color:GOLD, fontWeight:500 }}>{isGetBack?"waiting to reply":"pending answer"}</span>
                   </span>
                 </button>
@@ -2224,9 +2261,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const fmtStepsM  = v => v != null ? Math.round(v).toLocaleString() : "—";
     const fmtSleepM  = v => { if (v == null) return "—"; const h = Math.floor(v); const m = Math.round((v%1)*60); return `${h}h${m>0?(m<10?"0":"")+m:""}`; };
 
-    const taskMax = 4;
+    // Expanded sections scroll internally now, so show the full lists rather than a teaser.
+    const taskMax = 50;
     const topTasks = primaryTaskQueue.slice(0, taskMax);
     const hiddenMobileTasks = Math.max(0, primaryTaskQueue.length - taskMax);
+    const tasksPreview = signalNote("Tasks") || (primaryTaskQueue.length ? `${nerveDisplaySummary(primaryTaskQueue[0], "") || "Task"}${primaryTaskQueue.length > 1 ? ` +${primaryTaskQueue.length - 1} more` : ""}` : "No tasks");
 
     return (
       // height uses 100dvh (dynamic viewport) + safe-area padding so the iOS
@@ -2267,13 +2306,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             <span style={{ marginLeft: "auto", fontSize: 11, color: C.faint }}>↗</span>
           </button>
 
-          {/* Tasks — primary, always expanded */}
-          <MobileSection {...sectionCtx} id="tasks" icon="task_alt" title="Tasks" accentColor={C.accent} count={primaryTaskQueue.length} expandable={false}
-            primaryBtn={<button onClick={() => openTaskComposer(taskPriority)} style={gvIconButton({ width: 26, height: 26, color: C.muted }, C)} title="Add task">{suiteIcon("add", 14)}</button>}
+          {/* Tasks — collapsible; open the section when the composer is invoked so it shows. */}
+          <MobileSection {...sectionCtx} id="tasks" icon="task_alt" title="Tasks" accentColor={C.accent} count={primaryTaskQueue.length} preview={tasksPreview}
+            primaryBtn={<button onClick={() => { setMobileExpanded(prev => new Set(prev).add("tasks")); openTaskComposer(taskPriority); }} style={gvIconButton({ width: 26, height: 26, color: C.muted }, C)} title="Add task">{suiteIcon("add", 14)}</button>}
             menuItems={[
               { icon: "list_alt",    label: "Open full queue", run: onOpenQueue },
               { icon: "local_drink", label: "Zen mode",        run: onOpenZen },
-              ...(onAddMrsWTask ? [{ icon: "person", label: "Add Mrs W task", run: () => openTaskComposer(taskPriority, { mrsW: true }) }] : []),
+              ...(onAddMrsWTask ? [{ icon: "person", label: "Add Mrs W task", run: () => { setMobileExpanded(prev => new Set(prev).add("tasks")); openTaskComposer(taskPriority, { mrsW: true }); } }] : []),
             ]}
           >
             {taskComposerOpen && (
@@ -2346,7 +2385,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </div>
               ) : calendarRows.filter(r=>!r.past).length === 0 ? (
                 <div style={{ padding:"12px 14px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Nothing upcoming today.</div>
-              ) : calendarRows.filter(r=>!r.past).slice(0,3).map(row => (
+              ) : calendarRows.filter(r=>!r.past).slice(0,40).map(row => (
                 <div key={row.evt?.id||row.index} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:8,padding:"9px 12px",borderTop:`1px solid ${C.divider}`,alignItems:"start" }}>
                   <span style={{ fontSize:ncType.meta,color:row.now?C.accent:C.faint,fontFamily:NC_FONT_STACK,whiteSpace:"nowrap",paddingTop:1,fontWeight:row.now?700:400,minWidth:54 }}>
                     {row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
@@ -2383,7 +2422,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             >
               {!gmailMessages || gmailMessages.length === 0 ? (
                 <div style={{ padding:"12px 14px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Inbox clear.</div>
-              ) : gmailMessages.slice(0,3).map((msg,i) => {
+              ) : gmailMessages.slice(0,40).map((msg,i) => {
                 const subj = gmailHdr(msg,"Subject")||"(no subject)";
                 const from = fmtFromM(gmailHdr(msg,"From"));
                 const date = fmtTimeM(gmailHdr(msg,"Date"));
@@ -2412,7 +2451,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           >
             {visibleShailos.length === 0 ? (
               <div style={{ padding:"12px 14px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>No pending shailos.</div>
-            ) : visibleShailos.slice(0,2).map(s => {
+            ) : visibleShailos.slice(0,40).map(s => {
               const text = nerveDisplaySummary(s,"Open shaila");
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
               return (
@@ -2426,9 +2465,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </button>
               );
             })}
-            {visibleShailos.length > 2 && (
+            {visibleShailos.length > 40 && (
               <button onClick={onOpenShailos} style={{width:"100%",padding:"7px 0",border:"none",borderTop:`1px solid ${C.divider}`,background:"transparent",color:C.faint,cursor:"pointer",fontSize:ncType.meta,fontFamily:NC_FONT_STACK}}>
-                +{visibleShailos.length-2} more
+                +{visibleShailos.length-40} more
               </button>
             )}
           </MobileSection>
