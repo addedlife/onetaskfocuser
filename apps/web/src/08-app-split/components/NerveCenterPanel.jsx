@@ -1201,13 +1201,18 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // a deterministic line instantly and silently upgrade to the AI line when ready.
     // Both surfaces share one cache key, so neither pays for the call twice.
     if (!chiefPage && !isMobileDevice) {
+      // Desktop non-chief: always use the live fallback so resolving a missed call (or any
+      // context change) is reflected immediately rather than showing a stale AI brief.
+      setChiefBrief(chiefFallback);
       setChiefLoading(false);
       setChiefError("");
       return undefined;
     }
     const force = chiefRefreshNonce !== chiefRefreshHandledRef.current;
     chiefRefreshHandledRef.current = chiefRefreshNonce;
-    setChiefBrief(prev => prev || chiefFallback);
+    // Always show the fresh fallback immediately while the AI re-scan runs, so a resolved
+    // missed call (or any context change) is never stuck showing stale data.
+    setChiefBrief(chiefFallback);
     setChiefError("");
     if (!aiOpts) {
       setChiefBrief(chiefFallback);
@@ -2110,47 +2115,102 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // and fall back to the deterministic line below so the card is never blank, even
     // before the scan resolves or when offline (stale-while-revalidate).
     const signalNote = area => (activeChiefBrief.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || "";
-    const cardSummary = (area, fallback) => signalNote(area) || fallback;
     // Phone link state as a single dot color: green = live, accent = active call/incoming,
     // gray = offline/stale. Shown in the Phone card's corner so status reads at a glance.
     const phoneDotColor = phoneStatusSummary?.online
       ? ((phoneStatusSummary.tone === "incoming" || phoneStatusSummary.tone === "call") ? C.accent : C.success)
       : C.faint;
-    // Deterministic fallbacks, written in the same terse Apple-notification style as the
-    // AI signals: lead with the concrete fact, trailing "+N more" instead of a leading count.
-    const moreTail = n => (n > 1 ? ` +${n - 1} more` : "");
-    const mailTL = (() => {
+
+    // Apple-notification style summaries: name as many items as possible (the card header
+    // shows 2 lines via WebkitLineClamp so the CSS handles overflow). Trailing "+N" for the
+    // remainder. trunc keeps individual item length manageable so more fit per line.
+    const trunc = (s, n) => s && s.length > n ? s.slice(0, n - 1) + "…" : (s || "");
+    const joinTop = (items, rest) => items.join(" · ") + (rest > 0 ? ` +${rest}` : "");
+
+    const mailRich = (() => {
       if (!gmailMessages?.length) return "Inbox clear";
-      const from = fmtFromM(gmailHdr(gmailMessages[0], "From"));
-      const subj = gmailHdr(gmailMessages[0], "Subject") || "(no subject)";
-      return `${from}: ${subj}${moreTail(gmailMessages.length)}`;
+      const top = gmailMessages.slice(0, 4);
+      const items = top.map(msg => {
+        const from = fmtFromM(gmailHdr(msg, "From"));
+        const subj = trunc(gmailHdr(msg, "Subject") || "", 18);
+        return subj ? `${from}: ${subj}` : from;
+      });
+      return joinTop(items, gmailMessages.length - top.length);
     })();
+
     const phoneTL = (() => {
       const u = Number(phoneActivitySummary?.unreadTexts || 0);
       const m = Number(phoneActivitySummary?.missedCalls || 0);
       const v = Number(phoneActivitySummary?.voicemailCount || 0);
       const parts = [];
-      if (u) parts.push(`${u} unread`);
-      if (m) parts.push(`${m} missed`);
+      if (m) parts.push(`${m} missed call${m > 1 ? "s" : ""}`);
+      if (u) parts.push(`${u} text${u > 1 ? "s" : ""}`);
       if (v) parts.push(`${v} voicemail${v > 1 ? "s" : ""}`);
-      return parts.length ? parts.join(", ") : (phoneActivitySummary?.online ? "All clear" : "Phone offline");
+      return parts.length ? parts.join(" · ") : (phoneActivitySummary?.online ? "All clear" : "Phone offline");
     })();
-    const tasksTL = (() => {
+
+    const tasksRich = (() => {
       const n = primaryTaskQueue.length;
       if (!n) return "No tasks";
-      return `${nerveDisplaySummary(primaryTaskQueue[0], "") || "Task"}${moreTail(n)}`;
+      const top = primaryTaskQueue.slice(0, 5);
+      const items = top.map(t => {
+        const text = trunc(nerveDisplaySummary(t, "Task"), 22);
+        const pri = gP(priorities, t.priority);
+        const isHigh = pri?.label?.toLowerCase().includes("urgent") || pri?.label?.toLowerCase().includes("p1");
+        return isHigh ? `${text} (P1)` : text;
+      });
+      return joinTop(items, n - top.length);
     })();
-    const shailosTL = (() => {
+
+    const shailosRich = (() => {
       const n = visibleShailos.length;
       if (!n) return "No open shailos";
-      return `${nerveDisplaySummary(visibleShailos[0], "") || "Open shaila"}${moreTail(n)}`;
+      const top = visibleShailos.slice(0, 4);
+      const items = top.map(s => trunc(nerveDisplaySummary(s, "Shaila"), 24));
+      return joinTop(items, n - top.length);
     })();
-    const calTL = (() => {
+
+    const calRich = (() => {
       if (!upcomingCal.length) return "Nothing upcoming";
-      const ev = upcomingCal[0];
-      const t = fmtTimeM(ev.start || ev.startTime || ev.date);
-      const title = compactNerveSummary(ev.summary || ev.title || ev.name || "", "Event");
-      return `${title}${t ? ` ${t}` : ""}`;
+      const top = upcomingCal.slice(0, 3);
+      const items = top.map(ev => {
+        const t = fmtTimeM(ev.start || ev.startTime || ev.date);
+        const title = trunc(compactNerveSummary(ev.summary || ev.title || ev.name || "", "Event"), 20);
+        return t ? `${title} ${t}` : title;
+      });
+      return joinTop(items, upcomingCal.length - top.length);
+    })();
+
+    // cardSummary: prefer chief AI signal per area, fall back to rich deterministic text.
+    const cardSummary = (area, fallback) => signalNote(area) || fallback;
+
+    // Supercrunched universal summary — ONE synthesized sentence covering the most notable
+    // things across all categories. Prefers the chief AI overview; builds deterministically
+    // when chief isn't running. Reads like a situation report, not a list of headings.
+    const supercrunch = (() => {
+      if (chiefSummaryText) return chiefSummaryText;
+      const parts = [];
+      if (primaryTaskQueue.length) {
+        const p1 = primaryTaskQueue.find(t => { const l = (gP(priorities, t.priority)?.label || "").toLowerCase(); return l.includes("urgent") || l.includes("p1"); });
+        const lead = trunc(nerveDisplaySummary(p1 || primaryTaskQueue[0], "task"), 26);
+        parts.push(`${primaryTaskQueue.length} task${primaryTaskQueue.length > 1 ? "s" : ""}${lead ? ` — ${lead}${p1 ? " (P1)" : ""}` : ""}`);
+      }
+      if (gmailMessages?.length) {
+        const from = fmtFromM(gmailHdr(gmailMessages[0], "From"));
+        parts.push(gmailMessages.length > 1 ? `${gmailMessages.length} unread, ${from}` : `mail — ${from}`);
+      }
+      const missed = Number(phoneActivitySummary?.missedCalls || 0);
+      const texts = Number(phoneActivitySummary?.unreadTexts || 0);
+      if (missed) parts.push(`${missed} missed call${missed > 1 ? "s" : ""}`);
+      else if (texts) parts.push(`${texts} text${texts > 1 ? "s" : ""}`);
+      if (upcomingCal.length) {
+        const ev = upcomingCal[0];
+        const t = fmtTimeM(ev.start || ev.startTime || ev.date);
+        const title = trunc(compactNerveSummary(ev.summary || ev.title || ev.name || "", "Event"), 20);
+        parts.push(t ? `${title} ${t}` : title);
+      }
+      if (visibleShailos.length) parts.push(`${visibleShailos.length} shailo${visibleShailos.length > 1 ? "s" : ""} open`);
+      return parts.length ? parts.join(" · ") : "All clear";
     })();
 
     return (
@@ -2158,26 +2218,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
         {nextActionBar}
 
-        {/* Supercrunched universal header — desktop only. One tight line across all 5
-            categories: prefers the chief AI signals, falls back to the deterministic TL strings.
-            Skipped on mobile (nextActionBar already covers the chief summary). */}
-        {!isMobileDevice && (
-          <div style={{ flexShrink:0, padding:"3px 10px 5px", borderRadius:8, background: C.bgSoft, border:`1px solid ${C.divider}`, display:"flex", alignItems:"center", gap:0, flexWrap:"nowrap", overflow:"hidden", minHeight:28 }}>
-            {[
-              { icon:"mail",          color:CAT_MAIL,    tl: cardSummary("Mail",    mailTL)    },
-              { icon:"task_alt",      color:C.accent,    tl: cardSummary("Tasks",   tasksTL)   },
-              { icon:"phone_in_talk", color:CAT_PHONE,   tl: cardSummary("Phone",   phoneTL)   },
-              { icon:"rule",          color:GOLD,        tl: cardSummary("Shailos", shailosTL) },
-              { icon:"calendar_today",color:C.warning,   tl: cardSummary("Calendar",calTL)     },
-            ].map(({ icon, color, tl }, idx) => (
-              <React.Fragment key={icon}>
-                {idx > 0 && <span style={{ color:C.faint, fontSize:11, padding:"0 6px", flexShrink:0, userSelect:"none" }}>·</span>}
-                <span style={{ display:"inline-flex", alignItems:"center", gap:4, minWidth:0, flex:"1 1 0", overflow:"hidden" }}>
-                  <span style={{ display:"flex", color, flexShrink:0 }}>{suiteIcon(icon, 12)}</span>
-                  <span style={{ fontSize:11, color:C.muted, fontFamily:NC_FONT_STACK, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.3 }}>{tl}</span>
-                </span>
-              </React.Fragment>
-            ))}
+        {/* Supercrunched universal summary — one synthesized sentence covering the whole
+            situation at a glance. Prefers chief AI overview; builds deterministically otherwise. */}
+        {supercrunch && (
+          <div style={{ flexShrink:0, padding:"5px 12px", borderRadius:8, background: C.bgSoft, border:`1px solid ${C.divider}`, fontSize:12, color:C.muted, fontFamily:NC_FONT_STACK, lineHeight:1.4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+            {supercrunch}
           </div>
         )}
 
@@ -2210,7 +2255,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           gridTemplateRows: isMobileDevice ? (isPortrait ? "repeat(5, minmax(0,1fr))" : "repeat(2, minmax(0,1fr))") : "repeat(5, minmax(0,1fr))" }}>
 
           {/* Mail */}
-          <MobileBox {...boxCtx} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail", mailTL)} stickyHeader={!isMobileDevice} style={{ gridColumn: span(0) }}
+          <MobileBox {...boxCtx} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail", mailRich)} style={{ gridColumn: span(0) }}
             onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}>
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : gmailMessages.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
@@ -2236,7 +2281,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Phone */}
-          <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} summary={cardSummary("Phone", phoneTL)} stickyHeader={!isMobileDevice} style={{ gridColumn: span(1) }}
+          <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} summary={cardSummary("Phone", phoneTL)} style={{ gridColumn: span(1) }}
             statusDot={phoneDotColor} onOpen={onOpenPhone}>
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
@@ -2246,7 +2291,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Tasks */}
-          <MobileBox {...boxCtx} icon="task_alt" title="Tasks" accentColor={C.accent} summary={cardSummary("Tasks", tasksTL)} stickyHeader={!isMobileDevice} style={{ gridColumn: span(2) }}
+          <MobileBox {...boxCtx} icon="task_alt" title="Tasks" accentColor={C.accent} summary={cardSummary("Tasks", tasksRich)} style={{ gridColumn: span(2) }}
             onOpen={onOpenQueue}>
             {taskComposerOpen && (
               <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.divider}` }}>
@@ -2289,7 +2334,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Shailos */}
-          <MobileBox {...boxCtx} icon="rule" title="Shailos" accentColor={GOLD} summary={cardSummary("Shailos", shailosTL)} stickyHeader={!isMobileDevice} style={{ gridColumn: span(3) }}
+          <MobileBox {...boxCtx} icon="rule" title="Shailos" accentColor={GOLD} summary={cardSummary("Shailos", shailosRich)} style={{ gridColumn: span(3) }}
             onOpen={onOpenShailos}>
             {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : visibleShailos.map(s => {
               const text = nerveDisplaySummary(s,"Open shaila");
@@ -2310,7 +2355,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Calendar */}
-          <MobileBox {...boxCtx} icon="calendar_today" title="Calendar" accentColor={C.warning} summary={cardSummary("Calendar", calTL)} stickyHeader={!isMobileDevice} style={{ gridColumn: span(4) }}
+          <MobileBox {...boxCtx} icon="calendar_today" title="Calendar" accentColor={C.warning} summary={cardSummary("Calendar", calRich)} style={{ gridColumn: span(4) }}
             onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}>
             {showAddEvent && (
               <div style={{ padding:"10px 12px", borderBottom:`1px solid ${C.divider}` }}>
