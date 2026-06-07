@@ -567,9 +567,10 @@ function buildChiefFallbackBrief(context = {}, suppressed = []) {
     ].filter(Boolean);
     signals.push({ area: "Phone", note: phoneParts.join(", ") });
   }
-  if ((context.shailos || []).length > 0) signals.push({ area: "Shailos", note: `${context.shailos.length} open — ${shaila?.text || context.shailos[0]?.text || "pending"}` });
-  if (email) signals.push({ area: "Mail", note: `${email.from ? `From ${email.from}: ` : ""}${email.summary || email.subject}` });
-  if ((context.tasks || []).length > 0) signals.push({ area: "Tasks", note: `${nowCount > 0 ? `${nowCount} Now` : `${context.tasks.length} total`}${nowTask ? ` — top: ${nowTask.text}` : ""}` });
+  // Notes never restate the area name or its count — the card/section already labels it.
+  if ((context.shailos || []).length > 0) signals.push({ area: "Shailos", note: shaila?.text || context.shailos[0]?.text || "Pending answer" });
+  if (email) signals.push({ area: "Mail", note: `${email.from ? `${email.from}: ` : ""}${email.summary || email.subject}` });
+  if ((context.tasks || []).length > 0) signals.push({ area: "Tasks", note: nowTask?.text || context.tasks[0]?.text || "Open task" });
 
   // Build natural language brief covering all sources
   const briefParts = [];
@@ -1694,6 +1695,34 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const activeChiefTone = activeChiefBrief?.urgency === "now" ? C.danger : activeChiefBrief?.urgency === "today" ? C.accent : C.muted;
   const activeChiefSources = (activeChiefBrief?.sources || []).slice(0, 5);
   const activeChiefTaskText = cleanOneLine(activeChiefBrief?.nextAction || "", 260);
+
+  // Streamed "do this next" line above the page: the single most urgent+effective move across
+  // all categories (the chief's nextAction), no explanation — revealed with a typewriter so it
+  // reads as it streams in. Restarts only when the underlying action changes (not on clock tick).
+  const [streamNext, setStreamNext] = useState("");
+  const streamRef = useRef({ text: null, timer: null });
+  useEffect(() => {
+    if (streamRef.current.text === activeChiefTaskText) return undefined;
+    streamRef.current.text = activeChiefTaskText;
+    if (streamRef.current.timer) { clearInterval(streamRef.current.timer); streamRef.current.timer = null; }
+    setStreamNext("");
+    if (!activeChiefTaskText) return undefined;
+    let i = 0;
+    streamRef.current.timer = window.setInterval(() => {
+      i += 1;
+      setStreamNext(activeChiefTaskText.slice(0, i));
+      if (i >= activeChiefTaskText.length) { clearInterval(streamRef.current.timer); streamRef.current.timer = null; }
+    }, 18);
+    return () => { if (streamRef.current.timer) { clearInterval(streamRef.current.timer); streamRef.current.timer = null; } };
+  }, [activeChiefTaskText]);
+  const nextActionBar = activeChiefTaskText ? (
+    <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "1px 4px 7px", flexShrink: 0, minWidth: 0 }}>
+      <span style={{ display: "flex", color: C.accent, flexShrink: 0 }}>{suiteIcon("bolt", 16)}</span>
+      <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
+      </span>
+    </div>
+  ) : null;
   useEffect(() => {
     if (!chiefPage || !activeChiefTaskText || activeChiefBrief?._isPlaceholder) return;
     setChiefTaskDraft(prev => {
@@ -2012,10 +2041,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const isPortrait = typeof window === "undefined" || window.innerHeight >= window.innerWidth;
     const span = idx => isPortrait ? undefined : (idx < 3 ? "span 2" : "span 3");
     const emptyMsg = txt => <div style={{ padding:"12px 14px", fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{txt}</div>;
-    // Density: compact tightens row padding so more lines fit without shrinking tap targets much.
+    // Density: compact tightens padding AND type (toward the TaskRiver feed's density) so a lot
+    // more fits. Comfortable keeps the roomier defaults.
     const dense = mobileDensity === "compact";
-    const padY = dense ? 5 : 8;
-    const rowMinH = dense ? 34 : 40;
+    const padY = dense ? 4 : 8;
+    const rowMinH = dense ? 26 : 40;
+    const bodyF = dense ? 13 : ncType.body;
+    const metaF = dense ? 11 : ncType.meta;
+    const lineH = dense ? 1.3 : ncType.line;
 
     // Each card's top line is the chief's per-category summary (same summarizer as the
     // chief page — it emits one factual `signals` line per area). We prefer that AI line
@@ -2063,6 +2096,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     return (
       <div style={{ position:"fixed", top:topOffset, left:sidebarW, right:0, height:`calc(100dvh - ${topOffset}px)`, zIndex:7600, background:C.bg, display:"flex", flexDirection:"column", borderLeft:`1px solid ${C.divider}`, boxSizing:"border-box", padding:"8px 8px calc(8px + env(safe-area-inset-bottom,0px))" }}>
 
+        {nextActionBar}
+
         {/* slim time + actions bar */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 2px 6px", flexShrink:0 }}>
           <div style={{ display:"flex", alignItems:"baseline", gap:8, minWidth:0 }}>
@@ -2093,15 +2128,15 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const exp = expandedRows.has(rk);
               return (
                 <div key={msg.id||i} onClick={()=>toggleRow(rk)} style={{ padding:`${padY}px 12px`, cursor:"pointer" }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:6, marginBottom:2 }}>
-                    <span style={{ fontSize:ncType.body, fontWeight:600, color:C.text, fontFamily:NC_FONT_STACK, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{from}</span>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:6, marginBottom:dense?0:2 }}>
+                    <span style={{ fontSize:bodyF, fontWeight:600, color:C.text, fontFamily:NC_FONT_STACK, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{from}</span>
                     <span style={{ display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
-                      <span style={{ fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{date}</span>
+                      <span style={{ fontSize:metaF, color:C.faint, fontFamily:NC_FONT_STACK }}>{date}</span>
                       <a href={`https://mail.google.com/mail/u/0/#inbox/${msg.id}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} title="Open in Gmail" style={{ display:"flex", color:C.faint, lineHeight:0 }}>{suiteIcon("open_in_new",13)}</a>
                     </span>
                   </div>
-                  {exp && subj && subj !== snip && <span style={{ display:"block", fontSize:ncType.meta, fontWeight:600, color:C.text, fontFamily:NC_FONT_STACK, marginBottom:2 }}>{subj}</span>}
-                  <span style={{ fontSize:ncType.meta, color:C.muted, fontFamily:NC_FONT_STACK, display:"block", ...(exp ? { whiteSpace:"normal", wordBreak:"break-word" } : { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }) }}>{snip}</span>
+                  {exp && subj && subj !== snip && <span style={{ display:"block", fontSize:metaF, fontWeight:600, color:C.text, fontFamily:NC_FONT_STACK, marginBottom:2 }}>{subj}</span>}
+                  <span style={{ fontSize:metaF, color:C.muted, fontFamily:NC_FONT_STACK, display:"block", lineHeight:lineH, ...(exp ? { whiteSpace:"normal", wordBreak:"break-word" } : { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }) }}>{snip}</span>
                 </div>
               );
             })}
@@ -2147,7 +2182,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       onBlur={() => { if(editText.trim()&&editText!==t.text)onEditTask?.(t.id,editText.trim());setEditingTaskId(null); }}
                       style={{ width:"100%", boxSizing:"border-box", borderRadius:6, border:`1px solid ${priColor}`, background:C.bgSoft, color:C.text, padding:"6px 8px", fontSize:ncType.body, fontFamily:"system-ui", resize:"none", outline:"none" }} />
                   ) : (
-                    <span onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ display:"block", fontSize:ncType.body, lineHeight:ncType.line, color:C.text, wordBreak:"break-word", cursor:"text", paddingTop:1 }}>{nerveDisplaySummary(t,"Untitled task")}</span>
+                    <span onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ display:"block", fontSize:bodyF, lineHeight:lineH, color:C.text, wordBreak:"break-word", cursor:"text", paddingTop:1 }}>{nerveDisplaySummary(t,"Untitled task")}</span>
                   )}
                   {!isEditing && (
                     <div style={{ display:"flex", gap:3 }}>
@@ -2173,8 +2208,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   style={{ width:"100%", textAlign:"left", display:"grid", gridTemplateColumns:"3px minmax(0,1fr)", gap:10, padding:`${padY}px 12px ${padY}px 0`, border:"none", background:"transparent", color:C.text, cursor:"pointer", alignItems:"start" }}>
                   <span style={{ width:3, alignSelf:"stretch", minHeight:20, borderRadius:"0 3px 3px 0", background:GOLD, flexShrink:0 }} />
                   <span style={{ minWidth:0 }}>
-                    <span style={{ display:"block", fontSize:ncType.body, fontWeight:500, lineHeight:ncType.line, color:C.text, ...(exp ? { whiteSpace:"normal", wordBreak:"break-word" } : { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }) }}>{text}</span>
-                    <span style={{ fontSize:ncType.meta, color:GOLD, fontWeight:500 }}>{isGetBack?"waiting to reply":"pending answer"}</span>
+                    <span style={{ display:"block", fontSize:bodyF, fontWeight:500, lineHeight:lineH, color:C.text, ...(exp ? { whiteSpace:"normal", wordBreak:"break-word" } : { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }) }}>{text}</span>
+                    <span style={{ fontSize:metaF, color:GOLD, fontWeight:500 }}>{isGetBack?"waiting to reply":"pending answer"}</span>
                   </span>
                 </button>
               );
@@ -2198,10 +2233,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             )}
             {!calendarEvents ? emptyMsg("Loading…") : upcomingCal.length === 0 ? emptyMsg("Nothing upcoming.") : upcomingCal.map(row => (
               <div key={row.evt?.id||row.index} style={{ display:"grid", gridTemplateColumns:"auto minmax(0,1fr)", gap:8, padding:`${padY}px 12px`, alignItems:"start" }}>
-                <span style={{ fontSize:ncType.meta, color:row.now?C.accent:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap", paddingTop:1, fontWeight:row.now?700:400, minWidth:54 }}>
+                <span style={{ fontSize:metaF, color:row.now?C.accent:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap", paddingTop:1, fontWeight:row.now?700:400, minWidth:54 }}>
                   {row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                 </span>
-                <span style={{ fontSize:ncType.body, color:row.now||row.special?C.text:C.muted, fontFamily:NC_FONT_STACK, fontWeight:row.now||row.special?600:400, lineHeight:ncType.line }}>
+                <span style={{ fontSize:bodyF, color:row.now||row.special?C.text:C.muted, fontFamily:NC_FONT_STACK, fontWeight:row.now||row.special?600:400, lineHeight:lineH }}>
                   {row.evt?.summary||"(no title)"}
                 </span>
               </div>
@@ -2284,6 +2319,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       <div style={{ position: "fixed", top: topOffset, left: sidebarW, right: 0, height: `calc(100dvh - ${topOffset}px)`, zIndex: 7600, background: C.bg, overflowY: "auto", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}`, WebkitOverflowScrolling: "touch" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 7, padding: "10px 10px calc(34px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }}>
 
+          {nextActionBar}
+
           {/* Time strip — tap the time to reveal the timeline */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 2px 4px" }}>
             <button onClick={() => setMobileTimelineOpen(o => !o)} style={{ all: "unset", display: "flex", alignItems: "baseline", gap: 10, minWidth: 0, cursor: "pointer" }} aria-expanded={mobileTimelineOpen} title="Show timeline">
@@ -2305,17 +2342,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               <TimelineFace nowDate={nowDate} C={C} compact />
             </div>
           )}
-
-          {/* Health mini-strip */}
-          <button onClick={onOpenHealth} style={{ display: "flex", alignItems: "center", gap: 12, padding: "7px 12px", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, cursor: "pointer", textAlign: "left", width: "100%", boxSizing: "border-box" }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, letterSpacing: 0.8, textTransform: "uppercase", flexShrink: 0 }}>Health</span>
-            {[["👣", fmtStepsM(hd.steps)], ["😴", fmtSleepM(hd.sleep)], ["♥", hd.heartRate != null ? `${Math.round(hd.heartRate)} bpm` : "—"], ["⚖", hd.weight != null ? `${(+hd.weight).toFixed(1)} lb` : "—"]].map(([ico, val]) => (
-              <span key={ico} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 12, color: val === "—" ? C.faint : C.text, fontFamily: NC_FONT_STACK, fontWeight: val === "—" ? 400 : 600 }}>
-                <span style={{ fontSize: 11 }}>{ico}</span>{val}
-              </span>
-            ))}
-            <span style={{ marginLeft: "auto", fontSize: 11, color: C.faint }}>↗</span>
-          </button>
 
           {/* Tasks — collapsible; open the section when the composer is invoked so it shows. */}
           <MobileSection {...sectionCtx} id="tasks" icon="task_alt" title="Tasks" accentColor={C.accent} count={primaryTaskQueue.length} preview={tasksPreview}
@@ -2488,7 +2514,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             preview={signalNote("Phone") || phoneStatusSummary?.label || "DeskPhone"}
             menuItems={[{ icon: "open_in_full", label: "Open phone view", run: onOpenPhone }]}
           >
-            <div style={{ padding: "4px 12px 10px", borderTop: `1px solid ${C.divider}` }}>
+            {/* Real height so the phone surface's flex:1 activity feed (texts + calls) gets
+                space — a plain block wrapper collapsed it to zero, so calls never showed. */}
+            <div style={{ padding: "4px 12px 10px", borderTop: `1px solid ${C.divider}`, height: 380, boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
               <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </MobileSection>
@@ -3358,24 +3386,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           );
         })()}
 
-        {/* ── Health Card — bottom row, resizable, closeable ── */}
-        {!isStacked && healthCardVisible && (
-          <div style={{ height: healthCardH, flexShrink: 0, position: "sticky", bottom: 0, zIndex: 2, background: C.bg }}>
-            <HealthCard
-              C={C}
-              healthData={healthData}
-              healthHistory={healthHistory}
-              healthConfig={healthConfig}
-              onOpenHealth={onOpenHealth}
-              cardHeight={healthCardH}
-              onResizeStart={startHealthResize}
-              onDismiss={() => {
-                setHealthCardVisible(false);
-                try { localStorage.setItem("nc_health_card_visible", "0"); } catch {}
-              }}
-            />
-          </div>
-        )}
+        {/* Health card removed from the default dashboard — health stays reachable via the
+            Health page (actions menu / onOpenHealth). */}
 
         {/* Actions drawer */}
         {actionsOpen && (

@@ -1192,7 +1192,15 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         </div>
       )}
 
-      {!statusOnline && !error && <div style={{ fontSize: 13, color: C.muted, padding: "6px 2px" }}>Open DeskPhone to connect calls and texts.</div>}
+      {/* Compact card always shows a status dot — even with no texts/calls — so the phone's
+          live/stale/offline state is visible at a glance instead of a blank card. */}
+      {compact && !error && !(statusOnline && (hasMessages || hasCalls)) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 4px", fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: phoneLinkLive ? C.success : relayStale ? C.warning : C.faint }} />
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{phoneLinkLive ? "Connected · no recent calls or texts" : relayStale ? `PC offline · ${relayAgeLabel(relayAgeMs)}` : "DeskPhone offline"}</span>
+        </div>
+      )}
+      {!statusOnline && !error && !compact && <div style={{ fontSize: 13, color: C.muted, padding: "6px 2px" }}>Open DeskPhone to connect calls and texts.</div>}
       {error && <div style={{ fontSize: 13, color: C.danger, background: C.bgSoft, borderRadius: 8, padding: "8px 10px", marginTop: 2 }}>{error}</div>}
     </div>
   );
