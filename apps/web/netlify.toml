@@ -80,3 +80,9 @@
   from = "/shailos/*"
   to = "/shailos/index.html"
   status = 200
+
+# SPA fallback for client-side routing and to ensure index.html is served for all paths
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
