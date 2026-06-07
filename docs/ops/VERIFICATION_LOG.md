@@ -1,5 +1,16 @@
 # Verification Log
 
+## 2026-06-07 Six NerveCenter / Phone Recurring Issues
+
+- Issues: (1) missed-call resolve check insufficient; (2) no manual resolve button on web phone screen; (3) call/thread history capped too low; (4) accordion card fonts too small; (5) supercrunch brief sounding like advice; (7) task list diverges across devices.
+- Root cause (1): `isMissedCallResolved` checked only `recentCalls` (sliced to 10), so any handling call outside the top 10 didn't count as a resolution. Fixed: now checks full `calls` array. Integrated with remote's `resolvedMissed` + `missedKey` scheme (persisted in localStorage, cross-tab sync via CustomEvent).
+- Root cause (2): Web phone screen had no way to manually mark a missed call resolved if automatic detection didn't catch it. Remote commit `9d7b886` had already added a direct toggle button (green check / undo) directly on each call row. My duplicate in-menu button was removed; the row-level toggle remains.
+- Root cause (3): Threads and recentCalls both sliced to 10; activity feed capped at 8/14. Fixed: 10→20 for threads/calls, 8/14→12/20 for activity feed.
+- Root cause (4): `MobileSection` header title/preview at 11px, badge at 9px. Fixed: title/preview→13px, badge→11px. Chief brief signal area label NC_TYPE.small→meta (13px), note text NC_TYPE.control→15px. Kept remote's chip-icon design.
+- Root cause (5): AI schema described `brief` as "3-5 sentence natural language synthesis" which models render as advisory prose. Fixed: schema and prompt instruction now specify "2-4 short declarative status statements — same clipped factual tone as signals, no framing or advice." Remote's Apple-style note description for signals preserved.
+- Root cause (7): `_listenV5` in 01-core.js had a `wasInitialized` guard preventing the first Firestore snapshot from calling `onUpdate`. Tasks added on device A between `load()` completing and the first `onSnapshot` firing on device B would land in `taskCache` but never reach the UI — invisible until another change triggered a subsequent snapshot. Fix: removed the guard; first snapshot now always calls `onUpdate` when `changed=true`. App.jsx's `adoptedRemote` guard prevents the update from bouncing back as a save.
+- Gates: `npm run build` (apps/web) → 0 errors, bundle `index-fFUoLPAJ.js`. Pushed to `origin/main` (commit `1ecba98`). BUILD-VERIFIED ONLY — cross-device task sync requires runtime verification with two live devices.
+
 ## 2026-06-05 DeskPhone Connection Reliability — Auto-Reconnect + Ghost-Connected Fix (b285)
 
 - Reported: DeskPhone does not auto-reconnect when default phone comes back in range after being lost. Also reports "Connected" when the link has silently dropped and won't update calls/texts until user manually refreshes connection.
