@@ -1619,6 +1619,35 @@ function ConversationCallHistory({
   const [dialerNumber, setDialerNumber] = useState("");
   const [showRecents, setShowRecents] = useState(true);
   const [openCallActionKey, setOpenCallActionKey] = useState("");
+  // Missed-call resolve set — persisted and synced with the NerveCenter phone surface
+  // via the same localStorage key so resolving in one place reflects everywhere.
+  const [resolvedMissed, setResolvedMissed] = useState(() => {
+    try { const a = JSON.parse(localStorage.getItem("nc_missed_resolved") || "[]"); return new Set(Array.isArray(a) ? a : []); } catch { return new Set(); }
+  });
+  useEffect(() => {
+    const apply = arr => setResolvedMissed(new Set(Array.isArray(arr) ? arr : []));
+    const onSync = e => apply(e.detail);
+    const onStorage = e => { if (e.key === "nc_missed_resolved") { try { apply(JSON.parse(e.newValue || "[]")); } catch {} } };
+    window.addEventListener("nc-missed-resolved-sync", onSync);
+    window.addEventListener("storage", onStorage);
+    return () => { window.removeEventListener("nc-missed-resolved-sync", onSync); window.removeEventListener("storage", onStorage); };
+  }, []);
+  const callMissedKey = useCallback(call => {
+    const num = String(call.number || call.phoneNumber || "").replace(/[^\d]/g, "").slice(-10);
+    const at = call.timestamp || call.time || 0;
+    return num && at ? `${num}:${at}` : "";
+  }, []);
+  const toggleCallResolved = useCallback((key, resolved) => {
+    if (!key) return;
+    setResolvedMissed(prev => {
+      const next = new Set(prev);
+      if (resolved) next.add(key); else next.delete(key);
+      const arr = [...next].slice(-300);
+      try { localStorage.setItem("nc_missed_resolved", JSON.stringify(arr)); } catch {}
+      try { window.dispatchEvent(new CustomEvent("nc-missed-resolved-sync", { detail: arr })); } catch {}
+      return next;
+    });
+  }, []);
   const isFullCallsSurface = mode === "full";
   const selectedCalls = useMemo(() => getSortedCalls(calls).map((call) => enrichCallWithContactName(call, contacts)), [calls, contacts]);
   const visibleCalls = selectedCalls.filter((call) => callMatchesFilter(call, callFilter));
@@ -1670,14 +1699,26 @@ function ConversationCallHistory({
             {visibleCalls.map((call) => {
               const callKey = call.id || `${call.number}-${call.timestamp}`;
               const actionsOpen = openCallActionKey === callKey;
+              const mKey = call.isMissed ? callMissedKey(call) : "";
+              const isResolved = mKey ? resolvedMissed.has(mKey) : false;
               return (
-              <div className={`dp-thread-call-row ${call.isMissed ? "is-missed" : ""}`} key={callKey}>
+              <div className={`dp-thread-call-row ${call.isMissed ? "is-missed" : ""} ${isResolved ? "is-resolved" : ""}`} key={callKey}>
                 <div>{icon(call.isMissed ? "phone_missed" : call.direction === "Outgoing" ? "call_made" : "call_received", 18)}</div>
                 <div>
                   <strong>{call.contactName || call.number || "Unknown"}</strong>
                   <span>{formatCallLogTime(call.timestamp || call.time) || call.timeDisplay || formatConversationTime(call.timestamp)}{call.durationDisplay ? ` - ${call.durationDisplay}` : ""}</span>
+                  {isResolved && <span className="dp-missed-resolved-label">Resolved</span>}
                 </div>
                 <div className="dp-thread-call-overflow">
+                  {call.isMissed && mKey && (
+                    <button type="button"
+                      className={`dp-thread-call-resolve-btn${isResolved ? " is-resolved" : ""}`}
+                      title={isResolved ? "Reopen missed call" : "Mark resolved"}
+                      aria-label={isResolved ? "Reopen missed call" : "Mark resolved"}
+                      onClick={e => { e.stopPropagation(); toggleCallResolved(mKey, !isResolved); }}>
+                      {icon(isResolved ? "undo" : "check_circle", 18)}
+                    </button>
+                  )}
                   <button type="button" className="dp-thread-call-menu-button" title={actionsOpen ? "Hide call actions" : "Show call actions"} aria-label={actionsOpen ? "Hide call actions" : "Show call actions"} onClick={() => setOpenCallActionKey(actionsOpen ? "" : callKey)}>{icon("more_horiz", 18)}</button>
                   {actionsOpen ? (
                     <div className="dp-thread-call-actions">
@@ -4802,6 +4843,41 @@ const css = `
 .dp-thread-call-row.is-missed > div:first-child,
 .dp-thread-call-row.is-missed strong {
   color: var(--dp-red);
+}
+.dp-thread-call-row.is-resolved {
+  opacity: 0.6;
+}
+.dp-missed-resolved-label {
+  display: inline-block !important;
+  margin-top: 3px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: var(--dp-green, #34a853) !important;
+  white-space: nowrap !important;
+}
+.dp-thread-call-resolve-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--dp-green, #34a853);
+  opacity: 0.72;
+  transition: opacity 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.dp-thread-call-resolve-btn:hover,
+.dp-thread-call-resolve-btn:focus-visible {
+  opacity: 1;
+  background: var(--dp-hover, rgba(52,168,83,0.12));
+}
+.dp-thread-call-resolve-btn.is-resolved {
+  color: var(--dp-muted);
+  opacity: 0.5;
 }
 .dp-thread-call-row strong,
 .dp-thread-call-row span {
