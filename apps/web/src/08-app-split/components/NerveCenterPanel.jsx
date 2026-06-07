@@ -2165,11 +2165,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </div>
         </div>
 
-        {/* 5-box grid: portrait/phone → 1 col 5 rows; landscape/phone → 3+2 cols;
-            desktop → 5 equal columns in a single row for maximum density */}
+        {/* Box grid: phone portrait → 1 col / 5 rows; phone landscape → 3+2 cols;
+            desktop → single column of 5 rows, each filling an equal share of the
+            screen height (summary above sits in nextActionBar). */}
         <div style={{ flex:1, minHeight:0, display:"grid", gap:7,
-          gridTemplateColumns: isMobileDevice ? (isPortrait ? "1fr" : "repeat(6, 1fr)") : "repeat(5, minmax(0,1fr))",
-          gridTemplateRows: isMobileDevice ? (isPortrait ? "repeat(5, minmax(0,1fr))" : "repeat(2, minmax(0,1fr))") : "minmax(0,1fr)" }}>
+          gridTemplateColumns: isMobileDevice ? (isPortrait ? "1fr" : "repeat(6, 1fr)") : "1fr",
+          gridTemplateRows: isMobileDevice ? (isPortrait ? "repeat(5, minmax(0,1fr))" : "repeat(2, minmax(0,1fr))") : "repeat(5, minmax(0,1fr))" }}>
 
           {/* Mail */}
           <MobileBox {...boxCtx} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail", mailTL)} style={{ gridColumn: span(0) }}
