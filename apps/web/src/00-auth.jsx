@@ -65,6 +65,24 @@ window.__OT_DEV_USER = window.__OT_DEV ? {
   _isDev: true,
 } : null;
 
+class AppErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error("[AppErrorBoundary]", error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"100vh", padding:24, background:"#EDE5D8", fontFamily:"system-ui" }}>
+          <p style={{ fontSize:16, color:"#3D3633", marginBottom:16, textAlign:"center" }}>Something went wrong. Tap to reload.</p>
+          <button onClick={() => window.location.reload()} style={{ padding:"10px 24px", borderRadius:8, border:"none", background:"#3D3633", color:"#EDE5D8", fontSize:15, cursor:"pointer" }}>Reload</button>
+          <pre style={{ marginTop:16, fontSize:11, color:"#7E6858", maxWidth:360, overflow:"auto", whiteSpace:"pre-wrap" }}>{String(this.state.error)}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function AuthGate() {
   const [authState, setAuthState] = React.useState(window.__OT_DEV ? "authed" : "loading");
   const [user, setUser] = React.useState(window.__OT_DEV_USER);
@@ -172,7 +190,7 @@ function AuthGate() {
     <LoginScreen onLogin={u => { setUser(u); setAuthState("authed"); }} initialError={recoveryNotice || authError} />
   );
 
-  return withDiag(<App user={user} onSignOut={() => firebase.auth().signOut()} onSessionLostAccess={handleSessionLostAccess} />);
+  return withDiag(<AppErrorBoundary><App user={user} onSignOut={() => firebase.auth().signOut()} onSessionLostAccess={handleSessionLostAccess} /></AppErrorBoundary>);
 }
 
 // ── Login / Sign-up screen ──────────────────────────────────────────────────
