@@ -213,15 +213,15 @@ function gmailFullBody(message) {
   return (parts.plain.join("\n\n") || parts.html.join("\n\n") || "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-const CHIEF_TIME_BUCKET_MS = 15 * 60 * 1000;
+const CHIEF_TIME_BUCKET_MS = 5 * 60 * 1000;  // 5-min buckets: data changes surface in the scan key sooner
 const CHIEF_LEARNING_KEY = "ot_chief_learning_v1";
 const CHIEF_CHAT_HEIGHT_KEY = "ot_chief_chat_height_v1";
 const CHIEF_SCAN_CACHE_KEY = "ot_chief_scan_cache_v1";
 const CHIEF_SCAN_LAST_RUN_KEY = "ot_chief_scan_last_ai_run_v1";
 const CHIEF_SUGGESTIONS_CACHE_KEY = "ot_chief_task_suggestions_cache_v1";
 const CHIEF_SUGGESTIONS_LAST_RUN_KEY = "ot_chief_task_suggestions_last_ai_run_v1";
-const CHIEF_SCAN_CACHE_MS = 30 * 60 * 1000;
-const CHIEF_SCAN_MIN_AI_GAP_MS = 20 * 60 * 1000;
+const CHIEF_SCAN_CACHE_MS = 10 * 60 * 1000;      // industry standard: 10-min TTL for live dashboard AI briefs
+const CHIEF_SCAN_MIN_AI_GAP_MS = 3 * 60 * 1000;  // min 3 min between AI calls (debounced, not per keystroke)
 const CHIEF_SUGGESTIONS_CACHE_MS = 45 * 60 * 1000;
 const CHIEF_SUGGESTIONS_MIN_AI_GAP_MS = 25 * 60 * 1000;
 const ROUTINE_CALENDAR_RE = /\b(shacharis|shacharit|mincha|maariv|arvit|daven(?:ing)?|daf yomi|mishna(?:h)? yomi|halacha yomi|parsha|selichos|slichos)\b/i;
@@ -670,7 +670,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
   // grow the page unbounded.
   const scrollStyle = { maxHeight: "min(52vh, 460px)", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" };
   return (
-    <div style={{ background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 10, overflow: "visible" }}>
+    <div style={{ background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: 10, overflow: "visible" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px 7px 10px", minHeight: 34 }}>
         <button
           onClick={expandable ? () => onExpand(id) : undefined}
@@ -756,7 +756,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
   // stickyHeader: always-visible header row with icon chip + title + summary line
   const headerCollapsed = !stickyHeader && scrolled;
   return (
-    <div style={{ position: "relative", background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 10, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
+    <div style={{ position: "relative", background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: 10, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
       {stickyHeader ? (
         // Sticky header: never collapses. Shows icon chip + title label + summary on separate line.
         <button onClick={onOpen} title={title} aria-label={title}
@@ -1005,12 +1005,18 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   };
   const gridColumns = isStacked ? "1fr" : isTablet ? "repeat(2,minmax(0,1fr))" : `minmax(240px,${paneW.tasks}fr) 6px minmax(240px,${paneW.shailos}fr) 6px minmax(240px,${paneW.phone}fr)`;
   const googleH = Math.max(150, Math.min(420, Number(googlePaneHeight || 244)));
-  const ncPanel = { background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: isTablet && !isStacked ? 420 : 0, overflow: "hidden", boxShadow: "none" };
+  // tintedPanel: no outline; accent-tinted background like the boxes cards — visual grouping
+  // through colour, not chrome. Each section passes its own accent colour.
+  const tintedPanel = (accent = C.accent) => {
+    const tint = hexToRgba(accent, 0.04);
+    return { background: tint ? `linear-gradient(${tint},${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: isTablet && !isStacked ? 420 : 0, overflow: "hidden", boxShadow: "none" };
+  };
+  const ncPanel = tintedPanel(C.accent); // default; overridden per-section below
   const ncScrollPane = { overflow: "auto", flex: "1 1 auto", minHeight: 0, overscrollBehavior: "contain", scrollbarGutter: "stable", ...(isStacked ? { touchAction: "pan-y" } : {}) };
   const ncTaskBody = { flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", overscrollBehavior: "contain" };
   const ncTaskList = (isStacked || showAllTasks) ? ncScrollPane : { ...ncScrollPane, flex: "0 0 auto", overflow: "visible", maxHeight: "none" };
   const ncTasksPanel = showAllTasks ? ncPanel : { ...ncPanel, alignSelf: "start", width: "100%" };
-  const ncHeader = { minHeight: 36, padding: "4px 12px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 };
+  const ncHeader = { minHeight: 36, padding: "4px 12px", borderBottom: `1px solid ${hexToRgba(C.divider, 0.5) || C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 };
   const ncTitle = { fontSize: ncType.title, fontWeight: "var(--nc-font-weight-strong, 500)", color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35 };
   const ncSectionIcon = (accent = C.accent) => ({ width: 26, height: 26, borderRadius:12, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
   const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 26, height: 26, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
@@ -1194,15 +1200,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   useEffect(() => {
     let cancelled = false;
     const now = Date.now();
-    // The chief brief feeds two surfaces now: the full chief page AND the mobile
-    // nerve-center card summaries (each card's top line is the chief's per-category
-    // signal). So the scan must run when EITHER is visible. The cache + min-gap
-    // throttle + debounce below keep this cheap — stale-while-revalidate: cards show
-    // a deterministic line instantly and silently upgrade to the AI line when ready.
-    // Both surfaces share one cache key, so neither pays for the call twice.
-    if (!chiefPage && !isMobileDevice) {
-      // Desktop non-chief: always use the live fallback so resolving a missed call (or any
-      // context change) is reflected immediately rather than showing a stale AI brief.
+    // Chief scan feeds the chief page AND the nerve-center card summaries (each card's
+    // top line prefers the AI signal). Run whenever any of these views is active:
+    // chief page, mobile device (boxes/accordion), or desktop boxes/accordion layout.
+    // Cache + min-gap throttle keep this lean. Stale-while-revalidate: deterministic
+    // fallback shows instantly, AI signal upgrades it when fresh.
+    const ncLayoutActive = !isMobileDevice && desktopLayout !== "full";
+    if (!chiefPage && !isMobileDevice && !ncLayoutActive) {
+      // Full desktop panel: always use the live fallback (no AI overhead needed there).
       setChiefBrief(chiefFallback);
       setChiefLoading(false);
       setChiefError("");
@@ -1270,7 +1275,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [chiefPage, chiefScanKey, chiefRefreshNonce]); // eslint-disable-line
+  }, [chiefPage, chiefScanKey, chiefRefreshNonce, desktopLayout, isMobileDevice]); // eslint-disable-line
 
   useEffect(() => {
     if (!chiefPage || !aiOpts || (!calendarRows.length && !(gmailMessages || []).length) || !taskSuggestionPriorities.length) {
@@ -2732,7 +2737,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         <div ref={taskGridRef} data-nc-task-grid="true" style={isStacked ? { display: "flex", overflowX: "auto", overflowY: "hidden", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none", flex: "1 1 0", minHeight: 0 } : { display: "grid", gridTemplateColumns: gridColumns, gap: touchLayout ? 16 : 0, flex: touchLayout ? "0 0 auto" : "1 1 0", minHeight: 0, alignItems: "stretch" }}>
 
           {/* ── Tasks ── */}
-          <section style={isStacked ? { ...ncPanel, flex: "0 0 100%", minWidth: 0, scrollSnapAlign: "start", height: "100%", touchAction: "pan-y" } : (primaryTaskQueue.length > MIN_COLLAPSED_TASKS ? ncPanel : ncTasksPanel)}>
+          <section style={isStacked ? { ...tintedPanel(C.accent), flex: "0 0 100%", minWidth: 0, scrollSnapAlign: "start", height: "100%", touchAction: "pan-y" } : (primaryTaskQueue.length > MIN_COLLAPSED_TASKS ? tintedPanel(C.accent) : { ...tintedPanel(C.accent), alignSelf: "start", width: "100%" })}>
             {!isStacked && (
             <div ref={taskHeaderRef} style={{ ...ncHeader, display: taskComposerOpen ? "block" : "flex", ...(taskComposerOpen ? { padding: "7px 12px" } : {}) }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, ...(taskComposerOpen ? { marginBottom: 7 } : {}) }}>
@@ -2865,7 +2870,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {paneResizeHandle("tasks", "shailos")}
 
           {/* ── Shailos ── */}
-          <section style={isStacked ? { ...ncPanel, flex: "0 0 100%", minWidth: 0, scrollSnapAlign: "start", height: "100%", touchAction: "pan-y" } : ncPanel}>
+          <section style={isStacked ? { ...tintedPanel(GOLD), flex: "0 0 100%", minWidth: 0, scrollSnapAlign: "start", height: "100%", touchAction: "pan-y" } : tintedPanel(GOLD)}>
             <div style={{ ...ncHeader, display: isStacked ? "none" : "flex" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={ncSectionIcon(GOLD)}>{suiteIcon("rule", 16)}</span>
@@ -2925,10 +2930,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {paneResizeHandle("shailos", "phone")}
 
           {/* ── Phone ── */}
-          <section style={isStacked ? { ...ncPanel, flex: "0 0 100%", minWidth: 0, scrollSnapAlign: "start", height: "100%", touchAction: "pan-y" } : ncPanel}>
+          <section style={isStacked ? { ...tintedPanel(CAT_PHONE), flex: "0 0 100%", minWidth: 0, scrollSnapAlign: "start", height: "100%", touchAction: "pan-y" } : tintedPanel(CAT_PHONE)}>
             <div style={{ ...ncHeader, display: isStacked ? "none" : "flex" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                <span style={ncSectionIcon()}>{suiteIcon("phone_in_talk", 16)}</span>
+                <span style={ncSectionIcon(CAT_PHONE)}>{suiteIcon("phone_in_talk", 16)}</span>
                 <span style={ncTitle}>Phone</span>
                 <span title={phoneStatusSummary.label} style={{ display: "inline-flex", alignItems: "center", gap:6, minWidth: 0, color: phoneStatusColor, fontSize: 12, fontWeight: 500 }}>
                   <span style={{ width: 7, height: 7, borderRadius: 99, background: phoneStatusColor, flexShrink: 0 }} />
@@ -2982,15 +2987,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           };
 
           // Each card: header (fixed) + content (scrollable)
-          // isFocus: focus mode hides headers and softens borders for a cleaner at-a-glance read.
+          // isFocus: focus mode softens further for a cleaner at-a-glance read.
+          // No outline — visual grouping via tinted background, matching the boxes style.
           const isFocus = ncViewMode === "focus";
-          const cardWrap = {
-            background: C.bg,
-            borderRadius: isFocus ? 4 : 6,
-            border: `1px solid ${softBorder(C.divider, isFocus ? 0.3 : 0.65)}`,
-            ...(isFocus ? { boxShadow: "0 1px 4px rgba(0,0,0,0.05)" } : {}),
-            flex: isStacked ? "1 1 0" : 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden",
+          const tintedCard = (accent) => {
+            const tint = hexToRgba(accent, isFocus ? 0.02 : 0.04);
+            return { background: tint ? `linear-gradient(${tint},${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: isFocus ? 4 : 6, flex: isStacked ? "1 1 0" : 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" };
           };
+          const cardWrap = tintedCard(CAT_MAIL); // overridden per-card inline
           const cardHead = isFocus
             ? { display: "none" }
             : {
@@ -3131,7 +3135,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
               {/* ── Calendar card ── */}
               {(calendarEvents !== null || (googleLoading && googleToken)) && (
-                <div className="nc-card-group" style={cardWrap}>
+                <div className="nc-card-group" style={tintedCard(C.warning)}>
                   <div style={cardHead}>
                     <span style={headLabel}>{suiteIcon("calendar_today", 11)} Today</span>
                     <div className="nc-card-action" style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -3387,7 +3391,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
               {/* ── Gmail card ── */}
               {(gmailMessages !== null || (googleLoading && googleToken)) && (
-                <div className="nc-card-group" style={cardWrap}>
+                <div className="nc-card-group" style={tintedCard(CAT_MAIL)}>
                   <div style={cardHead}>
                     <span style={headLabel}>{suiteIcon("mail", 11)} Mail</span>
                     <div className="nc-card-action" style={{ display: "flex", gap: 6, alignItems: "center" }}>
