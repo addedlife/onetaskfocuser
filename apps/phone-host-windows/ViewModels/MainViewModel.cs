@@ -66,10 +66,11 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private readonly ConcurrentQueue<string> _priorityMessageHandles = new();
     private static readonly TimeSpan MessagePollInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan BusyMessagePollRetryInterval = TimeSpan.FromSeconds(5);
-    // 90 s: wide enough to cover the full MAP retry cycle (8 attempts × 15 s worst-case)
-    // so a failed connect doesn't immediately trigger another attempt before the OS has
-    // had time to release the RFCOMM channel.
-    private static readonly TimeSpan AutoReconnectRetryWindow = TimeSpan.FromSeconds(90);
+    // 30 s: short enough that the phone reconnects within one watchdog cycle after it
+    // comes back into range.  The in-flight guards (_autoReconnectInFlight, IsConnecting)
+    // prevent concurrent reconnects, so this no longer needs to cover the MAP retry
+    // cycle (that was the old reason for 90 s).
+    private static readonly TimeSpan AutoReconnectRetryWindow = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan PhoneReadStatePollInterval = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan MessageDeleteReconcileInterval = TimeSpan.FromMinutes(1);
     private const int AutomaticDeleteReconcilePhoneWindowPerFolder = 150;
@@ -5853,14 +5854,20 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                     }
 
                     Interlocked.Increment(ref _realOpCount);
+                    // Per-round OBEX timeout: if any MAP operation doesn't respond within
+                    // 20 s the socket is silently dead (ghost connection).  Using a linked CTS
+                    // (not ct) so the timeout OCE falls to catch (Exception ex) → QueueAutoReconnect
+                    // via the when (ct.IsCancellationRequested) guard above — it does NOT break the loop.
+                    using var syncCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    syncCts.CancelAfter(TimeSpan.FromSeconds(20));
                     try
                     {
                         var priorityHandles = DrainPriorityMessageHandles();
                         var priorityMessages = priorityHandles.Count > 0
-                            ? await _map.FetchHandlesAsync(priorityHandles, ct)
+                            ? await _map.FetchHandlesAsync(priorityHandles, syncCts.Token)
                             : new List<SmsMessage>();
 
-                        var fromPhone = await _map.PerformDeltaSyncAsync(ct);
+                        var fromPhone = await _map.PerformDeltaSyncAsync(syncCts.Token);
                         if (priorityMessages.Count > 0)
                             fromPhone.InsertRange(0, priorityMessages);
 
@@ -5912,10 +5919,10 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                         var now = DateTime.UtcNow;
                         if (newCount > 0 || now >= _nextPhoneReadStateRefreshUtc)
                         {
-                            await RefreshPhoneReadStatesAsync(ct);
+                            await RefreshPhoneReadStatesAsync(syncCts.Token);
                             _nextPhoneReadStateRefreshUtc = now.Add(PhoneReadStatePollInterval);
                         }
-                        await ReconcilePhoneMessageDeletesAsync(ct);
+                        await ReconcilePhoneMessageDeletesAsync(syncCts.Token);
                     }
                     finally
                     {
@@ -5924,9 +5931,11 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                         _messageSyncLock.Release();
                     }
                 }
-                catch (OperationCanceledException) { break; }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
                 catch (Exception ex)
                 {
+                    // Catches both real errors AND sync-round timeouts (OperationCanceledException
+                    // whose token is NOT ct — those fall here because the when-guard above fails).
                     AppendDebugThreadSafe($"[POLL ERROR] {ex.Message}");
                     Dispatch(() => StatusMap = FriendlyBtError(ex, "Messages"));
                     QueueAutoReconnect("message sync failed");

@@ -225,12 +225,13 @@ public class HfpService : IAsyncDisposable
                 {
                     // 30 s passed with no URC from the phone.
                     // Send a benign keepalive AT command.  If the write throws
-                    // (IOException / ObjectDisposedException), the socket is dead
-                    // and the exception propagates to the outer catch below.
-                    // If the write succeeds the phone replies "OK", which falls
-                    // through HandleUrcLineAsync as an unrecognised line (logged, ignored).
+                    // (IOException / ObjectDisposedException / write timeout), the socket
+                    // is dead and the exception propagates to the outer catch below, which
+                    // fires StatusChanged("HFP disconnected") → triggering auto-reconnect.
+                    // If the write succeeds the phone replies "OK", which falls through
+                    // HandleUrcLineAsync as an unrecognised line (logged, ignored).
                     AtLogLine?.Invoke("[keepalive] 30 s idle — probing HFP link with AT+NREC=0");
-                    await SendAsync("AT+NREC=0");
+                    await SendAsync("AT+NREC=0", ct);
                     continue;
                 }
 
@@ -523,11 +524,17 @@ public class HfpService : IAsyncDisposable
     }
 
     // ── Low-level send / expect ───────────────────────────────────────────────
-    private async Task SendAsync(string cmd)
+    private async Task SendAsync(string cmd, CancellationToken ct = default)
     {
         AtLogLine?.Invoke($"→ {cmd}");
-        await _writeLock.WaitAsync();
-        try   { await _writer!.WriteLineAsync(cmd); }
+        // 5-second write deadline — prevents a ghost RFCOMM socket from blocking
+        // the keepalive (and the read loop) indefinitely.  WriteLineAsync on a silently
+        // dead socket often blocks until Windows finally times out (30-120 s); this
+        // cap makes the read loop detect the drop and signal "HFP disconnected" fast.
+        using var writeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        writeCts.CancelAfter(TimeSpan.FromSeconds(5));
+        await _writeLock.WaitAsync(writeCts.Token);
+        try   { await _writer!.WriteLineAsync(cmd.AsMemory(), writeCts.Token); }
         finally { _writeLock.Release(); }
     }
 

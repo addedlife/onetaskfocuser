@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-07 18:33:29",
+        "version":  "b291",
+        "notes":  "Connection drops much less and reconnects faster when the phone comes back into range.",
+        "devNotes":  "Three fixes: (1) AutoReconnectRetryWindow 90s→30s — was making the app wait up to 89s before the watchdog could retry after a failed attempt; in-flight guards already prevent concurrent reconnects so 90s was over-cautious. (2) HfpService.SendAsync now has a 5-second write deadline (CancellationTokenSource.CancelAfter on WriteLineAsync) — ghost RFCOMM sockets accept writes silently, blocking the keepalive and read loop indefinitely; the timeout unblocks it and propagates to the HFP-disconnected finally path. (3) MAP poll loop: wrapped all per-round OBEX calls (FetchHandlesAsync, PerformDeltaSyncAsync, RefreshPhoneReadStates, ReconcileDeletes) in a 20s linked CTS; changed catch(OperationCanceledException){break} to catch(OperationCanceledException) when(ct.IsCancellationRequested){break} so a sync-round timeout falls to catch(Exception ex)→QueueAutoReconnect instead of silently killing the poll loop."
+    },
+    {
         "timestamp":  "2026-06-05 14:49:04",
         "version":  "b289",
         "notes":  "Notification quick-replies now actually send. Clicking the notification opens the browser phone screen. Incoming calls now show quick-reply chips to text back instead of answering.",
