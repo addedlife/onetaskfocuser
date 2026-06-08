@@ -224,14 +224,17 @@ public class HfpService : IAsyncDisposable
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                 {
                     // 30 s passed with no URC from the phone.
-                    // Skip the AT probe during an active call — the SCO audio channel
-                    // proves the link is alive, and AT commands sent while the phone is
-                    // processing audio can confuse some firmware, causing spurious drops.
-                    // When idle, probe with AT+NREC=0.  If the write throws or times out
-                    // the socket is dead and StatusChanged("HFP disconnected") fires.
-                    if (CurrentCall.Status != CallStatus.Idle)
+                    // Skip the AT probe while SCO audio is live — the audio channel
+                    // proves the link is alive, and AT commands mid-call can confuse
+                    // some firmware and cause spurious drops.
+                    // IncomingRinging is NOT skipped: no SCO yet, and if the link is
+                    // already dead we need to detect it so the user can answer.
+                    var audioActive = CurrentCall.Status is CallStatus.Active
+                                                           or CallStatus.Dialing
+                                                           or CallStatus.Ending;
+                    if (audioActive)
                     {
-                        AtLogLine?.Invoke("[keepalive] skipped — call in progress");
+                        AtLogLine?.Invoke("[keepalive] skipped — call audio active");
                         continue;
                     }
                     AtLogLine?.Invoke("[keepalive] 30 s idle — probing HFP link with AT+NREC=0");

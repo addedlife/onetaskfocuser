@@ -5853,10 +5853,16 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                         await Task.Delay(BusyMessagePollRetryInterval, ct);
                         continue;
                     }
-                    // Pause MAP sync during active calls.  Android handles HFP + MAP over a
-                    // single adapter; hammering MAP RFCOMM while SCO audio is live can make
-                    // the phone unresponsive on the AT channel, causing spurious call drops.
-                    if (CurrentCall.Status != CallStatus.Idle)
+                    // Pause MAP sync while SCO audio is live (Active/Dialing/Ending).
+                    // Android handles HFP + MAP over a single adapter; hammering MAP RFCOMM
+                    // while the SCO channel is open can make the phone unresponsive on the
+                    // AT channel and cause spurious call drops.
+                    // IncomingRinging is excluded: no SCO yet, and MAP needs to stay live
+                    // so that a reconnect triggered by a dead HFP link can proceed.
+                    var isAudioActive = CurrentCall.Status is CallStatus.Active
+                                                             or CallStatus.Dialing
+                                                             or CallStatus.Ending;
+                    if (isAudioActive)
                     {
                         if (coalescedWakeRequests > 0)
                             RequestMessageSync("deferred — call in progress");
@@ -5965,7 +5971,13 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private void QueueAutoReconnect(string reason)
     {
-        if (!HasQuickConnectDevice || IsConnecting || CurrentCall.Status != CallStatus.Idle)
+        // Block reconnect if a call is actually in progress (SCO audio is live).
+        // Do NOT block for IncomingRinging — the link may be dead before the user
+        // answers, and we need to reconnect so the Answer button actually works.
+        var callBlocking = CurrentCall.Status is CallStatus.Active
+                                                or CallStatus.Dialing
+                                                or CallStatus.Ending;
+        if (!HasQuickConnectDevice || IsConnecting || callBlocking)
             return;
 
         var now = DateTime.UtcNow;
