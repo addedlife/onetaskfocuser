@@ -2087,11 +2087,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const decodeSnipM = s => (s || "").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g," ").trim();
     const upcomingCal = (calendarRows || []).filter(r => !r.past);
 
-    // >= 1000 px: 5 vertical columns side by side (each card full height, 1/5 width).
-    // <  1000 px: 5 horizontal rows stacked (each card full width, 1/5 height).
+    // >= 1500 px: 5 vertical columns side by side (each card full height, 1/5 width).
+    // <  1500 px: 5 horizontal rows stacked (each card full width, 1/5 height).
     // Both orientations show all 5 cards simultaneously — no carousel, no scrolling between cards.
-    // 1000 px = 5 cols × 200 px minimum readable column width for short truncated text.
-    const boxesFiveCol = availableW >= 1000;
+    // 1500 px = 5 cols × 300 px minimum comfortable reading width per column.
+    // Surface Laptop 7 (15″ at 150% DPI) ≈ 1444 px available → rows. 1080p desktop ≈ 1700 px → columns.
+    const boxesFiveCol = availableW >= 1500;
     const cardStyle = { minWidth: 0 }; // grid handles all sizing in both orientations
     const emptyMsg = txt => <div style={{ padding:"12px 14px", fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{txt}</div>;
     // Density: compact keeps readable text and saves space with row padding/line-height.
@@ -2328,10 +2329,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // that per-second remount was tearing down and rebuilding each section mid-gesture,
     // which dropped taps on the ··· menu and reset focus in the task composer. With a
     // stable component type React now just re-renders with fresh props.
-    // >= 1000 px: 5 vertical columns side by side (each section full height, 1/5 width).
-    // <  1000 px: 5 horizontal rows stacked (each section full width, 1/5 height).
+    // >= 1500 px: 5 vertical columns side by side (each section full height, 1/5 width).
+    // <  1500 px: 5 horizontal rows stacked (each section full width, 1/5 height).
     // Both orientations show all 5 sections simultaneously — always expanded, always fullHeight.
-    const accWide = availableW >= 1000;
+    // 1500 px = 5 cols × 300 px minimum comfortable reading width per column.
+    const accWide = availableW >= 1500;
     const sectionCtx = { C, expandedIds: mobileExpanded, menuId: mobileMenuOpen, onExpand: mobileExpandToggle, onMenuToggle: mobileMenuToggle, onMenuClose: mobileMenuClose, expandable: false, fullHeight: true };
 
     const signalNote = nerveSignalNote;
