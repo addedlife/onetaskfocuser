@@ -697,20 +697,33 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     });
   }, [onStatusSummary, phoneLinkLive, relayStale, isIncoming, isOnCall, callerDisplay, statusText, vmCount]);
   const phoneIconButton = (active = false) => gvIconButton({
-    width: compact ? 32 : 36,
-    height: compact ? 32 : 36,
+    width: compact ? 28 : 32,
+    height: compact ? 28 : 32,
     background: active ? C.hover : "transparent",
     color: active ? C.text : C.muted,
   }, C);
   const phoneRowStyle = {
     display: "grid",
-    gridTemplateColumns: "32px minmax(0,1fr) 34px",
-    gap: "6px 9px",
+    gridTemplateColumns: "20px minmax(0,1fr) 30px",
+    gap: "4px 7px",
     alignItems: "start",
-    padding: compact ? "7px 2px" : "10px 4px",
+    padding: compact ? "4px 2px" : "6px 4px",
     borderRadius: 8,
-    minHeight: compact ? 48 : 56,
+    minHeight: compact ? 30 : 36,
   };
+  const phoneLeadIconStyle = (color, background = "transparent") => ({
+    width: 18,
+    height: 18,
+    borderRadius: 99,
+    background,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color,
+    flexShrink: 0,
+    lineHeight: 1,
+    marginTop: 1,
+  });
   const phoneActionGroupStyle = {
     display: "flex",
     alignItems: "center",
@@ -1078,13 +1091,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                 const expanded = expandedPhoneMessageId === actionId;
                 return (
                   <div key={`${thread._key || thread._who}-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, background: expanded ? C.hover : "transparent" }}>
-                    <span style={{ width: 32, height: 32, borderRadius: 99, background: isUnread ? C.hover : C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color: isUnread ? C.accent : msgColor, flexShrink: 0, marginTop: 2 }}>{suiteIcon(msgIcon, 15)}</span>
+                    <span style={phoneLeadIconStyle(isUnread ? C.accent : msgColor, isUnread ? C.hover : "transparent")}>{suiteIcon(msgIcon, 14)}</span>
                     <button onClick={() => setExpandedPhoneMessageId(expanded ? null : actionId)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: T.text }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
-                        <span style={{ flex: 1, fontSize: 15, fontWeight: isUnread ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread._name}</span>
-                        {time && <span style={{ fontSize: 13, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
+                        <span style={{ flex: 1, fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, fontWeight: isUnread ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread._name}</span>
+                        {time && <span style={{ fontSize: NC_TYPE.meta, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
                       </div>
-                      {preview && !expanded && <span style={{ display: "block", fontSize: compact ? 13 : 14, color: C.muted, marginTop: 1, whiteSpace: compact ? "nowrap" : "normal", overflow: compact ? "hidden" : undefined, textOverflow: compact ? "ellipsis" : undefined, wordBreak: compact ? "normal" : "break-word", lineHeight: compact ? 1.35 : 1.5 }}>{preview}</span>}
+                      {preview && !expanded && <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted, marginTop: 0, whiteSpace: compact ? "nowrap" : "normal", overflow: compact ? "hidden" : undefined, textOverflow: compact ? "ellipsis" : undefined, wordBreak: compact ? "normal" : "break-word", lineHeight: NC_TYPE.line }}>{preview}</span>}
                     </button>
                     {!expanded && (
                       <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
@@ -1103,7 +1116,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                       </div>
                     )}
                     {expanded && (
-                      <div style={{ gridColumn: "2 / 4", fontSize: compact ? 13 : 14, lineHeight: 1.5, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word", padding: "0 4px 4px 0" }}>
+                      <div style={{ gridColumn: "2 / 4", fontSize: NC_TYPE.meta, lineHeight: NC_TYPE.line, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word", padding: "0 4px 4px 0" }}>
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
                           <div style={{ flex: 1, minWidth: 0, color: C.muted }}>{count} message{count === 1 ? "" : "s"}</div>
                           <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
@@ -1210,18 +1223,18 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                 const resolved = isMissed && isMissedCallResolved(c);
                 const needsCallback = isMissed && !resolved;
                 return (
-                  <div key={`call-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, gridTemplateColumns: "32px minmax(0,1fr) auto", opacity: resolved ? 0.62 : 1 }}>
-                    <span style={{ width: 32, height: 32, borderRadius: 99, background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color, flexShrink: 0, marginTop: 2 }}>{suiteIcon(icon, 15)}</span>
+                  <div key={`call-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, gridTemplateColumns: "20px minmax(0,1fr) auto", opacity: resolved ? 0.62 : 1 }}>
+                    <span style={phoneLeadIconStyle(color)}>{suiteIcon(icon, 14)}</span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
-                        <span style={{ flex: 1, fontSize: 15, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
-                        {time && <span style={{ fontSize: 13, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
+                        <span style={{ flex: 1, fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                        {time && <span style={{ fontSize: NC_TYPE.meta, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
                       </div>
                       {needsCallback ? (
-                        <span style={{ display: "inline-block", marginTop: 3, fontSize: 11, fontWeight: 700, color: C.danger, background: C.bgSoft, borderRadius: 99, padding: "1px 8px" }}>Needs callback</span>
+                        <span style={{ display: "inline-block", marginTop: 1, fontSize: NC_TYPE.small, lineHeight: 1.15, fontWeight: 700, color: C.danger, background: C.bgSoft, borderRadius: 99, padding: "1px 6px" }}>Needs callback</span>
                       ) : resolved ? (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, marginTop: 3, fontSize: 11, fontWeight: 600, color: C.success }}>{suiteIcon("check_circle", 11)} Resolved</span>
-                      ) : (num && num !== name && <span style={{ display: "block", fontSize: 14, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{num}</span>)}
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, marginTop: 1, fontSize: NC_TYPE.small, lineHeight: 1.15, fontWeight: 600, color: C.success }}>{suiteIcon("check_circle", 11)} Resolved</span>
+                      ) : (num && num !== name && <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted, marginTop: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: NC_TYPE.line }}>{num}</span>)}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
                       {/* Direct resolve/reopen toggle for missed calls — one tap, no menu. */}

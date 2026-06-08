@@ -963,6 +963,10 @@ const AI_JOB_REGISTRY = {
         "Write 'signals': one entry per area that has active data (Calendar, Mail, Tasks, Shailos, Phone). Each note is Apple notification-summary style: terse, telegraphic, leads with the most concrete fact. Drop articles and filler. Pack multiple items with commas or semicolons.",
         "Do NOT restate the area's own name or use bare counts in a note — the UI already labels each line. Say 'Pending: kashrus of the pot' not '2 shailos'; say 'David, Mom' not '3 missed calls: David, Mom'.",
         "Do not invent facts. If data is thin, say what is visible.",
+        "Strict reliability rule: use ONLY facts visible in the snapshot. Do not infer names, deadlines, rulings, completed work, or actions taken.",
+        "Strict ordering rule: order supercrunch items by perceived urgency/consequence. Do not explain the urgency and do not include labels like urgent, today, soon, category names, or counts.",
+        "Strict terseness rule: supercrunch is one comma-separated line of item names. Signals are 2-5 word item blurbs, semicolon-separated when multiple items fit.",
+        "Strict omission rule: omit inactive categories from signals. If no source has active visible items, return an empty supercrunch and empty signals.",
         `Current snapshot:\n${jsonBlock(context)}`,
         responseJsonInstruction("object", this.schema),
       ]);

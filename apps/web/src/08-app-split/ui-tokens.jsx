@@ -22,13 +22,13 @@ export const GV_CLEAN = {
 export const NC_FONT_STACK = '"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
 
 export const NC_TYPE = {
-  title: 18,
-  body: 15,
-  meta: 13,
-  label: 13,
-  small: 12,
+  title: 16,
+  body: 14,
+  meta: 12,
+  label: 12,
+  small: 11,
   control: 14,
-  line: 1.5,
+  line: 1.28,
 };
 
 // ─── Z-index layering system ──────────────────────────────────────────────
@@ -103,7 +103,7 @@ export const NC_GLOBAL_CSS = `
   line-height: 1 !important;
 }
 .nc-suite-root :where(button, input, textarea, select) {
-  line-height: 1.45;
+  line-height: 1.25;
 }
 .nc-suite-root :where(button, input, textarea, select, p, div, a, label, li, summary) {
   font-weight: var(--nc-font-weight-normal, 400) !important;

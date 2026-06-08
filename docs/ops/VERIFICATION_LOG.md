@@ -938,3 +938,13 @@ Current source-grade file count after cleanup: 162 files.
 - `npm run build` passed in `apps/web`; generated `assets/index-CK2_Vva9.js`; existing large-bundle warning remains.
 - Pushed commit `d8cbbb1` to `origin/main`; Netlify Git-triggered production served `assets/index-CK2_Vva9.js` (HTTP 200) — hash matches local build exactly.
 
+
+## 2026-06-08 NerveCenter AI Summaries And Dense Type
+
+- Researched dense enterprise UI typography/list icon practice before editing: use a productive type scale, tighter line-height for short operational rows, and fixed leading icon slots so icons do not drive row height. The local plan aligned.
+- Restored NerveCenter AI-only SuperCrunch/category summaries across boxes, accordion, and full-panel layouts; waiting state now reads `Waiting on summary` instead of local fallback text.
+- Tightened the NerveCenter summary prompt for source-only facts, urgency/consequence ordering, and terse item-name output.
+- Standardized NerveCenter type tokens around 14px body, 12px metadata, and 1.28 row line height.
+- Tightened NerveCenter task/Shailos/phone rows and made phone call/text direction icons use fixed 20px leading slots so iconography cannot make rows taller.
+- `git diff --check -- apps/web/src/08-app-split/components/NerveCenterPanel.jsx apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx apps/web/src/08-app-split/ui-tokens.jsx apps/web/backend/functions/_ai-core.cjs` passed; line-ending normalization warnings only.
+- `npm run build` passed in `apps/web` and generated `assets/index-5ougcfRK.js`; existing large-bundle warning remains.
