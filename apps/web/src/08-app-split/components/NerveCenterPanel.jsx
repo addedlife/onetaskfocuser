@@ -678,7 +678,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
   const scrollStyle = { maxHeight: "min(52vh, 460px)", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" };
   return (
     <div style={{ background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: 10, overflow: "visible" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px 7px 10px", minHeight: 34 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px 4px 10px", minHeight: 28 }}>
         <button
           onClick={expandable ? () => onExpand(id) : undefined}
           style={{ all: "unset", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0, cursor: expandable ? "pointer" : "default" }}
@@ -691,7 +691,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
             <span style={{ fontSize: 13, color: C.faint, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{preview}</span>
           )}
           {expandable && (
-            <span style={{ marginLeft: "auto", color: expanded ? C.muted : C.faint, display: "flex", flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("expand_more", 18)}</span>
+            <span style={{ marginLeft: "auto", color: expanded ? C.muted : C.faint, display: "flex", flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("chevron_right", 18)}</span>
           )}
         </button>
         {primaryBtn}
@@ -1810,10 +1810,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   }, [primaryTaskQueue, calendarEvents, gmailMessages, visibleShailos, phoneActivitySummary]);
 
   const nextActionBar = activeChiefTaskText ? (
-    <div style={{ flexShrink: 0, minWidth: 0, margin: "0 2px 7px", padding: "10px 12px", borderRadius: 10, background: hexToRgba(C.accent, 0.06) || C.bgSoft, borderLeft: `3px solid ${C.accent}` }}>
+    <div style={{ flexShrink: 0, minWidth: 0, margin: "0 0 4px", padding: "8px 10px", borderRadius: 8, background: hexToRgba(C.accent, 0.06) || C.bgSoft, borderLeft: `3px solid ${C.accent}` }}>
       {/* Row 1: live global snapshot across all categories */}
       {globalSnapshotParts && (
-        <div style={{ fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.35, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div style={{ fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.3, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {globalSnapshotParts}
         </div>
       )}
@@ -2279,43 +2279,41 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     })();
 
     return (
-      <div style={{ position:"fixed", top:topOffset, left:sidebarW, right:0, bottom:0, zIndex:7600, background:C.bg, display:"flex", flexDirection:"column", overflow:"hidden", borderLeft:`1px solid ${C.divider}`, boxSizing:"border-box", padding:"8px 8px calc(8px + env(safe-area-inset-bottom,0px))" }}>
+      <div style={{ position:"fixed", top:topOffset, left:sidebarW, right:0, bottom:0, zIndex:7600, background:C.bg, display:"flex", flexDirection:"column", overflow:"hidden", borderLeft:`1px solid ${C.divider}`, boxSizing:"border-box", padding:"5px 8px calc(8px + env(safe-area-inset-bottom,0px))" }}>
+
+        {/* ── Layout selector — always top-right, before all content ── */}
+        <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", gap:2, flexShrink:0, marginBottom:2 }}>
+          <button onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density" style={gvIconButton({ width:28, height:24, borderRadius:4 }, C)}>{suiteIcon(dense ? "density_medium" : "density_small", 14)}</button>
+          {isMobileDevice ? (
+            <button onClick={toggleMobileLayout} title="Accordion view" aria-label="Switch to accordion view" style={gvIconButton({ width:28, height:24, borderRadius:4 }, C)}>{suiteIcon("view_agenda", 14)}</button>
+          ) : (
+            [{ id:"accordion", icon:"view_agenda", label:"Accordion" }, { id:"full", icon:"view_column", label:"Full panels" }].map(({ id, icon, label }) => (
+              <button key={id} onClick={() => setDesktopLayoutPersist(id)} title={label}
+                style={gvIconButton({ width:28, height:24, borderRadius:4, background: desktopLayout === id ? C.hover : "transparent" }, C)}>{suiteIcon(icon, 14)}</button>
+            ))
+          )}
+          <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" style={gvIconButton({ width:28, height:24, borderRadius:4 }, C)}>{suiteIcon("apps", 14)}</button>
+        </div>
 
         {nextActionBar}
 
-        {/* Supercrunched universal summary — one synthesized sentence covering the whole
-            situation at a glance. Prefers chief AI overview; builds deterministically otherwise. */}
+        {/* Supercrunched universal summary */}
         {supercrunch && (
-          <div style={{ flexShrink:0, padding:"7px 12px", borderRadius:8, background: C.bgSoft, fontSize:14, color:C.muted, fontFamily:NC_FONT_STACK, lineHeight:1.4, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+          <div style={{ flexShrink:0, padding:"5px 10px", borderRadius:7, background: C.bgSoft, fontSize:13, color:C.muted, fontFamily:NC_FONT_STACK, lineHeight:1.35, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:2 }}>
             {supercrunch}
           </div>
         )}
 
-        {/* slim time + actions bar */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 2px 6px", flexShrink:0 }}>
-          <div style={{ display:"flex", alignItems:"baseline", gap:8, minWidth:0 }}>
-            <span style={{ fontSize:20, fontWeight:300, color:C.text, fontFamily:NC_FONT_STACK, letterSpacing:-0.5 }}>{clockParts.timeMain}</span>
-            <span style={{ fontSize:11, color:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>{nowDate.toLocaleDateString([], { weekday:"short", month:"short", day:"numeric" })}</span>
-          </div>
-          <div style={{ display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
-            <button onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density" style={gvIconButton({ width:32, height:32 }, C)}>{suiteIcon(dense ? "density_medium" : "density_small", 16)}</button>
-            {isMobileDevice ? (
-              <button onClick={toggleMobileLayout} title="Accordion view" aria-label="Switch to accordion view" style={gvIconButton({ width:32, height:32 }, C)}>{suiteIcon("view_agenda", 16)}</button>
-            ) : (
-              <>
-                {[{ id:"accordion", icon:"view_agenda" }, { id:"full", icon:"view_column" }].map(({ id, icon }) => (
-                  <button key={id} onClick={() => setDesktopLayoutPersist(id)} title={id === "full" ? "Full panel view" : "Accordion view"} style={gvIconButton({ width:32, height:32, background: desktopLayout === id ? C.hover : "transparent" }, C)}>{suiteIcon(icon, 16)}</button>
-                ))}
-              </>
-            )}
-            <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" style={gvIconButton({ width:32, height:32 }, C)}>{suiteIcon("apps", 16)}</button>
-          </div>
+        {/* slim time bar (layout buttons moved to top) */}
+        <div style={{ display:"flex", alignItems:"baseline", gap:8, padding:"0 2px 4px", flexShrink:0, minWidth:0 }}>
+          <span style={{ fontSize:19, fontWeight:300, color:C.text, fontFamily:NC_FONT_STACK, letterSpacing:-0.5 }}>{clockParts.timeMain}</span>
+          <span style={{ fontSize:11, color:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>{nowDate.toLocaleDateString([], { weekday:"short", month:"short", day:"numeric" })}</span>
         </div>
 
         {/* Box grid: phone portrait → 1 col / 5 rows; phone landscape → 3+2 cols;
             desktop → single column of 5 rows, each filling an equal share of the
             screen height (summary above sits in nextActionBar). */}
-        <div style={{ flex:1, minHeight:0, display:"grid", gap:7,
+        <div style={{ flex:1, minHeight:0, display:"grid", gap:5,
           gridTemplateColumns: isMobileDevice ? (isPortrait ? "1fr" : "repeat(6, 1fr)") : "1fr",
           gridTemplateRows: isMobileDevice ? (isPortrait ? "repeat(5, minmax(0,1fr))" : "repeat(2, minmax(0,1fr))") : "repeat(5, minmax(0,1fr))" }}>
 
@@ -2520,29 +2518,30 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       // height uses 100dvh (dynamic viewport) + safe-area padding so the iOS
       // toolbar / home indicator never chops the last card off the bottom.
       <div style={{ position: "fixed", top: topOffset, left: sidebarW, right: 0, height: `calc(100dvh - ${topOffset}px)`, zIndex: 7600, background: C.bg, overflowY: "auto", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}`, WebkitOverflowScrolling: "touch" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 7, padding: "10px 10px calc(34px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, padding: "5px 10px calc(28px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }}>
+
+          {/* ── Layout selector — always top-right, before all content ── */}
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 2, flexShrink: 0 }}>
+            {isMobileDevice ? (
+              <button onClick={toggleMobileLayout} title="Box view" aria-label="Switch to box view" style={gvIconButton({ width: 30, height: 26, borderRadius: 4 }, C)}>{suiteIcon("grid_view", 14)}</button>
+            ) : (
+              [{ id:"boxes", icon:"grid_view", label:"Card grid" }, { id:"full", icon:"view_agenda", label:"Full panel" }].map(({ id, icon, label }) => (
+                <button key={id} onClick={() => setDesktopLayoutPersist(id)} title={label}
+                  style={gvIconButton({ width:30, height:26, borderRadius:4, background: desktopLayout === id ? C.hover : "transparent" }, C)}>{suiteIcon(icon, 14)}</button>
+              ))
+            )}
+            <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" style={gvIconButton({ width: 30, height: 26, borderRadius: 4 }, C)}>{suiteIcon("apps", 14)}</button>
+          </div>
 
           {nextActionBar}
 
           {/* Time strip — tap the time to reveal the timeline */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 2px 4px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 2px 2px" }}>
             <button onClick={() => setMobileTimelineOpen(o => !o)} style={{ all: "unset", display: "flex", alignItems: "baseline", gap: 10, minWidth: 0, cursor: "pointer" }} aria-expanded={mobileTimelineOpen} title="Show timeline">
-              <span style={{ fontSize: 24, fontWeight: 300, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: -0.5 }}>{clockParts.timeMain}</span>
+              <span style={{ fontSize: 22, fontWeight: 300, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: -0.5 }}>{clockParts.timeMain}</span>
               <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK }}>{nowDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
-              <span style={{ alignSelf: "center", color: C.faint, display: "flex", transform: mobileTimelineOpen ? "rotate(180deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("expand_more", 14)}</span>
+              <span style={{ alignSelf: "center", color: C.faint, display: "flex", transform: mobileTimelineOpen ? "rotate(90deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("chevron_right", 14)}</span>
             </button>
-            <div style={{ display:"flex", alignItems:"center", gap:4, flexShrink:0 }}>
-              {isMobileDevice ? (
-                <button onClick={toggleMobileLayout} title="Box view" aria-label="Switch to box view" style={gvIconButton({ width: 34, height: 34 }, C)}>{suiteIcon("grid_view", 16)}</button>
-              ) : (
-                <>
-                  {[{ id:"boxes", icon:"grid_view" }, { id:"full", icon:"view_column" }].map(({ id, icon }) => (
-                    <button key={id} onClick={() => setDesktopLayoutPersist(id)} title={id === "full" ? "Full panel view" : "Card grid view"} style={gvIconButton({ width:34, height:34, background: desktopLayout === id ? C.hover : "transparent" }, C)}>{suiteIcon(icon, 16)}</button>
-                  ))}
-                </>
-              )}
-              <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" style={gvIconButton({ width: 34, height: 34 }, C)}>{suiteIcon("apps", 16)}</button>
-            </div>
           </div>
 
           {/* Timeline reveal (seconds → English year, with Hebrew date) */}
@@ -2580,7 +2579,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const priColor = pri?.color || T.primary || "#7EB0DE";
               const isEditing = editingTaskId === t.id;
               return (
-                <div key={t.id} data-nc-task-row="true" style={{ display:"grid",gridTemplateColumns:"3px minmax(0,1fr) auto",alignItems:"start",padding:"10px 12px 10px 0",gap:10,borderTop:`1px solid ${C.divider}`,minHeight:40 }}>
+                <div key={t.id} data-nc-task-row="true" style={{ display:"grid",gridTemplateColumns:"3px minmax(0,1fr) auto",alignItems:"start",padding:"7px 12px 7px 0",gap:10,borderTop:`1px solid ${C.divider}`,minHeight:32 }}>
                   <span style={{ width:3,alignSelf:"stretch",minHeight:20,borderRadius:"0 3px 3px 0",background:priColor,flexShrink:0 }} />
                   {isEditing ? (
                     <textarea value={editText} autoFocus rows={2}
@@ -2675,7 +2674,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const url  = `https://mail.google.com/mail/u/0/#inbox/${msg.id}`;
                 return (
                   <a key={msg.id||i} href={url} target="_blank" rel="noopener noreferrer"
-                    style={{ display:"flex",alignItems:"baseline",gap:6,padding:"8px 12px",borderTop:`1px solid ${C.divider}`,textDecoration:"none",color:"inherit",minWidth:0 }}>
+                    style={{ display:"flex",alignItems:"baseline",gap:6,padding:"5px 12px",borderTop:`1px solid ${C.divider}`,textDecoration:"none",color:"inherit",minWidth:0 }}>
                     <span style={{fontSize:ncType.body,fontWeight:600,color:C.text,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{from}</span>
                     <span style={{flex:1,minWidth:0,fontSize:ncType.meta,color:C.muted,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
                     <span style={{fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{date}</span>
@@ -2698,7 +2697,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
               return (
                 <button key={s.id} onClick={onOpenShailos}
-                  style={{ width:"100%",textAlign:"left",display:"grid",gridTemplateColumns:"3px minmax(0,1fr)",gap:10,padding:"9px 12px 9px 0",border:"none",background:"transparent",color:C.text,cursor:"pointer",alignItems:"start",borderTop:`1px solid ${C.divider}` }}>
+                  style={{ width:"100%",textAlign:"left",display:"grid",gridTemplateColumns:"3px minmax(0,1fr)",gap:10,padding:"6px 12px 6px 0",border:"none",background:"transparent",color:C.text,cursor:"pointer",alignItems:"start",borderTop:`1px solid ${C.divider}` }}>
                   <span style={{width:3,alignSelf:"stretch",minHeight:20,borderRadius:"0 3px 3px 0",background:GOLD,flexShrink:0}} />
                   <span>
                     <span style={{display:"block",fontSize:ncType.body,fontWeight:500,lineHeight:ncType.line,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{text}</span>
