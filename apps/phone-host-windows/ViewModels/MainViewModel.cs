@@ -5030,6 +5030,14 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         StatusHfp = "Not connected";
         StatusMap = "Not connected";
         SetPbapStatus(PbapAvailabilityKind.NotRun, "PBAP call-log sync has not run for the current phone yet.");
+
+        // After disposing all services, give the phone an extra moment to finish
+        // tearing down its RFCOMM profile state on its side.  Without this pause
+        // the next ConnectAsync can arrive at the phone before it has reset its
+        // HFP state machine, and the phone accepts the handshake but then silently
+        // drops the HFP connection within the first 30 s.
+        await Task.Delay(1500);
+
         _sessionCts = new CancellationTokenSource();
     }
 
@@ -6061,8 +6069,12 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
             try
             {
-                // Small delay so the initial sync and poll loop settle first
-                await Task.Delay(3000, ct);
+                // Delay before starting heavy MAP paging so the HFP link has time to
+                // stabilize.  3 s was too short: after a reconnect the phone would drop
+                // HFP within ~30 s when MAP started hammering it immediately.  15 s is
+                // enough for HFP to receive the first few CIEV events and confirm the
+                // link is solid before we add MAP bandwidth pressure.
+                await Task.Delay(15000, ct);
 
                 var knownHandles = new HashSet<string>(
                     StringComparer.OrdinalIgnoreCase);

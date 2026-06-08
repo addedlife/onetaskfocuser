@@ -588,7 +588,10 @@ public class HfpService : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _cts?.Cancel();
-        _writeLock.Dispose();
+        // Do NOT dispose _writeLock here — it is a service-lifetime field and
+        // Release() in any in-flight SendAsync finally block would throw
+        // ObjectDisposedException if we dispose it before that task exits.
+        // The CTS cancellation above is sufficient to unblock any pending WaitAsync.
         _writer?.Dispose();
         _reader?.Dispose();
         _socket?.Dispose();
