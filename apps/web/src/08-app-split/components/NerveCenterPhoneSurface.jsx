@@ -705,9 +705,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const phoneRowStyle = {
     display: "grid",
     gridTemplateColumns: "20px minmax(0,1fr) 30px",
-    gap: "4px 7px",
+    gap: "4px 8px",
     alignItems: "start",
-    padding: compact ? "4px 2px" : "6px 4px",
+    padding: compact ? "5px 4px" : "7px 6px",
     borderRadius: 8,
     minHeight: compact ? 30 : 36,
   };
@@ -1095,9 +1095,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                     <button onClick={() => setExpandedPhoneMessageId(expanded ? null : actionId)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: T.text }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
                         <span style={{ flex: 1, fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, fontWeight: isUnread ? 600 : 400, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread._name}</span>
-                        {time && <span style={{ fontSize: NC_TYPE.meta, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
+                        {time && <span style={{ fontSize: NC_TYPE.meta, color: C.faint, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
                       </div>
-                      {preview && !expanded && <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted, marginTop: 0, whiteSpace: compact ? "nowrap" : "normal", overflow: compact ? "hidden" : undefined, textOverflow: compact ? "ellipsis" : undefined, wordBreak: compact ? "normal" : "break-word", lineHeight: NC_TYPE.line }}>{preview}</span>}
+                      {preview && !expanded && <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted, marginTop: 1, whiteSpace: compact ? "nowrap" : "normal", overflow: compact ? "hidden" : undefined, textOverflow: compact ? "ellipsis" : undefined, wordBreak: compact ? "normal" : "break-word", lineHeight: NC_TYPE.line }}>{preview}</span>}
                     </button>
                     {!expanded && (
                       <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
@@ -1227,8 +1227,8 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                     <span style={phoneLeadIconStyle(color)}>{suiteIcon(icon, 14)}</span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
-                        <span style={{ flex: 1, fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
-                        {time && <span style={{ fontSize: NC_TYPE.meta, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
+                        <span style={{ flex: 1, fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, fontWeight: 400, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                        {time && <span style={{ fontSize: NC_TYPE.meta, color: C.faint, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
                       </div>
                       {needsCallback ? (
                         <span style={{ display: "inline-block", marginTop: 1, fontSize: NC_TYPE.small, lineHeight: 1.15, fontWeight: 600, color: C.danger, background: C.bgSoft, borderRadius: 99, padding: "1px 6px" }}>Needs callback</span>

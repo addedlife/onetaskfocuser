@@ -2239,8 +2239,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   style={{ width:"100%", textAlign:"left", display:"grid", gridTemplateColumns:"16px minmax(0,1fr)", gap:8, padding:`${padY}px 12px ${padY}px 0`, border:"none", background:"transparent", color:C.text, cursor:"pointer", alignItems:"start" }}>
                   <span style={{ width:8, height:8, borderRadius:99, background:GOLD, flexShrink:0, marginTop:4 }} />
                   <span style={{ minWidth:0 }}>
-                    <span style={{ display:"block", fontSize:bodyF, fontWeight:500, lineHeight:lineH, color:C.text, ...(exp ? { whiteSpace:"normal", wordBreak:"break-word" } : { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }) }}>{text}</span>
-                    <span style={{ fontSize:metaF, color:GOLD, fontWeight:500 }}>{isGetBack?"waiting to reply":"pending answer"}</span>
+                    <span style={{ display:"block", fontSize:bodyF, fontWeight:400, lineHeight:lineH, color:C.text, ...(exp ? { whiteSpace:"normal", wordBreak:"break-word" } : { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }) }}>{text}</span>
+                    <span style={{ display:"block", fontSize:metaF, color:GOLD, fontWeight:500, marginTop:2 }}>{isGetBack?"waiting to reply":"pending answer"}</span>
                   </span>
                 </button>
               );
@@ -2264,7 +2264,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             )}
             {!calendarEvents ? emptyMsg("Loading…") : upcomingCal.length === 0 ? emptyMsg("Nothing upcoming.") : upcomingCal.map(row => (
               <div key={row.evt?.id||row.index} style={{ display:"grid", gridTemplateColumns:"auto minmax(0,1fr)", gap:8, padding:`${padY}px 12px`, alignItems:"start" }}>
-                <span style={{ fontSize:metaF, color:row.now?C.accent:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap", paddingTop:1, fontWeight:row.now?700:400, minWidth:54 }}>
+                <span style={{ fontSize:metaF, color:row.now?C.accent:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap", paddingTop:1, fontWeight:row.now?600:400, minWidth:54 }}>
                   {row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                 </span>
                 <span style={{ fontSize:bodyF, color:row.now||row.special?C.text:C.muted, fontFamily:NC_FONT_STACK, fontWeight:row.now||row.special?600:400, lineHeight:lineH }}>
@@ -2408,7 +2408,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const priColor = pri?.color || T.primary || "#7EB0DE";
               const isEditing = editingTaskId === t.id;
               return (
-                <div key={t.id} data-nc-task-row="true" style={{ display:"grid",gridTemplateColumns:"16px minmax(0,1fr) auto",alignItems:"start",padding:"7px 12px 7px 0",gap:8,borderTop:`1px solid ${C.divider}`,minHeight:28 }}>
+                <div key={t.id} data-nc-task-row="true" style={{ display:"grid",gridTemplateColumns:"16px minmax(0,1fr) auto",alignItems:"start",padding:"7px 12px 7px 0",gap:8,borderTop:`1px solid ${C.divider}`,minHeight:34 }}>
                   <span style={{ width:8,height:8,borderRadius:99,background:priColor,flexShrink:0,marginTop:5 }} />
                   {isEditing ? (
                     <textarea value={editText} autoFocus rows={2}
@@ -2453,8 +2453,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               ) : calendarRows.filter(r=>!r.past).length === 0 ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Nothing upcoming today.</div>
               ) : calendarRows.filter(r=>!r.past).slice(0,40).map(row => (
-                <div key={row.evt?.id||row.index} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:8,padding:"5px 12px",borderTop:`1px solid ${C.divider}`,alignItems:"start" }}>
-                  <span style={{ fontSize:ncType.meta,color:row.now?C.accent:C.faint,fontFamily:NC_FONT_STACK,whiteSpace:"nowrap",paddingTop:1,fontWeight:row.now?700:400,minWidth:54 }}>
+                <div key={row.evt?.id||row.index} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:8,padding:"6px 12px",borderTop:`1px solid ${C.divider}`,alignItems:"start" }}>
+                  <span style={{ fontSize:ncType.meta,color:row.now?C.accent:C.faint,fontFamily:NC_FONT_STACK,whiteSpace:"nowrap",paddingTop:1,fontWeight:row.now?600:400,minWidth:54 }}>
                     {row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                   </span>
                   <span style={{ fontSize:ncType.body,color:row.now||row.special?C.text:C.muted,fontFamily:NC_FONT_STACK,fontWeight:row.now||row.special?600:400,lineHeight:ncType.line,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
@@ -2496,10 +2496,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const url  = `https://mail.google.com/mail/u/0/#inbox/${msg.id}`;
                 return (
                   <a key={msg.id||i} href={url} target="_blank" rel="noopener noreferrer"
-                    style={{ display:"flex",alignItems:"baseline",gap:6,padding:"5px 12px",borderTop:`1px solid ${C.divider}`,textDecoration:"none",color:"inherit",minWidth:0 }}>
-                    <span style={{fontSize:ncType.body,fontWeight:600,color:C.text,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{from}</span>
-                    <span style={{flex:1,minWidth:0,fontSize:ncType.meta,color:C.muted,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
-                    <span style={{fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{date}</span>
+                    style={{ display:"block",padding:"6px 12px",borderTop:`1px solid ${C.divider}`,textDecoration:"none",color:"inherit",minWidth:0 }}>
+                    <div style={{ display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:6,minWidth:0,marginBottom:1 }}>
+                      <span style={{fontSize:ncType.body,fontWeight:600,color:C.text,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,minWidth:0}}>{from}</span>
+                      <span style={{fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{date}</span>
+                    </div>
+                    <span style={{display:"block",fontSize:ncType.meta,color:C.muted,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
                   </a>
                 );
               })}
@@ -2519,11 +2521,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
               return (
                 <button key={s.id} onClick={onOpenShailos}
-                  style={{ width:"100%",textAlign:"left",display:"grid",gridTemplateColumns:"16px minmax(0,1fr)",gap:8,padding:"6px 12px 6px 0",border:"none",background:"transparent",color:C.text,cursor:"pointer",alignItems:"start",borderTop:`1px solid ${C.divider}` }}>
+                  style={{ width:"100%",textAlign:"left",display:"grid",gridTemplateColumns:"16px minmax(0,1fr)",gap:8,padding:"7px 12px 7px 0",border:"none",background:"transparent",color:C.text,cursor:"pointer",alignItems:"start",borderTop:`1px solid ${C.divider}` }}>
                   <span style={{width:8,height:8,borderRadius:99,background:GOLD,flexShrink:0,marginTop:4}} />
                   <span>
-                    <span style={{display:"block",fontSize:ncType.body,fontWeight:500,lineHeight:ncType.line,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{text}</span>
-                    <span style={{fontSize:ncType.meta,color:GOLD,fontWeight:500}}>{isGetBack?"waiting to reply":"pending answer"}</span>
+                    <span style={{display:"block",fontSize:ncType.body,fontWeight:400,lineHeight:ncType.line,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{text}</span>
+                    <span style={{display:"block",fontSize:ncType.meta,color:GOLD,fontWeight:500,marginTop:2}}>{isGetBack?"waiting to reply":"pending answer"}</span>
                   </span>
                 </button>
               );
@@ -2699,7 +2701,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const actionsOpen = openTaskActionsId === t.id;
                 const displayText = nerveDisplaySummary(t, "Untitled task");
                 return (
-                  <div key={t.id} data-nc-task-row="true" className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? "16px minmax(0,1fr) 40px" : "16px minmax(0,1fr)", alignItems: "start", padding: "7px 16px 7px 0", gap:8, minHeight: 34 }}>
+                  <div key={t.id} data-nc-task-row="true" className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? "16px minmax(0,1fr) 40px" : "16px minmax(0,1fr)", alignItems: "start", padding: "7px 12px 7px 0", gap:8, minHeight: 34 }}>
                     {/* Priority dot */}
                     <span style={{ width: 8, height: 8, borderRadius: 99, background: priColor, flexShrink: 0, marginTop: 5 }} />
                     {/* Text — click to edit inline */}
@@ -2774,11 +2776,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const chipBg = isGetBack ? "rgba(201,146,60,0.22)" : "rgba(201,146,60,0.10)";
                 return (
                   <button key={s.id} onClick={onOpenShailos}
-                    style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "16px minmax(0,1fr) auto", gap:8, padding: "8px 16px 8px 0", border: "none", background: GOLD_BG, color: C.text, cursor: "pointer", alignItems: "start", minHeight: 38 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 99, background: GOLD, flexShrink: 0, marginTop: 5 }} />
-                    <span style={{ paddingLeft: 5, paddingTop: 1 }}>
-                      <span style={{ display: "block", fontSize: ncType.body, fontWeight: "var(--nc-font-weight-strong, 500)", lineHeight: ncType.line, color: C.text, wordBreak: "break-word" }}>{text}</span>
-                      <span style={{ display: "block", fontSize: ncType.label, color: GOLD, fontWeight: 500, marginTop: 1, lineHeight: 1.15 }}>{suiteIcon(isGetBack ? "schedule" : "search", 12)} {isGetBack ? "waiting to reply" : "pending answer"}</span>
+                    style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "16px minmax(0,1fr) auto", gap:8, padding: "7px 12px 7px 0", border: "none", background: GOLD_BG, color: C.text, cursor: "pointer", alignItems: "start", minHeight: 34 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 99, background: GOLD, flexShrink: 0, marginTop: 4 }} />
+                    <span style={{ paddingTop: 1 }}>
+                      <span style={{ display: "block", fontSize: ncType.body, fontWeight: "var(--nc-font-weight-normal, 400)", lineHeight: ncType.line, color: C.text, wordBreak: "break-word" }}>{text}</span>
+                      <span style={{ display: "block", fontSize: ncType.meta, color: GOLD, fontWeight: 500, marginTop: 2, lineHeight: 1.2 }}>{isGetBack ? "waiting to reply" : "pending answer"}</span>
                     </span>
                     <span style={{ fontSize: ncType.small, fontWeight: 500, color: GOLD, background: chipBg, border: `1px solid ${GOLD_BRD}`, borderRadius: 999, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 1 }}>{chipLabel}</span>
                   </button>
@@ -2795,7 +2797,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   {shailosCompleted.map(s => {
                     const text = nerveDisplaySummary(s, "Resolved shaila");
                     return (
-                      <div key={s.id} style={{ display: "grid", gridTemplateColumns: "16px minmax(0,1fr) auto", gap:8, padding: "7px 16px 7px 0", alignItems: "start", opacity: 0.72, minHeight: 34 }}>
+                      <div key={s.id} style={{ display: "grid", gridTemplateColumns: "16px minmax(0,1fr) auto", gap:8, padding: "7px 12px 7px 0", alignItems: "start", opacity: 0.72, minHeight: 34 }}>
                         <span style={{ width: 8, height: 8, borderRadius: 99, background: C.success, flexShrink: 0, marginTop: 5 }} />
                         <span style={{ paddingLeft: 5, paddingTop: 1, fontSize: ncType.meta, fontWeight: "var(--nc-font-weight-normal, 400)", lineHeight: ncType.line, color: C.muted, wordBreak: "break-word", textDecoration: "line-through" }}>{text}</span>
                         <span style={{ fontSize: ncType.small, fontWeight: 500, color: "T.success", background: "rgba(46,125,50,0.10)", border: "1px solid rgba(46,125,50,0.22)", borderRadius: 999, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 1 }}>Done</span>
@@ -3318,7 +3320,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         >
                           <button type="button" onClick={() => handleEmailSelect(msg)}
                             style={{ flex: 1, minWidth: 0, minHeight: 0, border: "none", background: "transparent", color: "inherit", textAlign: "left", padding: 0, cursor: "pointer", fontFamily: NC_FONT_STACK, display: "flex", alignItems: "baseline", gap: 6 }}>
-                            <span style={{ fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: "nowrap" }}>{from}</span>
+                            <span style={{ fontSize: NC_TYPE.control, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: "nowrap" }}>{from}</span>
                             <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
                             <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: "nowrap" }}>{date}</span>
                           </button>
