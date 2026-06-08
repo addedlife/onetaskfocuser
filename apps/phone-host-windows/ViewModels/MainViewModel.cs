@@ -5845,6 +5845,16 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                         await Task.Delay(BusyMessagePollRetryInterval, ct);
                         continue;
                     }
+                    // Pause MAP sync during active calls.  Android handles HFP + MAP over a
+                    // single adapter; hammering MAP RFCOMM while SCO audio is live can make
+                    // the phone unresponsive on the AT channel, causing spurious call drops.
+                    if (CurrentCall.Status != CallStatus.Idle)
+                    {
+                        if (coalescedWakeRequests > 0)
+                            RequestMessageSync("deferred — call in progress");
+                        await Task.Delay(BusyMessagePollRetryInterval, ct);
+                        continue;
+                    }
 
                     if (!await _messageSyncLock.WaitAsync(0, ct))
                     {

@@ -224,12 +224,16 @@ public class HfpService : IAsyncDisposable
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                 {
                     // 30 s passed with no URC from the phone.
-                    // Send a benign keepalive AT command.  If the write throws
-                    // (IOException / ObjectDisposedException / write timeout), the socket
-                    // is dead and the exception propagates to the outer catch below, which
-                    // fires StatusChanged("HFP disconnected") → triggering auto-reconnect.
-                    // If the write succeeds the phone replies "OK", which falls through
-                    // HandleUrcLineAsync as an unrecognised line (logged, ignored).
+                    // Skip the AT probe during an active call — the SCO audio channel
+                    // proves the link is alive, and AT commands sent while the phone is
+                    // processing audio can confuse some firmware, causing spurious drops.
+                    // When idle, probe with AT+NREC=0.  If the write throws or times out
+                    // the socket is dead and StatusChanged("HFP disconnected") fires.
+                    if (CurrentCall.Status != CallStatus.Idle)
+                    {
+                        AtLogLine?.Invoke("[keepalive] skipped — call in progress");
+                        continue;
+                    }
                     AtLogLine?.Invoke("[keepalive] 30 s idle — probing HFP link with AT+NREC=0");
                     await SendAsync("AT+NREC=0", ct);
                     continue;
@@ -527,12 +531,13 @@ public class HfpService : IAsyncDisposable
     private async Task SendAsync(string cmd, CancellationToken ct = default)
     {
         AtLogLine?.Invoke($"→ {cmd}");
-        // 5-second write deadline — prevents a ghost RFCOMM socket from blocking
-        // the keepalive (and the read loop) indefinitely.  WriteLineAsync on a silently
-        // dead socket often blocks until Windows finally times out (30-120 s); this
-        // cap makes the read loop detect the drop and signal "HFP disconnected" fast.
+        // 8-second write deadline — prevents a ghost RFCOMM socket from blocking
+        // the keepalive indefinitely.  8 s is generous enough that phones slowed by
+        // active SCO audio won't false-positive (the old 5 s was too tight for some
+        // firmware during calls), but short enough to detect a truly dead socket well
+        // before the 30-120 s Windows RFCOMM hold window expires.
         using var writeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        writeCts.CancelAfter(TimeSpan.FromSeconds(5));
+        writeCts.CancelAfter(TimeSpan.FromSeconds(8));
         await _writeLock.WaitAsync(writeCts.Token);
         try   { await _writer!.WriteLineAsync(cmd.AsMemory(), writeCts.Token); }
         finally { _writeLock.Release(); }

@@ -1,5 +1,17 @@
 [
     {
+        "timestamp":  "2026-06-07 22:42:19",
+        "version":  "b294",
+        "notes":  "Call drops fixed: no more AT probes during active calls, MAP paused during calls. Write timeout increased to 8s.",
+        "devNotes":  "HfpService: skip AT+NREC=0 keepalive when CurrentCall.Status != Idle. Write timeout 5s→8s. MainViewModel: pause MAP sync while call is active to prevent BT adapter contention."
+    },
+    {
+        "timestamp":  "2026-06-07 12:00:00",
+        "version":  "b292",
+        "notes":  "Call drops fixed: no more AT probes during active calls, MAP paused during calls. Write timeout increased to 8s.",
+        "devNotes":  "HfpService: skip AT+NREC=0 keepalive when CurrentCall.Status != Idle. Write timeout 5s→8s. MainViewModel: pause MAP sync while call is active to prevent BT adapter contention."
+    },
+    {
         "timestamp":  "2026-06-07 18:33:29",
         "version":  "b291",
         "notes":  "Connection drops much less and reconnects faster when the phone comes back into range.",
