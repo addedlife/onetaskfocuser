@@ -2084,11 +2084,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const decodeSnipM = s => (s || "").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g," ").trim();
     const upcomingCal = (calendarRows || []).filter(r => !r.past);
 
-    // >= 600 px: vertical column (1 col × 5 rows) — each card is full panel-width, good text display.
-    // < 600 px: horizontal scroll-snap carousel (full width × full height per card) — avoids
-    // the cramped ~80 px per-card height a 5-row stack produces on narrow panels.
-    // 600 px = Material Design compact→medium breakpoint, standard minimum for side-by-side layouts.
-    const boxesVertical = availableW >= 600;
+    // >= 600 px wide AND tall enough for 5 cards at ≥ 100 px each → vertical column.
+    // Otherwise → horizontal scroll-snap carousel (1 card at a time, full width × full height).
+    // The height guard catches landscape phones/tablets where width ≥ 600 px but each of 5
+    // stacked cards would be only ~60–80 px tall — too cramped to read.
+    // 600 px = Material Design compact→medium; 500 px = 5 cards × 100 px minimum card height.
+    const ncH = typeof window !== "undefined" ? window.innerHeight - topOffset : 600;
+    const boxesVertical = availableW >= 600 && ncH >= 500;
     const cardStyle = boxesVertical ? {} : { flex: "0 0 100%", scrollSnapAlign: "start", minWidth: 0 };
     const emptyMsg = txt => <div style={{ padding:"12px 14px", fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{txt}</div>;
     // Density: compact keeps readable text and saves space with row padding/line-height.
@@ -2327,7 +2329,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // that per-second remount was tearing down and rebuilding each section mid-gesture,
     // which dropped taps on the ··· menu and reset focus in the task composer. With a
     // stable component type React now just re-renders with fresh props.
-    const sectionCtx = { C, expandedIds: mobileExpanded, menuId: mobileMenuOpen, onExpand: mobileExpandToggle, onMenuToggle: mobileMenuToggle, onMenuClose: mobileMenuClose };
+    // >= 600 px: enough horizontal text space → all sections auto-expand as full vertical cards
+    // (expandable=false forces expanded=true in MobileSection via its own `!expandable` guard).
+    // < 600 px: sections collapse to single-line horizontal bars so text doesn't wrap excessively.
+    const accWide = availableW >= 600;
+    const sectionCtx = { C, expandedIds: mobileExpanded, menuId: mobileMenuOpen, onExpand: mobileExpandToggle, onMenuToggle: mobileMenuToggle, onMenuClose: mobileMenuClose, expandable: !accWide };
 
     const signalNote = nerveSignalNote;
 
