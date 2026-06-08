@@ -565,7 +565,14 @@ function buildChiefFallbackBrief(context = {}, suppressed = []) {
       phone.unreadTexts > 0 ? `${phone.unreadTexts} unread text${phone.unreadTexts > 1 ? "s" : ""}` : "",
       phone.voicemailCount > 0 ? `${phone.voicemailCount} voicemail${phone.voicemailCount > 1 ? "s" : ""}` : "",
     ].filter(Boolean);
-    signals.push({ area: "Phone", note: phoneParts.join(", ") });
+    // Append short text previews with sender: "Ginsparg: re meeting; Blech: thank you"
+    const textPreviews = (phone.texts || [])
+      .filter(t => t.unread && t.name && t.preview)
+      .slice(0, 3)
+      .map(t => `${t.name.split(" ")[0]}: ${t.preview}`)
+      .join("; ");
+    if (textPreviews) phoneParts.push(textPreviews);
+    signals.push({ area: "Phone", note: phoneParts.join(" · ") });
   }
   // Notes never restate the area name or its count — the card/section already labels it.
   if ((context.shailos || []).length > 0) signals.push({ area: "Shailos", note: shaila?.text || context.shailos[0]?.text || "Pending answer" });
@@ -1779,27 +1786,58 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // Capture timerId so the cleanup doesn't depend on the mutable ref value after unmount.
     return () => { clearInterval(timerId); streamRef.current.timer = null; };
   }, [activeChiefTaskText]);
-  const nextActionBar = (chiefSummaryText || activeChiefTaskText) ? (
-    <div style={{ flexShrink: 0, minWidth: 0, margin: "0 2px 7px", padding: "10px 12px", borderRadius: 10, background: hexToRgba(C.accent, 0.06) || C.bgSoft, borderLeft: `3px solid ${C.accent}`, display: "flex", alignItems: "flex-start", gap: 8 }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {chiefSummaryText && (
-          <div style={{ fontSize: 15, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.4, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>{chiefSummaryText}</div>
+  // Global snapshot line — locally computed, always current, covers every category.
+  // This is separate from the AI suggestion so they don't echo the same single item.
+  const globalSnapshotParts = useMemo(() => {
+    const parts = [];
+    const taskNow = primaryTaskQueue.filter(t => /now/i.test(t.priority)).length;
+    if (primaryTaskQueue.length > 0)
+      parts.push(taskNow > 0 ? `${taskNow} Now, ${primaryTaskQueue.length} tasks` : `${primaryTaskQueue.length} task${primaryTaskQueue.length === 1 ? "" : "s"}`);
+    const calRows = (calendarEvents || []).filter(e => !e.past);
+    if (calRows.length > 0) {
+      const now = calRows.find(e => e.now);
+      const next = calRows.find(e => e.special && !e.past) || calRows[0];
+      parts.push(now ? `In: ${compactNerveSummary(now.summary, "event")}` : (next ? `Next: ${compactNerveSummary(next.summary, "event")}` : `${calRows.length} upcoming`));
+    }
+    if ((gmailMessages || []).length > 0) parts.push(`${gmailMessages.length} email${gmailMessages.length === 1 ? "" : "s"}`);
+    if (visibleShailos.length > 0) parts.push(`${visibleShailos.length} shaila${visibleShailos.length === 1 ? "" : "s"}`);
+    const ph = phoneActivitySummary;
+    const phoneParts = [];
+    if (ph.missedCalls > 0) phoneParts.push(`${ph.missedCalls} missed`);
+    if (ph.unreadTexts > 0) phoneParts.push(`${ph.unreadTexts} unread text${ph.unreadTexts === 1 ? "" : "s"}`);
+    if (phoneParts.length > 0) parts.push(phoneParts.join(", "));
+    return parts.join(" · ");
+  }, [primaryTaskQueue, calendarEvents, gmailMessages, visibleShailos, phoneActivitySummary]);
+
+  const nextActionBar = activeChiefTaskText ? (
+    <div style={{ flexShrink: 0, minWidth: 0, margin: "0 2px 7px", padding: "10px 12px", borderRadius: 10, background: hexToRgba(C.accent, 0.06) || C.bgSoft, borderLeft: `3px solid ${C.accent}` }}>
+      {/* Row 1: live global snapshot across all categories */}
+      {globalSnapshotParts && (
+        <div style={{ fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.35, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {globalSnapshotParts}
+        </div>
+      )}
+      {/* Row 2: AI suggestion + Skip + Resuggest */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+        <span style={{ display: "flex", color: C.accent, flexShrink: 0 }}>{suiteIcon("bolt", 17)}</span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
+        </span>
+        {/* Skip this suggestion */}
+        {!activeChiefBrief?._isPlaceholder && (
+          <button type="button" onClick={() => handleChiefSmartResponse("not_now")} title="Skip this suggestion" aria-label="Skip suggestion"
+            disabled={!!chiefSmartSaving || chiefDialogueLoading}
+            style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: C.faint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {suiteIcon("close", 15)}
+          </button>
         )}
-        {activeChiefTaskText && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, marginTop: chiefSummaryText ? 5 : 0 }}>
-            <span style={{ display: "flex", color: C.accent, flexShrink: 0 }}>{suiteIcon("bolt", 17)}</span>
-            <span style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
-            </span>
-          </div>
-        )}
+        {/* Force a new scan */}
+        <button type="button" onClick={() => setChiefRefreshNonce(n => n + 1)} title="Re-suggest" aria-label="Re-suggest"
+          disabled={chiefLoading}
+          style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: C.accent, cursor: chiefLoading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: chiefLoading ? 0.5 : 1, ...(chiefLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }}>
+          {suiteIcon("autorenew", 17)}
+        </button>
       </div>
-      {/* Resuggest — force a fresh Chief scan / new suggestion */}
-      <button type="button" onClick={() => setChiefRefreshNonce(n => n + 1)} title="Re-suggest" aria-label="Re-suggest"
-        disabled={chiefLoading}
-        style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 8, border: "none", background: "transparent", color: C.accent, cursor: chiefLoading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: chiefLoading ? 0.5 : 1, ...(chiefLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }}>
-        {suiteIcon("autorenew", 17)}
-      </button>
     </div>
   ) : null;
   useEffect(() => {
@@ -2682,7 +2720,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
           {/* Phone — keepMounted so the DeskPhone poller keeps running while collapsed */}
           <MobileSection {...sectionCtx} id="phone" icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} keepMounted
-            preview={signalNote("Phone") || phoneStatusSummary?.label || "DeskPhone"}
+            preview={phoneStatusSummary?.label || signalNote("Phone") || "DeskPhone"}
             menuItems={[{ icon: "open_in_full", label: "Open phone view", run: onOpenPhone }]}
           >
             {/* Real height so the phone surface's flex:1 activity feed (texts + calls) gets

@@ -226,36 +226,76 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const [status, setStatus] = useState(null);
   const [messages, setMessages] = useState([]);
   const [calls, setCalls] = useState([]);
-  // Manually resolved missed calls — not every missed call needs a callback, so the user
-  // can confirm one as handled. Persisted (keyed by number:timestamp) so it sticks across
-  // reloads and feeds the chief's actionable missed-call count.
+  // Manually resolved missed calls — stored in Firestore so every browser/device (Chrome,
+  // Safari, phone) shares a single source of truth.  localStorage is the fast-init seed
+  // only; Firestore is authoritative.  The onSnapshot listener keeps all sessions live.
   const [resolvedMissed, setResolvedMissed] = useState(() => {
     try { const a = JSON.parse(localStorage.getItem("nc_missed_resolved") || "[]"); return new Set(Array.isArray(a) ? a : []); } catch { return new Set(); }
   });
+
+  // Firestore path: users/{uid}/appData/phoneState  { resolvedMissedCalls: string[] }
+  const phoneStateDocRef = useMemo(() => {
+    const uid = user?.uid;
+    if (!db || !uid) return null;
+    return db.collection("users").doc(uid).collection("appData").doc("phoneState");
+  }, [user?.uid]);
+
+  // Subscribe to Firestore doc — real-time across all browsers/devices.
+  useEffect(() => {
+    if (!phoneStateDocRef) return;
+    let stopped = false;
+    let unsub = null;
+    let retryTimer = null;
+    let attempt = 0;
+    const subscribe = () => {
+      if (stopped) return;
+      unsub = phoneStateDocRef.onSnapshot(snap => {
+        attempt = 0;
+        if (snap.metadata.fromCache) return; // trust server only
+        const arr = snap.data()?.resolvedMissedCalls;
+        if (!Array.isArray(arr)) return;
+        const next = new Set(arr);
+        try { localStorage.setItem("nc_missed_resolved", JSON.stringify(arr.slice(-300))); } catch {}
+        try { window.dispatchEvent(new CustomEvent("nc-missed-resolved-sync", { detail: arr })); } catch {}
+        setResolvedMissed(next);
+      }, err => {
+        console.warn("[PhoneSurface] phoneState listener error — resubscribing:", err);
+        try { unsub?.(); } catch (_) {}
+        unsub = null;
+        if (stopped) return;
+        retryTimer = setTimeout(subscribe, Math.min(30000, 1000 * Math.pow(2, attempt++)));
+      });
+    };
+    subscribe();
+    // Also sync from other tabs (cross-tab broadcast without a Firestore write).
+    const onSync = e => {
+      if (!Array.isArray(e.detail)) return;
+      setResolvedMissed(new Set(e.detail));
+    };
+    window.addEventListener("nc-missed-resolved-sync", onSync);
+    return () => {
+      stopped = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      try { unsub?.(); } catch (_) {}
+      window.removeEventListener("nc-missed-resolved-sync", onSync);
+    };
+  }, [phoneStateDocRef]);
+
   const toggleMissedResolved = useCallback((key, resolved) => {
     if (!key) return;
     setResolvedMissed(prev => {
       const next = new Set(prev);
       if (resolved) next.add(key); else next.delete(key);
       const arr = [...next].slice(-300);
+      // Write to Firestore — this propagates to every browser/device via the listener above.
+      if (phoneStateDocRef) {
+        phoneStateDocRef.set({ resolvedMissedCalls: arr }, { merge: true }).catch(() => {});
+      }
       try { localStorage.setItem("nc_missed_resolved", JSON.stringify(arr)); } catch {}
-      // Broadcast so EVERY mounted phone surface (compact card + full phone screen) updates
-      // immediately — resolving in one place drops the call from summaries/suggestions
-      // everywhere without waiting for a remount.
       try { window.dispatchEvent(new CustomEvent("nc-missed-resolved-sync", { detail: arr })); } catch {}
       return next;
     });
-  }, []);
-  // Listen for resolve toggles from OTHER phone-surface instances and storage changes from
-  // other tabs, so the resolved set stays in sync across all instances.
-  useEffect(() => {
-    const apply = (arr) => setResolvedMissed(new Set(Array.isArray(arr) ? arr : []));
-    const onSync = e => apply(e.detail);
-    const onStorage = e => { if (e.key === "nc_missed_resolved") { try { apply(JSON.parse(e.newValue || "[]")); } catch {} } };
-    window.addEventListener("nc-missed-resolved-sync", onSync);
-    window.addEventListener("storage", onStorage);
-    return () => { window.removeEventListener("nc-missed-resolved-sync", onSync); window.removeEventListener("storage", onStorage); };
-  }, []);
+  }, [phoneStateDocRef]);
   const [contacts, setContacts] = useState([]);
   const [number, setNumber] = useState("");
   const [body, setBody] = useState("");
@@ -769,9 +809,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     voicemailCount: vmCount,
     texts: threads.slice(0, 6).map(thread => {
       const latest = thread._latestMessage || thread._messages?.[thread._messages.length - 1] || {};
+      const body = messageBody(latest);
+      // Condense to ≤4 words so the summary line stays scannable.
+      const words = body.replace(/\s+/g, " ").trim().split(" ");
+      const shortPreview = words.length <= 4 ? body : words.slice(0, 4).join(" ") + "…";
       return {
         name: thread._name || thread._who || "Unknown",
-        preview: messageBody(latest),
+        preview: shortPreview,
         time: fmtTime(thread._latestAt),
         unread: (thread._unreadCount || 0) > 0,
       };
