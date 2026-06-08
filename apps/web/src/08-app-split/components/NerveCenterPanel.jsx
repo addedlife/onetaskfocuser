@@ -2080,12 +2080,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const decodeSnipM = s => (s || "").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g," ").trim();
     const upcomingCal = (calendarRows || []).filter(r => !r.past);
 
-    // >= 600 px: vertical column (1 col × 5 rows) — each card is full panel-width, good text display.
-    // < 600 px: horizontal scroll-snap carousel (full width × full height per card) — avoids
-    // the cramped ~80 px per-card height a 5-row stack produces on narrow panels.
-    // 600 px = Material Design compact→medium breakpoint, standard minimum for side-by-side layouts.
-    const boxesVertical = availableW >= 600;
-    const cardStyle = boxesVertical ? {} : { flex: "0 0 100%", scrollSnapAlign: "start", minWidth: 0 };
+    // >= 1000 px: 5-column grid — cards share available width so text lines are long enough to read.
+    // < 1000 px: horizontal scroll-snap carousel (each card full width × full height) — at narrower
+    // widths a 5-column layout produces columns too thin for useful text (~160 px each).
+    const boxesCols = availableW >= 1000;
+    const cardStyle = boxesCols ? {} : { flex: "0 0 100%", scrollSnapAlign: "start", minWidth: 0 };
     const emptyMsg = txt => <div style={{ padding:"12px 14px", fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{txt}</div>;
     // Density: compact keeps readable text and saves space with row padding/line-height.
     const dense = mobileDensity === "compact";
@@ -2139,11 +2138,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           <span style={{ fontSize:11, color:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>{nowDate.toLocaleDateString([], { weekday:"short", month:"short", day:"numeric" })}</span>
         </div>
 
-        {/* >= 600 px: vertical 1-col × 5-row grid (all cards visible, full-width text).
-            < 600 px: horizontal scroll-snap carousel (each card full width × full height). */}
-        <div style={{ flex:1, minHeight:0, gap:5,
-          ...(boxesVertical
-            ? { display:"grid", gridTemplateColumns:"1fr", gridTemplateRows:"repeat(5, minmax(0,1fr))" }
+        {/* >= 1000 px: 5-column grid — each card fills 1/5 of available width, all cards visible.
+            < 1000 px: horizontal scroll-snap carousel (each card full width × full height). */}
+        <div style={{ flex:1, minHeight:0, gap:5, overflow:"hidden",
+          ...(boxesCols
+            ? { display:"grid", gridTemplateColumns:"repeat(5, minmax(0,1fr))" }
             : { display:"flex", flexDirection:"row", overflowX:"auto", overflowY:"hidden", scrollSnapType:"x mandatory", WebkitOverflowScrolling:"touch", scrollbarWidth:"none", msOverflowStyle:"none" }
           ) }}>
 
