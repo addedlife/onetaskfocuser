@@ -224,6 +224,10 @@ const CHIEF_SCAN_CACHE_MS = 10 * 60 * 1000;      // industry standard: 10-min TT
 const CHIEF_SCAN_MIN_AI_GAP_MS = 3 * 60 * 1000;  // min 3 min between AI calls (debounced, not per keystroke)
 const CHIEF_SUGGESTIONS_CACHE_MS = 45 * 60 * 1000;
 const CHIEF_SUGGESTIONS_MIN_AI_GAP_MS = 25 * 60 * 1000;
+const NC_SUMMARY_CACHE_KEY = "ot_nc_summary_cache_v1";
+const NC_SUMMARY_LAST_RUN_KEY = "ot_nc_summary_last_run_v1";
+const NC_SUMMARY_CACHE_MS = 8 * 60 * 1000;
+const NC_SUMMARY_MIN_GAP_MS = 90 * 1000;
 const ROUTINE_CALENDAR_RE = /\b(shacharis|shacharit|mincha|maariv|arvit|daven(?:ing)?|daf yomi|mishna(?:h)? yomi|halacha yomi|parsha|selichos|slichos)\b/i;
 const CHIEF_SEARCHING_BRIEF = { summary: "", nextAction: "", why: "", urgency: "watch", sources: [], focusArea: "operations", _isPlaceholder: true };
 const CHIEF_QUIET_BRIEF = { summary: "", nextAction: "", why: "", urgency: "watch", sources: [], focusArea: "operations", _isPlaceholder: true };
@@ -736,6 +740,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const hoverTimerRef = useRef(null);
   const [reconnectTimedOut, setReconnectTimedOut] = useState(false);
   const [chiefBrief, setChiefBrief] = useState(null);
+  const [ncSummary, setNcSummary] = useState(null);
   const [chiefLoading, setChiefLoading] = useState(false);
   const [chiefError, setChiefError] = useState("");
   const [chiefPrompt, setChiefPrompt] = useState("");
@@ -1057,6 +1062,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   }), [chiefContext, chiefLearningProfile, sessionSuppressed]);
   const chiefScanKey = useMemo(() => JSON.stringify(chiefScanContext), [chiefScanContext]);
   const chiefFallback = null;
+  const ncSummaryScanKey = useMemo(() => JSON.stringify(chiefContext), [chiefContext]);
   const taskSuggestionPriorities = useMemo(() =>
     [...(priorities || [])]
       .filter(p => !p.deleted && !p.isShaila && p.id !== "shaila")
@@ -1172,6 +1178,36 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       window.clearTimeout(timer);
     };
   }, [chiefPage, chiefScanKey, chiefRefreshNonce, desktopLayout, isMobileDevice]); // eslint-disable-line
+  useEffect(() => {
+    let cancelled = false;
+    const now = Date.now();
+    if (!aiOpts) { setNcSummary(null); return undefined; }
+    const cached = readStorageJson(NC_SUMMARY_CACHE_KEY);
+    if (cached?.scanKey === ncSummaryScanKey && cached?.result?.supercrunch && now - Number(cached.ts || 0) < NC_SUMMARY_CACHE_MS) {
+      setNcSummary(cached.result);
+      return undefined;
+    }
+    if (now - readStorageNumber(NC_SUMMARY_LAST_RUN_KEY) < NC_SUMMARY_MIN_GAP_MS) {
+      if (cached?.result?.supercrunch) setNcSummary(cached.result);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      writeStorageNumber(NC_SUMMARY_LAST_RUN_KEY, Date.now());
+      runAIJob("dashboard.nervecenter_summary.v1", { context: chiefContext }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 600 } })
+        .then(job => {
+          if (cancelled) return;
+          const output = job?.output;
+          if (output?.supercrunch) {
+            setNcSummary(output);
+            writeStorageJson(NC_SUMMARY_CACHE_KEY, { scanKey: ncSummaryScanKey, ts: Date.now(), result: output });
+          } else {
+            setNcSummary(null);
+          }
+        })
+        .catch(() => { if (!cancelled) setNcSummary(null); });
+    }, 600);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [ncSummaryScanKey, aiOpts]); // eslint-disable-line
 
   useEffect(() => {
     if (!chiefPage || !aiOpts || (!calendarRows.length && !(gmailMessages || []).length) || !taskSuggestionPriorities.length) {
@@ -2053,7 +2089,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // chief page — it emits one factual `signals` line per area). We prefer that AI line
     // and fall back to the deterministic line below so the card is never blank, even
     // before the scan resolves or when offline (stale-while-revalidate).
-    const signalNote = area => (activeChiefBrief?.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || "";
+    const signalNote = area => (ncSummary?.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || "";
     // Phone link state as a single dot color: green = live, accent = active call/incoming,
     // gray = offline/stale. Shown in the Phone card's corner so status reads at a glance.
     const phoneDotColor = phoneStatusSummary?.online
@@ -2067,7 +2103,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const joinTop = (items, rest) => items.join(" · ") + (rest > 0 ? ` +${rest}` : "");
 
     const cardSummary = area => signalNote(area);
-    const supercrunch = chiefSummaryText || "";
+    const supercrunch = ncSummary?.supercrunch || "";
 
     return (
       <div style={{ position:"fixed", top:topOffset, left:sidebarW, right:0, bottom:0, zIndex:7600, background:C.bg, display:"flex", flexDirection:"column", overflow:"hidden", borderLeft:`1px solid ${C.divider}`, boxSizing:"border-box", padding:"5px 8px calc(8px + env(safe-area-inset-bottom,0px))" }}>
@@ -2288,7 +2324,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
     // Each collapsed section's preview line prefers the chief's per-category summary
     // (same summarizer as the chief page), falling back to a deterministic line.
-    const signalNote = area => (activeChiefBrief?.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || "";
+    const signalNote = area => (ncSummary?.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || "";
 
     const fmtTimeM = (raw) => { try { const d = new Date(raw); const now = new Date(); return d.toDateString()===now.toDateString() ? d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : d.toLocaleDateString([],{month:"short",day:"numeric"}); } catch { return ""; } };
     const gmailHdr = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || "";

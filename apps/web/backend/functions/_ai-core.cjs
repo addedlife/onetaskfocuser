@@ -882,7 +882,7 @@ const AI_JOB_REGISTRY = {
     output: "json",
     shape: "object",
     genConfig: { temperature: 0.1, maxOutputTokens: 1200 },
-    schema: '{"brief":"2-4 short declarative status statements — same clipped factual tone as signals, no framing or advice","summary":"1-2 sentence headline of the top priority","nextAction":"single concrete next move","why":"clear reason why this is the top priority right now","focusArea":"calendar|tasks|shailos|mail|phone|operations","urgency":"now|today|soon|watch","sources":["Calendar","Tasks"],"signals":[{"area":"Calendar","note":"terse Apple-notification-style condensed status for this area"}]}',
+    schema: '{"brief":"2-4 short declarative status statements — same clipped factual tone as signals, no framing or advice","summary":"terse comma-separated list of the actual items across all sources — name the thing not the category (e.g. \'Kashrus research, $100 CashApp transfer, bank account closure\'); no counts, no category nouns; trailing \'various [X] items\' if more remain","nextAction":"single concrete next move","why":"clear reason why this is the top priority right now","focusArea":"calendar|tasks|shailos|mail|phone|operations","urgency":"now|today|soon|watch","sources":["Calendar","Tasks"],"signals":[{"area":"Calendar","note":"terse Apple-notification-style condensed status for this area"}]}',
     buildPrompt(input = {}) {
       const context = normalizeChiefContext(input.context || input);
       return compactLines([
@@ -895,7 +895,7 @@ const AI_JOB_REGISTRY = {
         "Routine calendar items (regular davening, standard learning sessions, recurring meetings) are background context only — not the next action unless happening right now or actively blocking work.",
         "Treat a missed call as actionable only when phone.missedCalls is positive or a call row has needsReturnCall true.",
         "Write 'brief': 2–4 short, clipped, declarative status statements. Same factual tone as the signals — state what is there, not what to do. No framing phrases, no 'you should', no advice. Write each sentence like a status line, e.g. 'You have 3 Now tasks. 1 missed call from Reuven. Next calendar item is Mincha at 4pm. 2 unread emails, top from Dr. Cohen.'",
-        "Write 'summary': 1–2 sentence headline of the single most relevant item right now.",
+        "Write 'summary': a terse comma-separated list of the actual named items across all sources — task text, email topics, shaila subjects, caller names, calendar events. Name the thing, not the category. Never use counts or category nouns ('3 tasks', '2 shailos', 'emails'). If more items exist than fit, end with 'various [X] items' (e.g. 'Kashrus research, $100 CashApp transfer, bank account closure, various household items'). One line, no periods.",
         "Pick 'nextAction': the single most useful concrete move across all sources. Write 'why' with clear reasoning — explain why this is the right next step.",
         "Write 'signals': one entry per area that has active data (Calendar, Mail, Tasks, Shailos, Phone). Each note is the area's status — what is there, not advice.",
         "Write every 'note' in Apple's notification-summary style: a terse, telegraphic condensation of the key facts. Drop articles, filler, and weak verbs where the meaning survives; lead with the most concrete fact; pack multiple items with commas or semicolons; sentence case; no preamble like 'You have' or 'There are'. Examples: 'Dentist 3pm; lunch with David 1pm'; 'From Chase: overdraft transfer made, split purchases with Pay in 4'; 'David, Mom, unknown'.",
@@ -945,6 +945,38 @@ const AI_JOB_REGISTRY = {
       ]);
     },
     validate: normalizeChiefTaskSuggestions,
+  },
+  "dashboard.nervecenter_summary.v1": {
+    task: "dashboard-nervecenter-summary",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0.1, maxOutputTokens: 600 },
+    schema: '{"supercrunch":"terse comma-separated list of the actual items across all sources — name the thing not the category; no counts, no category nouns; trailing \'various [X] items\' if more remain","signals":[{"area":"Calendar","note":"terse Apple-notification-style note for this area"}]}',
+    buildPrompt(input = {}) {
+      const context = normalizeChiefContext(input.context || input);
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "You are generating two display strings for a NerveCenter dashboard header.",
+        "Scan ALL sources equally: Calendar, Gmail, Tasks, Shailos, phone calls, and texts.",
+        "Routine calendar items (regular davening, standard learning sessions, recurring meetings) are background context only.",
+        "Write 'supercrunch': a terse comma-separated list of the actual named items across all sources — task text, email topics, shaila subjects, caller names, calendar events. Name the thing, not the category. Never use counts or category nouns ('3 tasks', '2 shailos', 'emails'). If more items exist than fit, end with 'various [X] items'. One line, no periods. Example: 'Kashrus research, $100 CashApp transfer, bank account closure, various household items'.",
+        "Write 'signals': one entry per area that has active data (Calendar, Mail, Tasks, Shailos, Phone). Each note is Apple notification-summary style: terse, telegraphic, leads with the most concrete fact. Drop articles and filler. Pack multiple items with commas or semicolons.",
+        "Do NOT restate the area's own name or use bare counts in a note — the UI already labels each line. Say 'Pending: kashrus of the pot' not '2 shailos'; say 'David, Mom' not '3 missed calls: David, Mom'.",
+        "Do not invent facts. If data is thin, say what is visible.",
+        `Current snapshot:\n${jsonBlock(context)}`,
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate(value) {
+      const o = ensureObject(value);
+      return {
+        supercrunch: cleanString(o.supercrunch, 220),
+        signals: ensureArray(o.signals || [], "signals").slice(0, 6).map(s => ({
+          area: cleanString(s?.area, 60),
+          note: cleanString(s?.note, 200),
+        })).filter(s => s.area && s.note),
+      };
+    },
   },
   "dashboard.chief_dialogue.v1": {
     task: "dashboard-chief-dialogue",
