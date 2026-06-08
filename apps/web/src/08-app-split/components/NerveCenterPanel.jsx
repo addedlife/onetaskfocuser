@@ -2069,12 +2069,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const decodeSnipM = s => (s || "").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g," ").trim();
     const upcomingCal = (calendarRows || []).filter(r => !r.past);
 
-    // Portrait: 5 stacked equal rows. Landscape: 3 boxes on top (each 2 of 6 cols),
-    // 2 on the bottom (each 3 of 6) — fills the screen evenly with no empty cell.
-    const isPortrait = typeof window === "undefined" || window.innerHeight >= window.innerWidth;
-    // Mobile landscape: 3+2 spanning layout (idx<3 → span 2 of 6, idx≥3 → span 3 of 6).
-    // Desktop: 5 equal columns, no spanning needed.
-    const span = idx => !isMobileDevice ? undefined : isPortrait ? undefined : (idx < 3 ? "span 2" : "span 3");
+    // >= 600 px: vertical column (1 col × 5 rows) — each card is full panel-width, good text display.
+    // < 600 px: horizontal scroll-snap carousel (full width × full height per card) — avoids
+    // the cramped ~80 px per-card height a 5-row stack produces on narrow panels.
+    // 600 px = Material Design compact→medium breakpoint, standard minimum for side-by-side layouts.
+    const boxesVertical = availableW >= 600;
+    const cardStyle = boxesVertical ? {} : { flex: "0 0 100%", scrollSnapAlign: "start", minWidth: 0 };
     const emptyMsg = txt => <div style={{ padding:"12px 14px", fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{txt}</div>;
     // Density: compact tightens padding AND type (toward the TaskRiver feed's density) so a lot
     // more fits. Comfortable keeps the roomier defaults.
@@ -2137,15 +2137,16 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           <span style={{ fontSize:11, color:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>{nowDate.toLocaleDateString([], { weekday:"short", month:"short", day:"numeric" })}</span>
         </div>
 
-        {/* Box grid: phone portrait → 1 col / 5 rows; phone landscape → 3+2 cols;
-            desktop → single column of 5 rows, each filling an equal share of the
-            screen height (summary above sits in nextActionBar). */}
-        <div style={{ flex:1, minHeight:0, display:"grid", gap:5,
-          gridTemplateColumns: isMobileDevice ? (isPortrait ? "1fr" : "repeat(6, 1fr)") : "1fr",
-          gridTemplateRows: isMobileDevice ? (isPortrait ? "repeat(5, minmax(0,1fr))" : "repeat(2, minmax(0,1fr))") : "repeat(5, minmax(0,1fr))" }}>
+        {/* >= 600 px: vertical 1-col × 5-row grid (all cards visible, full-width text).
+            < 600 px: horizontal scroll-snap carousel (each card full width × full height). */}
+        <div style={{ flex:1, minHeight:0, gap:5,
+          ...(boxesVertical
+            ? { display:"grid", gridTemplateColumns:"1fr", gridTemplateRows:"repeat(5, minmax(0,1fr))" }
+            : { display:"flex", flexDirection:"row", overflowX:"auto", overflowY:"hidden", scrollSnapType:"x mandatory", WebkitOverflowScrolling:"touch", scrollbarWidth:"none", msOverflowStyle:"none" }
+          ) }}>
 
           {/* Mail */}
-          <MobileBox {...boxCtx} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail")} style={{ gridColumn: span(0) }}
+          <MobileBox {...boxCtx} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail")} style={cardStyle}
             onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}>
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : gmailMessages.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
@@ -2171,7 +2172,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Phone */}
-          <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} summary={cardSummary("Phone")} style={{ gridColumn: span(1) }}
+          <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} summary={cardSummary("Phone")} style={cardStyle}
             statusDot={phoneDotColor} onOpen={onOpenPhone}>
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
@@ -2181,7 +2182,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Tasks */}
-          <MobileBox {...boxCtx} icon="task_alt" title="Tasks" accentColor={C.accent} summary={cardSummary("Tasks")} style={{ gridColumn: span(2) }}
+          <MobileBox {...boxCtx} icon="task_alt" title="Tasks" accentColor={C.accent} summary={cardSummary("Tasks")} style={cardStyle}
             onOpen={onOpenQueue}>
             {taskComposerOpen && (
               <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.divider}` }}>
@@ -2224,7 +2225,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Shailos */}
-          <MobileBox {...boxCtx} icon="rule" title="Shailos" accentColor={GOLD} summary={cardSummary("Shailos")} style={{ gridColumn: span(3) }}
+          <MobileBox {...boxCtx} icon="rule" title="Shailos" accentColor={GOLD} summary={cardSummary("Shailos")} style={cardStyle}
             onOpen={onOpenShailos}>
             {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : visibleShailos.map(s => {
               const text = nerveDisplaySummary(s,"Open shaila");
@@ -2245,7 +2246,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Calendar */}
-          <MobileBox {...boxCtx} icon="calendar_today" title="Calendar" accentColor={C.warning} summary={cardSummary("Calendar")} style={{ gridColumn: span(4) }}
+          <MobileBox {...boxCtx} icon="calendar_today" title="Calendar" accentColor={C.warning} summary={cardSummary("Calendar")} style={cardStyle}
             onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}>
             {showAddEvent && (
               <div style={{ padding:"10px 12px", borderBottom:`1px solid ${C.divider}` }}>
