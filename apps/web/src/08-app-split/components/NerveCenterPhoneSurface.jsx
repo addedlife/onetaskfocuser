@@ -822,13 +822,11 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     voicemailCount: vmCount,
     texts: threads.slice(0, 6).map(thread => {
       const latest = thread._latestMessage || thread._messages?.[thread._messages.length - 1] || {};
-      const body = messageBody(latest);
-      // Condense to ≤4 words so the summary line stays scannable.
-      const words = body.replace(/\s+/g, " ").trim().split(" ");
-      const shortPreview = words.length <= 4 ? body : words.slice(0, 4).join(" ") + "…";
+      const body = messageBody(latest).replace(/\s+/g, " ").trim();
+      const preview = body.length > 120 ? body.slice(0, 119) + "…" : body;
       return {
         name: thread._name || thread._who || "Unknown",
-        preview: shortPreview,
+        preview,
         time: fmtTime(thread._latestAt),
         unread: (thread._unreadCount || 0) > 0,
       };
