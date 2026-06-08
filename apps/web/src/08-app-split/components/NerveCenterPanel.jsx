@@ -1708,36 +1708,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // Capture timerId so the cleanup doesn't depend on the mutable ref value after unmount.
     return () => { clearInterval(timerId); streamRef.current.timer = null; };
   }, [activeChiefTaskText]);
-  // Global snapshot line — locally computed, always current, covers every category.
-  // This is separate from the AI suggestion so they don't echo the same single item.
-  const globalSnapshotParts = useMemo(() => {
-    const parts = [];
-    // Name the top urgent tasks — never count them
-    const urgentTasks = primaryTaskQueue.filter(t => /now/i.test(t.priority));
-    const todayTasks = primaryTaskQueue.filter(t => /today/i.test(t.priority));
-    const topTasks = (urgentTasks.length ? urgentTasks : todayTasks.length ? todayTasks : primaryTaskQueue).slice(0, 2);
-    topTasks.forEach(t => { const n = nerveDisplaySummary(t, ""); if (n) parts.push(n); });
-    // Next non-routine calendar event by name
-    const upcoming = calendarRows.filter(r => !r.past);
-    const calRow = upcoming.find(r => r.now) || upcoming.find(r => !r.routine) || upcoming[0];
-    if (calRow?.evt?.summary) parts.push(compactNerveSummary(calRow.evt.summary, ""));
-    // First pending shaila by name
-    if (visibleShailos.length) { const n = nerveDisplaySummary(visibleShailos[0], ""); if (n) parts.push(n); }
-    // First email subject
-    if (gmailMessages?.length) {
-      const hdr = (m, k) => m?.payload?.headers?.find(h => h.name === k)?.value || "";
-      const subj = hdr(gmailMessages[0], "Subject");
-      if (subj) parts.push(subj.length > 46 ? subj.slice(0, 45) + "…" : subj);
-    }
-    // Missed callers by name
-    const ph = phoneActivitySummary;
-    if (ph.missedCalls > 0) {
-      const names = (ph.calls || []).filter(c => c.needsReturnCall).slice(0, 2).map(c => c.name).filter(Boolean);
-      parts.push(names.length ? names.join(", ") : "missed call");
-    }
-    return parts.filter(Boolean).slice(0, 6).join(" · ");
-  }, [primaryTaskQueue, calendarRows, gmailMessages, visibleShailos, phoneActivitySummary]);
-
   const nerveWaitingText = "Waiting on summary";
   const nerveSupercrunch = cleanOneLine(ncSummary?.supercrunch || nerveWaitingText, 240);
   const nerveSignalNote = area => (ncSummary?.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || nerveWaitingText;
@@ -1750,13 +1720,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
   const nextActionBar = activeChiefTaskText ? (
     <div style={{ flexShrink: 0, minWidth: 0, margin: "0 0 4px", padding: "8px 10px", borderRadius: 8, background: hexToRgba(C.accent, 0.06) || C.bgSoft, borderLeft: `3px solid ${C.accent}` }}>
-      {/* Row 1: live global snapshot across all categories */}
-      {globalSnapshotParts && (
-        <div style={{ fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.3, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {globalSnapshotParts}
-        </div>
-      )}
-      {/* Row 2: AI suggestion + Skip + Resuggest */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
         <span style={{ display: "flex", color: C.accent, flexShrink: 0 }}>{suiteIcon("bolt", 17)}</span>
         <span style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
