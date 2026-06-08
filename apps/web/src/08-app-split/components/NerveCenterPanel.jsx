@@ -225,8 +225,8 @@ const CHIEF_SCAN_MIN_AI_GAP_MS = 3 * 60 * 1000;  // min 3 min between AI calls (
 const CHIEF_SUGGESTIONS_CACHE_MS = 45 * 60 * 1000;
 const CHIEF_SUGGESTIONS_MIN_AI_GAP_MS = 25 * 60 * 1000;
 const ROUTINE_CALENDAR_RE = /\b(shacharis|shacharit|mincha|maariv|arvit|daven(?:ing)?|daf yomi|mishna(?:h)? yomi|halacha yomi|parsha|selichos|slichos)\b/i;
-const CHIEF_SEARCHING_BRIEF = { summary: "Scanning NerveCenter...", nextAction: "One moment — looking across all sources.", why: "", urgency: "watch", sources: [], focusArea: "operations", _isPlaceholder: true };
-const CHIEF_QUIET_BRIEF = { summary: "Top item handled.", nextAction: "Nothing else pressing right now.", why: "Remaining signals don’t call for action yet.", urgency: "watch", sources: [], focusArea: "operations", _isPlaceholder: true };
+const CHIEF_SEARCHING_BRIEF = { summary: "", nextAction: "", why: "", urgency: "watch", sources: [], focusArea: "operations", _isPlaceholder: true };
+const CHIEF_QUIET_BRIEF = { summary: "", nextAction: "", why: "", urgency: "watch", sources: [], focusArea: "operations", _isPlaceholder: true };
 
 function cleanOneLine(value, max = 180) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -540,118 +540,6 @@ function formatCalendarWindow(evt) {
   return `${time} - ${end.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
 }
 
-function buildChiefFallbackBrief(context = {}, suppressed = []) {
-  const notSuppressed = (text) => {
-    if (!suppressed.length || !text) return true;
-    return !suppressed.some(s => tokenOverlapRatio(String(text), String(s.text || "")) >= 0.35);
-  };
-  const currentEvent = (context.calendar || []).find(evt => evt.now && notSuppressed(evt.summary));
-  const specialEvent = (context.calendar || []).find(evt => evt.special && !evt.past && notSuppressed(evt.summary));
-  const nowTask = (context.tasks || []).find(task => /now/i.test(task.priority) && notSuppressed(task.text))
-    || (context.tasks || []).find(task => notSuppressed(task.text));
-  const shaila = (context.shailos || []).find(s => notSuppressed(s.text));
-  const email = (context.emails || []).find(e => notSuppressed(e.subject || e.summary));
-  const phone = context.phone || {};
-  const phoneNeeds = (phone.unreadTexts || 0) + (phone.missedCalls || 0) + (phone.voicemailCount || 0);
-  const nowCount = (context.tasks || []).filter(t => /now/i.test(t.priority)).length;
-
-  // Build per-area signals (factual status lines)
-  const signals = [];
-  if (currentEvent) signals.push({ area: "Calendar", note: `In progress: ${currentEvent.summary}` });
-  else if (specialEvent) signals.push({ area: "Calendar", note: `Up next: ${specialEvent.summary}${specialEvent.label ? ` — ${specialEvent.label}` : ""}` });
-  if (phoneNeeds > 0) {
-    const phoneParts = [
-      phone.missedCalls > 0 ? `${phone.missedCalls} missed call${phone.missedCalls > 1 ? "s" : ""}` : "",
-      phone.unreadTexts > 0 ? `${phone.unreadTexts} unread text${phone.unreadTexts > 1 ? "s" : ""}` : "",
-      phone.voicemailCount > 0 ? `${phone.voicemailCount} voicemail${phone.voicemailCount > 1 ? "s" : ""}` : "",
-    ].filter(Boolean);
-    // Append short text previews with sender: "Ginsparg: re meeting; Blech: thank you"
-    const textPreviews = (phone.texts || [])
-      .filter(t => t.unread && t.name && t.preview)
-      .slice(0, 3)
-      .map(t => `${t.name.split(" ")[0]}: ${t.preview}`)
-      .join("; ");
-    if (textPreviews) phoneParts.push(textPreviews);
-    signals.push({ area: "Phone", note: phoneParts.join(" · ") });
-  }
-  // Notes never restate the area name or its count — the card/section already labels it.
-  if ((context.shailos || []).length > 0) signals.push({ area: "Shailos", note: shaila?.text || context.shailos[0]?.text || "Pending answer" });
-  if (email) signals.push({ area: "Mail", note: `${email.from ? `${email.from}: ` : ""}${email.summary || email.subject}` });
-  if ((context.tasks || []).length > 0) signals.push({ area: "Tasks", note: nowTask?.text || context.tasks[0]?.text || "Open task" });
-
-  // Build natural language brief covering all sources
-  const briefParts = [];
-  if (currentEvent) briefParts.push(`You are currently in ${currentEvent.summary}.`);
-  if (specialEvent && !currentEvent) briefParts.push(`${specialEvent.summary} is the next calendar commitment.`);
-  if (phoneNeeds > 0) {
-    const phoneParts = [
-      phone.missedCalls > 0 ? `${phone.missedCalls} missed call${phone.missedCalls > 1 ? "s" : ""}` : "",
-      phone.unreadTexts > 0 ? `${phone.unreadTexts} unread text${phone.unreadTexts > 1 ? "s" : ""}` : "",
-      phone.voicemailCount > 0 ? `${phone.voicemailCount} voicemail${phone.voicemailCount > 1 ? "s" : ""}` : "",
-    ].filter(Boolean);
-    briefParts.push(`Phone: ${phoneParts.join(", ")}.`);
-  }
-  if ((context.shailos || []).length > 0) briefParts.push(`${context.shailos.length} shaila${context.shailos.length > 1 ? "s" : ""} in the queue.`);
-  if (email) briefParts.push(`${email.from ? `${email.from} sent` : "Mail:"} a message to look at.`);
-  if (nowCount > 0) briefParts.push(`${nowCount} Now item${nowCount > 1 ? "s" : ""} in the task queue.`);
-  const brief = briefParts.length > 0 ? briefParts.join(" ") : "Nothing pressing in the current snapshot.";
-
-  if (currentEvent) {
-    return {
-      brief, signals,
-      summary: `In ${currentEvent.summary} right now.`,
-      nextAction: nowTask ? `${nowTask.text} is queued for the next open slot.` : "Current calendar block is active — nothing new to add right now.",
-      why: currentEvent.label || "Calendar is the active block.",
-      focusArea: "calendar", urgency: "now", sources: ["Calendar", "Tasks"],
-    };
-  }
-  if (specialEvent) {
-    return {
-      brief, signals,
-      summary: `${specialEvent.summary} is the next non-routine item on the calendar.`,
-      nextAction: `Prep for ${specialEvent.summary}.`,
-      why: specialEvent.label || "Next special calendar item.",
-      focusArea: "calendar", urgency: "today", sources: ["Calendar"],
-    };
-  }
-  if (phoneNeeds > 0) {
-    return {
-      brief, signals,
-      summary: `Phone: ${phoneNeeds} item${phoneNeeds === 1 ? "" : "s"} to check when ready.`,
-      nextAction: "Open the Phone pane and work through the newest item.",
-      why: "Recent call or message activity on the phone.",
-      focusArea: "phone", urgency: "today", sources: ["Phone"],
-    };
-  }
-  if (shaila) {
-    return {
-      brief, signals,
-      summary: `${context.shailos.length} shaila${context.shailos.length === 1 ? "" : "s"} in the queue.`,
-      nextAction: `Next shaila: ${shaila.text}.`,
-      why: shaila.status || "Shaila work is in progress.",
-      focusArea: "shailos", urgency: "today", sources: ["Shailos"],
-    };
-  }
-  if (email) {
-    return {
-      brief, signals,
-      summary: `Mail item from ${email.from || "your inbox"}.`,
-      nextAction: `Look at "${email.summary || email.subject}" and decide if it needs a reply.`,
-      why: "Inbox has an item worth a look.",
-      focusArea: "mail", urgency: "watch", sources: ["Mail"],
-    };
-  }
-  return {
-    brief, signals,
-    summary: nowTask ? "Next move is in the task queue." : "Nothing pressing in the current dashboard snapshot.",
-    nextAction: nowTask ? nowTask.text : "Add or choose one concrete next task.",
-    why: nowTask ? `Priority: ${nowTask.priority || "active"}.` : "No current calendar, mail, phone, or shaila pressure.",
-    focusArea: "tasks", urgency: nowTask ? "today" : "watch", sources: ["Tasks"],
-  };
-}
-
-// Translucent rgba from a #hex color (for subtle per-category tints). Returns null for
-// non-hex input so callers can fall back to a plain token.
 function hexToRgba(hex, a) {
   if (typeof hex !== "string") return null;
   let h = hex.trim().replace(/^#/, "");
@@ -685,10 +573,10 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
           aria-expanded={expandable ? expanded : undefined}
         >
           <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0.1 }}>{title}</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0.1 }}>{title}</span>
           {count > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
           {expandable && !expanded && preview != null && (
-            <span style={{ fontSize: 13, color: C.faint, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{preview}</span>
+            <span style={{ fontSize: 14, color: C.muted, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{preview}</span>
           )}
           {expandable && (
             <span style={{ marginLeft: "auto", color: expanded ? C.muted : C.faint, display: "flex", flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("chevron_right", 18)}</span>
@@ -716,14 +604,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
           </div>
         )}
       </div>
-      {/* Collapsed: the full chief summary on its own line (wraps up to 2 lines), aligned
-          under the title. Tapping it expands the section. */}
-      {expandable && !expanded && preview != null && (
-        <button onClick={() => onExpand(id)}
-          style={{ all: "unset", boxSizing: "border-box", width: "100%", cursor: "pointer", padding: "0 12px 8px 40px", fontSize: 11, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.3, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>
-          {preview}
-        </button>
-      )}
+      {/* Preview shown inline in the header — no second body row needed. */}
       {keepMounted
         ? <div style={{ display: expanded ? "block" : "none", ...(expanded ? scrollStyle : {}) }}>{children}</div>
         : (expanded && <div style={scrollStyle}>{children}</div>)}
@@ -1175,7 +1056,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     sessionSuppressed: sessionSuppressed.slice(-8).map(s => s.text),
   }), [chiefContext, chiefLearningProfile, sessionSuppressed]);
   const chiefScanKey = useMemo(() => JSON.stringify(chiefScanContext), [chiefScanContext]);
-  const chiefFallback = useMemo(() => buildChiefFallbackBrief(chiefContext, sessionSuppressed), [chiefContext, sessionSuppressed]);
+  const chiefFallback = null;
   const taskSuggestionPriorities = useMemo(() =>
     [...(priorities || [])]
       .filter(p => !p.deleted && !p.isShaila && p.id !== "shaila")
@@ -1223,7 +1104,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const ncLayoutActive = !isMobileDevice && desktopLayout !== "full";
     if (!chiefPage && !isMobileDevice && !ncLayoutActive) {
       // Full desktop panel: always use the live fallback (no AI overhead needed there).
-      setChiefBrief(chiefFallback);
+      setChiefBrief(null);
       setChiefLoading(false);
       setChiefError("");
       return undefined;
@@ -1232,10 +1113,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     chiefRefreshHandledRef.current = chiefRefreshNonce;
     // Always show the fresh fallback immediately while the AI re-scan runs, so a resolved
     // missed call (or any context change) is never stuck showing stale data.
-    setChiefBrief(chiefFallback);
+    setChiefBrief(null);
     setChiefError("");
     if (!aiOpts) {
-      setChiefBrief(chiefFallback);
+      setChiefBrief(null);
       setChiefLoading(false);
       return undefined;
     }
@@ -1246,7 +1127,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       return undefined;
     }
     if (!force && now - readStorageNumber(CHIEF_SCAN_LAST_RUN_KEY) < CHIEF_SCAN_MIN_AI_GAP_MS) {
-      setChiefBrief(cached?.brief || chiefFallback);
+      setChiefBrief(cached?.brief ?? null);
       setChiefError(cached?.brief ? "Using cached scan." : "Using local scan.");
       setChiefLoading(false);
       return undefined;
@@ -1273,14 +1154,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               writeStorageJson(CHIEF_SCAN_CACHE_KEY, { scanKey: chiefScanKey, ts: Date.now(), brief: output });
             }
           } else {
-            setChiefBrief(chiefFallback);
-            setChiefError("Using local scan.");
+            setChiefBrief(null);
+            setChiefError("");
           }
         })
         .catch(() => {
           if (cancelled) return;
-          setChiefBrief(chiefFallback);
-          setChiefError("Using local scan.");
+          setChiefBrief(null);
+          setChiefError("");
         })
         .finally(() => {
           if (!cancelled) setChiefLoading(false);
@@ -1415,10 +1296,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       return;
     }
     if (looksLikeChiefRejection(question)) {
-      const rejectedBrief = chiefBrief || chiefFallback;
+      const rejectedBrief = chiefBrief;
       recordChiefSmartLearning(/(?:next|skip)/i.test(question) ? "next" : "not_now", rejectedBrief);
       const suppressText = cleanOneLine(rejectedBrief.nextAction || "", 260);
-      if (suppressText) setSessionSuppressed(prev => [...prev, { text: suppressText, sources: (chiefBrief || chiefFallback).sources || [], focusArea: (chiefBrief || chiefFallback).focusArea || "" }].slice(-10));
+      if (suppressText) setSessionSuppressed(prev => [...prev, { text: suppressText, sources: chiefBrief?.sources || [], focusArea: chiefBrief?.focusArea || "" }].slice(-10));
       setChiefBrief(CHIEF_SEARCHING_BRIEF);
       setChiefError("");
       setChiefDialogue([...nextHistory, { role: "assistant", text: `Got it. I am dropping "${cleanOneLine(rejectedBrief.nextAction, 140)}" and rescanning for a better next move.` }].slice(-6));
@@ -1426,7 +1307,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       return;
     }
     if (!aiOpts) {
-      setChiefDialogue([...nextHistory, { role: "assistant", text: `${chiefBrief?.nextAction || chiefFallback.nextAction} ${chiefBrief?.why || chiefFallback.why}` }].slice(-6));
+      setChiefDialogue([...nextHistory, { role: "assistant", text: `${chiefBrief?.nextAction || ""} ${chiefBrief?.why || ""}` }].slice(-6));
       return;
     }
     setChiefDialogueLoading(true);
@@ -1434,22 +1315,22 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       const historyText = nextHistory.map(row => `${row.role}: ${row.text}`).join("\n");
       const job = await runAIJob("dashboard.chief_dialogue.v1", {
         context: chiefContext,
-        brief: chiefBrief || chiefFallback,
+        brief: chiefBrief,
         history: historyText,
         question,
       }, aiOpts, { genConfig: { temperature: 0.2, maxOutputTokens: 1100 } });
-      const answer = String(job?.output || job?.text || "").trim() || `${chiefBrief?.nextAction || chiefFallback.nextAction} ${chiefBrief?.why || chiefFallback.why}`;
+      const answer = String(job?.output || job?.text || "").trim() || `${chiefBrief?.nextAction || ""} ${chiefBrief?.why || ""}`;
       setChiefDialogue([...nextHistory, { role: "assistant", text: answer }].slice(-6));
     } catch {
-      setChiefDialogue([...nextHistory, { role: "assistant", text: `${chiefBrief?.nextAction || chiefFallback.nextAction} ${chiefBrief?.why || chiefFallback.why}` }].slice(-6));
+      setChiefDialogue([...nextHistory, { role: "assistant", text: `${chiefBrief?.nextAction || ""} ${chiefBrief?.why || ""}` }].slice(-6));
     } finally {
       setChiefDialogueLoading(false);
     }
   }
 
   function chiefSmartResponseNote(choice, label, brief) {
-    const nextAction = cleanOneLine(brief?.nextAction || chiefFallback.nextAction, 240);
-    const summary = cleanOneLine(brief?.summary || chiefFallback.summary, 180);
+    const nextAction = cleanOneLine(brief?.nextAction || "", 240);
+    const summary = cleanOneLine(brief?.summary || "", 180);
     const meaning = {
       done: "User marked the Chief recommendation as handled.",
       not_now: "User deferred the Chief recommendation.",
@@ -1465,7 +1346,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
   function recordChiefSmartLearning(choice, brief) {
     if (choice !== "done" && choice !== "not_now" && choice !== "next") return;
-    const actionText = cleanOneLine(brief?.nextAction || chiefFallback.nextAction, 240);
+    const actionText = cleanOneLine(brief?.nextAction || "", 240);
     const eventRow = {
       ts: Date.now(),
       decision: choice === "not_now" ? "rejected" : choice === "done" ? "completed" : "accepted",
@@ -1491,7 +1372,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   }
 
   async function handleChiefSmartResponse(choice) {
-    const brief = chiefBrief || chiefFallback;
+    const brief = chiefBrief;
     const labels = { done: "Done", not_now: "Not now", next: "Next", other: "Other" };
     const label = labels[choice] || "Response";
     if (choice === "other") {
@@ -1595,7 +1476,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     if (!text) return;
     const priorityId = chiefTaskPriority || defaultSuggestionPriorityId;
     onAddTask?.(text, priorityId);
-    recordChiefSmartLearning("done", chiefBrief || chiefFallback);
+    recordChiefSmartLearning("done", chiefBrief);
     setChiefDialogue(rows => [...rows, { role: "assistant", text: "Added that next move to Tasks." }].slice(-6));
     setChiefTaskDraft("");
     chiefTaskDraftSourceRef.current = "";
@@ -1757,7 +1638,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     setTimeout(() => taskInputRef.current?.focus(), 0);
   };
 
-  const activeChiefBrief = chiefBrief || chiefFallback;
+  const activeChiefBrief = chiefBrief;
   const activeChiefTone = activeChiefBrief?.urgency === "now" ? C.danger : activeChiefBrief?.urgency === "today" ? C.accent : C.muted;
   const activeChiefSources = (activeChiefBrief?.sources || []).slice(0, 5);
   const activeChiefTaskText = cleanOneLine(activeChiefBrief?.nextAction || "", 260);
@@ -1950,12 +1831,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             </div>
           </header>
 
-          {activeChiefBrief._isPlaceholder ? (
+          {activeChiefBrief?._isPlaceholder ? (
             <section style={{ ...pagePanel, padding: pagePad, display: "flex", alignItems: "center", gap: 12, minHeight: 56 }}>
-              {chiefLoading && <div style={{ width: 13, height: 13, borderRadius: "50%", border: `2px solid ${C.faint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite", flexShrink: 0 }} />}
-              <span style={{ color: C.muted, fontSize: isStacked ? 14 : 15, lineHeight: 1.5, fontFamily: NC_FONT_STACK }}>{activeChiefBrief.summary}</span>
+
             </section>
-          ) : (activeChiefBrief.brief || activeChiefBrief.signals?.length > 0) ? (
+          ) : activeChiefBrief && (activeChiefBrief.brief || activeChiefBrief.signals?.length > 0) ? (
             <section style={{ ...pagePanel, padding: pagePad }}>
               {activeChiefBrief.brief && (
                 <div style={{ fontSize: isStacked ? 14 : 15, lineHeight: 1.65, color: C.text, fontFamily: NC_FONT_STACK, marginBottom: activeChiefBrief.signals?.length > 0 ? 14 : 0 }}>
@@ -2001,12 +1881,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   )}
                 </div>
                 <div style={{ borderLeft: `4px solid ${chiefLoading ? C.divider : activeChiefTone}`, paddingLeft: 14, display: "grid", gap: 8, opacity: chiefLoading ? 0.55 : 1, transition: "opacity 0.25s" }}>
-                  <div style={{ fontSize: isStacked ? 19 : 24, lineHeight: 1.2, color: C.text, fontWeight: 650, fontFamily: NC_FONT_STACK }}>{activeChiefBrief.summary}</div>
+                  <div style={{ fontSize: isStacked ? 19 : 24, lineHeight: 1.2, color: C.text, fontWeight: 650, fontFamily: NC_FONT_STACK }}>{activeChiefBrief?.summary}</div>
                   <div style={{ fontSize: isStacked ? 15 : 17, lineHeight: 1.38, color: C.muted, fontFamily: NC_FONT_STACK }}>
-                    <span style={{ color: activeChiefTone, fontWeight: 700 }}>Do: </span>{activeChiefBrief.nextAction}
+                    <span style={{ color: activeChiefTone, fontWeight: 700 }}>Do: </span>{activeChiefBrief?.nextAction}
                   </div>
-                  {(activeChiefBrief.why || chiefError) && (
-                    <div style={{ fontSize: NC_TYPE.control, lineHeight: 1.45, color: C.faint, fontFamily: NC_FONT_STACK }}>{activeChiefBrief.why || chiefError}</div>
+                  {(activeChiefBrief?.why || chiefError) && (
+                    <div style={{ fontSize: NC_TYPE.control, lineHeight: 1.45, color: C.faint, fontFamily: NC_FONT_STACK }}>{activeChiefBrief?.why || chiefError}</div>
                   )}
                 </div>
               </div>
@@ -2027,8 +1907,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               </div>
               <div style={{ display: "grid", gridTemplateColumns: isStacked ? "1fr" : "repeat(3,minmax(0,1fr))", gap: 8 }}>
                 {[
-                  ["Focus", activeChiefBrief.focusArea || "operations", C.text],
-                  ["Timing", activeChiefBrief.urgency || "watch", activeChiefTone],
+                  ["Focus", activeChiefBrief?.focusArea || "operations", C.text],
+                  ["Timing", activeChiefBrief?.urgency || "watch", activeChiefTone],
                   ["Evidence", (activeChiefSources.length ? activeChiefSources : ["Dashboard"]).join(", "), C.text],
                 ].map(([label, value, color]) => (
                   <div key={label} style={{ border: `1px solid ${C.divider}`, borderRadius: 8, padding:8, background: C.bgSoft, minWidth: 0 }}>
@@ -2173,7 +2053,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // chief page — it emits one factual `signals` line per area). We prefer that AI line
     // and fall back to the deterministic line below so the card is never blank, even
     // before the scan resolves or when offline (stale-while-revalidate).
-    const signalNote = area => (activeChiefBrief.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || "";
+    const signalNote = area => (activeChiefBrief?.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || "";
     // Phone link state as a single dot color: green = live, accent = active call/incoming,
     // gray = offline/stale. Shown in the Phone card's corner so status reads at a glance.
     const phoneDotColor = phoneStatusSummary?.online
@@ -2186,97 +2066,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const trunc = (s, n) => s && s.length > n ? s.slice(0, n - 1) + "…" : (s || "");
     const joinTop = (items, rest) => items.join(" · ") + (rest > 0 ? ` +${rest}` : "");
 
-    const mailRich = (() => {
-      if (!gmailMessages?.length) return "Inbox clear";
-      const top = gmailMessages.slice(0, 4);
-      const items = top.map(msg => {
-        const from = fmtFromM(gmailHdr(msg, "From"));
-        const subj = trunc(gmailHdr(msg, "Subject") || "", 18);
-        return subj ? `${from}: ${subj}` : from;
-      });
-      return joinTop(items, gmailMessages.length - top.length);
-    })();
-
-    const phoneTL = (() => {
-      const u = Number(phoneActivitySummary?.unreadTexts || 0);
-      const m = Number(phoneActivitySummary?.missedCalls || 0);
-      const v = Number(phoneActivitySummary?.voicemailCount || 0);
-      const parts = [];
-      if (m) parts.push(`${m} missed call${m > 1 ? "s" : ""}`);
-      if (u) parts.push(`${u} text${u > 1 ? "s" : ""}`);
-      if (v) parts.push(`${v} voicemail${v > 1 ? "s" : ""}`);
-      return parts.length ? parts.join(" · ") : (phoneActivitySummary?.online ? "All clear" : "Phone offline");
-    })();
-
-    const tasksRich = (() => {
-      const n = primaryTaskQueue.length;
-      if (!n) return "No tasks";
-      const top = primaryTaskQueue.slice(0, 5);
-      const items = top.map(t => {
-        const text = trunc(nerveDisplaySummary(t, "Task"), 22);
-        const pri = gP(priorities, t.priority);
-        const isHigh = pri?.label?.toLowerCase().includes("urgent") || pri?.label?.toLowerCase().includes("p1");
-        return isHigh ? `${text} (P1)` : text;
-      });
-      return joinTop(items, n - top.length);
-    })();
-
-    const shailosRich = (() => {
-      const n = visibleShailos.length;
-      if (!n) return "No open shailos";
-      const top = visibleShailos.slice(0, 4);
-      const items = top.map(s => trunc(nerveDisplaySummary(s, "Shaila"), 24));
-      return joinTop(items, n - top.length);
-    })();
-
-    const calRich = (() => {
-      if (!upcomingCal.length) return "Nothing upcoming";
-      const top = upcomingCal.slice(0, 3);
-      const items = top.map(ev => {
-        const t = fmtTimeM(ev.start || ev.startTime || ev.date);
-        const title = trunc(compactNerveSummary(ev.summary || ev.title || ev.name || "", "Event"), 20);
-        return t ? `${title} ${t}` : title;
-      });
-      return joinTop(items, upcomingCal.length - top.length);
-    })();
-
-    // cardSummary: prefer chief AI signal per area, fall back to rich deterministic text.
-    const cardSummary = (area, fallback) => signalNote(area) || fallback;
-
-    // Supercrunched universal summary — ONE synthesized line of the most notable CONCRETE
-    // items across everything. Prefers the chief AI overview. No category nouns or counts
-    // ("3 tasks", "shailos open", "N unread") — just the actual things that matter, named.
-    const supercrunch = (() => {
-      if (chiefSummaryText) return chiefSummaryText;
-      const parts = [];
-      // Lead with the most urgent concrete task (its text, not a count)
-      if (primaryTaskQueue.length) {
-        const p1 = primaryTaskQueue.find(t => { const l = (gP(priorities, t.priority)?.label || "").toLowerCase(); return l.includes("urgent") || l.includes("p1"); });
-        const lead = trunc(nerveDisplaySummary(p1 || primaryTaskQueue[0], ""), 30);
-        if (lead) parts.push(p1 ? `${lead} (P1)` : lead);
-      }
-      // Next calendar commitment (title + time)
-      if (upcomingCal.length) {
-        const ev = upcomingCal[0];
-        const t = fmtTimeM(ev.start || ev.startTime || ev.date);
-        const title = trunc(compactNerveSummary(ev.summary || ev.title || ev.name || "", ""), 22);
-        if (title) parts.push(t ? `${title} ${t}` : title);
-      }
-      // Who you missed a call from (name, not "N missed calls")
-      const missedCall = (phoneActivitySummary?.calls || []).find(c => c.needsReturnCall);
-      if (missedCall?.name) parts.push(`${missedCall.name} called`);
-      // Top unread email (sender, not "N unread")
-      if (gmailMessages?.length) {
-        const from = fmtFromM(gmailHdr(gmailMessages[0], "From"));
-        if (from) parts.push(from);
-      }
-      // Lead open shaila (its text, not "N shailos")
-      if (visibleShailos.length) {
-        const s = trunc(nerveDisplaySummary(visibleShailos[0], ""), 26);
-        if (s) parts.push(s);
-      }
-      return parts.length ? parts.join(" · ") : "All clear";
-    })();
+    const cardSummary = area => signalNote(area);
+    const supercrunch = chiefSummaryText || "";
 
     return (
       <div style={{ position:"fixed", top:topOffset, left:sidebarW, right:0, bottom:0, zIndex:7600, background:C.bg, display:"flex", flexDirection:"column", overflow:"hidden", borderLeft:`1px solid ${C.divider}`, boxSizing:"border-box", padding:"5px 8px calc(8px + env(safe-area-inset-bottom,0px))" }}>
@@ -2318,7 +2109,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           gridTemplateRows: isMobileDevice ? (isPortrait ? "repeat(5, minmax(0,1fr))" : "repeat(2, minmax(0,1fr))") : "repeat(5, minmax(0,1fr))" }}>
 
           {/* Mail */}
-          <MobileBox {...boxCtx} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail", mailRich)} style={{ gridColumn: span(0) }}
+          <MobileBox {...boxCtx} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail")} style={{ gridColumn: span(0) }}
             onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}>
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : gmailMessages.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
@@ -2344,7 +2135,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Phone */}
-          <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} summary={cardSummary("Phone", phoneTL)} style={{ gridColumn: span(1) }}
+          <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} summary={cardSummary("Phone")} style={{ gridColumn: span(1) }}
             statusDot={phoneDotColor} onOpen={onOpenPhone}>
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
@@ -2354,7 +2145,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Tasks */}
-          <MobileBox {...boxCtx} icon="task_alt" title="Tasks" accentColor={C.accent} summary={cardSummary("Tasks", tasksRich)} style={{ gridColumn: span(2) }}
+          <MobileBox {...boxCtx} icon="task_alt" title="Tasks" accentColor={C.accent} summary={cardSummary("Tasks")} style={{ gridColumn: span(2) }}
             onOpen={onOpenQueue}>
             {taskComposerOpen && (
               <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.divider}` }}>
@@ -2397,7 +2188,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Shailos */}
-          <MobileBox {...boxCtx} icon="rule" title="Shailos" accentColor={GOLD} summary={cardSummary("Shailos", shailosRich)} style={{ gridColumn: span(3) }}
+          <MobileBox {...boxCtx} icon="rule" title="Shailos" accentColor={GOLD} summary={cardSummary("Shailos")} style={{ gridColumn: span(3) }}
             onOpen={onOpenShailos}>
             {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : visibleShailos.map(s => {
               const text = nerveDisplaySummary(s,"Open shaila");
@@ -2418,7 +2209,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Calendar */}
-          <MobileBox {...boxCtx} icon="calendar_today" title="Calendar" accentColor={C.warning} summary={cardSummary("Calendar", calRich)} style={{ gridColumn: span(4) }}
+          <MobileBox {...boxCtx} icon="calendar_today" title="Calendar" accentColor={C.warning} summary={cardSummary("Calendar")} style={{ gridColumn: span(4) }}
             onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}>
             {showAddEvent && (
               <div style={{ padding:"10px 12px", borderBottom:`1px solid ${C.divider}` }}>
@@ -2497,7 +2288,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
     // Each collapsed section's preview line prefers the chief's per-category summary
     // (same summarizer as the chief page), falling back to a deterministic line.
-    const signalNote = area => (activeChiefBrief.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || "";
+    const signalNote = area => (activeChiefBrief?.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || "";
 
     const fmtTimeM = (raw) => { try { const d = new Date(raw); const now = new Date(); return d.toDateString()===now.toDateString() ? d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : d.toLocaleDateString([],{month:"short",day:"numeric"}); } catch { return ""; } };
     const gmailHdr = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || "";
@@ -2579,8 +2370,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const priColor = pri?.color || T.primary || "#7EB0DE";
               const isEditing = editingTaskId === t.id;
               return (
-                <div key={t.id} data-nc-task-row="true" style={{ display:"grid",gridTemplateColumns:"3px minmax(0,1fr) auto",alignItems:"start",padding:"7px 12px 7px 0",gap:10,borderTop:`1px solid ${C.divider}`,minHeight:32 }}>
-                  <span style={{ width:3,alignSelf:"stretch",minHeight:20,borderRadius:"0 3px 3px 0",background:priColor,flexShrink:0 }} />
+                <div key={t.id} data-nc-task-row="true" style={{ display:"grid",gridTemplateColumns:"16px minmax(0,1fr) auto",alignItems:"start",padding:"7px 12px 7px 0",gap:8,borderTop:`1px solid ${C.divider}`,minHeight:28 }}>
+                  <span style={{ width:8,height:8,borderRadius:99,background:priColor,flexShrink:0,marginTop:5 }} />
                   {isEditing ? (
                     <textarea value={editText} autoFocus rows={2}
                       onChange={e => setEditText(e.target.value)}
@@ -2697,8 +2488,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
               return (
                 <button key={s.id} onClick={onOpenShailos}
-                  style={{ width:"100%",textAlign:"left",display:"grid",gridTemplateColumns:"3px minmax(0,1fr)",gap:10,padding:"6px 12px 6px 0",border:"none",background:"transparent",color:C.text,cursor:"pointer",alignItems:"start",borderTop:`1px solid ${C.divider}` }}>
-                  <span style={{width:3,alignSelf:"stretch",minHeight:20,borderRadius:"0 3px 3px 0",background:GOLD,flexShrink:0}} />
+                  style={{ width:"100%",textAlign:"left",display:"grid",gridTemplateColumns:"16px minmax(0,1fr)",gap:8,padding:"6px 12px 6px 0",border:"none",background:"transparent",color:C.text,cursor:"pointer",alignItems:"start",borderTop:`1px solid ${C.divider}` }}>
+                  <span style={{width:8,height:8,borderRadius:99,background:GOLD,flexShrink:0,marginTop:4}} />
                   <span>
                     <span style={{display:"block",fontSize:ncType.body,fontWeight:500,lineHeight:ncType.line,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{text}</span>
                     <span style={{fontSize:ncType.meta,color:GOLD,fontWeight:500}}>{isGetBack?"waiting to reply":"pending answer"}</span>
