@@ -2077,7 +2077,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   if ((isMobileDevice ? mobileLayout !== "accordion" : desktopLayout === "boxes") && !healthPage && !chiefPage) {
     const menuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
     const menuClose  = () => setMobileMenuOpen(null);
-    const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, stickyHeader: boxesFiveCol };
 
     const fmtTimeM = (raw) => { try { const d = new Date(raw); const now = new Date(); return d.toDateString()===now.toDateString() ? d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : d.toLocaleDateString([],{month:"short",day:"numeric"}); } catch { return ""; } };
     // Abbreviated relative time (5m · 2h · Tue · Jun 3) — denser than a full timestamp.
@@ -2093,6 +2092,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // 1500 px = 5 cols × 300 px minimum comfortable reading width per column.
     // Surface Laptop 7 (15″ at 150% DPI) ≈ 1444 px available → rows. 1080p desktop ≈ 1700 px → columns.
     const boxesFiveCol = availableW >= 1500;
+    const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, stickyHeader: boxesFiveCol };
     const cardStyle = { minWidth: 0 }; // grid handles all sizing in both orientations
     const emptyMsg = txt => <div style={{ padding:"12px 14px", fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{txt}</div>;
     // Density: compact keeps readable text and saves space with row padding/line-height.
