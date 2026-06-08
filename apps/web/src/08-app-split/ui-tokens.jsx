@@ -21,6 +21,14 @@ export const GV_CLEAN = {
 
 export const NC_FONT_STACK = '"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
 
+// Category accent colors. Deliberately avoid red/green (those read as urgency/status signals).
+// Mail = slate blue, Phone = violet, Tasks = teal (C.accent), Shailos = gold.
+export const NC_GOLD       = "#C9923C";
+export const NC_GOLD_BG    = "rgba(201,146,60,0.055)";
+export const NC_GOLD_BRD   = "rgba(201,146,60,0.16)";
+export const NC_CAT_MAIL   = "#3D6CB5";
+export const NC_CAT_PHONE  = "#8A63B5";
+
 export const NC_TYPE = {
   title: 16,
   body: 14,
@@ -109,7 +117,7 @@ export const NC_GLOBAL_CSS = `
   font-weight: var(--nc-font-weight-normal, 400) !important;
 }
 .nc-suite-root :where(h1, h2, h3, h4, h5, h6, strong, b) {
-  font-weight: var(--nc-font-weight-strong, 500) !important;
+  font-weight: var(--nc-font-weight-strong, 600) !important;
 }
 .nc-suite-root * {
   scrollbar-width: thin;

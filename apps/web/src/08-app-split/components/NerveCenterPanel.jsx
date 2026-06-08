@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, textOnColor } from '../../01-core.js';
-import { cleanTheme, cleanToolbarButton, gvIconButton, gvTextButton, NC_FONT_STACK, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
+import { cleanTheme, cleanToolbarButton, gvIconButton, gvTextButton, NC_CAT_MAIL, NC_CAT_PHONE, NC_FONT_STACK, NC_GOLD, NC_GOLD_BG, NC_GOLD_BRD, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthCard } from './HealthCard.jsx';
@@ -131,7 +131,7 @@ function TimelineFace({ nowDate, C, base = null, openMenu = null, compact = fals
   const mb = compact ? 7 : 9;
   const bars = rows.map(({ lbl, val, frac, col, op, dur, vw }) => (
     <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: mb, minWidth: 0 }}>
-      <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, letterSpacing: 0.3, fontFamily: NC_FONT_STACK, width: 38, textAlign: "right", flexShrink: 0, textTransform: "uppercase", lineHeight: 1 }}>{lbl}</span>
+      <span style={{ fontSize: 9, fontWeight: 600, color: C.faint, letterSpacing: 0.3, fontFamily: NC_FONT_STACK, width: 38, textAlign: "right", flexShrink: 0, textTransform: "uppercase", lineHeight: 1 }}>{lbl}</span>
       <div style={{ flex: 1, height: 2, borderRadius: 1, background: C.hover, overflow: "hidden", position: "relative", minWidth: 0 }}>
         {dur ? (
           <SweepBar duration={dur} baseOpacity={op} getOffset={tlSweepOff}
@@ -146,7 +146,7 @@ function TimelineFace({ nowDate, C, base = null, openMenu = null, compact = fals
   if (compact) return <>{bars}</>;
   return (
     <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, background: C.bg, padding: "16px 10px 14px", alignItems: "stretch", gap: 0 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 14, textAlign: "center" }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 14, textAlign: "center" }}>
         {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
       </div>
       {bars}
@@ -577,8 +577,8 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
           aria-expanded={expandable ? expanded : undefined}
         >
           <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
-          <span style={{ fontSize: NC_TYPE.body, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0 }}>{title}</span>
-          {count > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
+          <span style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0 }}>{title}</span>
+          {count > 0 && <span style={{ fontSize: 11, fontWeight: 500, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
           {expandable && !expanded && preview != null && (
             <span style={{ fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, color: C.muted, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{preview}</span>
           )}
@@ -658,7 +658,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
           style={{ display: "flex", flexDirection: "column", width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "6px 10px 5px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0, borderBottom: `1px solid ${hexToRgba(accentColor, 0.18) || C.divider}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
             <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
-            <span style={{ fontSize: NC_TYPE.label, fontWeight: 700, color: accentColor || C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0.3, textTransform: "uppercase" }}>{title}</span>
+            <span style={{ fontSize: NC_TYPE.label, fontWeight: 600, color: accentColor || C.muted, fontFamily: NC_FONT_STACK, letterSpacing: "0.06em", textTransform: "uppercase" }}>{title}</span>
           </div>
           {summary && (
             <span style={{ display: "block", fontSize: NC_TYPE.body, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.3, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: 26 }}>{summary}</span>
@@ -878,15 +878,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     }
   }
 
-  const GOLD = "#C9923C";
-  const GOLD_BG = "rgba(201,146,60,0.055)";
-  const GOLD_BRD = "rgba(201,146,60,0.16)";
-  // Category accent colors. Mail and Phone deliberately avoid red/green — those read as
-  // urgency/status signals, not neutral category identity. Each hue is distinct so the cards
-  // stay glanceable: Mail = slate blue, Phone = violet, Tasks = teal, Shailos = gold,
-  // Calendar = amber.
-  const CAT_MAIL = "#3D6CB5";
-  const CAT_PHONE = "#8A63B5";
+  const GOLD = NC_GOLD;
+  const GOLD_BG = NC_GOLD_BG;
+  const GOLD_BRD = NC_GOLD_BRD;
+  const CAT_MAIL = NC_CAT_MAIL;
+  const CAT_PHONE = NC_CAT_PHONE;
   const C = cleanTheme(T);
   const ncType = NC_TYPE;
   const availableW = Math.max(0, viewportW - sidebarW);
@@ -913,7 +909,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const ncTaskBody = { flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", overscrollBehavior: "contain" };
   const ncTaskList = (isStacked || showAllTasks) ? ncScrollPane : { ...ncScrollPane, flex: "0 0 auto", overflow: "visible", maxHeight: "none" };
   const ncTasksPanel = showAllTasks ? ncPanel : { ...ncPanel, alignSelf: "start", width: "100%" };
-  const ncHeader = { minHeight: 30, padding: "3px 10px", borderBottom: `1px solid ${hexToRgba(C.divider, 0.5) || C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 };
+  const ncHeader = { minHeight: 30, padding: "3px 10px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 };
   const ncTitle = { fontSize: ncType.title, fontWeight: "var(--nc-font-weight-strong, 500)", color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.18 };
   const ncSectionIcon = (accent = C.accent) => ({ width: 26, height: 26, borderRadius:12, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
   const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 26, height: 26, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
@@ -1844,7 +1840,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   }
 
   if (chiefPage) {
-    const pageLabel = { fontSize: NC_TYPE.small, color: C.faint, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0, fontFamily: NC_FONT_STACK };
+    const pageLabel = { fontSize: NC_TYPE.small, color: C.faint, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: NC_FONT_STACK };
     const pagePanel = { border: `1px solid ${C.divider}`, borderRadius: 8, background: C.bg, minWidth: 0, overflow: "hidden" };
     const pagePad = isStacked ? 14 : 18;
     const dueSignals = {
@@ -1867,7 +1863,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         <div style={{ maxWidth: 1120, margin: "0 auto", padding: isStacked ? "18px 14px 32px" : "28px 24px 40px", display: "grid", gap:12, boxSizing: "border-box" }}>
           <header style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 12, alignItems: "center" }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, color: activeChiefTone, fontSize: NC_TYPE.label, fontWeight: 700, fontFamily: NC_FONT_STACK, marginBottom: 6 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, color: activeChiefTone, fontSize: NC_TYPE.label, fontWeight: 600, fontFamily: NC_FONT_STACK, marginBottom: 6 }}>
                 {suiteIcon("psychology", 18)}
                 Chief of Staff
               </div>
@@ -1897,7 +1893,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <div style={{ display: "grid", gap:8, borderTop: activeChiefBrief.brief ? `1px solid ${C.divider}` : "none", paddingTop: activeChiefBrief.brief ? 12 : 0 }}>
                   {activeChiefBrief.signals.map((sig, i) => (
                     <div key={i} style={{ display: "grid", gridTemplateColumns: "80px minmax(0,1fr)", gap: 10, fontSize: 15, fontFamily: NC_FONT_STACK, lineHeight: 1.45 }}>
-                      <span style={{ color: C.faint, fontWeight: 700, fontSize: NC_TYPE.meta, textTransform: "uppercase", letterSpacing: "0.04em", paddingTop: 2 }}>{sig.area}</span>
+                      <span style={{ color: C.faint, fontWeight: 600, fontSize: NC_TYPE.meta, textTransform: "uppercase", letterSpacing: "0.06em", paddingTop: 2 }}>{sig.area}</span>
                       <span style={{ color: C.muted }}>{sig.note}</span>
                     </div>
                   ))}
@@ -1910,7 +1906,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             {snapshotTiles.map(([label, value, icon, color]) => (
               <button key={label} type="button" onClick={onCloseChiefPage} title={`View ${label} in NerveCenter`}
                 style={{ border: `1px solid ${C.divider}`, borderRadius: 8, background: C.bgSoft, padding: "10px 11px", minWidth: 0, cursor: "pointer", textAlign: "left" }}>
-                <div style={{ display: "flex", alignItems: "center", gap:8, color, fontSize: NC_TYPE.small, fontWeight: 700, fontFamily: NC_FONT_STACK }}>
+                <div style={{ display: "flex", alignItems: "center", gap:8, color, fontSize: NC_TYPE.small, fontWeight: 600, fontFamily: NC_FONT_STACK }}>
                   {suiteIcon(icon, 14)}
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
                 </div>
@@ -1934,7 +1930,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <div style={{ borderLeft: `4px solid ${chiefLoading ? C.divider : activeChiefTone}`, paddingLeft: 14, display: "grid", gap: 8, opacity: chiefLoading ? 0.55 : 1, transition: "opacity 0.25s" }}>
                   <div style={{ fontSize: isStacked ? 19 : 24, lineHeight: 1.2, color: C.text, fontWeight: 650, fontFamily: NC_FONT_STACK }}>{activeChiefBrief?.summary}</div>
                   <div style={{ fontSize: isStacked ? 15 : 17, lineHeight: 1.38, color: C.muted, fontFamily: NC_FONT_STACK }}>
-                    <span style={{ color: activeChiefTone, fontWeight: 700 }}>Do: </span>{activeChiefBrief?.nextAction}
+                    <span style={{ color: activeChiefTone, fontWeight: 600 }}>Do: </span>{activeChiefBrief?.nextAction}
                   </div>
                   {(activeChiefBrief?.why || chiefError) && (
                     <div style={{ fontSize: NC_TYPE.control, lineHeight: 1.45, color: C.faint, fontFamily: NC_FONT_STACK }}>{activeChiefBrief?.why || chiefError}</div>
@@ -1974,7 +1970,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {(taskSuggestions.length > 0 || taskSuggestionsLoading) && (
             <section style={{ ...pagePanel }}>
               <div style={{ padding: "13px 14px", borderBottom: `1px solid ${C.divider}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <span style={{ color: C.text, fontSize: NC_TYPE.label, fontWeight: 700, fontFamily: NC_FONT_STACK }}>{suiteIcon("playlist_add", 15)} Taskable signals</span>
+                <span style={{ color: C.text, fontSize: NC_TYPE.label, fontWeight: 600, fontFamily: NC_FONT_STACK }}>{suiteIcon("playlist_add", 15)} Taskable signals</span>
                 {taskSuggestionsLoading && <span style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK }}>Scanning</span>}
               </div>
               <div style={{ padding: 14, display: "grid", gridTemplateColumns: isStacked ? "1fr" : "repeat(2,minmax(0,1fr))", gap: 10 }}>
@@ -2016,7 +2012,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
           <section style={{ ...pagePanel }}>
             <div style={{ padding: "13px 14px", borderBottom: `1px solid ${C.divider}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-              <span style={{ color: C.text, fontSize: NC_TYPE.label, fontWeight: 700, fontFamily: NC_FONT_STACK }}>{suiteIcon("forum", 15)} Discuss</span>
+              <span style={{ color: C.text, fontSize: NC_TYPE.label, fontWeight: 600, fontFamily: NC_FONT_STACK }}>{suiteIcon("forum", 15)} Discuss</span>
               {chiefDialogueLoading && <span style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK }}>Thinking</span>}
             </div>
             <div role="status" aria-live="polite" aria-atomic="false" style={{ padding: 14, minHeight: 130, maxHeight: 320, overflow: "auto", display: "grid", alignContent: "start", gap: 8 }}>
@@ -2041,7 +2037,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
           <section style={{ ...pagePanel }}>
             <button type="button" onClick={() => setChiefProfileOpen(open => !open)}
-              style={{ width: "100%", minHeight: 44, border: "none", background: "transparent", color: C.text, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "0 14px", cursor: "pointer", fontSize: NC_TYPE.label, fontWeight: 700, fontFamily: NC_FONT_STACK }}>
+              style={{ width: "100%", minHeight: 44, border: "none", background: "transparent", color: C.text, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "0 14px", cursor: "pointer", fontSize: NC_TYPE.label, fontWeight: 600, fontFamily: NC_FONT_STACK }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap:8 }}>{suiteIcon("tune", 15)} Profile</span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: C.faint, fontSize: NC_TYPE.small, fontWeight: 500 }}>
                 {chiefProfileLoading ? "Loading" : "Netlify Blobs"}
@@ -2794,7 +2790,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 16px 5px", borderTop: `1px solid ${C.divider}` }}>
                     <span style={{ color: "T.success" }}>{suiteIcon("check_circle", 15)}</span>
-                    <span style={{ fontSize: ncType.label, fontWeight: 500, color: C.muted, letterSpacing: 0, textTransform: "uppercase" }}>Recently resolved</span>
+                    <span style={{ fontSize: ncType.label, fontWeight: 600, color: C.muted, letterSpacing: "0.06em", textTransform: "uppercase" }}>Recently resolved</span>
                   </div>
                   {shailosCompleted.map(s => {
                     const text = nerveDisplaySummary(s, "Resolved shaila");
@@ -2883,12 +2879,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             : {
                 minHeight: isStacked ? 24 : 28,
                 padding: isStacked ? "3px 8px" : "5px 10px 3px",
-                borderBottom: `1px solid ${softBorder(C.divider, 0.5)}`,
+                borderBottom: `1px solid ${C.divider}`,
                 flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6,
               };
           const cardBody = { flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: isStacked ? "2px 8px 6px" : (isFocus ? "6px 12px 8px" : "4px 12px 8px"), overscrollBehavior: "contain", scrollbarGutter: "stable" };
           // headLabel: ambient watermark — small, spaced, low-opacity; not a structural bar
-          const headLabel = { fontSize: 8, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, letterSpacing: 1.8, textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0, opacity: 0.7 };
+          const headLabel = { fontSize: 8, fontWeight: 600, color: C.faint, fontFamily: NC_FONT_STACK, letterSpacing: 1.8, textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0, opacity: 0.7 };
           const selectedEmail = selectedEmailId ? (gmailMessages || []).find(msg => msg.id === selectedEmailId) : null;
           const selectedEmailDetail = selectedEmailId ? emailDetails[selectedEmailId] : null;
           const selectedEmailSource = selectedEmailDetail || selectedEmail;
@@ -2904,7 +2900,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           const hasCurrentCalendarEvent = calendarRows.some(row => row.now);
           const calendarNowLine = (key = "now") => (
             <div key={key} ref={calendarNowRef} aria-label="Current time" style={{ display: "grid", gridTemplateColumns: "44px minmax(0,1fr)", gap: 8, alignItems: "center", padding: "5px 0", scrollMarginBlock: "50%" }}>
-              <span style={{ color: nowLineColor, fontSize: NC_TYPE.small, fontWeight: 700, textAlign: "right", fontFamily: NC_FONT_STACK, whiteSpace: "nowrap" }}>Now</span>
+              <span style={{ color: nowLineColor, fontSize: NC_TYPE.small, fontWeight: 600, textAlign: "right", fontFamily: NC_FONT_STACK, whiteSpace: "nowrap" }}>Now</span>
               <span style={{ height: 2, borderRadius: 2, background: nowLineColor, boxShadow: `0 0 0 1px ${softBorder(nowLineColor, 0.18)}` }} />
             </div>
           );
@@ -2952,7 +2948,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       background: ncViewMode === id ? softBorder(C.divider, 0.45) : "transparent",
                       border: "none", borderRadius: 4, padding: "2px 7px",
                       cursor: "pointer", fontFamily: NC_FONT_STACK,
-                      fontSize: 8, fontWeight: 700, letterSpacing: 1.4,
+                      fontSize: 8, fontWeight: 600, letterSpacing: 1.4,
                       textTransform: "uppercase",
                       color: ncViewMode === id ? C.muted : C.faint,
                       transition: "background 0.12s, color 0.12s",
@@ -3126,7 +3122,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const faces = {
                   digital: (
                     <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, borderTop: `2px solid ${C.accent}`, background: C.bg, padding: "18px 8px 10px" }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 14 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 14 }}>
                         {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric" })}
                       </div>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 5, lineHeight: 1 }}>
@@ -3179,7 +3175,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   ),
                   verbose: (
                     <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, borderLeft: `3px solid ${C.accent}`, background: C.bg, padding: "14px 10px 10px", alignItems: "flex-start" }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1, marginBottom: 3 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1, marginBottom: 3 }}>
                         {nowDate.toLocaleDateString([], { weekday: "long" })}
                       </div>
                       <div style={{ fontSize: 11, fontWeight: 400, color: C.faint, fontFamily: NC_FONT_STACK, marginBottom: 10 }}>
@@ -3194,7 +3190,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   ),
                   word: (
                     <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, background: C.bg, padding: "18px 10px 10px", gap: 0 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 10 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: C.faint, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 10 }}>
                         {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric" })}
                       </div>
                       <div style={{ fontSize: 18, fontWeight: 700, color: C.text, letterSpacing: 1.5, textTransform: "uppercase", lineHeight: 1.25, textAlign: "center", fontFamily: NC_FONT_STACK }}>{wL1}</div>
@@ -3236,7 +3232,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   ),
                   neon: (
                     <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, background: C.bg, padding: "16px 8px 10px", gap: 4 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 10 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 10 }}>
                         {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric" })}
                       </div>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, lineHeight: 1 }}>
@@ -3259,7 +3255,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       </div>
                     )}
                     <button onClick={toggleTimeline} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "3px 0 4px", border: "none", background: "transparent", cursor: "pointer" }}>
-                      <span style={{ fontSize: 8, fontWeight: 700, color: clockTimelineOpen ? C.muted : C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK }}>
+                      <span style={{ fontSize: 8, fontWeight: 600, color: clockTimelineOpen ? C.muted : C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK }}>
                         {clockTimelineOpen ? "▲ timeline" : "▼ timeline"}
                       </span>
                     </button>
@@ -3404,7 +3400,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               <>
                 <div style={{ position: "fixed", inset: 0, zIndex: 9090 }} onClick={() => setClockMenuPos(null)} />
                 <div onMouseDown={e => e.stopPropagation()} style={{ position: "fixed", left: Math.min(clockMenuPos.x, window.innerWidth - 212), top: Math.min(clockMenuPos.y, window.innerHeight - 460), zIndex: 9091, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 10, padding: 6, minWidth: 200, maxHeight: "min(455px, 85vh)", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", gap: 2 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "6px 8px 4px" }}>Clock Style</div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "6px 8px 4px" }}>Clock Style</div>
                   {[
                     { id: "digital", label: "Digital",  desc: "Date + time + seconds bar"  },
                     { id: "minimal", label: "Minimal",  desc: "Time only, ultra clean"      },
