@@ -224,8 +224,8 @@ const CHIEF_SCAN_CACHE_MS = 10 * 60 * 1000;      // industry standard: 10-min TT
 const CHIEF_SCAN_MIN_AI_GAP_MS = 3 * 60 * 1000;  // min 3 min between AI calls (debounced, not per keystroke)
 const CHIEF_SUGGESTIONS_CACHE_MS = 45 * 60 * 1000;
 const CHIEF_SUGGESTIONS_MIN_AI_GAP_MS = 25 * 60 * 1000;
-const NC_SUMMARY_CACHE_KEY = "ot_nc_summary_cache_v1";
-const NC_SUMMARY_LAST_RUN_KEY = "ot_nc_summary_last_run_v1";
+const NC_SUMMARY_CACHE_KEY = "ot_nc_summary_cache_v2";
+const NC_SUMMARY_LAST_RUN_KEY = "ot_nc_summary_last_run_v2";
 const NC_SUMMARY_CACHE_MS = 8 * 60 * 1000;
 const NC_SUMMARY_MIN_GAP_MS = 90 * 1000;
 const ROUTINE_CALENDAR_RE = /\b(shacharis|shacharit|mincha|maariv|arvit|daven(?:ing)?|daf yomi|mishna(?:h)? yomi|halacha yomi|parsha|selichos|slichos)\b/i;
@@ -1712,24 +1712,31 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // This is separate from the AI suggestion so they don't echo the same single item.
   const globalSnapshotParts = useMemo(() => {
     const parts = [];
-    const taskNow = primaryTaskQueue.filter(t => /now/i.test(t.priority)).length;
-    if (primaryTaskQueue.length > 0)
-      parts.push(taskNow > 0 ? `${taskNow} Now, ${primaryTaskQueue.length} tasks` : `${primaryTaskQueue.length} task${primaryTaskQueue.length === 1 ? "" : "s"}`);
-    const calRows = (calendarEvents || []).filter(e => !e.past);
-    if (calRows.length > 0) {
-      const now = calRows.find(e => e.now);
-      const next = calRows.find(e => e.special && !e.past) || calRows[0];
-      parts.push(now ? `In: ${compactNerveSummary(now.summary, "event")}` : (next ? `Next: ${compactNerveSummary(next.summary, "event")}` : `${calRows.length} upcoming`));
+    // Name the top urgent tasks — never count them
+    const urgentTasks = primaryTaskQueue.filter(t => /now/i.test(t.priority));
+    const todayTasks = primaryTaskQueue.filter(t => /today/i.test(t.priority));
+    const topTasks = (urgentTasks.length ? urgentTasks : todayTasks.length ? todayTasks : primaryTaskQueue).slice(0, 2);
+    topTasks.forEach(t => { const n = nerveDisplaySummary(t, ""); if (n) parts.push(n); });
+    // Next non-routine calendar event by name
+    const upcoming = calendarRows.filter(r => !r.past);
+    const calRow = upcoming.find(r => r.now) || upcoming.find(r => !r.routine) || upcoming[0];
+    if (calRow?.evt?.summary) parts.push(compactNerveSummary(calRow.evt.summary, ""));
+    // First pending shaila by name
+    if (visibleShailos.length) { const n = nerveDisplaySummary(visibleShailos[0], ""); if (n) parts.push(n); }
+    // First email subject
+    if (gmailMessages?.length) {
+      const hdr = (m, k) => m?.payload?.headers?.find(h => h.name === k)?.value || "";
+      const subj = hdr(gmailMessages[0], "Subject");
+      if (subj) parts.push(subj.length > 46 ? subj.slice(0, 45) + "…" : subj);
     }
-    if ((gmailMessages || []).length > 0) parts.push(`${gmailMessages.length} email${gmailMessages.length === 1 ? "" : "s"}`);
-    if (visibleShailos.length > 0) parts.push(`${visibleShailos.length} shaila${visibleShailos.length === 1 ? "" : "s"}`);
+    // Missed callers by name
     const ph = phoneActivitySummary;
-    const phoneParts = [];
-    if (ph.missedCalls > 0) phoneParts.push(`${ph.missedCalls} missed`);
-    if (ph.unreadTexts > 0) phoneParts.push(`${ph.unreadTexts} unread text${ph.unreadTexts === 1 ? "" : "s"}`);
-    if (phoneParts.length > 0) parts.push(phoneParts.join(", "));
-    return parts.join(" · ");
-  }, [primaryTaskQueue, calendarEvents, gmailMessages, visibleShailos, phoneActivitySummary]);
+    if (ph.missedCalls > 0) {
+      const names = (ph.calls || []).filter(c => c.needsReturnCall).slice(0, 2).map(c => c.name).filter(Boolean);
+      parts.push(names.length ? names.join(", ") : "missed call");
+    }
+    return parts.filter(Boolean).slice(0, 6).join(" · ");
+  }, [primaryTaskQueue, calendarRows, gmailMessages, visibleShailos, phoneActivitySummary]);
 
   const nerveWaitingText = "Waiting on summary";
   const nerveSupercrunch = cleanOneLine(ncSummary?.supercrunch || nerveWaitingText, 240);
