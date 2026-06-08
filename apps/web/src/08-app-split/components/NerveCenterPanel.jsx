@@ -2201,8 +2201,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const priColor = pri?.color || T.primary || "#7EB0DE";
               const isEditing = editingTaskId === t.id;
               return (
-                <div key={t.id} style={{ display:"grid", gridTemplateColumns:"3px minmax(0,1fr) auto", alignItems:"start", padding:`${padY}px 12px ${padY}px 0`, gap:10, minHeight:rowMinH }}>
-                  <span style={{ width:3, alignSelf:"stretch", minHeight:20, borderRadius:"0 3px 3px 0", background:priColor, flexShrink:0 }} />
+                <div key={t.id} style={{ display:"grid", gridTemplateColumns:"16px minmax(0,1fr) auto", alignItems:"start", padding:`${padY}px 12px ${padY}px 0`, gap:8, minHeight:rowMinH }}>
+                  <span style={{ width:8, height:8, borderRadius:99, background:priColor, flexShrink:0, marginTop:4 }} />
                   {isEditing ? (
                     <textarea value={editText} autoFocus rows={2}
                       onChange={e => setEditText(e.target.value)}
@@ -2233,8 +2233,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const exp = expandedRows.has(rk);
               return (
                 <button key={s.id} onClick={()=>toggleRow(rk)}
-                  style={{ width:"100%", textAlign:"left", display:"grid", gridTemplateColumns:"3px minmax(0,1fr)", gap:10, padding:`${padY}px 12px ${padY}px 0`, border:"none", background:"transparent", color:C.text, cursor:"pointer", alignItems:"start" }}>
-                  <span style={{ width:3, alignSelf:"stretch", minHeight:20, borderRadius:"0 3px 3px 0", background:GOLD, flexShrink:0 }} />
+                  style={{ width:"100%", textAlign:"left", display:"grid", gridTemplateColumns:"16px minmax(0,1fr)", gap:8, padding:`${padY}px 12px ${padY}px 0`, border:"none", background:"transparent", color:C.text, cursor:"pointer", alignItems:"start" }}>
+                  <span style={{ width:8, height:8, borderRadius:99, background:GOLD, flexShrink:0, marginTop:4 }} />
                   <span style={{ minWidth:0 }}>
                     <span style={{ display:"block", fontSize:bodyF, fontWeight:500, lineHeight:lineH, color:C.text, ...(exp ? { whiteSpace:"normal", wordBreak:"break-word" } : { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }) }}>{text}</span>
                     <span style={{ fontSize:metaF, color:GOLD, fontWeight:500 }}>{isGetBack?"waiting to reply":"pending answer"}</span>
@@ -2702,9 +2702,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const actionsOpen = openTaskActionsId === t.id;
                 const displayText = nerveDisplaySummary(t, "Untitled task");
                 return (
-                  <div key={t.id} data-nc-task-row="true" className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? "3px minmax(0,1fr) 40px" : "3px minmax(0,1fr)", alignItems: "start", padding: "14px 18px 14px 0", gap:12, minHeight: 56 }}>
-                    {/* Priority color bar */}
-                    <span style={{ width: 3, alignSelf: "stretch", minHeight: 24, borderRadius: "0 3px 3px 0", background: priColor, flexShrink: 0 }} />
+                  <div key={t.id} data-nc-task-row="true" className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? "16px minmax(0,1fr) 40px" : "16px minmax(0,1fr)", alignItems: "start", padding: "14px 18px 14px 0", gap:10, minHeight: 56 }}>
+                    {/* Priority dot */}
+                    <span style={{ width: 8, height: 8, borderRadius: 99, background: priColor, flexShrink: 0, marginTop: 5 }} />
                     {/* Text — click to edit inline */}
                     <div style={{ flex: 1, minWidth: 0, paddingTop: 1 }}>
                       {isEditing ? (
@@ -2777,8 +2777,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const chipBg = isGetBack ? "rgba(201,146,60,0.22)" : "rgba(201,146,60,0.10)";
                 return (
                   <button key={s.id} onClick={onOpenShailos}
-                    style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap:12, padding: "16px 20px 16px 0", border: "none", background: GOLD_BG, color: C.text, cursor: "pointer", alignItems: "start", minHeight: 60 }}>
-                    <span style={{ width: 3, alignSelf: "stretch", minHeight: 28, borderRadius: 2, background: GOLD, flexShrink: 0 }} />
+                    style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "16px minmax(0,1fr) auto", gap:10, padding: "16px 20px 16px 0", border: "none", background: GOLD_BG, color: C.text, cursor: "pointer", alignItems: "start", minHeight: 60 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 99, background: GOLD, flexShrink: 0, marginTop: 5 }} />
                     <span style={{ paddingLeft: 5, paddingTop: 1 }}>
                       <span style={{ display: "block", fontSize: ncType.body, fontWeight: "var(--nc-font-weight-strong, 500)", lineHeight: ncType.line, color: C.text, wordBreak: "break-word" }}>{text}</span>
                       <span style={{ display: "block", fontSize: ncType.label, color: GOLD, fontWeight: 500, marginTop: 4 }}>{suiteIcon(isGetBack ? "schedule" : "search", 13)} {isGetBack ? "waiting to reply" : "pending answer"}</span>
@@ -2798,8 +2798,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   {shailosCompleted.map(s => {
                     const text = nerveDisplaySummary(s, "Resolved shaila");
                     return (
-                      <div key={s.id} style={{ display: "grid", gridTemplateColumns: "3px minmax(0,1fr) auto", gap:12, padding: "14px 20px 14px 0", alignItems: "start", opacity: 0.72, minHeight: 56 }}>
-                        <span style={{ width: 3, alignSelf: "stretch", minHeight: 24, borderRadius: 2, background: "T.success", flexShrink: 0 }} />
+                      <div key={s.id} style={{ display: "grid", gridTemplateColumns: "16px minmax(0,1fr) auto", gap:10, padding: "14px 20px 14px 0", alignItems: "start", opacity: 0.72, minHeight: 56 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 99, background: C.success, flexShrink: 0, marginTop: 5 }} />
                         <span style={{ paddingLeft: 5, paddingTop: 1, fontSize: ncType.meta, fontWeight: "var(--nc-font-weight-normal, 400)", lineHeight: ncType.line, color: C.muted, wordBreak: "break-word", textDecoration: "line-through" }}>{text}</span>
                         <span style={{ fontSize: 12, fontWeight: 500, color: "T.success", background: "rgba(46,125,50,0.10)", border: "1px solid rgba(46,125,50,0.22)", borderRadius: 999, padding: "4px 9px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 2 }}>Done</span>
                       </div>
