@@ -2675,14 +2675,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const url  = `https://mail.google.com/mail/u/0/#inbox/${msg.id}`;
                 return (
                   <a key={msg.id||i} href={url} target="_blank" rel="noopener noreferrer"
-                    style={{ display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:6,padding:"9px 12px",borderTop:`1px solid ${C.divider}`,textDecoration:"none",color:"inherit",alignItems:"start" }}>
-                    <div style={{minWidth:0}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:6,marginBottom:2}}>
-                        <span style={{fontSize:ncType.body,fontWeight:600,color:C.text,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{from}</span>
-                        <span style={{fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,flexShrink:0}}>{date}</span>
-                      </div>
-                      <span style={{fontSize:ncType.meta,color:C.muted,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
-                    </div>
+                    style={{ display:"flex",alignItems:"baseline",gap:6,padding:"8px 12px",borderTop:`1px solid ${C.divider}`,textDecoration:"none",color:"inherit",minWidth:0 }}>
+                    <span style={{fontSize:ncType.body,fontWeight:600,color:C.text,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{from}</span>
+                    <span style={{flex:1,minWidth:0,fontSize:ncType.meta,color:C.muted,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
+                    <span style={{fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{date}</span>
                   </a>
                 );
               })}
@@ -3498,12 +3494,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                           }}
                         >
                           <button type="button" onClick={() => handleEmailSelect(msg)}
-                            style={{ flex: 1, minWidth: 0, minHeight: 0, border: "none", background: "transparent", color: "inherit", textAlign: "left", padding: 0, cursor: "pointer", fontFamily: NC_FONT_STACK }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6, marginBottom: 2 }}>
-                              <span style={{ fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{from}</span>
-                              <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, flexShrink: 0 }}>{date}</span>
-                            </div>
-                            <span style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word", lineHeight: 1.4 }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
+                            style={{ flex: 1, minWidth: 0, minHeight: 0, border: "none", background: "transparent", color: "inherit", textAlign: "left", padding: 0, cursor: "pointer", fontFamily: NC_FONT_STACK, display: "flex", alignItems: "baseline", gap: 6 }}>
+                            <span style={{ fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: "nowrap" }}>{from}</span>
+                            <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
+                            <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: "nowrap" }}>{date}</span>
                           </button>
                           <a href={url} target="_blank" rel="noopener noreferrer" title="Open in Gmail"
                             className="nc-hover-actions"

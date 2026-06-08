@@ -43,13 +43,12 @@ try {
           window.location.replace(u.toString());
         } catch (_) { window.location.reload(); }
       });
-    } else {
-      // Single-tab persistence (NOT synchronizeTabs). Multi-tab persistence is a
-      // documented source of stale-data emission — mutating from a non-leader tab makes
-      // Firestore emit correct→STALE→correct (firebase-js-sdk#6511). A phone/tablet PWA
-      // never needs cross-tab sync, so single-tab is both safer and best-practice here.
-      db.enablePersistence().catch(() => {});
     }
+    // Persistence (IndexedDB cache) intentionally disabled — the app uses Firestore
+    // as the live single source of truth and should never serve stale cached content.
+    // All reads go to the server; there is no cache fallback.
+    // (The ?resetCache=1 hatch above still runs clearPersistence() to wipe any
+    //  pre-existing IndexedDB left over from earlier builds.)
 
     // Android/iOS PWAs freeze backgrounded tabs; on resume the Firestore stream is
     // often silently stale (alive but delivering no updates), which surfaces as
@@ -368,47 +367,49 @@ const Store = {
     }
   },
 
-  // Weekly auto-backup. Called from the save effect in 08-app.js (not from ls()).
-  // Automatic exports write only to the user-selected folder. If no folder is
-  // approved, Firebase/localStorage remain the recovery path and no file is
-  // dropped into Downloads.
-  // force=true skips the weekly-stamp check — use only for explicit user actions.
-  // Uses the same restorable JSON shape as fullBackup.
+  // Daily auto-backup. Called from the save effect in 08-app.js (not from ls()).
+  // Runs once per calendar day — uses today's YYYY-MM-DD date as the dedup stamp.
+  // Writes to the user-selected backup folder; silently skips if no folder is set
+  // or the permission has lapsed (Firebase/localStorage remain the recovery path).
+  // force=true re-runs even if today already has a backup (for explicit user action).
   async autoFileBackup(d, _ignored = [], force = false) {
     if (!d || !d.lists || !d.lists.some(l => l.tasks?.length > 0)) return;
     try {
       const now = new Date();
-      const weekStamp = this._backupWeekStamp(now);
+      const dayStamp = now.toISOString().slice(0, 10); // YYYY-MM-DD
       const forced = force === true;
 
       if (!forced) {
         const lastBk = localStorage.getItem(`${this.lsKey()}_last_file_bk`);
-        if (lastBk === weekStamp) return; // already backed up this week
+        if (lastBk === dayStamp) return; // already backed up today
       }
 
-      const { backup, counts } = await this._buildBackup(d, forced ? "explicit" : "weekly_auto");
+      const { backup, counts } = await this._buildBackup(d, forced ? "explicit" : "daily_auto");
       const content = JSON.stringify(backup, null, 2);
       const fileName = forced
         ? `onetask_explicit_backup_${this._backupStamp(true)}.json`
-        : `onetask_auto_backup_${weekStamp}.json`;
+        : `onetask_daily_backup_${dayStamp}.json`;
 
       const dirHandle = await this._idbGet('backupDir');
       if (!dirHandle) {
-        console.log('[Backup] Skipped file auto-backup: no backup folder selected');
+        console.log('[Backup] Skipped daily auto-backup: no backup folder selected');
         return null;
       }
 
-      const saved = await this._writeBackupToDir(dirHandle, fileName, content, { allowPrompt: forced });
+      // Request permission on auto-runs too so the backup actually lands even
+      // after the browser restarts and resets the transient permission grant.
+      const saved = await this._writeBackupToDir(dirHandle, fileName, content, { allowPrompt: true });
       if (!saved) {
-        console.log('[Backup] Skipped file auto-backup: backup folder permission is not active');
+        console.log('[Backup] Skipped daily auto-backup: backup folder permission unavailable');
         return null;
       }
 
-      localStorage.setItem(`${this.lsKey()}_last_file_bk`, weekStamp);
-      if (!forced) await this._pruneBackups(dirHandle, 'onetask_auto_backup_', 12);
-      console.log(`[Backup] Saved to selected folder: ${fileName}`);
+      localStorage.setItem(`${this.lsKey()}_last_file_bk`, dayStamp);
+      // Keep 30 daily backups (~1 month of history)
+      if (!forced) await this._pruneBackups(dirHandle, 'onetask_daily_backup_', 30);
+      console.log(`[Backup] Daily backup saved: ${fileName} (${counts.tasks} tasks, ${counts.shailos} shailos)`);
       return { ...counts, fileName };
-    } catch(e) { console.warn('[Backup] Failed:', e); }
+    } catch(e) { console.warn('[Backup] Daily auto-backup failed:', e); }
   },
 
   ll() {
@@ -904,11 +905,7 @@ const Store = {
       const snap = await meta.get({ source: "server" });
       if (snap.exists && snap.data()?.schema === 'v5_pertask') return 'v5';
     } catch(e) {
-      // Try cache if server fails
-      try {
-        const snap = await meta.get({ source: "cache" });
-        if (snap.exists && snap.data()?.schema === 'v5_pertask') return 'v5';
-      } catch(e2) {}
+      // Server unreachable — treat as v4 (safe: will retry migration on next load)
     }
     return 'v4';
   },
@@ -979,10 +976,10 @@ const Store = {
     if (!col || !settRef) return null;
 
     try {
-      // Load tasks and settings in parallel
+      // Load tasks and settings from server only — no cache fallback.
       const [taskSnap, settSnap] = await Promise.all([
-        col.get({ source: "server" }).catch(() => col.get({ source: "cache" })),
-        settRef.get({ source: "server" }).catch(() => settRef.get({ source: "cache" }))
+        col.get({ source: "server" }),
+        settRef.get({ source: "server" }),
       ]);
 
       const settings = settSnap.exists ? settSnap.data() : {};
