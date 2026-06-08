@@ -57,6 +57,10 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private readonly CallAudioRouteService _audioRoute = new();
 
     private CancellationTokenSource _sessionCts = new();
+    // MAP-profile CTS — linked to _sessionCts so a full session reset cancels it, but
+    // it can be cancelled independently for MAP-only reconnects without touching HFP.
+    // Created as a plain (unlinked) CTS here; linked in ConnectAsync after _sessionCts is live.
+    private CancellationTokenSource _mapCts = new();
     // App-lifetime CTS — cancelled only in Shutdown(), never by ResetConnectionSessionAsync.
     // Owned by the persistent connection watchdog so the watchdog survives failed reconnects.
     private readonly CancellationTokenSource _appCts = new();
@@ -5031,6 +5035,10 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         StatusMap = "Not connected";
         SetPbapStatus(PbapAvailabilityKind.NotRun, "PBAP call-log sync has not run for the current phone yet.");
 
+        // Dispose MAP CTS now that the MAP service is gone.  A new linked one is
+        // created in ConnectAsync after _sessionCts is renewed below.
+        _mapCts.Dispose();
+
         // After disposing all services, give the phone an extra moment to finish
         // tearing down its RFCOMM profile state on its side.  Without this pause
         // the next ConnectAsync can arrive at the phone before it has reset its
@@ -5039,6 +5047,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         await Task.Delay(1500);
 
         _sessionCts = new CancellationTokenSource();
+        _mapCts = new CancellationTokenSource();  // placeholder; linked in ConnectAsync
     }
 
     private async Task ScanAsync()
@@ -5098,6 +5107,11 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
         await ResetConnectionSessionAsync();
         var ct = _sessionCts.Token;
+        // Link MAP CTS to session so a full reset cancels it, but it can also be
+        // cancelled independently for MAP-only reconnects without touching HFP.
+        _mapCts.Dispose();
+        _mapCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var mapCt = _mapCts.Token;
 
         // ── Calls (HFP) ────────────────────────────────────────────────
         _hfp = new HfpService();
@@ -5186,7 +5200,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
             try
             {
-                await _map.ConnectAsync(mapDevice.Address, ct);
+                await _map.ConnectAsync(mapDevice.Address, mapCt);
                 if (!string.IsNullOrWhiteSpace(_connectedDeviceAddress))
                     MigrateLegacyDeviceScope(_connectedDeviceAddress);
                 Dispatch(() =>
@@ -5212,7 +5226,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 if (_pendingMmsHandles.Count > 0)
                 {
                     AppendDebugThreadSafe($"[MMS] Re-fetching {_pendingMmsHandles.Count} unparsed MMS from last session");
-                    var refetched = await _map.FetchHandlesAsync(_pendingMmsHandles, ct);
+                    var refetched = await _map.FetchHandlesAsync(_pendingMmsHandles, mapCt);
                     TagMessagesWithActiveDevice(refetched);
                     _pendingMmsHandles.Clear();
                     if (refetched.Count > 0)
@@ -5228,13 +5242,13 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                     }
                 }
 
-                var mapNotificationsEnabled = await _map.RegisterForNotificationsAsync(true, ct);
+                var mapNotificationsEnabled = await _map.RegisterForNotificationsAsync(true, mapCt);
                 AppendDebugThreadSafe(mapNotificationsEnabled
                     ? "[POLL] MAP event notifications enabled; delta polling remains the safety net."
                     : "[POLL] MAP event notifications unavailable; using adaptive delta polling fallback.");
-                StartPollLoop(ct);
-                StartOrQueueFullHistoryLoader(ct, "Messages connected");
-                StartContactSyncLoop(ct);
+                StartPollLoop(mapCt);
+                StartOrQueueFullHistoryLoader(mapCt, "Messages connected");
+                StartContactSyncLoop(mapCt);
             }
             catch (Exception ex)
             {
@@ -5242,7 +5256,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 Dispatch(() => StatusMap = msg);
                 AppendDebugThreadSafe($"[MESSAGES ERROR] {ex.GetType().Name}: {ex.Message}");
             }
-        }, ct);
+        }, mapCt);
 
         } // end outer try
         finally
@@ -5988,8 +6002,24 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             return;
 
         _nextAutoReconnectUtc = now.Add(AutoReconnectRetryWindow);
-        AppendDebugThreadSafe($"[CONNECT] Auto-reconnect queued: {reason}");
 
+        // Industry-standard profile independence: if HFP is still alive and only the
+        // MAP channel has dropped, reconnect MAP without tearing down HFP.  This keeps
+        // the phone call channel stable and avoids unnecessary HFP reconnect cycles
+        // that contribute to the dropping issue.
+        if (_hfp?.IsConnected == true && _map?.IsConnected == false)
+        {
+            AppendDebugThreadSafe($"[CONNECT] MAP-only reconnect queued (HFP alive): {reason}");
+            Dispatch(async () =>
+            {
+                try   { await ReconnectMapOnlyAsync(); }
+                catch (Exception ex) { AppendDebug($"[CONNECT] MAP-only reconnect error: {ex.Message}"); }
+                finally { Interlocked.Exchange(ref _autoReconnectInFlight, 0); }
+            });
+            return;
+        }
+
+        AppendDebugThreadSafe($"[CONNECT] Full auto-reconnect queued: {reason}");
         Dispatch(async () =>
         {
             try
@@ -6009,6 +6039,75 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 Interlocked.Exchange(ref _autoReconnectInFlight, 0);
             }
         });
+    }
+
+    /// <summary>
+    /// Reconnects only the MAP profile without touching HFP (_sessionCts stays alive).
+    /// Cancels _mapCts so the old poll/history/contact loops exit cleanly, then
+    /// starts fresh MAP connection + loops on a new linked CTS.
+    /// Falls back to a full reconnect if MAP fails.
+    /// </summary>
+    private async Task ReconnectMapOnlyAsync()
+    {
+        if (_sessionCts.IsCancellationRequested) return;
+
+        Dispatch(() => StatusMap = "Reconnecting messages...");
+
+        // Cancel MAP-specific loops without touching HFP.
+        _mapCts.Cancel();
+        await Task.Delay(600);  // let poll/history/contact loops observe cancellation
+
+        if (_map is not null)
+        {
+            try { await _map.DisposeAsync(); } catch { }
+            _map = null;
+        }
+
+        await Task.Delay(500);  // brief settle for phone MAP server
+
+        // Fresh MAP CTS, linked to alive session so a future full reset cascades.
+        _mapCts.Dispose();
+        _mapCts = CancellationTokenSource.CreateLinkedTokenSource(_sessionCts.Token);
+        var mapCt = _mapCts.Token;
+
+        _map = new MapService();
+        _map.StatusChanged       += s => Dispatch(() => StatusMap = s);
+        _map.MapLogLine          += s => Dispatch(() => AppendDebug(s));
+        _map.InboxChangeDetected += HandleInboxChangeDetected;
+
+        var mapDevice = SelectedDevice;
+        if (mapDevice == null) return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _map.ConnectAsync(mapDevice.Address, mapCt);
+
+                List<SmsMessage> snapshot;
+                lock (_msgLock) { snapshot = _allMessages.Where(MessageBelongsToActiveDevice).ToList(); }
+                _map.SeedKnownHandles(snapshot.Select(m => m.Handle));
+
+                await RefreshMessagesAsync();
+
+                var notifEnabled = await _map.RegisterForNotificationsAsync(true, mapCt);
+                AppendDebugThreadSafe(notifEnabled
+                    ? "[POLL] MAP event notifications enabled; delta polling remains the safety net."
+                    : "[POLL] MAP event notifications unavailable; using adaptive delta polling fallback.");
+                StartPollLoop(mapCt);
+                StartOrQueueFullHistoryLoader(mapCt, "MAP reconnected");
+                StartContactSyncLoop(mapCt);
+
+                Dispatch(() => _nextAutoReconnectUtc = DateTime.MinValue);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                AppendDebugThreadSafe($"[MESSAGES] MAP-only reconnect failed ({ex.Message}) — escalating to full reconnect");
+                _nextAutoReconnectUtc = DateTime.MinValue;  // clear throttle so full reconnect can proceed
+                QueueAutoReconnect("MAP-only reconnect failed");
+            }
+        }, mapCt);
     }
 
     /// <summary>
