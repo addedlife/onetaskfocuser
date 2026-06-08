@@ -560,19 +560,16 @@ function hexToRgba(hex, a) {
 // stay open. When expanded the content scrolls internally so the page stays bounded.
 // `keepMounted` hides via display:none so embedded pollers (Phone) keep running while
 // collapsed. State arrives via props (expandedIds/menuId + the on* callbacks).
-function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuItems, preview, expandable = true, keepMounted = false, fullHeight = false, children, C, expandedIds, menuId, onExpand, onMenuToggle, onMenuClose }) {
+function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuItems, preview, expandable = true, keepMounted = false, children, C, expandedIds, menuId, onExpand, onMenuToggle, onMenuClose }) {
   const expanded = !expandable || !!expandedIds?.has(id);
   const menuOpen = menuId === id;
   const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
   const tint = hexToRgba(accentColor, 0.05);
-  // fullHeight: fills its grid cell in the 5-column layout (flex:1, no maxHeight cap).
-  // Normal: capped so stacked accordion sections don't grow the page unbounded.
-  const scrollStyle = fullHeight
-    ? { flex: "1 1 0", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }
-    : { maxHeight: "min(52vh, 460px)", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" };
+  // Expanded content scrolls inside the section (capped) so several open sections never
+  // grow the page unbounded.
+  const scrollStyle = { maxHeight: "min(52vh, 460px)", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" };
   return (
-    <div style={{ background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: 10, overflow: "hidden",
-      ...(fullHeight ? { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 } : {}) }}>
+    <div style={{ background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: 10, overflow: "visible" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px 4px 10px", minHeight: 28 }}>
         <button
           onClick={expandable ? () => onExpand(id) : undefined}
@@ -613,7 +610,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
       </div>
       {/* Preview shown inline in the header — no second body row needed. */}
       {keepMounted
-        ? <div style={expanded ? scrollStyle : { display: "none" }}>{children}</div>
+        ? <div style={{ display: expanded ? "block" : "none", ...(expanded ? scrollStyle : {}) }}>{children}</div>
         : (expanded && <div style={scrollStyle}>{children}</div>)}
     </div>
   );
@@ -2077,6 +2074,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   if ((isMobileDevice ? mobileLayout !== "accordion" : desktopLayout === "boxes") && !healthPage && !chiefPage) {
     const menuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
     const menuClose  = () => setMobileMenuOpen(null);
+    const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose };
 
     const fmtTimeM = (raw) => { try { const d = new Date(raw); const now = new Date(); return d.toDateString()===now.toDateString() ? d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : d.toLocaleDateString([],{month:"short",day:"numeric"}); } catch { return ""; } };
     // Abbreviated relative time (5m · 2h · Tue · Jun 3) — denser than a full timestamp.
@@ -2086,14 +2084,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const decodeSnipM = s => (s || "").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&nbsp;/g," ").trim();
     const upcomingCal = (calendarRows || []).filter(r => !r.past);
 
-    // >= 1500 px: 5 vertical columns side by side (each card full height, 1/5 width).
-    // <  1500 px: 5 horizontal rows stacked (each card full width, 1/5 height).
-    // Both orientations show all 5 cards simultaneously — no carousel, no scrolling between cards.
-    // 1500 px = 5 cols × 300 px minimum comfortable reading width per column.
-    // Surface Laptop 7 (15″ at 150% DPI) ≈ 1444 px available → rows. 1080p desktop ≈ 1700 px → columns.
-    const boxesFiveCol = availableW >= 1500;
-    const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, stickyHeader: boxesFiveCol };
-    const cardStyle = { minWidth: 0 }; // grid handles all sizing in both orientations
+    // >= 600 px: vertical column (1 col × 5 rows) — each card is full panel-width, good text display.
+    // < 600 px: horizontal scroll-snap carousel (full width × full height per card) — avoids
+    // the cramped ~80 px per-card height a 5-row stack produces on narrow panels.
+    // 600 px = Material Design compact→medium breakpoint, standard minimum for side-by-side layouts.
+    const boxesVertical = availableW >= 600;
+    const cardStyle = boxesVertical ? {} : { flex: "0 0 100%", scrollSnapAlign: "start", minWidth: 0 };
     const emptyMsg = txt => <div style={{ padding:"12px 14px", fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{txt}</div>;
     // Density: compact keeps readable text and saves space with row padding/line-height.
     const dense = mobileDensity === "compact";
@@ -2147,11 +2143,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           <span style={{ fontSize:11, color:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>{nowDate.toLocaleDateString([], { weekday:"short", month:"short", day:"numeric" })}</span>
         </div>
 
-        {/* >= 1000 px: 5 columns side by side, each full height.
-            <  1000 px: 5 rows stacked, each 1/5 height — all cards always visible. */}
-        <div style={{ flex:1, minHeight:0, gap:5, display:"grid", overflow:"hidden",
-          gridTemplateColumns: boxesFiveCol ? "repeat(5, minmax(0,1fr))" : "1fr",
-          gridTemplateRows:    boxesFiveCol ? "1fr" : "repeat(5, minmax(0,1fr))" }}>
+        {/* >= 600 px: vertical 1-col × 5-row grid (all cards visible, full-width text).
+            < 600 px: horizontal scroll-snap carousel (each card full width × full height). */}
+        <div style={{ flex:1, minHeight:0, gap:5,
+          ...(boxesVertical
+            ? { display:"grid", gridTemplateColumns:"1fr", gridTemplateRows:"repeat(5, minmax(0,1fr))" }
+            : { display:"flex", flexDirection:"row", overflowX:"auto", overflowY:"hidden", scrollSnapType:"x mandatory", WebkitOverflowScrolling:"touch", scrollbarWidth:"none", msOverflowStyle:"none" }
+          ) }}>
 
           {/* Mail */}
           <MobileBox {...boxCtx} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail")} style={cardStyle}
@@ -2329,12 +2327,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // that per-second remount was tearing down and rebuilding each section mid-gesture,
     // which dropped taps on the ··· menu and reset focus in the task composer. With a
     // stable component type React now just re-renders with fresh props.
-    // >= 1500 px: 5 vertical columns side by side (each section full height, 1/5 width).
-    // <  1500 px: 5 horizontal rows stacked (each section full width, 1/5 height).
-    // Both orientations show all 5 sections simultaneously — always expanded, always fullHeight.
-    // 1500 px = 5 cols × 300 px minimum comfortable reading width per column.
-    const accWide = availableW >= 1500;
-    const sectionCtx = { C, expandedIds: mobileExpanded, menuId: mobileMenuOpen, onExpand: mobileExpandToggle, onMenuToggle: mobileMenuToggle, onMenuClose: mobileMenuClose, expandable: false, fullHeight: true };
+    const sectionCtx = { C, expandedIds: mobileExpanded, menuId: mobileMenuOpen, onExpand: mobileExpandToggle, onMenuToggle: mobileMenuToggle, onMenuClose: mobileMenuClose };
 
     const signalNote = nerveSignalNote;
 
@@ -2354,14 +2347,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const tasksPreview = signalNote("Tasks");
 
     return (
-      // Fixed panel: flex-column so chrome stays pinned and sections fill the rest.
-      <div style={{ position: "fixed", top: topOffset, left: sidebarW, right: 0, height: `calc(100dvh - ${topOffset}px)`, zIndex: 7600, background: C.bg, overflow: "hidden", display: "flex", flexDirection: "column", borderLeft: `1px solid ${C.divider}` }}>
+      // height uses 100dvh (dynamic viewport) + safe-area padding so the iOS
+      // toolbar / home indicator never chops the last card off the bottom.
+      <div style={{ position: "fixed", top: topOffset, left: sidebarW, right: 0, height: `calc(100dvh - ${topOffset}px)`, zIndex: 7600, background: C.bg, overflowY: "auto", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}`, WebkitOverflowScrolling: "touch" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, padding: "5px 10px calc(28px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }}>
 
-        {/* ── Chrome: layout selector, summary, clock — never scrolls ── */}
-        <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 5, padding: "5px 10px 0" }}>
-
-          {/* Layout selector */}
-          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 2 }}>
+          {/* ── Layout selector — always top-right, before all content ── */}
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 2, flexShrink: 0 }}>
             {isMobileDevice ? (
               <button onClick={toggleMobileLayout} title="Box view" aria-label="Switch to box view" style={gvIconButton({ width: 30, height: 26, borderRadius: 4 }, C)}>{suiteIcon("grid_view", 14)}</button>
             ) : (
@@ -2376,7 +2368,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {nextActionBar}
           {nerveSummaryStrip({ marginBottom: 2 })}
 
-          {/* Time strip — tap to reveal the timeline */}
+          {/* Time strip — tap the time to reveal the timeline */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 2px 2px" }}>
             <button onClick={() => setMobileTimelineOpen(o => !o)} style={{ all: "unset", display: "flex", alignItems: "baseline", gap: 10, minWidth: 0, cursor: "pointer" }} aria-expanded={mobileTimelineOpen} title="Show timeline">
               <span style={{ fontSize: 22, fontWeight: 300, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: -0.5 }}>{clockParts.timeMain}</span>
@@ -2384,18 +2376,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               <span style={{ alignSelf: "center", color: C.faint, display: "flex", transform: mobileTimelineOpen ? "rotate(90deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("chevron_right", 14)}</span>
             </button>
           </div>
+
+          {/* Timeline reveal (seconds → English year, with Hebrew date) */}
           {mobileTimelineOpen && (
             <div style={{ padding: "10px 12px 5px", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8 }}>
               <TimelineFace nowDate={nowDate} C={C} compact />
             </div>
           )}
-        </div>
-
-        {/* ── Sections: 5 columns when wide, 5 rows when narrow — all always visible ── */}
-        <div style={{ flex: 1, minHeight: 0, gap: 5, display: "grid", overflow: "hidden",
-          padding: "5px 10px calc(8px + env(safe-area-inset-bottom, 0px))",
-          gridTemplateColumns: accWide ? "repeat(5, minmax(0,1fr))" : "1fr",
-          gridTemplateRows:    accWide ? "1fr" : "repeat(5, minmax(0,1fr))" }}>
 
           {/* Tasks — collapsible; open the section when the composer is invoked so it shows. */}
           <MobileSection {...sectionCtx} id="tasks" icon="task_alt" title="Tasks" accentColor={C.accent} count={primaryTaskQueue.length} preview={tasksPreview}
