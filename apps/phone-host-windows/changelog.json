@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-08 15:25:22",
+        "version":  "b295",
+        "notes":  "Incoming-call reconnect fixed: dead links during ringing are now detected. MAP reconnects independently without tearing down the call channel.",
+        "devNotes":  "Three fixes: (1) Keepalive/poll/reconnect-block guard narrowed from != Idle to (Active|Dialing|Ending) — IncomingRinging no longer suppresses AT probe, MAP pause, or QueueAutoReconnect. (2) Added _mapCts linked to _sessionCts; QueueAutoReconnect dispatches ReconnectMapOnlyAsync when HFP alive but MAP dropped, skipping full session teardown. (3) HfpService.DisposeAsync: removed _writeLock.Dispose() — Release() in in-flight SendAsync finally would throw ObjectDisposedException; also added 1500 ms pause in ResetConnectionSessionAsync before session CTS renewal."
+    },
+    {
         "timestamp":  "2026-06-07 22:42:19",
         "version":  "b294",
         "notes":  "Call drops fixed: no more AT probes during active calls, MAP paused during calls. Write timeout increased to 8s.",

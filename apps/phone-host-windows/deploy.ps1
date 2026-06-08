@@ -119,11 +119,11 @@ if (-not (Test-Path $numFile)) {
 
 $buildNum = [int](Get-Content $numFile -Raw).Trim()
 $nextBuildNum = $buildNum + 1
-$nextBuildNum | Set-Content $numFile
-Write-Host "[DEPLOY] This was build #$buildNum; next will be #$nextBuildNum"
-
 $versionTag = "b$buildNum"
 Assert-DetailedChangelogEntry $versionTag
+
+$nextBuildNum | Set-Content $numFile
+Write-Host "[DEPLOY] This was build #$buildNum; next will be #$nextBuildNum"
 
 $exeFile = [System.IO.Path]::ChangeExtension($TargetPath, ".exe")
 if (-not (Test-Path $exeFile)) {
