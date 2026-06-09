@@ -750,6 +750,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const [ncSummaryLoading, setNcSummaryLoading] = useState(false);
   const [ncSummaryError, setNcSummaryError] = useState(false); // last summary attempt failed (gateway null/throw)
   const [ncSummaryRefreshNonce, setNcSummaryRefreshNonce] = useState(0);
+  const ncInFlightRef = useRef(false); // a summary scan is in flight (survives effect re-runs)
   const [chiefLoading, setChiefLoading] = useState(false);
   const [chiefError, setChiefError] = useState("");
   const [chiefPrompt, setChiefPrompt] = useState("");
@@ -1188,47 +1189,49 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     };
   }, [chiefPage, chiefScanKey, chiefRefreshNonce, desktopLayout, isMobileDevice]); // eslint-disable-line
   useEffect(() => {
-    let cancelled = false;
     const now = Date.now();
     // Attempt the native summary unconditionally — exactly like email summaries do (runAIJob
     // with `aiOpts || {}`). Do NOT pre-gate on aiOpts: app-config's provider "available" map
-    // can report nothing even when the gateway has working keys, which is why emails
-    // summarized but this card summary stayed "unavailable". Let the server resolve a
-    // provider; if there genuinely is none, the call fails and we show a retry.
+    // can report nothing even when the gateway has working keys.
     const cached = readStorageJson(NC_SUMMARY_CACHE_KEY);
+    // Fresh cache for this exact context → show it.
     if (cached?.scanKey === ncSummaryScanKey && cached?.result?.supercrunch && now - Number(cached.ts || 0) < NC_SUMMARY_CACHE_MS) {
-      setNcSummary(cached.result);
-      setNcSummaryLoading(false);
+      setNcSummary(cached.result); setNcSummaryError(false);
+      if (!ncInFlightRef.current) setNcSummaryLoading(false);
       return undefined;
     }
-    if (now - readStorageNumber(NC_SUMMARY_LAST_RUN_KEY) < NC_SUMMARY_MIN_GAP_MS) {
-      if (cached?.result?.supercrunch) setNcSummary(cached.result);
-      setNcSummaryLoading(false);
-      return undefined;
+    // A scan is already running — keep its live "Updating" status; never start a second one
+    // or blank the bar. (The context key changes constantly with live data, so without this
+    // guard a mid-flight re-run cancelled the call and wiped the status — the blank you saw.)
+    if (ncInFlightRef.current) return undefined;
+    // Throttled since the last run: keep the status visible (cache if we have it, else stay on
+    // "Updating") and re-trigger the moment the window opens, so it never goes blank.
+    const sinceLast = now - readStorageNumber(NC_SUMMARY_LAST_RUN_KEY);
+    if (sinceLast < NC_SUMMARY_MIN_GAP_MS) {
+      if (cached?.result?.supercrunch) { setNcSummary(cached.result); setNcSummaryLoading(false); }
+      else { setNcSummaryLoading(true); }
+      const t = window.setTimeout(() => setNcSummaryRefreshNonce(n => n + 1), NC_SUMMARY_MIN_GAP_MS - sinceLast + 60);
+      return () => window.clearTimeout(t);
     }
+    // Start a scan. Status stays "Updating" until THIS call resolves; we do NOT cancel it on
+    // context changes — discarding the in-flight result is exactly what blanked the bar.
+    ncInFlightRef.current = true;
     setNcSummaryLoading(true);
     setNcSummaryError(false);
-    const timer = window.setTimeout(() => {
-      writeStorageNumber(NC_SUMMARY_LAST_RUN_KEY, Date.now());
-      runAIJob("dashboard.nervecenter_summary.v1", { context: chiefContext }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 600 } })
-        .then(job => {
-          if (cancelled) return;
-          // job === null means the gateway failed/timed out (callAIProxy swallows the error).
-          if (!job || !job.output) { setNcSummary(null); setNcSummaryError(true); return; }
-          const output = job.output;
-          // Keep a response that has signals even if supercrunch is empty (the schema can
-          // legitimately return an empty supercrunch). Previously this was discarded as null,
-          // which is why area summaries could stay blank forever.
-          setNcSummary(output);
-          setNcSummaryError(false);
-          if (output.supercrunch) {
-            writeStorageJson(NC_SUMMARY_CACHE_KEY, { scanKey: ncSummaryScanKey, ts: Date.now(), result: output });
-          }
-        })
-        .catch(() => { if (!cancelled) { setNcSummary(null); setNcSummaryError(true); } })
-        .finally(() => { if (!cancelled) setNcSummaryLoading(false); });
-    }, 600);
-    return () => { cancelled = true; window.clearTimeout(timer); };
+    writeStorageNumber(NC_SUMMARY_LAST_RUN_KEY, now);
+    const scanKeyAtStart = ncSummaryScanKey;
+    runAIJob("dashboard.nervecenter_summary.v1", { context: chiefContext }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 600 } })
+      .then(job => {
+        if (!job || !job.output) { setNcSummary(null); setNcSummaryError(true); return; }
+        // Keep a result that has signals even if supercrunch is empty (the schema allows it).
+        setNcSummary(job.output); setNcSummaryError(false);
+        if (job.output.supercrunch) {
+          writeStorageJson(NC_SUMMARY_CACHE_KEY, { scanKey: scanKeyAtStart, ts: Date.now(), result: job.output });
+        }
+      })
+      .catch(() => { setNcSummary(null); setNcSummaryError(true); })
+      .finally(() => { ncInFlightRef.current = false; setNcSummaryLoading(false); });
+    return undefined;
   }, [ncSummaryScanKey, aiOpts, ncSummaryRefreshNonce]); // eslint-disable-line
 
   useEffect(() => {
@@ -2165,11 +2168,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const emptyMsg = txt => <div style={{ padding:"12px 14px", fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{txt}</div>;
     // Density: compact keeps readable text and saves space with row padding/line-height.
     const dense = mobileDensity === "compact";
-    const padY = dense ? 3 : 6;
-    const rowMinH = dense ? 26 : 40;
+    // Tighter vertical rhythm so more rows fit per card without feeling cramped.
+    const padY = dense ? 2 : 4;
+    const rowMinH = dense ? 22 : 30;
     const bodyF = ncType.body;
     const metaF = ncType.meta;
-    const lineH = dense ? 1.22 : ncType.line;
+    const lineH = dense ? 1.18 : 1.3;
 
     // Each card's top line is the AI per-category summary, or Waiting on summary.
     const signalNote = nerveSignalNote;
@@ -2489,7 +2493,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const priColor = pri?.color || T.primary || "#7EB0DE";
               const isEditing = editingTaskId === t.id;
               return (
-                <div key={t.id} data-nc-task-row="true" style={{ display:"grid",gridTemplateColumns:"16px minmax(0,1fr) auto",alignItems:"start",padding:"7px 12px 7px 0",gap:8,borderTop:`1px solid ${C.divider}`,minHeight:28 }}>
+                <div key={t.id} data-nc-task-row="true" style={{ display:"grid",gridTemplateColumns:"16px minmax(0,1fr) auto",alignItems:"start",padding:"4px 12px 4px 0",gap:8,borderTop:`1px solid ${C.divider}`,minHeight:24 }}>
                   <span style={{ width:8,height:8,borderRadius:99,background:priColor,flexShrink:0,marginTop:5 }} />
                   {isEditing ? (
                     <textarea value={editText} autoFocus rows={2}
@@ -2534,7 +2538,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               ) : calendarRows.filter(r=>!r.past).length === 0 ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Nothing upcoming today.</div>
               ) : calendarRows.filter(r=>!r.past).slice(0,40).map(row => (
-                <div key={row.evt?.id||row.index} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:8,padding:"5px 12px",borderTop:`1px solid ${C.divider}`,alignItems:"start" }}>
+                <div key={row.evt?.id||row.index} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:8,padding:"3px 12px",borderTop:`1px solid ${C.divider}`,alignItems:"start" }}>
                   <span style={{ fontSize:ncType.meta,color:row.now?C.accent:C.faint,fontFamily:NC_FONT_STACK,whiteSpace:"nowrap",paddingTop:1,fontWeight:row.now?700:400,minWidth:54 }}>
                     {row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                   </span>
@@ -2577,7 +2581,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const url  = `https://mail.google.com/mail/u/0/#inbox/${msg.id}`;
                 return (
                   <a key={msg.id||i} href={url} target="_blank" rel="noopener noreferrer"
-                    style={{ display:"flex",alignItems:"baseline",gap:6,padding:"5px 12px",borderTop:`1px solid ${C.divider}`,textDecoration:"none",color:"inherit",minWidth:0 }}>
+                    style={{ display:"flex",alignItems:"baseline",gap:6,padding:"3px 12px",borderTop:`1px solid ${C.divider}`,textDecoration:"none",color:"inherit",minWidth:0 }}>
                     <span style={{fontSize:ncType.body,fontWeight:600,color:C.text,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{from}</span>
                     <span style={{flex:1,minWidth:0,fontSize:ncType.meta,color:C.muted,fontFamily:NC_FONT_STACK,...(msg.aiSummary?{whiteSpace:"normal",wordBreak:"break-word"}:{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"})}}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
                     <span style={{fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{date}</span>
@@ -2600,10 +2604,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
               return (
                 <button key={s.id} onClick={onOpenShailos}
-                  style={{ width:"100%",textAlign:"left",display:"grid",gridTemplateColumns:"16px minmax(0,1fr)",gap:8,padding:"6px 12px 6px 0",border:"none",background:"transparent",color:C.text,cursor:"pointer",alignItems:"start",borderTop:`1px solid ${C.divider}` }}>
+                  style={{ width:"100%",textAlign:"left",display:"grid",gridTemplateColumns:"16px minmax(0,1fr)",gap:8,padding:"4px 12px 4px 0",border:"none",background:"transparent",color:C.text,cursor:"pointer",alignItems:"start",borderTop:`1px solid ${C.divider}` }}>
                   <span style={{width:8,height:8,borderRadius:99,background:GOLD,flexShrink:0,marginTop:4}} />
                   <span>
-                    <span style={{display:"block",fontSize:ncType.body,fontWeight:500,lineHeight:ncType.line,color:C.text,whiteSpace:"normal",wordBreak:"break-word"}}>{text}</span>
+                    <span style={{display:"block",fontSize:ncType.body,fontWeight:500,lineHeight:1.25,color:C.text,whiteSpace:"normal",wordBreak:"break-word"}}>{text}</span>
                     <span style={{fontSize:ncType.meta,color:GOLD,fontWeight:500}}>{isGetBack?"waiting to reply":"pending answer"}</span>
                   </span>
                 </button>
