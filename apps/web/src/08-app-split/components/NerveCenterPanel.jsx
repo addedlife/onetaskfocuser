@@ -745,6 +745,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const [chiefBrief, setChiefBrief] = useState(null);
   const [ncSummary, setNcSummary] = useState(null);
   const [ncSummaryLoading, setNcSummaryLoading] = useState(false);
+  const [ncSummaryRefreshNonce, setNcSummaryRefreshNonce] = useState(0);
   const [chiefLoading, setChiefLoading] = useState(false);
   const [chiefError, setChiefError] = useState("");
   const [chiefPrompt, setChiefPrompt] = useState("");
@@ -1215,7 +1216,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         .finally(() => { if (!cancelled) setNcSummaryLoading(false); });
     }, 600);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [ncSummaryScanKey, aiOpts]); // eslint-disable-line
+  }, [ncSummaryScanKey, aiOpts, ncSummaryRefreshNonce]); // eslint-disable-line
 
   useEffect(() => {
     if (!chiefPage || !aiOpts || (!calendarRows.length && !(gmailMessages || []).length) || !taskSuggestionPriorities.length) {
@@ -1744,35 +1745,39 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     </div>
   );
 
-  const nextActionBar = activeChiefTaskText ? (
-    <div style={{ flexShrink: 0, minWidth: 0, margin: "0 0 4px", padding: "8px 10px", borderRadius: 8, background: hexToRgba(C.accent, 0.06) || C.bgSoft, borderLeft: `3px solid ${C.accent}` }}>
-      {/* Row 1: live global snapshot across all categories */}
-      {globalSnapshotParts && (
-        <div style={{ fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.3, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {globalSnapshotParts}
-        </div>
-      )}
-      {/* Row 2: AI suggestion + Skip + Resuggest */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-        <span style={{ display: "flex", color: C.accent, flexShrink: 0 }}>{suiteIcon("bolt", 17)}</span>
-        <span style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.35, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
+  const nextActionBar = (ncSummary?.supercrunch || ncSummaryLoading || activeChiefTaskText) ? (
+    <div style={{ flexShrink: 0, minWidth: 0, marginBottom: 4, borderRadius: 8, border: `1px solid ${C.divider}`, overflow: "hidden" }}>
+      {/* Row 1: super-crunched item summary + refresh */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 4, padding: "6px 6px 6px 10px", background: C.bgSoft }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.control, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.35, wordBreak: "break-word" }}>
+          {ncSummaryLoading && !ncSummary?.supercrunch
+            ? <span style={{ opacity: 0.45 }}>…</span>
+            : (ncSummary?.supercrunch || "")}
         </span>
-        {/* Skip this suggestion */}
-        {!activeChiefBrief?._isPlaceholder && (
-          <button type="button" onClick={() => handleChiefSmartResponse("not_now")} title="Skip this suggestion" aria-label="Skip suggestion"
-            disabled={!!chiefSmartSaving || chiefDialogueLoading}
-            style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: C.faint, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            {suiteIcon("close", 15)}
-          </button>
-        )}
-        {/* Force a new scan */}
-        <button type="button" onClick={() => setChiefRefreshNonce(n => n + 1)} title="Re-suggest" aria-label="Re-suggest"
-          disabled={chiefLoading}
-          style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: C.accent, cursor: chiefLoading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: chiefLoading ? 0.5 : 1, ...(chiefLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }}>
-          {suiteIcon("autorenew", 17)}
+        <button type="button"
+          onClick={() => { removeStorageKey(NC_SUMMARY_CACHE_KEY); removeStorageKey(NC_SUMMARY_LAST_RUN_KEY); setNcSummaryRefreshNonce(n => n + 1); }}
+          title="Refresh summary" aria-label="Refresh summary"
+          disabled={ncSummaryLoading}
+          style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 5, border: "none", background: "transparent", color: C.faint, cursor: ncSummaryLoading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: ncSummaryLoading ? 0.4 : 1, ...(ncSummaryLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }}>
+          {suiteIcon("autorenew", 13)}
         </button>
       </div>
+      {/* Row 2: single most important next action + resuggest */}
+      {activeChiefTaskText && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 6px 5px 10px", background: hexToRgba(C.accent, 0.055) || C.bgSoft, borderTop: `1px solid ${C.divider}` }}>
+          <span style={{ display: "flex", color: C.accent, flexShrink: 0 }}>{suiteIcon("bolt", 15)}</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.3, wordBreak: "break-word" }}>
+            {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
+          </span>
+          <button type="button"
+            onClick={() => setChiefRefreshNonce(n => n + 1)}
+            title="Suggest something else" aria-label="Suggest something else"
+            disabled={chiefLoading}
+            style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 5, border: "none", background: "transparent", color: chiefLoading ? C.faint : C.accent, cursor: chiefLoading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: chiefLoading ? 0.4 : 1, ...(chiefLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }}>
+            {suiteIcon("autorenew", 14)}
+          </button>
+        </div>
+      )}
     </div>
   ) : null;
   useEffect(() => {
@@ -2138,9 +2143,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
         {nextActionBar}
 
-        {/* Supercrunched universal summary */}
-        {nerveSummaryStrip({ marginBottom: 2 })}
-
         {/* slim time bar (layout buttons moved to top) */}
         <div style={{ display:"flex", alignItems:"baseline", gap:8, padding:"0 2px 4px", flexShrink:0, minWidth:0 }}>
           <span style={{ fontSize:19, fontWeight:300, color:C.text, fontFamily:NC_FONT_STACK, letterSpacing:-0.5 }}>{clockParts.timeMain}</span>
@@ -2374,7 +2376,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </div>
 
           {nextActionBar}
-          {nerveSummaryStrip({ marginBottom: 2 })}
 
           {/* Time strip — tap to reveal the timeline */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 2px 2px" }}>
@@ -2628,7 +2629,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         )}
 
         {/* Three-panel grid — fills all remaining height; CSS scroll-snap carousel when stacked */}
-        {nerveSummaryStrip(isStacked ? { margin: "5px 10px 0" } : { marginBottom: 6 })}
 
         <div ref={taskGridRef} data-nc-task-grid="true" style={isStacked ? { display: "flex", overflowX: "auto", overflowY: "hidden", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none", flex: "1 1 0", minHeight: 0 } : { display: "grid", gridTemplateColumns: gridColumns, gap: touchLayout ? 16 : 0, flex: touchLayout ? "0 0 auto" : "1 1 0", minHeight: 0, alignItems: "stretch" }}>
 
