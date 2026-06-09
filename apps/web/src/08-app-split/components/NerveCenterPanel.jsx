@@ -583,7 +583,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
           <span style={{ fontSize: NC_TYPE.body, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0 }}>{title}</span>
           {count > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
           {expandable && !expanded && preview != null && (
-            <span style={{ fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0, flex: 1, whiteSpace: "normal", wordBreak: "break-word" }}>{preview}</span>
+            <span style={{ fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0, flex: 1, whiteSpace: "normal", wordBreak: "break-word", fontStyle: "italic" }}>{preview}</span>
           )}
           {expandable && (
             <span style={{ marginLeft: "auto", color: expanded ? C.muted : C.faint, display: "flex", flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("chevron_right", 18)}</span>
@@ -664,7 +664,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
             <span style={{ fontSize: NC_TYPE.label, fontWeight: 700, color: accentColor || C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0.3, textTransform: "uppercase" }}>{title}</span>
           </div>
           {summary && (
-            <span style={{ display: "block", fontSize: NC_TYPE.body, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.3, marginTop: 3, whiteSpace: "normal", wordBreak: "break-word", paddingLeft: 26 }}>{summary}</span>
+            <span style={{ display: "block", fontSize: NC_TYPE.body, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.3, marginTop: 3, whiteSpace: "normal", wordBreak: "break-word", paddingLeft: 26, fontStyle: "italic" }}>{summary}</span>
           )}
         </button>
       ) : (
@@ -672,7 +672,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
         <button onClick={onOpen} title={title} aria-label={title}
           style={{ display: "flex", alignItems: "flex-start", gap: 7, width: "100%", textAlign: "left", border: "none", background: "transparent", padding: headerCollapsed ? "0 10px" : "7px 11px 6px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0, maxHeight: headerCollapsed ? 0 : 56, opacity: headerCollapsed ? 0 : 1, overflow: "hidden", pointerEvents: headerCollapsed ? "none" : "auto", transition: "max-height 0.2s ease, opacity 0.15s ease, padding 0.2s ease" }}>
           <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 14)}</span>
-          <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.3, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden" }}>{summary}</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.body, fontWeight: 400, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.3, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden", fontStyle: "italic" }}>{summary}</span>
         </button>
       )}
       <div ref={scrollRef} onScroll={measure}
