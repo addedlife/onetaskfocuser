@@ -1735,7 +1735,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     return parts.join(" · ");
   }, [primaryTaskQueue, calendarEvents, gmailMessages, visibleShailos, phoneActivitySummary]);
 
-  const nerveWaitingText = "Waiting on summary";
+  // Only claim we're "waiting" while a summary is actually in flight. Once the AI job has
+  // finished (even if it produced nothing, or the gateway was unreachable), drop the caption
+  // so cards render their own content cleanly instead of a permanently stuck "Waiting…".
+  const nerveWaitingText = ncSummaryLoading ? "Waiting on summary" : "";
   const nerveSupercrunch = cleanOneLine(ncSummary?.supercrunch || nerveWaitingText, 240);
   const nerveSignalNote = area => (ncSummary?.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || nerveWaitingText;
   const nerveSummaryStrip = (style = {}) => (

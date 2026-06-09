@@ -1,5 +1,15 @@
 # Verification Log
 
+## 2026-06-09 Mobile NerveCenter — Email/Calendar "loading forever" + cards stuck "Waiting on summary"
+
+- Reported: On mobile browser, the Email and Calendar cards spin "Loading…" indefinitely, and every card stays on "Waiting on summary" with no summary ever arriving.
+- Root cause (shared): no client-side fetch in the Google/AI load path had a timeout. A bare `fetch()` never rejects when a mobile connection stalls mid-flight (radio sleep), so a single stalled request hung forever. Two specific manifestations: (a) the browser-token loader awaited the AI email-summary job *inside* `fetchGmailData`, and set Calendar + Mail state together only after `Promise.allSettled([cal, mail])` settled — so a hung AI gateway froze the Calendar card too; (b) `callAIProxy` (NerveCenter `dashboard.nervecenter_summary.v1`) had no timeout, so a stalled AI request left `ncSummaryLoading` true forever → every card's signal note stuck on "Waiting on summary".
+- Fix 1 (`01-core.js`): `callAIProxy` now uses an `AbortController` with a 30s timeout (server budget ≤26s). A stalled gateway aborts → returns null → callers degrade to "no summary" instead of an infinite spinner.
+- Fix 2 (`App.jsx`): added a shared `fetchWithTimeout` (20s) and routed every Calendar/Gmail/Workspace fetch through it (`callGoogleWorkspace`, `fetchCalendarData` list+primary+per-calendar, `fetchGmailData` list+messages, `loadGoogleEmailDetail`). A dropped request now surfaces as a recoverable error, not a frozen card.
+- Fix 3 (`App.jsx`): decoupled the browser-token load. Calendar and Mail now resolve and render independently (whichever finishes first), so a slow Mail step can no longer hold the Calendar card. The AI email summaries were pulled out of `fetchGmailData` into a non-blocking `applyEmailSummaries(msgs)` that renders raw mail first and merges one-line summaries by message id when (if) the AI returns.
+- Fix 4 (`NerveCenterPanel.jsx`): the "Waiting on summary" caption now shows only while `ncSummaryLoading` is true. Once the AI job finishes (even producing nothing / gateway down), the caption clears so cards render their own content instead of a permanently stuck "Waiting…".
+- Gates: `npm run build` (apps/web) → 0 errors, bundle `index-Cke9jSvq.js`. BUILD-VERIFIED ONLY — the timeouts/decoupling target a mobile network-stall failure mode that requires runtime verification on the affected device (use `?diag=1`).
+
 ## 2026-06-07 DeskPhone Connection Reliability — Faster Reconnect + Ghost-Connection Detection (b291)
 
 - Reported: Connection still flaky and droppy after b285 fixes; requires frequent manual resets; phone coming back into range takes too long to auto-reconnect.

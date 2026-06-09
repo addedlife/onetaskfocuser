@@ -31,6 +31,24 @@ function clearStoredGoogleBrowserToken() {
   } catch {}
 }
 
+// A bare fetch never rejects if the connection stalls mid-flight (a frequent mobile
+// failure mode: radio sleeps, request hangs forever). Every Calendar/Gmail/Workspace
+// call below uses this so a dropped request surfaces as an error the UI can recover
+// from, instead of an infinite "Loading…" spinner.
+const GOOGLE_FETCH_TIMEOUT_MS = 20000;
+async function fetchWithTimeout(url, options = {}, timeoutMs = GOOGLE_FETCH_TIMEOUT_MS) {
+  const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  try {
+    return await fetch(url, { ...options, signal: ctrl ? ctrl.signal : options.signal });
+  } catch (e) {
+    if (e?.name === "AbortError") throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s`);
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 // Phones/tablets can't reach the PC's localhost, so they get the cloud-relay phone
 // surface; desktops get the full direct-to-DeskPhone web panel. Evaluated once.
 const IS_MOBILE_DEVICE = isMobilePhoneDevice();
@@ -517,7 +535,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const callGoogleWorkspace = useCallback(async (action, payload = {}) => {
     if (!user?.getIdToken) throw new Error("Sign in again before connecting Google Workspace.");
     const idToken = await user.getIdToken();
-    const r = await fetch("/.netlify/functions/google-workspace", {
+    const r = await fetchWithTimeout("/.netlify/functions/google-workspace", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -756,7 +774,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     let cals = null;
     try {
       console.log('[Google] Fetching calendar list…');
-      const listR = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?showHidden=false&maxResults=50', { headers: { Authorization: `Bearer ${token}` } });
+      const listR = await fetchWithTimeout('https://www.googleapis.com/calendar/v3/users/me/calendarList?showHidden=false&maxResults=50', { headers: { Authorization: `Bearer ${token}` } });
       console.log('[Google] CalendarList status:', listR.status);
       if (listR.status === 401) throw new Error('token_expired');
       if (listR.ok) {
@@ -771,7 +789,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
     // If calendarList failed or returned nothing, fall back to primary
     if (!cals || cals.length === 0) {
-      const r = await fetch(eventsUrl('primary'), { headers: { Authorization: `Bearer ${token}` } });
+      const r = await fetchWithTimeout(eventsUrl('primary'), { headers: { Authorization: `Bearer ${token}` } });
       if (r.status === 401) throw new Error('token_expired');
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + r.status}`); }
       const d = await r.json();
@@ -781,7 +799,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     // Step 2: fetch events from each calendar in parallel
     const results = await Promise.allSettled(
       cals.map(cal =>
-        fetch(eventsUrl(cal.id), { headers: { Authorization: `Bearer ${token}` } })
+        fetchWithTimeout(eventsUrl(cal.id), { headers: { Authorization: `Bearer ${token}` } })
           .then(r => { if (r.status === 401) throw new Error('token_expired'); return r.json(); })
           .then(d => (d.items || []).filter(evt => evt.status !== "cancelled").map(evt => ({ ...evt, calendarId: cal.id, calendarSummary: cal.summary || "" })))
       )
@@ -799,7 +817,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     console.log('[Google] Fetching Gmail…');
     // Personal = all; Promotions + Updates = important only; most recent 20 combined
     const q = encodeURIComponent('(category:primary) OR (category:promotions is:important) OR (category:updates is:important)');
-    const listR = await fetch(
+    const listR = await fetchWithTimeout(
       `https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=${q}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
@@ -809,13 +827,22 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     const list = await listR.json();
     console.log('[Google] Gmail message count:', list.messages?.length ?? 0);
     if (!list.messages?.length) return [];
-    const msgs = await Promise.all(
+    // Return the raw messages as soon as metadata is in. The AI one-line summaries are an
+    // enhancement applied separately (applyEmailSummaries) so a slow/failed AI gateway can
+    // never block the Mail card — nor, via the shared load, the Calendar card.
+    return Promise.all(
       list.messages.slice(0, 20).map(m =>
-        fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
+        fetchWithTimeout(`https://www.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
           { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
       )
     );
-    // Batch AI: generate one-sentence summaries for all emails in a single call
+  }
+
+  // Best-effort: batch-generate one-sentence email summaries and merge them into the
+  // already-rendered messages by id. Runs after the raw mail is on screen; if the AI
+  // gateway is slow or down, the snippets simply remain.
+  async function applyEmailSummaries(msgs) {
+    if (!Array.isArray(msgs) || msgs.length === 0) return;
     try {
       const emails = msgs.map((m) => {
         const subj = m?.payload?.headers?.find(h => h.name === "Subject")?.value || "";
@@ -824,13 +851,19 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       });
       const job = await runAIJob("dashboard.email_summaries.v1", { emails }, aiOpts || {});
       const summaries = Array.isArray(job?.output) ? job.output : null;
-      if (summaries) {
-        return msgs.map((m, i) => ({ ...m, aiSummary: typeof summaries[i] === "string" ? summaries[i].replace(/^"|"$/g, "") : "" }));
-      }
+      if (!summaries) return;
+      const byId = new Map();
+      msgs.forEach((m, i) => {
+        if (m?.id && typeof summaries[i] === "string") byId.set(m.id, summaries[i].replace(/^"|"$/g, ""));
+      });
+      if (!byId.size) return;
+      // Merge by id so a refresh that swapped the list mid-flight isn't clobbered.
+      setGmailMessages(prev => Array.isArray(prev)
+        ? prev.map(m => byId.has(m.id) ? { ...m, aiSummary: byId.get(m.id) } : m)
+        : prev);
     } catch (e) {
       console.warn('[Google] AI email summary failed:', e.message);
     }
-    return msgs;
   }
 
   // Auto-fetch when token arrives; refresh while visible and on focus.
@@ -859,36 +892,41 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       if (cancelled) return;
       console.log('[Google] Starting load, token length:', googleToken?.length);
       setGoogleLoading(true);
-      Promise.allSettled([fetchCalendarData(googleToken), fetchGmailData(googleToken)])
-        .then(([calR, mailR]) => {
-          console.log('[Google] Results: cal=', calR.status, 'mail=', mailR.status);
-          if (cancelled) { console.log('[Google] cancelled — skipping state update'); return; }
-          const errs = [];
-          if (calR.status === 'fulfilled') {
-            setCalendarEvents(calR.value);
-          } else if (calR.reason?.message === 'token_expired') {
-            clearStoredGoogleBrowserToken();
-            requestSilentGoogleAccessToken(300);
-            setGoogleToken(null); return;
-          } else {
-            console.error('[Google] cal error:', calR.reason?.message);
-            errs.push(calR.reason?.message || 'Calendar error');
-            setCalendarEvents(prev => prev ?? []); // still show card on error
-          }
-          if (mailR.status === 'fulfilled') {
-            setGmailMessages(mailR.value);
-          } else if (mailR.reason?.message === 'token_expired') {
-            clearStoredGoogleBrowserToken();
-            requestSilentGoogleAccessToken(300);
-            setGoogleToken(null); return;
-          } else {
-            console.error('[Google] mail error:', mailR.reason?.message);
-            errs.push(mailR.reason?.message || 'Gmail error');
-            setGmailMessages(prev => prev ?? []); // still show card on error
-          }
-          if (errs.length) setGoogleError(errs.join(' · '));
-        })
-        .finally(() => { if (!cancelled) setGoogleLoading(false); });
+      // Calendar and Mail resolve INDEPENDENTLY — whichever finishes first renders right
+      // away. They previously shared a single Promise.allSettled().then() that set both
+      // states together, so a slow/hung Gmail step (incl. its AI summary) left the Calendar
+      // card spinning too. The expensive AI email summaries are applied afterward and never
+      // gate the raw data.
+      let expiredHandled = false;
+      const handleExpired = () => {
+        if (expiredHandled) return;
+        expiredHandled = true;
+        clearStoredGoogleBrowserToken();
+        requestSilentGoogleAccessToken(300);
+        setGoogleToken(null);
+      };
+      const calP = fetchCalendarData(googleToken).then(value => {
+        if (cancelled) return;
+        setCalendarEvents(value);
+      }).catch(err => {
+        if (cancelled) return;
+        if (err?.message === 'token_expired') { handleExpired(); return; }
+        console.error('[Google] cal error:', err?.message);
+        setGoogleError(err?.message || 'Calendar error');
+        setCalendarEvents(prev => prev ?? []); // still show card on error
+      });
+      const mailP = fetchGmailData(googleToken).then(msgs => {
+        if (cancelled) return;
+        setGmailMessages(msgs);
+        applyEmailSummaries(msgs); // non-blocking enhancement
+      }).catch(err => {
+        if (cancelled) return;
+        if (err?.message === 'token_expired') { handleExpired(); return; }
+        console.error('[Google] mail error:', err?.message);
+        setGoogleError(err?.message || 'Gmail error');
+        setGmailMessages(prev => prev ?? []); // still show card on error
+      });
+      Promise.allSettled([calP, mailP]).finally(() => { if (!cancelled) setGoogleLoading(false); });
     };
     load();
     const onVisible = () => {
@@ -934,7 +972,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   async function loadGoogleEmailDetail(messageId) {
     if (useGoogleServerAuth) return callGoogleWorkspace("gmailMessage", { id: messageId });
     if (!googleToken) throw new Error("Reconnect Google to read the full message.");
-    const r = await fetch(`https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`, {
+    const r = await fetchWithTimeout(`https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`, {
       headers: { Authorization: `Bearer ${googleToken}` },
     });
     if (r.status === 401) throw new Error("Google session expired. Reconnect Google.");

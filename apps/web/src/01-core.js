@@ -1540,12 +1540,21 @@ function normalizeAiOpts(aiOpts) {
   return aiOpts;
 }
 
-async function callAIProxy(payload) {
+// The Netlify ai-proxy function is synchronous (≤26s server budget). A bare fetch with
+// no client timeout will hang forever if the request stalls mid-flight — a common mobile
+// failure mode that silently froze the NerveCenter summary and the Gmail-summary step
+// (which in turn blocked the whole Calendar+Mail load). Abort past the server budget so a
+// stalled gateway degrades to "no summary" instead of an infinite spinner.
+const AI_PROXY_TIMEOUT_MS = 30000;
+async function callAIProxy(payload, timeoutMs = AI_PROXY_TIMEOUT_MS) {
+  const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
   try {
     const r = await fetch(AI_PROXY_ENDPOINT, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(payload),
+      signal: ctrl ? ctrl.signal : undefined,
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || d.error) {
@@ -1554,8 +1563,10 @@ async function callAIProxy(payload) {
     }
     return d;
   } catch(e) {
-    console.warn("[AI] Gateway call failed:", e);
+    console.warn("[AI] Gateway call failed:", e?.name === "AbortError" ? `timed out after ${timeoutMs}ms` : e);
     return null;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
