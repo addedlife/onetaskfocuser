@@ -2166,14 +2166,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               return (
                 <div key={msg.id||i} onClick={()=>toggleRow(rk)} style={{ padding:`${padY}px 12px`, cursor:"pointer" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:6, marginBottom:dense?0:2 }}>
-                    <span style={{ fontSize:bodyF, fontWeight:600, color:C.text, fontFamily:NC_FONT_STACK, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{from}</span>
+                    <span style={{ fontSize:bodyF, fontWeight:600, color:C.text, fontFamily:NC_FONT_STACK, wordBreak:"break-word" }}>{from}</span>
                     <span style={{ display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
                       <span style={{ fontSize:metaF, color:C.faint, fontFamily:NC_FONT_STACK }}>{date}</span>
                       <a href={`https://mail.google.com/mail/u/0/#inbox/${msg.id}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} title="Open in Gmail" style={{ display:"flex", color:C.faint, lineHeight:0 }}>{suiteIcon("open_in_new",13)}</a>
                     </span>
                   </div>
                   {exp && subj && subj !== snip && <span style={{ display:"block", fontSize:metaF, fontWeight:600, color:C.text, fontFamily:NC_FONT_STACK, marginBottom:2 }}>{subj}</span>}
-                  <span style={{ fontSize:metaF, color:C.muted, fontFamily:NC_FONT_STACK, display:"block", lineHeight:lineH, ...(exp ? { whiteSpace:"normal", wordBreak:"break-word" } : { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }) }}>{snip}</span>
+                  <span style={{ fontSize:metaF, color:C.muted, fontFamily:NC_FONT_STACK, display:"block", lineHeight:lineH, ...(msg.aiSummary ? { whiteSpace:"normal", wordBreak:"break-word" } : { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }) }}>{snip}</span>
                 </div>
               );
             })}
@@ -2245,7 +2245,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   style={{ width:"100%", textAlign:"left", display:"grid", gridTemplateColumns:"16px minmax(0,1fr)", gap:8, padding:`${padY}px 12px ${padY}px 0`, border:"none", background:"transparent", color:C.text, cursor:"pointer", alignItems:"start" }}>
                   <span style={{ width:8, height:8, borderRadius:99, background:GOLD, flexShrink:0, marginTop:4 }} />
                   <span style={{ minWidth:0 }}>
-                    <span style={{ display:"block", fontSize:bodyF, fontWeight:500, lineHeight:lineH, color:C.text, ...(exp ? { whiteSpace:"normal", wordBreak:"break-word" } : { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }) }}>{text}</span>
+                    <span style={{ display:"block", fontSize:bodyF, fontWeight:500, lineHeight:lineH, color:C.text, whiteSpace:"normal", wordBreak:"break-word" }}>{text}</span>
                     <span style={{ fontSize:metaF, color:GOLD, fontWeight:500 }}>{isGetBack?"waiting to reply":"pending answer"}</span>
                   </span>
                 </button>
@@ -2474,7 +2474,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   <span style={{ fontSize:ncType.meta,color:row.now?C.accent:C.faint,fontFamily:NC_FONT_STACK,whiteSpace:"nowrap",paddingTop:1,fontWeight:row.now?700:400,minWidth:54 }}>
                     {row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                   </span>
-                  <span style={{ fontSize:ncType.body,color:row.now||row.special?C.text:C.muted,fontFamily:NC_FONT_STACK,fontWeight:row.now||row.special?600:400,lineHeight:ncType.line,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                  <span style={{ fontSize:ncType.body,color:row.now||row.special?C.text:C.muted,fontFamily:NC_FONT_STACK,fontWeight:row.now||row.special?600:400,lineHeight:ncType.line,whiteSpace:"normal",wordBreak:"break-word" }}>
                     {row.now && <span style={{width:6,height:6,borderRadius:"50%",background:C.accent,display:"inline-block",marginRight:5,verticalAlign:"middle"}} />}
                     {row.evt?.summary||"(no title)"}
                   </span>
@@ -2515,7 +2515,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   <a key={msg.id||i} href={url} target="_blank" rel="noopener noreferrer"
                     style={{ display:"flex",alignItems:"baseline",gap:6,padding:"5px 12px",borderTop:`1px solid ${C.divider}`,textDecoration:"none",color:"inherit",minWidth:0 }}>
                     <span style={{fontSize:ncType.body,fontWeight:600,color:C.text,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{from}</span>
-                    <span style={{flex:1,minWidth:0,fontSize:ncType.meta,color:C.muted,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
+                    <span style={{flex:1,minWidth:0,fontSize:ncType.meta,color:C.muted,fontFamily:NC_FONT_STACK,...(msg.aiSummary?{whiteSpace:"normal",wordBreak:"break-word"}:{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"})}}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
                     <span style={{fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{date}</span>
                   </a>
                 );
@@ -2539,7 +2539,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   style={{ width:"100%",textAlign:"left",display:"grid",gridTemplateColumns:"16px minmax(0,1fr)",gap:8,padding:"6px 12px 6px 0",border:"none",background:"transparent",color:C.text,cursor:"pointer",alignItems:"start",borderTop:`1px solid ${C.divider}` }}>
                   <span style={{width:8,height:8,borderRadius:99,background:GOLD,flexShrink:0,marginTop:4}} />
                   <span>
-                    <span style={{display:"block",fontSize:ncType.body,fontWeight:500,lineHeight:ncType.line,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{text}</span>
+                    <span style={{display:"block",fontSize:ncType.body,fontWeight:500,lineHeight:ncType.line,color:C.text,whiteSpace:"normal",wordBreak:"break-word"}}>{text}</span>
                     <span style={{fontSize:ncType.meta,color:GOLD,fontWeight:500}}>{isGetBack?"waiting to reply":"pending answer"}</span>
                   </span>
                 </button>
@@ -3080,7 +3080,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                           <div style={{ position: "relative", zIndex: 2, flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                               {now && <span style={{ width: 5, height: 5, borderRadius: "50%", background: accentBlue, flexShrink: 0 }} />}
-                              <span style={{ fontSize: NC_TYPE.control, color: lifted ? C.text : C.muted, fontWeight: lifted ? 600 : 400, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", opacity: row.routine && !lifted ? 0.78 : 1 }}>{evt.summary || "(no title)"}</span>
+                              <span style={{ fontSize: NC_TYPE.control, color: lifted ? C.text : C.muted, fontWeight: lifted ? 600 : 400, fontFamily: NC_FONT_STACK, whiteSpace: "normal", wordBreak: "break-word", opacity: row.routine && !lifted ? 0.78 : 1 }}>{evt.summary || "(no title)"}</span>
                             </div>
                           </div>
                         </>
@@ -3336,7 +3336,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                           <button type="button" onClick={() => handleEmailSelect(msg)}
                             style={{ flex: 1, minWidth: 0, minHeight: 0, border: "none", background: "transparent", color: "inherit", textAlign: "left", padding: 0, cursor: "pointer", fontFamily: NC_FONT_STACK, display: "flex", alignItems: "baseline", gap: 6 }}>
                             <span style={{ fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: "nowrap" }}>{from}</span>
-                            <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
+                            <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, ...(msg.aiSummary ? { whiteSpace: "normal", wordBreak: "break-word" } : { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
                             <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: "nowrap" }}>{date}</span>
                           </button>
                           <a href={url} target="_blank" rel="noopener noreferrer" title="Open in Gmail"
@@ -3348,8 +3348,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                           <div style={{ margin: "2px 0 8px", padding: "10px 10px 11px", borderRadius: 6, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, fontFamily: NC_FONT_STACK }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
                               <div style={{ minWidth: 0 }}>
-                                <div style={{ fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{gmailHeader(selectedEmailSource, 'Subject') || '(no subject)'}</div>
-                                <div style={{ fontSize: NC_TYPE.meta, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>{fmtFrom(gmailHeader(selectedEmailSource, 'From'))}</div>
+                                <div style={{ fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, whiteSpace: "normal", wordBreak: "break-word" }}>{gmailHeader(selectedEmailSource, 'Subject') || '(no subject)'}</div>
+                                <div style={{ fontSize: NC_TYPE.meta, color: C.muted, whiteSpace: "normal", wordBreak: "break-word", marginTop: 2 }}>{fmtFrom(gmailHeader(selectedEmailSource, 'From'))}</div>
                               </div>
                               <button type="button" onClick={() => { setSelectedEmailId(null); setEmailDetailError(""); }}
                                 title="Close message"
