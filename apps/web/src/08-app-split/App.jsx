@@ -1293,15 +1293,28 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   // ─── Derived state ───────────────────────────────────────────────────────
   // All app AI calls go through the central Netlify AI gateway.
   const selectedProvider = AS?.aiProvider || aiConfig?.provider || aiConfig?.defaultProvider || "gemini";
-  const selectedProviderAvailable = aiConfig ? !!aiConfig?.available?.[selectedProvider] : serverKeyAvailable;
+  const availMap = aiConfig?.available || null;
+  const availableProviders = availMap ? Object.keys(availMap).filter(p => availMap[p]) : [];
+  // If the user's chosen provider has no server key but another one does, fall back to a
+  // working provider (server default, else any available). Otherwise a mis-set provider
+  // silently disables every dashboard summary even though the gateway works — which is
+  // exactly why email summaries (which send no explicit provider) succeed while the
+  // NerveCenter summary showed "unavailable".
+  const effectiveProvider =
+      (availMap && availMap[selectedProvider]) ? selectedProvider
+    : (availMap && aiConfig?.defaultProvider && availMap[aiConfig.defaultProvider]) ? aiConfig.defaultProvider
+    : (availableProviders[0] || selectedProvider);
+  const aiAvailable = availMap ? availableProviders.length > 0 : serverKeyAvailable;
   const selectedModel = AS?.aiModel || aiConfig?.model || aiConfig?.textModel || "";
   const rawAiOpts = AS ? {
-    provider: selectedProvider,
-    model: selectedModel,
+    provider: effectiveProvider,
+    // Only carry the user's model when using their chosen provider; on fallback let the
+    // server pick the right default model for the substitute provider.
+    model: effectiveProvider === selectedProvider ? selectedModel : "",
     geminiCredential: AS?.aiGeminiCredential || aiConfig?.defaultGeminiCredential || "auto",
     source: "server",
   } : null;
-  const hasAI = !!(rawAiOpts && selectedProviderAvailable);
+  const hasAI = !!(rawAiOpts && aiAvailable);
   const aiOpts = hasAI ? rawAiOpts : null;
   async function retryHeldTranscription(rec) {
     if (!aiOpts || pendingRetryId) return;

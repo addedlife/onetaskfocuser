@@ -1757,10 +1757,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const NC_STATUS_LABEL = { updating: "Updating…", unavailable: "Summary unavailable", error: "Summary unavailable" };
   const nerveStatusLabel = NC_STATUS_LABEL[ncSummaryStatus] || "";
   const ncSummaryRetryable = ncSummaryStatus === "error" || ncSummaryStatus === "unavailable";
+  // Retry must stay self-contained: clear the summary cache and re-run the summary job ONLY.
+  // It must NOT touch Gmail/Calendar — re-fetching app-config here re-triggered the Google
+  // load and discarded already-computed email summaries (a wasted, visible AI re-run).
   const retryNcSummary = () => {
     removeStorageKey(NC_SUMMARY_CACHE_KEY);
     removeStorageKey(NC_SUMMARY_LAST_RUN_KEY);
-    if (!aiOpts) onRefreshAiConfig?.();   // AI was unavailable → re-check provider config
     setNcSummaryError(false);
     setNcSummaryRefreshNonce(n => n + 1);
   };
