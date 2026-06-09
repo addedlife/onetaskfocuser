@@ -582,8 +582,11 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
           <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
           <span style={{ fontSize: NC_TYPE.body, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0 }}>{title}</span>
           {count > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
-          {expandable && !expanded && preview != null && (
-            <span style={{ fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0, flex: 1, whiteSpace: "normal", wordBreak: "break-word", fontStyle: "italic" }}>{preview}</span>
+          {preview != null && preview !== "" && (
+            // Small single-line caption next to the title — visible in every layout (incl. the
+            // always-expanded mobile sections), kept to one line so it never pushes card
+            // content (emails, events) down.
+            <span style={{ fontSize: NC_TYPE.small, lineHeight: 1.2, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "italic" }}>{preview}</span>
           )}
           {expandable && (
             <span style={{ marginLeft: "auto", color: expanded ? C.muted : C.faint, display: "flex", flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("chevron_right", 18)}</span>
@@ -664,7 +667,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
             <span style={{ fontSize: NC_TYPE.label, fontWeight: 700, color: accentColor || C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0.3, textTransform: "uppercase" }}>{title}</span>
           </div>
           {summary && (
-            <span style={{ display: "block", fontSize: NC_TYPE.body, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.3, marginTop: 3, whiteSpace: "normal", wordBreak: "break-word", paddingLeft: 26, fontStyle: "italic" }}>{summary}</span>
+            <span style={{ display: "block", fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: 26, fontStyle: "italic" }}>{summary}</span>
           )}
         </button>
       ) : (
@@ -672,7 +675,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
         <button onClick={onOpen} title={title} aria-label={title}
           style={{ display: "flex", alignItems: "flex-start", gap: 7, width: "100%", textAlign: "left", border: "none", background: "transparent", padding: headerCollapsed ? "0 10px" : "7px 11px 6px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0, maxHeight: headerCollapsed ? 0 : 56, opacity: headerCollapsed ? 0 : 1, overflow: "hidden", pointerEvents: headerCollapsed ? "none" : "auto", transition: "max-height 0.2s ease, opacity 0.15s ease, padding 0.2s ease" }}>
           <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 14)}</span>
-          <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.body, fontWeight: 400, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.3, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden", fontStyle: "italic" }}>{summary}</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.small, fontWeight: 400, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "italic" }}>{summary}</span>
         </button>
       )}
       <div ref={scrollRef} onScroll={measure}
@@ -1187,7 +1190,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   useEffect(() => {
     let cancelled = false;
     const now = Date.now();
-    if (!aiOpts) { setNcSummary(null); setNcSummaryLoading(false); return undefined; }
+    // Attempt the native summary unconditionally — exactly like email summaries do (runAIJob
+    // with `aiOpts || {}`). Do NOT pre-gate on aiOpts: app-config's provider "available" map
+    // can report nothing even when the gateway has working keys, which is why emails
+    // summarized but this card summary stayed "unavailable". Let the server resolve a
+    // provider; if there genuinely is none, the call fails and we show a retry.
     const cached = readStorageJson(NC_SUMMARY_CACHE_KEY);
     if (cached?.scanKey === ncSummaryScanKey && cached?.result?.supercrunch && now - Number(cached.ts || 0) < NC_SUMMARY_CACHE_MS) {
       setNcSummary(cached.result);
@@ -1203,7 +1210,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     setNcSummaryError(false);
     const timer = window.setTimeout(() => {
       writeStorageNumber(NC_SUMMARY_LAST_RUN_KEY, Date.now());
-      runAIJob("dashboard.nervecenter_summary.v1", { context: chiefContext }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 600 } })
+      runAIJob("dashboard.nervecenter_summary.v1", { context: chiefContext }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 600 } })
         .then(job => {
           if (cancelled) return;
           // job === null means the gateway failed/timed out (callAIProxy swallows the error).
@@ -1749,14 +1756,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   //   ok          – we have a result (may be legitimately empty/quiet)
   const ncSummaryStatus =
       ncSummaryLoading ? "updating"
-    : (!aiOpts && aiConfigLoading) ? "updating"
-    : !aiOpts ? "unavailable"
+    : (aiConfigLoading && !ncSummary && !ncSummaryError) ? "updating"
     : ncSummaryError ? "error"
     : ncSummary ? "ok"
     : "idle";
-  const NC_STATUS_LABEL = { updating: "Updating…", unavailable: "Summary unavailable", error: "Summary unavailable" };
+  const NC_STATUS_LABEL = { updating: "Updating…", error: "Summary unavailable" };
   const nerveStatusLabel = NC_STATUS_LABEL[ncSummaryStatus] || "";
-  const ncSummaryRetryable = ncSummaryStatus === "error" || ncSummaryStatus === "unavailable";
+  const ncSummaryRetryable = ncSummaryStatus === "error";
   // Retry must stay self-contained: clear the summary cache and re-run the summary job ONLY.
   // It must NOT touch Gmail/Calendar — re-fetching app-config here re-triggered the Google
   // load and discarded already-computed email summaries (a wasted, visible AI re-run).
@@ -1782,7 +1788,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   );
 
   // Small live-status pill (spinner while updating, warning dot + Retry when failed/unavailable).
-  const ncStatusDotColor = ncSummaryStatus === "error" || ncSummaryStatus === "unavailable" ? (C.warning || C.danger || "#C98A1B") : C.faint;
+  const ncStatusDotColor = ncSummaryStatus === "error" ? (C.warning || C.danger || "#C98A1B") : C.faint;
   const ncSummaryStatusPill = (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
       {ncSummaryStatus === "updating" ? (
@@ -1791,7 +1797,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         <span style={{ width: 7, height: 7, borderRadius: "50%", background: ncStatusDotColor }} />
       )}
       <span style={{ fontSize: NC_TYPE.small, color: ncStatusDotColor, fontFamily: NC_FONT_STACK }}>
-        {ncSummaryStatus === "updating" ? "Updating" : ncSummaryStatus === "unavailable" ? "Unavailable" : "Unavailable"}
+        {ncSummaryStatus === "updating" ? "Updating" : "Unavailable"}
       </span>
       {ncSummaryRetryable && (
         <button type="button" onClick={retryNcSummary} title="Try the summary again" aria-label="Retry summary"
