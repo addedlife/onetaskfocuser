@@ -64,7 +64,13 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const [tab, setTab] = useState("focus");
   const [suiteView, setSuiteView] = useState(getInitialSuiteView);
   const [sidebarOpen, setSidebarOpen] = useState(() => {
-    try { return localStorage.getItem("shamash_sidebar_open") !== "false"; } catch { return true; }
+    try {
+      const stored = localStorage.getItem("shamash_sidebar_open");
+      if (stored !== null) return stored !== "false";
+      // No saved preference: open by default on desktop, collapsed on small screens
+      // (phones) — but the toggle still works to expand it (overlaying the content).
+      return (typeof window !== "undefined" ? window.innerWidth : 1024) >= 760;
+    } catch { return true; }
   });
   const [ncActionsOpen, setNcActionsOpen] = useState(false);
   const [ncActionCatId, setNcActionCatId] = useState("tasks");
@@ -2601,8 +2607,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     .sort((a, b) => (b.completedAt || b.createdAt || 0) - (a.completedAt || a.createdAt || 0))
     .slice(0, 5);
   const shellHidden = !!(zen && curT);
-  const sidebarForceCompact = viewportW < 760;
-  const sidebarW = shellHidden ? 0 : (sidebarForceCompact ? 64 : (sidebarOpen ? 184 : 64));
+  // The rail is collapsible/expandable on every screen size. It defaults collapsed on
+  // small screens (see sidebarOpen init) but the toggle must always work — previously
+  // `viewportW < 760` hard-forced compact AND disabled the toggle, so phones could never
+  // expand the rail.
+  const sidebarW = shellHidden ? 0 : (sidebarOpen ? 184 : 64);
   const launchDeskPhone = (force = false) => {
     if (!force && deskPhoneOnline) return;
     const now = Date.now();
@@ -3402,7 +3411,6 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           onParkRest={() => curT && parkRestOfGroup(curT)}
           onDelete={() => curT && delTask(curT.id)}
           topOffset={noticeTopOffset}
-          forceCompact={sidebarForceCompact}
           clockTime={clockTime}
         />
       )}

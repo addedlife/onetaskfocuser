@@ -1,6 +1,6 @@
 import React from 'react';
 import { cleanTheme, NC_FONT_STACK, NC_TYPE, suiteIcon } from '../ui-tokens.jsx';
-import { APP_VERSION, formatVersionStamp } from '../../version.js';
+import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
 
 function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreActions, topOffset = 0, forceCompact = false, clockTime = null, onSettings }) {
   const mainApps = [
@@ -57,7 +57,10 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
       borderRight: `1px solid ${C.divider}`,
       transition: "width 0.20s cubic-bezier(0.4,0,0.2,1)",
-      overflow: "hidden",
+      // Short (landscape-phone) viewports can't fit the whole nav column; scroll
+      // vertically so the bottom cluster (clock, toggle, version) is never clipped.
+      overflowY: "auto",
+      overflowX: "hidden",
     }}>
 
       {/* NerveCenter identity button — right side goes flat when active so the arrow cap reads as one shape */}
@@ -169,7 +172,8 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         {suiteIcon(displayOpen ? "chevron_left" : "chevron_right", 15)}
       </button>
 
-      {/* Version stamp — bump apps/web/src/version.js on each release (see CLAUDE.md) */}
+      {/* Version stamp — bump apps/web/src/version.js on each release (see CLAUDE.md).
+          Shows version + update date/time in BOTH states (compact two-line when collapsed). */}
       <div title={`Shamash Pro · v${APP_VERSION} · updated ${formatVersionStamp()}`} style={{
         width: "100%", flexShrink: 0,
         marginTop: 8, paddingTop: 7,
@@ -182,13 +186,26 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
           color: C.faint, fontFamily: NC_FONT_STACK,
           fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
         }}>v{APP_VERSION}</span>
-        {displayOpen && (
+        {displayOpen ? (
           <span style={{
             fontSize: 8.5, color: C.faint, opacity: 0.7,
             fontFamily: NC_FONT_STACK, letterSpacing: 0.2, whiteSpace: "nowrap",
             fontVariantNumeric: "tabular-nums",
           }}>{formatVersionStamp()}</span>
-        )}
+        ) : (() => {
+          const s = versionStampShort();
+          const lineStyle = {
+            fontSize: 7.5, color: C.faint, opacity: 0.7, lineHeight: 1.15,
+            fontFamily: NC_FONT_STACK, letterSpacing: 0.1, whiteSpace: "nowrap",
+            fontVariantNumeric: "tabular-nums",
+          };
+          return (
+            <>
+              <span style={lineStyle}>{s.date}</span>
+              {s.time && <span style={lineStyle}>{s.time}</span>}
+            </>
+          );
+        })()}
       </div>
     </div>
 

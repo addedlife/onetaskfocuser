@@ -1,0 +1,60 @@
+#!/bin/sh
+# ─────────────────────────────────────────────────────────────────────────────
+# pre-push guard: refuse to push to the live branch (main) unless APP_VERSION in
+# apps/web/src/version.js has been bumped relative to what is already live.
+#
+# This enforces the standing release policy (see CLAUDE.md / AGENTS.md): every
+# push to production must carry a version bump, so the left-rail version stamp
+# always reflects what is actually deployed.
+#
+# Emergency bypass (use sparingly): git push --no-verify
+# ─────────────────────────────────────────────────────────────────────────────
+VERSION_FILE="apps/web/src/version.js"
+ZERO="0000000000000000000000000000000000000000"
+
+extract_version() {
+  # $1 = git revision; prints the APP_VERSION string value, or nothing.
+  git show "$1:$VERSION_FILE" 2>/dev/null \
+    | sed -nE 's/.*APP_VERSION[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' \
+    | head -1
+}
+
+status=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # Only guard the live branch.
+  case "$remote_ref" in
+    refs/heads/main|refs/heads/master) ;;
+    *) continue ;;
+  esac
+
+  # Branch deletion — nothing to check.
+  [ "$local_sha" = "$ZERO" ] && continue
+
+  new_ver=$(extract_version "$local_sha")
+  if [ -z "$new_ver" ]; then
+    echo "" >&2
+    echo "  ✗ Push to ${remote_ref#refs/heads/} blocked: cannot read APP_VERSION from $VERSION_FILE." >&2
+    echo "    Add/restore the version constant before pushing live (see CLAUDE.md)." >&2
+    echo "" >&2
+    status=1
+    continue
+  fi
+
+  # New branch on the remote (no prior tip) — allow; nothing to compare against.
+  if [ "$remote_sha" = "$ZERO" ]; then
+    continue
+  fi
+
+  old_ver=$(extract_version "$remote_sha")
+  if [ -n "$old_ver" ] && [ "$new_ver" = "$old_ver" ]; then
+    echo "" >&2
+    echo "  ✗ Push to ${remote_ref#refs/heads/} blocked: APP_VERSION is still $new_ver (unchanged from live)." >&2
+    echo "    Bump apps/web/src/version.js (APP_VERSION) before pushing live." >&2
+    echo "    Scheme: minor for feat:, patch for fix:/style: — see CLAUDE.md release policy." >&2
+    echo "    Emergency bypass: git push --no-verify" >&2
+    echo "" >&2
+    status=1
+  fi
+done
+
+exit $status
