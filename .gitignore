@@ -3,7 +3,10 @@ dist/
 bin/
 obj/
 .netlify/
-.claude/
+.claude/*
+!.claude/settings.json
+!.claude/hooks
+.claude/settings.local.json
 .launcher/
 artifacts/
 deno.lock
