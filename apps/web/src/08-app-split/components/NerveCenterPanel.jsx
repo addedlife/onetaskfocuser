@@ -583,7 +583,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
           <span style={{ fontSize: NC_TYPE.body, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0 }}>{title}</span>
           {count > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
           {expandable && !expanded && preview != null && (
-            <span style={{ fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, color: C.muted, fontFamily: NC_FONT_STACK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: 1 }}>{preview}</span>
+            <span style={{ fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0, flex: 1, whiteSpace: "normal", wordBreak: "break-word" }}>{preview}</span>
           )}
           {expandable && (
             <span style={{ marginLeft: "auto", color: expanded ? C.muted : C.faint, display: "flex", flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("chevron_right", 18)}</span>
@@ -664,7 +664,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
             <span style={{ fontSize: NC_TYPE.label, fontWeight: 700, color: accentColor || C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0.3, textTransform: "uppercase" }}>{title}</span>
           </div>
           {summary && (
-            <span style={{ display: "block", fontSize: NC_TYPE.body, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.3, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: 26 }}>{summary}</span>
+            <span style={{ display: "block", fontSize: NC_TYPE.body, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.3, marginTop: 3, whiteSpace: "normal", wordBreak: "break-word", paddingLeft: 26 }}>{summary}</span>
           )}
         </button>
       ) : (
