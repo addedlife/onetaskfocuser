@@ -1,52 +1,40 @@
+import { registerSW } from 'virtual:pwa-register';
+
 const OFFLINE_READY_KEY = "onetask_offline_shell_ready";
+const LEGACY_CACHE_NAME = "onetask-offline-v6";
 
-function collectOfflineUrls() {
-  const urls = new Set(["/", "/index.html", "/manifest.webmanifest"]);
-
-  try {
-    urls.add(`${window.location.pathname}${window.location.search}`);
-    document.querySelectorAll("script[src],link[rel='stylesheet'][href]").forEach((node) => {
-      const value = node.getAttribute("src") || node.getAttribute("href");
-      if (!value) return;
-      const url = new URL(value, window.location.origin);
-      if (url.origin === window.location.origin) {
-        urls.add(`${url.pathname}${url.search}`);
-      }
-    });
-  } catch {}
-
-  return Array.from(urls);
+function signalOfflineReady() {
+  try { localStorage.setItem(OFFLINE_READY_KEY, String(Date.now())); } catch {}
+  window.dispatchEvent(new CustomEvent("onetask-offline-ready"));
 }
 
 export function registerOfflineShell() {
   if (!("serviceWorker" in navigator) || !import.meta.env.PROD) return;
 
-  // Note: the actual reload-to-fresh-code is driven by the service worker itself
-  // (it navigates its clients on activate), which also rescues stale installed PWAs
-  // that resume old code without re-navigating. Here we just make sure the browser
-  // checks for a new worker promptly instead of waiting up to 24h.
-  window.addEventListener("load", async () => {
-    try {
-      const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-
-      // Proactively check for a new SW on load and every time the app is foregrounded,
-      // so resumed PWAs discover and apply updates instead of sitting on stale code.
-      const checkForUpdate = () => { registration.update().catch(() => {}); };
+  // Workbox-generated worker (vite-plugin-pwa, registerType: 'autoUpdate'). When a new
+  // deploy ships, the precache manifest changes → the browser installs the new worker,
+  // which skipWaiting + clientsClaim and then auto-reloads open windows to fresh code.
+  // This is the cache-busting the old hand-bumped CACHE_NAME couldn't guarantee.
+  registerSW({
+    immediate: true,
+    onRegisteredSW(_swUrl, registration) {
+      // One-time cleanup of the legacy hand-rolled cache so old bundles don't linger.
+      try { caches.delete(LEGACY_CACHE_NAME); } catch {}
+      // Check for a new worker on load and whenever the app is foregrounded, so resumed
+      // PWAs discover updates promptly instead of waiting up to 24h.
+      const checkForUpdate = () => { registration?.update().catch(() => {}); };
       checkForUpdate();
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") checkForUpdate();
       });
-
-      const ready = await navigator.serviceWorker.ready;
-      const target = ready.active || registration.active || navigator.serviceWorker.controller;
-      target?.postMessage({ type: "CACHE_URLS", urls: collectOfflineUrls() });
-      localStorage.setItem(OFFLINE_READY_KEY, String(Date.now()));
-      window.dispatchEvent(new CustomEvent("onetask-offline-ready"));
-    } catch (error) {
+      signalOfflineReady();
+    },
+    onOfflineReady() { signalOfflineReady(); },
+    onRegisterError(error) {
       console.warn("[offline] Service worker registration failed", error);
       // Don't let a SW failure stall the app's offline-ready signal.
-      window.dispatchEvent(new CustomEvent("onetask-offline-ready"));
-    }
+      signalOfflineReady();
+    },
   });
 }
 
