@@ -957,9 +957,10 @@ const AI_JOB_REGISTRY = {
       return compactLines([
         YESHIVISH_SYSTEM,
         "You are generating two display strings for a NerveCenter dashboard header.",
-        "Scan ALL sources equally: Calendar, Gmail, Tasks, Shailos, phone calls, and texts.",
-        "Routine calendar items (regular davening, standard learning sessions, recurring meetings) are background context only.",
+        "Scan ALL sources: Calendar, Gmail, Tasks, Shailos, phone calls, and texts.",
+        "Routine calendar items (regular davening, standard learning sessions, recurring meetings) are background context only. Calendar items marked past:true are already over — ignore them completely.",
         "Write 'supercrunch': a terse comma-separated list of the actual named items across all sources — task text, email topics, shaila subjects, caller names, calendar events. Name the thing, not the category. Never use counts or category nouns ('3 tasks', '2 shailos', 'emails'). If more items exist than fit, end with 'various [X] items'. One line, no periods. Example: 'Kashrus research, $100 CashApp transfer, bank account closure, various household items'.",
+        "Cross-source coverage rule: before listing a second item from any one source, you must include the single most important item from every other active source. Tasks will often dominate the data — resist that bias. If calendar, mail, shailos, and phone each have active items, each gets at least one entry in supercrunch before any source gets a second entry.",
         "Write 'signals': one entry per area that has active data (Calendar, Mail, Tasks, Shailos, Phone). Each note is Apple notification-summary style: terse, telegraphic, leads with the most concrete fact. Drop articles and filler. Pack multiple items with commas or semicolons.",
         "Do NOT restate the area's own name or use bare counts in a note — the UI already labels each line. Say 'Pending: kashrus of the pot' not '2 shailos'; say 'David, Mom' not '3 missed calls: David, Mom'.",
         "Do not invent facts. If data is thin, say what is visible.",

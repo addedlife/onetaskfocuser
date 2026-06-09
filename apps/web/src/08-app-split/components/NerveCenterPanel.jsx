@@ -1031,7 +1031,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         text: nerveDisplaySummary(item, item.text || "Shaila"),
         status: item.status === "get_back" || item.isGetBackStep ? "waiting to reply" : "pending answer",
       })),
-      calendar: calendarRows.slice(0, 24).map(row => ({
+      calendar: calendarRows.filter(r => !r.past).slice(0, 24).map(row => ({
         id: cleanOneLine(row.evt?.id || "", 120),
         calendarId: cleanOneLine(row.evt?.calendarId || "primary", 180),
         sourceKey: hashChiefValue(`calendar|${row.evt?.id || row.evt?.summary || ""}`),
