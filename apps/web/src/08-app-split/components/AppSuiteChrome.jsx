@@ -1,5 +1,6 @@
 import React from 'react';
 import { cleanTheme, NC_FONT_STACK, NC_TYPE, suiteIcon } from '../ui-tokens.jsx';
+import { APP_VERSION, formatVersionStamp } from '../../version.js';
 
 function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreActions, topOffset = 0, forceCompact = false, clockTime = null, onSettings }) {
   const mainApps = [
@@ -167,6 +168,28 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         }}>
         {suiteIcon(displayOpen ? "chevron_left" : "chevron_right", 15)}
       </button>
+
+      {/* Version stamp — bump apps/web/src/version.js on each release (see CLAUDE.md) */}
+      <div title={`Shamash Pro · v${APP_VERSION} · updated ${formatVersionStamp()}`} style={{
+        width: "100%", flexShrink: 0,
+        marginTop: 8, paddingTop: 7,
+        borderTop: `1px solid ${C.divider}`,
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
+      }}>
+        <span style={{
+          fontSize: 9, fontWeight: 700,
+          letterSpacing: displayOpen ? 1.4 : 0.4,
+          color: C.faint, fontFamily: NC_FONT_STACK,
+          fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
+        }}>v{APP_VERSION}</span>
+        {displayOpen && (
+          <span style={{
+            fontSize: 8.5, color: C.faint, opacity: 0.7,
+            fontFamily: NC_FONT_STACK, letterSpacing: 0.2, whiteSpace: "nowrap",
+            fontVariantNumeric: "tabular-nums",
+          }}>{formatVersionStamp()}</span>
+        )}
+      </div>
     </div>
 
     {/* Arrow cap — sibling of sidebar so overflow:hidden doesn't clip it.

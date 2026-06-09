@@ -15,7 +15,8 @@ Start with `BRIEF.txt`. Keep both cached and uncached token use low: read the br
 - Before a coding fix, project, upgrade, or change, research the relevant industry-standard practice. If it conflicts with the local plan, tell the user and get confirmation before proceeding.
 - Verify current state from `docs/ops/VERIFICATION_LOG.md` before changing code.
 - Use `docs/ops/CONTEXT_INDEX.md` to target source reads; expand with `rg` only when the listed context is insufficient.
-- After verified web changes, commit and push to `origin/main`, then verify Netlify's Git-triggered production deploy picked up the pushed commit or built asset. Use manual `npx netlify deploy` only if the Git-triggered deploy fails or the current thread explicitly asks for it.
+- **Always push live after a verified good fix** (standing owner authorization — see `CLAUDE.md`). After verified web changes, commit and push straight to `origin/main` — do not leave a verified fix on a feature branch and do not ask "should I push this live?" for a normal fix. Then verify Netlify's Git-triggered production deploy picked up the pushed commit or built asset. Use manual `npx netlify deploy` only if the Git-triggered deploy fails or the current thread explicitly asks for it. (Exceptions needing a heads-up first: storage/sync refactors per `HANDOFF.md` §9, schema migrations, secret/permission changes.)
+- Bump `apps/web/src/version.js` (`APP_VERSION` + `APP_VERSION_DATE`, shown in the left rail) on every release — minor for `feat:`, patch for `fix:`/`style:`.
 - Do not relink Netlify without explicit approval.
 - Record verification results in `docs/ops/VERIFICATION_LOG.md`.
 - Record migration decisions in `docs/ops/MIGRATION_MANIFEST.md`.
