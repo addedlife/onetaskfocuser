@@ -685,7 +685,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
   );
 }
 
-function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
+function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
   const viewportW = useViewportWidth();
   const [healthCardVisible, setHealthCardVisible] = useState(() => {
     try { return localStorage.getItem("nc_health_card_visible") !== "0"; } catch { return true; }
@@ -745,6 +745,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const [chiefBrief, setChiefBrief] = useState(null);
   const [ncSummary, setNcSummary] = useState(null);
   const [ncSummaryLoading, setNcSummaryLoading] = useState(false);
+  const [ncSummaryError, setNcSummaryError] = useState(false); // last summary attempt failed (gateway null/throw)
   const [ncSummaryRefreshNonce, setNcSummaryRefreshNonce] = useState(0);
   const [chiefLoading, setChiefLoading] = useState(false);
   const [chiefError, setChiefError] = useState("");
@@ -1199,20 +1200,25 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       return undefined;
     }
     setNcSummaryLoading(true);
+    setNcSummaryError(false);
     const timer = window.setTimeout(() => {
       writeStorageNumber(NC_SUMMARY_LAST_RUN_KEY, Date.now());
       runAIJob("dashboard.nervecenter_summary.v1", { context: chiefContext }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 600 } })
         .then(job => {
           if (cancelled) return;
-          const output = job?.output;
-          if (output?.supercrunch) {
-            setNcSummary(output);
+          // job === null means the gateway failed/timed out (callAIProxy swallows the error).
+          if (!job || !job.output) { setNcSummary(null); setNcSummaryError(true); return; }
+          const output = job.output;
+          // Keep a response that has signals even if supercrunch is empty (the schema can
+          // legitimately return an empty supercrunch). Previously this was discarded as null,
+          // which is why area summaries could stay blank forever.
+          setNcSummary(output);
+          setNcSummaryError(false);
+          if (output.supercrunch) {
             writeStorageJson(NC_SUMMARY_CACHE_KEY, { scanKey: ncSummaryScanKey, ts: Date.now(), result: output });
-          } else {
-            setNcSummary(null);
           }
         })
-        .catch(() => { if (!cancelled) setNcSummary(null); })
+        .catch(() => { if (!cancelled) { setNcSummary(null); setNcSummaryError(true); } })
         .finally(() => { if (!cancelled) setNcSummaryLoading(false); });
     }, 600);
     return () => { cancelled = true; window.clearTimeout(timer); };
@@ -1735,12 +1741,37 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     return parts.join(" · ");
   }, [primaryTaskQueue, calendarEvents, gmailMessages, visibleShailos, phoneActivitySummary]);
 
-  // Only claim we're "waiting" while a summary is actually in flight. Once the AI job has
-  // finished (even if it produced nothing, or the gateway was unreachable), drop the caption
-  // so cards render their own content cleanly instead of a permanently stuck "Waiting…".
-  const nerveWaitingText = ncSummaryLoading ? "Waiting on summary" : "";
-  const nerveSupercrunch = cleanOneLine(ncSummary?.supercrunch || nerveWaitingText, 240);
-  const nerveSignalNote = area => (ncSummary?.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || nerveWaitingText;
+  // Live status for the AI summaries, surfaced on every area so a stuck/failed summary is
+  // visible instead of a silent blank:
+  //   updating    – a summary scan is in flight (or AI config is still resolving)
+  //   unavailable – AI is off / no provider key (config settled, no aiOpts)
+  //   error       – the gateway failed or timed out on the last attempt
+  //   ok          – we have a result (may be legitimately empty/quiet)
+  const ncSummaryStatus =
+      ncSummaryLoading ? "updating"
+    : (!aiOpts && aiConfigLoading) ? "updating"
+    : !aiOpts ? "unavailable"
+    : ncSummaryError ? "error"
+    : ncSummary ? "ok"
+    : "idle";
+  const NC_STATUS_LABEL = { updating: "Updating…", unavailable: "Summary unavailable", error: "Summary unavailable" };
+  const nerveStatusLabel = NC_STATUS_LABEL[ncSummaryStatus] || "";
+  const ncSummaryRetryable = ncSummaryStatus === "error" || ncSummaryStatus === "unavailable";
+  const retryNcSummary = () => {
+    removeStorageKey(NC_SUMMARY_CACHE_KEY);
+    removeStorageKey(NC_SUMMARY_LAST_RUN_KEY);
+    if (!aiOpts) onRefreshAiConfig?.();   // AI was unavailable → re-check provider config
+    setNcSummaryError(false);
+    setNcSummaryRefreshNonce(n => n + 1);
+  };
+  const nerveSupercrunch = cleanOneLine(
+    ncSummaryStatus === "ok" ? (ncSummary?.supercrunch || "") : nerveStatusLabel, 240);
+  const nerveSignalNote = area => {
+    if (ncSummaryStatus === "ok") {
+      return (ncSummary?.signals || []).find(s => (s.area || "").toLowerCase() === area.toLowerCase())?.note || "";
+    }
+    return nerveStatusLabel;
+  };
   const nerveSummaryStrip = (style = {}) => (
     <div style={{ flexShrink: 0, padding: "3px 10px", borderRadius: 7, background: C.bgSoft, fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.22, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...style }}>
       {nerveSupercrunch}
@@ -1748,14 +1779,35 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     </div>
   );
 
-  const nextActionBar = (ncSummary?.supercrunch || ncSummaryLoading || activeChiefTaskText) ? (
+  // Small live-status pill (spinner while updating, warning dot + Retry when failed/unavailable).
+  const ncStatusDotColor = ncSummaryStatus === "error" || ncSummaryStatus === "unavailable" ? (C.warning || C.danger || "#C98A1B") : C.faint;
+  const ncSummaryStatusPill = (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+      {ncSummaryStatus === "updating" ? (
+        <span style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${C.faint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+      ) : (
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: ncStatusDotColor }} />
+      )}
+      <span style={{ fontSize: NC_TYPE.small, color: ncStatusDotColor, fontFamily: NC_FONT_STACK }}>
+        {ncSummaryStatus === "updating" ? "Updating" : ncSummaryStatus === "unavailable" ? "Unavailable" : "Unavailable"}
+      </span>
+      {ncSummaryRetryable && (
+        <button type="button" onClick={retryNcSummary} title="Try the summary again" aria-label="Retry summary"
+          style={{ fontSize: NC_TYPE.small, fontWeight: 600, color: C.accent, background: "none", border: `1px solid ${C.accent}`, borderRadius: 6, padding: "1px 8px", cursor: "pointer", fontFamily: NC_FONT_STACK }}>
+          Try again
+        </button>
+      )}
+    </span>
+  );
+
+  const nextActionBar = (ncSummary?.supercrunch || ncSummaryLoading || activeChiefTaskText || ncSummaryRetryable) ? (
     <div style={{ flexShrink: 0, minWidth: 0, marginBottom: 4, borderRadius: 8, border: `1px solid ${C.divider}`, overflow: "hidden" }}>
-      {/* Row 1: super-crunched item summary + refresh */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 4, padding: "6px 6px 6px 10px", background: C.bgSoft }}>
+      {/* Row 1: super-crunched item summary + status/refresh */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: "6px 6px 6px 10px", background: C.bgSoft }}>
         <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.control, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.35, wordBreak: "break-word" }}>
-          {ncSummaryLoading && !ncSummary?.supercrunch
-            ? <span style={{ opacity: 0.45 }}>…</span>
-            : (ncSummary?.supercrunch || "")}
+          {ncSummaryStatus === "ok"
+            ? (ncSummary?.supercrunch || "")
+            : ncSummaryStatusPill}
         </span>
         <button type="button"
           onClick={() => { removeStorageKey(NC_SUMMARY_CACHE_KEY); removeStorageKey(NC_SUMMARY_LAST_RUN_KEY); setNcSummaryRefreshNonce(n => n + 1); }}

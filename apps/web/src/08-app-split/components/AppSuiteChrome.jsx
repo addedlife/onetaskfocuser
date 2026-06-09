@@ -17,8 +17,28 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
   const displayOpen = open && !forceCompact;
   const W = displayOpen ? 184 : 64;
   const rightPad = displayOpen ? 12 : 10;
+
+  // Height-aware scale: shrink the whole rail to fit short (landscape-phone) viewports so
+  // it never needs scrolling, while staying pixel-identical on tall/desktop screens (s=1).
+  const [winH, setWinH] = React.useState(() => (typeof window !== "undefined" ? window.innerHeight : 800));
+  React.useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const on = () => setWinH(window.innerHeight);
+    window.addEventListener("resize", on);
+    window.addEventListener("orientationchange", on);
+    return () => { window.removeEventListener("resize", on); window.removeEventListener("orientationchange", on); };
+  }, []);
+  const railH = Math.max(240, winH - topOffset);
+  const NATURAL = 684;                                  // approx un-scaled content height
+  const s = Math.max(0.5, Math.min(1, railH / NATURAL));
+  const px = v => Math.round(v * s);                    // scaled pixels
+  const ic = v => Math.max(13, Math.round(v * s));      // scaled icon size (never illegibly tiny)
+  const BTN_H = Math.max(24, px(40));
+  const FZ = Math.max(11, px(14));
+  const GAP = Math.max(2, px(4));
+
   const navButton = (isActive = false, overrides = {}) => ({
-    height: 40,
+    height: BTN_H,
     padding: displayOpen ? "0 12px" : "0",
     borderRadius: 20,
     cursor: "pointer",
@@ -27,7 +47,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
     color: isActive ? C.text : C.muted,
     fontFamily: NC_FONT_STACK,
     fontWeight: 500,
-    fontSize: 14,
+    fontSize: FZ,
     display: "flex",
     alignItems: "center",
     gap: displayOpen ? 12 : 0,
@@ -51,8 +71,8 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       style={{
       position: "fixed", left: 0, top: topOffset, bottom: 0, width: W, zIndex: 8600,
       display: "flex", flexDirection: "column", alignItems: displayOpen ? "stretch" : "center",
-      boxSizing: "border-box", padding: displayOpen ? "18px 12px 16px" : "18px 10px 16px",
-      gap: 4,
+      boxSizing: "border-box", padding: `${px(18)}px ${displayOpen ? 12 : 10}px ${px(16)}px`,
+      gap: GAP,
       background: C.bg,
       backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
       borderRight: `1px solid ${C.divider}`,
@@ -66,11 +86,11 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       {/* NerveCenter identity button — right side goes flat when active so the arrow cap reads as one shape */}
       <button onClick={() => onSelect("nervecenter")} title="NerveCenter"
         style={navButton(ncActive, {
-          marginBottom: 10,
-          fontSize: 15,
+          marginBottom: px(10),
+          fontSize: Math.max(12, px(15)),
           ...(ncActive ? { borderRadius: "20px 0 0 20px" } : {}),
         })}>
-        {suiteIcon("hub", 20)}
+        {suiteIcon("hub", ic(20))}
         {displayOpen && "NerveCenter"}
       </button>
 
@@ -80,16 +100,16 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         return (
           <button key={app.id} onClick={() => onSelect(app.id)} title={app.label}
             style={navButton(isActive)}>
-            {suiteIcon(app.icon, 17)}
+            {suiteIcon(app.icon, ic(17))}
             {displayOpen && app.label}
           </button>
         );
       })}
 
       {/* Experimental section divider + label */}
-      <div style={{ marginTop: 10, marginBottom: 2, flexShrink: 0 }}>
-        <div style={{ height: 1, background: C.divider, margin: displayOpen ? "0 8px 6px" : "0 4px 6px" }} />
-        {displayOpen && (
+      <div style={{ marginTop: px(10), marginBottom: px(2), flexShrink: 0 }}>
+        <div style={{ height: 1, background: C.divider, margin: displayOpen ? `0 8px ${px(6)}px` : `0 4px ${px(6)}px` }} />
+        {displayOpen && s > 0.72 && (
           <div style={{
             fontSize: 9, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase",
             color: C.faint, fontFamily: NC_FONT_STACK, padding: "2px 14px 4px",
@@ -103,26 +123,26 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         return (
           <button key={app.id} onClick={() => onSelect(app.id)} title={`${app.label} (experimental)`}
             style={navButton(isActive)}>
-            {suiteIcon(app.icon, 17)}
+            {suiteIcon(app.icon, ic(17))}
             {displayOpen && app.label}
           </button>
         );
       })}
 
       {/* Divider */}
-      <div style={{ height: 1, background: C.divider, margin: displayOpen ? "12px 8px" : "12px 4px", flexShrink: 0 }} />
+      <div style={{ height: 1, background: C.divider, margin: displayOpen ? `${px(12)}px 8px` : `${px(12)}px 4px`, flexShrink: 0 }} />
 
       {/* Record anything — mic */}
       <button onClick={onRecord} title="Record anything — tasks, shailos, notes, got-backs"
         style={navButton(false)}>
-        {suiteIcon("mic", 18)}
+        {suiteIcon("mic", ic(18))}
         {displayOpen && "Record"}
       </button>
 
       {/* More Actions */}
       <button onClick={onMoreActions} title="More Actions"
         style={navButton(false, { color: C.accent })}>
-        {suiteIcon("apps", 18)}
+        {suiteIcon("apps", ic(18))}
         {displayOpen && "More Actions"}
       </button>
 
@@ -132,14 +152,14 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       {/* Settings */}
       <button onClick={onSettings} title="Settings"
         style={navButton(false)}>
-        {suiteIcon("settings", 18)}
+        {suiteIcon("settings", ic(18))}
         {displayOpen && "Settings"}
       </button>
 
       {/* Persistent clock */}
       <div title={now.toLocaleString()} style={{
         width: displayOpen ? "100%" : 44,
-        minHeight: displayOpen ? 50 : 44,
+        minHeight: displayOpen ? px(50) : Math.max(34, px(44)),
         borderRadius: displayOpen ? 8 : 22,
         border: `1px solid ${C.divider}`,
         background: C.bgSoft,
@@ -148,20 +168,20 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        marginBottom: 6,
+        marginBottom: px(6),
         fontFamily: NC_FONT_STACK,
         fontVariantNumeric: "tabular-nums",
         overflow: "hidden",
         flexShrink: 0,
       }}>
-        <span style={{ fontSize: displayOpen ? 18 : 13, fontWeight: 600, lineHeight: 1.05, whiteSpace: "nowrap" }}>{railTime}</span>
-        {displayOpen && <span style={{ fontSize: NC_TYPE.small, color: C.muted, marginTop: 3, lineHeight: 1 }}>{railDate}</span>}
+        <span style={{ fontSize: displayOpen ? Math.max(13, px(18)) : Math.max(11, px(13)), fontWeight: 600, lineHeight: 1.05, whiteSpace: "nowrap" }}>{railTime}</span>
+        {displayOpen && s > 0.7 && <span style={{ fontSize: NC_TYPE.small, color: C.muted, marginTop: 3, lineHeight: 1 }}>{railDate}</span>}
       </div>
 
       {/* Collapse / expand toggle */}
       <button onClick={onToggle} title={displayOpen ? "Collapse sidebar" : "Expand sidebar"} disabled={forceCompact}
         style={{
-          width: displayOpen ? "100%" : 40, height: 34, borderRadius:16,
+          width: displayOpen ? "100%" : 40, height: Math.max(24, px(34)), borderRadius:16,
           border: `1px solid ${C.divider}`,
           background: "transparent", color: C.faint, cursor: forceCompact ? "default" : "pointer",
           opacity: forceCompact ? 0.45 : 1,
@@ -169,14 +189,14 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
           justifyContent: displayOpen ? "flex-end" : "center",
           padding: displayOpen ? "0 8px" : "0", flexShrink: 0,
         }}>
-        {suiteIcon(displayOpen ? "chevron_left" : "chevron_right", 15)}
+        {suiteIcon(displayOpen ? "chevron_left" : "chevron_right", ic(15))}
       </button>
 
       {/* Version stamp — bump apps/web/src/version.js on each release (see CLAUDE.md).
           Shows version + update date/time in BOTH states (compact two-line when collapsed). */}
       <div title={`Shamash Pro · v${APP_VERSION} · updated ${formatVersionStamp()}`} style={{
         width: "100%", flexShrink: 0,
-        marginTop: 8, paddingTop: 7,
+        marginTop: px(8), paddingTop: px(7),
         borderTop: `1px solid ${C.divider}`,
         display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
       }}>

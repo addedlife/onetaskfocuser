@@ -201,6 +201,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const pendingShailaIds = useRef(new Set());              // shailaIds assigned but not yet in state (prevents listener dupes)
   const [serverKeyAvailable, setServerKeyAvailable] = useState(false); // true = Netlify AI is configured
   const [aiConfig, setAiConfig] = useState(null);
+  const [aiConfigLoaded, setAiConfigLoaded] = useState(false); // app-config fetch settled (ok or failed)
   const [serverGoogleClientId, setServerGoogleClientId] = useState("");
   const [chiefProfile, setChiefProfile] = useState(null);
   const [chiefProfileLoading, setChiefProfileLoading] = useState(false);
@@ -454,10 +455,15 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   // (beforeunload/pagehide flushing is consolidated in the effect below with the periodic sync)
 
   // ─── Shared Gemini gateway config ─────────────────────────────────────────
-  useEffect(() => {
-    fetch("/.netlify/functions/app-config")
-      .then(r => r.json())
-      .then(d => {
+  // This drives whether AI is considered available (hasAI). A bare fetch with no timeout
+  // could stall on mobile and leave AI permanently "off" — which silently kills every
+  // dashboard summary. Use a timeout + a few retries, and always mark the fetch as settled
+  // so the UI can distinguish "still connecting" from "AI unavailable".
+  const loadAppConfig = useCallback(async () => {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const r = await fetchWithTimeout("/.netlify/functions/app-config", {}, 12000);
+        const d = await r.json();
         const cfg = d.ai || null;
         const integrations = d?.integrations || {};
         const googleId = integrations.googleClientId || d?.googleClientId || "";
@@ -466,9 +472,17 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         setServerGoogleClientId(typeof googleId === "string" ? googleId.trim() : "");
         setGoogleServerAuthAvailable(!!integrations.googleServerAuthAvailable);
         setGoogleAuthMode(integrations.googleServerAuthAvailable ? "server" : "token");
-      })
-      .catch(() => {});
+        setAiConfigLoaded(true);
+        return true;
+      } catch {
+        await new Promise(res => setTimeout(res, 1000 * (attempt + 1))); // 1s,2s,3s backoff
+      }
+    }
+    setAiConfigLoaded(true); // give up retrying → let the UI show "AI unavailable" with a manual retry
+    return false;
   }, []);
+
+  useEffect(() => { loadAppConfig(); }, [loadAppConfig]);
 
   const refreshPendingRecordings = useCallback(() => {
     listPendingRecordings()
@@ -3425,6 +3439,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           shailosCompleted={switchboardShailaCompleted}
           priorities={ap}
           aiOpts={aiOpts}
+          aiConfigLoading={!aiConfigLoaded}
+          onRefreshAiConfig={loadAppConfig}
           onAddTask={addVT}
           onAddMrsWTask={addMrsWTask}
           onCompleteTask={id => compTask(id)}
