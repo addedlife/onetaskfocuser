@@ -1,0 +1,7 @@
+ShamashPro Bugs/Improvements
+
+Shaila research formatys nicely then snaps back to old format sometimes
+
+quick response text notifyers dont send the text
+
+want concise topline summary over each of email calls etc like in chief, can clone it without new ai call
