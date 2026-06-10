@@ -874,7 +874,6 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const phoneActivitySnapshot = useMemo(() => ({
     online: phoneLinkLive,
     stale: relayStale,
-    lastSeenLabel: relayStale ? relayAgeLabel(relayAgeMs) : "",
     status: statusText,
     unreadTexts: threads.reduce((sum, thread) => sum + (thread._unreadCount || 0), 0),
     missedCalls: actionableMissedCalls.length,
@@ -902,7 +901,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         time: fmtTime(c.timestamp || c.date || c.time || c.startTime || c.StartTime),
       };
     }),
-  }), [phoneLinkLive, relayStale, relayAgeMs, statusText, threads, recentCalls, actionableMissedCalls.length, vmCount, lookupName, messages, resolvedMissed]);
+  }), [phoneLinkLive, relayStale, statusText, threads, recentCalls, actionableMissedCalls.length, vmCount, lookupName, messages, resolvedMissed]);
 
   useEffect(() => {
     onActivitySnapshot?.(phoneActivitySnapshot);
