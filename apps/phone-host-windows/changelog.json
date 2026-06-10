@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-10 15:52:54",
+        "version":  "b295",
+        "notes":  "Connection no longer drops every 30 seconds: the idle keepalive was destroying its own healthy Bluetooth link. Texts that fail to send now show as Failed with a Retry button instead of vanishing, and texts sent from the browser report their real result instead of always claiming success.",
+        "devNotes":  "Root cause of the 30s drop loop: b285\u0027s read deadline cancelled the pending ReadLineAsync on the WinRT StreamSocket, and cancelling a pending WinRT socket read aborts the socket itself — so the AT+NREC=0 probe instantly threw ObjectDisposedException and queued a full reconnect; every connection died exactly 30s after handshake. ReadLoopAsync now keeps one never-cancelled pending read and races it against Task.Delay(30s) via Task.WhenAny; after a probe it requires any reply within 10s, else throws IOException to trigger a legitimate reconnect. SendMessageAsync returns Task\u003cbool\u003e and records a Failed bubble instead of silently returning when MAP is down; _api.Send/SendWithAttachments marshal the real outcome via TaskCompletionSource; RelayService logs the /send result. MAP sync-round budget 20s→60s so rounds with several MMS body downloads stop triggering spurious reconnects."
+    },
+    {
         "timestamp":  "2026-06-07 22:42:19",
         "version":  "b294",
         "notes":  "Call drops fixed: no more AT probes during active calls, MAP paused during calls. Write timeout increased to 8s.",

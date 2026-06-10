@@ -279,7 +279,12 @@ public class RelayService : IDisposable
                     var to   = ParseStr(qs, "to");
                     var body = ParseStr(qs, "body");
                     if (!string.IsNullOrWhiteSpace(to) && !string.IsNullOrWhiteSpace(body) && Send is not null)
-                        await Send(to, body);
+                    {
+                        var ok = await Send(to, body);
+                        LogLine?.Invoke(ok
+                            ? $"[RELAY CMD] send delivered to phone ({to})"
+                            : $"[RELAY CMD] send FAILED on phone link ({to}) — kept as Failed in DeskPhone for retry");
+                    }
                     break;
                 case "/refresh":
                     if (Refresh is not null) await Refresh();

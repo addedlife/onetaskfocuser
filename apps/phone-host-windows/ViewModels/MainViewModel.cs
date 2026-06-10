@@ -2825,36 +2825,48 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         };
         _api.Send = (to, body) =>
         {
-            Dispatch(() =>
+            // Marshal to the UI thread but return the REAL send outcome (not an
+            // optimistic true) so LAN/relay callers can see and log failures.
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Dispatch(async () =>
             {
-                ComposeToNumber = to;
-                ComposeRecipientInput = to;
-                ComposeBody = body;
-                _ = SendMessageAsync();
+                try
+                {
+                    ComposeToNumber = to;
+                    ComposeRecipientInput = to;
+                    ComposeBody = body;
+                    tcs.TrySetResult(await SendMessageAsync());
+                }
+                catch (Exception ex) { tcs.TrySetException(ex); }
             });
-            return Task.FromResult(true);
+            return tcs.Task;
         };
         _api.SendWithAttachments = (to, body, attachments) =>
         {
-            Dispatch(() =>
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Dispatch(async () =>
             {
-                ComposeToNumber = to;
-                ComposeRecipientInput = to;
-                ComposeBody = body;
-                ClearComposeAttachments();
-                foreach (var attachment in attachments)
+                try
                 {
-                    ComposeAttachments.Add(new MessageAttachment
+                    ComposeToNumber = to;
+                    ComposeRecipientInput = to;
+                    ComposeBody = body;
+                    ClearComposeAttachments();
+                    foreach (var attachment in attachments)
                     {
-                        ContentType = attachment.ContentType,
-                        FileName = attachment.FileName,
-                        Data = attachment.Data.ToArray()
-                    });
+                        ComposeAttachments.Add(new MessageAttachment
+                        {
+                            ContentType = attachment.ContentType,
+                            FileName = attachment.FileName,
+                            Data = attachment.Data.ToArray()
+                        });
+                    }
+                    NotifyComposeAttachmentsChanged();
+                    tcs.TrySetResult(await SendMessageAsync());
                 }
-                NotifyComposeAttachmentsChanged();
-                _ = SendMessageAsync();
+                catch (Exception ex) { tcs.TrySetException(ex); }
             });
-            return Task.FromResult(true);
+            return tcs.Task;
         };
         _api.Shutdown = () => Dispatch(Shutdown);
         _api.LogLine = s => AppendDebugThreadSafe(s);
@@ -5864,12 +5876,16 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                     }
 
                     Interlocked.Increment(ref _realOpCount);
-                    // Per-round OBEX timeout: if any MAP operation doesn't respond within
-                    // 20 s the socket is silently dead (ghost connection).  Using a linked CTS
-                    // (not ct) so the timeout OCE falls to catch (Exception ex) → QueueAutoReconnect
-                    // via the when (ct.IsCancellationRequested) guard above — it does NOT break the loop.
+                    // Per-round OBEX timeout: if the round doesn't finish the socket is
+                    // silently dead (ghost connection).  60 s, not 20: this budget covers the
+                    // WHOLE round, and a legitimate round with several MMS body downloads can
+                    // exceed 20 s — cancelling it would abort the MAP socket and force a
+                    // spurious full reconnect.  60 s still beats the 30-120 s Windows RFCOMM
+                    // ghost window.  Using a linked CTS (not ct) so the timeout OCE falls to
+                    // catch (Exception ex) → QueueAutoReconnect via the
+                    // when (ct.IsCancellationRequested) guard above — it does NOT break the loop.
                     using var syncCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    syncCts.CancelAfter(TimeSpan.FromSeconds(20));
+                    syncCts.CancelAfter(TimeSpan.FromSeconds(60));
                     try
                     {
                         var priorityHandles = DrainPriorityMessageHandles();
@@ -6256,11 +6272,15 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 
 
-    private async Task SendMessageAsync()
+    private async Task<bool> SendMessageAsync()
     {
-        if (_map is null || !_map.IsConnected) return;
-        if (string.IsNullOrWhiteSpace(ComposeToNumber)) return;
-        if (string.IsNullOrWhiteSpace(ComposeBody) && !HasComposeAttachments) return;
+        if (string.IsNullOrWhiteSpace(ComposeToNumber)) return false;
+        if (string.IsNullOrWhiteSpace(ComposeBody) && !HasComposeAttachments) return false;
+
+        // The messages link may be mid-reconnect.  Do NOT silently drop the send —
+        // record it as Failed so it appears in the conversation with a Retry button
+        // instead of vanishing while the sender (UI, LAN, or relay) believes it went out.
+        var mapReady = _map is not null && _map.IsConnected;
 
         IsSendingMessage = true;
         System.Threading.Interlocked.Increment(ref _realOpCount);
@@ -6283,7 +6303,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             IsSent    = true,
             SourceDeviceAddress = ActiveDeviceAddress,
             LocalId   = Guid.NewGuid().ToString("N"),
-            SendStatus = "Sending"
+            SendStatus = mapReady ? "Sending" : "Failed"
         };
         sent.Attachments = stagedAttachments
             .Select(attachment => new MessageAttachment
@@ -6320,9 +6340,19 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             if (conv != null) SelectedConversation = conv;
         });
 
+        if (!mapReady)
+        {
+            AppendDebug("[SEND FAILED] Messages connection not ready — message saved as Failed; Retry will resend after reconnect");
+            IsSendingMessage = false;
+            System.Threading.Interlocked.Decrement(ref _realOpCount);
+            return false;
+        }
+
+        var sendOk = false;
         try
         {
-            var ok = await _map.SendMessageAsync(to, body, stagedAttachments, _sessionCts.Token);
+            var ok = await _map!.SendMessageAsync(to, body, stagedAttachments, _sessionCts.Token);
+            sendOk = ok;
             if (ok)
             {
                 AppendDebug("[SEND] Bluetooth accepted message; waiting for phone sent-folder confirmation");
@@ -6370,6 +6400,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             IsSendingMessage = false;
             System.Threading.Interlocked.Decrement(ref _realOpCount);
         }
+        return sendOk;
     }
 
     // ── Conversation builder ──────────────────────────────────────────────

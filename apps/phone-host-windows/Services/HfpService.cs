@@ -207,28 +207,27 @@ public class HfpService : IAsyncDisposable
     {
         try
         {
+            Task<string?>? pendingRead = null;
             while (!ct.IsCancellationRequested)
             {
-                // 30 s read deadline.  Windows RFCOMM can hold a socket in a
-                // half-open "connected" state for 30-120 s after the radio link
-                // drops — the stream won't throw until we actually try to use it.
-                // A per-iteration timeout lets us probe the link before declaring it dead.
-                using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                readCts.CancelAfter(TimeSpan.FromSeconds(30));
+                // Windows RFCOMM can hold a socket in a half-open "connected" state
+                // for 30-120 s after the radio link drops — the stream won't throw
+                // until we actually try to use it.  To detect that, race the pending
+                // read against a 30 s idle timer.  The read itself is NEVER cancelled:
+                // cancelling a pending read on a WinRT StreamSocket aborts the whole
+                // socket (the next write throws "Cannot access a disposed object"),
+                // which made b285-b294 destroy a healthy link every 30 idle seconds.
+                pendingRead ??= _reader!.ReadLineAsync();
+                var idle = Task.Delay(TimeSpan.FromSeconds(30), ct);
+                var winner = await Task.WhenAny(pendingRead, idle);
+                if (ct.IsCancellationRequested) break;
 
-                string? line;
-                try
-                {
-                    line = await _reader!.ReadLineAsync(readCts.Token);
-                }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                if (winner != pendingRead)
                 {
                     // 30 s passed with no URC from the phone.
                     // Skip the AT probe during an active call — the SCO audio channel
                     // proves the link is alive, and AT commands sent while the phone is
                     // processing audio can confuse some firmware, causing spurious drops.
-                    // When idle, probe with AT+NREC=0.  If the write throws or times out
-                    // the socket is dead and StatusChanged("HFP disconnected") fires.
                     if (CurrentCall.Status != CallStatus.Idle)
                     {
                         AtLogLine?.Invoke("[keepalive] skipped — call in progress");
@@ -236,9 +235,17 @@ public class HfpService : IAsyncDisposable
                     }
                     AtLogLine?.Invoke("[keepalive] 30 s idle — probing HFP link with AT+NREC=0");
                     await SendAsync("AT+NREC=0", ct);
-                    continue;
+                    // The phone answers every AT command (OK or ERROR — either proves
+                    // liveness) so the pending read must complete shortly.  No reply
+                    // means the link is genuinely dead: throw to trigger reconnect.
+                    var probeReply = await Task.WhenAny(pendingRead, Task.Delay(TimeSpan.FromSeconds(10), ct));
+                    if (probeReply != pendingRead && !ct.IsCancellationRequested)
+                        throw new IOException("keepalive probe got no reply within 10 s — link presumed dead");
+                    continue;   // reply arrived; consume it at the top of the loop
                 }
 
+                var line = await pendingRead;
+                pendingRead = null;
                 if (line is null) break;           // stream closed normally
 
                 line = line.Trim();
@@ -249,6 +256,11 @@ public class HfpService : IAsyncDisposable
             }
         }
         catch (OperationCanceledException) { }
+        catch (Exception) when (ct.IsCancellationRequested)
+        {
+            // Teardown race: DisposeAsync closed the socket while a read was pending.
+            // Not a link failure — exit quietly; finally below still reports the disconnect.
+        }
         catch (Exception ex)
         {
             AtLogLine?.Invoke($"[read error] {ex.Message}");
