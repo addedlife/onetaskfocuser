@@ -1048,7 +1048,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       tasks: primaryTaskQueue.slice(0, 18).map(task => ({
         text: nerveDisplaySummary(task, task.text || "Task"),
         priority: priById.get(task.priority) || task.priority || "",
-        ageHours: task.createdAt ? Math.max(0, Math.round((nowMs - Number(task.createdAt || 0)) / 3600000)) : null,
+        ageHours: task.createdAt ? Math.max(0, Math.round((timeBucket * CHIEF_TIME_BUCKET_MS - Number(task.createdAt || 0)) / 3600000)) : null,
       })),
       shailos: visibleShailos.slice(0, 12).map(item => ({
         text: nerveDisplaySummary(item, item.text || "Shaila"),
@@ -1081,7 +1081,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       phone: phoneActivitySummary,
       profile: { notes: chiefProfileNotes },
     };
-  }, [timeBucket, priorities, primaryTaskQueue, visibleShailos, calendarRows, gmailMessages, phoneActivitySummary, nowMs, chiefProfileNotes]);
+  }, [timeBucket, priorities, primaryTaskQueue, visibleShailos, calendarRows, gmailMessages, phoneActivitySummary, chiefProfileNotes]);
   const chiefLearningProfile = useMemo(() => buildChiefLearningProfile(chiefLearning), [chiefLearning]);
   const chiefScanContext = useMemo(() => ({
     ...chiefContext,
