@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-10 19:29:11",
+        "version":  "b296",
+        "notes":  "Remote texts now report their true delivery result: DeskPhone acknowledges every command from the browser, so the webapp shows real sent/failed status instead of assuming success. Stale queued commands (e.g. a dial queued while the PC was off) now expire instead of executing hours later.",
+        "devNotes":  "RelayService: drain now parses the command id and queuedAt that the relay function already assigns; ExecuteCommandAsync acks every command via RecordCommandResult (capped 20-entry queue of {id, path, ok, error, completedAt}) including on exception and for unknown/unavailable commands; acks ride the existing state blob as a new commandResults field (PushNow after each command already ships them within ~1s). Per-kind TTL via CommandTtl: dial/answer/hangup/toggle-mute 45s, everything else 10min — expired commands are acked as expired and never executed. Webapp counterpart (same release, web 4.14.37): NerveCenterPhoneSurface post() awaits the ack for its command id (25s timeout → \u0027PC looks offline\u0027), compose drafts survive failures, outgoing bubbles render sendStatus; MiniDock and LAN path check result:failed."
+    },
+    {
         "timestamp":  "2026-06-10 15:52:54",
         "version":  "b295",
         "notes":  "Connection no longer drops every 30 seconds: the idle keepalive was destroying its own healthy Bluetooth link. Texts that fail to send now show as Failed with a Retry button instead of vanishing, and texts sent from the browser report their real result instead of always claiming success.",

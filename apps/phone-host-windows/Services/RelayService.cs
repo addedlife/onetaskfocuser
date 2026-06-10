@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -58,6 +59,36 @@ public class RelayService : IDisposable
     private readonly SemaphoreSlim  _pushGate        = new(1, 1);
     private volatile bool           _pushNowScheduled;
     private readonly HashSet<string> _uploadedMedia  = new();   // mediaIds already in phone-media
+
+    // Last few command acknowledgements, pre-serialized JSON objects. They ride every
+    // state push so the browser that queued a command (and got an id back from
+    // ?action=command) can confirm the command's REAL outcome instead of assuming success.
+    private readonly ConcurrentQueue<string> _commandResults = new();
+    private const int CommandResultLimit = 20;
+
+    private void RecordCommandResult(string commandId, string path, bool ok, string? error)
+    {
+        if (string.IsNullOrWhiteSpace(commandId)) return;   // command predates the ack protocol
+        _commandResults.Enqueue(JsonSerializer.Serialize(new
+        {
+            id          = commandId,
+            path,
+            ok,
+            error       = error ?? "",
+            completedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+        }));
+        while (_commandResults.Count > CommandResultLimit && _commandResults.TryDequeue(out _)) { }
+    }
+
+    // Commands queue in the cloud mailbox while the PC is offline and execute on wake,
+    // which can be hours later.  A stale /dial must never ring someone in the middle of
+    // the night; a stale /send is acked as expired so the sender sees the truth instead
+    // of a surprise delivery or a silent drop.
+    private static TimeSpan CommandTtl(string path) => path switch
+    {
+        "/dial" or "/answer" or "/hangup" or "/toggle-mute" => TimeSpan.FromSeconds(45),
+        _ => TimeSpan.FromMinutes(10),
+    };
 
     public void Configure(string relayKey, string? relayUrl)
     {
@@ -128,8 +159,9 @@ public class RelayService : IDisposable
 
             // Inline-assemble the outer object without deserializing everything —
             // these are already valid JSON strings, just stitch them together.
-            var lanUrl    = GetLanUrl?.Invoke() ?? "";
-            var stateJson = $"{{\"status\":{statusJson},\"messages\":{messagesJson},\"calls\":{callsJson},\"contacts\":{contactsJson},\"lanUrl\":\"{lanUrl}\",\"pushedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
+            var lanUrl      = GetLanUrl?.Invoke() ?? "";
+            var resultsJson = "[" + string.Join(",", _commandResults) + "]";
+            var stateJson = $"{{\"status\":{statusJson},\"messages\":{messagesJson},\"calls\":{callsJson},\"contacts\":{contactsJson},\"commandResults\":{resultsJson},\"lanUrl\":\"{lanUrl}\",\"pushedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
 
             using var content = new StringContent(stateJson, Encoding.UTF8, "application/json");
             using var req     = new HttpRequestMessage(HttpMethod.Post, $"{_relayUrl}?action=push") { Content = content };
@@ -244,72 +276,105 @@ public class RelayService : IDisposable
         {
             var path = cmdEl.GetProperty("path").GetString() ?? "";
             if (string.IsNullOrWhiteSpace(path)) continue;
-            _ = Task.Run(() => ExecuteCommandAsync(path));
+            var id       = cmdEl.TryGetProperty("id", out var idEl) ? (idEl.GetString() ?? "") : "";
+            var queuedAt = cmdEl.TryGetProperty("queuedAt", out var qEl) && qEl.TryGetInt64(out var qv) ? qv : 0L;
+            _ = Task.Run(() => ExecuteCommandAsync(path, id, queuedAt));
         }
     }
 
-    // Parse the path+query string (same format the webapp already sends to localhost)
-    // and route to the appropriate callback.
-    private async Task ExecuteCommandAsync(string rawPath)
+    // Parse the path+query string (same format the webapp already sends to localhost),
+    // route to the appropriate callback, and acknowledge the command's real outcome.
+    private async Task ExecuteCommandAsync(string rawPath, string commandId, long queuedAtMs)
     {
+        var q    = rawPath.IndexOf('?');
+        var path = (q < 0 ? rawPath : rawPath[..q]).ToLowerInvariant();
+        var qs   = q < 0 ? "" : rawPath[(q + 1)..];
+
         try
         {
-            var q     = rawPath.IndexOf('?');
-            var path  = (q < 0 ? rawPath : rawPath[..q]).ToLowerInvariant();
-            var qs    = q < 0 ? "" : rawPath[(q + 1)..];
-
             LogLine?.Invoke($"[RELAY CMD] {path}");
+
+            var ageMs = queuedAtMs > 0
+                ? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - queuedAtMs
+                : 0;
+            if (ageMs > CommandTtl(path).TotalMilliseconds)
+            {
+                LogLine?.Invoke($"[RELAY CMD] {path} expired ({ageMs / 1000}s in queue) — not executed");
+                RecordCommandResult(commandId, path, ok: false, error: "expired before DeskPhone was online");
+                PushNow();
+                return;
+            }
+
+            bool ok = true;
+            string? error = null;
 
             switch (path)
             {
                 case "/dial":
                     var n = ParseStr(qs, "n");
-                    if (!string.IsNullOrWhiteSpace(n) && Dial is not null) await Dial(n);
+                    if (string.IsNullOrWhiteSpace(n) || Dial is null) { ok = false; error = "missing number"; }
+                    else await Dial(n);
                     break;
                 case "/hangup":
-                    if (HangUp is not null) await HangUp();
+                    if (HangUp is null) { ok = false; error = "unavailable"; }
+                    else await HangUp();
                     break;
                 case "/answer":
-                    if (Answer is not null) await Answer();
+                    if (Answer is null) { ok = false; error = "unavailable"; }
+                    else await Answer();
                     break;
                 case "/toggle-mute":
-                    if (ToggleMute is not null) await ToggleMute();
+                    if (ToggleMute is null) { ok = false; error = "unavailable"; }
+                    else await ToggleMute();
                     break;
                 case "/send":
                     var to   = ParseStr(qs, "to");
                     var body = ParseStr(qs, "body");
-                    if (!string.IsNullOrWhiteSpace(to) && !string.IsNullOrWhiteSpace(body) && Send is not null)
+                    if (string.IsNullOrWhiteSpace(to) || string.IsNullOrWhiteSpace(body) || Send is null)
                     {
-                        var ok = await Send(to, body);
+                        ok = false; error = "missing recipient or message body";
+                    }
+                    else
+                    {
+                        ok = await Send(to, body);
+                        if (!ok) error = "phone link rejected the send — kept as Failed in DeskPhone for retry";
                         LogLine?.Invoke(ok
                             ? $"[RELAY CMD] send delivered to phone ({to})"
                             : $"[RELAY CMD] send FAILED on phone link ({to}) — kept as Failed in DeskPhone for retry");
                     }
                     break;
                 case "/refresh":
-                    if (Refresh is not null) await Refresh();
+                    if (Refresh is null) { ok = false; error = "unavailable"; }
+                    else await Refresh();
                     break;
                 case "/mark-conversation-read":
                     var rPhone = ParseStr(qs, "phone");
-                    if (!string.IsNullOrWhiteSpace(rPhone) && MarkRead is not null) await MarkRead(rPhone);
+                    if (string.IsNullOrWhiteSpace(rPhone) || MarkRead is null) { ok = false; error = "missing phone"; }
+                    else await MarkRead(rPhone);
                     break;
                 case "/mark-conversation-unread":
                     var uPhone = ParseStr(qs, "phone");
-                    if (!string.IsNullOrWhiteSpace(uPhone) && MarkUnread is not null) await MarkUnread(uPhone);
+                    if (string.IsNullOrWhiteSpace(uPhone) || MarkUnread is null) { ok = false; error = "missing phone"; }
+                    else await MarkUnread(uPhone);
                     break;
                 default:
                     LogLine?.Invoke($"[RELAY CMD] unhandled: {path}");
+                    ok = false; error = $"unknown command {path}";
                     break;
             }
 
+            RecordCommandResult(commandId, path, ok, error);
+
             // Push the resulting state right away so the remote browser sees the
-            // effect of its command (call state, sent text, read flag) within ~1 s
-            // instead of waiting for the next heartbeat.
+            // effect of its command (call state, sent text, read flag) AND the
+            // acknowledgement within ~1 s instead of waiting for the next heartbeat.
             PushNow();
         }
         catch (Exception ex)
         {
             LogLine?.Invoke($"[RELAY CMD ERR] {ex.Message}");
+            RecordCommandResult(commandId, path, ok: false, error: ex.Message);
+            PushNow();
         }
     }
 
