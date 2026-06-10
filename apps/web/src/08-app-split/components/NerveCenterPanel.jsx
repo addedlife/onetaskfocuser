@@ -999,37 +999,41 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const primaryTasks = (isStacked || showAllTasks) ? primaryTaskQueue : primaryTaskQueue.slice(0, collapsedTaskLimit);
   const visibleShailos = shailos.filter(Boolean);
   const timeBucket = Math.floor(nowMs / CHIEF_TIME_BUCKET_MS);
-  const calendarRows = useMemo(() => (calendarEvents || [])
-    // Drop events cancelled in Google Calendar — the API can still return them as
-    // status:"cancelled" (e.g. a deleted instance of a recurring series), and stale
-    // caches can hold a one-off after it's deleted. Either way it must not show.
-    .filter(evt => evt && evt.status !== "cancelled")
-    .map((evt, index) => {
-    const routine = isRoutineCalendarEvent(evt);
-    const now = isCalendarEventCurrent(evt, nowMs);
-    const past = isCalendarEventPast(evt, nowMs);
-    const special = !routine && !past;
-    return {
-      evt,
-      index,
-      routine,
-      now,
-      past,
-      special,
-      startMs: calendarStartMs(evt),
-      label: formatCalendarWindow(evt),
-    };
-  }), [calendarEvents, nowMs]);
+  const calendarMinuteKey = Math.floor(nowMs / 60000);
+  const calendarRows = useMemo(() => {
+    const nowForRows = calendarMinuteKey * 60000;
+    return (calendarEvents || [])
+      // Drop events cancelled in Google Calendar — the API can still return them as
+      // status:"cancelled" (e.g. a deleted instance of a recurring series), and stale
+      // caches can hold a one-off after it's deleted. Either way it must not show.
+      .filter(evt => evt && evt.status !== "cancelled")
+      .map((evt, index) => {
+        const routine = isRoutineCalendarEvent(evt);
+        const now = isCalendarEventCurrent(evt, nowForRows);
+        const past = isCalendarEventPast(evt, nowForRows);
+        const special = !routine && !past;
+        return {
+          evt,
+          index,
+          routine,
+          now,
+          past,
+          special,
+          startMs: calendarStartMs(evt),
+          label: formatCalendarWindow(evt),
+        };
+      });
+  }, [calendarEvents, calendarMinuteKey]);
   const specialCalendarRows = calendarRows
     .filter(row => row.special)
     .sort((a, b) => a.startMs - b.startMs)
     .slice(0, 2);
   const calendarNowInsertIndex = useMemo(() => {
     if (!calendarRows.length) return 0;
-    const nextIndex = calendarRows.findIndex(row => !row.past && row.startMs > nowMs);
+    const nowForIndex = calendarMinuteKey * 60000;
+    const nextIndex = calendarRows.findIndex(row => !row.past && row.startMs > nowForIndex);
     return nextIndex === -1 ? calendarRows.length : nextIndex;
-  }, [calendarRows, nowMs]);
-  const calendarMinuteKey = Math.floor(nowMs / 60000);
+  }, [calendarRows, calendarMinuteKey]);
   useEffect(() => {
     if (!calendarNowRef.current || calendarEvents === null) return undefined;
     const frame = window.requestAnimationFrame(() => {
