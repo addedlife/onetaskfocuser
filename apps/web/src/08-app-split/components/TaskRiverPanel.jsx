@@ -271,10 +271,9 @@ export function TaskRiverPanel({
               const isDrag = dragId === it.id;
               return (
                 <div key={it.id} data-river-row={it.id} onClick={() => act(it)}
-                  style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: 9,
+                  style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 8,
                     padding: '3px 6px 3px 10px', minHeight: 26, cursor: 'pointer', borderRadius: 7,
                     background: isDrag ? rgba(it.color, 0.12) : 'transparent', transition: 'background .12s' }}>
-                  <span style={{ width: 14, textAlign: 'center', color: rgba(it.color, 0.9), fontSize: 11, flexShrink: 0 }}>{it.icon}</span>
                   <span style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 7, overflow: 'hidden' }}>
                     {it.meta && <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: 'nowrap' }}>{it.meta}</span>}
                     <span style={{ fontSize: 13, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', minWidth: 0 }}>
@@ -282,11 +281,9 @@ export function TaskRiverPanel({
                     </span>
                     {it.reason && <span style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK, fontStyle: 'italic', flexShrink: 0, whiteSpace: 'nowrap', marginLeft: 'auto', paddingLeft: 6 }}>{it.reason}</span>}
                   </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 0 }} onClick={e => e.stopPropagation()}>
-                    <button onClick={() => move(it.id, -1)} disabled={idx === 0} title="Up" style={mini(C, idx === 0)}>▲</button>
-                    <button onClick={() => move(it.id, +1)} disabled={idx === ordered.length - 1} title="Down" style={mini(C, idx === ordered.length - 1)}>▼</button>
-                    <button onPointerDown={onHandleDown(it.id)} onTouchStart={onHandleDown(it.id)} title="Drag" style={{ ...mini(C, false), cursor: 'grab', touchAction: 'none', fontSize: 13 }}>⠿</button>
-                    <button onClick={() => act(it)} title={it.type === 'task' ? 'Done' : 'Open'} style={{ ...mini(C, false), color: it.color, fontSize: 13 }}>{it.type === 'task' ? '✓' : '›'}</button>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                    <button onPointerDown={onHandleDown(it.id)} onTouchStart={onHandleDown(it.id)} title="Drag to reorder" style={{ ...mini(C, false), cursor: 'grab', touchAction: 'none', fontSize: 14 }}>⠿</button>
+                    {it.type === 'task' && <button onClick={() => act(it)} title="Done" style={{ ...mini(C, false), color: it.color, fontSize: 14 }}>✓</button>}
                   </span>
                 </div>
               );
