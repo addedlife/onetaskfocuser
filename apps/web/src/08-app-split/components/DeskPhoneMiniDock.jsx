@@ -42,14 +42,24 @@ function DeskPhoneMiniDock({ T, onOnlineChange, onOpenDeskPhone }) {
     return () => clearInterval(id);
   }, [refresh]);
 
+  // Returns true only when DeskPhone's response confirmed success — callers use
+  // this to decide whether typed input is safe to discard.
   const post = async (path, label) => {
     setBusy(label);
     try {
-      await fetch(`${api}${path}`, { method: "POST" });
+      const res = await fetch(`${api}${path}`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
       await refresh();
+      if (!res.ok || data?.success === false || data?.ok === false || data?.result === "failed") {
+        setError(data?.error || data?.message || data?.reason || `DeskPhone reported failure (${res.status}).`);
+        return false;
+      }
+      setError("");
+      return true;
     } catch {
       setError("DeskPhone did not answer.");
       onOnlineChange?.(false);
+      return false;
     } finally {
       setBusy("");
     }
@@ -57,8 +67,9 @@ function DeskPhoneMiniDock({ T, onOnlineChange, onOpenDeskPhone }) {
 
   const sendSms = async () => {
     if (!number.trim() || !body.trim()) return;
-    await post(`/send?to=${encodeURIComponent(number.trim())}&body=${encodeURIComponent(body.trim())}`, "send");
-    setBody("");
+    const ok = await post(`/send?to=${encodeURIComponent(number.trim())}&body=${encodeURIComponent(body.trim())}`, "send");
+    // Keep the draft on failure so the typed message is never lost.
+    if (ok) setBody("");
   };
 
   const dial = async () => {

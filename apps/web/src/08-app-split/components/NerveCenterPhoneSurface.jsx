@@ -327,6 +327,31 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const C = cleanTheme(T);
   const RELAY_BASE = "/.netlify/functions/phone-relay";
 
+  // ── Relay command acknowledgements ─────────────────────────────────────────
+  // DeskPhone acknowledges every relayed command by id inside the state blob it
+  // pushes (commandResults). post() awaits the ack for its command id, so success
+  // means DeskPhone REALLY ran the command — not just that the cloud queued it.
+  const recentAcksRef = useRef(new Map());   // command id → { ok, error, completedAt }
+  const ackWaitersRef = useRef(new Map());   // command id → resolve(ack)
+  const processCommandResults = useCallback((results) => {
+    if (!Array.isArray(results)) return;
+    results.forEach(r => {
+      if (!r?.id || recentAcksRef.current.has(r.id)) return;
+      recentAcksRef.current.set(r.id, r);
+      while (recentAcksRef.current.size > 60) {
+        recentAcksRef.current.delete(recentAcksRef.current.keys().next().value);
+      }
+      const waiter = ackWaitersRef.current.get(r.id);
+      if (waiter) { ackWaitersRef.current.delete(r.id); waiter(r); }
+    });
+  }, []);
+  const waitForAck = useCallback((id, timeoutMs) => new Promise(resolve => {
+    const existing = recentAcksRef.current.get(id);
+    if (existing) { resolve(existing); return; }
+    const timer = setTimeout(() => { ackWaitersRef.current.delete(id); resolve(null); }, timeoutMs);
+    ackWaitersRef.current.set(id, ack => { clearTimeout(timer); resolve(ack); });
+  }), []);
+
   // Apply a phone-state payload (from either the direct LAN poll or the cloud-relay
   // listener) to component state. Signature refs short-circuit redundant re-renders,
   // so it's safe for the poll and the onSnapshot listener to both feed this.
@@ -385,6 +410,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           callsRes    = relayState?.calls     || [];
           contactsRes = relayState?.contacts  || [];
           relayReceivedAtRes = Number(relayState?.relayReceivedAt) || 0;
+          processCommandResults(relayState?.commandResults);
           usingRelayRef.current = true;
           setUsingRelay(true);
         } catch (relayErr) {
@@ -427,7 +453,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     } finally {
       refreshInFlightRef.current = false;
     }
-  }, [api, isMobile, onOnlineChange, user, applyPhoneState]);
+  }, [api, isMobile, onOnlineChange, user, applyPhoneState, processCommandResults]);
 
   // Build phone-number → name map from contacts, covering many possible field names from the DeskPhone API
   const contactMap = useMemo(() => {
@@ -533,6 +559,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         let blob;
         try { blob = JSON.parse(raw); } catch { return; }
         applyPhoneState(blob.status, blob.messages, blob.calls, blob.contacts, Number(blob.relayReceivedAt) || 0);
+        processCommandResults(blob.commandResults);
       }, err => {
         console.warn("[Phone] relay listener error — resubscribing:", err);
         try { unsub && unsub(); } catch (_) {}
@@ -551,13 +578,17 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       if (retryTimer) clearTimeout(retryTimer);
       try { unsub && unsub(); } catch (_) {}
     };
-  }, [usingRelay, user, applyPhoneState]);
+  }, [usingRelay, user, applyPhoneState, processCommandResults]);
 
+  // Returns true only when DeskPhone confirmed the command ran (or, on the LAN path,
+  // when its HTTP response said so). Callers use this to decide whether user input
+  // (e.g. a typed message) is safe to discard. NOTE: refresh() clears the error
+  // banner, so failure paths refresh FIRST and set their error after.
   const post = async (path, label) => {
     setBusy(label);
     try {
       if (usingRelayRef.current) {
-        // Route command through the cloud relay — DeskPhone will execute it within 2 s.
+        // Route command through the cloud relay — DeskPhone drains it within 2 s.
         // Include Firebase ID token so the function can gate on auth.
         let cmdAuthHeaders = {};
         try {
@@ -566,32 +597,58 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             cmdAuthHeaders["Authorization"] = `Bearer ${tok}`;
           }
         } catch {}
-        await fetch(`${RELAY_BASE}?action=command`, {
+        const res = await fetch(`${RELAY_BASE}?action=command`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...cmdAuthHeaders },
           body: JSON.stringify({ path }),
         });
+        if (!res.ok) {
+          let msg = `Relay rejected the command (${res.status})`;
+          try { const d = await res.json(); if (d?.error) msg = d.error; } catch {}
+          setError(msg);
+          return false;
+        }
+        const queued = await res.json().catch(() => ({}));
+        if (queued?.id) {
+          // Await DeskPhone's acknowledgement — it rides the state pushes we already
+          // receive (~3 s round trip). No ack within 25 s means the PC is offline.
+          const ack = await waitForAck(queued.id, 25000);
+          await refresh();
+          if (ack && !ack.ok) {
+            setError(ack.error || "DeskPhone could not run the command.");
+            return false;
+          }
+          if (!ack) {
+            setError("No confirmation from DeskPhone — your PC looks offline. The command runs if it reconnects within 10 minutes, then expires.");
+            return false;
+          }
+          setError("");
+          return true;
+        }
+        // Relay without command ids (older function) — keep the legacy blind wait.
         setError("");
-        // Short wait then refresh so the UI reflects the command result
         await new Promise(r => setTimeout(r, 2500));
       } else {
         const res = await fetch(`${api}${path}`, { method: "POST" });
         if (!res.ok) {
           let msg = `DeskPhone error (${res.status})`;
           try { const d = await res.json(); if (d?.error || d?.message) msg = d.error || d.message; } catch {}
+          await refresh();
           setError(msg);
-        } else {
-          const data = await res.json().catch(() => ({}));
-          if (data?.success === false || data?.ok === false) {
-            setError(data?.error || data?.message || data?.reason || "DeskPhone reported failure.");
-          } else {
-            setError("");
-          }
+          return false;
         }
+        const data = await res.json().catch(() => ({}));
+        if (data?.success === false || data?.ok === false || data?.result === "failed") {
+          await refresh();
+          setError(data?.error || data?.message || data?.reason || "DeskPhone reported failure.");
+          return false;
+        }
+        setError("");
       }
       await refresh();
+      return true;
     }
-    catch { setError("DeskPhone did not answer."); onOnlineChange?.(false); }
+    catch { setError("DeskPhone did not answer."); onOnlineChange?.(false); return false; }
     finally { setBusy(""); }
   };
 
@@ -600,8 +657,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const sendSms = async () => {
     const to = selected?.number || number;
     if (!to?.trim() || !body.trim()) return;
-    await post(`/send?to=${encodeURIComponent(to.trim())}&body=${encodeURIComponent(body.trim())}`, "send");
-    setBody(""); closeCompose();
+    const ok = await post(`/send?to=${encodeURIComponent(to.trim())}&body=${encodeURIComponent(body.trim())}`, "send");
+    // Only discard the draft once DeskPhone confirmed the send — on failure the
+    // text stays in the compose box so nothing the user typed is ever lost.
+    if (ok) { setBody(""); closeCompose(); }
   };
 
   // Normalize callState so "Idle", "None", "Available" etc. all collapse to "" (shows "Connected · device")
@@ -1141,16 +1200,30 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                             const outgoing = isOutgoingMessage(msg);
                             const msgText = messageBody(msg);
                             const msgTime = fmtTime(messageTimeMs(msg));
+                            // DeskPhone stamps in-flight/failed sends ("Sending", "Confirming",
+                            // "Failed") and the blob carries it — surface it on outgoing bubbles
+                            // so a failed send is visible remotely, not only on the PC.
+                            const sendStatus = String(msg.sendStatus || msg.SendStatus || "").trim();
+                            const sendFailed = /fail/i.test(sendStatus);
                             return (
                               <div key={`${thread._who}-${messageTimeMs(msg)}-${msgIdx}`} style={{ alignSelf: outgoing ? "flex-end" : "flex-start", maxWidth: "92%", minWidth: 0 }}>
-                                <div style={{ borderRadius: 8, border: `1px solid ${outgoing ? "transparent" : C.divider}`, background: outgoing ? C.hover : C.bgSoft, color: C.text, padding: "7px 9px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                                <div style={{ borderRadius: 8, border: `1px solid ${outgoing ? (sendFailed ? C.danger : "transparent") : C.divider}`, background: outgoing ? C.hover : C.bgSoft, color: C.text, padding: "7px 9px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                                   {msgText && linkedMessageParts(msgText, { color: C.accent })}
                                   {(msg.attachments || []).filter(a => a.isImage).map((a, ai) => (
                                     <PhoneMmsImage key={a.mediaId || ai} attachment={a} C={C} />
                                   ))}
                                   {!msgText && !(msg.attachments || []).some(a => a.isImage) && "(no text)"}
                                 </div>
-                                {msgTime && <div style={{ fontSize: 11, color: C.faint, marginTop: 2, textAlign: outgoing ? "right" : "left" }}>{msgTime}</div>}
+                                {(msgTime || (outgoing && sendStatus)) && (
+                                  <div style={{ fontSize: 11, color: C.faint, marginTop: 2, textAlign: outgoing ? "right" : "left" }}>
+                                    {outgoing && sendStatus && (
+                                      <span style={{ color: sendFailed ? C.danger : C.faint, fontWeight: sendFailed ? 600 : 400 }}>
+                                        {msg.sendStatusLabel || msg.SendStatusLabel || sendStatus}{msgTime ? " · " : ""}
+                                      </span>
+                                    )}
+                                    {msgTime}
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
