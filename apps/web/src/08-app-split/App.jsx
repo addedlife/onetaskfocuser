@@ -3524,6 +3524,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           tasks={switchboardTaskList}
           shailos={switchboardShailaList}
           priorities={ap}
+          aiOpts={aiOpts}
           calendarEvents={calendarEvents}
           gmailMessages={gmailMessages}
           googleToken={googleToken}

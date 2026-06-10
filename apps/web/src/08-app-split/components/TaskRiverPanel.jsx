@@ -9,6 +9,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanTheme, NC_FONT_STACK } from '../ui-tokens.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
+import { runAIJob } from '../../01-core.js';
 
 // ── color helpers ───────────────────────────────────────────────────────────
 function hexToRgb(hex) {
@@ -127,7 +128,7 @@ function applyOrder(items, order) {
 
 export function TaskRiverPanel({
   T, tasks = [], shailos = [], calendarEvents = null, gmailMessages = null,
-  priorities = [], sidebarW = 64, topOffset = 0, clockTime,
+  priorities = [], aiOpts = null, sidebarW = 64, topOffset = 0, clockTime,
   onCompleteTask, onOpenTasks, onOpenShailos, onOpenPhone,
 }) {
   const C = cleanTheme(T);
@@ -138,8 +139,44 @@ export function TaskRiverPanel({
     () => buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, nowMs),
     [tasks, shailos, calendarEvents, gmailMessages, priorities, Math.floor(nowMs / 60000)]
   );
+
+  // ── AI ranking ──────────────────────────────────────────────────────────────
+  // Each item is scored 0-100 by the river_rank AI job (deadlines, asks, money, sender,
+  // event proximity). The deterministic score from buildItems is the instant fallback and
+  // the safety net if the gateway is slow/down, so the river is never broken or blank.
+  const [aiScores, setAiScores] = useState({});
+  const [aiState, setAiState] = useState('idle'); // idle | ranking | ok | error
+  const rankInFlight = useRef(false);
+  const lastRankKeyRef = useRef('');
+  const rankKey = useMemo(() => items.map(i => i.id).join('|'), [items]);
+
+  useEffect(() => {
+    if (!items.length) { setAiState('idle'); return; }
+    if (rankInFlight.current) return;
+    if (lastRankKeyRef.current === rankKey && Object.keys(aiScores).length) { setAiState('ok'); return; }
+    rankInFlight.current = true;
+    setAiState('ranking');
+    const payload = items.map(i => ({ id: i.id, type: i.type, text: (i.text || '').slice(0, 200), meta: i.meta || '' }));
+    runAIJob('dashboard.river_rank.v1', { items: payload, currentTime: now.toLocaleString() }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 1400 } })
+      .then(job => {
+        const ranking = job?.output?.ranking;
+        if (Array.isArray(ranking) && ranking.length) {
+          const map = {}; ranking.forEach(r => { if (r && r.id != null) map[r.id] = r.score; });
+          setAiScores(map); lastRankKeyRef.current = rankKey; setAiState('ok');
+        } else { setAiState('error'); }
+      })
+      .catch(() => setAiState('error'))
+      .finally(() => { rankInFlight.current = false; });
+  }, [rankKey, aiOpts]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // AI score overrides the deterministic fallback once it arrives.
+  const scoredItems = useMemo(
+    () => items.map(i => ({ ...i, score: aiScores[i.id] != null ? aiScores[i.id] : i.score })),
+    [items, aiScores]
+  );
+
   const [order, setOrder] = useState(readOrder);
-  const ordered = useMemo(() => applyOrder(items, order), [items, order]);
+  const ordered = useMemo(() => applyOrder(scoredItems, order), [scoredItems, order]);
   const manual = (order || []).length > 0;
   const [dragId, setDragId] = useState(null);
   useEffect(() => { writeOrder(order); }, [order]);
@@ -203,7 +240,9 @@ export function TaskRiverPanel({
       <div style={{ flexShrink: 0, padding: '14px clamp(14px,3vw,32px) 8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 23, fontWeight: 300, letterSpacing: -0.5, color: C.text, fontFamily: NC_FONT_STACK }}>The River</span>
-          <span style={{ fontSize: 12, color: C.muted, fontFamily: NC_FONT_STACK }}>{ordered.length} items · auto-prioritized</span>
+          <span style={{ fontSize: 12, color: C.muted, fontFamily: NC_FONT_STACK }}>
+            {ordered.length} items · {aiState === 'ranking' ? 'AI prioritizing…' : aiState === 'error' ? 'auto-prioritized' : 'AI-prioritized'}
+          </span>
           <button onClick={reprioritize} disabled={!manual} title="Drop manual order; let priority flow again"
             style={{ marginLeft: 'auto', fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 500, color: manual ? '#fff' : C.faint, background: manual ? rgba(COL_SHAILA, 0.9) : 'transparent', border: `1px solid ${manual ? rgba(COL_SHAILA, 0.9) : C.divider}`, borderRadius: 16, padding: '4px 12px', cursor: manual ? 'pointer' : 'default' }}>
             ↻ Re-prioritize

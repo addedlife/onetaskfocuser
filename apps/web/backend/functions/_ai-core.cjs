@@ -946,6 +946,41 @@ const AI_JOB_REGISTRY = {
     },
     validate: normalizeChiefTaskSuggestions,
   },
+  "dashboard.river_rank.v1": {
+    task: "dashboard-river-rank",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0.1, maxOutputTokens: 1400 },
+    schema: '{"ranking":[{"id":"the item id, copied exactly","score":"0-100 urgency, higher = needs attention sooner"}]}',
+    buildPrompt(input = {}) {
+      const items = ensureArray(input.items || [], "items").slice(0, 60).map(it => ({
+        id: cleanString(it?.id, 120),
+        type: cleanString(it?.type, 20),
+        text: cleanString(it?.text, 220),
+        meta: cleanString(it?.meta, 100),
+      })).filter(it => it.id);
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "You are prioritizing ONE unified action list ('the river') that mixes tasks, shailos (halachic questions awaiting the rabbi's answer), calendar events, and emails for an executive.",
+        "Give every item a 'score' from 0 to 100 for how much it needs his attention right now: 100 = urgent, time-critical, blocking, or a hard deadline; 0 = trivial, informational, no action.",
+        "Weigh real consequence, not the source type. An email with a clear ask, a payment due, or a question awaiting reply can outrank a routine task. A newsletter, notification, or no-reply blast scores low. A meeting happening now or within the hour scores high; a routine recurring event scores low unless imminent.",
+        "Shailos awaiting an answer are real obligations — weigh by how long they have waited and their consequence.",
+        "Score EVERY id you are given, exactly once, and copy each id verbatim. Do not invent ids or add commentary.",
+        `Current time: ${cleanString(input.currentTime, 80)}`,
+        `Items:\n${jsonBlock(items)}`,
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate(value) {
+      const o = ensureObject(value);
+      return {
+        ranking: ensureArray(o.ranking || [], "ranking").map(r => ({
+          id: cleanString(r?.id, 120),
+          score: Math.max(0, Math.min(100, Math.round(Number(r?.score)) || 0)),
+        })).filter(r => r.id),
+      };
+    },
+  },
   "dashboard.nervecenter_summary.v1": {
     task: "dashboard-nervecenter-summary",
     output: "json",
