@@ -2168,12 +2168,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const emptyMsg = txt => <div style={{ padding:"12px 14px", fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{txt}</div>;
     // Density: compact keeps readable text and saves space with row padding/line-height.
     const dense = mobileDensity === "compact";
-    // Tighter vertical rhythm so more rows fit per card without feeling cramped.
-    const padY = dense ? 2 : 4;
-    const rowMinH = dense ? 22 : 30;
-    const bodyF = ncType.body;
-    const metaF = ncType.meta;
-    const lineH = dense ? 1.18 : 1.3;
+    // Expanded = comfortable. Compact = roughly twice the density: minimal padding, tight
+    // line-height, and one step smaller type, so a card fits about double the rows.
+    const padY = dense ? 1 : 4;
+    const rowMinH = dense ? 14 : 28;
+    const bodyF = dense ? ncType.meta : ncType.body;   // 12 vs 14
+    const metaF = dense ? ncType.small : ncType.meta;  // 11 vs 12
+    const lineH = dense ? 1.05 : 1.3;
 
     // Each card's top line is the AI per-category summary, or Waiting on summary.
     const signalNote = nerveSignalNote;
