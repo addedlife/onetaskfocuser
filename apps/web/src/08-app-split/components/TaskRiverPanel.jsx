@@ -35,6 +35,29 @@ function gmailHeader(msg, name) {
 }
 function fmtSender(raw) { const m = (raw || '').match(/^"?([^"<]+?)"?\s*(?:<[^>]+>)?$/); return m ? m[1].trim() : (raw || '').split('@')[0]; }
 
+// Lightweight "task analysis" so emails earn their place in the priority stream instead of
+// sinking to the bottom: real asks/deadlines/money rise; bulk/no-reply noise sinks.
+const RE_ACTION = /\b(please|can you|could you|kindly|need(ed)?|review|approve|confirm|reply|respond|sign|complete|submit|pay|due|deadline|overdue|urgent|asap|action required|requested|waiting on|follow.?up|by (today|tomorrow|mon|tue|wed|thu|fri|sat|sun|\d))\b/i;
+const RE_MONEY  = /(\$\s?\d|invoice|payment|past due|balance due|bill|receipt|refund|wire|transfer)/i;
+const RE_BULK   = /(no.?reply|do.?not.?reply|donotreply|notification|newsletter|unsubscribe|mailer|digest|noreply|automated|via )/i;
+function scoreEmail(m, i) {
+  const subj = gmailHeader(m, 'Subject') || '';
+  const from = gmailHeader(m, 'From') || '';
+  const text = `${m.aiSummary || ''} ${subj} ${m.snippet || ''}`;
+  let s = 46;
+  if (RE_BULK.test(from) || RE_BULK.test(subj)) s -= 20;
+  if (RE_ACTION.test(text) || /\?/.test(subj)) s += 22;
+  if (RE_MONEY.test(text)) s += 12;
+  s += Math.max(0, 6 - i); // recency nudge (list is newest-first)
+  return Math.max(22, Math.min(82, s));
+}
+function scoreCalendar(startMs, endMs, hasTime, nowMs) {
+  if (startMs <= nowMs && endMs >= nowMs) return 94;     // happening now
+  if (!hasTime) return 56;                                // all-day today
+  const soonH = Math.max(0, (startMs - nowMs) / 3600000);
+  return Math.max(50, 88 - soonH * 3.5);                  // sooner = higher
+}
+
 // ── build the mixed, scored stream ───────────────────────────────────────────
 function buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, nowMs) {
   const priById = new Map((priorities || []).map(p => [p.id, p]));
@@ -78,7 +101,7 @@ function buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, n
     items.push({
       id: 'cal_' + (e.id || startMs), type: 'calendar', icon: '◷',
       text: (e.summary || '(untitled event)').trim(), meta: inProgress ? 'now' : when,
-      color: COL_CAL, score: inProgress ? 96 : Math.max(45, 80 - soonH * 4), raw: e,
+      color: COL_CAL, score: scoreCalendar(startMs, endMs, !!e.start?.dateTime, nowMs), raw: e,
     });
   });
 
@@ -88,7 +111,7 @@ function buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, n
     items.push({
       id: 'mail_' + (m.id || i), type: 'mail', icon: '✉',
       text: (m.aiSummary || subj).trim(), meta: fmtSender(gmailHeader(m, 'From')),
-      color: COL_MAIL, score: 40 - i * 0.5, raw: m,
+      color: COL_MAIL, score: scoreEmail(m, i), raw: m,
     });
   });
 
