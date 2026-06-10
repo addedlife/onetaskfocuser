@@ -1,730 +1,287 @@
 /**
- * TaskRiverPanel — a unified temporal stream of all data sources.
+ * TaskRiverPanel — one calm, flowing river of everything to do.
  *
- * Design philosophy: one scrolling column, everything sorted by urgency
- * to the current moment. No cards. No source-based sections. Typography
- * and a 2px left-rule color are the only structural signals.
- *
- * Sections (temporal buckets):
- *   NOW        — things happening or urgent right this instant
- *   TODAY      — calendar left today, today-priority tasks, open shailos, mail
- *   COMING UP  — upcoming events beyond today
- *
- * Clicking any row opens a detail pane from the right without losing the stream.
+ * A single combined, auto-prioritized list drawn from all actionable sources
+ * (tasks + shailos). Reorder by drag, tap-drag, or up/down buttons; "Re-prioritize"
+ * drops your manual order and lets the auto-sort take over again. A muted running-water
+ * backdrop and soft left-edge color bands that bleed into one another give it the feel
+ * of a slow, relaxing stream rather than a checklist.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanTheme, NC_FONT_STACK } from '../ui-tokens.jsx';
-import { isNerveTaskShailaWork, isShailaPriority } from '../utils/shailosQueue.js';
+import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 
-// ─── Tiny helpers ─────────────────────────────────────────────────────────────
-
-function gmailHeader(msg, name) {
-  return (msg?.payload?.headers || []).find(
-    h => h.name?.toLowerCase() === name.toLowerCase()
-  )?.value || '';
+// ── color helpers ─────────────────────────────────────────────────────────────
+function hexToRgb(hex) {
+  let h = String(hex || '').replace('#', '').trim();
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  if (h.length !== 6) return { r: 120, g: 160, b: 175 };
+  return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+}
+function mix(a, b, t) {
+  const x = hexToRgb(a), y = hexToRgb(b);
+  const r = Math.round(x.r + (y.r - x.r) * t);
+  const g = Math.round(x.g + (y.g - x.g) * t);
+  const bl = Math.round(x.b + (y.b - x.b) * t);
+  return `rgb(${r},${g},${bl})`;
+}
+function rgba(hex, a) {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${a})`;
 }
 
-function fmtSender(raw) {
-  if (!raw) return '';
-  const m = raw.match(/^"?([^"<]+?)"?\s*(?:<[^>]+>)?$/);
-  return m ? m[1].trim() : raw.split('@')[0];
+const SHAILA_COLOR = '#5BA8A0';        // calm teal for shailos
+const ORDER_KEY = 'taskriver_order_v1';
+const readOrder = () => { try { return JSON.parse(localStorage.getItem(ORDER_KEY) || '[]') || []; } catch { return []; } };
+const writeOrder = (arr) => { try { localStorage.setItem(ORDER_KEY, JSON.stringify(arr)); } catch {} };
+
+// ── build the combined, scored stream ───────────────────────────────────────────
+function buildItems(tasks, shailos, priorities) {
+  const priById = new Map((priorities || []).map(p => [p.id, p]));
+  const weights = (priorities || []).filter(p => !p.deleted).map(p => Number(p.weight) || 0);
+  const maxW = weights.length ? Math.max(...weights) : 1;
+
+  const items = [];
+
+  (tasks || []).forEach(t => {
+    if (!t || t.completed || t.deleted) return;
+    if (isNerveTaskShailaWork(t)) return; // shown once, in the shaila stream
+    const pri = priById.get(t.priority);
+    const color = pri?.color || '#8FB7C9';
+    const weight = Number(pri?.weight) || 0;
+    items.push({
+      id: t.id,
+      type: 'task',
+      text: (t.ncSummary || t.text || 'Untitled').trim(),
+      color,
+      pinned: !!t.pinned,
+      score: (t.pinned ? 1e9 : 0) + weight * 1000 + (Number(t.createdAt) || 0) / 1e9,
+      priLabel: pri?.label || '',
+      raw: t,
+    });
+  });
+
+  (shailos || []).forEach(s => {
+    if (!s || s.deleted || s.completed || s.status === 'answered') return;
+    const getBack = s.status === 'get_back' || !!s.isGetBackStep;
+    items.push({
+      id: s.id,
+      type: 'shaila',
+      text: (s.synopsis || s.text || s.content || 'Open shaila').trim(),
+      color: SHAILA_COLOR,
+      pinned: false,
+      // shailos surface in the upper-middle of the current by default
+      score: maxW * (getBack ? 0.5 : 0.78) * 1000 + (Number(s.createdAt) || 0) / 1e9,
+      priLabel: getBack ? 'waiting to reply' : 'pending answer',
+      raw: s,
+    });
+  });
+
+  return items;
 }
 
-function fmtClock(date) {
-  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+// Apply the saved manual order; unseen items fall in by auto-score at the end.
+function applyOrder(items, order) {
+  const byId = new Map(items.map(i => [i.id, i]));
+  const seen = new Set();
+  const out = [];
+  (order || []).forEach(id => { const it = byId.get(id); if (it) { out.push(it); seen.add(id); } });
+  const rest = items.filter(i => !seen.has(i.id)).sort((a, b) => b.score - a.score);
+  return [...out, ...rest];
 }
-
-function fmtDate(date) {
-  return date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
-}
-
-function isSameDay(a, b) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth()    === b.getMonth()    &&
-    a.getDate()     === b.getDate()
-  );
-}
-
-function relDay(date, now) {
-  const d = new Date(date); d.setHours(0, 0, 0, 0);
-  const n = new Date(now);  n.setHours(0, 0, 0, 0);
-  const diff = Math.round((d - n) / 86400000);
-  if (diff === 0) return 'Today';
-  if (diff === 1) return 'Tomorrow';
-  if (diff < 7)  return new Date(date).toLocaleDateString([], { weekday: 'long' });
-  return new Date(date).toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
-function fmtAgo(date, now) {
-  if (!date) return '';
-  const ms = now - date;
-  if (ms < 0) return '';
-  if (ms < 3600000)  return `${Math.round(ms / 60000)}m`;
-  if (ms < 86400000) return `${Math.round(ms / 3600000)}h`;
-  return `${Math.round(ms / 86400000)}d`;
-}
-
-// Hebrew year lookup — same rosh-hashana table as NerveCenterPanel
-const ROSH_H = [
-  { y: 5785, d: new Date(2024, 9, 2)  },
-  { y: 5786, d: new Date(2025, 8, 22) },
-  { y: 5787, d: new Date(2026, 8, 11) },
-  { y: 5788, d: new Date(2027, 9, 1)  },
-  { y: 5789, d: new Date(2028, 8, 20) },
-  { y: 5790, d: new Date(2029, 8, 10) },
-];
-function hebrewYear(date) {
-  for (let i = 0; i < ROSH_H.length - 1; i++) {
-    if (date >= ROSH_H[i].d && date < ROSH_H[i + 1].d) return ROSH_H[i].y;
-  }
-  return ROSH_H[1].y;
-}
-
-// ─── rAF-driven sweep bar (same pattern as NerveCenterPanel) ─────────────────
-function SweepBar({ duration, getOffset, color, opacity = 0.38 }) {
-  const barRef = useRef(null);
-  const getOffRef = useRef(getOffset);
-  useEffect(() => { getOffRef.current = getOffset; });
-  useEffect(() => {
-    let raf;
-    const tick = () => {
-      if (barRef.current) {
-        const frac = Math.min((getOffRef.current() % duration) / duration, 1);
-        const fade = frac > 0.97 ? Math.max(0, (1 - frac) / 0.03) : 1;
-        barRef.current.style.transform = `scaleX(${frac})`;
-        barRef.current.style.opacity   = String(opacity * fade);
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [duration]); // eslint-disable-line react-hooks/exhaustive-deps
-  return (
-    <div style={{ position: 'relative', height: 2, borderRadius: 1, background: 'rgba(128,128,128,0.1)', overflow: 'hidden', flex: 1 }}>
-      <div
-        ref={barRef}
-        style={{ position: 'absolute', inset: 0, borderRadius: 1, background: color, transformOrigin: 'left center', transform: 'scaleX(0)', opacity: 0 }}
-      />
-    </div>
-  );
-}
-
-// ─── Accent colours by source type ────────────────────────────────────────────
-const TYPE_ACCENT = {
-  event:  '#3B82F6',  // blue   — calendar
-  task:   '#EF4444',  // red    — now-priority tasks
-  taskT:  '#F59E0B',  // amber  — today tasks
-  taskS:  'rgba(128,128,128,0.28)', // subtle — soon / backlog
-  shaila: '#8B5CF6',  // violet — shailos
-  email:  'transparent',
-  call:   '#10B981',  // green  — phone
-  text:   '#6B7280',  // gray   — texts
-};
-
-// ─── Main panel ───────────────────────────────────────────────────────────────
 
 export function TaskRiverPanel({
   T,
-  tasks        = [],
-  shailos      = [],
-  calendarEvents = null,
-  gmailMessages  = null,
-  googleToken,
-  sidebarW     = 64,
-  topOffset    = 0,
+  tasks = [],
+  shailos = [],
+  priorities = [],
+  sidebarW = 64,
+  topOffset = 0,
   clockTime,
-  priorities   = [],
   onCompleteTask,
   onOpenTasks,
   onOpenShailos,
-  onOpenPhone,
-  onLoadEmailDetail,
 }) {
-  const C   = cleanTheme(T);
-  const now = useMemo(() => {
-    const d = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());
-    return Number.isFinite(d.getTime()) ? d : new Date();
-  }, [clockTime]);
+  const C = cleanTheme(T);
+  const now = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());
 
-  // Detail pane state
-  const [selected,       setSelected]       = useState(null);  // { type, id, raw }
-  const [emailBody,      setEmailBody]      = useState('');
-  const [emailLoading,   setEmailLoading]   = useState(false);
-  const [emailError,     setEmailError]     = useState('');
+  const items = useMemo(() => buildItems(tasks, shailos, priorities), [tasks, shailos, priorities]);
+  const [order, setOrder] = useState(readOrder);
+  const ordered = useMemo(() => applyOrder(items, order), [items, order]);
+  const manual = (order || []).length > 0;
 
-  // Load email body when an email row is selected
-  useEffect(() => {
-    if (selected?.type !== 'email') {
-      setEmailBody('');
-      setEmailLoading(false);
-      setEmailError('');
-      return;
-    }
-    if (!onLoadEmailDetail) return;
-    setEmailBody('');
-    setEmailLoading(true);
-    setEmailError('');
-    onLoadEmailDetail(selected.raw.id)
-      .then(data => {
-        // Extract plain-text body from Gmail payload recursively
-        const extractBody = (payload) => {
-          if (!payload) return '';
-          if (payload.mimeType === 'text/plain' && payload.body?.data) {
-            try { return atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/')); } catch { return ''; }
-          }
-          for (const part of payload.parts || []) {
-            const r = extractBody(part);
-            if (r) return r;
-          }
-          return '';
-        };
-        const body = extractBody(data?.payload) || data?.snippet || '';
-        setEmailBody(body);
-        setEmailLoading(false);
-      })
-      .catch(err => {
-        setEmailError(err?.message || 'Could not load message.');
-        setEmailLoading(false);
-      });
-  }, [selected?.raw?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [dragId, setDragId] = useState(null);
+  const listRef = useRef(null);
 
-  // ── Time header values ──────────────────────────────────────────────────────
-  const hYear = hebrewYear(now);
-  let hMonthName = '';
-  try { hMonthName = new Intl.DateTimeFormat('en-u-ca-hebrew', { month: 'long' }).format(now); } catch {}
+  // Persist whenever the manual order changes.
+  useEffect(() => { writeOrder(order); }, [order]);
 
-  const gregYrStart = new Date(now.getFullYear(), 0, 1);
-  const gregYrFrac  = (now - gregYrStart) / (new Date(now.getFullYear() + 1, 0, 1) - gregYrStart);
+  // Freeze the current visible order into an explicit id list (so auto items get fixed
+  // positions we can then nudge), and apply a transform.
+  const reorderTo = (idList) => setOrder(idList);
+  const currentIds = () => ordered.map(i => i.id);
 
-  // Sweep offsets — always read fresh time for rAF callbacks
-  const getSecOfDay = () => {
-    const n = new Date();
-    return n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds() + n.getMilliseconds() / 1000;
-  };
-  const getSecOfHr = () => {
-    const n = new Date();
-    return n.getMinutes() * 60 + n.getSeconds() + n.getMilliseconds() / 1000;
+  const move = (id, dir) => {
+    const ids = currentIds();
+    const i = ids.indexOf(id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    reorderTo(ids);
   };
 
-  // ── Stream builder ──────────────────────────────────────────────────────────
-  //
-  // DEDUP RULE: switchboardTaskList includes shaila-linked tasks (tasks with
-  // shailaId / _nerveKind:"shaila" / isGetBackStep etc.). switchboardShailaList
-  // is built from those same tasks. We must skip shaila-work tasks in the task
-  // loop so they only appear once, in the shailos section.
-  //
-  // FOCUS RULE: only "now" and "today" priority tasks appear. Backlog ("soon",
-  // "eventually", etc.) stays invisible here — the Tasks page is for that.
-  //
-  const entries = useMemo(() => {
-    const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999);
+  const dropBefore = (dragId, targetId) => {
+    if (dragId === targetId) return;
+    const ids = currentIds().filter(x => x !== dragId);
+    const t = ids.indexOf(targetId);
+    if (t < 0) ids.push(dragId); else ids.splice(t, 0, dragId);
+    reorderTo(ids);
+  };
 
-    // Today section is broken into typed sub-groups so the stream breathes:
-    //   events (chronological) → tasks → shailos → emails
-    const nowBucket      = [];
-    const todayEvents    = [];
-    const todayTasks     = [];
-    const todayShailos   = [];
-    const todayEmails    = [];
-    const upcomingBucket = [];
+  const reprioritize = () => { setOrder([]); };
 
-    // ── Calendar events ──────────────────────────────────────────────────────
-    if (Array.isArray(calendarEvents)) {
-      // Deduplicate by event id (Google sometimes returns recurring instances twice)
-      const seen = new Set();
-      for (const evt of calendarEvents) {
-        if (!evt?.start) continue;
-        const key = evt.id || evt.iCalUID || `${evt.summary}-${evt.start.dateTime || evt.start.date}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-
-        const start = evt.start.dateTime ? new Date(evt.start.dateTime) : new Date(evt.start.date);
-        const end   = evt.end?.dateTime  ? new Date(evt.end.dateTime)
-                    : evt.end?.date      ? new Date(evt.end.date)
-                    : new Date(start.getTime() + 3600000);
-
-        const happening  = start <= now && end > now;
-        const laterToday = !happening && start > now && start <= todayEnd;
-        const upcoming   = start > todayEnd;
-
-        const base = {
-          type: 'event',
-          id:    key,
-          time:  start, end,
-          title: evt.summary || '(no title)',
-          sub:   evt.location || null,
-          accent: TYPE_ACCENT.event,
-          raw:   evt,
-        };
-
-        if (happening)       nowBucket.push({ ...base, tag: `ends ${fmtClock(end)}` });
-        else if (laterToday) todayEvents.push({ ...base, tag: fmtClock(start) });
-        else if (upcoming)   upcomingBucket.push({ ...base, tag: relDay(start, now) });
-      }
-    }
-    todayEvents.sort((a, b) => (a.time || 0) - (b.time || 0));
-
-    // ── Tasks ────────────────────────────────────────────────────────────────
-    // Build priority ID sets from the priorities prop
-    const nowPriIds   = new Set(['now']);
-    const todayPriIds = new Set(['today']);
-    for (const p of priorities) {
-      if (!p || p.deleted) continue;
-      if (p.id === 'now'   || p.level === 0) nowPriIds.add(p.id);
-      if (p.id === 'today' || p.level === 1) todayPriIds.add(p.id);
-    }
-    // Also check for shaila priorities so we can detect them without duplicating
-    const shailaPriIds = new Set(['shaila']);
-    for (const p of priorities) {
-      if (p?.isShaila && !p.deleted) shailaPriIds.add(p.id);
-    }
-
-    const seenTaskIds = new Set();
-    for (const task of tasks) {
-      if (task.completed || task.deleted || task.parked || task.archived) continue;
-      if (seenTaskIds.has(task.id)) continue;
-      seenTaskIds.add(task.id);
-
-      // Skip shaila-work tasks — they appear in the shailos section instead
-      if (isNerveTaskShailaWork(task, priorities)) continue;
-      if (isShailaPriority(task.priority, priorities)) continue;
-
-      const pId     = task.priority || task.priorityId || '';
-      const isNow   = nowPriIds.has(pId);
-      const isToday = !isNow && todayPriIds.has(pId);
-      // Only show now + today — everything else is backlog noise
-      if (!isNow && !isToday) continue;
-
-      const display = task.ncSummary || task.frontSummary || task.text || 'Task';
-      const entry = {
-        type: 'task', id: task.id, time: null,
-        title: display, sub: null, raw: task,
-        accent: isNow ? TYPE_ACCENT.task : TYPE_ACCENT.taskT,
-        tag:    isNow ? 'now' : 'today',
-      };
-      if (isNow) nowBucket.push(entry);
-      else       todayTasks.push(entry);
-    }
-
-    // ── Shailos ──────────────────────────────────────────────────────────────
-    // shailos prop is already deduplicated by buildNerveShailaRows; cap at 4.
-    const seenShailaIds = new Set();
-    for (const s of shailos.slice(0, 4)) {
-      if (s.completed || s.archived || s.dismissed || s.done) continue;
-      const sid = s.id || s.shailaId;
-      if (!sid || seenShailaIds.has(sid)) continue;
-      seenShailaIds.add(sid);
-      const title = s.parentTask || s.shaila || s.question || s.text || 'Shaila';
-      todayShailos.push({
-        type: 'shaila', id: sid, time: null,
-        title, sub: s.answerSummary || s.sourceShaila?.answerSummary || null,
-        accent: TYPE_ACCENT.shaila, raw: s, tag: 'shaila',
-      });
-    }
-
-    // ── Emails ───────────────────────────────────────────────────────────────
-    // Cap at 4; most recent first (array already ordered by Gmail API)
-    if (Array.isArray(gmailMessages)) {
-      for (const msg of gmailMessages.slice(0, 4)) {
-        const from    = fmtSender(gmailHeader(msg, 'From'));
-        const subject = gmailHeader(msg, 'Subject') || '(no subject)';
-        const dateStr = gmailHeader(msg, 'Date');
-        const date    = dateStr ? new Date(dateStr) : null;
-        todayEmails.push({
-          type: 'email', id: msg.id,
-          time: date, title: from,
-          sub:  msg.aiSummary || subject,
-          accent: TYPE_ACCENT.email, raw: msg,
-          tag: date ? fmtAgo(date, now) : '',
-        });
-      }
-    }
-
-    // Sort upcoming chronologically, cap at 5
-    upcomingBucket.sort((a, b) => (a.time || 0) - (b.time || 0));
-
-    return {
-      now:           nowBucket,
-      todayEvents,
-      todayTasks,
-      todayShailos,
-      todayEmails,
-      upcoming:      upcomingBucket.slice(0, 5),
+  // Pointer drag (works for mouse + touch). The drag handle starts it; movement finds the
+  // row under the finger and slots the dragged item before it.
+  const onHandleDown = (id) => (e) => {
+    e.preventDefault();
+    setDragId(id);
+    const move_ = (ev) => {
+      const pt = ev.touches?.[0] || ev;
+      const el = document.elementFromPoint(pt.clientX, pt.clientY);
+      const row = el && el.closest ? el.closest('[data-river-row]') : null;
+      const overId = row?.getAttribute('data-river-row');
+      if (overId && overId !== id) dropBefore(id, overId);
     };
-  }, [tasks, shailos, calendarEvents, gmailMessages, now, priorities]);
-
-  // ── Entry renderer ───────────────────────────────────────────────────────────
-  const isSel = (e) => selected && selected.type === e.type && selected.id === e.id;
-
-  const timeLabel = (entry) => {
-    if (!entry.time) return null;
-    const t = entry.time;
-    const label = isSameDay(t, now)
-      ? fmtClock(t)
-      : t.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    return (
-      <span style={{
-        fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK,
-        width: 44, textAlign: 'right', flexShrink: 0,
-        letterSpacing: 0.2, lineHeight: 1.3, paddingTop: 1,
-        whiteSpace: 'nowrap',
-      }}>
-        {label}
-      </span>
-    );
+    const up = () => {
+      setDragId(null);
+      window.removeEventListener('pointermove', move_);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('touchmove', move_);
+      window.removeEventListener('touchend', up);
+    };
+    window.addEventListener('pointermove', move_, { passive: false });
+    window.addEventListener('pointerup', up);
+    window.addEventListener('touchmove', move_, { passive: false });
+    window.addEventListener('touchend', up);
   };
 
-  const renderEntry = (entry) => {
-    const sel = isSel(entry);
-    const titleWeight = entry.type === 'event' ? 500
-      : (entry.tag === 'now' ? 600 : 400);
-    const titleColor = (entry.type === 'email' && !sel) ? C.muted : C.text;
-
-    return (
-      <div
-        key={`${entry.type}-${entry.id}`}
-        className="nc-action-row"
-        onClick={() => setSelected(sel ? null : { type: entry.type, id: entry.id, raw: entry.raw })}
-        style={{
-          display: 'flex', alignItems: 'flex-start', gap: 0,
-          paddingLeft: 10,
-          borderLeft: `2px solid ${entry.accent}`,
-          marginLeft: 2,
-          cursor: 'pointer',
-          background: sel ? (T.bgW || 'rgba(120,120,120,0.07)') : 'transparent',
-          borderRadius: sel ? '0 5px 5px 0' : '0 3px 3px 0',
-          transition: 'background 0.12s',
-        }}
-        onMouseEnter={e => { if (!sel) e.currentTarget.style.background = T.bgW || 'rgba(120,120,120,0.04)'; }}
-        onMouseLeave={e => { if (!sel) e.currentTarget.style.background = 'transparent'; }}
-      >
-        {timeLabel(entry)}
-        <div style={{ flex: 1, minWidth: 0, padding: '7px 6px 7px 10px' }}>
-          <div style={{
-            fontSize: 12, fontWeight: titleWeight, color: titleColor,
-            fontFamily: NC_FONT_STACK, lineHeight: 1.3,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {entry.title}
-          </div>
-          {entry.sub && (
-            <div style={{
-              fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK,
-              lineHeight: 1.3, marginTop: 2,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {entry.sub}
-            </div>
-          )}
-        </div>
-        {entry.tag && (
-          <span style={{
-            fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK,
-            flexShrink: 0, padding: '8px 4px 0 0',
-            letterSpacing: 0.3, whiteSpace: 'nowrap',
-          }}>
-            {entry.tag}
-          </span>
-        )}
-      </div>
-    );
+  const complete = (it) => {
+    if (it.type === 'task') onCompleteTask?.(it.id);
+    else onOpenShailos?.();
   };
+  const open = (it) => { if (it.type === 'task') onOpenTasks?.(); else onOpenShailos?.(); };
 
-  // ── Section divider ──────────────────────────────────────────────────────────
-  const Section = ({ label }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '18px 0 7px 2px', flexShrink: 0 }}>
-      <span style={{
-        fontSize: 8, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK,
-        letterSpacing: 2, textTransform: 'uppercase', flexShrink: 0,
-      }}>
-        {label}
-      </span>
-      <div style={{ flex: 1, height: 1, background: 'rgba(128,128,128,0.12)' }} />
-    </div>
-  );
+  // Header supercrunch — a calm, deterministic one-liner of what's flowing.
+  const supercrunch = ordered.slice(0, 6).map(i => i.text.replace(/\s+/g, ' ').slice(0, 42)).join('  ·  ');
 
-  // ── Detail pane ──────────────────────────────────────────────────────────────
-  const renderDetail = () => {
-    if (!selected) return null;
-    const { type, raw } = selected;
-
-    if (type === 'task') {
-      return (
-        <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.45 }}>
-            {raw.text || raw.ncSummary || 'Task'}
-          </div>
-          {raw.ncSummary && raw.text && raw.ncSummary !== raw.text && (
-            <div style={{ fontSize: 11, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.55, paddingTop: 2 }}>
-              {raw.text}
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-            {onCompleteTask && (
-              <button
-                onClick={() => { onCompleteTask(raw.id); setSelected(null); }}
-                style={{ fontSize: 12, fontWeight: 600, color: '#fff', background: C.accent, border: 'none', borderRadius: 6, padding: '7px 16px', cursor: 'pointer', fontFamily: NC_FONT_STACK }}
-              >
-                ✓  Done
-              </button>
-            )}
-            {onOpenTasks && (
-              <button
-                onClick={onOpenTasks}
-                style={{ fontSize: 12, color: C.muted, background: 'none', border: `1px solid ${C.divider}`, borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontFamily: NC_FONT_STACK }}
-              >
-                Open Tasks →
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (type === 'email') {
-      const subject = gmailHeader(raw, 'Subject') || '(no subject)';
-      const from    = gmailHeader(raw, 'From') || '';
-      const dateStr = gmailHeader(raw, 'Date');
-      const url     = `https://mail.google.com/mail/u/0/#inbox/${raw.id}`;
-      return (
-        <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 10, height: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.4 }}>{subject}</div>
-          <div style={{ fontSize: 11, color: C.muted, fontFamily: NC_FONT_STACK }}>{fmtSender(from)}</div>
-          {dateStr && (
-            <div style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK }}>
-              {new Date(dateStr).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-            </div>
-          )}
-          <a href={url} target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: 11, color: C.accent, fontFamily: NC_FONT_STACK, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            ↗  Open in Gmail
-          </a>
-          <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', marginTop: 6 }}>
-            {emailLoading ? (
-              <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK }}>Loading…</span>
-            ) : emailError ? (
-              <span style={{ fontSize: 11, color: C.danger || '#EF4444', fontFamily: NC_FONT_STACK }}>{emailError}</span>
-            ) : (
-              <div style={{ fontSize: 12, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.65, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {emailBody || raw.aiSummary || raw.snippet || '(no preview)'}
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (type === 'event') {
-      const start = raw.start?.dateTime ? new Date(raw.start.dateTime) : (raw.start?.date ? new Date(raw.start.date) : null);
-      const end   = raw.end?.dateTime   ? new Date(raw.end.dateTime)   : (raw.end?.date   ? new Date(raw.end.date)   : null);
-      return (
-        <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.4 }}>
-            {raw.summary || '(no title)'}
-          </div>
-          {start && (
-            <div style={{ fontSize: 12, color: C.muted, fontFamily: NC_FONT_STACK }}>
-              {start.toLocaleDateString([], { weekday: 'short', month: 'long', day: 'numeric' })}
-              {'  '}
-              {fmtClock(start)}
-              {end ? ` – ${fmtClock(end)}` : ''}
-            </div>
-          )}
-          {raw.location && (
-            <div style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK }}>
-              📍 {raw.location}
-            </div>
-          )}
-          {raw.description && (
-            <div style={{ fontSize: 12, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {raw.description}
-            </div>
-          )}
-          {raw.htmlLink && (
-            <a href={raw.htmlLink} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: 11, color: C.accent, fontFamily: NC_FONT_STACK, textDecoration: 'none', marginTop: 4 }}>
-              ↗  Open in Calendar
-            </a>
-          )}
-        </div>
-      );
-    }
-
-    if (type === 'shaila') {
-      return (
-        <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.45 }}>
-            {raw.parentTask || raw.shaila || raw.question || raw.text || 'Shaila'}
-          </div>
-          {(raw.sourceShaila?.answerSummary || raw.answerSummary || raw.answer) && (
-            <div style={{ fontSize: 12, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.6 }}>
-              {raw.sourceShaila?.answerSummary || raw.answerSummary || raw.answer}
-            </div>
-          )}
-          {onOpenShailos && (
-            <button onClick={onOpenShailos}
-              style={{ alignSelf: 'flex-start', marginTop: 4, fontSize: 12, color: C.muted, background: 'none', border: `1px solid ${C.divider}`, borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
-              Open Shailos →
-            </button>
-          )}
-        </div>
-      );
-    }
-
-    return null;
+  // Muted running-water backdrop: layered soft teal/blue gradients over the theme bg.
+  const waterBg = {
+    background: `
+      radial-gradient(120% 60% at 20% -10%, ${rgba('#7FC6D9', 0.07)} 0%, transparent 60%),
+      radial-gradient(120% 70% at 90% 110%, ${rgba('#4F9AA6', 0.08)} 0%, transparent 55%),
+      repeating-linear-gradient(115deg, ${rgba('#9ED4E0', 0.018)} 0px, ${rgba('#9ED4E0', 0.018)} 2px, transparent 2px, transparent 26px),
+      linear-gradient(180deg, ${C.bg} 0%, ${mix(C.bg, '#16323a', 0.10)} 100%)
+    `,
   };
-
-  // ── Layout ───────────────────────────────────────────────────────────────────
-  const hasDetail   = !!selected;
-  const streamWidth = hasDetail ? 'clamp(260px, 38%, 400px)' : '100%';
-
-  const allEmpty = entries.now.length === 0 &&
-    entries.todayEvents.length === 0 && entries.todayTasks.length === 0 &&
-    entries.todayShailos.length === 0 && entries.todayEmails.length === 0 &&
-    entries.upcoming.length === 0;
-
-  // Thin rule between type-groups within Today — only rendered between groups, not after the last
-  const GroupRule = () => (
-    <div style={{ height: 1, background: 'rgba(128,128,128,0.08)', margin: '6px 2px 2px' }} />
-  );
-
-  // Build the today groups array so we can insert rules only between non-empty groups
-  const todayGroups = [
-    entries.todayEvents,
-    entries.todayTasks,
-    entries.todayShailos,
-    entries.todayEmails,
-  ].filter(g => g.length > 0);
-
-  const hasToday = todayGroups.length > 0;
 
   return (
     <div style={{
-      position: 'fixed',
-      inset: `${topOffset}px 0 0 ${sidebarW}px`,
-      zIndex: 7600,
-      background: C.bg,
-      borderLeft: `1px solid ${C.divider}`,
-      display: 'flex',
-      flexDirection: 'row',
-      overflow: 'hidden',
-      fontFamily: NC_FONT_STACK,
+      position: 'fixed', top: topOffset, left: sidebarW, right: 0, bottom: 0,
+      zIndex: 1, display: 'flex', flexDirection: 'column',
+      borderLeft: `1px solid ${C.divider}`, overflow: 'hidden', ...waterBg,
     }}>
-
-      {/* ══ Stream column ════════════════════════════════════════════════════ */}
-      <div style={{
-        width: streamWidth,
-        flexShrink: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        overflow: 'hidden',
-        borderRight: hasDetail ? `1px solid ${C.divider}` : 'none',
-        transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
-      }}>
-
-        {/* Time header — slim strip, not a card */}
-        <div style={{ flexShrink: 0, padding: '16px 18px 12px', borderBottom: `1px solid ${C.divider}` }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontSize: 12, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: 0.2 }}>
-              {fmtDate(now)}
-            </span>
-            <span style={{ fontSize: 11, color: C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0.2 }}>
-              {fmtClock(now)}
-            </span>
-          </div>
-          {/* Hebrew year line */}
-          <div style={{ fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, letterSpacing: 0.5, marginBottom: 8, opacity: 0.8 }}>
-            {hMonthName && `${hMonthName} · `}{hYear}
-          </div>
-          {/* Day and hour sweep bars */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 8, color: C.faint, fontFamily: NC_FONT_STACK, width: 26, textAlign: 'right', flexShrink: 0, letterSpacing: 0.5 }}>day</span>
-              <SweepBar duration={86400} getOffset={getSecOfDay} color={C.accent} opacity={0.45} />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 8, color: C.faint, fontFamily: NC_FONT_STACK, width: 26, textAlign: 'right', flexShrink: 0, letterSpacing: 0.5 }}>hr</span>
-              <SweepBar duration={3600} getOffset={getSecOfHr} color={C.muted} opacity={0.3} />
-            </div>
-          </div>
+      {/* ── Header ── */}
+      <div style={{ flexShrink: 0, padding: '18px clamp(16px,4vw,40px) 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 26, fontWeight: 300, letterSpacing: -0.5, color: C.text, fontFamily: NC_FONT_STACK }}>The River</span>
+          <span style={{ fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK }}>
+            {ordered.length} flowing · {now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+          </span>
+          <button onClick={reprioritize} disabled={!manual} title="Drop manual order and let priority flow again"
+            style={{
+              marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6,
+              fontSize: 12.5, fontFamily: NC_FONT_STACK, fontWeight: 500,
+              color: manual ? '#fff' : C.faint, background: manual ? rgba(SHAILA_COLOR, 0.9) : 'transparent',
+              border: `1px solid ${manual ? rgba(SHAILA_COLOR, 0.9) : C.divider}`, borderRadius: 18,
+              padding: '5px 14px', cursor: manual ? 'pointer' : 'default',
+            }}>
+            ↻ Re-prioritize
+          </button>
         </div>
-
-        {/* Stream body */}
-        <div style={{ flex: '1 1 0', overflowY: 'auto', overflowX: 'hidden', padding: '0 16px 32px', overscrollBehavior: 'contain' }}>
-
-          {allEmpty && (
-            <div style={{ paddingTop: 64, textAlign: 'center', color: C.faint, fontSize: 12, fontFamily: NC_FONT_STACK, lineHeight: 1.7 }}>
-              Connect Google and add some tasks<br />to start the river flowing.
-            </div>
-          )}
-
-          {entries.now.length > 0 && (
-            <>
-              <Section label="Now" />
-              {entries.now.map(renderEntry)}
-            </>
-          )}
-
-          {hasToday && (
-            <>
-              <Section label="Today" />
-              {todayGroups.map((group, gi) => (
-                <React.Fragment key={gi}>
-                  {gi > 0 && <GroupRule />}
-                  {group.map(renderEntry)}
-                </React.Fragment>
-              ))}
-            </>
-          )}
-
-          {entries.upcoming.length > 0 && (
-            <>
-              <Section label="Coming up" />
-              {entries.upcoming.map(renderEntry)}
-            </>
-          )}
-
-        </div>
+        {supercrunch && (
+          <div style={{
+            fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK, fontStyle: 'italic',
+            lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            paddingBottom: 2, borderBottom: `1px solid ${C.divider}`,
+          }}>{supercrunch}</div>
+        )}
       </div>
 
-      {/* ══ Detail pane ══════════════════════════════════════════════════════ */}
-      {hasDetail && (
-        <div style={{
-          flex: 1,
-          minWidth: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          overflow: 'hidden',
-          background: C.bgSoft || C.bg,
-        }}>
-          {/* Pane header */}
-          <div style={{
-            flexShrink: 0,
-            height: 44,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            padding: '0 16px',
-            borderBottom: `1px solid ${C.divider}`,
-          }}>
-            <button
-              onClick={() => setSelected(null)}
-              title="Close"
-              style={{ fontSize: 20, color: C.faint, background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '0 2px', fontFamily: NC_FONT_STACK }}
-            >
-              ×
-            </button>
+      {/* ── The stream ── */}
+      <div ref={listRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '4px clamp(10px,3vw,32px) 40px' }}>
+        {ordered.length === 0 && (
+          <div style={{ padding: '60px 20px', textAlign: 'center', color: C.faint, fontFamily: NC_FONT_STACK, fontSize: 15 }}>
+            The river is still. Nothing waiting.
           </div>
-          {/* Pane content */}
-          <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain' }}>
-            {renderDetail()}
-          </div>
-        </div>
-      )}
-
+        )}
+        {ordered.map((it, idx) => {
+          const prev = ordered[idx - 1] || it;
+          const next = ordered[idx + 1] || it;
+          // Soft left band that bleeds from the row above into the row below — the "river".
+          const band = `linear-gradient(to bottom,
+            ${rgba(mix(prev.color, it.color, 0.5), 0.6)} 0%,
+            ${rgba(it.color, 0.62)} 50%,
+            ${rgba(mix(it.color, next.color, 0.5), 0.6)} 100%)`;
+          const isDrag = dragId === it.id;
+          return (
+            <div key={it.id} data-river-row={it.id}
+              onClick={() => open(it)}
+              style={{
+                position: 'relative', display: 'grid', gridTemplateColumns: '10px 1fr auto',
+                alignItems: 'center', gap: 12, padding: '11px 12px 11px 0', cursor: 'pointer',
+                borderRadius: 12, marginBottom: 2,
+                background: isDrag ? rgba(it.color, 0.10) : 'transparent',
+                boxShadow: isDrag ? `0 6px 22px ${rgba('#000', 0.18)}` : 'none',
+                transition: 'background 0.15s',
+              }}>
+              {/* river color band */}
+              <span style={{ alignSelf: 'stretch', width: 10, borderRadius: 6, background: band }} />
+              {/* text */}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 15, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.32, wordBreak: 'break-word' }}>
+                  {it.pinned && <span style={{ color: it.color, marginRight: 6 }}>★</span>}
+                  {it.text}
+                </div>
+                <div style={{ fontSize: 11.5, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 2 }}>
+                  {it.type === 'shaila' ? 'Shaila' : (it.priLabel || 'Task')}{it.type === 'shaila' && it.priLabel ? ` · ${it.priLabel}` : ''}
+                </div>
+              </div>
+              {/* controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 2 }} onClick={e => e.stopPropagation()}>
+                <button onClick={() => move(it.id, -1)} disabled={idx === 0} title="Move up"
+                  style={ctrlBtn(C, idx === 0)}>▲</button>
+                <button onClick={() => move(it.id, +1)} disabled={idx === ordered.length - 1} title="Move down"
+                  style={ctrlBtn(C, idx === ordered.length - 1)}>▼</button>
+                <button onPointerDown={onHandleDown(it.id)} onTouchStart={onHandleDown(it.id)} title="Drag to reorder"
+                  style={{ ...ctrlBtn(C, false), cursor: 'grab', touchAction: 'none', color: C.muted, fontSize: 15 }}>⠿</button>
+                <button onClick={() => complete(it)} title={it.type === 'task' ? 'Done' : 'Open'}
+                  style={{ ...ctrlBtn(C, false), color: it.color, fontSize: 15 }}>
+                  {it.type === 'task' ? '✓' : '›'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
+}
+
+function ctrlBtn(C, disabled) {
+  return {
+    width: 28, height: 28, borderRadius: 8, border: 'none', background: 'transparent',
+    color: disabled ? C.faint : C.muted, opacity: disabled ? 0.35 : 1,
+    cursor: disabled ? 'default' : 'pointer', fontSize: 11, lineHeight: 1,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: NC_FONT_STACK,
+  };
 }
