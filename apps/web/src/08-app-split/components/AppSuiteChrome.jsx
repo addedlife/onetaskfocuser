@@ -4,8 +4,8 @@ import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../versio
 
 function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreActions, topOffset = 0, forceCompact = false, clockTime = null, onSettings }) {
   const mainApps = [
-    { id: "focus",      label: "Tasks",      icon: "task_alt"      },
-    { id: "shailos",    label: "Shailos",    icon: "rule"          },
+    { id: "focus",      label: "Tasks",      icon: "rule"          },
+    { id: "shailos",    label: "Shailos",    icon: "question_mark" },
     { id: "deskphone",  label: "Phone",      icon: "smartphone"    },
   ];
   const experimentalApps = [

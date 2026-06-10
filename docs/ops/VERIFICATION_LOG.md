@@ -1,5 +1,13 @@
 # Verification Log
 
+## 2026-06-10 NC boxes view — denser task rows, card expand-to-page, Tasks/Shailos icon swap (4.15.37)
+
+- Reported: mobile unstacked (boxes) view tasks list still too spacious — halve it (~2 more tasks visible); each card should expand on tap to full page height; Shailos' checklist icon ("rule") should move to Tasks, with Shailos getting a classy question mark.
+- Density root cause (shipped from prior session, was uncommitted): `index.html` sets `button{min-height:36px}` globally; min-height beats height, so every icon button shorter than 36px silently propped row heights open. `gvIconButton` now sets inline `minHeight` from its height override (`ui-tokens.jsx`). On top of that, boxes-view task-row Done/Delete buttons shrank 22→16px (compact) / 30→24px (comfortable), comfortable `rowMinH` 28→22.
+- Card expand (`NerveCenterPanel.jsx`): new ephemeral `expandedBoxId` state; rows-orientation boxes grid switches to `min-content`/`minmax(0,1fr)` rows. `MobileBox` gained `expanded`/`collapsed`/`onToggleExpand` — header tap toggles expand (was: open full surface; that moved to a trailing `open_in_new` button), collapsed cards render header-only via `display:none` content (Phone pollers stay mounted), scroll-away header suspended while expanded/collapsed. Desktop 5-column boxes unchanged.
+- Icon swap: Tasks `task_alt`→`rule`, Shailos `rule`→`question_mark` across NerveCenterPanel (boxes, accordion, full panel, tab bar, action categories, signal chips), AppSuiteChrome rail, SuitePanels Shailos header, App.jsx shaila actions. The "Done" action keeps `task_alt`.
+- Gates: `npm run build` (apps/web) → 0 errors. Preview-verified at 420px (desktop boxes layout): expand → 629px card + 22px strips, collapse → even 143px rows; icon names confirmed in a11y tree; 24px icon button computes min-height 24px (was 36).
+
 ## 2026-06-09 Mobile NerveCenter — Email/Calendar "loading forever" + cards stuck "Waiting on summary"
 
 - Reported: On mobile browser, the Email and Calendar cards spin "Loading…" indefinitely, and every card stays on "Waiting on summary" with no summary ever arriving.

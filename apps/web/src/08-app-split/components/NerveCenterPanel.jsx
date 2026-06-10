@@ -630,7 +630,11 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
 // stickyHeader=true: the icon+title+summary bar is always visible (not collapsed on scroll).
 // Used for desktop boxes view where cards are tall enough that collapsing the header loses
 // the per-category summary the user always wants to see.
-function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, stickyHeader = false, dense = false }) {
+// expanded/collapsed/onToggleExpand: card-level expand-to-page (mobile rows orientation).
+// When onToggleExpand is provided the header tap toggles expand instead of opening the full
+// surface; onOpen moves to a small trailing open_in_new button. collapsed=true renders the
+// header only (content hidden via display:none so embedded pollers — Phone — keep running).
+function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, stickyHeader = false, dense = false, expanded = false, collapsed = false, onToggleExpand = null }) {
   const [scrolled, setScrolled] = useState(false);
   const [fade, setFade] = useState(false); // more content below → show a bottom fade so the
   const scrollRef = useRef(null);          // last (partial) row dissolves instead of hard-cutting
@@ -654,8 +658,10 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
     return () => obs.disconnect();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // stickyHeader: always-visible header row with icon chip + title + summary line
-  const headerCollapsed = !stickyHeader && scrolled;
+  // stickyHeader: always-visible header row with icon chip + title + summary line.
+  // While card-expanded (or header-only collapsed) the header must stay reachable,
+  // so the scroll-away behavior is suspended.
+  const headerCollapsed = !stickyHeader && scrolled && !expanded && !collapsed;
   return (
     <div style={{ position: "relative", background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: 10, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
       {stickyHeader ? (
@@ -673,18 +679,25 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
       ) : (
         // Collapsing header: hides when the card content scrolls (mobile default).
         // dense = aggressively compact: a thin single-line header that reclaims vertical space.
-        <button onClick={onOpen} title={title} aria-label={title}
-          style={{ display: "flex", alignItems: "center", gap: dense ? 5 : 7, width: "100%", textAlign: "left", border: "none", background: "transparent", padding: headerCollapsed ? "0 10px" : (dense ? "2px 9px" : "7px 11px 6px"), cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0, maxHeight: headerCollapsed ? 0 : (dense ? 22 : 56), opacity: headerCollapsed ? 0 : 1, overflow: "hidden", pointerEvents: headerCollapsed ? "none" : "auto", transition: "max-height 0.2s ease, opacity 0.15s ease, padding 0.2s ease" }}>
-          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: dense ? 16 : 22, height: dense ? 16 : 22, borderRadius: dense ? 5 : 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, dense ? 11 : 14)}</span>
-          <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.small, fontWeight: 400, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "italic" }}>{summary}</span>
-        </button>
+        <div style={{ display: "flex", alignItems: "center", width: "100%", flexShrink: 0, minWidth: 0, maxHeight: headerCollapsed ? 0 : (dense ? 22 : 56), opacity: headerCollapsed ? 0 : 1, overflow: "hidden", pointerEvents: headerCollapsed ? "none" : "auto", transition: "max-height 0.2s ease, opacity 0.15s ease" }}>
+          <button onClick={onToggleExpand || onOpen} title={title} aria-label={title} aria-expanded={onToggleExpand ? expanded : undefined}
+            style={{ display: "flex", alignItems: "center", gap: dense ? 5 : 7, flex: 1, textAlign: "left", border: "none", background: "transparent", padding: headerCollapsed ? "0 10px" : (dense ? "2px 9px" : "7px 11px 6px"), cursor: (onToggleExpand || onOpen) ? "pointer" : "default", minWidth: 0 }}>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: dense ? 16 : 22, height: dense ? 16 : 22, borderRadius: dense ? 5 : 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, dense ? 11 : 14)}</span>
+            <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.small, fontWeight: 400, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "italic" }}>{summary}</span>
+            {onToggleExpand && <span style={{ display: "flex", color: C.faint, flexShrink: 0 }}>{suiteIcon(expanded ? "close_fullscreen" : "expand_content", 12)}</span>}
+          </button>
+          {onToggleExpand && onOpen && (
+            <button onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`}
+              style={gvIconButton({ width: 26, height: dense ? 18 : 24, borderRadius: 5, color: C.faint, marginRight: 4 }, C)}>{suiteIcon("open_in_new", 12)}</button>
+          )}
+        </div>
       )}
       <div ref={scrollRef} onScroll={measure}
-        style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
+        style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", ...(collapsed ? { display: "none" } : {}) }}>
         {children}
       </div>
-      {fade && <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 22, pointerEvents: "none", background: `linear-gradient(to bottom, transparent, ${C.bgSoft})` }} />}
-      {statusDot && <span style={{ position: "absolute", top: 7, right: 7, width: 8, height: 8, borderRadius: 99, background: statusDot, boxShadow: `0 0 0 2px ${C.bgSoft}`, pointerEvents: "none" }} />}
+      {fade && !collapsed && <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 22, pointerEvents: "none", background: `linear-gradient(to bottom, transparent, ${C.bgSoft})` }} />}
+      {statusDot && <span style={{ position: "absolute", top: 7, right: onToggleExpand ? 36 : 7, width: 8, height: 8, borderRadius: 99, background: statusDot, boxShadow: `0 0 0 2px ${C.bgSoft}`, pointerEvents: "none" }} />}
     </div>
   );
 }
@@ -785,6 +798,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   }, [chiefProfile?.updatedAt]); // eslint-disable-line
   const [mobileMenuOpen, setMobileMenuOpen] = useState(null); // id of section whose ··· menu is open
   const [mobileExpanded, setMobileExpanded] = useState(() => new Set()); // ids of expanded accordion sections — all collapsed by default; multiple may stay open
+  const [expandedBoxId, setExpandedBoxId] = useState(null); // boxes view: card expanded to page height (null = even 5-way split); ephemeral by design
   const [expandedRows, setExpandedRows] = useState(() => new Set()); // box-mode rows tapped open to reveal full text
   const toggleRow = key => setExpandedRows(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
   const [mobileTimelineOpen, setMobileTimelineOpen] = useState(false); // mobile hero timeline reveal
@@ -1678,9 +1692,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const bySection = Object.fromEntries(sections.map(s => [s.id, s]));
   const collectActions = (...ids) => ids.flatMap(id => bySection[id]?.actions || []);
   const actionCategories = [
-    { id: "tasks",   title: "Tasks",   icon: "task_alt",     actions: collectActions("priority", "focus") },
+    { id: "tasks",   title: "Tasks",   icon: "rule",         actions: collectActions("priority", "focus") },
     { id: "health",  title: "Health",  icon: "monitor_heart",actions: collectActions("health") },
-    { id: "shailos", title: "Shailos", icon: "rule",         actions: [...collectActions("shaila"), ...(bySection.record?.actions || []).filter(a => a.id === "record-shaila")] },
+    { id: "shailos", title: "Shailos", icon: "question_mark",         actions: [...collectActions("shaila"), ...(bySection.record?.actions || []).filter(a => a.id === "record-shaila")] },
     { id: "phone",   title: "Phone",   icon: "phone_in_talk",actions: [...collectActions("phone"), ...(bySection.record?.actions || []).filter(a => a.id === "record-call")] },
     { id: "setup",   title: "Setup",   icon: "settings",     actions: [...(bySection.record?.actions || []).filter(a => !["record-shaila","record-call"].includes(a.id)), ...collectActions("system")] },
   ].filter(c => c.actions.length);
@@ -1936,8 +1950,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     };
     const snapshotTiles = [
       ["Calendar", dueSignals.calendar ? `${dueSignals.calendar} special` : "steady", "calendar_today", dueSignals.calendar ? C.accent : C.muted],
-      ["Tasks", `${dueSignals.tasks} open`, "task_alt", dueSignals.tasks ? C.text : C.muted],
-      ["Shailos", `${dueSignals.shailos} open`, "rule", dueSignals.shailos ? C.warning || C.accent : C.muted],
+      ["Tasks", `${dueSignals.tasks} open`, "rule", dueSignals.tasks ? C.text : C.muted],
+      ["Shailos", `${dueSignals.shailos} open`, "question_mark", dueSignals.shailos ? C.warning || C.accent : C.muted],
       ["Mail", dueSignals.mail ? `${dueSignals.mail} visible` : "clear", "mail", dueSignals.mail ? C.text : C.muted],
       ["Phone", dueSignals.phone ? `${dueSignals.phone} signal${dueSignals.phone === 1 ? "" : "s"}` : (phoneActivitySummary?.online ? "quiet" : "not connected"), "smartphone", dueSignals.phone ? C.danger : (phoneActivitySummary?.online ? C.muted : C.faint)],
     ];
@@ -2161,6 +2175,17 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // Surface Laptop 7 (15″ at 150% DPI) ≈ 1444 px available → rows. 1080p desktop ≈ 1700 px → columns.
     const boxesFiveCol = availableW >= 1500;
     const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, stickyHeader: boxesFiveCol };
+    // Card-level expand-to-page: rows orientation only (5-column desktop keeps even columns).
+    // Tapping a header gives that card the whole page; the rest shrink to header strips.
+    const BOX_ORDER = ["mail", "phone", "tasks", "shailos", "calendar"];
+    const boxProps = id => boxesFiveCol ? {} : {
+      expanded: expandedBoxId === id,
+      collapsed: !!expandedBoxId && expandedBoxId !== id,
+      onToggleExpand: () => setExpandedBoxId(prev => prev === id ? null : id),
+    };
+    const boxRows = expandedBoxId
+      ? BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,1fr)" : "min-content").join(" ")
+      : "repeat(5, minmax(0,1fr))";
 
     const fmtTimeM = (raw) => { try { const d = new Date(raw); const now = new Date(); return d.toDateString()===now.toDateString() ? d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : d.toLocaleDateString([],{month:"short",day:"numeric"}); } catch { return ""; } };
     // Abbreviated relative time (5m · 2h · Tue · Jun 3) — denser than a full timestamp.
@@ -2176,7 +2201,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // Expanded = comfortable. Compact = roughly twice the density: minimal padding, tight
     // line-height, and one step smaller type, so a card fits about double the rows.
     const padY = dense ? 1 : 4;
-    const rowMinH = dense ? 14 : 28;
+    const rowMinH = dense ? 14 : 22;
     const bodyF = dense ? ncType.meta : ncType.body;   // 12 vs 14
     const metaF = dense ? ncType.small : ncType.meta;  // 11 vs 12
     const lineH = dense ? 1.05 : 1.3;
@@ -2226,10 +2251,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             <  1000 px: 5 rows stacked, each 1/5 height — all cards always visible. */}
         <div style={{ flex:1, minHeight:0, gap: dense?3:5, display:"grid", overflow:"hidden",
           gridTemplateColumns: boxesFiveCol ? "repeat(5, minmax(0,1fr))" : "1fr",
-          gridTemplateRows:    boxesFiveCol ? "1fr" : "repeat(5, minmax(0,1fr))" }}>
+          gridTemplateRows:    boxesFiveCol ? "1fr" : boxRows }}>
 
           {/* Mail */}
-          <MobileBox {...boxCtx} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} {...boxProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail")} style={cardStyle} dense={dense}
             onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}>
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : gmailMessages.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
@@ -2255,7 +2280,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Phone */}
-          <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} summary={cardSummary("Phone")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} {...boxProps("phone")} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} summary={cardSummary("Phone")} style={cardStyle} dense={dense}
             statusDot={phoneDotColor} onOpen={onOpenPhone}>
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
@@ -2265,7 +2290,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Tasks */}
-          <MobileBox {...boxCtx} icon="task_alt" title="Tasks" accentColor={C.accent} summary={cardSummary("Tasks")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} {...boxProps("tasks")} icon="rule" title="Tasks" accentColor={C.accent} summary={cardSummary("Tasks")} style={cardStyle} dense={dense}
             onOpen={onOpenQueue}>
             {taskComposerOpen && (
               <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.divider}` }}>
@@ -2298,8 +2323,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   )}
                   {!isEditing && (
                     <div style={{ display:"flex", gap: dense?1:3 }}>
-                      <button onClick={() => onCompleteTask?.(t.id)} style={gvIconButton({width: dense?22:30, height: dense?22:30, color:C.success, background:"transparent"},C)} title="Done">{suiteIcon("check", dense?13:14)}</button>
-                      <button onClick={() => onDeleteTask?.(t.id)} style={gvIconButton({width: dense?22:30, height: dense?22:30, color:C.danger, background:"transparent"},C)} title="Delete">{suiteIcon("close", dense?12:13)}</button>
+                      {/* Width stays finger-sized; height is what sets the row, so it shrinks. */}
+                      <button onClick={() => onCompleteTask?.(t.id)} style={gvIconButton({width: dense?22:26, height: dense?16:24, color:C.success, background:"transparent"},C)} title="Done">{suiteIcon("check", dense?11:13)}</button>
+                      <button onClick={() => onDeleteTask?.(t.id)} style={gvIconButton({width: dense?22:26, height: dense?16:24, color:C.danger, background:"transparent"},C)} title="Delete">{suiteIcon("close", dense?10:12)}</button>
                     </div>
                   )}
                 </div>
@@ -2308,7 +2334,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Shailos */}
-          <MobileBox {...boxCtx} icon="rule" title="Shailos" accentColor={GOLD} summary={cardSummary("Shailos")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} {...boxProps("shailos")} icon="question_mark" title="Shailos" accentColor={GOLD} summary={cardSummary("Shailos")} style={cardStyle} dense={dense}
             onOpen={onOpenShailos}>
             {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : visibleShailos.map(s => {
               const text = nerveDisplaySummary(s,"Open shaila");
@@ -2329,7 +2355,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Calendar */}
-          <MobileBox {...boxCtx} icon="calendar_today" title="Calendar" accentColor={C.warning} summary={cardSummary("Calendar")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} {...boxProps("calendar")} icon="calendar_today" title="Calendar" accentColor={C.warning} summary={cardSummary("Calendar")} style={cardStyle} dense={dense}
             onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}>
             {showAddEvent && (
               <div style={{ padding:"10px 12px", borderBottom:`1px solid ${C.divider}` }}>
@@ -2481,7 +2507,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               gridTemplateRows:    accWide ? "1fr" : "repeat(5, minmax(0,1fr))" }}>
 
           {/* Tasks — collapsible; open the section when the composer is invoked so it shows. */}
-          <MobileSection {...sectionCtx} id="tasks" icon="task_alt" title="Tasks" accentColor={C.accent} count={primaryTaskQueue.length} preview={tasksPreview}
+          <MobileSection {...sectionCtx} id="tasks" icon="rule" title="Tasks" accentColor={C.accent} count={primaryTaskQueue.length} preview={tasksPreview}
             primaryBtn={<button onClick={() => { setMobileExpanded(prev => new Set(prev).add("tasks")); openTaskComposer(taskPriority); }} style={gvIconButton({ width: 26, height: 26, color: C.muted }, C)} title="Add task">{suiteIcon("add", 14)}</button>}
             menuItems={[
               { icon: "list_alt",    label: "Open full queue", run: onOpenQueue },
@@ -2607,7 +2633,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           )}
 
           {/* Shailos */}
-          <MobileSection {...sectionCtx} id="shailos" icon="rule" title="Shailos" accentColor={GOLD} count={visibleShailos.length}
+          <MobileSection {...sectionCtx} id="shailos" icon="question_mark" title="Shailos" accentColor={GOLD} count={visibleShailos.length}
             preview={signalNote("Shailos")}
             primaryBtn={<button onClick={onOpenShailaAdd} style={gvIconButton({width:26,height:26,color:GOLD},C)} title="Add shaila">{suiteIcon("add",14)}</button>}
             menuItems={[{ icon: "open_in_full", label: "Open Shailos", run: onOpenShailos }]}
@@ -2701,7 +2727,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         {/* Panel tab bar — mobile/stacked only */}
         {isStacked && (
           <div style={{ display: "flex", background: C.bg, borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
-            {[["Tasks", "task_alt", 0], ["Shailos", "rule", 1], ["Phone", "phone_in_talk", 2]].map(([lbl, ico, idx]) => (
+            {[["Tasks", "rule", 0], ["Shailos", "question_mark", 1], ["Phone", "phone_in_talk", 2]].map(([lbl, ico, idx]) => (
               <button key={idx} onClick={() => goToPanel(idx)}
                 style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap:6, height: 42, padding: "0 4px", border: "none", borderBottom: `2px solid ${idx === activeStackPanel ? C.accent : "transparent"}`, background: "none", cursor: "pointer", color: idx === activeStackPanel ? C.text : C.muted, fontSize: ncType.label, fontWeight: 500, fontFamily: NC_FONT_STACK, transition: "color 0.15s" }}>
                 {suiteIcon(ico, 13)} {lbl}
@@ -2720,7 +2746,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             <div ref={taskHeaderRef} style={{ ...ncHeader, display: taskComposerOpen ? "block" : "flex", ...(taskComposerOpen ? { padding: "7px 12px" } : {}) }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, ...(taskComposerOpen ? { marginBottom: 7 } : {}) }}>
                 <div style={{ display: "flex", alignItems: "center", gap:8 }}>
-                  <span style={ncSectionIcon()}>{suiteIcon("task_alt", 16)}</span>
+                  <span style={ncSectionIcon()}>{suiteIcon("rule", 16)}</span>
                   <span style={ncTitle}>Tasks</span>
                 </div>
                 <div style={{ display: "flex", gap:4, alignItems: "center" }}>
@@ -2798,9 +2824,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const actionsOpen = openTaskActionsId === t.id;
                 const displayText = nerveDisplaySummary(t, "Untitled task");
                 return (
-                  <div key={t.id} data-nc-task-row="true" className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? "16px minmax(0,1fr) 40px" : "16px minmax(0,1fr)", alignItems: dense && !touchLayout ? "center" : "start", padding: dense ? "1px 16px 1px 0" : "7px 16px 7px 0", gap: dense?6:8, minHeight: dense ? 16 : 34 }}>
+                  <div key={t.id} data-nc-task-row="true" className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? (dense ? "16px minmax(0,1fr) 32px" : "16px minmax(0,1fr) 40px") : "16px minmax(0,1fr)", alignItems: dense ? "center" : "start", padding: dense ? "1px 16px 1px 0" : "7px 16px 7px 0", gap: dense?6:8, minHeight: dense ? 16 : 34 }}>
                     {/* Priority dot */}
-                    <span style={{ width: dense?6:8, height: dense?6:8, borderRadius: 99, background: priColor, flexShrink: 0, marginLeft: dense?5:0, marginTop: dense ? 0 : 5, alignSelf: dense && !touchLayout ? "center" : "flex-start" }} />
+                    <span style={{ width: dense?6:8, height: dense?6:8, borderRadius: 99, background: priColor, flexShrink: 0, marginLeft: dense?5:0, marginTop: dense ? 0 : 5, alignSelf: dense ? "center" : "flex-start" }} />
                     {/* Text — click to edit inline */}
                     <div style={{ flex: 1, minWidth: 0, paddingTop: dense?0:1 }}>
                       {isEditing ? (
@@ -2817,8 +2843,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     </div>
                     {/* Checkmark — plain icon, no pill */}
                     {touchLayout && !isEditing && (
-                      <button onClick={e => { e.stopPropagation(); setOpenTaskActionsId(actionsOpen ? null : t.id); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={gvIconButton({ width: 40, height: 40, background: actionsOpen ? C.hover : "transparent" }, C)}>
-                        {suiteIcon("more_horiz", 17)}
+                      <button onClick={e => { e.stopPropagation(); setOpenTaskActionsId(actionsOpen ? null : t.id); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={gvIconButton({ width: dense ? 32 : 40, height: dense ? 22 : 40, background: actionsOpen ? C.hover : "transparent" }, C)}>
+                        {suiteIcon("more_horiz", dense ? 15 : 17)}
                       </button>
                     )}
                     {(!touchLayout || actionsOpen) && !isEditing && (
@@ -2851,7 +2877,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           <section style={isStacked ? { ...tintedPanel(GOLD), flex: "0 0 100%", minWidth: 0, scrollSnapAlign: "start", height: "100%", touchAction: "pan-y" } : tintedPanel(GOLD)}>
             <div style={{ ...ncHeader, display: isStacked ? "none" : "flex" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={ncSectionIcon(GOLD)}>{suiteIcon("rule", 16)}</span>
+                <span style={ncSectionIcon(GOLD)}>{suiteIcon("question_mark", 16)}</span>
                 <span style={ncTitle}>Shailos</span>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

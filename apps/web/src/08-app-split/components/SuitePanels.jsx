@@ -7,7 +7,7 @@ function SuiteShailosPanel({ T, action, onClose, sidebarW = 0 }) {
     <div style={{position:"fixed",inset:`0 0 0 ${sidebarW}px`,zIndex:7600,overflow:"hidden",background:T.card,borderLeft:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"flex",flexDirection:"column"}}>
       <div style={{height:52,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 16px",borderBottom:`1px solid ${T.brd}`,background:T.card,flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-          {suiteIcon("rule", 21)}
+          {suiteIcon("question_mark", 21)}
           <div style={{minWidth:0}}>
             <div style={{fontSize:15,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK}}>Shailos Tracker</div>
             <div style={{fontSize:13,color:T.tFaint,fontFamily:NC_FONT_STACK}}>Questions, answers, and follow-up</div>

@@ -249,6 +249,10 @@ export const gvIconButton = (overrides = {}, C = GV_CLEAN) => ({
   justifyContent: "center",
   flexShrink: 0,
   ...overrides,
+  // index.html sets button{min-height:36px} globally; min-height beats height, so
+  // without an inline minHeight any icon button shorter than 36px silently renders
+  // at 36px and props row heights open (why "compact" rows never got compact).
+  minHeight: overrides.minHeight ?? overrides.height ?? 40,
 });
 
 export const gvTextButton = (overrides = {}, C = GV_CLEAN) => ({

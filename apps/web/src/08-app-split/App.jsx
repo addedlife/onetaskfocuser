@@ -2795,10 +2795,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     {
       id: "shaila",
       title: "Shaila",
-      icon: "rule",
+      icon: "question_mark",
       meta: "Questions, answers, and follow-up",
       actions: [
-        {id:"questions", label:"Questions", note:`${shailaOpenCount} open`, icon:"rule", primary:true, run:()=>{setShailosAction(null); openCommandView("shailos");}},
+        {id:"questions", label:"Questions", note:`${shailaOpenCount} open`, icon:"question_mark", primary:true, run:()=>{setShailosAction(null); openCommandView("shailos");}},
         {id:"add-shaila", label:"Add shaila", note:"Create a question manually", icon:"add_circle", run:()=>{setShailosAction("add-manual"); openCommandView("shailos");}},
         {id:"question-followup", label:"Follow-up", note:"Review answers and got-back status", icon:"fact_check", run:()=>setShowShailaManager(true)},
         {id:"reconcile", label:reconcileLoading ? "Checking..." : "Check sync", note:"Make sure questions and tasks match", icon:"sync", disabled:reconcileLoading, run:runShailaReconcile},
