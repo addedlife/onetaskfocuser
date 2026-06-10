@@ -2404,7 +2404,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // Both orientations show all 5 sections simultaneously — always expanded, always fullHeight.
     // 1500 px = 5 cols × 300 px minimum comfortable reading width per column.
     const accWide = availableW >= 1500;
-    const sectionCtx = { C, expandedIds: mobileExpanded, menuId: mobileMenuOpen, onExpand: mobileExpandToggle, onMenuToggle: mobileMenuToggle, onMenuClose: mobileMenuClose, expandable: false, fullHeight: true };
+    // True accordion = collapsible sections that show only their summary line until tapped.
+    // (Plain narrow-stacked, without the accordion layout chosen, stays always-expanded.)
+    const isAccordion = isMobileDevice ? mobileLayout === "accordion" : desktopLayout === "accordion";
+    const sectionCtx = { C, expandedIds: mobileExpanded, menuId: mobileMenuOpen, onExpand: mobileExpandToggle, onMenuToggle: mobileMenuToggle, onMenuClose: mobileMenuClose, expandable: isAccordion, fullHeight: !isAccordion };
 
     const signalNote = nerveSignalNote;
 
@@ -2460,11 +2463,16 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           )}
         </div>
 
-        {/* ── Sections: 5 columns when wide, 5 rows when narrow — all always visible ── */}
-        <div style={{ flex: 1, minHeight: 0, gap: 5, display: "grid", overflow: "hidden",
-          padding: "5px 10px calc(8px + env(safe-area-inset-bottom, 0px))",
-          gridTemplateColumns: accWide ? "repeat(5, minmax(0,1fr))" : "1fr",
-          gridTemplateRows:    accWide ? "1fr" : "repeat(5, minmax(0,1fr))" }}>
+        {/* ── Sections ── accordion: a scrollable column of collapsible summary lines.
+             Non-accordion stacked: 5 columns when wide, 5 rows when narrow, all expanded. ── */}
+        <div style={isAccordion
+          ? { flex: 1, minHeight: 0, gap: 5, display: "flex", flexDirection: "column",
+              overflowY: "auto", overflowX: "hidden",
+              padding: "5px 10px calc(8px + env(safe-area-inset-bottom, 0px))" }
+          : { flex: 1, minHeight: 0, gap: 5, display: "grid", overflow: "hidden",
+              padding: "5px 10px calc(8px + env(safe-area-inset-bottom, 0px))",
+              gridTemplateColumns: accWide ? "repeat(5, minmax(0,1fr))" : "1fr",
+              gridTemplateRows:    accWide ? "1fr" : "repeat(5, minmax(0,1fr))" }}>
 
           {/* Tasks — collapsible; open the section when the composer is invoked so it shows. */}
           <MobileSection {...sectionCtx} id="tasks" icon="task_alt" title="Tasks" accentColor={C.accent} count={primaryTaskQueue.length} preview={tasksPreview}
