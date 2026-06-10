@@ -45,6 +45,32 @@ function getDb() {
   return adminDb;
 }
 
+// ── Firebase Auth (verify the caller's ID token) ─────────────────────────────
+let adminAuth = null;
+function getAuth() {
+  if (adminAuth) return adminAuth;
+  getDb(); // ensure the Admin app is initialized first
+  const { getAuth: _getAuth } = require("firebase-admin/auth");
+  adminAuth = _getAuth();
+  return adminAuth;
+}
+
+// Verify the "Authorization: Bearer <idToken>" header and return the caller's uid.
+// SECURITY GATE: every data action derives the user from this *verified* token —
+// never from a client-supplied user_id, which would be a trust-the-caller IDOR.
+// Throws an Error tagged .statusCode = 401 when the token is missing or invalid.
+async function authedUid(event) {
+  const header = event.headers?.authorization || event.headers?.Authorization || "";
+  const token  = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (!token) { const e = new Error("Sign in required"); e.statusCode = 401; throw e; }
+  try {
+    const decoded = await getAuth().verifyIdToken(token);
+    return decoded.uid;
+  } catch (_) {
+    const e = new Error("Invalid or expired sign-in"); e.statusCode = 401; throw e;
+  }
+}
+
 // ── CORS helper ───────────────────────────────────────────────────────────────
 function corsHeaders(origin = "") {
   const allowed = /^https:\/\/([a-z0-9-]+\.)?netlify\.app$/i.test(origin) ||
@@ -169,6 +195,18 @@ export const handler = async (event) => {
   const clientSecret = process.env.GOOGLE_HEALTH_CLIENT_SECRET || "";
   const action       = q.action;
 
+  // Actions that read or mutate a user's health data must prove who the caller is.
+  // The verified uid replaces the old client-supplied q.user_id (the IDOR hole).
+  // "exchange" is exempt — it's the Google OAuth redirect callback (a top-level
+  // browser navigation that cannot carry our Firebase token) and is instead
+  // protected by Google's unforgeable authorization `code`.
+  const PROTECTED = new Set(["authorize-url", "load", "sync", "save-entry", "disconnect"]);
+  let authedUserId = null;
+  if (PROTECTED.has(action)) {
+    try { authedUserId = await authedUid(event); }
+    catch (e) { return json(e.statusCode || 401, { error: e.message }, origin); }
+  }
+
   // ── 1. Return the Google OAuth authorization URL ──────────────────────────
   if (action === "authorize-url") {
     await dlog("authorize-url", "start", { clientIdSet: !!clientId, clientIdPrefix: clientId.slice(0, 16), origin });
@@ -176,7 +214,7 @@ export const handler = async (event) => {
       await dlog("authorize-url", "MISSING GOOGLE_HEALTH_CLIENT_ID");
       return json(503, { error: "GOOGLE_HEALTH_CLIENT_ID not set in Netlify env vars", setup: true }, origin);
     }
-    const userId = q.user_id || "";
+    const userId = authedUserId;
     const url = "https://accounts.google.com/o/oauth2/v2/auth?" + new URLSearchParams({
       client_id:     clientId,
       redirect_uri:  REDIRECT,
@@ -238,9 +276,8 @@ export const handler = async (event) => {
 
   // ── 3. Sync today's health data ───────────────────────────────────────────
   if (action === "sync") {
-    const userId = q.user_id || "";
+    const userId = authedUserId;
     await dlog("sync", "start", { userId });
-    if (!userId) return json(400, { error: "Missing user_id" }, origin);
 
     const db          = getDb();
     let accessToken;
@@ -327,8 +364,7 @@ export const handler = async (event) => {
 
   // ── 3b. Load config + history for the browser (bypasses Firestore rules) ─
   if (action === "load") {
-    const userId = q.user_id || "";
-    if (!userId) return json(400, { error: "Missing user_id" }, origin);
+    const userId = authedUserId;
     const db = getDb();
 
     try {
@@ -362,8 +398,7 @@ export const handler = async (event) => {
   // ── 3c. Save a manual entry (browser can't write to Firestore directly) ──
   if (action === "save-entry") {
     if (event.httpMethod !== "POST") return json(405, { error: "Use POST" }, origin);
-    const userId = q.user_id || "";
-    if (!userId) return json(400, { error: "Missing user_id" }, origin);
+    const userId = authedUserId;
 
     let body;
     try { body = JSON.parse(event.body || "{}"); }
@@ -383,8 +418,7 @@ export const handler = async (event) => {
 
   // ── 4. Disconnect / revoke ────────────────────────────────────────────────
   if (action === "disconnect") {
-    const userId = q.user_id || "";
-    if (!userId) return json(400, { error: "Missing user_id" }, origin);
+    const userId = authedUserId;
     const db = getDb();
     try {
       const snap  = await db.collection("healthConfig").doc(userId).get();

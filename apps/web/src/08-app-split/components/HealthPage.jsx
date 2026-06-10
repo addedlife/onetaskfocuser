@@ -418,6 +418,7 @@ export function HealthPage({
   topOffset = 0,
   sidebarW = 0,
   userId = "",
+  getAuthToken,
   healthCardVisible = true,
   onSetHealthCardVisible,
 }) {
@@ -734,7 +735,15 @@ export function HealthPage({
             }).catch(() => {});
             dlog("Connect clicked", { userId });
             try {
-              const r    = await fetch(`/.netlify/functions/google-health?action=authorize-url&user_id=${encodeURIComponent(userId)}`);
+              const token = getAuthToken ? await getAuthToken() : null;
+              if (!token) {
+                setConnectError("Sign in again before connecting Google Health.");
+                setConnectLoading(false);
+                return;
+              }
+              const r    = await fetch(`/.netlify/functions/google-health?action=authorize-url`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
               const data = await r.json();
               dlog(`authorize-url response status ${r.status}`, { status: r.status, hasUrl: !!data.url, error: data.error, urlPrefix: data.url?.slice(0, 120) });
               if (!r.ok || !data.url) {

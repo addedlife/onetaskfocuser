@@ -1913,6 +1913,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         topOffset={topOffset}
         sidebarW={sidebarW}
         userId={user?.uid}
+        getAuthToken={() => user?.getIdToken?.()}
         healthCardVisible={healthCardVisible}
         onSetHealthCardVisible={v => {
           setHealthCardVisible(v);

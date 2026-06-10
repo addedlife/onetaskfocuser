@@ -32,11 +32,22 @@ function getDb() {
   return adminDb;
 }
 
+let adminAuth = null;
+function getAuth() {
+  if (adminAuth) return adminAuth;
+  getDb(); // ensure the Admin app is initialized
+  const { getAuth: _getAuth } = require("firebase-admin/auth");
+  adminAuth = _getAuth();
+  return adminAuth;
+}
+
 function corsHeaders(origin = "") {
-  const allowed = /^https:\/\/([a-z0-9-]+\.)?netlify\.app$/i.test(origin) ||
-                  origin === "https://onetaskfocuser.netlify.app" ||
-                  /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)
-    ? origin : "https://onetaskfocuser.netlify.app";
+  // Only our own origins — production, our deploy previews, and localhost.
+  // The old rule trusted ANY *.netlify.app site, letting a stranger's page read/clear logs.
+  const ok = origin === "https://onetaskfocuser.netlify.app" ||
+             /^https:\/\/[a-z0-9-]+--onetaskfocuser\.netlify\.app$/i.test(origin) ||
+             /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+  const allowed = ok ? origin : "https://onetaskfocuser.netlify.app";
   return {
     "Access-Control-Allow-Origin":  allowed,
     "Access-Control-Allow-Headers": "Content-Type,Authorization",
@@ -80,6 +91,17 @@ export const handler = async (event) => {
     } catch (err) {
       return json(500, { error: String(err.message || err) }, origin);
     }
+  }
+
+  // Reading or wiping logs is privileged (logs can hold user data) — require a
+  // verified sign-in. The write path above stays open so the frontend logger,
+  // which posts without a token, keeps working; entries there are length-capped.
+  if (q.action === "tail" || q.action === "clear") {
+    const header = event.headers?.authorization || event.headers?.Authorization || "";
+    const token  = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+    if (!token) return json(401, { error: "Sign in required" }, origin);
+    try { await getAuth().verifyIdToken(token); }
+    catch { return json(401, { error: "Invalid or expired sign-in" }, origin); }
   }
 
   // GET ?action=tail&limit=N — newest N entries, returned oldest-first

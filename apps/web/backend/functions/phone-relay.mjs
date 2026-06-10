@@ -179,6 +179,17 @@ export const handler = async (event) => {
   if (action === "command" && method === "POST") {
     const idToken = extractIdToken(event);
     if (!idToken) return err(401, "Firebase ID token required — sign in to queue commands");
+    // Presence isn't enough — actually VERIFY the token. We have no firebase-admin here
+    // (this function is deliberately dependency-free), so we validate by doing an
+    // authenticated Firestore read: phone-relay/state requires request.auth != null, so a
+    // forged/expired token trips a 401 there and we reject. A valid token reads fine (or
+    // 404 if nothing pushed yet — still proves the token was accepted). Fail closed.
+    try {
+      await fsGet("state", idToken);
+    } catch (e) {
+      if (e.message === "auth:token_invalid") return err(401, "Invalid or expired sign-in — sign in again");
+      return err(401, "Could not verify sign-in");
+    }
     let cmd;
     try { cmd = JSON.parse(event.body || "{}"); } catch { return err(400, "invalid JSON"); }
     if (!cmd.path) return err(400, "missing path");

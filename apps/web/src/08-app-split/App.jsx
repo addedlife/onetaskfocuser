@@ -2710,7 +2710,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     dlog("called", { uid: user?.uid });
     if (!user?.uid) return;
     try {
-      const res  = await fetch(`/.netlify/functions/google-health?action=load&user_id=${encodeURIComponent(user.uid)}`);
+      const res  = await fetch(`/.netlify/functions/google-health?action=load`, {
+        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+      });
       const json = await res.json();
       dlog(`load response status ${res.status}`, { status: res.status, hasConfig: !!json?.config, oauthType: json?.config?.oauthType, historyDays: json?.history?.length });
       if (!res.ok) return;
@@ -2726,8 +2728,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   async function saveHealthDataToFirebase(data) {
     if (!user?.uid || !data?.date) return;
     try {
-      const res = await fetch(`/.netlify/functions/google-health?action=save-entry&user_id=${encodeURIComponent(user.uid)}`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+      const res = await fetch(`/.netlify/functions/google-health?action=save-entry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` },
         body: JSON.stringify(data),
       });
       if (!res.ok) return;
@@ -2754,7 +2757,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   async function syncHealthNow() {
     if (!user?.uid) return;
     try {
-      const res = await fetch(`/.netlify/functions/google-health?action=sync&user_id=${encodeURIComponent(user.uid)}`);
+      const res = await fetch(`/.netlify/functions/google-health?action=sync`, {
+        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+      });
       if (!res.ok) return;
       const entry = await res.json();
       if (entry?.date) {
