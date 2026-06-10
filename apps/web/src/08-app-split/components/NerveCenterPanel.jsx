@@ -2447,6 +2447,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   style={gvIconButton({ width:30, height:26, borderRadius:4, background: desktopLayout === id ? C.hover : "transparent" }, C)}>{suiteIcon(icon, 14)}</button>
               ))
             )}
+            <button onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density" style={gvIconButton({ width: 30, height: 26, borderRadius: 4 }, C)}>{suiteIcon(dense ? "density_small" : "density_medium", 14)}</button>
             <button onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" style={gvIconButton({ width: 30, height: 26, borderRadius: 4 }, C)}>{suiteIcon("apps", 14)}</button>
           </div>
 
@@ -2506,8 +2507,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const priColor = pri?.color || T.primary || "#7EB0DE";
               const isEditing = editingTaskId === t.id;
               return (
-                <div key={t.id} data-nc-task-row="true" style={{ display:"grid",gridTemplateColumns:"16px minmax(0,1fr) auto",alignItems:"start",padding:"4px 12px 4px 0",gap:8,borderTop:`1px solid ${C.divider}`,minHeight:24 }}>
-                  <span style={{ width:8,height:8,borderRadius:99,background:priColor,flexShrink:0,marginTop:5 }} />
+                <div key={t.id} data-nc-task-row="true" style={{ display:"grid",gridTemplateColumns:"16px minmax(0,1fr) auto",alignItems: dense?"center":"start",padding: dense?"1px 12px 1px 0":"4px 12px 4px 0",gap: dense?6:8,borderTop:`1px solid ${C.divider}`,minHeight: dense?16:24 }}>
+                  <span style={{ width: dense?6:8,height: dense?6:8,borderRadius:99,background:priColor,flexShrink:0,marginLeft: dense?5:0,marginTop: dense?0:5,alignSelf: dense?"center":"flex-start" }} />
                   {isEditing ? (
                     <textarea value={editText} autoFocus rows={2}
                       onChange={e => setEditText(e.target.value)}
@@ -2515,12 +2516,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       onBlur={() => { if(editText.trim()&&editText!==t.text)onEditTask?.(t.id,editText.trim());setEditingTaskId(null); }}
                       style={{ width:"100%",boxSizing:"border-box",borderRadius:6,border:`1px solid ${priColor}`,background:C.bgSoft,color:C.text,padding:"6px 8px",fontSize:ncType.body,fontFamily:NC_FONT_STACK,lineHeight:ncType.line,resize:"none",outline:"none" }} />
                   ) : (
-                    <span onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ display:"block",fontSize:ncType.body,lineHeight:ncType.line,color:C.text,wordBreak:"break-word",cursor:"text",paddingTop:1 }}>{nerveDisplaySummary(t,"Untitled task")}</span>
+                    <span onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ display:"block",fontSize: dense?ncType.meta:ncType.body,lineHeight: dense?1.12:ncType.line,color:C.text,wordBreak:"break-word",cursor:"text",paddingTop: dense?0:1 }}>{nerveDisplaySummary(t,"Untitled task")}</span>
                   )}
                   {!isEditing && (
-                    <div style={{ display:"flex",gap:3 }}>
-                      <button onClick={() => onCompleteTask?.(t.id)} style={gvIconButton({width:30,height:30,color:C.success,background:"transparent"},C)} title="Done">{suiteIcon("check",14)}</button>
-                      <button onClick={() => onDeleteTask?.(t.id)} style={gvIconButton({width:30,height:30,color:C.danger,background:"transparent"},C)} title="Delete">{suiteIcon("close",13)}</button>
+                    <div style={{ display:"flex",gap: dense?1:3 }}>
+                      <button onClick={() => onCompleteTask?.(t.id)} style={gvIconButton({width: dense?22:30,height: dense?22:30,color:C.success,background:"transparent"},C)} title="Done">{suiteIcon("check", dense?13:14)}</button>
+                      <button onClick={() => onDeleteTask?.(t.id)} style={gvIconButton({width: dense?22:30,height: dense?22:30,color:C.danger,background:"transparent"},C)} title="Delete">{suiteIcon("close", dense?12:13)}</button>
                     </div>
                   )}
                 </div>
@@ -2551,11 +2552,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               ) : calendarRows.filter(r=>!r.past).length === 0 ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Nothing upcoming today.</div>
               ) : calendarRows.filter(r=>!r.past).slice(0,40).map(row => (
-                <div key={row.evt?.id||row.index} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:8,padding:"3px 12px",borderTop:`1px solid ${C.divider}`,alignItems:"start" }}>
+                <div key={row.evt?.id||row.index} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:8,padding: dense?"1px 12px":"3px 12px",borderTop:`1px solid ${C.divider}`,alignItems:"start" }}>
                   <span style={{ fontSize:ncType.meta,color:row.now?C.accent:C.faint,fontFamily:NC_FONT_STACK,whiteSpace:"nowrap",paddingTop:1,fontWeight:row.now?700:400,minWidth:54 }}>
                     {row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                   </span>
-                  <span style={{ fontSize:ncType.body,color:row.now||row.special?C.text:C.muted,fontFamily:NC_FONT_STACK,fontWeight:row.now||row.special?600:400,lineHeight:ncType.line,whiteSpace:"normal",wordBreak:"break-word" }}>
+                  <span style={{ fontSize: dense?ncType.meta:ncType.body,color:row.now||row.special?C.text:C.muted,fontFamily:NC_FONT_STACK,fontWeight:row.now||row.special?600:400,lineHeight: dense?1.12:ncType.line,whiteSpace:"normal",wordBreak:"break-word" }}>
                     {row.now && <span style={{width:6,height:6,borderRadius:"50%",background:C.accent,display:"inline-block",marginRight:5,verticalAlign:"middle"}} />}
                     {row.evt?.summary||"(no title)"}
                   </span>
@@ -2594,8 +2595,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const url  = `https://mail.google.com/mail/u/0/#inbox/${msg.id}`;
                 return (
                   <a key={msg.id||i} href={url} target="_blank" rel="noopener noreferrer"
-                    style={{ display:"flex",alignItems:"baseline",gap:6,padding:"3px 12px",borderTop:`1px solid ${C.divider}`,textDecoration:"none",color:"inherit",minWidth:0 }}>
-                    <span style={{fontSize:ncType.body,fontWeight:600,color:C.text,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{from}</span>
+                    style={{ display:"flex",alignItems:"baseline",gap:6,padding: dense?"1px 12px":"3px 12px",borderTop:`1px solid ${C.divider}`,textDecoration:"none",color:"inherit",minWidth:0 }}>
+                    <span style={{fontSize: dense?ncType.meta:ncType.body,fontWeight:600,color:C.text,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{from}</span>
                     <span style={{flex:1,minWidth:0,fontSize:ncType.meta,color:C.muted,fontFamily:NC_FONT_STACK,...(msg.aiSummary?{whiteSpace:"normal",wordBreak:"break-word"}:{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"})}}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
                     <span style={{fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{date}</span>
                   </a>
@@ -2617,11 +2618,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
               return (
                 <button key={s.id} onClick={onOpenShailos}
-                  style={{ width:"100%",textAlign:"left",display:"grid",gridTemplateColumns:"16px minmax(0,1fr)",gap:8,padding:"4px 12px 4px 0",border:"none",background:"transparent",color:C.text,cursor:"pointer",alignItems:"start",borderTop:`1px solid ${C.divider}` }}>
-                  <span style={{width:8,height:8,borderRadius:99,background:GOLD,flexShrink:0,marginTop:4}} />
+                  style={{ width:"100%",textAlign:"left",display:"grid",gridTemplateColumns:"16px minmax(0,1fr)",gap:8,padding: dense?"1px 12px 1px 0":"4px 12px 4px 0",border:"none",background:"transparent",color:C.text,cursor:"pointer",alignItems:"start",borderTop:`1px solid ${C.divider}` }}>
+                  <span style={{width: dense?6:8,height: dense?6:8,borderRadius:99,background:GOLD,flexShrink:0,marginTop: dense?3:4}} />
                   <span>
-                    <span style={{display:"block",fontSize:ncType.body,fontWeight:500,lineHeight:1.25,color:C.text,whiteSpace:"normal",wordBreak:"break-word"}}>{text}</span>
-                    <span style={{fontSize:ncType.meta,color:GOLD,fontWeight:500}}>{isGetBack?"waiting to reply":"pending answer"}</span>
+                    <span style={{display:"block",fontSize: dense?ncType.meta:ncType.body,fontWeight:500,lineHeight: dense?1.12:1.25,color:C.text,whiteSpace:"normal",wordBreak:"break-word"}}>{text}</span>
+                    {!dense && <span style={{fontSize:ncType.meta,color:GOLD,fontWeight:500}}>{isGetBack?"waiting to reply":"pending answer"}</span>}
                   </span>
                 </button>
               );
@@ -2640,8 +2641,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           >
             {/* Real height so the phone surface's flex:1 activity feed (texts + calls) gets
                 space — a plain block wrapper collapsed it to zero, so calls never showed. */}
-            <div style={{ padding: "4px 12px 10px", borderTop: `1px solid ${C.divider}`, height: 380, boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
-              <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
+            <div style={{ padding: dense?"2px 12px 8px":"4px 12px 10px", borderTop: `1px solid ${C.divider}`, height: 380, boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
+              <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact dense={dense} onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </MobileSection>
 
