@@ -951,7 +951,7 @@ const AI_JOB_REGISTRY = {
     output: "json",
     shape: "object",
     genConfig: { temperature: 0.1, maxOutputTokens: 1400 },
-    schema: '{"ranking":[{"id":"the item id, copied exactly","score":"0-100 urgency, higher = needs attention sooner"}]}',
+    schema: '{"ranking":[{"id":"item id copied exactly","score":"0-100 urgency","label":"terse 3-7 word restatement, no trailing punctuation","reason":"1-3 word priority tag e.g. deadline today / awaiting reply / payment due / routine"}]}',
     buildPrompt(input = {}) {
       const items = ensureArray(input.items || [], "items").slice(0, 60).map(it => ({
         id: cleanString(it?.id, 120),
@@ -966,6 +966,8 @@ const AI_JOB_REGISTRY = {
         "Weigh real consequence, not the source type. An email with a clear ask, a payment due, or a question awaiting reply can outrank a routine task. A newsletter, notification, or no-reply blast scores low. A meeting happening now or within the hour scores high; a routine recurring event scores low unless imminent.",
         "Shailos awaiting an answer are real obligations — weigh by how long they have waited and their consequence.",
         "Score EVERY id you are given, exactly once, and copy each id verbatim. Do not invent ids or add commentary.",
+        "Also write 'label': a terse 3-7 word restatement of what the item is — no fluff, no trailing punctuation. For an email, lead with what it actually wants.",
+        "Also write 'reason': a 1-3 word tag for why it ranks where it does (e.g. 'deadline today', 'awaiting reply', 'payment due', 'happening now', 'routine', 'fyi').",
         `Current time: ${cleanString(input.currentTime, 80)}`,
         `Items:\n${jsonBlock(items)}`,
         responseJsonInstruction("object", this.schema),
@@ -977,6 +979,8 @@ const AI_JOB_REGISTRY = {
         ranking: ensureArray(o.ranking || [], "ranking").map(r => ({
           id: cleanString(r?.id, 120),
           score: Math.max(0, Math.min(100, Math.round(Number(r?.score)) || 0)),
+          label: cleanString(r?.label, 80),
+          reason: cleanString(r?.reason, 28),
         })).filter(r => r.id),
       };
     },

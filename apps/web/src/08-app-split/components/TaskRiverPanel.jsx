@@ -35,6 +35,8 @@ function gmailHeader(msg, name) {
   return (msg?.payload?.headers || []).find(h => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
 }
 function fmtSender(raw) { const m = (raw || '').match(/^"?([^"<]+?)"?\s*(?:<[^>]+>)?$/); return m ? m[1].trim() : (raw || '').split('@')[0]; }
+// Terse fallback line (no ellipsis — kept short enough to fit).
+function terse(t) { t = (t || '').replace(/\s+/g, ' ').trim(); if (t.length <= 48) return t; const cut = t.slice(0, 48); const sp = cut.lastIndexOf(' '); return sp > 24 ? cut.slice(0, sp) : cut; }
 
 // Lightweight "task analysis" so emails earn their place in the priority stream instead of
 // sinking to the bottom: real asks/deadlines/money rise; bulk/no-reply noise sinks.
@@ -73,7 +75,7 @@ function buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, n
     items.push({
       id: t.id, type: 'task', icon: '◆',
       text: (t.ncSummary || t.text || 'Untitled').trim(),
-      meta: pri?.label || '',
+      meta: '', // manual priority label hidden — the river auto-prioritizes
       color: pri?.color || '#8FB7C9',
       score: (t.pinned ? 100 : 0) + 35 + norm(pri?.weight) * 55,
       pinned: !!t.pinned, raw: t,
@@ -101,7 +103,7 @@ function buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, n
     const when = e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'All day';
     items.push({
       id: 'cal_' + (e.id || startMs), type: 'calendar', icon: '◷',
-      text: (e.summary || '(untitled event)').trim(), meta: inProgress ? 'now' : when,
+      text: (e.summary || '(untitled event)').trim(), meta: when,
       color: COL_CAL, score: scoreCalendar(startMs, endMs, !!e.start?.dateTime, nowMs), raw: e,
     });
   });
@@ -144,7 +146,7 @@ export function TaskRiverPanel({
   // Each item is scored 0-100 by the river_rank AI job (deadlines, asks, money, sender,
   // event proximity). The deterministic score from buildItems is the instant fallback and
   // the safety net if the gateway is slow/down, so the river is never broken or blank.
-  const [aiScores, setAiScores] = useState({});
+  const [aiMeta, setAiMeta] = useState({}); // id -> { score, label, reason }
   const [aiState, setAiState] = useState('idle'); // idle | ranking | ok | error
   const rankInFlight = useRef(false);
   const lastRankKeyRef = useRef('');
@@ -153,7 +155,7 @@ export function TaskRiverPanel({
   useEffect(() => {
     if (!items.length) { setAiState('idle'); return; }
     if (rankInFlight.current) return;
-    if (lastRankKeyRef.current === rankKey && Object.keys(aiScores).length) { setAiState('ok'); return; }
+    if (lastRankKeyRef.current === rankKey && Object.keys(aiMeta).length) { setAiState('ok'); return; }
     rankInFlight.current = true;
     setAiState('ranking');
     const payload = items.map(i => ({ id: i.id, type: i.type, text: (i.text || '').slice(0, 200), meta: i.meta || '' }));
@@ -161,18 +163,22 @@ export function TaskRiverPanel({
       .then(job => {
         const ranking = job?.output?.ranking;
         if (Array.isArray(ranking) && ranking.length) {
-          const map = {}; ranking.forEach(r => { if (r && r.id != null) map[r.id] = r.score; });
-          setAiScores(map); lastRankKeyRef.current = rankKey; setAiState('ok');
+          const map = {}; ranking.forEach(r => { if (r && r.id != null) map[r.id] = { score: r.score, label: r.label, reason: r.reason }; });
+          setAiMeta(map); lastRankKeyRef.current = rankKey; setAiState('ok');
         } else { setAiState('error'); }
       })
       .catch(() => setAiState('error'))
       .finally(() => { rankInFlight.current = false; });
   }, [rankKey, aiOpts]); // eslint-disable-line react-hooks/exhaustive-deps
+  // attach AI score (fallback to heuristic), terse line text, and a short reason tag
 
   // AI score overrides the deterministic fallback once it arrives.
   const scoredItems = useMemo(
-    () => items.map(i => ({ ...i, score: aiScores[i.id] != null ? aiScores[i.id] : i.score })),
-    [items, aiScores]
+    () => items.map(i => {
+      const m = aiMeta[i.id];
+      return { ...i, score: m && m.score != null ? m.score : i.score, line: (m && m.label) || terse(i.text), reason: (m && m.reason) || '' };
+    }),
+    [items, aiMeta]
   );
 
   const [order, setOrder] = useState(readOrder);
@@ -270,10 +276,11 @@ export function TaskRiverPanel({
                     background: isDrag ? rgba(it.color, 0.12) : 'transparent', transition: 'background .12s' }}>
                   <span style={{ width: 14, textAlign: 'center', color: rgba(it.color, 0.9), fontSize: 11, flexShrink: 0 }}>{it.icon}</span>
                   <span style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 7, overflow: 'hidden' }}>
-                    <span style={{ fontSize: 13, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {it.pinned && <span style={{ color: it.color, marginRight: 4 }}>★</span>}{it.text}
+                    {it.meta && <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: 'nowrap' }}>{it.meta}</span>}
+                    <span style={{ fontSize: 13, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', minWidth: 0 }}>
+                      {it.pinned && <span style={{ color: it.color, marginRight: 4 }}>★</span>}{it.line}
                     </span>
-                    {it.meta && <span style={{ fontSize: 10.5, color: C.faint, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: 'nowrap' }}>{it.meta}</span>}
+                    {it.reason && <span style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK, fontStyle: 'italic', flexShrink: 0, whiteSpace: 'nowrap', marginLeft: 'auto', paddingLeft: 6 }}>{it.reason}</span>}
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 0 }} onClick={e => e.stopPropagation()}>
                     <button onClick={() => move(it.id, -1)} disabled={idx === 0} title="Up" style={mini(C, idx === 0)}>▲</button>
