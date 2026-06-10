@@ -78,6 +78,7 @@ function buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, n
       meta: '', // manual priority label hidden — the river auto-prioritizes
       color: pri?.color || '#8FB7C9',
       score: (t.pinned ? 100 : 0) + 35 + norm(pri?.weight) * 55,
+      dreason: t.pinned ? 'pinned' : '',
       pinned: !!t.pinned, raw: t,
     });
   });
@@ -89,7 +90,7 @@ function buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, n
       id: s.id, type: 'shaila', icon: '?',
       text: (s.synopsis || s.text || s.content || 'Open shaila').trim(),
       meta: getBack ? 'waiting to reply' : 'pending answer',
-      color: COL_SHAILA, score: getBack ? 52 : 72, raw: s,
+      color: COL_SHAILA, score: getBack ? 52 : 72, dreason: getBack ? 'follow up' : 'awaiting', raw: s,
     });
   });
 
@@ -104,17 +105,20 @@ function buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, n
     items.push({
       id: 'cal_' + (e.id || startMs), type: 'calendar', icon: '◷',
       text: (e.summary || '(untitled event)').trim(), meta: when,
-      color: COL_CAL, score: scoreCalendar(startMs, endMs, !!e.start?.dateTime, nowMs), raw: e,
+      color: COL_CAL, score: scoreCalendar(startMs, endMs, !!e.start?.dateTime, nowMs), dreason: inProgress ? 'in progress' : 'upcoming', raw: e,
     });
   });
 
   (gmailMessages || []).slice(0, 12).forEach((m, i) => {
     if (!m) return;
     const subj = gmailHeader(m, 'Subject') || '(no subject)';
+    const from = gmailHeader(m, 'From') || '';
+    const mt = `${m.aiSummary || ''} ${subj} ${m.snippet || ''}`;
+    const dreason = (RE_BULK.test(from) || RE_BULK.test(subj)) ? 'fyi' : RE_MONEY.test(mt) ? 'payment' : (RE_ACTION.test(mt) || /\?/.test(subj)) ? 'needs reply' : '';
     items.push({
       id: 'mail_' + (m.id || i), type: 'mail', icon: '✉',
-      text: (m.aiSummary || subj).trim(), meta: fmtSender(gmailHeader(m, 'From')),
-      color: COL_MAIL, score: scoreEmail(m, i), raw: m,
+      text: (m.aiSummary || subj).trim(), meta: fmtSender(from),
+      color: COL_MAIL, score: scoreEmail(m, i), dreason, raw: m,
     });
   });
 
@@ -158,17 +162,27 @@ export function TaskRiverPanel({
     if (lastRankKeyRef.current === rankKey && Object.keys(aiMeta).length) { setAiState('ok'); return; }
     rankInFlight.current = true;
     setAiState('ranking');
+    let settled = false;
+    const settle = (state, meta) => {
+      if (settled) return; settled = true; rankInFlight.current = false;
+      if (meta) { setAiMeta(meta); lastRankKeyRef.current = rankKey; }
+      setAiState(state);
+    };
+    // Watchdog: the river always falls back to its own order; never claim "AI prioritizing"
+    // longer than this if the gateway is slow/unreachable.
+    const watchdog = setTimeout(() => settle('error'), 16000);
     const payload = items.map(i => ({ id: i.id, type: i.type, text: (i.text || '').slice(0, 200), meta: i.meta || '' }));
     runAIJob('dashboard.river_rank.v1', { items: payload, currentTime: now.toLocaleString() }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 1400 } })
       .then(job => {
         const ranking = job?.output?.ranking;
         if (Array.isArray(ranking) && ranking.length) {
           const map = {}; ranking.forEach(r => { if (r && r.id != null) map[r.id] = { score: r.score, label: r.label, reason: r.reason }; });
-          setAiMeta(map); lastRankKeyRef.current = rankKey; setAiState('ok');
-        } else { setAiState('error'); }
+          settle('ok', map);
+        } else { settle('error'); }
       })
-      .catch(() => setAiState('error'))
-      .finally(() => { rankInFlight.current = false; });
+      .catch(() => settle('error'))
+      .finally(() => clearTimeout(watchdog));
+    return () => clearTimeout(watchdog);
   }, [rankKey, aiOpts]); // eslint-disable-line react-hooks/exhaustive-deps
   // attach AI score (fallback to heuristic), terse line text, and a short reason tag
 
@@ -176,7 +190,7 @@ export function TaskRiverPanel({
   const scoredItems = useMemo(
     () => items.map(i => {
       const m = aiMeta[i.id];
-      return { ...i, score: m && m.score != null ? m.score : i.score, line: (m && m.label) || terse(i.text), reason: (m && m.reason) || '' };
+      return { ...i, score: m && m.score != null ? m.score : i.score, line: (m && m.label) || terse(i.text), reason: (m && m.reason) || i.dreason || '' };
     }),
     [items, aiMeta]
   );

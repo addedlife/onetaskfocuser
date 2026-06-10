@@ -1833,6 +1833,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 6px 5px 10px", background: hexToRgba(C.accent, 0.055) || C.bgSoft, borderTop: `1px solid ${C.divider}` }}>
           <span style={{ display: "flex", color: C.accent, flexShrink: 0 }}>{suiteIcon("bolt", 15)}</span>
           <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.3, wordBreak: "break-word" }}>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: C.accent, marginRight: 6 }}>{chiefRefreshNonce > 0 ? "Re-suggested:" : "Suggested now:"}</span>
             {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
           </span>
           <button type="button"
