@@ -921,6 +921,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       const handleExpired = () => {
         if (expiredHandled) return;
         expiredHandled = true;
+        // Clearing the token re-runs this effect, whose cleanup sets cancelled=true — so the
+        // Promise.allSettled().finally() below will NOT reset googleLoading (it's guarded by
+        // !cancelled). Reset it here, or the spinner sticks forever and the reconnect button
+        // (gated on !googleLoading) never appears → "stuck loading, never prompts" on expiry.
+        setGoogleLoading(false);
         clearStoredGoogleBrowserToken();
         requestSilentGoogleAccessToken(300);
         setGoogleToken(null);

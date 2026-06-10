@@ -801,6 +801,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // more rows on screen — Gmail-style). Persisted.
   const [mobileDensity, setMobileDensity] = useState(() => { try { return localStorage.getItem("nc_mobile_density") || "compact"; } catch { return "compact"; } });
   const toggleMobileDensity = () => setMobileDensity(prev => { const next = prev === "compact" ? "comfortable" : "compact"; try { localStorage.setItem("nc_mobile_density", next); } catch {} return next; });
+  // Hoisted so EVERY layout (full panel, boxes, accordion) can honor compact density — not
+  // just the boxes view. "compact" = aggressively tight rows; "comfortable" = relaxed.
+  const dense = mobileDensity === "compact";
   const [phoneActivitySummary, setPhoneActivitySummary] = useState({ online: false, status: "DeskPhone offline", unreadTexts: 0, missedCalls: 0, voicemailCount: 0, texts: [], calls: [] });
   const phoneActivitySigRef = useRef("");
   const [phoneStatusSummary, setPhoneStatusSummary] = useState({ online: false, tone: "offline", label: "DeskPhone offline", voicemailCount: 0 });
@@ -2168,8 +2171,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
     const cardStyle = { minWidth: 0 }; // grid handles all sizing in both orientations
     const emptyMsg = txt => <div style={{ padding:"12px 14px", fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{txt}</div>;
-    // Density: compact keeps readable text and saves space with row padding/line-height.
-    const dense = mobileDensity === "compact";
+    // Density (compact vs comfortable) is hoisted to the component top as `dense`.
     // Expanded = comfortable. Compact = roughly twice the density: minimal padding, tight
     // line-height, and one step smaller type, so a card fits about double the rows.
     const padY = dense ? 1 : 4;
@@ -2794,11 +2796,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const actionsOpen = openTaskActionsId === t.id;
                 const displayText = nerveDisplaySummary(t, "Untitled task");
                 return (
-                  <div key={t.id} data-nc-task-row="true" className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? "16px minmax(0,1fr) 40px" : "16px minmax(0,1fr)", alignItems: "start", padding: "7px 16px 7px 0", gap:8, minHeight: 34 }}>
+                  <div key={t.id} data-nc-task-row="true" className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? "16px minmax(0,1fr) 40px" : "16px minmax(0,1fr)", alignItems: dense && !touchLayout ? "center" : "start", padding: dense ? "1px 16px 1px 0" : "7px 16px 7px 0", gap: dense?6:8, minHeight: dense ? 16 : 34 }}>
                     {/* Priority dot */}
-                    <span style={{ width: 8, height: 8, borderRadius: 99, background: priColor, flexShrink: 0, marginTop: 5 }} />
+                    <span style={{ width: dense?6:8, height: dense?6:8, borderRadius: 99, background: priColor, flexShrink: 0, marginLeft: dense?5:0, marginTop: dense ? 0 : 5, alignSelf: dense && !touchLayout ? "center" : "flex-start" }} />
                     {/* Text — click to edit inline */}
-                    <div style={{ flex: 1, minWidth: 0, paddingTop: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0, paddingTop: dense?0:1 }}>
                       {isEditing ? (
                         <textarea value={editText} autoFocus rows={2}
                           onChange={e => setEditText(e.target.value)}
@@ -2808,7 +2810,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       ) : (
                         <span onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }}
                           title="Click to edit"
-                          style={{ display: "block", fontSize: ncType.body, fontWeight: "var(--nc-font-weight-normal, 400)", lineHeight: ncType.line, color: C.text, wordBreak: "break-word", cursor: "text" }}>{displayText}</span>
+                          style={{ display: "block", fontSize: dense ? ncType.meta : ncType.body, fontWeight: "var(--nc-font-weight-normal, 400)", lineHeight: dense ? 1.12 : ncType.line, color: C.text, wordBreak: "break-word", cursor: "text" }}>{displayText}</span>
                       )}
                     </div>
                     {/* Checkmark — plain icon, no pill */}
@@ -2869,11 +2871,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const chipBg = isGetBack ? "rgba(201,146,60,0.22)" : "rgba(201,146,60,0.10)";
                 return (
                   <button key={s.id} onClick={onOpenShailos}
-                    style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "16px minmax(0,1fr) auto", gap:8, padding: "8px 16px 8px 0", border: "none", background: GOLD_BG, color: C.text, cursor: "pointer", alignItems: "start", minHeight: 38 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 99, background: GOLD, flexShrink: 0, marginTop: 5 }} />
-                    <span style={{ paddingLeft: 5, paddingTop: 1 }}>
-                      <span style={{ display: "block", fontSize: ncType.body, fontWeight: "var(--nc-font-weight-strong, 500)", lineHeight: ncType.line, color: C.text, wordBreak: "break-word" }}>{text}</span>
-                      <span style={{ display: "block", fontSize: ncType.label, color: GOLD, fontWeight: 500, marginTop: 1, lineHeight: 1.15 }}>{suiteIcon(isGetBack ? "schedule" : "search", 12)} {isGetBack ? "waiting to reply" : "pending answer"}</span>
+                    style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "16px minmax(0,1fr) auto", gap:8, padding: dense ? "2px 16px 2px 0" : "8px 16px 8px 0", border: "none", background: GOLD_BG, color: C.text, cursor: "pointer", alignItems: "start", minHeight: dense ? 18 : 38 }}>
+                    <span style={{ width: dense?6:8, height: dense?6:8, borderRadius: 99, background: GOLD, flexShrink: 0, marginLeft: dense?5:0, marginTop: dense?3:5 }} />
+                    <span style={{ paddingLeft: 5, paddingTop: dense?0:1 }}>
+                      <span style={{ display: "block", fontSize: dense ? ncType.meta : ncType.body, fontWeight: "var(--nc-font-weight-strong, 500)", lineHeight: dense ? 1.12 : ncType.line, color: C.text, wordBreak: "break-word" }}>{text}</span>
+                      {!dense && <span style={{ display: "block", fontSize: ncType.label, color: GOLD, fontWeight: 500, marginTop: 1, lineHeight: 1.15 }}>{suiteIcon(isGetBack ? "schedule" : "search", 12)} {isGetBack ? "waiting to reply" : "pending answer"}</span>}
                     </span>
                     <span style={{ fontSize: ncType.small, fontWeight: 500, color: GOLD, background: chipBg, border: `1px solid ${GOLD_BRD}`, borderRadius: 999, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 1 }}>{chipLabel}</span>
                   </button>
@@ -2926,8 +2928,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <button onClick={() => { setActionCategoryId("phone"); setActionsOpen(true); }} title="Phone actions" style={ncSmallIconButton()}>{suiteIcon("apps", 14)}</button>
               </div>
             </div>
-            <div style={{ overflow: "hidden", flex: "1 1 auto", minHeight: 0, padding: "10px 14px 14px", display: "flex", flexDirection: "column" }}>
-              <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
+            <div style={{ overflow: "hidden", flex: "1 1 auto", minHeight: 0, padding: dense ? "3px 12px 8px" : "10px 14px 14px", display: "flex", flexDirection: "column" }}>
+              <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact dense={dense} onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </section>
         </div>
@@ -3035,6 +3037,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   ))}
                 </div>
                 <span style={{ width: 1, height: 14, background: C.divider, flexShrink: 0 }} />
+                {/* Density: compact (aggressively tight rows) vs comfortable */}
+                <button onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density"
+                  style={gvIconButton({ width: 28, height: 24, borderRadius: 4, background: dense ? softBorder(C.divider, 0.55) : "transparent", color: dense ? C.muted : C.faint }, C)}>{suiteIcon(dense ? "density_small" : "density_medium", 15)}</button>
+                <span style={{ width: 1, height: 14, background: C.divider, flexShrink: 0 }} />
                 {/* View: Full / Focus (only meaningful in full panel mode) */}
                 {desktopLayout === "full" && [{ id: "full", lbl: "Full" }, { id: "focus", lbl: "Focus" }].map(({ id, lbl }) => (
                   <button key={id}
@@ -3092,8 +3098,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
               {/* Error banner */}
               {googleError && (
-                <div style={{ ...cardWrap, borderColor: "T.warning", flexDirection: "row", alignItems: "center", padding: "0 14px", gap: 10 }}>
-                  <span style={{ fontSize: NC_TYPE.meta, color: "T.warning", fontFamily: NC_FONT_STACK, flex: 1 }}>{googleError}</span>
+                <div style={{ ...cardWrap, borderColor: T.warning, flexDirection: "row", alignItems: "center", padding: "0 14px", gap: 10 }}>
+                  <span style={{ fontSize: NC_TYPE.meta, color: T.warning, fontFamily: NC_FONT_STACK, flex: 1 }}>{googleError}</span>
                   <button onClick={onConnectGoogle} style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: 500, color: accentBlue, background: "none", border: `1px solid ${accentBlue}`, borderRadius: 8, padding: "5px 12px", cursor: "pointer", flexShrink: 0 }}>Retry</button>
                   <button onClick={onDisconnectGoogle} style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: T.tFaint, background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: 0 }}>✕</button>
                 </div>
@@ -3151,7 +3157,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       const evt = row.evt;
                       const now = row.now;
                       const lifted = row.special || row.now;
-                      const rowStyle = { position: "relative", overflow: "hidden", display: "flex", gap: isStacked ? 7 : 10, alignItems: "flex-start", padding: isStacked ? "5px 2px" : "8px 4px", textDecoration: "none", color: "inherit", borderRadius: 4, background: lifted ? softBg(accentBlue, row.now ? 0.10 : 0.055) : "transparent" };
+                      const rowStyle = { position: "relative", overflow: "hidden", display: "flex", gap: isStacked ? 7 : 10, alignItems: "flex-start", padding: dense ? "1px 4px" : (isStacked ? "5px 2px" : "8px 4px"), textDecoration: "none", color: "inherit", borderRadius: 4, background: lifted ? softBg(accentBlue, row.now ? 0.10 : 0.055) : "transparent" };
                       const inner = (
                         <>
                           <span style={{ position: "relative", zIndex: 2, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: now ? accentBlue : T.tFaint, fontWeight: lifted ? 600 : 400, flexShrink: 0, width: isStacked ? 54 : 66, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
@@ -3395,7 +3401,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       return (
                         <React.Fragment key={msg.id || i}>
                         <div className="nc-action-row"
-                          style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: isStacked ? "5px 2px" : "8px 4px", borderRadius: 4, background: selected ? (T.bgW || 'rgba(255,255,255,0.05)') : "transparent" }}
+                          style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: dense ? "1px 4px" : (isStacked ? "5px 2px" : "8px 4px"), borderRadius: 4, background: selected ? (T.bgW || 'rgba(255,255,255,0.05)') : "transparent" }}
                           onMouseEnter={e => {
                             e.currentTarget.style.background = T.bgW || 'rgba(255,255,255,0.05)';
                             clearTimeout(hoverTimerRef.current);
