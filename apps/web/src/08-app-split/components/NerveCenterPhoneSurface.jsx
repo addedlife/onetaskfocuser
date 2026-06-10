@@ -213,7 +213,7 @@ function PhoneMmsImage({ attachment, C }) {
   </div>;
 }
 
-function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, onRecordConversation, onRecordCall, onMoreHistory }) {
+function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, dense = false, onRecordConversation, onRecordCall, onMoreHistory }) {
   // Phone connection is now exactly two paths: direct DeskPhone on a PC, cloud relay on a phone.
   const isMobile = useMemo(() => isMobilePhoneDevice(), []);
   // Direct DeskPhone API base (desktop only): origin when served from DeskPhone:8765, else localhost.
@@ -704,16 +704,16 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   }, C);
   const phoneRowStyle = {
     display: "grid",
-    gridTemplateColumns: "20px minmax(0,1fr) 30px",
-    gap: "4px 7px",
+    gridTemplateColumns: dense ? "16px minmax(0,1fr) 26px" : "20px minmax(0,1fr) 30px",
+    gap: dense ? "1px 5px" : "4px 7px",
     alignItems: "start",
-    padding: compact ? "4px 2px" : "6px 4px",
-    borderRadius: 8,
-    minHeight: compact ? 30 : 36,
+    padding: dense ? "1px 2px" : (compact ? "4px 2px" : "6px 4px"),
+    borderRadius: dense ? 5 : 8,
+    minHeight: dense ? 18 : (compact ? 30 : 36),
   };
   const phoneLeadIconStyle = (color, background = "transparent") => ({
-    width: 18,
-    height: 18,
+    width: dense ? 15 : 18,
+    height: dense ? 15 : 18,
     borderRadius: 99,
     background,
     display: "inline-flex",
@@ -944,10 +944,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: compact ? 6 : 12, minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden", color: C.text }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: dense ? 2 : (compact ? 6 : 12), minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden", color: C.text }}>
 
       {(isIncoming || isOnCall || vmCount > 0) && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: compact ? 28 : 36, padding: "0 2px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: dense ? 20 : (compact ? 28 : 36), padding: "0 2px" }}>
           <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: isIncoming ? C.success : isOnCall ? C.warning : C.danger }} />
           <span style={{ flex: 1, minWidth: 0, fontSize: compact ? 13 : 14, fontWeight: 500, color: isIncoming ? C.success : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {callerDisplay && (isIncoming || isOnCall) ? `${isIncoming ? "Incoming" : "On call"} · ${callerDisplay}` : `${vmCount} voicemail${vmCount === 1 ? "" : "s"}`}

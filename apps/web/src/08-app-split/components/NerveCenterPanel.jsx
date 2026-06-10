@@ -630,7 +630,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
 // stickyHeader=true: the icon+title+summary bar is always visible (not collapsed on scroll).
 // Used for desktop boxes view where cards are tall enough that collapsing the header loses
 // the per-category summary the user always wants to see.
-function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, stickyHeader = false }) {
+function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, stickyHeader = false, dense = false }) {
   const [scrolled, setScrolled] = useState(false);
   const [fade, setFade] = useState(false); // more content below → show a bottom fade so the
   const scrollRef = useRef(null);          // last (partial) row dissolves instead of hard-cutting
@@ -671,11 +671,12 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
           )}
         </button>
       ) : (
-        // Collapsing header: hides when the card content scrolls (mobile default)
+        // Collapsing header: hides when the card content scrolls (mobile default).
+        // dense = aggressively compact: a thin single-line header that reclaims vertical space.
         <button onClick={onOpen} title={title} aria-label={title}
-          style={{ display: "flex", alignItems: "flex-start", gap: 7, width: "100%", textAlign: "left", border: "none", background: "transparent", padding: headerCollapsed ? "0 10px" : "7px 11px 6px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0, maxHeight: headerCollapsed ? 0 : 56, opacity: headerCollapsed ? 0 : 1, overflow: "hidden", pointerEvents: headerCollapsed ? "none" : "auto", transition: "max-height 0.2s ease, opacity 0.15s ease, padding 0.2s ease" }}>
-          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 14)}</span>
-          <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.small, fontWeight: 400, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "italic" }}>{summary}</span>
+          style={{ display: "flex", alignItems: "center", gap: dense ? 5 : 7, width: "100%", textAlign: "left", border: "none", background: "transparent", padding: headerCollapsed ? "0 10px" : (dense ? "2px 9px" : "7px 11px 6px"), cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0, maxHeight: headerCollapsed ? 0 : (dense ? 22 : 56), opacity: headerCollapsed ? 0 : 1, overflow: "hidden", pointerEvents: headerCollapsed ? "none" : "auto", transition: "max-height 0.2s ease, opacity 0.15s ease, padding 0.2s ease" }}>
+          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: dense ? 16 : 22, height: dense ? 16 : 22, borderRadius: dense ? 5 : 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, dense ? 11 : 14)}</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.small, fontWeight: 400, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "italic" }}>{summary}</span>
         </button>
       )}
       <div ref={scrollRef} onScroll={measure}
@@ -2220,12 +2221,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
         {/* >= 1000 px: 5 columns side by side, each full height.
             <  1000 px: 5 rows stacked, each 1/5 height — all cards always visible. */}
-        <div style={{ flex:1, minHeight:0, gap:5, display:"grid", overflow:"hidden",
+        <div style={{ flex:1, minHeight:0, gap: dense?3:5, display:"grid", overflow:"hidden",
           gridTemplateColumns: boxesFiveCol ? "repeat(5, minmax(0,1fr))" : "1fr",
           gridTemplateRows:    boxesFiveCol ? "1fr" : "repeat(5, minmax(0,1fr))" }}>
 
           {/* Mail */}
-          <MobileBox {...boxCtx} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail")} style={cardStyle}
+          <MobileBox {...boxCtx} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail")} style={cardStyle} dense={dense}
             onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}>
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : gmailMessages.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
@@ -2235,7 +2236,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const rk = `mail-${msg.id||i}`;
               const exp = expandedRows.has(rk);
               return (
-                <div key={msg.id||i} onClick={()=>toggleRow(rk)} style={{ padding:`${padY}px 12px`, cursor:"pointer" }}>
+                <div key={msg.id||i} onClick={()=>toggleRow(rk)} style={{ padding:`${padY}px ${dense?10:12}px`, cursor:"pointer" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:6, marginBottom:dense?0:2 }}>
                     <span style={{ fontSize:bodyF, fontWeight:600, color:C.text, fontFamily:NC_FONT_STACK, wordBreak:"break-word" }}>{from}</span>
                     <span style={{ display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
@@ -2251,17 +2252,17 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Phone */}
-          <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} summary={cardSummary("Phone")} style={cardStyle}
+          <MobileBox {...boxCtx} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} summary={cardSummary("Phone")} style={cardStyle} dense={dense}
             statusDot={phoneDotColor} onOpen={onOpenPhone}>
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
-            <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0, padding:"4px 10px 8px", boxSizing:"border-box" }}>
-              <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
+            <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0, padding: dense ? "1px 8px 4px" : "4px 10px 8px", boxSizing:"border-box" }}>
+              <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact dense={dense} onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </MobileBox>
 
           {/* Tasks */}
-          <MobileBox {...boxCtx} icon="task_alt" title="Tasks" accentColor={C.accent} summary={cardSummary("Tasks")} style={cardStyle}
+          <MobileBox {...boxCtx} icon="task_alt" title="Tasks" accentColor={C.accent} summary={cardSummary("Tasks")} style={cardStyle} dense={dense}
             onOpen={onOpenQueue}>
             {taskComposerOpen && (
               <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.divider}` }}>
@@ -2281,8 +2282,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const priColor = pri?.color || T.primary || "#7EB0DE";
               const isEditing = editingTaskId === t.id;
               return (
-                <div key={t.id} style={{ display:"grid", gridTemplateColumns:"16px minmax(0,1fr) auto", alignItems:"start", padding:`${padY}px 12px ${padY}px 0`, gap:8, minHeight:rowMinH }}>
-                  <span style={{ width:8, height:8, borderRadius:99, background:priColor, flexShrink:0, marginTop:4 }} />
+                <div key={t.id} style={{ display:"grid", gridTemplateColumns: dense ? "12px minmax(0,1fr) auto" : "16px minmax(0,1fr) auto", alignItems: dense?"center":"start", padding:`${padY}px 10px ${padY}px 0`, gap: dense?6:8, minHeight:rowMinH }}>
+                  <span style={{ width: dense?6:8, height: dense?6:8, borderRadius:99, background:priColor, flexShrink:0, marginLeft: dense?6:0, marginTop: dense?0:4, alignSelf: dense?"center":"start" }} />
                   {isEditing ? (
                     <textarea value={editText} autoFocus rows={2}
                       onChange={e => setEditText(e.target.value)}
@@ -2290,12 +2291,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       onBlur={() => { if(editText.trim()&&editText!==t.text)onEditTask?.(t.id,editText.trim());setEditingTaskId(null); }}
                       style={{ width:"100%", boxSizing:"border-box", borderRadius:6, border:`1px solid ${priColor}`, background:C.bgSoft, color:C.text, padding:"6px 8px", fontSize:ncType.body, fontFamily:NC_FONT_STACK, lineHeight:ncType.line, resize:"none", outline:"none" }} />
                   ) : (
-                    <span onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ display:"block", fontSize:bodyF, lineHeight:lineH, color:C.text, wordBreak:"break-word", cursor:"text", paddingTop:1 }}>{nerveDisplaySummary(t,"Untitled task")}</span>
+                    <span onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ display:"block", fontSize:bodyF, lineHeight:lineH, color:C.text, wordBreak:"break-word", cursor:"text", paddingTop: dense?0:1 }}>{nerveDisplaySummary(t,"Untitled task")}</span>
                   )}
                   {!isEditing && (
-                    <div style={{ display:"flex", gap:3 }}>
-                      <button onClick={() => onCompleteTask?.(t.id)} style={gvIconButton({width:30,height:30,color:C.success,background:"transparent"},C)} title="Done">{suiteIcon("check",14)}</button>
-                      <button onClick={() => onDeleteTask?.(t.id)} style={gvIconButton({width:30,height:30,color:C.danger,background:"transparent"},C)} title="Delete">{suiteIcon("close",13)}</button>
+                    <div style={{ display:"flex", gap: dense?1:3 }}>
+                      <button onClick={() => onCompleteTask?.(t.id)} style={gvIconButton({width: dense?22:30, height: dense?22:30, color:C.success, background:"transparent"},C)} title="Done">{suiteIcon("check", dense?13:14)}</button>
+                      <button onClick={() => onDeleteTask?.(t.id)} style={gvIconButton({width: dense?22:30, height: dense?22:30, color:C.danger, background:"transparent"},C)} title="Delete">{suiteIcon("close", dense?12:13)}</button>
                     </div>
                   )}
                 </div>
@@ -2304,7 +2305,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Shailos */}
-          <MobileBox {...boxCtx} icon="rule" title="Shailos" accentColor={GOLD} summary={cardSummary("Shailos")} style={cardStyle}
+          <MobileBox {...boxCtx} icon="rule" title="Shailos" accentColor={GOLD} summary={cardSummary("Shailos")} style={cardStyle} dense={dense}
             onOpen={onOpenShailos}>
             {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : visibleShailos.map(s => {
               const text = nerveDisplaySummary(s,"Open shaila");
@@ -2313,11 +2314,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const exp = expandedRows.has(rk);
               return (
                 <button key={s.id} onClick={()=>toggleRow(rk)}
-                  style={{ width:"100%", textAlign:"left", display:"grid", gridTemplateColumns:"16px minmax(0,1fr)", gap:8, padding:`${padY}px 12px ${padY}px 0`, border:"none", background:"transparent", color:C.text, cursor:"pointer", alignItems:"start" }}>
-                  <span style={{ width:8, height:8, borderRadius:99, background:GOLD, flexShrink:0, marginTop:4 }} />
+                  style={{ width:"100%", textAlign:"left", display:"grid", gridTemplateColumns: dense ? "12px minmax(0,1fr)" : "16px minmax(0,1fr)", gap: dense?6:8, padding:`${padY}px 10px ${padY}px 0`, border:"none", background:"transparent", color:C.text, cursor:"pointer", alignItems:"start" }}>
+                  <span style={{ width: dense?6:8, height: dense?6:8, borderRadius:99, background:GOLD, flexShrink:0, marginLeft: dense?6:0, marginTop: dense?3:4 }} />
                   <span style={{ minWidth:0 }}>
                     <span style={{ display:"block", fontSize:bodyF, fontWeight:500, lineHeight:lineH, color:C.text, whiteSpace:"normal", wordBreak:"break-word" }}>{text}</span>
-                    <span style={{ fontSize:metaF, color:GOLD, fontWeight:500 }}>{isGetBack?"waiting to reply":"pending answer"}</span>
+                    <span style={{ fontSize:metaF, color:GOLD, fontWeight:500, lineHeight: dense?1.05:1.3 }}>{isGetBack?"waiting to reply":"pending answer"}</span>
                   </span>
                 </button>
               );
@@ -2325,7 +2326,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Calendar */}
-          <MobileBox {...boxCtx} icon="calendar_today" title="Calendar" accentColor={C.warning} summary={cardSummary("Calendar")} style={cardStyle}
+          <MobileBox {...boxCtx} icon="calendar_today" title="Calendar" accentColor={C.warning} summary={cardSummary("Calendar")} style={cardStyle} dense={dense}
             onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}>
             {showAddEvent && (
               <div style={{ padding:"10px 12px", borderBottom:`1px solid ${C.divider}` }}>
@@ -2340,8 +2341,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               </div>
             )}
             {!calendarEvents ? emptyMsg("Loading…") : upcomingCal.length === 0 ? emptyMsg("Nothing upcoming.") : upcomingCal.map(row => (
-              <div key={row.evt?.id||row.index} style={{ display:"grid", gridTemplateColumns:"auto minmax(0,1fr)", gap:8, padding:`${padY}px 12px`, alignItems:"start" }}>
-                <span style={{ fontSize:metaF, color:row.now?C.accent:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap", paddingTop:1, fontWeight:row.now?700:400, minWidth:54 }}>
+              <div key={row.evt?.id||row.index} style={{ display:"grid", gridTemplateColumns:"auto minmax(0,1fr)", gap: dense?6:8, padding:`${padY}px ${dense?10:12}px`, alignItems:"start" }}>
+                <span style={{ fontSize:metaF, color:row.now?C.accent:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap", paddingTop: dense?0:1, fontWeight:row.now?700:400, minWidth: dense?44:54 }}>
                   {row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                 </span>
                 <span style={{ fontSize:bodyF, color:row.now||row.special?C.text:C.muted, fontFamily:NC_FONT_STACK, fontWeight:row.now||row.special?600:400, lineHeight:lineH }}>
