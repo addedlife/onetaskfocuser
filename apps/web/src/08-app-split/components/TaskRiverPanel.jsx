@@ -1,10 +1,12 @@
 /**
- * TaskRiverPanel — one calm, auto-prioritized river of everything.
+ * TaskRiverPanel — one calm river of everything, prioritized ONLY by AI.
  *
- * A single tightly-spaced list mixing ALL sources (tasks, shailos, calendar, mail),
- * auto-sorted by urgency. One continuous color bar runs down the left edge, blending
- * smoothly from each item's priority color into the next — a flowing river of priority.
- * Reorder by drag, tap-drag, or ▲▼; "Re-prioritize" drops your manual order.
+ * A single tightly-spaced list mixing all sources (tasks, shailos, calendar, mail).
+ * Ordering, the terse line, and the short reason come exclusively from the river_rank AI
+ * job — there is no heuristic "guessing" of priority or intent (that would fabricate
+ * assessments the data doesn't support). When the AI is unavailable the river is honest:
+ * it lists the items in their plain source order and says "AI unavailable", with no
+ * invented priority or reasons. One continuous color bar runs down the left edge.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanTheme, NC_FONT_STACK } from '../ui-tokens.jsx';
@@ -35,50 +37,20 @@ function gmailHeader(msg, name) {
   return (msg?.payload?.headers || []).find(h => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
 }
 function fmtSender(raw) { const m = (raw || '').match(/^"?([^"<]+?)"?\s*(?:<[^>]+>)?$/); return m ? m[1].trim() : (raw || '').split('@')[0]; }
-// Terse fallback line (no ellipsis — kept short enough to fit).
-function terse(t) { t = (t || '').replace(/\s+/g, ' ').trim(); if (t.length <= 48) return t; const cut = t.slice(0, 48); const sp = cut.lastIndexOf(' '); return sp > 24 ? cut.slice(0, sp) : cut; }
+// Shorten the item's OWN text (authentic — not a generated summary) when no AI label exists.
+function clip(t) { t = (t || '').replace(/\s+/g, ' ').trim(); if (t.length <= 60) return t; const cut = t.slice(0, 60); const sp = cut.lastIndexOf(' '); return sp > 30 ? cut.slice(0, sp) : cut; }
 
-// Lightweight "task analysis" so emails earn their place in the priority stream instead of
-// sinking to the bottom: real asks/deadlines/money rise; bulk/no-reply noise sinks.
-const RE_ACTION = /\b(please|can you|could you|kindly|need(ed)?|review|approve|confirm|reply|respond|sign|complete|submit|pay|due|deadline|overdue|urgent|asap|action required|requested|waiting on|follow.?up|by (today|tomorrow|mon|tue|wed|thu|fri|sat|sun|\d))\b/i;
-const RE_MONEY  = /(\$\s?\d|invoice|payment|past due|balance due|bill|receipt|refund|wire|transfer)/i;
-const RE_BULK   = /(no.?reply|do.?not.?reply|donotreply|notification|newsletter|unsubscribe|mailer|digest|noreply|automated|via )/i;
-function scoreEmail(m, i) {
-  const subj = gmailHeader(m, 'Subject') || '';
-  const from = gmailHeader(m, 'From') || '';
-  const text = `${m.aiSummary || ''} ${subj} ${m.snippet || ''}`;
-  let s = 46;
-  if (RE_BULK.test(from) || RE_BULK.test(subj)) s -= 20;
-  if (RE_ACTION.test(text) || /\?/.test(subj)) s += 22;
-  if (RE_MONEY.test(text)) s += 12;
-  s += Math.max(0, 6 - i); // recency nudge (list is newest-first)
-  return Math.max(22, Math.min(82, s));
-}
-function scoreCalendar(startMs, endMs, hasTime, nowMs) {
-  if (startMs <= nowMs && endMs >= nowMs) return 94;     // happening now
-  if (!hasTime) return 56;                                // all-day today
-  const soonH = Math.max(0, (startMs - nowMs) / 3600000);
-  return Math.max(50, 88 - soonH * 3.5);                  // sooner = higher
-}
-
-// ── build the mixed, scored stream ───────────────────────────────────────────
+// ── collect the items (NO priority/scoring assumptions — that is the AI's job) ──
 function buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, nowMs) {
   const priById = new Map((priorities || []).map(p => [p.id, p]));
-  const weights = (priorities || []).filter(p => !p.deleted).map(p => Number(p.weight) || 0);
-  const maxW = weights.length ? Math.max(...weights) : 1;
-  const norm = (w) => maxW ? (Number(w) || 0) / maxW : 0;   // 0..1
   const items = [];
 
   (tasks || []).forEach(t => {
     if (!t || t.completed || t.deleted || isNerveTaskShailaWork(t)) return;
-    const pri = priById.get(t.priority);
     items.push({
-      id: t.id, type: 'task', icon: '◆',
+      id: t.id, type: 'task',
       text: (t.ncSummary || t.text || 'Untitled').trim(),
-      meta: '', // manual priority label hidden — the river auto-prioritizes
-      color: pri?.color || '#8FB7C9',
-      score: (t.pinned ? 100 : 0) + 35 + norm(pri?.weight) * 55,
-      dreason: t.pinned ? 'pinned' : '',
+      meta: '', color: priById.get(t.priority)?.color || '#8FB7C9',
       pinned: !!t.pinned, raw: t,
     });
   });
@@ -87,10 +59,9 @@ function buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, n
     if (!s || s.deleted || s.completed || s.status === 'answered') return;
     const getBack = s.status === 'get_back' || !!s.isGetBackStep;
     items.push({
-      id: s.id, type: 'shaila', icon: '?',
+      id: s.id, type: 'shaila',
       text: (s.synopsis || s.text || s.content || 'Open shaila').trim(),
-      meta: getBack ? 'waiting to reply' : 'pending answer',
-      color: COL_SHAILA, score: getBack ? 52 : 72, dreason: getBack ? 'follow up' : 'awaiting', raw: s,
+      meta: getBack ? 'waiting to reply' : 'pending answer', color: COL_SHAILA, raw: s,
     });
   });
 
@@ -99,37 +70,34 @@ function buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, n
     const startMs = new Date(e.start?.dateTime || e.start?.date || 0).getTime();
     const endMs = new Date(e.end?.dateTime || e.end?.date || 0).getTime();
     if (endMs && endMs < nowMs) return; // past
-    const soonH = Math.max(0, (startMs - nowMs) / 3600000);
-    const inProgress = startMs <= nowMs && endMs >= nowMs;
     const when = e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'All day';
     items.push({
-      id: 'cal_' + (e.id || startMs), type: 'calendar', icon: '◷',
-      text: (e.summary || '(untitled event)').trim(), meta: when,
-      color: COL_CAL, score: scoreCalendar(startMs, endMs, !!e.start?.dateTime, nowMs), dreason: inProgress ? 'in progress' : 'upcoming', raw: e,
+      id: 'cal_' + (e.id || startMs), type: 'calendar',
+      text: (e.summary || '(untitled event)').trim(), meta: when, color: COL_CAL, raw: e,
     });
   });
 
   (gmailMessages || []).slice(0, 12).forEach((m, i) => {
     if (!m) return;
-    const subj = gmailHeader(m, 'Subject') || '(no subject)';
-    const from = gmailHeader(m, 'From') || '';
-    const mt = `${m.aiSummary || ''} ${subj} ${m.snippet || ''}`;
-    const dreason = (RE_BULK.test(from) || RE_BULK.test(subj)) ? 'fyi' : RE_MONEY.test(mt) ? 'payment' : (RE_ACTION.test(mt) || /\?/.test(subj)) ? 'needs reply' : '';
     items.push({
-      id: 'mail_' + (m.id || i), type: 'mail', icon: '✉',
-      text: (m.aiSummary || subj).trim(), meta: fmtSender(from),
-      color: COL_MAIL, score: scoreEmail(m, i), dreason, raw: m,
+      id: 'mail_' + (m.id || i), type: 'mail',
+      text: (m.aiSummary || gmailHeader(m, 'Subject') || '(no subject)').trim(),
+      meta: fmtSender(gmailHeader(m, 'From')), color: COL_MAIL, raw: m,
     });
   });
 
   return items;
 }
 
-function applyOrder(items, order) {
+// Manual (user) order wins. Otherwise: AI score order when present; else plain source order.
+function applyOrder(items, order, aiMeta) {
   const byId = new Map(items.map(i => [i.id, i]));
   const seen = new Set(); const out = [];
   (order || []).forEach(id => { const it = byId.get(id); if (it) { out.push(it); seen.add(id); } });
-  return [...out, ...items.filter(i => !seen.has(i.id)).sort((a, b) => b.score - a.score)];
+  const rest = items.filter(i => !seen.has(i.id));
+  const hasAi = rest.some(i => aiMeta[i.id] && aiMeta[i.id].score != null);
+  if (hasAi) rest.sort((a, b) => ((aiMeta[b.id]?.score ?? -1) - (aiMeta[a.id]?.score ?? -1)));
+  return [...out, ...rest];
 }
 
 export function TaskRiverPanel({
@@ -146,10 +114,7 @@ export function TaskRiverPanel({
     [tasks, shailos, calendarEvents, gmailMessages, priorities, Math.floor(nowMs / 60000)]
   );
 
-  // ── AI ranking ──────────────────────────────────────────────────────────────
-  // Each item is scored 0-100 by the river_rank AI job (deadlines, asks, money, sender,
-  // event proximity). The deterministic score from buildItems is the instant fallback and
-  // the safety net if the gateway is slow/down, so the river is never broken or blank.
+  // ── AI ranking (the ONLY source of priority, terse line, and reason) ─────────
   const [aiMeta, setAiMeta] = useState({}); // id -> { score, label, reason }
   const [aiState, setAiState] = useState('idle'); // idle | ranking | ok | error
   const rankInFlight = useRef(false);
@@ -168,8 +133,7 @@ export function TaskRiverPanel({
       if (meta) { setAiMeta(meta); lastRankKeyRef.current = rankKey; }
       setAiState(state);
     };
-    // Watchdog: the river always falls back to its own order; never claim "AI prioritizing"
-    // longer than this if the gateway is slow/unreachable.
+    // Watchdog so the status never hangs on "AI prioritizing…" if the gateway is slow/down.
     const watchdog = setTimeout(() => settle('error'), 16000);
     const payload = items.map(i => ({ id: i.id, type: i.type, text: (i.text || '').slice(0, 200), meta: i.meta || '' }));
     runAIJob('dashboard.river_rank.v1', { items: payload, currentTime: now.toLocaleString() }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 1400 } })
@@ -184,42 +148,34 @@ export function TaskRiverPanel({
       .finally(() => clearTimeout(watchdog));
     return () => clearTimeout(watchdog);
   }, [rankKey, aiOpts]); // eslint-disable-line react-hooks/exhaustive-deps
-  // attach AI score (fallback to heuristic), terse line text, and a short reason tag
-
-  // AI score overrides the deterministic fallback once it arrives.
-  const scoredItems = useMemo(
-    () => items.map(i => {
-      const m = aiMeta[i.id];
-      return { ...i, score: m && m.score != null ? m.score : i.score, line: (m && m.label) || terse(i.text), reason: (m && m.reason) || i.dreason || '' };
-    }),
-    [items, aiMeta]
-  );
 
   const [order, setOrder] = useState(readOrder);
-  const ordered = useMemo(() => applyOrder(scoredItems, order), [scoredItems, order]);
-  const manual = (order || []).length > 0;
-  const [dragId, setDragId] = useState(null);
   useEffect(() => { writeOrder(order); }, [order]);
+  const ordered = useMemo(() => applyOrder(items, order, aiMeta), [items, order, aiMeta]);
+  const manual = (order || []).length > 0;
+  const aiOn = aiState === 'ok';
 
-  const ids = () => ordered.map(i => i.id);
-  const move = (id, dir) => {
-    const a = ids(); const i = a.indexOf(id); const j = i + dir;
-    if (i < 0 || j < 0 || j >= a.length) return;
-    [a[i], a[j]] = [a[j], a[i]]; setOrder(a);
-  };
+  // Display values come ONLY from the AI; with no AI we show the item's own (real) text and
+  // no reason — never an invented one.
+  const view = useMemo(() => ordered.map(it => ({
+    ...it,
+    line: (aiMeta[it.id]?.label) || clip(it.text),
+    reason: aiOn ? (aiMeta[it.id]?.reason || '') : '',
+  })), [ordered, aiMeta, aiOn]);
+
+  const [dragId, setDragId] = useState(null);
+  const ids = () => view.map(i => i.id);
   const dropBefore = (drag, target) => {
     if (drag === target) return;
     const a = ids().filter(x => x !== drag); const t = a.indexOf(target);
     if (t < 0) a.push(drag); else a.splice(t, 0, drag); setOrder(a);
   };
   const reprioritize = () => setOrder([]);
-
   const onHandleDown = (id) => (e) => {
     e.preventDefault(); e.stopPropagation(); setDragId(id);
     const mv = (ev) => {
       const pt = ev.touches?.[0] || ev;
-      const el = document.elementFromPoint(pt.clientX, pt.clientY);
-      const row = el?.closest?.('[data-river-row]');
+      const row = document.elementFromPoint(pt.clientX, pt.clientY)?.closest?.('[data-river-row]');
       const over = row?.getAttribute('data-river-row');
       if (over && over !== id) dropBefore(id, over);
     };
@@ -233,16 +189,18 @@ export function TaskRiverPanel({
     window.addEventListener('touchmove', mv, { passive: false });
     window.addEventListener('touchend', up);
   };
+  const act = (it) => {
+    if (it.type === 'task') onCompleteTask?.(it.id);
+    else if (it.type === 'shaila') onOpenShailos?.();
+    else if (it.type === 'mail') window.open('https://mail.google.com/mail/u/0/#inbox/' + (it.raw?.id || ''), '_blank');
+    else if (it.type === 'calendar') window.open('https://calendar.google.com/calendar/r', '_blank');
+  };
 
-  const act = (it) => { if (it.type === 'task') onCompleteTask?.(it.id); else if (it.type === 'shaila') onOpenShailos?.(); else if (it.type === 'mail') window.open('https://mail.google.com/mail/u/0/#inbox/' + (it.raw?.id || ''), '_blank'); else if (it.type === 'calendar') window.open('https://calendar.google.com/calendar/r', '_blank'); };
-
-  // One continuous left bar: a vertical gradient through every item's color, in order.
-  const riverGradient = ordered.length
-    ? `linear-gradient(to bottom, ${ordered.map((it, i) => `${rgba(it.color, 0.85)} ${(i / Math.max(1, ordered.length - 1)) * 100}%`).join(', ')})`
+  const riverGradient = view.length
+    ? `linear-gradient(to bottom, ${view.map((it, i) => `${rgba(it.color, 0.85)} ${(i / Math.max(1, view.length - 1)) * 100}%`).join(', ')})`
     : rgba(COL_SHAILA, 0.4);
 
-  const supercrunch = ordered.slice(0, 7).map(i => i.text.replace(/\s+/g, ' ').slice(0, 38)).join('  ·  ');
-
+  const statusText = aiState === 'ranking' ? 'AI prioritizing…' : aiState === 'ok' ? 'AI-prioritized' : 'AI unavailable';
   const waterBg = {
     background: `
       radial-gradient(120% 55% at 18% -8%, ${rgba('#7FC6D9', 0.06)} 0%, transparent 60%),
@@ -256,32 +214,22 @@ export function TaskRiverPanel({
       display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${C.divider}`,
       overflow: 'hidden', ...waterBg,
     }}>
-      {/* Header */}
-      <div style={{ flexShrink: 0, padding: '14px clamp(14px,3vw,32px) 8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 23, fontWeight: 300, letterSpacing: -0.5, color: C.text, fontFamily: NC_FONT_STACK }}>The River</span>
-          <span style={{ fontSize: 12, color: C.muted, fontFamily: NC_FONT_STACK }}>
-            {ordered.length} items · {aiState === 'ranking' ? 'AI prioritizing…' : aiState === 'error' ? 'auto-prioritized' : 'AI-prioritized'}
-          </span>
-          <button onClick={reprioritize} disabled={!manual} title="Drop manual order; let priority flow again"
-            style={{ marginLeft: 'auto', fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 500, color: manual ? '#fff' : C.faint, background: manual ? rgba(COL_SHAILA, 0.9) : 'transparent', border: `1px solid ${manual ? rgba(COL_SHAILA, 0.9) : C.divider}`, borderRadius: 16, padding: '4px 12px', cursor: manual ? 'pointer' : 'default' }}>
-            ↻ Re-prioritize
-          </button>
-        </div>
-        {supercrunch && (
-          <div style={{ fontSize: 12.5, color: C.muted, fontFamily: NC_FONT_STACK, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{supercrunch}</div>
-        )}
+      <div style={{ flexShrink: 0, padding: '14px clamp(14px,3vw,32px) 8px', display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 23, fontWeight: 300, letterSpacing: -0.5, color: C.text, fontFamily: NC_FONT_STACK }}>The River</span>
+        <span style={{ fontSize: 12, color: aiState === 'error' ? (C.warning || C.muted) : C.muted, fontFamily: NC_FONT_STACK }}>{view.length} items · {statusText}</span>
+        <button onClick={reprioritize} disabled={!manual} title="Drop manual order; let AI priority flow again"
+          style={{ marginLeft: 'auto', fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 500, color: manual ? '#fff' : C.faint, background: manual ? rgba(COL_SHAILA, 0.9) : 'transparent', border: `1px solid ${manual ? rgba(COL_SHAILA, 0.9) : C.divider}`, borderRadius: 16, padding: '4px 12px', cursor: manual ? 'pointer' : 'default' }}>
+          ↻ Re-prioritize
+        </button>
       </div>
 
-      {/* The stream — tightly spaced rows with one flowing color bar on the left */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', position: 'relative', padding: '2px clamp(8px,2vw,24px) 40px' }}>
-        {ordered.length === 0 ? (
+        {view.length === 0 ? (
           <div style={{ padding: '50px 20px', textAlign: 'center', color: C.faint, fontFamily: NC_FONT_STACK, fontSize: 15 }}>The river is still. Nothing waiting.</div>
         ) : (
-          <div style={{ position: 'relative', paddingLeft: 16 }}>
-            {/* the one long blended river bar */}
+          <div style={{ position: 'relative', paddingLeft: 14 }}>
             <div aria-hidden style={{ position: 'absolute', left: 0, top: 4, bottom: 4, width: 7, borderRadius: 5, background: riverGradient, boxShadow: `0 0 0 1px ${rgba('#000', 0.04)}` }} />
-            {ordered.map((it, idx) => {
+            {view.map((it) => {
               const isDrag = dragId === it.id;
               return (
                 <div key={it.id} data-river-row={it.id} onClick={() => act(it)}
