@@ -1,63 +1,58 @@
 /**
- * TaskRiverPanel — one calm, flowing river of everything to do.
+ * TaskRiverPanel — one calm, auto-prioritized river of everything.
  *
- * A single combined, auto-prioritized list drawn from all actionable sources
- * (tasks + shailos). Reorder by drag, tap-drag, or up/down buttons; "Re-prioritize"
- * drops your manual order and lets the auto-sort take over again. A muted running-water
- * backdrop and soft left-edge color bands that bleed into one another give it the feel
- * of a slow, relaxing stream rather than a checklist.
+ * A single tightly-spaced list mixing ALL sources (tasks, shailos, calendar, mail),
+ * auto-sorted by urgency. One continuous color bar runs down the left edge, blending
+ * smoothly from each item's priority color into the next — a flowing river of priority.
+ * Reorder by drag, tap-drag, or ▲▼; "Re-prioritize" drops your manual order.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanTheme, NC_FONT_STACK } from '../ui-tokens.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 
-// ── color helpers ─────────────────────────────────────────────────────────────
+// ── color helpers ───────────────────────────────────────────────────────────
 function hexToRgb(hex) {
   let h = String(hex || '').replace('#', '').trim();
   if (h.length === 3) h = h.split('').map(c => c + c).join('');
   if (h.length !== 6) return { r: 120, g: 160, b: 175 };
   return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
 }
+function rgba(hex, a) { const { r, g, b } = hexToRgb(hex); return `rgba(${r},${g},${b},${a})`; }
 function mix(a, b, t) {
   const x = hexToRgb(a), y = hexToRgb(b);
-  const r = Math.round(x.r + (y.r - x.r) * t);
-  const g = Math.round(x.g + (y.g - x.g) * t);
-  const bl = Math.round(x.b + (y.b - x.b) * t);
-  return `rgb(${r},${g},${bl})`;
-}
-function rgba(hex, a) {
-  const { r, g, b } = hexToRgb(hex);
-  return `rgba(${r},${g},${b},${a})`;
+  return `rgb(${Math.round(x.r + (y.r - x.r) * t)},${Math.round(x.g + (y.g - x.g) * t)},${Math.round(x.b + (y.b - x.b) * t)})`;
 }
 
-const SHAILA_COLOR = '#5BA8A0';        // calm teal for shailos
+const COL_SHAILA = '#5BA8A0';   // teal
+const COL_CAL    = '#D9A23B';   // amber
+const COL_MAIL   = '#8E86C9';   // indigo
 const ORDER_KEY = 'taskriver_order_v1';
 const readOrder = () => { try { return JSON.parse(localStorage.getItem(ORDER_KEY) || '[]') || []; } catch { return []; } };
-const writeOrder = (arr) => { try { localStorage.setItem(ORDER_KEY, JSON.stringify(arr)); } catch {} };
+const writeOrder = (a) => { try { localStorage.setItem(ORDER_KEY, JSON.stringify(a)); } catch {} };
 
-// ── build the combined, scored stream ───────────────────────────────────────────
-function buildItems(tasks, shailos, priorities) {
+function gmailHeader(msg, name) {
+  return (msg?.payload?.headers || []).find(h => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+}
+function fmtSender(raw) { const m = (raw || '').match(/^"?([^"<]+?)"?\s*(?:<[^>]+>)?$/); return m ? m[1].trim() : (raw || '').split('@')[0]; }
+
+// ── build the mixed, scored stream ───────────────────────────────────────────
+function buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, nowMs) {
   const priById = new Map((priorities || []).map(p => [p.id, p]));
   const weights = (priorities || []).filter(p => !p.deleted).map(p => Number(p.weight) || 0);
   const maxW = weights.length ? Math.max(...weights) : 1;
-
+  const norm = (w) => maxW ? (Number(w) || 0) / maxW : 0;   // 0..1
   const items = [];
 
   (tasks || []).forEach(t => {
-    if (!t || t.completed || t.deleted) return;
-    if (isNerveTaskShailaWork(t)) return; // shown once, in the shaila stream
+    if (!t || t.completed || t.deleted || isNerveTaskShailaWork(t)) return;
     const pri = priById.get(t.priority);
-    const color = pri?.color || '#8FB7C9';
-    const weight = Number(pri?.weight) || 0;
     items.push({
-      id: t.id,
-      type: 'task',
+      id: t.id, type: 'task', icon: '◆',
       text: (t.ncSummary || t.text || 'Untitled').trim(),
-      color,
-      pinned: !!t.pinned,
-      score: (t.pinned ? 1e9 : 0) + weight * 1000 + (Number(t.createdAt) || 0) / 1e9,
-      priLabel: pri?.label || '',
-      raw: t,
+      meta: pri?.label || '',
+      color: pri?.color || '#8FB7C9',
+      score: (t.pinned ? 100 : 0) + 35 + norm(pri?.weight) * 55,
+      pinned: !!t.pinned, raw: t,
     });
   });
 
@@ -65,223 +60,177 @@ function buildItems(tasks, shailos, priorities) {
     if (!s || s.deleted || s.completed || s.status === 'answered') return;
     const getBack = s.status === 'get_back' || !!s.isGetBackStep;
     items.push({
-      id: s.id,
-      type: 'shaila',
+      id: s.id, type: 'shaila', icon: '?',
       text: (s.synopsis || s.text || s.content || 'Open shaila').trim(),
-      color: SHAILA_COLOR,
-      pinned: false,
-      // shailos surface in the upper-middle of the current by default
-      score: maxW * (getBack ? 0.5 : 0.78) * 1000 + (Number(s.createdAt) || 0) / 1e9,
-      priLabel: getBack ? 'waiting to reply' : 'pending answer',
-      raw: s,
+      meta: getBack ? 'waiting to reply' : 'pending answer',
+      color: COL_SHAILA, score: getBack ? 52 : 72, raw: s,
+    });
+  });
+
+  (calendarEvents || []).forEach(e => {
+    if (!e || e.status === 'cancelled') return;
+    const startMs = new Date(e.start?.dateTime || e.start?.date || 0).getTime();
+    const endMs = new Date(e.end?.dateTime || e.end?.date || 0).getTime();
+    if (endMs && endMs < nowMs) return; // past
+    const soonH = Math.max(0, (startMs - nowMs) / 3600000);
+    const inProgress = startMs <= nowMs && endMs >= nowMs;
+    const when = e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'All day';
+    items.push({
+      id: 'cal_' + (e.id || startMs), type: 'calendar', icon: '◷',
+      text: (e.summary || '(untitled event)').trim(), meta: inProgress ? 'now' : when,
+      color: COL_CAL, score: inProgress ? 96 : Math.max(45, 80 - soonH * 4), raw: e,
+    });
+  });
+
+  (gmailMessages || []).slice(0, 12).forEach((m, i) => {
+    if (!m) return;
+    const subj = gmailHeader(m, 'Subject') || '(no subject)';
+    items.push({
+      id: 'mail_' + (m.id || i), type: 'mail', icon: '✉',
+      text: (m.aiSummary || subj).trim(), meta: fmtSender(gmailHeader(m, 'From')),
+      color: COL_MAIL, score: 40 - i * 0.5, raw: m,
     });
   });
 
   return items;
 }
 
-// Apply the saved manual order; unseen items fall in by auto-score at the end.
 function applyOrder(items, order) {
   const byId = new Map(items.map(i => [i.id, i]));
-  const seen = new Set();
-  const out = [];
+  const seen = new Set(); const out = [];
   (order || []).forEach(id => { const it = byId.get(id); if (it) { out.push(it); seen.add(id); } });
-  const rest = items.filter(i => !seen.has(i.id)).sort((a, b) => b.score - a.score);
-  return [...out, ...rest];
+  return [...out, ...items.filter(i => !seen.has(i.id)).sort((a, b) => b.score - a.score)];
 }
 
 export function TaskRiverPanel({
-  T,
-  tasks = [],
-  shailos = [],
-  priorities = [],
-  sidebarW = 64,
-  topOffset = 0,
-  clockTime,
-  onCompleteTask,
-  onOpenTasks,
-  onOpenShailos,
+  T, tasks = [], shailos = [], calendarEvents = null, gmailMessages = null,
+  priorities = [], sidebarW = 64, topOffset = 0, clockTime,
+  onCompleteTask, onOpenTasks, onOpenShailos, onOpenPhone,
 }) {
   const C = cleanTheme(T);
   const now = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());
+  const nowMs = now.getTime();
 
-  const items = useMemo(() => buildItems(tasks, shailos, priorities), [tasks, shailos, priorities]);
+  const items = useMemo(
+    () => buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, nowMs),
+    [tasks, shailos, calendarEvents, gmailMessages, priorities, Math.floor(nowMs / 60000)]
+  );
   const [order, setOrder] = useState(readOrder);
   const ordered = useMemo(() => applyOrder(items, order), [items, order]);
   const manual = (order || []).length > 0;
-
   const [dragId, setDragId] = useState(null);
-  const listRef = useRef(null);
-
-  // Persist whenever the manual order changes.
   useEffect(() => { writeOrder(order); }, [order]);
 
-  // Freeze the current visible order into an explicit id list (so auto items get fixed
-  // positions we can then nudge), and apply a transform.
-  const reorderTo = (idList) => setOrder(idList);
-  const currentIds = () => ordered.map(i => i.id);
-
+  const ids = () => ordered.map(i => i.id);
   const move = (id, dir) => {
-    const ids = currentIds();
-    const i = ids.indexOf(id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= ids.length) return;
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-    reorderTo(ids);
+    const a = ids(); const i = a.indexOf(id); const j = i + dir;
+    if (i < 0 || j < 0 || j >= a.length) return;
+    [a[i], a[j]] = [a[j], a[i]]; setOrder(a);
   };
-
-  const dropBefore = (dragId, targetId) => {
-    if (dragId === targetId) return;
-    const ids = currentIds().filter(x => x !== dragId);
-    const t = ids.indexOf(targetId);
-    if (t < 0) ids.push(dragId); else ids.splice(t, 0, dragId);
-    reorderTo(ids);
+  const dropBefore = (drag, target) => {
+    if (drag === target) return;
+    const a = ids().filter(x => x !== drag); const t = a.indexOf(target);
+    if (t < 0) a.push(drag); else a.splice(t, 0, drag); setOrder(a);
   };
+  const reprioritize = () => setOrder([]);
 
-  const reprioritize = () => { setOrder([]); };
-
-  // Pointer drag (works for mouse + touch). The drag handle starts it; movement finds the
-  // row under the finger and slots the dragged item before it.
   const onHandleDown = (id) => (e) => {
-    e.preventDefault();
-    setDragId(id);
-    const move_ = (ev) => {
+    e.preventDefault(); e.stopPropagation(); setDragId(id);
+    const mv = (ev) => {
       const pt = ev.touches?.[0] || ev;
       const el = document.elementFromPoint(pt.clientX, pt.clientY);
-      const row = el && el.closest ? el.closest('[data-river-row]') : null;
-      const overId = row?.getAttribute('data-river-row');
-      if (overId && overId !== id) dropBefore(id, overId);
+      const row = el?.closest?.('[data-river-row]');
+      const over = row?.getAttribute('data-river-row');
+      if (over && over !== id) dropBefore(id, over);
     };
     const up = () => {
       setDragId(null);
-      window.removeEventListener('pointermove', move_);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('touchmove', move_);
-      window.removeEventListener('touchend', up);
+      window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up);
+      window.removeEventListener('touchmove', mv); window.removeEventListener('touchend', up);
     };
-    window.addEventListener('pointermove', move_, { passive: false });
+    window.addEventListener('pointermove', mv, { passive: false });
     window.addEventListener('pointerup', up);
-    window.addEventListener('touchmove', move_, { passive: false });
+    window.addEventListener('touchmove', mv, { passive: false });
     window.addEventListener('touchend', up);
   };
 
-  const complete = (it) => {
-    if (it.type === 'task') onCompleteTask?.(it.id);
-    else onOpenShailos?.();
-  };
-  const open = (it) => { if (it.type === 'task') onOpenTasks?.(); else onOpenShailos?.(); };
+  const act = (it) => { if (it.type === 'task') onCompleteTask?.(it.id); else if (it.type === 'shaila') onOpenShailos?.(); else if (it.type === 'mail') window.open('https://mail.google.com/mail/u/0/#inbox/' + (it.raw?.id || ''), '_blank'); else if (it.type === 'calendar') window.open('https://calendar.google.com/calendar/r', '_blank'); };
 
-  // Header supercrunch — a calm, deterministic one-liner of what's flowing.
-  const supercrunch = ordered.slice(0, 6).map(i => i.text.replace(/\s+/g, ' ').slice(0, 42)).join('  ·  ');
+  // One continuous left bar: a vertical gradient through every item's color, in order.
+  const riverGradient = ordered.length
+    ? `linear-gradient(to bottom, ${ordered.map((it, i) => `${rgba(it.color, 0.85)} ${(i / Math.max(1, ordered.length - 1)) * 100}%`).join(', ')})`
+    : rgba(COL_SHAILA, 0.4);
 
-  // Muted running-water backdrop: layered soft teal/blue gradients over the theme bg.
+  const supercrunch = ordered.slice(0, 7).map(i => i.text.replace(/\s+/g, ' ').slice(0, 38)).join('  ·  ');
+
   const waterBg = {
     background: `
-      radial-gradient(120% 60% at 20% -10%, ${rgba('#7FC6D9', 0.07)} 0%, transparent 60%),
-      radial-gradient(120% 70% at 90% 110%, ${rgba('#4F9AA6', 0.08)} 0%, transparent 55%),
-      repeating-linear-gradient(115deg, ${rgba('#9ED4E0', 0.018)} 0px, ${rgba('#9ED4E0', 0.018)} 2px, transparent 2px, transparent 26px),
-      linear-gradient(180deg, ${C.bg} 0%, ${mix(C.bg, '#16323a', 0.10)} 100%)
-    `,
+      radial-gradient(120% 55% at 18% -8%, ${rgba('#7FC6D9', 0.06)} 0%, transparent 60%),
+      radial-gradient(120% 65% at 92% 108%, ${rgba('#4F9AA6', 0.07)} 0%, transparent 55%),
+      linear-gradient(180deg, ${C.bg} 0%, ${mix(C.bg, '#16323a', 0.08)} 100%)`,
   };
 
   return (
     <div style={{
-      position: 'fixed', top: topOffset, left: sidebarW, right: 0, bottom: 0,
-      zIndex: 1, display: 'flex', flexDirection: 'column',
-      borderLeft: `1px solid ${C.divider}`, overflow: 'hidden', ...waterBg,
+      position: 'fixed', top: topOffset, left: sidebarW, right: 0, bottom: 0, zIndex: 7600,
+      display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${C.divider}`,
+      overflow: 'hidden', ...waterBg,
     }}>
-      {/* ── Header ── */}
-      <div style={{ flexShrink: 0, padding: '18px clamp(16px,4vw,40px) 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 26, fontWeight: 300, letterSpacing: -0.5, color: C.text, fontFamily: NC_FONT_STACK }}>The River</span>
-          <span style={{ fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK }}>
-            {ordered.length} flowing · {now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-          </span>
-          <button onClick={reprioritize} disabled={!manual} title="Drop manual order and let priority flow again"
-            style={{
-              marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6,
-              fontSize: 12.5, fontFamily: NC_FONT_STACK, fontWeight: 500,
-              color: manual ? '#fff' : C.faint, background: manual ? rgba(SHAILA_COLOR, 0.9) : 'transparent',
-              border: `1px solid ${manual ? rgba(SHAILA_COLOR, 0.9) : C.divider}`, borderRadius: 18,
-              padding: '5px 14px', cursor: manual ? 'pointer' : 'default',
-            }}>
+      {/* Header */}
+      <div style={{ flexShrink: 0, padding: '14px clamp(14px,3vw,32px) 8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 23, fontWeight: 300, letterSpacing: -0.5, color: C.text, fontFamily: NC_FONT_STACK }}>The River</span>
+          <span style={{ fontSize: 12, color: C.muted, fontFamily: NC_FONT_STACK }}>{ordered.length} items · auto-prioritized</span>
+          <button onClick={reprioritize} disabled={!manual} title="Drop manual order; let priority flow again"
+            style={{ marginLeft: 'auto', fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 500, color: manual ? '#fff' : C.faint, background: manual ? rgba(COL_SHAILA, 0.9) : 'transparent', border: `1px solid ${manual ? rgba(COL_SHAILA, 0.9) : C.divider}`, borderRadius: 16, padding: '4px 12px', cursor: manual ? 'pointer' : 'default' }}>
             ↻ Re-prioritize
           </button>
         </div>
         {supercrunch && (
-          <div style={{
-            fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK, fontStyle: 'italic',
-            lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            paddingBottom: 2, borderBottom: `1px solid ${C.divider}`,
-          }}>{supercrunch}</div>
+          <div style={{ fontSize: 12.5, color: C.muted, fontFamily: NC_FONT_STACK, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{supercrunch}</div>
         )}
       </div>
 
-      {/* ── The stream ── */}
-      <div ref={listRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '4px clamp(10px,3vw,32px) 40px' }}>
-        {ordered.length === 0 && (
-          <div style={{ padding: '60px 20px', textAlign: 'center', color: C.faint, fontFamily: NC_FONT_STACK, fontSize: 15 }}>
-            The river is still. Nothing waiting.
+      {/* The stream — tightly spaced rows with one flowing color bar on the left */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', position: 'relative', padding: '2px clamp(8px,2vw,24px) 40px' }}>
+        {ordered.length === 0 ? (
+          <div style={{ padding: '50px 20px', textAlign: 'center', color: C.faint, fontFamily: NC_FONT_STACK, fontSize: 15 }}>The river is still. Nothing waiting.</div>
+        ) : (
+          <div style={{ position: 'relative', paddingLeft: 16 }}>
+            {/* the one long blended river bar */}
+            <div aria-hidden style={{ position: 'absolute', left: 0, top: 4, bottom: 4, width: 7, borderRadius: 5, background: riverGradient, boxShadow: `0 0 0 1px ${rgba('#000', 0.04)}` }} />
+            {ordered.map((it, idx) => {
+              const isDrag = dragId === it.id;
+              return (
+                <div key={it.id} data-river-row={it.id} onClick={() => act(it)}
+                  style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: 9,
+                    padding: '3px 6px 3px 10px', minHeight: 26, cursor: 'pointer', borderRadius: 7,
+                    background: isDrag ? rgba(it.color, 0.12) : 'transparent', transition: 'background .12s' }}>
+                  <span style={{ width: 14, textAlign: 'center', color: rgba(it.color, 0.9), fontSize: 11, flexShrink: 0 }}>{it.icon}</span>
+                  <span style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 7, overflow: 'hidden' }}>
+                    <span style={{ fontSize: 13, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {it.pinned && <span style={{ color: it.color, marginRight: 4 }}>★</span>}{it.text}
+                    </span>
+                    {it.meta && <span style={{ fontSize: 10.5, color: C.faint, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: 'nowrap' }}>{it.meta}</span>}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 0 }} onClick={e => e.stopPropagation()}>
+                    <button onClick={() => move(it.id, -1)} disabled={idx === 0} title="Up" style={mini(C, idx === 0)}>▲</button>
+                    <button onClick={() => move(it.id, +1)} disabled={idx === ordered.length - 1} title="Down" style={mini(C, idx === ordered.length - 1)}>▼</button>
+                    <button onPointerDown={onHandleDown(it.id)} onTouchStart={onHandleDown(it.id)} title="Drag" style={{ ...mini(C, false), cursor: 'grab', touchAction: 'none', fontSize: 13 }}>⠿</button>
+                    <button onClick={() => act(it)} title={it.type === 'task' ? 'Done' : 'Open'} style={{ ...mini(C, false), color: it.color, fontSize: 13 }}>{it.type === 'task' ? '✓' : '›'}</button>
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
-        {ordered.map((it, idx) => {
-          const prev = ordered[idx - 1] || it;
-          const next = ordered[idx + 1] || it;
-          // Soft left band that bleeds from the row above into the row below — the "river".
-          const band = `linear-gradient(to bottom,
-            ${rgba(mix(prev.color, it.color, 0.5), 0.6)} 0%,
-            ${rgba(it.color, 0.62)} 50%,
-            ${rgba(mix(it.color, next.color, 0.5), 0.6)} 100%)`;
-          const isDrag = dragId === it.id;
-          return (
-            <div key={it.id} data-river-row={it.id}
-              onClick={() => open(it)}
-              style={{
-                position: 'relative', display: 'grid', gridTemplateColumns: '10px 1fr auto',
-                alignItems: 'center', gap: 12, padding: '11px 12px 11px 0', cursor: 'pointer',
-                borderRadius: 12, marginBottom: 2,
-                background: isDrag ? rgba(it.color, 0.10) : 'transparent',
-                boxShadow: isDrag ? `0 6px 22px ${rgba('#000', 0.18)}` : 'none',
-                transition: 'background 0.15s',
-              }}>
-              {/* river color band */}
-              <span style={{ alignSelf: 'stretch', width: 10, borderRadius: 6, background: band }} />
-              {/* text */}
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 15, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.32, wordBreak: 'break-word' }}>
-                  {it.pinned && <span style={{ color: it.color, marginRight: 6 }}>★</span>}
-                  {it.text}
-                </div>
-                <div style={{ fontSize: 11.5, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 2 }}>
-                  {it.type === 'shaila' ? 'Shaila' : (it.priLabel || 'Task')}{it.type === 'shaila' && it.priLabel ? ` · ${it.priLabel}` : ''}
-                </div>
-              </div>
-              {/* controls */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 2 }} onClick={e => e.stopPropagation()}>
-                <button onClick={() => move(it.id, -1)} disabled={idx === 0} title="Move up"
-                  style={ctrlBtn(C, idx === 0)}>▲</button>
-                <button onClick={() => move(it.id, +1)} disabled={idx === ordered.length - 1} title="Move down"
-                  style={ctrlBtn(C, idx === ordered.length - 1)}>▼</button>
-                <button onPointerDown={onHandleDown(it.id)} onTouchStart={onHandleDown(it.id)} title="Drag to reorder"
-                  style={{ ...ctrlBtn(C, false), cursor: 'grab', touchAction: 'none', color: C.muted, fontSize: 15 }}>⠿</button>
-                <button onClick={() => complete(it)} title={it.type === 'task' ? 'Done' : 'Open'}
-                  style={{ ...ctrlBtn(C, false), color: it.color, fontSize: 15 }}>
-                  {it.type === 'task' ? '✓' : '›'}
-                </button>
-              </div>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
 }
 
-function ctrlBtn(C, disabled) {
-  return {
-    width: 28, height: 28, borderRadius: 8, border: 'none', background: 'transparent',
-    color: disabled ? C.faint : C.muted, opacity: disabled ? 0.35 : 1,
-    cursor: disabled ? 'default' : 'pointer', fontSize: 11, lineHeight: 1,
-    display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: NC_FONT_STACK,
-  };
+function mini(C, disabled) {
+  return { width: 22, height: 22, borderRadius: 6, border: 'none', background: 'transparent',
+    color: disabled ? C.faint : C.muted, opacity: disabled ? 0.3 : 0.85, cursor: disabled ? 'default' : 'pointer',
+    fontSize: 9, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: NC_FONT_STACK };
 }

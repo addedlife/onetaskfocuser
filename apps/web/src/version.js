@@ -9,7 +9,7 @@
 // To recompute after new commits:
 //   minor: git log --pretty=%s | grep -cE '^feat'
 //   patch: git log --pretty=%s | grep -cE '^(fix|style)'
-export const APP_VERSION = "4.12.28";
+export const APP_VERSION = "4.12.29";
 
 // The "updated" stamp is taken from the real build time (injected by Vite's `define` in
 // vite.config.js as __BUILD_TIME__), so every deploy — including multiple pushes in one
