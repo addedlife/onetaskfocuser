@@ -541,10 +541,11 @@ function remotePhoneStatus(status) {
 }
 
 function connectionStatusFromStatus(status) {
-  if (!status) return "DeskPhone Host is not reachable";
-  if (status.connected || status.Connected) return "Connected to phone";
-  if (status.isConnecting || status.IsConnecting) return "Reconnecting to phone";
-  return "Phone link needs reconnect";
+  if (!status) return "Phone service is off";
+  const name = hostDeviceName(status);
+  if (status.connected || status.Connected) return `Connected to ${name}`;
+  if (status.isConnecting || status.IsConnecting) return `Connecting to ${name}…`;
+  return `${name} is out of range`;
 }
 
 function webVersionLabel() {
@@ -570,8 +571,22 @@ function webVersionBadge() {
   return `Web ${DESKPHONE_WEB_VERSION}`;
 }
 
+// The paired phone's friendly name (e.g. "FIG-NEWTON") from the known-devices
+// list — the selected device first, then the default one.
+function pairedPhoneName(status) {
+  const devices = Array.isArray(status?.knownDevices || status?.KnownDevices)
+    ? (status?.knownDevices || status?.KnownDevices)
+    : [];
+  const selected = String(status?.selectedDeviceAddress || status?.SelectedDeviceAddress || "");
+  const bySelected = devices.find((d) => String(d?.address || d?.Address || "") === selected);
+  const byDefault = devices.find((d) => d?.isDefault || d?.IsDefault);
+  return String(bySelected?.name || bySelected?.Name || byDefault?.name || byDefault?.Name || "").trim();
+}
+
 function hostDeviceName(status) {
   const remote = remotePhoneStatus(status);
+  // NOTE: never fall back to hostConnector — that's the PC service's label
+  // ("DeskPhone Windows Host"), and showing it as the "phone" reads absurd.
   return (
     remote.preferredName ||
     status?.phoneName ||
@@ -580,8 +595,8 @@ function hostDeviceName(status) {
     status?.DeviceName ||
     status?.connectedDeviceName ||
     status?.ConnectedDeviceName ||
-    status?.hostConnector ||
-    "phone"
+    pairedPhoneName(status) ||
+    "your phone"
   );
 }
 
@@ -1156,9 +1171,8 @@ function ConnectionRail({
             {icon("sync", 20)}
           </button>
         </div>
-        <div className="dp-rail-subtitle">Status refreshes automatically</div>
-        <div className="dp-rail-channel">{callsConnectionLabel}</div>
-        <div className="dp-rail-channel">{messagesConnectionLabel}</div>
+        {callsConnectionLabel ? <div className="dp-rail-channel">{callsConnectionLabel}</div> : null}
+        {messagesConnectionLabel ? <div className="dp-rail-channel">{messagesConnectionLabel}</div> : null}
       </div>
       <ShellButton
         className="dp-tonal dp-rail-wide-button"
@@ -3045,36 +3059,40 @@ function SimpleTabContent({
           <section className="dp-settings-panel" data-native-source="MainWindow.xaml:3995">
             <div className="dp-device-manager dp-phone-bridge-card">
               <div className="dp-device-manager-head">
-                <h3>This screen</h3>
-                <span className={`dp-bridge-state ${online ? "is-ready" : "needs-attention"}`}>
-                  {online ? `Connected to ${localPhoneHostName(status)}` : `${localPhoneHostName(status)} is not reachable`}
+                <h3>Phone</h3>
+                <span className={`dp-bridge-state ${online && (status?.connected || status?.Connected) ? "is-ready" : "needs-attention"}`}>
+                  {connectionStatusFromStatus(online ? status : null)}
                 </span>
               </div>
               <div className="dp-device-status">
-                {online
-                  ? `${localPhoneHostName(status)} is online. Source phone: ${hostDeviceName(status)}.`
-                  : "Open the local phone service, then refresh."}
+                {!online
+                  ? "Open the DeskPhone app on this computer."
+                  : (status?.connected || status?.Connected)
+                    ? "Everything is connected. Calls and texts flow automatically."
+                    : "Connection is automatic — it finds your phone whenever it's nearby with Bluetooth on."}
               </div>
             </div>
-            <div className="dp-settings-actions">
-              <ShellButton className="dp-primary" iconName="refresh" onClick={onRefresh}>Check now</ShellButton>
-            </div>
-            {canManagePhoneConnection ? (
-              <div className="dp-settings-actions dp-settings-tools">
-                <ShellButton className="dp-tonal" iconName="sync" nativeSource="MainWindow.xaml:808" onClick={() => onCommand("/connect", "reconnect phone")}>Reconnect phone</ShellButton>
-                <ShellButton className="dp-tonal" iconName="bluetooth" nativeSource="MainWindow.xaml:4140" onClick={() => onCommand("/open-bluetooth-settings", "open Bluetooth settings")}>Open Bluetooth on this device</ShellButton>
+            {canManagePhoneConnection && online && !(status?.connected || status?.Connected) ? (
+              <div className="dp-settings-actions">
+                <ShellButton className="dp-primary" iconName="sync" nativeSource="MainWindow.xaml:808" onClick={() => onCommand("/connect", "reconnect phone")}>Reconnect now</ShellButton>
               </div>
             ) : null}
             {canManagePhoneConnection ? (
               <details className="dp-bridge-details">
-                <summary>Pair or switch phones</summary>
-                <div className="dp-device-status">These controls use the phone service on this device. They are not browser Bluetooth controls.</div>
+                <summary>Advanced — pair or switch phones</summary>
+                <div className="dp-device-status">Manage which phone this PC links to.</div>
+                <div className="dp-settings-actions dp-settings-tools">
+                  <ShellButton className="dp-tonal" iconName="refresh" onClick={onRefresh}>Check status now</ShellButton>
+                  <ShellButton className="dp-tonal" iconName="bluetooth" nativeSource="MainWindow.xaml:4140" onClick={() => onCommand("/open-bluetooth-settings", "open Bluetooth settings")}>Open Windows Bluetooth settings</ShellButton>
+                </div>
                 <div className="dp-device-manager" data-native-source="MainWindow.xaml:4052">
                   <div className="dp-device-manager-head">
                     <h3>Paired phones</h3>
                     <ShellButton className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4052" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Find another phone</ShellButton>
                   </div>
-                  {bluetoothStatus ? <div className="dp-device-status">{bluetoothStatus}</div> : null}
+                  {bluetoothStatus && !/^(idle|ready)$/i.test(bluetoothStatus.trim())
+                    ? <div className="dp-device-status">{bluetoothStatus}</div>
+                    : null}
                   <div className="dp-device-list">
                     {knownDevices.length ? knownDevices.map((device) => {
                       const address = deviceAddress(device);
@@ -5721,44 +5739,50 @@ export function DeskPhoneWebPanel({
     () => connectionStatusFromStatus(status),
     [status]
   );
+  // ONE human connection line. Nobody needs the two-hop plumbing (browser→host,
+  // host→phone) spelled out — the only question is: is my phone on this screen?
   const callsConnectionLabel = useMemo(() => {
-    const phoneHostName = localPhoneHostName(status);
-    const sourcePhone = hostDeviceName(status);
-    return (
-      <div className="dp-channel-row">
-        <div className="dp-channel-status">
-          <span className={`dp-status-dot ${online ? "is-online" : ""}`} />
-          <strong>This screen to {phoneHostName}</strong>
-        </div>
-        <div className="dp-channel-guide">
-          {online ? `${phoneHostName} is online. Source phone: ${sourcePhone}.` : `${phoneHostName} is not reachable. Open the local phone service.`}
-        </div>
-      </div>
-    );
-  }, [online, status]);
-  const messagesConnectionLabel = useMemo(() => {
-    const mapStatus = status?.map || status?.Map || "";
-    const hfpStatus = status?.hfp || status?.Hfp || "";
-    const callsConnected = includesConnected(hfpStatus);
-    const textsConnected = includesConnected(mapStatus);
-    const isConnected = callsConnected || textsConnected;
-    const phoneHostName = localPhoneHostName(status);
-    const sourcePhone = hostDeviceName(status);
+    const name = hostDeviceName(status);
+    const callsOk = includesConnected(status?.hfp || status?.Hfp || "");
+    const textsOk = includesConnected(status?.map || status?.Map || "");
+    const phoneConnected = !!(status?.connected || status?.Connected) || callsOk || textsOk;
+    const connecting = !!(status?.isConnecting || status?.IsConnecting);
+
+    let dotClass = "";
+    let text;
+    let guide;
+    if (!online) {
+      text = "Phone service is off on this PC";
+      guide = "Open the DeskPhone app on this computer.";
+    } else if (phoneConnected) {
+      dotClass = "is-online";
+      text = `Connected to ${name}`;
+      guide = callsOk && textsOk
+        ? "Calls and texts are live."
+        : callsOk
+          ? "Calls are live — texts are still connecting."
+          : textsOk
+            ? "Texts are live — calls are still connecting."
+            : "Link is up.";
+    } else if (connecting) {
+      text = `Connecting to ${name}…`;
+      guide = "This finishes by itself — nothing to do.";
+    } else {
+      text = `${name} is out of range`;
+      guide = "Reconnects automatically when your phone is near this PC.";
+    }
 
     return (
       <div className="dp-channel-row">
         <div className="dp-channel-status">
-          <span className={`dp-status-dot ${isConnected ? "is-online" : ""}`} />
-          <strong>{phoneHostName} to source phone</strong>
+          <span className={`dp-status-dot ${dotClass}`} />
+          <strong>{text}</strong>
         </div>
-        <div className="dp-channel-guide">
-          {isConnected
-            ? `${sourcePhone} is connected for ${callsConnected && textsConnected ? "calls and texts" : callsConnected ? "calls" : "texts"} by Bluetooth.`
-            : "Phone not available. Make sure the phone is nearby, paired, and Bluetooth is on."}
-        </div>
+        <div className="dp-channel-guide">{guide}</div>
       </div>
     );
-  }, [status]);
+  }, [online, status]);
+  const messagesConnectionLabel = null;
   const showReconnectPrompt = !reconnectDismissed && !!(status?.showReconnectPrompt || status?.ShowReconnectPrompt || !online);
   const effectiveBuildPrompt = !!(status?.showBuildUpdatePrompt || status?.ShowBuildUpdatePrompt || showBuildPrompt);
   const effectiveBuildIndicator = !!(status?.showBuildUpdateIndicator || status?.ShowBuildUpdateIndicator || showBuildIndicator);
