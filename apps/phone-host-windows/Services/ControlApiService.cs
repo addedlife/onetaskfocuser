@@ -38,6 +38,10 @@ public class ControlApiService : IDisposable
     private TcpListener? _server;
     private CancellationTokenSource _cts = new();
 
+    /// <summary>Live call-audio bridge: captures a chosen Windows input device and
+    /// streams 16 kHz mono PCM to browser subscribers. See CallAudioBridgeService.</summary>
+    public readonly CallAudioBridgeService CallAudio = new();
+
     // ── Callbacks wired up by the ViewModel ───────────────────────────────
     public Func<string>?                     GetStatus   { get; set; }
     public Func<int, bool, string>?          GetMessages { get; set; }
@@ -114,6 +118,7 @@ public class ControlApiService : IDisposable
         try
         {
             _cts = new CancellationTokenSource();
+            CallAudio.Log = s => LogLine?.Invoke(s);
             _server = new TcpListener(IPAddress.Any, Port);
             _server.Start();
             LanUrl = GetLanUrl();
@@ -145,6 +150,7 @@ public class ControlApiService : IDisposable
     {
         _cts.Cancel();
         try { _server?.Stop(); } catch { }
+        try { CallAudio.Dispose(); } catch { }
     }
 
     // ── Accept loop ───────────────────────────────────────────────────────
@@ -197,6 +203,20 @@ public class ControlApiService : IDisposable
                 return;
             }
 
+            // ── Live call-audio bridge (handled before the JSON chain because the
+            //    PCM stream writes its own long-lived response and the listener
+            //    page returns HTML) ─────────────────────────────────────────────
+            if (path == "/call-audio.pcm")
+            {
+                await StreamCallAudioAsync(stream, qs);
+                return;
+            }
+            if (path == "/audio-bridge")
+            {
+                await WriteHtmlResponseAsync(stream, BuildAudioBridgePage());
+                return;
+            }
+
             string body;
             int statusCode = 200;
 
@@ -225,6 +245,25 @@ public class ControlApiService : IDisposable
             else if (path == "/contacts")
             {
                 body = GetContacts?.Invoke() ?? "[]";
+            }
+            else if (path == "/audio-inputs")
+            {
+                body = AudioInputsJson();
+            }
+            else if (method == "POST" && path == "/call-audio/start")
+            {
+                var deviceId = ParseStr(qs, "device");
+                try
+                {
+                    CallAudio.Start(string.IsNullOrWhiteSpace(deviceId) ? null : deviceId);
+                    body = AudioInputsJson();
+                }
+                catch (Exception ex) { statusCode = 500; body = JsonError($"start failed: {ex.Message}"); }
+            }
+            else if (method == "POST" && path == "/call-audio/stop")
+            {
+                CallAudio.Stop();
+                body = AudioInputsJson();
             }
             else if (method == "POST" && path == "/connect")
             {
@@ -702,8 +741,228 @@ public class ControlApiService : IDisposable
         204 => "No Content",
         400 => "Bad Request",
         404 => "Not Found",
+        500 => "Internal Server Error",
         _ => "OK"
     };
+
+    // ── Call-audio bridge helpers ─────────────────────────────────────────
+    private string AudioInputsJson()
+    {
+        var inputs = CallAudio.ListInputs();
+        var payload = new
+        {
+            running           = CallAudio.IsRunning,
+            currentDeviceId   = CallAudio.CurrentDeviceId,
+            currentDeviceName = CallAudio.CurrentDeviceName,
+            level             = CallAudio.LastLevel,
+            subscribers       = CallAudio.SubscriberCount,
+            sampleRate        = CallAudioBridgeService.OutputSampleRate,
+            devices           = inputs.Select(d => new { id = d.Id, name = d.Name, isDefault = d.IsDefault })
+        };
+        return JsonSerializer.Serialize(payload);
+    }
+
+    /// <summary>Writes an indefinite chunked PCM stream to the socket until the
+    /// client disconnects, then releases its subscriber lease.</summary>
+    private async Task StreamCallAudioAsync(NetworkStream stream, string qs)
+    {
+        var deviceId = ParseStr(qs, "device");
+        if (!string.IsNullOrWhiteSpace(deviceId))
+        {
+            try { CallAudio.Start(deviceId); }
+            catch (Exception ex) { LogLine?.Invoke($"[call-audio] requested device start failed: {ex.Message}"); }
+        }
+
+        var (reader, lease) = CallAudio.AddSubscriber();
+        using var _l = lease;
+
+        var header = Encoding.ASCII.GetBytes(
+            "HTTP/1.1 200 OK\r\n" +
+            "Content-Type: application/octet-stream\r\n" +
+            "Cache-Control: no-store\r\n" +
+            "Access-Control-Allow-Origin: *\r\n" +
+            "Access-Control-Allow-Private-Network: true\r\n" +
+            $"X-Sample-Rate: {CallAudioBridgeService.OutputSampleRate}\r\n" +
+            "Connection: close\r\n\r\n");
+
+        try
+        {
+            await stream.WriteAsync(header, _cts.Token);
+            await stream.FlushAsync(_cts.Token);
+            await foreach (var chunk in reader.ReadAllAsync(_cts.Token))
+            {
+                await stream.WriteAsync(chunk, _cts.Token);
+                await stream.FlushAsync(_cts.Token);
+            }
+        }
+        catch { /* client closed the stream or host shutting down — release the lease via using */ }
+    }
+
+    private static string BuildAudioBridgePage() => """
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeskPhone — Call Audio Bridge</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: 'Segoe UI', Roboto, system-ui, sans-serif; margin: 0; padding: 24px;
+         background:#0b0f14; color:#e7edf3; }
+  .card { max-width: 560px; margin: 0 auto; background:#141b24; border:1px solid #243140;
+          border-radius:16px; padding:24px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  p.sub { margin:0 0 20px; color:#8aa0b4; font-size:13px; line-height:1.4; }
+  label { display:block; font-size:12px; color:#8aa0b4; margin:16px 0 6px; }
+  select, button { font-size:14px; }
+  select { width:100%; padding:10px; border-radius:10px; background:#0e141b; color:#e7edf3;
+           border:1px solid #2b3a4b; }
+  .row { display:flex; gap:10px; margin-top:18px; }
+  button { flex:1; padding:12px; border-radius:10px; border:none; cursor:pointer; font-weight:600; }
+  #listen { background:#0b8a4a; color:#fff; }
+  #stop   { background:#7a2230; color:#fff; }
+  button:disabled { opacity:.45; cursor:default; }
+  .meter { height:14px; border-radius:7px; background:#0e141b; border:1px solid #2b3a4b;
+           overflow:hidden; margin-top:18px; }
+  .meter > div { height:100%; width:0%; background:linear-gradient(90deg,#0b8a4a,#d6c40b,#d63b3b);
+                 transition:width .08s linear; }
+  .status { margin-top:14px; font-size:13px; color:#8aa0b4; min-height:18px; }
+  code { color:#9fd0ff; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Call Audio Bridge</h1>
+    <p class="sub">Pick the Windows input the call audio arrives on (the USB/Bluetooth
+       speakerphone's microphone, a 3.5&nbsp;mm line-in, or the built-in mic to test the
+       pipeline), then press Listen. Audio is captured by DeskPhone and streamed here live.</p>
+
+    <label for="dev">Input device</label>
+    <select id="dev"></select>
+
+    <div class="row">
+      <button id="listen">Listen</button>
+      <button id="stop" disabled>Stop</button>
+    </div>
+
+    <div class="meter"><div id="bar"></div></div>
+    <div class="status" id="status">Idle.</div>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let ctx = null, playing = false, nextTime = 0, reader = null, abort = null, meterTimer = null;
+
+async function refreshDevices() {
+  try {
+    const j = await (await fetch('/audio-inputs')).json();
+    const sel = $('dev');
+    const prev = sel.value;
+    sel.innerHTML = '';
+    for (const d of j.devices) {
+      const o = document.createElement('option');
+      o.value = d.id; o.textContent = d.name + (d.isDefault ? '  (default)' : '');
+      sel.appendChild(o);
+    }
+    if (prev) sel.value = prev;
+  } catch (e) { $('status').textContent = 'Could not list devices: ' + e; }
+}
+
+function concat(a, b) {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a, 0); out.set(b, a.length); return out;
+}
+
+async function listen() {
+  const dev = $('dev').value;
+  try { ctx = new AudioContext({ sampleRate: 16000 }); }
+  catch (e) { ctx = new AudioContext(); }
+  await ctx.resume();
+  nextTime = ctx.currentTime + 0.20;            // jitter buffer
+  abort = new AbortController();
+
+  $('listen').disabled = true; $('stop').disabled = false;
+  $('status').textContent = 'Connecting…';
+
+  let resp;
+  try {
+    resp = await fetch('/call-audio.pcm?device=' + encodeURIComponent(dev), { signal: abort.signal });
+  } catch (e) { $('status').textContent = 'Stream failed: ' + e; resetUi(); return; }
+
+  reader = resp.body.getReader();
+  playing = true;
+  $('status').textContent = 'Live — listening on selected input.';
+  startMeter();
+
+  let leftover = new Uint8Array(0);
+  try {
+    while (playing) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      let buf = concat(leftover, value);
+      const frames = Math.floor(buf.length / 2);
+      const usable = frames * 2;
+      const pcm = buf.slice(0, usable);
+      leftover = buf.slice(usable);
+      if (frames === 0) continue;
+
+      const f32 = new Float32Array(frames);
+      const dv = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+      for (let i = 0; i < frames; i++) f32[i] = dv.getInt16(i * 2, true) / 32768;
+
+      const ab = ctx.createBuffer(1, frames, 16000);
+      ab.copyToChannel(f32, 0);
+      const src = ctx.createBufferSource();
+      src.buffer = ab; src.connect(ctx.destination);
+      if (nextTime < ctx.currentTime) nextTime = ctx.currentTime + 0.05;  // re-prime if we fell behind
+      src.start(nextTime);
+      nextTime += ab.duration;
+    }
+  } catch (e) { if (playing) $('status').textContent = 'Stream ended: ' + e; }
+  resetUi();
+}
+
+function startMeter() {
+  stopMeter();
+  meterTimer = setInterval(async () => {
+    try { const j = await (await fetch('/audio-inputs')).json();
+          $('bar').style.width = Math.min(100, Math.round((j.level || 0) * 140)) + '%'; }
+    catch {}
+  }, 250);
+}
+function stopMeter() { if (meterTimer) { clearInterval(meterTimer); meterTimer = null; } $('bar').style.width = '0%'; }
+
+function stop() { playing = false; try { abort.abort(); } catch {} try { reader.cancel(); } catch {} }
+function resetUi() {
+  playing = false; stopMeter();
+  try { ctx && ctx.close(); } catch {}
+  $('listen').disabled = false; $('stop').disabled = true;
+  if ($('status').textContent.startsWith('Live')) $('status').textContent = 'Stopped.';
+}
+
+$('listen').onclick = listen;
+$('stop').onclick = stop;
+refreshDevices();
+setInterval(() => { if (!playing) refreshDevices(); }, 5000);
+</script>
+</body>
+</html>
+""";
+
+    private static async Task WriteHtmlResponseAsync(NetworkStream stream, string html)
+    {
+        var bodyBytes = Encoding.UTF8.GetBytes(html);
+        var response = Encoding.ASCII.GetBytes(
+            "HTTP/1.1 200 OK\r\n" +
+            "Content-Type: text/html; charset=utf-8\r\n" +
+            "Access-Control-Allow-Origin: *\r\n" +
+            "Cache-Control: no-store\r\n" +
+            $"Content-Length: {bodyBytes.Length}\r\n" +
+            "Connection: close\r\n\r\n");
+        await stream.WriteAsync(response);
+        await stream.WriteAsync(bodyBytes);
+        await stream.FlushAsync();
+    }
 
     private static string Json(string key, string value)
         => $"{{\"{key}\":\"{value}\"}}";
