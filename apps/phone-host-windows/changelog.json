@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-11 17:29:08",
+        "version":  "b302",
+        "notes":  "Critical fix for the half-dead state b301 introduced: closing the classic DeskPhone window while the modern phone window was open killed the engine (Bluetooth API, webapp link, all buttons) but left the app running - the webapp said \u0027waiting for your PC\u0027 and nothing responded until a full restart. Closing the classic window now closes the whole app cleanly, exactly like before. Closing just the modern window keeps everything running.",
+        "devNotes":  "Root cause: MainWindow.OnClosed calls vm.Shutdown() (stops ControlApiService\u0027s TcpListener, BT teardown), and pre-b301 the process then exited because MainWindow was the only window (WPF default ShutdownMode=OnLastWindowClose). b301\u0027s auto-opened WebShellWindow kept the process alive past Shutdown(), leaving a zombie: process up, port 8765 refusing connections (verified live: DeskPhone PID running, netstat showed only SYN_SENT clients, no LISTENING socket; webapp fell back to relay with \u0027Waiting for your PC\u0027). Fix: App.xaml ShutdownMode=OnMainWindowClose - closing the classic main window exits the entire app (all shell windows included); closing only the WebShellWindow never touches vm.Shutdown. Also observed in the zombie\u0027s log: [RELAY MEDIA] HTTP 401 retry loop every ~5.5s for three media ids - pre-existing relay-media auth issue, tracked separately. Verified: ARM64 build clean; b302 launched with listener up and modern UI auto-open intact."
+    },
+    {
         "timestamp":  "2026-06-11 17:19:38",
         "version":  "b301",
         "notes":  "One phone screen everywhere. DeskPhone now opens the modern web phone UI as its own window on launch - the exact same clean interface the webapp shows, pixel for pixel, because it IS the same code, served from DeskPhone\u0027s own built-in web server. No sign-in needed (everything on it comes from this PC). The classic window stays available underneath as the engine room and for advanced settings; Settings -\u003e Audio gains \u0027Open Modern Phone UI\u0027 to reopen the modern window anytime. Switching between the webapp\u0027s Phone screen and the DeskPhone app is now indistinguishable - that was the goal.",
