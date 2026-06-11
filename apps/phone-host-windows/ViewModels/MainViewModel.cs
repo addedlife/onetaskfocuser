@@ -2513,8 +2513,13 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[web-shell] {ex.Message}");
-            try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
+            OpenInDefaultBrowser(url);
         }
+    }
+
+    private static void OpenInDefaultBrowser(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
     }
     public ICommand ForgetDeviceCommand         { get; }   // remove a device from saved list
     public ICommand SwitchTabCommand            { get; }
@@ -2803,7 +2808,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _api.SetPauseHistoryActivity = paused => { Dispatch(() => PauseHistoryActivity = paused); return Task.CompletedTask; };
         _api.SetDarkModeEnabled = enabled => { Dispatch(() => IsDarkModeEnabled = enabled); return Task.CompletedTask; };
         _api.OpenLiveLog = () => { Dispatch(() => ShowLiveLog = true); return Task.CompletedTask; };
-        _api.OpenWebUi = () => { Dispatch(() => OpenWebShell("http://127.0.0.1:8765/?suite=deskphone")); return Task.CompletedTask; };
+        _api.OpenWebUi = () => { Dispatch(() => OpenInDefaultBrowser("https://onetaskfocuser.netlify.app/?suite=phone")); return Task.CompletedTask; };
         _api.OpenAudioConsole = () => { Dispatch(() => OpenWebShell("http://127.0.0.1:8765/audio-bridge")); return Task.CompletedTask; };
         _api.ClearLog = () => { Dispatch(ClearDebugLog); return Task.CompletedTask; };
         _api.RunUiAuditor = () => { RunUiAuditor(); return Task.CompletedTask; };
@@ -3016,7 +3021,10 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         AddComposeAttachmentCommand = new RelayCommand(_ => AddComposeAttachments());
         RemoveComposeAttachmentCommand = new RelayCommand(a => RemoveComposeAttachment(a as MessageAttachment));
         OpenSoundSettingsCommand = new RelayCommand(_ => Process.Start("mmsys.cpl"));
-        OpenShamashUiCommand     = new RelayCommand(_ => OpenWebShell("http://127.0.0.1:8765/?suite=deskphone"));
+        // The Shamash UI opens in the DEFAULT BROWSER, not the embedded shell:
+        // the user's signed-in session (Firebase) lives in their browser profile,
+        // and the production app reaches this host directly via loopback.
+        OpenShamashUiCommand     = new RelayCommand(_ => OpenInDefaultBrowser("https://onetaskfocuser.netlify.app/?suite=phone"));
         OpenAudioConsoleCommand  = new RelayCommand(_ => OpenWebShell("http://127.0.0.1:8765/audio-bridge"));
         ForgetDeviceCommand    = new RelayCommand(addr => { if (addr is string a) { _settings.ForgetDevice(a); RefreshKnownDevices(); } });
         SwitchTabCommand       = new RelayCommand(t => { if (t is string s && Enum.TryParse<AppTab>(s, out var tab)) SelectedTab = tab; });

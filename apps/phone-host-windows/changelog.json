@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-11 12:01:37",
+        "version":  "b300",
+        "notes":  "\u0027Open Shamash Web UI\u0027 now opens the real production app in your default browser - where you are already signed in - instead of a logged-out embedded copy. The production webapp (4.16.44, same release) gained seamless automatic connection: on this PC it talks to DeskPhone directly; on any other browser in the world it rides the cloud relay; it probes and switches by reachability with a single status pill instead of connection menus. The embedded window remains only for the Call Audio Console, which needs no sign-in.",
+        "devNotes":  "MainViewModel: OpenShamashUiCommand and the /open-web-ui callback now OpenInDefaultBrowser(https://onetaskfocuser.netlify.app/?suite=phone) - the signed-in Firebase session lives in the user\u0027s browser profile, and the production app reaches this host via loopback (exempt from mixed-content). OpenWebShell falls back to OpenInDefaultBrowser; OpenAudioConsoleCommand still uses the WebView2 shell (loopback /audio-bridge, mic pre-granted, no auth needed). Companion webapp commit 0e92f71 (4.16.44): NerveCenterPhoneSurface transport resolver - auto probes direct (1.5s) then relay, trusts direct until failure with same-cycle relay failover, re-probes every 25s on relay and on tab focus/visibility, transport pill (Auto / This PC only / Cloud relay only, persisted to localStorage nc_phone_transport), relay liveness banner on any relay browser. Verified in dev against live b299: auto-\u003edirect with real data, pinned relay surfaces proper error, auto recovery; npm build assets/index-asS7A0vs.js."
+    },
+    {
         "timestamp":  "2026-06-11 06:08:43",
         "version":  "b299",
         "notes":  "One UI, the nicer one: DeskPhone can now open the Shamash web phone screen as its own native window. Settings -\u003e Audio gains two buttons - \u0027Open Shamash Web UI\u0027 (the full web DeskPhone surface, hosted inside the app via an embedded Edge view) and \u0027Call Audio Console\u0027 (the two-way audio bridge from b298, with the microphone pre-authorized so Talk works without a browser prompt). External links still open in your regular browser. This is the first step of unifying the native and web phone screens into a single web codebase.",
