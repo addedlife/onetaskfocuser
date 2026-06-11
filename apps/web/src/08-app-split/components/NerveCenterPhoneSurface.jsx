@@ -214,9 +214,14 @@ function PhoneMmsImage({ attachment, C }) {
 }
 
 function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, dense = false, onRecordConversation, onRecordCall, onMoreHistory }) {
-  // Phone connection is now exactly two paths: direct DeskPhone on a PC, cloud relay on a phone.
+  // Two transports reach the phone: DIRECT (DeskPhone's HTTP API — loopback or
+  // same-origin when this page is served by DeskPhone itself) and RELAY (the
+  // cloud blob, reachable from anywhere). The default "auto" mode probes direct
+  // and falls back to relay BY REACHABILITY, not device type — so a desktop
+  // browser away from home rides the relay, and sitting back down at the PC
+  // flips back to direct automatically. isMobile only skips the pointless
+  // probe (a phone can never reach the PC's loopback).
   const isMobile = useMemo(() => isMobilePhoneDevice(), []);
-  // Direct DeskPhone API base (desktop only): origin when served from DeskPhone:8765, else localhost.
   const api = (typeof window !== "undefined" && window.location.port === "8765")
     ? window.location.origin
     : "http://127.0.0.1:8765";
@@ -327,6 +332,41 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const C = cleanTheme(T);
   const RELAY_BASE = "/.netlify/functions/phone-relay";
 
+  // ── Transport resolution (the ONE connection control) ─────────────────────
+  // transportMode is the user override: 'auto' (default) | 'direct' | 'relay'.
+  // transportRef caches the resolved path so auto doesn't probe every cycle:
+  // an established 'direct' is trusted until a fetch fails; on 'relay' we
+  // re-probe at most every 25 s so coming home flips back without clicks.
+  const transportRef = useRef(null);
+  const lastProbeAtRef = useRef(0);
+  const [showTransportMenu, setShowTransportMenu] = useState(false);
+  const [transportMode, setTransportModeState] = useState(() => {
+    try { return localStorage.getItem("nc_phone_transport") || "auto"; } catch { return "auto"; }
+  });
+  const setTransportMode = useCallback(mode => {
+    setTransportModeState(mode);
+    try { localStorage.setItem("nc_phone_transport", mode); } catch {}
+    transportRef.current = null;     // re-resolve on the next refresh
+    lastProbeAtRef.current = 0;
+  }, []);
+
+  // Loopback is exempt from mixed-content blocking, so this probe is safe even
+  // from the HTTPS production app.
+  const probeDirect = useCallback(async () => {
+    try { return !!(await fetchPhoneJson(`${api}/status`, 1500)); }
+    catch { return false; }
+  }, [api]);
+
+  const resolveTransport = useCallback(async (force = false) => {
+    if (transportMode === "direct" || transportMode === "relay") return transportMode;
+    if (isMobile) return "relay";
+    const now = Date.now();
+    if (!force && transportRef.current === "direct") return "direct";
+    if (!force && transportRef.current === "relay" && now - lastProbeAtRef.current < 25000) return "relay";
+    lastProbeAtRef.current = now;
+    return (await probeDirect()) ? "direct" : "relay";
+  }, [transportMode, isMobile, probeDirect]);
+
   // ── Relay command acknowledgements ─────────────────────────────────────────
   // DeskPhone acknowledges every relayed command by id inside the state blob it
   // pushes (commandResults). post() awaits the ack for its command id, so success
@@ -384,76 +424,94 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     if (receivedAt) setRelayReceivedAt(receivedAt);
   }, []);
 
-  const refresh = useCallback(async () => {
+  // forceProbe must be EXACTLY true (the Refresh button passes a click event).
+  const refresh = useCallback(async (forceProbe) => {
     if (refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
+
+    // Reads the single state blob DeskPhone pushed to the cloud. Private to the
+    // signed-in user — gated by a Firebase ID token.
+    const fetchViaRelay = async () => {
+      let relayIdToken = null;
+      try { relayIdToken = user?.getIdToken ? await user.getIdToken() : null; } catch {}
+      if (!relayIdToken) throw new Error("relay:no_auth");
+      try {
+        const relayState = await fetchPhoneJson(
+          `${RELAY_BASE}?action=state`,
+          PHONE_FETCH_TIMEOUT_MS,
+          { Authorization: `Bearer ${relayIdToken}` },
+        );
+        processCommandResults(relayState?.commandResults);
+        return {
+          statusRes:   relayState?.status   || null,
+          messagesRes: relayState?.messages || [],
+          callsRes:    relayState?.calls    || [],
+          contactsRes: relayState?.contacts || [],
+          receivedAt:  Number(relayState?.relayReceivedAt) || 0,
+        };
+      } catch (relayErr) {
+        const msg = String(relayErr?.message || "");
+        if (msg.includes("404")) throw new Error("relay:no_state");
+        if (msg.includes("401")) throw new Error("relay:no_auth");
+        if (msg.includes("403")) throw new Error("relay:denied");
+        throw new Error("relay:fail:" + msg);
+      }
+    };
+
+    const fetchDirect = async () => {
+      const [statusRes, messagesRes, callsRes, contactsRes] = await Promise.all([
+        fetchPhoneJson(`${api}/status`, 2500),
+        fetchPhoneJson(`${api}/messages?limit=5000`, 2500),
+        fetchPhoneJson(`${api}/calls`, 2500).catch(() => null),
+        fetchPhoneJson(`${api}/contacts`, 2500).catch(() => null),
+      ]);
+      return { statusRes, messagesRes, callsRes, contactsRes, receivedAt: 0 };
+    };
+
     try {
       setError("");
-      let statusRes, messagesRes, callsRes, contactsRes;
-      let relayReceivedAtRes = 0;
-
-      if (isMobile) {
-        // ── Phone: cloud relay only (localhost is unreachable from a phone). ──
-        // Reads the single state blob DeskPhone pushed. Private to the signed-in
-        // user — gated by a Firebase ID token. Live updates arrive via onSnapshot.
-        let relayIdToken = null;
-        try { relayIdToken = user?.getIdToken ? await user.getIdToken() : null; } catch {}
-        if (!relayIdToken) throw new Error("relay:no_auth");
+      let transport = await resolveTransport(forceProbe === true);
+      let payload;
+      if (transport === "direct") {
         try {
-          const relayState = await fetchPhoneJson(
-            `${RELAY_BASE}?action=state`,
-            PHONE_FETCH_TIMEOUT_MS,
-            { Authorization: `Bearer ${relayIdToken}` },
-          );
-          statusRes   = relayState?.status   || null;
-          messagesRes = relayState?.messages  || [];
-          callsRes    = relayState?.calls     || [];
-          contactsRes = relayState?.contacts  || [];
-          relayReceivedAtRes = Number(relayState?.relayReceivedAt) || 0;
-          processCommandResults(relayState?.commandResults);
-          usingRelayRef.current = true;
-          setUsingRelay(true);
-        } catch (relayErr) {
-          const msg = String(relayErr?.message || "");
-          if (msg.includes("404")) throw new Error("relay:no_state");
-          if (msg.includes("401")) throw new Error("relay:no_auth");
-          if (msg.includes("403")) throw new Error("relay:denied");
-          throw new Error("relay:fail:" + msg);
+          payload = await fetchDirect();
+        } catch (directErr) {
+          if (transportMode !== "auto") throw directErr;
+          // Auto failover: the PC vanished mid-session (left home, DeskPhone
+          // closed) — fall through to the relay within the same cycle.
+          transport = "relay";
+          lastProbeAtRef.current = Date.now();
+          payload = await fetchViaRelay();
         }
       } else {
-        // ── PC: direct DeskPhone only (no relay fallback). ──
-        [statusRes, messagesRes, callsRes, contactsRes] = await Promise.all([
-          fetchPhoneJson(`${api}/status`, 2500),
-          fetchPhoneJson(`${api}/messages?limit=5000`, 2500),
-          fetchPhoneJson(`${api}/calls`, 2500).catch(() => null),
-          fetchPhoneJson(`${api}/contacts`, 2500).catch(() => null),
-        ]);
-        usingRelayRef.current = false;
-        setUsingRelay(false);
+        payload = await fetchViaRelay();
       }
-      applyPhoneState(statusRes, messagesRes, callsRes, contactsRes, relayReceivedAtRes);
+      transportRef.current = transport;
+      usingRelayRef.current = transport === "relay";
+      setUsingRelay(transport === "relay");
+      applyPhoneState(payload.statusRes, payload.messagesRes, payload.callsRes, payload.contactsRes, payload.receivedAt);
     } catch (e) {
       setStatus(null); setMessages([]); setCalls([]); setRelayReceivedAt(0);
       messagesSigRef.current = ""; callsSigRef.current = ""; contactsSigRef.current = "";
+      transportRef.current = null;   // both paths failed — re-resolve from scratch next cycle
       const msg = String(e?.message || "");
       setError(
-        isMobile
-          ? (msg === "relay:no_state"
-              ? "Waiting for your PC — open DeskPhone so it can relay your texts."
-              : msg === "relay:no_auth"
-                ? "Sign in to see your phone here."
-                : msg === "relay:denied"
-                  ? "Phone relay blocked by security rules."
-                  : "Cloud relay unreachable — try again in a moment.")
-          : "Open DeskPhone on this PC to use calls and texts.")
-      ;
+        msg === "relay:no_state"
+          ? "Waiting for your PC — open DeskPhone so it can relay your texts."
+          : msg === "relay:no_auth"
+            ? "Sign in to see your phone here."
+            : msg === "relay:denied"
+              ? "Phone relay blocked by security rules."
+              : msg.startsWith("relay:fail")
+                ? "Cloud relay unreachable — try again in a moment."
+                : "Can't reach DeskPhone — make sure it's running on your PC.");
       usingRelayRef.current = false;
       setUsingRelay(false);
       onOnlineChange?.(false);
     } finally {
       refreshInFlightRef.current = false;
     }
-  }, [api, isMobile, onOnlineChange, user, applyPhoneState, processCommandResults]);
+  }, [api, transportMode, resolveTransport, onOnlineChange, user, applyPhoneState, processCommandResults]);
 
   // Build phone-number → name map from contacts, covering many possible field names from the DeskPhone API
   const contactMap = useMemo(() => {
@@ -520,13 +578,25 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
 
   useEffect(() => { refresh(); const id = setInterval(refresh, 6500); return () => clearInterval(id); }, [refresh]);
 
+  // Waking the tab (or unlocking the laptop) re-resolves the best path right
+  // away — back at the PC means direct, on the road means relay, no clicks.
+  useEffect(() => {
+    const onWake = () => { if (document.visibilityState !== "hidden") refresh(true); };
+    window.addEventListener("focus", onWake);
+    document.addEventListener("visibilitychange", onWake);
+    return () => {
+      window.removeEventListener("focus", onWake);
+      document.removeEventListener("visibilitychange", onWake);
+    };
+  }, [refresh]);
+
   // Re-evaluate relay freshness on a clock even when no new data arrives, so the
   // "Live" indicator flips to "PC offline" once the PC stops heartbeating.
   useEffect(() => {
-    if (!isMobile) return undefined;
+    if (!usingRelay) return undefined;
     const id = setInterval(() => setNowTick(Date.now()), 5000);
     return () => clearInterval(id);
-  }, [isMobile]);
+  }, [usingRelay]);
 
   // ── Real-time relay: when we're on the cloud relay (away from the PC's LAN),
   // subscribe to the phone-relay/state doc directly instead of relying only on the
@@ -648,7 +718,12 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       await refresh();
       return true;
     }
-    catch { setError("DeskPhone did not answer."); onOnlineChange?.(false); return false; }
+    catch {
+      setError("DeskPhone did not answer.");
+      transportRef.current = null;   // direct path died mid-command — re-resolve next cycle
+      onOnlineChange?.(false);
+      return false;
+    }
     finally { setBusy(""); }
   };
 
@@ -674,13 +749,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // closed, so incoming texts/calls are NOT reaching this device live. On the LAN path
   // there's no relay; liveness is simply whether the just-completed /status fetch worked.
   const relayAgeMs = relayReceivedAt > 0 ? Math.max(0, nowTick - relayReceivedAt) : 0;
-  const relayStale = isMobile && usingRelay && relayReceivedAt > 0 && relayAgeMs >= RELAY_LIVE_WINDOW_MS;
-  const phoneLinkLive = isMobile ? (usingRelay && statusOnline && relayReceivedAt > 0 && !relayStale) : statusOnline;
+  const relayStale = usingRelay && relayReceivedAt > 0 && relayAgeMs >= RELAY_LIVE_WINDOW_MS;
+  const phoneLinkLive = usingRelay ? (statusOnline && relayReceivedAt > 0 && !relayStale) : statusOnline;
   const deviceName = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
   const idleLabel = deviceName ? `Connected · ${deviceName}` : "Connected";
   const statusText = !statusOnline
     ? "DeskPhone offline"
-    : (isMobile && relayStale)
+    : relayStale
       ? `PC offline · last seen ${relayAgeLabel(relayAgeMs)} ago`
       : (isIncoming ? "Incoming call" : isOnCall ? "On call" : callState ? "Call status changed" : idleLabel);
 
@@ -1013,11 +1088,11 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         </div>
       )}
 
-      {/* ── PC-link status banner (mobile relay only) — tells you whether your PC is
+      {/* ── PC-link status banner (any relay browser) — tells you whether your PC is
             actually connected right now, so you know live texts/calls are arriving. On the
             compact nerve-center card this is suppressed (the card's summary line already
             states online/offline); it only shows in the full phone view. ── */}
-      {isMobile && usingRelay && !compact && (
+      {usingRelay && !compact && (
         relayStale ? (
           <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, lineHeight: 1.4, color: C.warning, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 8, padding: "8px 10px" }}>
             <span style={{ marginTop: 1, flexShrink: 0, color: C.warning }}>{suiteIcon("cloud_off", 16)}</span>
@@ -1080,21 +1155,46 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           style={phoneIconButton(showDialer)}>
           {suiteIcon("dialpad", 15)}
         </button>
-        {/* Cloud-relay live indicator (mobile only). Green "Live" = the relay heard from
-            your PC within the last ~30s. "PC offline · age" = stale; the data on screen is
-            a snapshot from before your PC closed and new texts/calls are NOT coming in. */}
-        {isMobile && (
-          <span title={
-            phoneLinkLive ? "Live — connected to your PC's cloud relay"
-              : relayStale ? `PC offline — last update ${relayAgeLabel(relayAgeMs)} ago`
-                : "Waiting for your PC"
-          }
+        {/* Transport pill — the ONE connection control. Shows how this browser
+            reaches the phone (direct on this PC, or cloud relay) and how live it
+            is; click it to pin a path if Auto ever guesses wrong. */}
+        <span style={{ position: "relative", flexShrink: 0 }}>
+          <button onClick={() => setShowTransportMenu(v => !v)}
+            title={
+              (usingRelay
+                ? (phoneLinkLive ? "Connected through the cloud relay"
+                  : relayStale ? `PC offline — last update ${relayAgeLabel(relayAgeMs)} ago`
+                    : "Waiting for your PC via the cloud relay")
+                : (phoneLinkLive ? "Connected directly to DeskPhone on this PC" : "Looking for DeskPhone…"))
+              + (transportMode === "auto" ? " · automatic" : " · pinned — click to change")
+            }
             style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700,
-              color: phoneLinkLive ? C.success : relayStale ? C.warning : C.faint, padding: "0 4px", flexShrink: 0 }}>
-            {suiteIcon(phoneLinkLive ? "cloud" : "cloud_off", 15)}
-            <span>{phoneLinkLive ? "Live" : relayStale ? relayAgeLabel(relayAgeMs) : "…"}</span>
-          </span>
-        )}
+              border: "none", background: "transparent", cursor: "pointer",
+              color: phoneLinkLive ? C.success : relayStale ? C.warning : C.faint, padding: "0 4px" }}>
+            {suiteIcon(usingRelay ? (phoneLinkLive ? "cloud" : "cloud_off") : "computer", 15)}
+            <span>{phoneLinkLive ? (usingRelay ? "Live · cloud" : "This PC") : relayStale ? relayAgeLabel(relayAgeMs) : "…"}</span>
+          </button>
+          {showTransportMenu && (
+            <div style={{ position: "absolute", right: 0, bottom: "calc(100% + 6px)", zIndex: 60, minWidth: 200,
+              background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 10,
+              boxShadow: "0 6px 24px rgba(0,0,0,.28)", padding: 6 }}>
+              {[["auto", "Auto (recommended)", "Direct when this browser can reach your PC, cloud relay otherwise"],
+                ["direct", "This PC only", "Always talk to DeskPhone on this machine"],
+                ["relay", "Cloud relay only", "Always go through the cloud"]].map(([val, label, hint]) => (
+                <button key={val} title={hint}
+                  onClick={() => { setTransportMode(val); setShowTransportMenu(false); refresh(true); }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
+                    fontSize: 12, padding: "7px 9px", borderRadius: 7, border: "none", cursor: "pointer",
+                    background: transportMode === val ? C.bgSoft : "transparent",
+                    color: C.text, fontWeight: transportMode === val ? 700 : 400 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 99, flexShrink: 0,
+                    background: transportMode === val ? C.success : C.divider }} />
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </span>
       </div>
       )}
 
