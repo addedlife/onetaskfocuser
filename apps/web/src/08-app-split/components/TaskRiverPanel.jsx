@@ -26,6 +26,7 @@ function mix(a, b, t) {
   return `rgb(${Math.round(x.r + (y.r - x.r) * t)},${Math.round(x.g + (y.g - x.g) * t)},${Math.round(x.b + (y.b - x.b) * t)})`;
 }
 
+const COL_TASK   = '#8FB7C9';   // steel blue — all tasks, one color
 const COL_SHAILA = '#5BA8A0';   // teal
 const COL_CAL    = '#D9A23B';   // amber
 const COL_MAIL   = '#8E86C9';   // indigo
@@ -41,8 +42,7 @@ function fmtSender(raw) { const m = (raw || '').match(/^"?([^"<]+?)"?\s*(?:<[^>]
 function clip(t) { t = (t || '').replace(/\s+/g, ' ').trim(); if (t.length <= 60) return t; const cut = t.slice(0, 60); const sp = cut.lastIndexOf(' '); return sp > 30 ? cut.slice(0, sp) : cut; }
 
 // ── collect the items (NO priority/scoring assumptions — that is the AI's job) ──
-function buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, nowMs) {
-  const priById = new Map((priorities || []).map(p => [p.id, p]));
+function buildItems(tasks, shailos, calendarEvents, gmailMessages, _priorities, nowMs) {
   const items = [];
 
   (tasks || []).forEach(t => {
@@ -50,7 +50,7 @@ function buildItems(tasks, shailos, calendarEvents, gmailMessages, priorities, n
     items.push({
       id: t.id, type: 'task',
       text: (t.ncSummary || t.text || 'Untitled').trim(),
-      meta: '', color: priById.get(t.priority)?.color || '#8FB7C9',
+      meta: '', color: COL_TASK,
       pinned: !!t.pinned, raw: t,
     });
   });
@@ -96,7 +96,18 @@ function applyOrder(items, order, aiMeta) {
   (order || []).forEach(id => { const it = byId.get(id); if (it) { out.push(it); seen.add(id); } });
   const rest = items.filter(i => !seen.has(i.id));
   const hasAi = rest.some(i => aiMeta[i.id] && aiMeta[i.id].score != null);
-  if (hasAi) rest.sort((a, b) => ((aiMeta[b.id]?.score ?? -1) - (aiMeta[a.id]?.score ?? -1)));
+  if (hasAi) {
+    rest.sort((a, b) => ((aiMeta[b.id]?.score ?? -1) - (aiMeta[a.id]?.score ?? -1)));
+  } else {
+    // No AI yet — interleave by type so no single source dominates the top or bottom.
+    const buckets = {};
+    rest.forEach(i => { (buckets[i.type] = buckets[i.type] || []).push(i); });
+    const lanes = Object.values(buckets);
+    rest.length = 0;
+    for (let r = 0; lanes.some(l => r < l.length); r++) {
+      lanes.forEach(l => { if (r < l.length) rest.push(l[r]); });
+    }
+  }
   return [...out, ...rest];
 }
 
@@ -307,10 +318,10 @@ export function TaskRiverPanel({
       <div style={{ flexShrink: 0, borderTop: `1px solid ${rgba('#888', 0.1)}`, padding: '6px clamp(14px,3vw,32px)', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK, letterSpacing: 0.3 }}>Color key</span>
         {[
-          { color: '#8FB7C9', label: 'Task (by priority)' },
+          { color: COL_TASK,   label: 'Task' },
           { color: COL_SHAILA, label: 'Shaila' },
-          { color: COL_CAL, label: 'Calendar' },
-          { color: COL_MAIL, label: 'Email' },
+          { color: COL_CAL,    label: 'Calendar' },
+          { color: COL_MAIL,   label: 'Email' },
         ].map(({ color, label }) => (
           <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 0 1px ${rgba(color, 0.4)}` }} />
