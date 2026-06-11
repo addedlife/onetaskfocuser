@@ -103,6 +103,7 @@ function applyOrder(items, order, aiMeta) {
 export function TaskRiverPanel({
   T, tasks = [], shailos = [], calendarEvents = null, gmailMessages = null,
   priorities = [], aiOpts = null, sidebarW = 64, topOffset = 0, clockTime,
+  visible = true,
   onCompleteTask, onOpenTasks, onOpenShailos, onOpenPhone,
 }) {
   const C = cleanTheme(T);
@@ -211,7 +212,7 @@ export function TaskRiverPanel({
   return (
     <div style={{
       position: 'fixed', top: topOffset, left: sidebarW, right: 0, bottom: 0, zIndex: 7600,
-      display: 'flex', flexDirection: 'column', borderLeft: `1px solid ${C.divider}`,
+      display: visible ? 'flex' : 'none', flexDirection: 'column', borderLeft: `1px solid ${C.divider}`,
       overflow: 'hidden', ...waterBg,
     }}>
       <div style={{ flexShrink: 0, padding: '14px clamp(14px,3vw,32px) 8px', display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
@@ -223,7 +224,7 @@ export function TaskRiverPanel({
         </button>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', position: 'relative', padding: '2px clamp(8px,2vw,24px) 40px' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', position: 'relative', padding: '2px clamp(8px,2vw,24px) 12px' }}>
         {view.length === 0 ? (
           <div style={{ padding: '50px 20px', textAlign: 'center', color: C.faint, fontFamily: NC_FONT_STACK, fontSize: 15 }}>The river is still. Nothing waiting.</div>
         ) : (
@@ -252,6 +253,22 @@ export function TaskRiverPanel({
             })}
           </div>
         )}
+      </div>
+
+      {/* Color legend */}
+      <div style={{ flexShrink: 0, borderTop: `1px solid ${rgba('#888', 0.1)}`, padding: '6px clamp(14px,3vw,32px)', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK, letterSpacing: 0.3 }}>Color key</span>
+        {[
+          { color: '#8FB7C9', label: 'Task (by priority)' },
+          { color: COL_SHAILA, label: 'Shaila' },
+          { color: COL_CAL, label: 'Calendar' },
+          { color: COL_MAIL, label: 'Email' },
+        ].map(({ color, label }) => (
+          <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 0 1px ${rgba(color, 0.4)}` }} />
+            <span style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK }}>{label}</span>
+          </span>
+        ))}
       </div>
     </div>
   );

@@ -155,7 +155,9 @@ function positiveIntEnv(name, fallback) {
 
 function geminiLimitsFor(model) {
   const published = GEMINI_FREE_LIMITS[model] || GEMINI_FREE_LIMITS[DEFAULT_GEMINI_MODEL];
-  const safeRpm = positiveIntEnv("GEMINI_SAFE_RPM", GEMINI_DEFAULT_SAFE_RPM);
+  // Default to the model's own published RPM: a single global safe-RPM (4) throttled the
+  // 15-RPM flash-lite lane to pro-preview speed and starved the dashboard jobs into 429s.
+  const safeRpm = positiveIntEnv("GEMINI_SAFE_RPM", published.rpm);
   const safeTpm = positiveIntEnv("GEMINI_SAFE_TPM", Math.min(GEMINI_DEFAULT_TPM, published.tpm));
   const modelRpd = positiveIntEnv(`GEMINI_SAFE_RPD_${model.replace(/[^A-Z0-9]/gi, "_").toUpperCase()}`, Math.floor(published.rpd * 0.9));
   return {
@@ -1266,6 +1268,7 @@ const AI_JOB_REGISTRY = {
     },
   },
   "shaila.detect_answers.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL,
     task: "shaila-detect-answers",
     output: "json",
     shape: "array",
@@ -1312,6 +1315,7 @@ const AI_JOB_REGISTRY = {
     },
   },
   "shaila.answer_summary.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL,
     task: "shaila-answer-summary",
     output: "text",
     genConfig: { temperature: 0.1, maxOutputTokens: 40 },
@@ -1325,6 +1329,7 @@ const AI_JOB_REGISTRY = {
     },
   },
   "shaila.research_queries.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL,
     task: "shaila-research-queries",
     output: "json",
     shape: "object",
@@ -1346,6 +1351,7 @@ const AI_JOB_REGISTRY = {
     },
   },
   "shaila.research_followups.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL,
     task: "shaila-research-followups",
     output: "json",
     shape: "object",
@@ -1366,6 +1372,7 @@ const AI_JOB_REGISTRY = {
     },
   },
   "shaila.research_summarize_sources.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL,
     task: "shaila-research-sources",
     output: "json",
     shape: "object",

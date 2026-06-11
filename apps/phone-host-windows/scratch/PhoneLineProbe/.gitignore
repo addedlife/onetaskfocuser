@@ -1,0 +1,5 @@
+# Build artifacts — only the source, manifest, and findings belong in git.
+bin/
+obj/
+layout/*
+!layout/AppxManifest.xml

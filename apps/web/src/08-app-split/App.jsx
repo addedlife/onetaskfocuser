@@ -3535,8 +3535,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         />
       )}
 
-      {!shellHidden && suiteView === "taskriver" && (
+      {!shellHidden && (
         <TaskRiverPanel
+          visible={suiteView === "taskriver"}
           T={T}
           tasks={switchboardTaskList}
           shailos={switchboardShailaList}
