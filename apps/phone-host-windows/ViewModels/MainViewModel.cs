@@ -5108,6 +5108,10 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _hfp.StatusChanged    += s    => Dispatch(() => StatusHfp = s);
         _hfp.AtLogLine        += s    => Dispatch(() => AppendDebug(s));
         _hfp.CallStateChanged += call => Dispatch(() => HandleCallStateChange(call));
+        // Desk-mode auto-engage runs off the UI thread — audio device setup can
+        // block for ~100 ms and must never stall the dispatcher.
+        _hfp.CallStateChanged += call => Task.Run(() =>
+            _api.CallAudio.OnCallStateChanged(call.Status == CallStatus.Active));
         _hfp.IndicatorChanged += (name, value) => Dispatch(() => HandlePhoneIndicator(name, value));
 
         try

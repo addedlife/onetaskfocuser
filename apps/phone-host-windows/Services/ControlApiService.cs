@@ -211,6 +211,11 @@ public class ControlApiService : IDisposable
                 await StreamCallAudioAsync(stream, qs);
                 return;
             }
+            if (path == "/call-audio.ws")
+            {
+                await HandleCallAudioWebSocketAsync(stream, headers, qs);
+                return;
+            }
             if (path == "/audio-bridge")
             {
                 await WriteHtmlResponseAsync(stream, BuildAudioBridgePage());
@@ -249,6 +254,56 @@ public class ControlApiService : IDisposable
             else if (path == "/audio-inputs")
             {
                 body = AudioInputsJson();
+            }
+            else if (path == "/audio-outputs")
+            {
+                body = JsonSerializer.Serialize(new
+                {
+                    devices = CallAudio.ListOutputs()
+                        .Select(d => new { id = d.Id, name = d.Name, isDefault = d.IsDefault })
+                });
+            }
+            else if (path == "/call-audio/state")
+            {
+                body = CallAudioStateJson();
+            }
+            else if (method == "POST" && path == "/call-audio/config")
+            {
+                var cfg = CallAudio.Settings;
+                void Apply(string key, Action<string> set) { var v = ParseStr(qs, key); if (qs.Contains(key + "=")) set(v); }
+                Apply("carkitIn",  v => cfg.CarkitInputId  = v);
+                Apply("carkitOut", v => cfg.CarkitOutputId = v);
+                Apply("deskOut",   v => cfg.DeskOutputId   = v);
+                Apply("deskMic",   v => cfg.DeskMicId      = v);
+                if (qs.Contains("autoEngage=")) cfg.AutoEngageDeskMode = ParseInt(qs, "autoEngage", 0) != 0;
+                CallAudio.SaveConfig();
+                LogLine?.Invoke("[call-audio] config updated");
+                body = CallAudioStateJson();
+            }
+            else if (method == "POST" && path == "/desk-mode/start")
+            {
+                var summary = CallAudio.EngageDeskMode();
+                body = JsonSerializer.Serialize(new { engaged = CallAudio.DeskModeEngaged, summary });
+            }
+            else if (method == "POST" && path == "/desk-mode/stop")
+            {
+                CallAudio.ReleaseDeskMode();
+                body = JsonSerializer.Serialize(new { engaged = CallAudio.DeskModeEngaged });
+            }
+            else if (method == "POST" && path == "/call-audio/uplink-start")
+            {
+                var deviceId = ParseStr(qs, "device");
+                try
+                {
+                    CallAudio.StartUplink(string.IsNullOrWhiteSpace(deviceId) ? null : deviceId);
+                    body = CallAudioStateJson();
+                }
+                catch (Exception ex) { statusCode = 500; body = JsonError($"uplink start failed: {ex.Message}"); }
+            }
+            else if (method == "POST" && path == "/call-audio/uplink-stop")
+            {
+                CallAudio.StopUplink();
+                body = CallAudioStateJson();
             }
             else if (method == "POST" && path == "/call-audio/start")
             {
@@ -762,6 +817,204 @@ public class ControlApiService : IDisposable
         return JsonSerializer.Serialize(payload);
     }
 
+    private string CallAudioStateJson()
+    {
+        var cfg = CallAudio.Settings;
+        return JsonSerializer.Serialize(new
+        {
+            downlink = new
+            {
+                running           = CallAudio.IsRunning,
+                deviceId          = CallAudio.CurrentDeviceId,
+                deviceName        = CallAudio.CurrentDeviceName,
+                level             = CallAudio.LastLevel,
+                subscribers       = CallAudio.SubscriberCount,
+            },
+            uplink = new
+            {
+                active        = CallAudio.UplinkActive,
+                deviceName    = CallAudio.UplinkDeviceName,
+                bytesReceived = CallAudio.UplinkBytesReceived,
+            },
+            deskMode = new
+            {
+                engaged    = CallAudio.DeskModeEngaged,
+                autoEngage = cfg.AutoEngageDeskMode,
+                lanes      = CallAudio.DeskLaneStatus()
+                    .Select(l => new { l.Name, l.Source, l.Target, l.Level, l.Faulted }),
+            },
+            config = new
+            {
+                carkitIn  = cfg.CarkitInputId,
+                carkitOut = cfg.CarkitOutputId,
+                deskOut   = cfg.DeskOutputId,
+                deskMic   = cfg.DeskMicId,
+                autoEngage = cfg.AutoEngageDeskMode,
+            },
+            sampleRate = CallAudioBridgeService.OutputSampleRate,
+            inputs  = CallAudio.ListInputs().Select(d => new { id = d.Id, name = d.Name, isDefault = d.IsDefault }),
+            outputs = CallAudio.ListOutputs().Select(d => new { id = d.Id, name = d.Name, isDefault = d.IsDefault }),
+        });
+    }
+
+    // ── WebSocket: full-duplex call audio ────────────────────────────────
+    // Server→client binary frames: downlink PCM (16 kHz mono s16le).
+    // Client→server binary frames: uplink PCM (same format) → carkit output.
+    // Minimal RFC 6455: binary/ping/pong/close, masked client frames, no extensions.
+    private async Task HandleCallAudioWebSocketAsync(
+        NetworkStream stream, IReadOnlyDictionary<string, string> headers, string qs)
+    {
+        if (!headers.TryGetValue("Sec-WebSocket-Key", out var wsKey) ||
+            !headers.TryGetValue("Upgrade", out var upgrade) ||
+            !upgrade.Contains("websocket", StringComparison.OrdinalIgnoreCase))
+        {
+            await WriteHttpResponseAsync(stream, JsonError("expected a WebSocket upgrade request"), 400);
+            return;
+        }
+
+        var accept = Convert.ToBase64String(
+            System.Security.Cryptography.SHA1.HashData(
+                Encoding.ASCII.GetBytes(wsKey.Trim() + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
+
+        var handshake = Encoding.ASCII.GetBytes(
+            "HTTP/1.1 101 Switching Protocols\r\n" +
+            "Upgrade: websocket\r\n" +
+            "Connection: Upgrade\r\n" +
+            $"Sec-WebSocket-Accept: {accept}\r\n\r\n");
+        await stream.WriteAsync(handshake, _cts.Token);
+        await stream.FlushAsync(_cts.Token);
+
+        LogLine?.Invoke("[call-audio] websocket client connected");
+
+        var uplinkDevice = ParseStr(qs, "uplink");
+        bool uplinkStartedHere = false;
+        var sendLock = new SemaphoreSlim(1, 1);
+        using var closeCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+
+        // Downlink pump: capture chunks → binary frames.
+        var (reader, lease) = CallAudio.AddSubscriber();
+        var downlinkTask = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var chunk in reader.ReadAllAsync(closeCts.Token))
+                    await SendWsFrameAsync(stream, 0x2, chunk, sendLock, closeCts.Token);
+            }
+            catch { /* socket closed — read pump handles shutdown */ }
+        });
+
+        // Read pump: client frames → uplink PCM / ping / close.
+        try
+        {
+            var header = new byte[2];
+            while (!closeCts.Token.IsCancellationRequested)
+            {
+                await ReadExactAsync(stream, header, 2, closeCts.Token);
+                int opcode = header[0] & 0x0F;
+                bool masked = (header[1] & 0x80) != 0;
+                long len = header[1] & 0x7F;
+
+                if (len == 126)
+                {
+                    var ext = new byte[2];
+                    await ReadExactAsync(stream, ext, 2, closeCts.Token);
+                    len = (ext[0] << 8) | ext[1];
+                }
+                else if (len == 127)
+                {
+                    var ext = new byte[8];
+                    await ReadExactAsync(stream, ext, 8, closeCts.Token);
+                    len = 0;
+                    for (int i = 0; i < 8; i++) len = (len << 8) | ext[i];
+                }
+
+                if (len > 1024 * 1024) break;            // refuse absurd frames
+
+                var mask = new byte[4];
+                if (masked) await ReadExactAsync(stream, mask, 4, closeCts.Token);
+
+                var payload = new byte[len];
+                if (len > 0) await ReadExactAsync(stream, payload, (int)len, closeCts.Token);
+                if (masked)
+                    for (int i = 0; i < payload.Length; i++)
+                        payload[i] ^= mask[i & 3];
+
+                if (opcode == 0x8)                        // close
+                {
+                    // Stop the downlink pump BEFORE replying: a strict client
+                    // (.NET ClientWebSocket) fails its close handshake if data
+                    // frames keep arriving after it initiates close.
+                    closeCts.Cancel();
+                    try { await downlinkTask; } catch { }
+                    await SendWsFrameAsync(stream, 0x8, Array.Empty<byte>(), sendLock, CancellationToken.None);
+                    break;
+                }
+                if (opcode == 0x9)                        // ping → pong
+                {
+                    await SendWsFrameAsync(stream, 0xA, payload, sendLock, closeCts.Token);
+                    continue;
+                }
+                if (opcode == 0x2 && payload.Length > 0)  // binary → uplink voice
+                {
+                    if (!CallAudio.UplinkActive)
+                    {
+                        try
+                        {
+                            CallAudio.StartUplink(string.IsNullOrWhiteSpace(uplinkDevice) ? null : uplinkDevice);
+                            uplinkStartedHere = true;
+                        }
+                        catch (Exception ex) { LogLine?.Invoke($"[call-audio] ws uplink start failed: {ex.Message}"); }
+                    }
+                    CallAudio.WriteUplink(payload, 0, payload.Length);
+                }
+                // text frames (opcode 0x1) and pongs are ignored for now
+            }
+        }
+        catch { /* client vanished — normal for tab close / network drop */ }
+        finally
+        {
+            closeCts.Cancel();
+            lease.Dispose();
+            if (uplinkStartedHere) CallAudio.StopUplink();
+            try { await downlinkTask; } catch { }
+            sendLock.Dispose();
+            LogLine?.Invoke("[call-audio] websocket client disconnected");
+        }
+    }
+
+    private static async Task SendWsFrameAsync(
+        NetworkStream stream, byte opcode, byte[] payload, SemaphoreSlim sendLock, CancellationToken ct)
+    {
+        byte[] header;
+        if (payload.Length < 126)
+            header = new byte[] { (byte)(0x80 | opcode), (byte)payload.Length };
+        else if (payload.Length <= 65535)
+            header = new byte[] { (byte)(0x80 | opcode), 126,
+                                  (byte)(payload.Length >> 8), (byte)(payload.Length & 0xFF) };
+        else
+            throw new InvalidOperationException("frame too large");
+
+        await sendLock.WaitAsync(ct);
+        try
+        {
+            await stream.WriteAsync(header, ct);
+            if (payload.Length > 0) await stream.WriteAsync(payload, ct);
+            await stream.FlushAsync(ct);
+        }
+        finally { sendLock.Release(); }
+    }
+
+    private static async Task ReadExactAsync(NetworkStream stream, byte[] buf, int count, CancellationToken ct)
+    {
+        int read = 0;
+        while (read < count)
+        {
+            int n = await stream.ReadAsync(buf.AsMemory(read, count - read), ct);
+            if (n <= 0) throw new IOException("socket closed");
+            read += n;
+        }
+    }
+
     /// <summary>Writes an indefinite chunked PCM stream to the socket until the
     /// client disconnects, then releases its subscriber lease.</summary>
     private async Task StreamCallAudioAsync(NetworkStream stream, string qs)
@@ -804,146 +1057,264 @@ public class ControlApiService : IDisposable
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DeskPhone — Call Audio Bridge</title>
+<title>DeskPhone — Call Audio</title>
 <style>
-  :root { color-scheme: light dark; }
-  body { font-family: 'Segoe UI', Roboto, system-ui, sans-serif; margin: 0; padding: 24px;
+  :root { color-scheme: dark; }
+  body { font-family: 'Segoe UI', Roboto, system-ui, sans-serif; margin:0; padding:24px;
          background:#0b0f14; color:#e7edf3; }
-  .card { max-width: 560px; margin: 0 auto; background:#141b24; border:1px solid #243140;
-          border-radius:16px; padding:24px; }
-  h1 { font-size:18px; margin:0 0 4px; }
-  p.sub { margin:0 0 20px; color:#8aa0b4; font-size:13px; line-height:1.4; }
-  label { display:block; font-size:12px; color:#8aa0b4; margin:16px 0 6px; }
+  .wrap { max-width:620px; margin:0 auto; display:flex; flex-direction:column; gap:16px; }
+  .card { background:#141b24; border:1px solid #243140; border-radius:16px; padding:20px 22px; }
+  h1 { font-size:18px; margin:0; display:flex; align-items:center; gap:10px; }
+  h2 { font-size:13px; margin:0 0 12px; color:#9fd0ff; text-transform:uppercase; letter-spacing:.08em; }
+  p.sub { margin:6px 0 0; color:#8aa0b4; font-size:13px; line-height:1.45; }
+  label { display:block; font-size:12px; color:#8aa0b4; margin:12px 0 5px; }
   select, button { font-size:14px; }
-  select { width:100%; padding:10px; border-radius:10px; background:#0e141b; color:#e7edf3;
+  select { width:100%; padding:9px; border-radius:10px; background:#0e141b; color:#e7edf3;
            border:1px solid #2b3a4b; }
-  .row { display:flex; gap:10px; margin-top:18px; }
-  button { flex:1; padding:12px; border-radius:10px; border:none; cursor:pointer; font-weight:600; }
-  #listen { background:#0b8a4a; color:#fff; }
-  #stop   { background:#7a2230; color:#fff; }
+  .row { display:flex; gap:10px; margin-top:14px; }
+  button { flex:1; padding:11px; border-radius:10px; border:none; cursor:pointer; font-weight:600;
+           background:#26405c; color:#fff; }
+  button.go   { background:#0b8a4a; }
+  button.warn { background:#7a2230; }
   button:disabled { opacity:.45; cursor:default; }
-  .meter { height:14px; border-radius:7px; background:#0e141b; border:1px solid #2b3a4b;
-           overflow:hidden; margin-top:18px; }
+  .meter { height:12px; border-radius:6px; background:#0e141b; border:1px solid #2b3a4b;
+           overflow:hidden; margin-top:12px; }
   .meter > div { height:100%; width:0%; background:linear-gradient(90deg,#0b8a4a,#d6c40b,#d63b3b);
                  transition:width .08s linear; }
-  .status { margin-top:14px; font-size:13px; color:#8aa0b4; min-height:18px; }
-  code { color:#9fd0ff; }
+  .status { margin-top:10px; font-size:13px; color:#8aa0b4; min-height:17px; }
+  .badge { font-size:12px; font-weight:600; border-radius:999px; padding:3px 12px; background:#26405c; }
+  .badge.live { background:#0b8a4a; }
+  .check { display:flex; align-items:center; gap:8px; margin-top:14px; font-size:13px; color:#c7d4e0; }
+  .check input { width:16px; height:16px; }
+  .lanes { font-size:12px; color:#8aa0b4; margin-top:8px; line-height:1.5; }
 </style>
 </head>
 <body>
+<div class="wrap">
+
   <div class="card">
-    <h1>Call Audio Bridge</h1>
-    <p class="sub">Pick the Windows input the call audio arrives on (the USB/Bluetooth
-       speakerphone's microphone, a 3.5&nbsp;mm line-in, or the built-in mic to test the
-       pipeline), then press Listen. Audio is captured by DeskPhone and streamed here live.</p>
+    <h1>Call Audio <span class="badge" id="callBadge">idle</span></h1>
+    <p class="sub">Live two-way bridge between the carkit device (the hardware your phone
+       sends call audio to) and this browser or your PC headset. Configure devices once;
+       Desk Mode can then follow calls automatically.</p>
+  </div>
 
-    <label for="dev">Input device</label>
-    <select id="dev"></select>
-
-    <div class="row">
-      <button id="listen">Listen</button>
-      <button id="stop" disabled>Stop</button>
+  <div class="card">
+    <h2>Devices</h2>
+    <label>Carkit input — call audio arrives here</label>
+    <select id="cfgCarkitIn"></select>
+    <label>Carkit output — your voice plays out here (phone hears it)</label>
+    <select id="cfgCarkitOut"></select>
+    <label>Desk output — your headset / AirPods</label>
+    <select id="cfgDeskOut"></select>
+    <label>Desk mic — your headset / AirPods microphone</label>
+    <select id="cfgDeskMic"></select>
+    <div class="check">
+      <input type="checkbox" id="cfgAuto">
+      <span>Auto-engage Desk Mode while a call is active</span>
     </div>
+    <div class="row"><button id="saveCfg" class="go">Save devices</button></div>
+    <div class="status" id="cfgStatus"></div>
+  </div>
 
+  <div class="card">
+    <h2>Browser — listen &amp; talk</h2>
+    <div class="row">
+      <button id="listen" class="go">Listen</button>
+      <button id="talk">Talk</button>
+      <button id="stopAll" class="warn" disabled>Stop</button>
+    </div>
     <div class="meter"><div id="bar"></div></div>
     <div class="status" id="status">Idle.</div>
   </div>
 
+  <div class="card">
+    <h2>Desk Mode — carkit ⇄ headset</h2>
+    <div class="row">
+      <button id="deskOn" class="go">Engage</button>
+      <button id="deskOff" class="warn">Release</button>
+    </div>
+    <div class="lanes" id="lanes">Not engaged.</div>
+  </div>
+
+</div>
 <script>
 const $ = (id) => document.getElementById(id);
-let ctx = null, playing = false, nextTime = 0, reader = null, abort = null, meterTimer = null;
+const RATE = 16000;
+let ws = null, ctx = null, nextTime = 0;
+let listening = false, talking = false;
+let micStream = null, micCtx = null, micNode = null, micSrc = null;
 
-async function refreshDevices() {
+// ── shared websocket (downlink frames in, uplink frames out) ──
+function wsUrl() {
+  return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/call-audio.ws';
+}
+function ensureWs() {
+  return new Promise((resolve, reject) => {
+    if (ws && ws.readyState === WebSocket.OPEN) return resolve(ws);
+    const s = new WebSocket(wsUrl());
+    s.binaryType = 'arraybuffer';
+    s.onopen = () => { ws = s; resolve(s); };
+    s.onerror = (e) => reject(new Error('WebSocket failed'));
+    s.onclose = () => { if (ws === s) { ws = null; if (listening || talking) stopAll('Connection closed.'); } };
+    s.onmessage = (ev) => { if (listening && ev.data instanceof ArrayBuffer) playChunk(ev.data); };
+  });
+}
+function closeWsIfIdle() {
+  if (!listening && !talking && ws) { try { ws.close(); } catch {} ws = null; }
+}
+
+// ── downlink playback ──
+function playChunk(buf) {
+  if (!ctx) return;
+  const frames = Math.floor(buf.byteLength / 2);
+  if (!frames) return;
+  const dv = new DataView(buf);
+  const f32 = new Float32Array(frames);
+  for (let i = 0; i < frames; i++) f32[i] = dv.getInt16(i * 2, true) / 32768;
+  const ab = ctx.createBuffer(1, frames, RATE);
+  ab.copyToChannel(f32, 0);
+  const src = ctx.createBufferSource();
+  src.buffer = ab; src.connect(ctx.destination);
+  if (nextTime < ctx.currentTime) nextTime = ctx.currentTime + 0.06;
+  src.start(nextTime);
+  nextTime += ab.duration;
+}
+
+async function startListen() {
   try {
-    const j = await (await fetch('/audio-inputs')).json();
-    const sel = $('dev');
-    const prev = sel.value;
-    sel.innerHTML = '';
-    for (const d of j.devices) {
-      const o = document.createElement('option');
-      o.value = d.id; o.textContent = d.name + (d.isDefault ? '  (default)' : '');
-      sel.appendChild(o);
-    }
-    if (prev) sel.value = prev;
-  } catch (e) { $('status').textContent = 'Could not list devices: ' + e; }
+    try { ctx = new AudioContext({ sampleRate: RATE }); } catch { ctx = new AudioContext(); }
+    await ctx.resume();
+    nextTime = ctx.currentTime + 0.20;
+    await fetch('/call-audio/start?device=' + encodeURIComponent($('cfgCarkitIn').value), { method:'POST' });
+    await ensureWs();
+    listening = true;
+    syncButtons('Live — listening to the carkit input.');
+  } catch (e) { syncButtons('Listen failed: ' + e.message); }
 }
 
-function concat(a, b) {
-  const out = new Uint8Array(a.length + b.length);
-  out.set(a, 0); out.set(b, a.length); return out;
-}
-
-async function listen() {
-  const dev = $('dev').value;
-  try { ctx = new AudioContext({ sampleRate: 16000 }); }
-  catch (e) { ctx = new AudioContext(); }
-  await ctx.resume();
-  nextTime = ctx.currentTime + 0.20;            // jitter buffer
-  abort = new AbortController();
-
-  $('listen').disabled = true; $('stop').disabled = false;
-  $('status').textContent = 'Connecting…';
-
-  let resp;
+// ── uplink (your mic → carkit output) ──
+async function startTalk() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    syncButtons('Mic capture needs a secure page (localhost or HTTPS).'); return;
+  }
   try {
-    resp = await fetch('/call-audio.pcm?device=' + encodeURIComponent(dev), { signal: abort.signal });
-  } catch (e) { $('status').textContent = 'Stream failed: ' + e; resetUi(); return; }
-
-  reader = resp.body.getReader();
-  playing = true;
-  $('status').textContent = 'Live — listening on selected input.';
-  startMeter();
-
-  let leftover = new Uint8Array(0);
-  try {
-    while (playing) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      let buf = concat(leftover, value);
-      const frames = Math.floor(buf.length / 2);
-      const usable = frames * 2;
-      const pcm = buf.slice(0, usable);
-      leftover = buf.slice(usable);
-      if (frames === 0) continue;
-
-      const f32 = new Float32Array(frames);
-      const dv = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength);
-      for (let i = 0; i < frames; i++) f32[i] = dv.getInt16(i * 2, true) / 32768;
-
-      const ab = ctx.createBuffer(1, frames, 16000);
-      ab.copyToChannel(f32, 0);
-      const src = ctx.createBufferSource();
-      src.buffer = ab; src.connect(ctx.destination);
-      if (nextTime < ctx.currentTime) nextTime = ctx.currentTime + 0.05;  // re-prime if we fell behind
-      src.start(nextTime);
-      nextTime += ab.duration;
-    }
-  } catch (e) { if (playing) $('status').textContent = 'Stream ended: ' + e; }
-  resetUi();
+    micStream = await navigator.mediaDevices.getUserMedia(
+      { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    await ensureWs();
+    try { micCtx = new AudioContext({ sampleRate: RATE }); } catch { micCtx = new AudioContext(); }
+    await micCtx.resume();
+    micSrc = micCtx.createMediaStreamSource(micStream);
+    micNode = micCtx.createScriptProcessor(2048, 1, 1);
+    const mute = micCtx.createGain(); mute.gain.value = 0;   // processor must reach destination to run
+    micNode.onaudioprocess = (ev) => {
+      if (!talking || !ws || ws.readyState !== WebSocket.OPEN) return;
+      const f32 = ev.inputBuffer.getChannelData(0);
+      const out = new Int16Array(f32.length);
+      for (let i = 0; i < f32.length; i++) {
+        const s = Math.max(-1, Math.min(1, f32[i]));
+        out[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+      ws.send(out.buffer);
+    };
+    micSrc.connect(micNode); micNode.connect(mute); mute.connect(micCtx.destination);
+    talking = true;
+    syncButtons('Live — your voice is feeding the carkit output.');
+  } catch (e) { stopTalkInternals(); syncButtons('Talk failed: ' + e.message); }
 }
 
-function startMeter() {
-  stopMeter();
-  meterTimer = setInterval(async () => {
-    try { const j = await (await fetch('/audio-inputs')).json();
-          $('bar').style.width = Math.min(100, Math.round((j.level || 0) * 140)) + '%'; }
-    catch {}
-  }, 250);
+function stopTalkInternals() {
+  try { micNode && micNode.disconnect(); } catch {}
+  try { micSrc && micSrc.disconnect(); } catch {}
+  try { micStream && micStream.getTracks().forEach(t => t.stop()); } catch {}
+  try { micCtx && micCtx.close(); } catch {}
+  micNode = micSrc = micStream = micCtx = null;
 }
-function stopMeter() { if (meterTimer) { clearInterval(meterTimer); meterTimer = null; } $('bar').style.width = '0%'; }
 
-function stop() { playing = false; try { abort.abort(); } catch {} try { reader.cancel(); } catch {} }
-function resetUi() {
-  playing = false; stopMeter();
+function stopAll(msg) {
+  listening = false;
+  talking = false;
+  stopTalkInternals();
   try { ctx && ctx.close(); } catch {}
-  $('listen').disabled = false; $('stop').disabled = true;
-  if ($('status').textContent.startsWith('Live')) $('status').textContent = 'Stopped.';
+  ctx = null;
+  closeWsIfIdle();
+  syncButtons(msg || 'Stopped.');
 }
 
-$('listen').onclick = listen;
-$('stop').onclick = stop;
-refreshDevices();
-setInterval(() => { if (!playing) refreshDevices(); }, 5000);
+function syncButtons(msg) {
+  $('listen').disabled = listening;
+  $('talk').disabled = talking;
+  $('stopAll').disabled = !listening && !talking;
+  if (msg) $('status').textContent = msg;
+}
+
+// ── config + state ──
+function fillSelect(sel, devices, selectedId) {
+  sel.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = ''; none.textContent = '(not set — use default)';
+  sel.appendChild(none);
+  for (const d of devices) {
+    const o = document.createElement('option');
+    o.value = d.id; o.textContent = d.name + (d.isDefault ? '  (default)' : '');
+    sel.appendChild(o);
+  }
+  sel.value = selectedId || '';
+}
+
+let cfgLoaded = false;
+async function refreshState() {
+  try {
+    const j = await (await fetch('/call-audio/state')).json();
+    if (!cfgLoaded) {
+      fillSelect($('cfgCarkitIn'),  j.inputs,  j.config.carkitIn);
+      fillSelect($('cfgDeskMic'),   j.inputs,  j.config.deskMic);
+      fillSelect($('cfgCarkitOut'), j.outputs, j.config.carkitOut);
+      fillSelect($('cfgDeskOut'),   j.outputs, j.config.deskOut);
+      $('cfgAuto').checked = !!j.config.autoEngage;
+      cfgLoaded = true;
+    }
+    $('bar').style.width = Math.min(100, Math.round((j.downlink.level || 0) * 140)) + '%';
+    if (j.deskMode.engaged) {
+      $('lanes').innerHTML = j.deskMode.lanes.map(l =>
+        (l.Faulted ? '⚠ ' : '● ') + l.Name + ': ' + l.Source + ' → ' + l.Target).join('<br>') || 'Engaged (no lanes).';
+    } else {
+      $('lanes').textContent = j.deskMode.autoEngage
+        ? 'Not engaged — will engage automatically during calls.' : 'Not engaged.';
+    }
+  } catch {}
+  try {
+    const s = await (await fetch('/status')).json();
+    const active = s.isCallActive || s.isRinging;
+    $('callBadge').textContent = s.callState || 'idle';
+    $('callBadge').className = 'badge' + (active ? ' live' : '');
+  } catch {}
+}
+
+async function saveCfg() {
+  const p = new URLSearchParams({
+    carkitIn:  $('cfgCarkitIn').value,
+    carkitOut: $('cfgCarkitOut').value,
+    deskOut:   $('cfgDeskOut').value,
+    deskMic:   $('cfgDeskMic').value,
+    autoEngage: $('cfgAuto').checked ? '1' : '0',
+  });
+  try {
+    await fetch('/call-audio/config?' + p, { method: 'POST' });
+    $('cfgStatus').textContent = 'Saved.';
+    setTimeout(() => $('cfgStatus').textContent = '', 2500);
+  } catch (e) { $('cfgStatus').textContent = 'Save failed: ' + e; }
+}
+
+$('listen').onclick = startListen;
+$('talk').onclick = startTalk;
+$('stopAll').onclick = () => stopAll();
+$('saveCfg').onclick = saveCfg;
+$('deskOn').onclick  = async () => { await saveCfg(); await fetch('/desk-mode/start', { method:'POST' }); refreshState(); };
+$('deskOff').onclick = async () => { await fetch('/desk-mode/stop',  { method:'POST' }); refreshState(); };
+
+refreshState();
+setInterval(refreshState, 1500);
 </script>
 </body>
 </html>
