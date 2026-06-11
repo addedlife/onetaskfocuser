@@ -174,7 +174,11 @@ export function TaskRiverPanel({
         setAiMeta(meta); lastRankKeyRef.current = rankKey; retryStreakRef.current = 0;
       } else if (state === 'error') {
         retryStreakRef.current += 1;
-        scheduleRetry(Math.min(90, 30 * retryStreakRef.current));
+        // Auto-retry once at 20s, once more at 45s, then stop — let the user press the button.
+        const delays = [20, 45];
+        if (retryStreakRef.current <= delays.length) {
+          scheduleRetry(delays[retryStreakRef.current - 1]);
+        }
       }
       setAiState(state);
     };
