@@ -970,7 +970,7 @@ const AI_JOB_REGISTRY = {
     validate: normalizeChiefTaskSuggestions,
   },
   "dashboard.river_rank.v1": {
-    model: QUOTA_FALLBACK_GEMINI_MODEL, // high-frequency dashboard job: use the 1000/day flash-lite lane
+    model: "gemini-2.5-flash-lite", // dedicated lane — keeps river_rank out of the flash-lite queue shared by 5+ other dashboard jobs
     task: "dashboard-river-rank",
     output: "json",
     shape: "object",

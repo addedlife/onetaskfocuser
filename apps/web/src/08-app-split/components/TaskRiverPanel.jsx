@@ -182,7 +182,7 @@ export function TaskRiverPanel({
       }
       setAiState(state);
     };
-    const watchdog = setTimeout(() => settle('error'), 16000);
+    const watchdog = setTimeout(() => settle('error'), 29000);
     const payload = items.map(i => ({ id: i.id, type: i.type, text: (i.text || '').slice(0, 200), meta: i.meta || '' }));
     runAIJob('dashboard.river_rank.v1', { items: payload, currentTime: now.toLocaleString() }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 1400 } })
       .then(job => {
