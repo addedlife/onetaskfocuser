@@ -1311,16 +1311,23 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     : (availableProviders[0] || selectedProvider);
   const aiAvailable = availMap ? availableProviders.length > 0 : serverKeyAvailable;
   const selectedModel = AS?.aiModel || aiConfig?.model || aiConfig?.textModel || "";
-  const rawAiOpts = AS ? {
-    provider: effectiveProvider,
-    // Only carry the user's model when using their chosen provider; on fallback let the
-    // server pick the right default model for the substitute provider.
-    model: effectiveProvider === selectedProvider ? selectedModel : "",
-    geminiCredential: AS?.aiGeminiCredential || aiConfig?.defaultGeminiCredential || "auto",
-    source: "server",
-  } : null;
-  const hasAI = !!(rawAiOpts && aiAvailable);
-  const aiOpts = hasAI ? rawAiOpts : null;
+  // Memoized on its primitive parts: aiOpts is an effect dependency in NerveCenterPanel
+  // and elsewhere, and App re-renders every second for the clock — a fresh object literal
+  // here re-ran every consumer effect once per second.
+  const hasAS = !!AS;
+  const geminiCredentialPref = AS?.aiGeminiCredential || aiConfig?.defaultGeminiCredential || "auto";
+  const aiOpts = useMemo(() => {
+    if (!hasAS || !aiAvailable) return null;
+    return {
+      provider: effectiveProvider,
+      // Only carry the user's model when using their chosen provider; on fallback let the
+      // server pick the right default model for the substitute provider.
+      model: effectiveProvider === selectedProvider ? selectedModel : "",
+      geminiCredential: geminiCredentialPref,
+      source: "server",
+    };
+  }, [hasAS, aiAvailable, effectiveProvider, selectedProvider, selectedModel, geminiCredentialPref]);
+  const hasAI = !!aiOpts;
   async function retryHeldTranscription(rec) {
     if (!aiOpts || pendingRetryId) return;
     setPendingRetryId(rec.id);

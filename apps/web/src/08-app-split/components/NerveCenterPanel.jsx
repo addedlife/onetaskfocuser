@@ -765,6 +765,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const [ncSummaryError, setNcSummaryError] = useState(false); // last summary attempt failed (gateway null/throw)
   const [ncSummaryRefreshNonce, setNcSummaryRefreshNonce] = useState(0);
   const ncInFlightRef = useRef(false); // a summary scan is in flight (survives effect re-runs)
+  const ncFailStreakRef = useRef(0);   // consecutive failed scans → exponential retry backoff
   const [chiefLoading, setChiefLoading] = useState(false);
   const [chiefError, setChiefError] = useState("");
   const [chiefPrompt, setChiefPrompt] = useState("");
@@ -1226,13 +1227,21 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // or blank the bar. (The context key changes constantly with live data, so without this
     // guard a mid-flight re-run cancelled the call and wiped the status — the blank you saw.)
     if (ncInFlightRef.current) return undefined;
-    // Throttled since the last run: keep the status visible (cache if we have it, else stay on
-    // "Updating") and re-trigger the moment the window opens, so it never goes blank.
+    // Throttled since the last run: keep the status visible (cache if we have it, error pill
+    // if the last attempt failed, else stay on "Updating") and re-trigger when the window
+    // opens. Consecutive failures back the window off (90s → 3m → 6m → … capped at 15m) so
+    // a down/overloaded gateway isn't hammered on a fixed clock by every open tab.
+    const failStreak = ncFailStreakRef.current;
+    const gapMs = failStreak > 0
+      ? Math.min(15 * 60 * 1000, NC_SUMMARY_MIN_GAP_MS * 2 ** failStreak)
+      : NC_SUMMARY_MIN_GAP_MS;
     const sinceLast = now - readStorageNumber(NC_SUMMARY_LAST_RUN_KEY);
-    if (sinceLast < NC_SUMMARY_MIN_GAP_MS) {
+    if (sinceLast < gapMs) {
       if (cached?.result?.supercrunch) { setNcSummary(cached.result); setNcSummaryLoading(false); }
-      else { setNcSummaryLoading(true); }
-      const t = window.setTimeout(() => setNcSummaryRefreshNonce(n => n + 1), NC_SUMMARY_MIN_GAP_MS - sinceLast + 60);
+      // After a failure, keep the error pill (with its Retry button) visible during the
+      // backoff window — flipping it to a perpetual "Updating…" hid real outages.
+      else if (failStreak === 0) { setNcSummaryLoading(true); }
+      const t = window.setTimeout(() => setNcSummaryRefreshNonce(n => n + 1), gapMs - sinceLast + 60);
       return () => window.clearTimeout(t);
     }
     // Start a scan. Status stays "Updating" until THIS call resolves; we do NOT cancel it on
@@ -1244,14 +1253,15 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const scanKeyAtStart = ncSummaryScanKey;
     runAIJob("dashboard.nervecenter_summary.v1", { context: chiefContext }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 600 } })
       .then(job => {
-        if (!job || !job.output) { setNcSummary(null); setNcSummaryError(true); return; }
+        if (!job || !job.output) { ncFailStreakRef.current += 1; setNcSummary(null); setNcSummaryError(true); return; }
         // Keep a result that has signals even if supercrunch is empty (the schema allows it).
+        ncFailStreakRef.current = 0;
         setNcSummary(job.output); setNcSummaryError(false);
         if (job.output.supercrunch) {
           writeStorageJson(NC_SUMMARY_CACHE_KEY, { scanKey: scanKeyAtStart, ts: Date.now(), result: job.output });
         }
       })
-      .catch(() => { setNcSummary(null); setNcSummaryError(true); })
+      .catch(() => { ncFailStreakRef.current += 1; setNcSummary(null); setNcSummaryError(true); })
       .finally(() => { ncInFlightRef.current = false; setNcSummaryLoading(false); });
     return undefined;
   }, [ncSummaryScanKey, aiOpts, ncSummaryRefreshNonce]); // eslint-disable-line
@@ -1794,6 +1804,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const retryNcSummary = () => {
     removeStorageKey(NC_SUMMARY_CACHE_KEY);
     removeStorageKey(NC_SUMMARY_LAST_RUN_KEY);
+    ncFailStreakRef.current = 0; // manual retry overrides the failure backoff
     setNcSummaryError(false);
     setNcSummaryRefreshNonce(n => n + 1);
   };
@@ -1843,7 +1854,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             : ncSummaryStatusPill}
         </span>
         <button type="button"
-          onClick={() => { removeStorageKey(NC_SUMMARY_CACHE_KEY); removeStorageKey(NC_SUMMARY_LAST_RUN_KEY); setNcSummaryRefreshNonce(n => n + 1); }}
+          onClick={retryNcSummary}
           title="Refresh summary" aria-label="Refresh summary"
           disabled={ncSummaryLoading}
           style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 5, border: "none", background: "transparent", color: C.faint, cursor: ncSummaryLoading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: ncSummaryLoading ? 0.4 : 1, ...(ncSummaryLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }}>

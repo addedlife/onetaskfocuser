@@ -25,7 +25,10 @@ const QUOTA_FALLBACK_GEMINI_MODEL = "gemini-3.1-flash-lite";
 const DEFAULT_CALENDAR_TIME_ZONE = "America/New_York";
 const GEMINI_DEFAULT_SAFE_RPM = 4;
 const GEMINI_DEFAULT_TPM = 200000;
-const GEMINI_QUEUE_TIMEOUT_MS = 55000;
+// Must stay well under the Netlify function budget (~26-30s): if a caller waits in the
+// pacing queue past the Lambda wall it dies as Sandbox.Timedout (an opaque 502) instead
+// of returning a clean 429 the client can back off from.
+const GEMINI_QUEUE_TIMEOUT_MS = 18000;
 
 const GEMINI_FREE_LIMITS = {
   "gemini-3.1-pro-preview": { rpm: 4, tpm: 250000, rpd: 90 },
@@ -878,6 +881,7 @@ const AI_JOB_REGISTRY = {
     },
   },
   "dashboard.chief_of_staff.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL, // high-frequency dashboard job: use the 1000/day flash-lite lane
     task: "dashboard-chief-of-staff",
     output: "json",
     shape: "object",
@@ -911,6 +915,7 @@ const AI_JOB_REGISTRY = {
     validate: normalizeChiefBrief,
   },
   "dashboard.task_suggestions.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL, // high-frequency dashboard job: use the 1000/day flash-lite lane
     task: "dashboard-task-suggestions",
     output: "json",
     shape: "object",
@@ -947,6 +952,7 @@ const AI_JOB_REGISTRY = {
     validate: normalizeChiefTaskSuggestions,
   },
   "dashboard.river_rank.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL, // high-frequency dashboard job: use the 1000/day flash-lite lane
     task: "dashboard-river-rank",
     output: "json",
     shape: "object",
@@ -986,6 +992,7 @@ const AI_JOB_REGISTRY = {
     },
   },
   "dashboard.nervecenter_summary.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL, // high-frequency dashboard job: use the 1000/day flash-lite lane
     task: "dashboard-nervecenter-summary",
     output: "json",
     shape: "object",
@@ -1023,6 +1030,7 @@ const AI_JOB_REGISTRY = {
     },
   },
   "dashboard.chief_dialogue.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL, // high-frequency dashboard job: use the 1000/day flash-lite lane
     task: "dashboard-chief-dialogue",
     output: "text",
     genConfig: { temperature: 0.2, maxOutputTokens: 1100 },
@@ -1048,6 +1056,7 @@ const AI_JOB_REGISTRY = {
     },
   },
   "dashboard.email_summaries.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL, // high-frequency dashboard job: use the 1000/day flash-lite lane
     task: "email-summary",
     output: "json",
     shape: "array",
@@ -1066,6 +1075,7 @@ const AI_JOB_REGISTRY = {
     validate: value => normalizeStringArray(value, 20, 240),
   },
   "dashboard.polish_items.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL, // high-frequency dashboard job: use the 1000/day flash-lite lane
     task: "dashboard-polish",
     output: "json",
     shape: "array",
@@ -1621,7 +1631,10 @@ async function callGemini({ body, prompt, base64, mimeType, model, genConfig, cr
   }
 
   if (allowQuotaFallback && model !== QUOTA_FALLBACK_GEMINI_MODEL) {
-    await sleep(30000 + Math.floor(Math.random() * 5000));
+    // The fallback model has its own independent quota lane, so there is nothing to wait
+    // out — and a long sleep here overruns the Netlify function budget and turns every
+    // daily-cap event into a Sandbox.Timedout 502. Brief jitter only, to de-thunder herds.
+    await sleep(500 + Math.floor(Math.random() * 1000));
     return callGemini({
       body: requestBody,
       prompt,
@@ -1781,7 +1794,9 @@ async function runAiJobPayload(payload = {}) {
   const provider = kind === "audio"
     ? "gemini"
     : (payload.provider || payload.aiProvider || undefined);
-  const model = payload.model || payload.aiModel || undefined;
+  // Per-job default model (job.model) lets high-frequency dashboard jobs run on the
+  // high-quota flash-lite lane instead of burning the 90/day pro-preview cap.
+  const model = payload.model || payload.aiModel || job.model || undefined;
   const genConfig = { ...(job.genConfig || {}), ...(payload.genConfig || {}) };
   const started = Date.now();
   const aiResult = await processAiPayload({
@@ -1875,8 +1890,22 @@ async function processAiPayload(payload = {}) {
     credential: payload.geminiCredential || payload.credential || payload.keyLane,
   };
 
-  if (provider === "openai") return callOpenAI(common);
-  if (provider === "claude") return callClaude(common);
+  if (provider === "openai" || provider === "claude") {
+    const call = provider === "openai" ? callOpenAI : callClaude;
+    try {
+      return await call(common);
+    } catch (e) {
+      // A paid lane that's out of credits fails 100% of calls instantly ("credit balance
+      // is too low"). The key still exists, so the client's availability map keeps routing
+      // here — reroute to Gemini so the dashboards stay alive instead of erroring forever.
+      const billingDead = (e?.statusCode === 400 || e?.statusCode === 402 || e?.statusCode === 403)
+        && /credit|billing|balance|purchase/i.test(String(e?.message || ""));
+      const geminiAvailable = geminiCredentialCatalog().some(credential => credential.available);
+      if (!billingDead || !geminiAvailable) throw e;
+      console.warn(`[AI] ${provider} lane failed with a billing error; falling back to Gemini:`, e.message);
+      return callGemini({ ...common, model: modelFor("gemini", kind, task, payload.model) });
+    }
+  }
   return callGemini(common);
 }
 
