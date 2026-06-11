@@ -115,26 +115,58 @@ export function TaskRiverPanel({
     [tasks, shailos, calendarEvents, gmailMessages, priorities, Math.floor(nowMs / 60000)]
   );
 
-  // ── AI ranking (the ONLY source of priority, terse line, and reason) ─────────
+  // ── AI ranking ─────────────────────────────────────────────────────────────────
   const [aiMeta, setAiMeta] = useState({}); // id -> { score, label, reason }
   const [aiState, setAiState] = useState('idle'); // idle | ranking | ok | error
+  const [retryIn, setRetryIn] = useState(null); // seconds until auto-retry, null = none pending
+  const [rankNonce, setRankNonce] = useState(0); // increment to force a fresh rank
   const rankInFlight = useRef(false);
   const lastRankKeyRef = useRef('');
+  const retryTimerRef = useRef(null);
+  const retryCountdownRef = useRef(null);
+  const retryStreakRef = useRef(0);
   const rankKey = useMemo(() => items.map(i => i.id).join('|'), [items]);
+
+  function cancelRetry() {
+    if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
+    if (retryCountdownRef.current) { clearInterval(retryCountdownRef.current); retryCountdownRef.current = null; }
+    setRetryIn(null);
+  }
+  function scheduleRetry(delaySec) {
+    cancelRetry();
+    setRetryIn(delaySec);
+    retryCountdownRef.current = setInterval(() => setRetryIn(t => (t === null ? null : Math.max(0, t - 1))), 1000);
+    retryTimerRef.current = setTimeout(() => {
+      clearInterval(retryCountdownRef.current); retryCountdownRef.current = null;
+      retryTimerRef.current = null; setRetryIn(null);
+      lastRankKeyRef.current = ''; setRankNonce(n => n + 1);
+    }, delaySec * 1000);
+  }
+  // Cleanup on unmount
+  useEffect(() => () => { // eslint-disable-line react-hooks/exhaustive-deps
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    if (retryCountdownRef.current) clearInterval(retryCountdownRef.current);
+  }, []);
 
   useEffect(() => {
     if (!items.length) { setAiState('idle'); return; }
     if (rankInFlight.current) return;
     if (lastRankKeyRef.current === rankKey && Object.keys(aiMeta).length) { setAiState('ok'); return; }
+    // New content or forced retry — cancel any waiting countdown and rank now
+    cancelRetry();
     rankInFlight.current = true;
     setAiState('ranking');
     let settled = false;
     const settle = (state, meta) => {
       if (settled) return; settled = true; rankInFlight.current = false;
-      if (meta) { setAiMeta(meta); lastRankKeyRef.current = rankKey; }
+      if (meta) {
+        setAiMeta(meta); lastRankKeyRef.current = rankKey; retryStreakRef.current = 0;
+      } else if (state === 'error') {
+        retryStreakRef.current += 1;
+        scheduleRetry(Math.min(90, 30 * retryStreakRef.current));
+      }
       setAiState(state);
     };
-    // Watchdog so the status never hangs on "AI prioritizing…" if the gateway is slow/down.
     const watchdog = setTimeout(() => settle('error'), 16000);
     const payload = items.map(i => ({ id: i.id, type: i.type, text: (i.text || '').slice(0, 200), meta: i.meta || '' }));
     runAIJob('dashboard.river_rank.v1', { items: payload, currentTime: now.toLocaleString() }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 1400 } })
@@ -148,7 +180,7 @@ export function TaskRiverPanel({
       .catch(() => settle('error'))
       .finally(() => clearTimeout(watchdog));
     return () => clearTimeout(watchdog);
-  }, [rankKey, aiOpts]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rankKey, aiOpts, rankNonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [order, setOrder] = useState(readOrder);
   useEffect(() => { writeOrder(order); }, [order]);
@@ -171,7 +203,13 @@ export function TaskRiverPanel({
     const a = ids().filter(x => x !== drag); const t = a.indexOf(target);
     if (t < 0) a.push(drag); else a.splice(t, 0, drag); setOrder(a);
   };
-  const reprioritize = () => setOrder([]);
+  const reprioritize = () => {
+    setOrder([]);
+    cancelRetry();
+    retryStreakRef.current = 0;
+    lastRankKeyRef.current = '';
+    setRankNonce(n => n + 1);
+  };
   const onHandleDown = (id) => (e) => {
     e.preventDefault(); e.stopPropagation(); setDragId(id);
     const mv = (ev) => {
@@ -201,7 +239,12 @@ export function TaskRiverPanel({
     ? `linear-gradient(to bottom, ${view.map((it, i) => `${rgba(it.color, 0.85)} ${(i / Math.max(1, view.length - 1)) * 100}%`).join(', ')})`
     : rgba(COL_SHAILA, 0.4);
 
-  const statusText = aiState === 'ranking' ? 'AI prioritizing…' : aiState === 'ok' ? 'AI-prioritized' : 'AI unavailable';
+  const statusText = retryIn !== null
+    ? `AI restrained — retry in ${retryIn}s`
+    : aiState === 'ranking' ? 'AI prioritizing…'
+    : aiState === 'ok' ? 'AI-prioritized'
+    : aiState === 'error' ? 'AI unavailable'
+    : '';
   const waterBg = {
     background: `
       radial-gradient(120% 55% at 18% -8%, ${rgba('#7FC6D9', 0.06)} 0%, transparent 60%),
@@ -217,10 +260,15 @@ export function TaskRiverPanel({
     }}>
       <div style={{ flexShrink: 0, padding: '14px clamp(14px,3vw,32px) 8px', display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 23, fontWeight: 300, letterSpacing: -0.5, color: C.text, fontFamily: NC_FONT_STACK }}>The River</span>
-        <span style={{ fontSize: 12, color: aiState === 'error' ? (C.warning || C.muted) : C.muted, fontFamily: NC_FONT_STACK }}>{view.length} items · {statusText}</span>
-        <button onClick={reprioritize} disabled={!manual} title="Drop manual order; let AI priority flow again"
-          style={{ marginLeft: 'auto', fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 500, color: manual ? '#fff' : C.faint, background: manual ? rgba(COL_SHAILA, 0.9) : 'transparent', border: `1px solid ${manual ? rgba(COL_SHAILA, 0.9) : C.divider}`, borderRadius: 16, padding: '4px 12px', cursor: manual ? 'pointer' : 'default' }}>
-          ↻ Re-prioritize
+        <span style={{ fontSize: 12, color: (retryIn !== null || aiState === 'error') ? (C.warning || '#C8A84C') : C.muted, fontFamily: NC_FONT_STACK }}>{view.length} items · {statusText}</span>
+        <button onClick={reprioritize}
+          title={manual ? 'Reset manual order and re-rank with AI' : 'Force a fresh AI ranking'}
+          style={{ marginLeft: 'auto', fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 500,
+            color: (manual || aiState === 'error' || retryIn !== null) ? '#fff' : C.faint,
+            background: (manual || aiState === 'error' || retryIn !== null) ? rgba(COL_SHAILA, 0.9) : 'transparent',
+            border: `1px solid ${(manual || aiState === 'error' || retryIn !== null) ? rgba(COL_SHAILA, 0.9) : C.divider}`,
+            borderRadius: 16, padding: '4px 12px', cursor: 'pointer' }}>
+          {(aiState === 'error' || retryIn !== null) ? '↻ Retry now' : '↻ Re-prioritize'}
         </button>
       </div>
 
