@@ -25,10 +25,10 @@ const QUOTA_FALLBACK_GEMINI_MODEL = "gemini-3.1-flash-lite";
 const DEFAULT_CALENDAR_TIME_ZONE = "America/New_York";
 const GEMINI_DEFAULT_SAFE_RPM = 4;
 const GEMINI_DEFAULT_TPM = 200000;
-// Must stay well under the Netlify function budget (~26-30s): if a caller waits in the
-// pacing queue past the Lambda wall it dies as Sandbox.Timedout (an opaque 502) instead
-// of returning a clean 429 the client can back off from.
-const GEMINI_QUEUE_TIMEOUT_MS = 18000;
+// Queue wait + upstream fetch (20s) together must stay under the Netlify function budget
+// (~26-30s): if a caller waits in the pacing queue past the Lambda wall it dies as
+// Sandbox.Timedout (an opaque 502) instead of returning a clean 429 the client can back off from.
+const GEMINI_QUEUE_TIMEOUT_MS = 8000;
 
 const GEMINI_FREE_LIMITS = {
   "gemini-3.1-pro-preview": { rpm: 4, tpm: 250000, rpd: 90 },
@@ -345,11 +345,27 @@ async function reserveGeminiSlotInMemory(model, estimatedTokens, started, creden
   throw httpError(429, "Gemini gateway is pacing requests to protect the quota; retry shortly.", 30);
 }
 
+// The Firestore reservation is a transaction on ONE shared document — every Gemini call
+// from every client contends on it. Under load those transactions retry internally and can
+// hang well past the Lambda budget, turning the rate limiter itself into the outage. Bound
+// each attempt hard and fall back to the per-container in-memory limiter instead of hanging.
+const FIRESTORE_RESERVE_TIMEOUT_MS = 4000;
+
 async function reserveGeminiSlot(model, estimatedTokens, credentialId = "primary") {
   const started = Date.now();
 
   while (Date.now() - started < GEMINI_QUEUE_TIMEOUT_MS) {
-    const reservation = await reserveGeminiSlotWithFirestore(model, estimatedTokens, credentialId);
+    let reservation;
+    try {
+      reservation = await Promise.race([
+        reserveGeminiSlotWithFirestore(model, estimatedTokens, credentialId),
+        sleep(FIRESTORE_RESERVE_TIMEOUT_MS).then(() => { throw new Error("Firestore limiter reservation timed out (hot document)"); }),
+      ]);
+    } catch (e) {
+      if (e?.statusCode) throw e; // real pacing/quota 429s pass through
+      console.warn("[AI] Firestore limiter slow or contended; using in-memory limiter:", e.message);
+      return reserveGeminiSlotInMemory(model, estimatedTokens, started, credentialId);
+    }
     if (!reservation) return reserveGeminiSlotInMemory(model, estimatedTokens, started, credentialId);
     if (reservation.waitMs <= 0) return reservation;
     await sleep(Math.min(reservation.waitMs + Math.floor(Math.random() * 250), 5000));
@@ -1581,7 +1597,9 @@ async function callGeminiOnce({ body, prompt, base64, mimeType, model, genConfig
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${credential.key}`;
   const controller = new AbortController();
-  const fetchTimeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+  // Must stay inside the ~30s Netlify function budget (together with the queue wait):
+  // a hung upstream otherwise dies as Sandbox.Timedout instead of a clean retryable error.
+  const fetchTimeout = setTimeout(() => controller.abort(), 20000);
   let r;
   try {
     r = await fetch(url, {
@@ -1590,6 +1608,9 @@ async function callGeminiOnce({ body, prompt, base64, mimeType, model, genConfig
       body: JSON.stringify(requestBody),
       signal: controller.signal,
     });
+  } catch (e) {
+    if (e?.name === "AbortError") throw httpError(504, "Gemini upstream timed out after 20s; retry shortly.", 15);
+    throw e;
   } finally {
     clearTimeout(fetchTimeout);
   }
