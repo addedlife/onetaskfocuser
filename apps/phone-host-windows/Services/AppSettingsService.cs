@@ -73,6 +73,10 @@ public class AppSettingsService
 
         public bool SyncThemeWithShamash { get; set; } = true;
 
+        // Open the modern web phone UI (the webapp's phone screen, served from
+        // this app's own loopback server) automatically on launch.
+        public bool OpenModernUiOnLaunch { get; set; } = true;
+
         public double? UiScalePercent { get; set; }
 
         public bool IsNavigationRailCollapsed { get; set; }

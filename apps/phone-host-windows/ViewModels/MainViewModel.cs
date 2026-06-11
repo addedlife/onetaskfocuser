@@ -2502,14 +2502,24 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     public ICommand AddComposeAttachmentCommand { get; }
     public ICommand RemoveComposeAttachmentCommand { get; }
     public ICommand OpenSoundSettingsCommand    { get; }
-    public ICommand OpenShamashUiCommand        { get; }   // web UI in embedded shell
+    public ICommand OpenShamashUiCommand        { get; }   // production webapp in default browser (signed in)
+    public ICommand OpenModernUiCommand         { get; }   // the web phone screen as this app's own window
     public ICommand OpenAudioConsoleCommand     { get; }   // /audio-bridge in embedded shell
+
+    /// <summary>The modern UI: the webapp's phone screen, served from this app's
+    /// own loopback web server — no Shamash shell, no sign-in (host data only).</summary>
+    private const string ModernUiUrl = "http://127.0.0.1:8765/?standalone=deskphone";
 
     /// <summary>Hosts a loopback page in the embedded WebView2 shell; falls back
     /// to the default browser when the WebView2 runtime is unavailable.</summary>
-    private void OpenWebShell(string url)
+    private void OpenWebShell(string url, bool maximize = false)
     {
-        try { new WebShellWindow(url).Show(); }
+        try
+        {
+            var win = new WebShellWindow(url);
+            if (maximize) win.WindowState = System.Windows.WindowState.Maximized;
+            win.Show();
+        }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[web-shell] {ex.Message}");
@@ -2961,6 +2971,19 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _api.Start();
         AppendDebug($"[API] {_api.StartupResult}");
 
+        // Modern UI on launch: the app's face is the same web phone screen the
+        // webapp shows, served from our own loopback server just started above.
+        // Delayed a beat so the listener is warm and the main window settles;
+        // WebShellWindow also retries its first navigation to cover the race.
+        if (_settings.Current.OpenModernUiOnLaunch)
+        {
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(1500);
+                Dispatch(() => OpenWebShell(ModernUiUrl, maximize: true));
+            });
+        }
+
         // ── Cloud relay (same data sources as the local API) ──────────────
         _relay.GetStatus   = _api.GetStatus;
         _relay.GetMessages = _api.GetMessages;
@@ -3025,6 +3048,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         // the user's signed-in session (Firebase) lives in their browser profile,
         // and the production app reaches this host directly via loopback.
         OpenShamashUiCommand     = new RelayCommand(_ => OpenInDefaultBrowser("https://onetaskfocuser.netlify.app/?suite=phone"));
+        OpenModernUiCommand      = new RelayCommand(_ => OpenWebShell(ModernUiUrl, maximize: true));
         OpenAudioConsoleCommand  = new RelayCommand(_ => OpenWebShell("http://127.0.0.1:8765/audio-bridge"));
         ForgetDeviceCommand    = new RelayCommand(addr => { if (addr is string a) { _settings.ForgetDevice(a); RefreshKnownDevices(); } });
         SwitchTabCommand       = new RelayCommand(t => { if (t is string s && Enum.TryParse<AppTab>(s, out var tab)) SelectedTab = tab; });
