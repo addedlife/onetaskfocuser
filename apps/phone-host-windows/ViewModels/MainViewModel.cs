@@ -2502,6 +2502,20 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     public ICommand AddComposeAttachmentCommand { get; }
     public ICommand RemoveComposeAttachmentCommand { get; }
     public ICommand OpenSoundSettingsCommand    { get; }
+    public ICommand OpenShamashUiCommand        { get; }   // web UI in embedded shell
+    public ICommand OpenAudioConsoleCommand     { get; }   // /audio-bridge in embedded shell
+
+    /// <summary>Hosts a loopback page in the embedded WebView2 shell; falls back
+    /// to the default browser when the WebView2 runtime is unavailable.</summary>
+    private void OpenWebShell(string url)
+    {
+        try { new WebShellWindow(url).Show(); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[web-shell] {ex.Message}");
+            try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
+        }
+    }
     public ICommand ForgetDeviceCommand         { get; }   // remove a device from saved list
     public ICommand SwitchTabCommand            { get; }
     public ICommand SaveImageCommand            { get; }   // save MMS photo to Downloads
@@ -2789,6 +2803,8 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _api.SetPauseHistoryActivity = paused => { Dispatch(() => PauseHistoryActivity = paused); return Task.CompletedTask; };
         _api.SetDarkModeEnabled = enabled => { Dispatch(() => IsDarkModeEnabled = enabled); return Task.CompletedTask; };
         _api.OpenLiveLog = () => { Dispatch(() => ShowLiveLog = true); return Task.CompletedTask; };
+        _api.OpenWebUi = () => { Dispatch(() => OpenWebShell("http://127.0.0.1:8765/?suite=deskphone")); return Task.CompletedTask; };
+        _api.OpenAudioConsole = () => { Dispatch(() => OpenWebShell("http://127.0.0.1:8765/audio-bridge")); return Task.CompletedTask; };
         _api.ClearLog = () => { Dispatch(ClearDebugLog); return Task.CompletedTask; };
         _api.RunUiAuditor = () => { RunUiAuditor(); return Task.CompletedTask; };
         _api.ToggleMute = () => { Dispatch(() => MuteMicCommand.Execute(null)); return Task.CompletedTask; };
@@ -3000,6 +3016,8 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         AddComposeAttachmentCommand = new RelayCommand(_ => AddComposeAttachments());
         RemoveComposeAttachmentCommand = new RelayCommand(a => RemoveComposeAttachment(a as MessageAttachment));
         OpenSoundSettingsCommand = new RelayCommand(_ => Process.Start("mmsys.cpl"));
+        OpenShamashUiCommand     = new RelayCommand(_ => OpenWebShell("http://127.0.0.1:8765/?suite=deskphone"));
+        OpenAudioConsoleCommand  = new RelayCommand(_ => OpenWebShell("http://127.0.0.1:8765/audio-bridge"));
         ForgetDeviceCommand    = new RelayCommand(addr => { if (addr is string a) { _settings.ForgetDevice(a); RefreshKnownDevices(); } });
         SwitchTabCommand       = new RelayCommand(t => { if (t is string s && Enum.TryParse<AppTab>(s, out var tab)) SelectedTab = tab; });
         SaveImageCommand       = new RelayCommand(m => _ = SaveImageToDownloadsAsync(m as SmsMessage));

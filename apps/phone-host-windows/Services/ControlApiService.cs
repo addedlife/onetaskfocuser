@@ -70,6 +70,8 @@ public class ControlApiService : IDisposable
     public Func<bool, Task>?                 SetPauseHistoryActivity { get; set; }
     public Func<bool, Task>?                 SetDarkModeEnabled { get; set; }
     public Func<Task>?                       OpenLiveLog { get; set; }
+    public Func<Task>?                       OpenWebUi { get; set; }
+    public Func<Task>?                       OpenAudioConsole { get; set; }
     public Func<Task>?                       ClearLog { get; set; }
     public Func<Task>?                       RunUiAuditor { get; set; }
     public Func<Task>?                       ToggleMute { get; set; }
@@ -422,6 +424,16 @@ public class ControlApiService : IDisposable
             {
                 if (OpenLiveLog is not null) await OpenLiveLog();
                 body = Json("result", "live log opened");
+            }
+            else if (method == "POST" && path == "/open-web-ui")
+            {
+                if (OpenWebUi is not null) await OpenWebUi();
+                body = Json("result", "web ui shell opened");
+            }
+            else if (method == "POST" && path == "/open-audio-console")
+            {
+                if (OpenAudioConsole is not null) await OpenAudioConsole();
+                body = Json("result", "audio console shell opened");
             }
             else if (method == "POST" && path == "/clear-log")
             {

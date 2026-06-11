@@ -20,6 +20,10 @@
   <ItemGroup>
     <PackageReference Include="InTheHand.Net.Bluetooth" Version="4.1.0" />
     <PackageReference Include="NAudio" Version="2.2.1" />
+    <!-- Native shell for the web UI: DeskPhone serves the built Shamash webapp on
+         loopback, and WebShellWindow hosts it in an embedded Edge WebView2. One UI
+         codebase (the web one) instead of parallel WPF/web phone screens. -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
     <!-- Interactive Windows 10/11 Toast notifications with text input and action buttons.
          Handles COM activation registration for unpackaged desktop apps so background
          activations (reply button, quick-reply chips) fire silently in this running process

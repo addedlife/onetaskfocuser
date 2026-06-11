@@ -4545,6 +4545,16 @@
                                                 Padding="20,0"
                                                 Command="{Binding OpenSoundSettingsCommand}"/>
                                     </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                        <Button Content="Call Audio Console"
+                                                Style="{StaticResource PrimaryButton}"
+                                                Margin="0,0,12,0" Padding="20,0"
+                                                Command="{Binding OpenAudioConsoleCommand}"/>
+                                        <Button Content="Open Shamash Web UI"
+                                                Style="{StaticResource TonalButton}"
+                                                Padding="20,0"
+                                                Command="{Binding OpenShamashUiCommand}"/>
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
                             <Border Style="{StaticResource Card}" Margin="0,0,0,32">
