@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { GV_CLEAN } from './08-app-split/ui-tokens.jsx';
 
 const DEFAULT_HOST = "http://127.0.0.1:8765";
 const RAIL_COLLAPSED_KEY = "deskphone_web_rail_collapsed";
@@ -28,27 +29,32 @@ const MEDIA_FETCH_TIMEOUT_MS = 9000;
 const CONVERSATION_RENDER_BATCH = 160;
 const THREAD_RENDER_BATCH = 240;
 
+// Role map over the canonical design tokens (ui-tokens.jsx GV_CLEAN) — the
+// phone surface keeps its own role names (bubble/bg/text slots) but every
+// color that exists in GV_CLEAN is drawn from there, not re-declared. The
+// literals that remain have no GV_CLEAN equivalent (light accent tints and
+// the second-tier text grey) and are intentionally local to this surface.
 const COLORS = {
-  bgMain: "#FFFFFF",
-  bgSidebar: "#FFFFFF",
-  bgHover: "#F1F3F4",
-  bgInput: "#F8F9FA",
-  bgSelected: "#F1F3F4",
-  accentBlue: "#00796B",
-  accentBlueDark: "#00695C",
-  accentBlueLight: "#E0F2F1",
-  accentGreen: "#1E8E3E",
-  accentGreenDark: "#137333",
-  accentGreenLight: "#CEEAD6",
-  accentRed: "#D93025",
-  accentRedLight: "#FCE8E6",
-  textPrimary: "#202124",
-  textSecond: "#3C4043",
-  textMuted: "#5F6368",
-  textDisabled: "#9AA0A6",
-  textOnAccent: "#FFFFFF",
-  textOnAccentBlueLight: "#00695C",
-  border: "#DADCE0",
+  bgMain: GV_CLEAN.bg,
+  bgSidebar: GV_CLEAN.bg,
+  bgHover: GV_CLEAN.hover,
+  bgInput: GV_CLEAN.bgSoft,
+  bgSelected: GV_CLEAN.hover,
+  accentBlue: GV_CLEAN.accent,
+  accentBlueDark: GV_CLEAN.accentDark,
+  accentBlueLight: "#E0F2F1",          // accent tint — no GV_CLEAN equivalent
+  accentGreen: GV_CLEAN.success,
+  accentGreenDark: "#137333",          // success-dark — no GV_CLEAN equivalent
+  accentGreenLight: "#CEEAD6",         // success tint — no GV_CLEAN equivalent
+  accentRed: GV_CLEAN.danger,
+  accentRedLight: "#FCE8E6",           // danger tint — no GV_CLEAN equivalent
+  textPrimary: GV_CLEAN.text,
+  textSecond: "#3C4043",               // between text and muted — no GV_CLEAN equivalent
+  textMuted: GV_CLEAN.muted,
+  textDisabled: GV_CLEAN.faint,
+  textOnAccent: "#FFFFFF",             // text on accent fills — not the page bg role
+  textOnAccentBlueLight: GV_CLEAN.accentDark,
+  border: GV_CLEAN.divider,
 };
 
 function dpIsHexColor(value) {
@@ -3233,7 +3239,7 @@ const css = `
   --dp-disabled: ${COLORS.textDisabled};
   --dp-border: ${COLORS.border};
   --dp-border-strong: #BDC1C6;
-  --dp-bg-surface: #FFFFFF;
+  --dp-bg-surface: ${COLORS.bgMain};
   min-height: 100vh;
   width: 100%;
   align-self: stretch;
