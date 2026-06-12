@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { cleanTheme, gvIconButton, gvTextButton, NC_FONT_STACK, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
+import { cleanTheme, DUR, EASE, gvIconButton, gvTextButton, NC_FONT_STACK, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { db } from '../../01-core.js';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
@@ -1076,8 +1076,31 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     </div>
   );
 
+  // ── One phone screen everywhere ──────────────────────────────────────────
+  // When this desktop browser reaches DeskPhone directly, the full phone view
+  // embeds the exact UI DeskPhone itself serves (?standalone=deskphone) instead
+  // of this summary surface — identical pixels in the webapp and on the PC.
+  // All hooks above keep running, so the poll still detects the PC going away,
+  // flips the transport to relay, and this falls back to the built-in surface
+  // transparently. Compact/dense NerveCenter cards always keep the summary UI.
+  // Chromium-only by design: a browser that blocks HTTP-loopback iframes from
+  // an HTTPS page also fails the direct probe, so it never reaches this branch.
+  if (!compact && !dense && !isMobile && !usingRelay && status) {
+    return (
+      <div style={{ flex: "1 1 auto", minHeight: 0, minWidth: 0, display: "flex",
+        animation: `nc-phone-surface-fade ${DUR.base} ${EASE.standard}` }}>
+        <iframe
+          src={`${api}/?standalone=deskphone`}
+          style={{ width: "100%", height: "100%", border: "none", borderRadius: 0, display: "block" }}
+          title="DeskPhone"
+          sandbox="allow-scripts allow-same-origin allow-forms"
+        />
+      </div>
+    );
+  }
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: dense ? 2 : (compact ? 6 : 12), minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden", color: C.text }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: dense ? 2 : (compact ? 6 : 12), minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden", color: C.text, animation: `nc-phone-surface-fade ${DUR.base} ${EASE.standard}` }}>
 
       {(isIncoming || isOnCall || vmCount > 0) && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: dense ? 20 : (compact ? 28 : 36), padding: "0 2px" }}>

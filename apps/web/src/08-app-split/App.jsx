@@ -9,7 +9,7 @@ import { SettingsModal } from '../07-settings.jsx';
 import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, listPendingRecordings, PENDING_EVENT, formatPendingAge } from '../09-transcription-pen.js';
 import { DeskPhoneWebPanel } from '../10-deskphone-web.jsx';
 import { isOfflineShellReady } from '../offline-support.js';
-import { buildDeskPhoneThemeQuery, getInitialSuiteView, GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, suiteIcon, useViewportWidth, Z } from './ui-tokens.jsx';
+import { buildDeskPhoneThemeQuery, DUR, EASE, getInitialSuiteView, GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, suiteIcon, useViewportWidth, Z } from './ui-tokens.jsx';
 import { AppSuiteChrome } from './components/AppSuiteChrome.jsx';
 import { DeskPhoneSuitePanel, SuiteShailosPanel } from './components/SuitePanels.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './components/NerveCenterPhoneSurface.jsx';
@@ -81,6 +81,35 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   // for this + user being loaded (Firebase auth is async) before reading Firestore.
   const [healthOAuthReady, setHealthOAuthReady] = useState(false);
   const [deskPhoneOnline, setDeskPhoneOnline] = useState(false);
+  // Direct-reachability probe for the desktop Phone screen: when DeskPhone's
+  // loopback host answers, the deskphone view embeds the UI DeskPhone itself
+  // serves (?standalone=deskphone) instead of the locally bundled copy — one
+  // phone screen everywhere. Re-probes every 25s, so the PC going away falls
+  // back to the built-in panel and coming back flips to the embed, no clicks.
+  // Chromium-only by design: browsers that block HTTP-loopback frames from an
+  // HTTPS page also fail this probe, so they keep the built-in panel.
+  const [deskPhoneDirect, setDeskPhoneDirect] = useState(false);
+  useEffect(() => {
+    if (suiteView !== "deskphone" || IS_MOBILE_DEVICE) return undefined;
+    let cancelled = false;
+    const probe = async () => {
+      let ok = false;
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 1500);
+        const res = await fetch("http://127.0.0.1:8765/status", { signal: ctrl.signal });
+        clearTimeout(timer);
+        ok = !!res.ok;
+      } catch { ok = false; }
+      if (cancelled) return;
+      setDeskPhoneDirect(ok);
+      // The embed replaces the panel that normally reports online state.
+      if (ok) setDeskPhoneOnline(true);
+    };
+    probe();
+    const id = setInterval(probe, 25000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [suiteView]);
   const deskPhoneLaunchAtRef = useRef(0);
   const lastDeskPhoneThemeRef = useRef("");
   const [justComp, setJustComp] = useState(false);
@@ -3579,13 +3608,25 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 onRecordCall={()=>{setConvCallMode(true); setShowConvCapture(true);}}
               />
             </div>
+          ) : deskPhoneDirect ? (
+            // DeskPhone is reachable on this PC — embed the UI it serves itself.
+            <div style={{ width: "100%", height: "100%", animation: `nc-phone-surface-fade ${DUR.base} ${EASE.standard}` }}>
+              <iframe
+                src="http://127.0.0.1:8765/?standalone=deskphone"
+                style={{ width: "100%", height: "100%", border: "none", borderRadius: 0, display: "block" }}
+                title="DeskPhone"
+                sandbox="allow-scripts allow-same-origin allow-forms"
+              />
+            </div>
           ) : (
-            <DeskPhoneWebPanel
-              T={T}
-              onOnlineChange={setDeskPhoneOnline}
-              onClose={()=>openCommandView("focus")}
-              onLaunchNative={bringDeskPhoneForward}
-            />
+            <div style={{ width: "100%", height: "100%", animation: `nc-phone-surface-fade ${DUR.base} ${EASE.standard}` }}>
+              <DeskPhoneWebPanel
+                T={T}
+                onOnlineChange={setDeskPhoneOnline}
+                onClose={()=>openCommandView("focus")}
+                onLaunchNative={bringDeskPhoneForward}
+              />
+            </div>
           )}
         </div>
       )}

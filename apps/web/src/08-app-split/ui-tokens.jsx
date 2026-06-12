@@ -219,6 +219,11 @@ export const NC_GLOBAL_CSS = `
   82%  { opacity: 0.36; }
   100% { transform: scaleX(1.0); opacity: 0; }
 }
+/* Mount fade for the phone surface ⇄ embedded DeskPhone swap (DUR.base). */
+@keyframes nc-phone-surface-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 `;
 
 export const cleanTheme = (theme = {}) => ({
