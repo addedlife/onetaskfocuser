@@ -2752,9 +2752,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     }).catch(() => {});
     dlog("called", { uid: user?.uid });
     if (!user?.uid) return;
+    // Dev / anonymous user objects don't expose getIdToken(). Bail quietly instead of
+    // calling it blindly — the unguarded call threw a TypeError that the catch logged on
+    // every auth-state churn, spamming "[Health] loadHealth error". No token → no read.
+    const idToken = user?.getIdToken ? await user.getIdToken() : null;
+    if (!idToken) { dlog("skipped: user has no getIdToken", { uid: user?.uid }); return; }
     try {
       const res  = await fetch(`/.netlify/functions/google-health?action=load`, {
-        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+        headers: { Authorization: `Bearer ${idToken}` },
       });
       const json = await res.json();
       dlog(`load response status ${res.status}`, { status: res.status, hasConfig: !!json?.config, oauthType: json?.config?.oauthType, historyDays: json?.history?.length });
@@ -2770,10 +2775,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
   async function saveHealthDataToFirebase(data) {
     if (!user?.uid || !data?.date) return;
+    const idToken = user?.getIdToken ? await user.getIdToken() : null;
+    if (!idToken) return;
     try {
       const res = await fetch(`/.netlify/functions/google-health?action=save-entry`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
         body: JSON.stringify(data),
       });
       if (!res.ok) return;
@@ -2799,9 +2806,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
   async function syncHealthNow() {
     if (!user?.uid) return;
+    const idToken = user?.getIdToken ? await user.getIdToken() : null;
+    if (!idToken) return;
     try {
       const res = await fetch(`/.netlify/functions/google-health?action=sync`, {
-        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+        headers: { Authorization: `Bearer ${idToken}` },
       });
       if (!res.ok) return;
       const entry = await res.json();
