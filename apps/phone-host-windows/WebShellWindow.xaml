@@ -1,0 +1,27 @@
+<Window x:Class="DeskPhone.WebShellWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="Shamash — DeskPhone"
+        Width="1240" Height="860"
+        MinWidth="720" MinHeight="540"
+        WindowStartupLocation="CenterScreen"
+        Background="#0B0F14">
+    <Grid>
+        <wv2:WebView2 x:Name="Web" />
+        <StackPanel x:Name="Fallback"
+                    Visibility="Collapsed"
+                    VerticalAlignment="Center" HorizontalAlignment="Center"
+                    MaxWidth="460">
+            <TextBlock Text="The embedded web view could not start."
+                       Foreground="#E7EDF3" FontSize="16" FontWeight="Medium"
+                       TextWrapping="Wrap" TextAlignment="Center"/>
+            <TextBlock x:Name="FallbackDetail"
+                       Foreground="#8AA0B4" FontSize="13" Margin="0,10,0,18"
+                       TextWrapping="Wrap" TextAlignment="Center"/>
+            <Button Content="Open in default browser instead"
+                    Padding="18,10" HorizontalAlignment="Center"
+                    Click="OpenInBrowser_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
