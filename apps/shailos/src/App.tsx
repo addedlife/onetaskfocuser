@@ -1,24 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { 
-  Mic, 
-  Square, 
-  Plus, 
-  FileText, 
-  CheckCircle, 
-  Clock, 
-  Search,
-  ChevronRight,
-  MoreVertical,
-  Trash2,
-  Edit2,
-  Send,
-  Loader2,
-  AlertCircle,
-  Phone,
-  Copy,
-  FlaskConical,
-  RefreshCw
-} from 'lucide-react';
 import {
   onAuthStateChanged,
   User as FirebaseUser
@@ -48,6 +28,43 @@ import { twMerge } from 'tailwind-merge';
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+// --- Icons: Material Symbols Rounded, the one icon language of the whole app ---
+// Drop-in replacements for the former lucide-react components: same names, same
+// className-driven API. Tailwind's w-N sizing is parsed into the glyph font-size
+// so existing call sites (`w-4 h-4`, colors, animate-spin) keep working unchanged.
+const MSR_SIZE_RE = /(?:^|\s)w-(\d+(?:\.\d+)?)(?:\s|$)/;
+const glyph = (name: string) => {
+  const Icon = ({ className = '', style, ...props }: React.HTMLAttributes<HTMLSpanElement>) => {
+    const m = MSR_SIZE_RE.exec(className);
+    const px = m ? parseFloat(m[1]) * 4 : 16; // tailwind w-N = N*4px
+    return (
+      <span aria-hidden="true" {...props} className={cn('material-symbols-rounded', className)}
+        style={{ fontSize: px, lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, ...style }}>
+        {name}
+      </span>
+    );
+  };
+  return Icon;
+};
+const Mic          = glyph('mic');
+const Square       = glyph('stop');
+const Plus         = glyph('add');
+const FileText     = glyph('description');
+const CheckCircle  = glyph('check_circle');
+const Clock        = glyph('schedule');
+const Search       = glyph('search');
+const ChevronRight = glyph('chevron_right');
+const MoreVertical = glyph('more_vert');
+const Trash2       = glyph('delete');
+const Edit2        = glyph('edit');
+const Send         = glyph('send');
+const Loader2      = glyph('progress_activity');
+const AlertCircle  = glyph('error');
+const Phone        = glyph('call');
+const Copy         = glyph('content_copy');
+const FlaskConical = glyph('science');
+const RefreshCw    = glyph('refresh');
 
 const MIC_CONSTRAINTS: MediaStreamConstraints = {
   audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
