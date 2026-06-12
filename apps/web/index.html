@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Shamash Pro 4</title>
-<meta name="theme-color" content="#0B57D0">
+<meta name="theme-color" content="#00796B">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,7 +21,7 @@ body{font-family:'Google Sans','Segoe UI Variable Text','Segoe UI',system-ui,san
   --pure-radius-lg:16px;
   --pure-radius-xl:20px;
   --pure-md3-ease:cubic-bezier(.2,0,0,1);
-  --pure-focus:#0B57D0;
+  --pure-focus:#00796B; /* GV_CLEAN.accent — focus rings match the app teal everywhere (was Google blue) */
 }
 @keyframes ot-glow{0%{opacity:.3;transform:scale(1)}50%{opacity:.6;transform:scale(1.03)}100%{opacity:.3;transform:scale(1)}}
 @keyframes ot-fade{from{opacity:0}to{opacity:1}}
@@ -53,6 +53,14 @@ button{
 }
 button:not(:disabled){cursor:pointer}
 button:active:not(:disabled){transform:translateY(1px)}
+/* Material state layer — uniform hover/press feedback on EVERY button, all surfaces, any
+   theme. background-image composes over the button's own background-color without touching
+   box-shadow or creating a containing block; mid-gray reads on light and dark themes alike.
+   Buttons with their own background-image (gradients) keep theirs via specificity/inline. */
+@media(hover:hover){
+  button:not(:disabled):hover{background-image:linear-gradient(rgba(127,127,127,.08),rgba(127,127,127,.08))}
+}
+button:not(:disabled):active{background-image:linear-gradient(rgba(127,127,127,.14),rgba(127,127,127,.14))}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
   outline:3px solid color-mix(in srgb,var(--pure-focus) 36%,transparent);
   outline-offset:2px;
@@ -83,7 +91,13 @@ input,select,textarea{
   border-radius:var(--pure-radius-md);
   letter-spacing:0;
 }
-::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
+/* One scrollbar language everywhere: thin rounded overlay thumb, transparent track
+   (same family as the suite's; the suite adds its own hide-until-hover refinement). */
+*{scrollbar-width:thin;scrollbar-color:rgba(95,99,104,.35) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(95,99,104,.38);background-clip:content-box;border:3px solid transparent;border-radius:999px}
+::-webkit-scrollbar-thumb:hover{background-color:rgba(95,99,104,.58)}
 textarea{resize:vertical}
 </style>
 </head>
