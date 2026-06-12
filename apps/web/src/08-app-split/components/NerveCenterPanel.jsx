@@ -2704,6 +2704,47 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bg, overflow: isStacked ? "hidden" : touchLayout ? "auto" : "hidden", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}` }}>
       <div style={isStacked ? { height: "100%", display: "flex", flexDirection: "column", boxSizing: "border-box" } : { minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: touchLayout ? 12 : 4 }}>
 
+        {/* ── Layout + view mode toggles — top right of the whole panel, above all panes ── */}
+        {!isStacked && (
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, padding: "0 2px 2px", flexShrink: 0 }}>
+            {/* Layout: Boxes / Accordion / Full (desktop-only alternatives to the 3-column view) */}
+            <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+              {[
+                { id: "boxes",     icon: "grid_view",   title: "Card grid view" },
+                { id: "accordion", icon: "view_agenda", title: "Accordion view" },
+                { id: "full",      icon: "view_column", title: "Full panel view" },
+              ].map(({ id, icon, title }) => (
+                <button key={id} onClick={() => setDesktopLayoutPersist(id)} title={title}
+                  style={gvIconButton({
+                    width: 28, height: 24, borderRadius: 4,
+                    background: desktopLayout === id ? softBorder(C.divider, 0.55) : "transparent",
+                    color: desktopLayout === id ? C.muted : C.faint,
+                  }, C)}>{suiteIcon(icon, 15)}</button>
+              ))}
+            </div>
+            <span style={{ width: 1, height: 14, background: C.divider, flexShrink: 0 }} />
+            {/* Density: compact (aggressively tight rows) vs comfortable */}
+            <button onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density"
+              style={gvIconButton({ width: 28, height: 24, borderRadius: 4, background: dense ? softBorder(C.divider, 0.55) : "transparent", color: dense ? C.muted : C.faint }, C)}>{suiteIcon(dense ? "density_small" : "density_medium", 15)}</button>
+            <span style={{ width: 1, height: 14, background: C.divider, flexShrink: 0 }} />
+            {/* View: Full / Focus (only meaningful in full panel mode) */}
+            {desktopLayout === "full" && [{ id: "full", lbl: "Full" }, { id: "focus", lbl: "Focus" }].map(({ id, lbl }) => (
+              <button key={id}
+                onClick={() => { setNcViewMode(id); try { localStorage.setItem("nc_view_mode", id); } catch {} }}
+                style={{
+                  background: ncViewMode === id ? softBorder(C.divider, 0.45) : "transparent",
+                  border: "none", borderRadius: 4, padding: "2px 7px",
+                  cursor: "pointer", fontFamily: NC_FONT_STACK,
+                  fontSize: 8, fontWeight: 700, letterSpacing: 1.4,
+                  textTransform: "uppercase",
+                  color: ncViewMode === id ? C.muted : C.faint,
+                  transition: "background 0.12s, color 0.12s",
+                }}
+              >{lbl}</button>
+            ))}
+          </div>
+        )}
+
         {/* Panel tab bar — mobile/stacked only */}
         {isStacked && (
           <div style={{ display: "flex", background: C.bg, borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
@@ -3027,44 +3068,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           return (
             <React.Fragment>
             <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", gap: 6, minHeight: 0 }}>
-              {/* ── Layout + view mode toggles ── */}
-              <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, padding: "0 2px 2px" }}>
-                {/* Layout: Boxes / Accordion / Full (desktop-only alternatives to the 3-column view) */}
-                <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                  {[
-                    { id: "boxes",     icon: "grid_view",   title: "Card grid view" },
-                    { id: "accordion", icon: "view_agenda", title: "Accordion view" },
-                    { id: "full",      icon: "view_column", title: "Full panel view" },
-                  ].map(({ id, icon, title }) => (
-                    <button key={id} onClick={() => setDesktopLayoutPersist(id)} title={title}
-                      style={gvIconButton({
-                        width: 28, height: 24, borderRadius: 4,
-                        background: desktopLayout === id ? softBorder(C.divider, 0.55) : "transparent",
-                        color: desktopLayout === id ? C.muted : C.faint,
-                      }, C)}>{suiteIcon(icon, 15)}</button>
-                  ))}
-                </div>
-                <span style={{ width: 1, height: 14, background: C.divider, flexShrink: 0 }} />
-                {/* Density: compact (aggressively tight rows) vs comfortable */}
-                <button onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density"
-                  style={gvIconButton({ width: 28, height: 24, borderRadius: 4, background: dense ? softBorder(C.divider, 0.55) : "transparent", color: dense ? C.muted : C.faint }, C)}>{suiteIcon(dense ? "density_small" : "density_medium", 15)}</button>
-                <span style={{ width: 1, height: 14, background: C.divider, flexShrink: 0 }} />
-                {/* View: Full / Focus (only meaningful in full panel mode) */}
-                {desktopLayout === "full" && [{ id: "full", lbl: "Full" }, { id: "focus", lbl: "Focus" }].map(({ id, lbl }) => (
-                  <button key={id}
-                    onClick={() => { setNcViewMode(id); try { localStorage.setItem("nc_view_mode", id); } catch {} }}
-                    style={{
-                      background: ncViewMode === id ? softBorder(C.divider, 0.45) : "transparent",
-                      border: "none", borderRadius: 4, padding: "2px 7px",
-                      cursor: "pointer", fontFamily: NC_FONT_STACK,
-                      fontSize: 8, fontWeight: 700, letterSpacing: 1.4,
-                      textTransform: "uppercase",
-                      color: ncViewMode === id ? C.muted : C.faint,
-                      transition: "background 0.12s, color 0.12s",
-                    }}
-                  >{lbl}</button>
-                ))}
-              </div>
               <div style={lowerGridStyle}>
 
               {!googleConfigured && (
