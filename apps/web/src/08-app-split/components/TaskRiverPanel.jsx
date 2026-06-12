@@ -136,6 +136,7 @@ export function TaskRiverPanel({
   const retryTimerRef = useRef(null);
   const retryCountdownRef = useRef(null);
   const retryStreakRef = useRef(0);
+  const mountedAtRef = useRef(Date.now());
   const rankKey = useMemo(() => items.map(i => i.id).join('|'), [items]);
 
   function cancelRetry() {
@@ -163,6 +164,12 @@ export function TaskRiverPanel({
     if (!items.length) { setAiState('idle'); return; }
     if (rankInFlight.current) return;
     if (lastRankKeyRef.current === rankKey && Object.keys(aiMeta).length) { setAiState('ok'); return; }
+    // 4-second startup delay on first call so snapshot.v1 gets the first flash-lite slot.
+    const elapsed = Date.now() - mountedAtRef.current;
+    if (elapsed < 4000 && retryStreakRef.current === 0 && !Object.keys(aiMeta).length) {
+      const t = setTimeout(() => setRankNonce(n => n + 1), 4000 - elapsed);
+      return () => clearTimeout(t);
+    }
     // New content or forced retry — cancel any waiting countdown and rank now
     cancelRetry();
     rankInFlight.current = true;
@@ -174,11 +181,7 @@ export function TaskRiverPanel({
         setAiMeta(meta); lastRankKeyRef.current = rankKey; retryStreakRef.current = 0;
       } else if (state === 'error') {
         retryStreakRef.current += 1;
-        // Auto-retry once at 20s, once more at 45s, then stop — let the user press the button.
-        const delays = [20, 45];
-        if (retryStreakRef.current <= delays.length) {
-          scheduleRetry(delays[retryStreakRef.current - 1]);
-        }
+        scheduleRetry(Math.min(90, 20 * retryStreakRef.current));
       }
       setAiState(state);
     };

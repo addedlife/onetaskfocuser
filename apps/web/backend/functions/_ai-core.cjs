@@ -970,7 +970,7 @@ const AI_JOB_REGISTRY = {
     validate: normalizeChiefTaskSuggestions,
   },
   "dashboard.river_rank.v1": {
-    model: "gemini-2.5-flash-lite", // dedicated lane — keeps river_rank out of the flash-lite queue shared by 5+ other dashboard jobs
+    model: QUOTA_FALLBACK_GEMINI_MODEL, // high-frequency dashboard job: use the 1000/day flash-lite lane
     task: "dashboard-river-rank",
     output: "json",
     shape: "object",
@@ -1044,6 +1044,69 @@ const AI_JOB_REGISTRY = {
           area: cleanString(s?.area, 60),
           note: cleanString(s?.note, 200),
         })).filter(s => s.area && s.note),
+      };
+    },
+  },
+  "dashboard.snapshot.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL, // consolidated page-load call: replaces separate nervecenter_summary + task_suggestions calls
+    task: "dashboard-snapshot",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0.1, maxOutputTokens: 1600 },
+    schema: '{"supercrunch":"terse comma-separated list of actual items across all sources","signals":[{"area":"Calendar","note":"terse note"}],"taskSuggestions":[{"text":"task to create","priorityId":"priority_id","source":"Calendar|Mail","sourceKey":"","freshnessKey":"","actionType":"reply|call|confirm|prepare|schedule|send|pay|register|follow_up","sourceTitle":"source item","reason":"why taskable"}]}',
+    buildPrompt(input = {}) {
+      const context = normalizeChiefContext(input.context || input);
+      const priorityOptions = ensureArray(input.priorityOptions || [], "priorityOptions").slice(0, 8).map(priority => ({
+        id: cleanString(priority?.id, 80),
+        label: cleanString(priority?.label, 120),
+        rank: Number.isFinite(Number(priority?.rank)) ? Number(priority.rank) : null,
+      })).filter(priority => priority.id);
+      const existingTasks = ensureArray(input.existingTasks || [], "existingTasks").slice(0, 80).map(task => cleanString(task?.text || task, 260)).filter(Boolean);
+      const learningProfile = input.learningProfile && typeof input.learningProfile === "object" && !Array.isArray(input.learningProfile)
+        ? input.learningProfile : {};
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "You are producing a consolidated dashboard snapshot in one pass — two outputs combined.",
+        "",
+        "PART 1 — NerveCenter summary. Scan ALL sources: Calendar, Gmail, Tasks, Shailos, phone calls, texts.",
+        "Write 'supercrunch': a terse comma-separated list of the actual named items — task text, email topics, shaila subjects, caller names, calendar events. Name the thing, not the category. Never use counts or category nouns ('3 tasks', '2 shailos', 'emails'). End with 'various [X] items' if more remain. One line, no periods.",
+        "Cross-source coverage rule: before listing a second item from any one source, include the single most important item from every other active source.",
+        "Write 'signals': one entry per area that has active data (Calendar, Mail, Tasks, Shailos, Phone). Each note is Apple-notification style: terse, telegraphic, leads with the most concrete fact. Drop articles and filler.",
+        "Routine calendar items (regular davening, standard learning sessions, recurring meetings) are background context only. Calendar items marked past:true are already over — ignore them.",
+        "Do NOT restate the area name or use bare counts in a note.",
+        "",
+        "PART 2 — Task suggestions. Find taskable follow-up items from Calendar and Gmail not already in existing tasks.",
+        "Do not suggest routine calendar attendance. Do suggest prep, reply, bring, call, send, confirm, register, pay, review when the source implies action.",
+        "Choose one priorityId from the priority options. Use highest priority only for urgent, same-day, blocking, or time-sensitive work.",
+        "Use the learning profile as a preference signal: favor accepted action types; avoid repeatedly-rejected classes unless the source is clearly new or time-sensitive.",
+        "When a source row has sourceKey or freshnessKey, copy those exact values into the suggestion.",
+        `Priority options:\n${jsonBlock(priorityOptions)}`,
+        `Learning profile:\n${jsonBlock(learningProfile)}`,
+        `Profile notes:\n${jsonBlock(context.profile?.notes || [])}`,
+        `Existing tasks:\n${jsonBlock(existingTasks)}`,
+        `Current snapshot:\n${jsonBlock(context)}`,
+        "Return at most 4 taskSuggestions. If nothing taskable, return an empty taskSuggestions array.",
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate(value) {
+      const o = ensureObject(value);
+      return {
+        supercrunch: cleanString(o.supercrunch, 220),
+        signals: ensureArray(o.signals || [], "signals").slice(0, 6).map(s => ({
+          area: cleanString(s?.area, 60),
+          note: cleanString(s?.note, 200),
+        })).filter(s => s.area && s.note),
+        taskSuggestions: ensureArray(o.taskSuggestions || [], "taskSuggestions").map(r => ({
+          text: cleanString(r?.text, 260),
+          priorityId: cleanString(r?.priorityId, 80),
+          source: cleanString(r?.source, 40),
+          sourceKey: cleanString(r?.sourceKey, 80),
+          freshnessKey: cleanString(r?.freshnessKey, 80),
+          actionType: cleanString(r?.actionType, 40),
+          sourceTitle: cleanString(r?.sourceTitle, 160),
+          reason: cleanString(r?.reason, 160),
+        })).filter(r => r.text),
       };
     },
   },

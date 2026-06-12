@@ -228,6 +228,10 @@ const NC_SUMMARY_CACHE_KEY = "ot_nc_summary_cache_v1";
 const NC_SUMMARY_LAST_RUN_KEY = "ot_nc_summary_last_run_v1";
 const NC_SUMMARY_CACHE_MS = 8 * 60 * 1000;
 const NC_SUMMARY_MIN_GAP_MS = 90 * 1000;
+const SNAPSHOT_CACHE_KEY = "ot_nc_snapshot_v1";
+const SNAPSHOT_LAST_RUN_KEY = "ot_nc_snapshot_last_run_v1";
+const SNAPSHOT_CACHE_MS = 8 * 60 * 1000;
+const SNAPSHOT_MIN_GAP_MS = 90 * 1000;
 const ROUTINE_CALENDAR_RE = /\b(shacharis|shacharit|mincha|maariv|arvit|daven(?:ing)?|daf yomi|mishna(?:h)? yomi|halacha yomi|parsha|selichos|slichos)\b/i;
 const CHIEF_SEARCHING_BRIEF = { summary: "", nextAction: "", why: "", urgency: "watch", sources: [], focusArea: "operations", _isPlaceholder: true };
 const CHIEF_QUIET_BRIEF = { summary: "", nextAction: "", why: "", urgency: "watch", sources: [], focusArea: "operations", _isPlaceholder: true };
@@ -1132,47 +1136,31 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     if (items.length) onPolishNerveItems(items);
   }, [polishQueueKey]); // eslint-disable-line
 
+  // Chief of Staff is beta — AI fires ONLY when user explicitly clicks the "Brief me" pill.
+  // Passive context changes (chiefScanKey) no longer auto-trigger a call.
   useEffect(() => {
-    let cancelled = false;
     const now = Date.now();
-    // Chief scan feeds the chief page AND the nerve-center card summaries (each card's
-    // top line prefers the AI signal). Run whenever any of these views is active:
-    // chief page, mobile device (boxes/accordion), or desktop boxes/accordion layout.
-    // Cache + min-gap throttle keep this lean. Stale-while-revalidate: deterministic
-    // fallback shows instantly, AI signal upgrades it when fresh.
     const ncLayoutActive = !isMobileDevice && desktopLayout !== "full";
     if (!chiefPage && !isMobileDevice && !ncLayoutActive) {
-      // Full desktop panel: always use the live fallback (no AI overhead needed there).
-      setChiefBrief(null);
-      setChiefLoading(false);
-      setChiefError("");
-      return undefined;
+      setChiefBrief(null); setChiefLoading(false); setChiefError(""); return undefined;
     }
     const force = chiefRefreshNonce !== chiefRefreshHandledRef.current;
     chiefRefreshHandledRef.current = chiefRefreshNonce;
-    // Always show the fresh fallback immediately while the AI re-scan runs, so a resolved
-    // missed call (or any context change) is never stuck showing stale data.
-    setChiefBrief(null);
-    setChiefError("");
-    if (!aiOpts) {
-      setChiefBrief(null);
-      setChiefLoading(false);
-      return undefined;
+    if (!force) {
+      // Passive mount/layout change: show cache if fresh, otherwise show empty (pill handles the rest).
+      const cached = readStorageJson(CHIEF_SCAN_CACHE_KEY);
+      if (cached?.brief && now - Number(cached.ts || 0) < CHIEF_SCAN_CACHE_MS) {
+        setChiefBrief(cached.brief);
+      } else {
+        setChiefBrief(null);
+      }
+      setChiefLoading(false); setChiefError(""); return undefined;
     }
-    const cached = readStorageJson(CHIEF_SCAN_CACHE_KEY);
-    if (!force && cached?.scanKey === chiefScanKey && cached?.brief && now - Number(cached.ts || 0) < CHIEF_SCAN_CACHE_MS) {
-      setChiefBrief(cached.brief);
-      setChiefLoading(false);
-      return undefined;
-    }
-    if (!force && now - readStorageNumber(CHIEF_SCAN_LAST_RUN_KEY) < CHIEF_SCAN_MIN_AI_GAP_MS) {
-      setChiefBrief(cached?.brief ?? null);
-      setChiefError(cached?.brief ? "Using cached scan." : "Using local scan.");
-      setChiefLoading(false);
-      return undefined;
-    }
-      setChiefLoading(true);
-    const delay = force ? 50 : 900;
+    // User explicitly triggered (pill click incremented chiefRefreshNonce) — run the AI call.
+    setChiefBrief(null); setChiefError("");
+    if (!aiOpts) { setChiefLoading(false); return undefined; }
+    setChiefLoading(true);
+    let cancelled = false;
     const timer = window.setTimeout(() => {
       writeStorageNumber(CHIEF_SCAN_LAST_RUN_KEY, Date.now());
       runAIJob("dashboard.chief_of_staff.v1", { context: chiefScanContext }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 900 } })
@@ -1186,166 +1174,134 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               return sk && actionKey && tokenOverlapRatio(sk, actionKey) >= 0.6;
             });
             if (isDuplicate) {
-              setChiefBrief(CHIEF_QUIET_BRIEF);
-              setChiefError("");
+              setChiefBrief(CHIEF_QUIET_BRIEF); setChiefError("");
             } else {
               setChiefBrief(output);
               writeStorageJson(CHIEF_SCAN_CACHE_KEY, { scanKey: chiefScanKey, ts: Date.now(), brief: output });
             }
           } else {
             setChiefBrief(null);
-            setChiefError("");
+            setChiefError(output ? "No recommendation available." : `AI returned no output — check gateway. Job: ${JSON.stringify(output).slice(0, 120)}`);
           }
         })
-        .catch(() => {
+        .catch(e => {
           if (cancelled) return;
           setChiefBrief(null);
-          setChiefError("");
+          setChiefError(`Brief failed: ${e?.message || "unknown error"}`);
         })
-        .finally(() => {
-          if (!cancelled) setChiefLoading(false);
-        });
-    }, delay);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [chiefPage, chiefScanKey, chiefRefreshNonce, desktopLayout, isMobileDevice]); // eslint-disable-line
+        .finally(() => { if (!cancelled) setChiefLoading(false); });
+    }, 50);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [chiefRefreshNonce, chiefPage, desktopLayout, isMobileDevice]); // eslint-disable-line
+  // dashboard.snapshot.v1: single consolidated call replacing separate nervecenter_summary + task_suggestions calls.
+  // One flash-lite slot on page load instead of three.
   useEffect(() => {
     const now = Date.now();
-    // Attempt the native summary unconditionally — exactly like email summaries do (runAIJob
-    // with `aiOpts || {}`). Do NOT pre-gate on aiOpts: app-config's provider "available" map
-    // can report nothing even when the gateway has working keys.
-    const cached = readStorageJson(NC_SUMMARY_CACHE_KEY);
-    // Fresh cache for this exact context → show it.
-    if (cached?.scanKey === ncSummaryScanKey && cached?.result?.supercrunch && now - Number(cached.ts || 0) < NC_SUMMARY_CACHE_MS) {
-      setNcSummary(cached.result); setNcSummaryError(false);
+    const cached = readStorageJson(SNAPSHOT_CACHE_KEY);
+    if (cached?.scanKey === ncSummaryScanKey && cached?.result?.supercrunch && now - Number(cached.ts || 0) < SNAPSHOT_CACHE_MS) {
+      setNcSummary({ supercrunch: cached.result.supercrunch, signals: cached.result.signals || [] });
+      setNcSummaryError(false);
       if (!ncInFlightRef.current) setNcSummaryLoading(false);
+      if (Array.isArray(cached.result.taskSuggestions)) {
+        setTaskSuggestions(cached.result.taskSuggestions);
+        setTaskSuggestionsLoading(false);
+      }
       return undefined;
     }
-    // A scan is already running — keep its live "Updating" status; never start a second one
-    // or blank the bar. (The context key changes constantly with live data, so without this
-    // guard a mid-flight re-run cancelled the call and wiped the status — the blank you saw.)
     if (ncInFlightRef.current) return undefined;
-    // Throttled since the last run: keep the status visible (cache if we have it, error pill
-    // if the last attempt failed, else stay on "Updating") and re-trigger when the window
-    // opens. Consecutive failures back the window off (90s → 3m → 6m → … capped at 15m) so
-    // a down/overloaded gateway isn't hammered on a fixed clock by every open tab.
     const failStreak = ncFailStreakRef.current;
     const gapMs = failStreak > 0
-      ? Math.min(15 * 60 * 1000, NC_SUMMARY_MIN_GAP_MS * 2 ** failStreak)
-      : NC_SUMMARY_MIN_GAP_MS;
-    const sinceLast = now - readStorageNumber(NC_SUMMARY_LAST_RUN_KEY);
+      ? Math.min(15 * 60 * 1000, SNAPSHOT_MIN_GAP_MS * 2 ** failStreak)
+      : SNAPSHOT_MIN_GAP_MS;
+    const sinceLast = now - readStorageNumber(SNAPSHOT_LAST_RUN_KEY);
     if (sinceLast < gapMs) {
-      if (cached?.result?.supercrunch) { setNcSummary(cached.result); setNcSummaryLoading(false); }
-      // After a failure, keep the error pill (with its Retry button) visible during the
-      // backoff window — flipping it to a perpetual "Updating…" hid real outages.
-      else if (failStreak === 0) { setNcSummaryLoading(true); }
+      if (cached?.result?.supercrunch) {
+        setNcSummary({ supercrunch: cached.result.supercrunch, signals: cached.result.signals || [] });
+        setNcSummaryLoading(false);
+        if (Array.isArray(cached.result.taskSuggestions)) {
+          setTaskSuggestions(cached.result.taskSuggestions);
+          setTaskSuggestionsLoading(false);
+        }
+      } else if (failStreak === 0) { setNcSummaryLoading(true); }
       const t = window.setTimeout(() => setNcSummaryRefreshNonce(n => n + 1), gapMs - sinceLast + 60);
       return () => window.clearTimeout(t);
     }
-    // Start a scan. Status stays "Updating" until THIS call resolves; we do NOT cancel it on
-    // context changes — discarding the in-flight result is exactly what blanked the bar.
     ncInFlightRef.current = true;
     setNcSummaryLoading(true);
     setNcSummaryError(false);
-    writeStorageNumber(NC_SUMMARY_LAST_RUN_KEY, now);
-    const scanKeyAtStart = ncSummaryScanKey;
-    runAIJob("dashboard.nervecenter_summary.v1", { context: chiefContext }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 600 } })
-      .then(job => {
-        if (!job || !job.output) { ncFailStreakRef.current += 1; setNcSummary(null); setNcSummaryError(true); return; }
-        // Keep a result that has signals even if supercrunch is empty (the schema allows it).
-        ncFailStreakRef.current = 0;
-        setNcSummary(job.output); setNcSummaryError(false);
-        if (job.output.supercrunch) {
-          writeStorageJson(NC_SUMMARY_CACHE_KEY, { scanKey: scanKeyAtStart, ts: Date.now(), result: job.output });
-        }
-      })
-      .catch(() => { ncFailStreakRef.current += 1; setNcSummary(null); setNcSummaryError(true); })
-      .finally(() => { ncInFlightRef.current = false; setNcSummaryLoading(false); });
-    return undefined;
-  }, [ncSummaryScanKey, aiOpts, ncSummaryRefreshNonce]); // eslint-disable-line
-
-  useEffect(() => {
-    if (!chiefPage || !aiOpts || (!calendarRows.length && !(gmailMessages || []).length) || !taskSuggestionPriorities.length) {
-      setTaskSuggestions([]);
-      setTaskSuggestionsLoading(false);
-      return undefined;
-    }
-    let cancelled = false;
-    const now = Date.now();
-    const cached = readStorageJson(CHIEF_SUGGESTIONS_CACHE_KEY);
-    if (cached?.scanKey === taskSuggestionScanKey && Array.isArray(cached.rows) && now - Number(cached.ts || 0) < CHIEF_SUGGESTIONS_CACHE_MS) {
-      setTaskSuggestions(cached.rows);
-      setTaskSuggestionsLoading(false);
-      return undefined;
-    }
-    if (now - readStorageNumber(CHIEF_SUGGESTIONS_LAST_RUN_KEY) < CHIEF_SUGGESTIONS_MIN_AI_GAP_MS) {
-      setTaskSuggestions(Array.isArray(cached?.rows) ? cached.rows : []);
-      setTaskSuggestionsLoading(false);
-      return undefined;
-    }
     setTaskSuggestionsLoading(true);
+    writeStorageNumber(SNAPSHOT_LAST_RUN_KEY, now);
+    const scanKeyAtStart = ncSummaryScanKey;
     const existingKeys = new Set(
       primaryTaskQueue
         .map(task => taskSuggestionKey(`${task.text || ""} ${nerveDisplaySummary(task, "")}`))
         .filter(Boolean)
     );
     const validPriorityIds = new Set(taskSuggestionPriorities.map(p => p.id));
-    const timer = window.setTimeout(() => {
-      writeStorageNumber(CHIEF_SUGGESTIONS_LAST_RUN_KEY, Date.now());
-      runAIJob("dashboard.task_suggestions.v1", {
-        context: chiefContext,
-        priorityOptions: taskSuggestionPriorities.map((p, index) => ({ id: p.id, label: p.label || p.id, rank: index + 1 })),
-        existingTasks: primaryTaskQueue.slice(0, 80).map(task => ({ text: nerveDisplaySummary(task, task.text || "") })),
-        learningProfile: chiefLearningProfile,
-      }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 900 } })
-        .then(job => {
-          if (cancelled) return;
-          const seen = new Set();
-          const rows = (job?.output?.suggestions || [])
-            .map((item, index) => {
-              const text = cleanOneLine(item.text, 260);
-              const key = taskSuggestionKey(`${item.source || ""} ${item.sourceTitle || ""} ${text}`);
-              return {
-                id: key || `suggestion-${index}`,
-                key,
-                text,
-                priorityId: validPriorityIds.has(item.priorityId) ? item.priorityId : defaultSuggestionPriorityId,
-                source: cleanOneLine(item.source || "Dashboard", 40),
-                sourceKey: cleanOneLine(item.sourceKey || "", 80),
-                freshnessKey: cleanOneLine(item.freshnessKey || "", 80),
-                sourceTitle: cleanOneLine(item.sourceTitle || "", 160),
-                reason: cleanOneLine(item.reason || "", 160),
-                actionType: cleanOneLine(item.actionType || "", 40),
-              };
-            })
-            .map(item => decorateTaskSuggestion(item, chiefContext))
-            .filter(item => item.text && item.key && !shouldHideTaskSuggestion(item, chiefLearning))
-            .filter(item => {
-              const bare = taskSuggestionKey(item.text);
-              if (!bare || existingKeys.has(bare) || seen.has(item.key) || seen.has(item.suppressionKey) || seen.has(item.textKey)) return false;
-              seen.add(item.key);
-              seen.add(item.suppressionKey);
-              seen.add(item.textKey);
-              return true;
-            })
-            .slice(0, 3);
-          setTaskSuggestions(rows);
-          writeStorageJson(CHIEF_SUGGESTIONS_CACHE_KEY, { scanKey: taskSuggestionScanKey, ts: Date.now(), rows });
-        })
-        .catch(() => {
-          if (!cancelled) setTaskSuggestions([]);
-        })
-        .finally(() => {
-          if (!cancelled) setTaskSuggestionsLoading(false);
-        });
-    }, 1200);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [chiefPage, taskSuggestionScanKey]); // eslint-disable-line
+    runAIJob("dashboard.snapshot.v1", {
+      context: chiefContext,
+      priorityOptions: taskSuggestionPriorities.map((p, index) => ({ id: p.id, label: p.label || p.id, rank: index + 1 })),
+      existingTasks: primaryTaskQueue.slice(0, 80).map(task => ({ text: nerveDisplaySummary(task, task.text || "") })),
+      learningProfile: chiefLearningProfile,
+    }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 1600 } })
+      .then(job => {
+        const out = job?.output;
+        if (!out || !out.supercrunch) {
+          ncFailStreakRef.current += 1;
+          setNcSummary(null);
+          setNcSummaryError(true);
+          console.warn("[Snapshot] No output. Raw job:", JSON.stringify(job).slice(0, 400));
+          return;
+        }
+        ncFailStreakRef.current = 0;
+        const summaryPart = { supercrunch: out.supercrunch, signals: out.signals || [] };
+        setNcSummary(summaryPart);
+        setNcSummaryError(false);
+        const seen = new Set();
+        const rows = (out.taskSuggestions || [])
+          .map((item, index) => {
+            const text = cleanOneLine(item.text, 260);
+            const key = taskSuggestionKey(`${item.source || ""} ${item.sourceTitle || ""} ${text}`);
+            return {
+              id: key || `suggestion-${index}`,
+              key,
+              text,
+              priorityId: validPriorityIds.has(item.priorityId) ? item.priorityId : defaultSuggestionPriorityId,
+              source: cleanOneLine(item.source || "Dashboard", 40),
+              sourceKey: cleanOneLine(item.sourceKey || "", 80),
+              freshnessKey: cleanOneLine(item.freshnessKey || "", 80),
+              sourceTitle: cleanOneLine(item.sourceTitle || "", 160),
+              reason: cleanOneLine(item.reason || "", 160),
+              actionType: cleanOneLine(item.actionType || "", 40),
+            };
+          })
+          .map(item => decorateTaskSuggestion(item, chiefContext))
+          .filter(item => item.text && item.key && !shouldHideTaskSuggestion(item, chiefLearning))
+          .filter(item => {
+            const bare = taskSuggestionKey(item.text);
+            if (!bare || existingKeys.has(bare) || seen.has(item.key) || seen.has(item.suppressionKey) || seen.has(item.textKey)) return false;
+            seen.add(item.key); seen.add(item.suppressionKey); seen.add(item.textKey);
+            return true;
+          })
+          .slice(0, 3);
+        setTaskSuggestions(rows);
+        writeStorageJson(CHIEF_SUGGESTIONS_CACHE_KEY, { scanKey: ncSummaryScanKey, ts: Date.now(), rows });
+        writeStorageJson(SNAPSHOT_CACHE_KEY, { scanKey: scanKeyAtStart, ts: Date.now(), result: { ...summaryPart, taskSuggestions: rows } });
+      })
+      .catch(e => {
+        ncFailStreakRef.current += 1;
+        setNcSummary(null);
+        setNcSummaryError(true);
+        setTaskSuggestions([]);
+        console.warn("[Snapshot] Error:", e?.message || String(e));
+      })
+      .finally(() => {
+        ncInFlightRef.current = false;
+        setNcSummaryLoading(false);
+        setTaskSuggestionsLoading(false);
+      });
+    return undefined;
+  }, [ncSummaryScanKey, aiOpts, ncSummaryRefreshNonce]); // eslint-disable-line
 
   async function submitChiefPrompt(questionOverride = null) {
     const question = String(questionOverride ?? chiefPrompt).trim();
@@ -2040,6 +1996,15 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     </span>
                   )}
                 </div>
+                {!activeChiefBrief && !chiefLoading && (
+                  <div style={{ display: "flex", alignItems: "center", paddingTop: 4, paddingBottom: 4 }}>
+                    <button type="button" onClick={() => setChiefRefreshNonce(n => n + 1)}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 20px", borderRadius: 20, border: `1.5px solid ${C.accent}`, background: "transparent", color: C.accent, fontSize: NC_TYPE.base, fontFamily: NC_FONT_STACK, fontWeight: 600, cursor: "pointer", letterSpacing: 0.1 }}>
+                      ✦ Brief me
+                      <span style={{ fontSize: NC_TYPE.small, fontWeight: 400, opacity: 0.6 }}>beta</span>
+                    </button>
+                  </div>
+                )}
                 <div style={{ borderLeft: `4px solid ${chiefLoading ? C.divider : activeChiefTone}`, paddingLeft: 14, display: "grid", gap: 8, opacity: chiefLoading ? 0.55 : 1, transition: "opacity 0.25s" }}>
                   <div style={{ fontSize: isStacked ? 19 : 24, lineHeight: 1.2, color: C.text, fontWeight: 650, fontFamily: NC_FONT_STACK }}>{activeChiefBrief?.summary}</div>
                   <div style={{ fontSize: isStacked ? 15 : 17, lineHeight: 1.38, color: C.muted, fontFamily: NC_FONT_STACK }}>
