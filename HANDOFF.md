@@ -208,3 +208,199 @@ This is pure protection and low-risk; ship it first.
 The web session diagnosed the Android staleness wrong repeatedly because it never had
 ground-truth from the device or the server. **You do.** Pull the real Firestore data and
 read the device's `?diag=1` BEFORE writing code. Measure, then fix.
+
+---
+
+## 13. AI Gateway Architecture — current state (2026-06-12)
+
+_This section was written after a full redesign of the dashboard AI layer in commits
+`0dc63f7` and `bf14d50`. Read it before touching any AI-related code._
+
+---
+
+### 13.1 The problem that was fixed
+
+The app previously fired **5+ simultaneous AI calls on every page load**, all targeting
+the same `gemini-3.1-flash-lite` quota lane (15 RPM free tier = 1 slot per 4 seconds).
+The Netlify Lambda function queue times out at **8 seconds**. A 5th simultaneous job waits
+20+ seconds → guaranteed 429 every load. `dashboard.river_rank.v1` (the Task River AI
+prioritizer) always fired last and always lost. The result was the "AI restrained" loop
+the user saw.
+
+Secondary problem: the 90-second snapshot refresh gap, combined with frequent Gmail/task
+updates, was burning through the **1,000 RPD** (requests per day) free-tier limit.
+
+---
+
+### 13.2 Architecture now — two calls per page load
+
+| Time | Call | What it does |
+|------|------|-------------|
+| T+0s | `dashboard.snapshot.v1` | Single consolidated call: NerveCenter summary + task suggestions combined |
+| T+4s | `dashboard.river_rank.v1` | Task River AI prioritization (4-second startup delay ensures snapshot gets its slot first) |
+| After Gmail loads | `dashboard.email_summaries.v1` | One-sentence summaries per email; ID-based dedup prevents re-runs |
+| User clicks "✦ Brief me" | `dashboard.chief_of_staff.v1` | **Beta — manual-only.** Never auto-fires. |
+
+**Removed as auto-fire jobs (2026-06-12):**
+- `dashboard.nervecenter_summary.v1` — merged into snapshot
+- `dashboard.task_suggestions.v1` — merged into snapshot
+- `dashboard.chief_of_staff.v1` auto-fire — now pill-only (see §13.5)
+
+---
+
+### 13.3 AI model used everywhere
+
+All dashboard jobs use `QUOTA_FALLBACK_GEMINI_MODEL = "gemini-3.1-flash-lite"` (defined
+in `apps/web/backend/functions/_ai-core.cjs` line ~24). This is the free-tier model with
+the highest RPD allowance (1,000/day, 15 RPM). Do NOT change individual jobs to other
+models without understanding cross-job quota contention.
+
+The **wrong model name `"gemini-2.5-flash-lite"`** was briefly introduced in commit
+`e0c7925` and reverted in `0dc63f7`. If you ever see that string again, remove it.
+
+---
+
+### 13.4 Throttle constants — the three brakes on quota usage
+
+**Snapshot** (`NerveCenterPanel.jsx` lines ~231–234):
+```
+SNAPSHOT_CACHE_MS   = 20 * 60 * 1000   // 20 min cache TTL
+SNAPSHOT_MIN_GAP_MS =  8 * 60 * 1000   // 8 min min-gap between calls (shared across tabs via localStorage)
+SNAPSHOT_LAST_RUN_KEY = 'ot_nc_snapshot_last_run_v1'
+SNAPSHOT_CACHE_KEY    = 'ot_nc_snapshot_v1'
+```
+
+**River rank** (`TaskRiverPanel.jsx` lines ~16–17):
+```
+RANK_MIN_GAP_MS = 4 * 60 * 1000   // 4 min min-gap (shared across tabs via localStorage)
+RANK_LAST_RUN_KEY = 'ot_river_rank_last_run_v1'
+```
+Throttle is bypassed for: user-triggered reprioritize (`lastRankKeyRef === ''`), and
+retries after failure (`retryStreakRef.current > 0`).
+
+**Email summaries** (`App.jsx` inside `applyEmailSummaries`):
+```
+EMAIL_SUMMARIES_IDS_KEY = 'ot_email_summaries_ids_v1'
+```
+Dedup by sorted message-ID string — re-runs only when the inbox composition changes.
+
+**Estimated RPD with these brakes:** ~200–250/day (well inside the 1,000 free-tier limit
+even with two tabs open, since all three throttles use localStorage which is shared across
+tabs on the same origin).
+
+---
+
+### 13.5 Chief of Staff — beta / pill-only
+
+`dashboard.chief_of_staff.v1` **does not auto-fire**. The auto-fire `useEffect` was
+removed and replaced with a manual trigger only.
+
+**UI:** A "✦ Brief me — beta" pill button renders on the Chief of Staff page when no
+brief is loaded and it isn't loading. Clicking it increments `chiefRefreshNonce`, which
+triggers the effect.
+
+**Code location:** `NerveCenterPanel.jsx`
+- Effect: lines ~1139–1213 (deps: `[chiefRefreshNonce, chiefPage]` only — no `chiefScanKey`)
+- Pill button: around line ~2001–2005
+- The effect still reads/writes the `CHIEF_SCAN_CACHE_KEY` localStorage cache, so a
+  cached brief loads instantly without a new API call when the user opens the page.
+
+---
+
+### 13.6 Full AI job registry (all jobs in `_ai-core.cjs`)
+
+| Job ID | Model | Trigger | Purpose |
+|--------|-------|---------|---------|
+| `dashboard.snapshot.v1` | flash-lite | Page load (8-min throttle) | NerveCenter summary + task suggestions combined |
+| `dashboard.river_rank.v1` | flash-lite | Items change (4-min throttle, 4s startup delay) | Task River prioritization scores + labels |
+| `dashboard.email_summaries.v1` | flash-lite | Gmail load (ID dedup) | One-sentence summaries per email |
+| `dashboard.chief_of_staff.v1` | flash-lite | User clicks "Brief me" only | Executive next-action brief |
+| `dashboard.chief_dialogue.v1` | flash-lite | User submits a question in CoS chat | Conversational follow-up in Chief chat |
+| `dashboard.polish_items.v1` | flash-lite | User-triggered (polish button) | Rewrites raw task/shaila text for clarity |
+| `dashboard.nervecenter_summary.v1` | flash-lite | **ORPHANED** — no longer called from client | Legacy job; kept for back-compat but nothing fires it |
+| `dashboard.task_suggestions.v1` | flash-lite | **ORPHANED** — no longer called from client | Legacy job; kept for back-compat but nothing fires it |
+| `transcribe.yeshivish.v1` | Gemini audio | Voice input | Yeshivish-aware speech-to-text |
+| `halacha.*` | various | On demand | Halacha research/psak generation |
+
+---
+
+### 13.7 `dashboard.snapshot.v1` — what it returns
+
+The server-side job (`_ai-core.cjs` line ~1050) returns one JSON object:
+```json
+{
+  "supercrunch": "terse comma-separated list of named items across all sources",
+  "signals": [{ "area": "Calendar", "note": "terse note" }],
+  "taskSuggestions": [{ "text": "...", "priorityId": "...", "source": "...", ... }]
+}
+```
+The client (`NerveCenterPanel.jsx` snapshot effect) splits this:
+- `supercrunch` + `signals` → `setNcSummary()`
+- `taskSuggestions` → processed through `decorateTaskSuggestion` + dedup filters → `setTaskSuggestions()`
+- Full result cached under `SNAPSHOT_CACHE_KEY` in localStorage
+
+Input to the job: `{ context: chiefContext, priorityOptions, existingTasks, learningProfile }`
+
+---
+
+### 13.8 How to diagnose AI failures
+
+**"AI restrained — retry in Xs"** (TaskRiver status bar):
+- `retryIn` state is set → river_rank failed, retry countdown is running
+- First failure retries at 20s, then 45s, then 90s max delay
+- If it keeps failing: check the Netlify function log for 429s (quota) or 502s (Lambda timeout)
+
+**"AI unavailable"** (TaskRiver):
+- `aiState === 'error'` with no retry pending
+- Usually means all retry attempts exhausted, or `aiOpts` is null (AI gateway not configured)
+
+**NerveCenter summary missing / blank**:
+- Check `ncSummaryError` state — the UI shows an error pill with a Retry button
+- Check `console.warn("[Snapshot]...")` messages in browser console
+- Check `localStorage['ot_nc_snapshot_last_run_v1']` timestamp — if very recent, the 8-min gate is holding
+
+**To force a fresh snapshot immediately** (debug only):
+```javascript
+localStorage.removeItem('ot_nc_snapshot_last_run_v1');
+localStorage.removeItem('ot_nc_snapshot_v1');
+// then reload
+```
+
+**To reset the river rank throttle:**
+```javascript
+localStorage.removeItem('ot_river_rank_last_run_v1');
+```
+
+---
+
+### 13.9 What is still NOT done
+
+1. **Settings toggle for Claude Haiku** — the Settings UI has visual provider-selection
+   controls but they don't reliably wire through to all dashboard jobs. The toggle exists,
+   instructions for Haiku setup don't. Low priority.
+
+2. **`dashboard.nervecenter_summary.v1` and `dashboard.task_suggestions.v1`** are orphaned
+   in the registry. They still exist on the server and are safe to call directly. They're
+   not harmful, but they waste space. Could be removed from the registry in a cleanup pass
+   (low risk — nothing calls them).
+
+3. **Firestore rules security issue** — documented in §2 above; unrelated to AI but still
+   open.
+
+---
+
+### 13.10 Server infrastructure
+
+- **Netlify Lambda:** `apps/web/backend/functions/ai-proxy.js` + `_ai-core.cjs`
+- **Function budget:** ~26–30s total execution time per invocation
+- **Gemini quota gate:** Firestore-backed rate limiter (`reserveGeminiSlot`). Shared across
+  all Lambda invocations via Firestore. Queue timeout: 8 seconds. If a job waits >8s in
+  the Firestore queue it gets a 429 that propagates to the client.
+- **Retry-after:** The 429 response includes a `retryAfterSeconds` hint but `callAIProxy`
+  in `01-core.js` currently returns null on any error (does not expose the hint to the
+  client). If you need smart retry timing, wire `retryAfterSeconds` from the Lambda
+  response through `callAIProxy`.
+
+---
+
+_Next session: read §13 first, then `BRIEF.txt` for live state._
