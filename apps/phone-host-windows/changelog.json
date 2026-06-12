@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-12 00:02:03",
+        "version":  "b303",
+        "notes":  "Pure style release: the classic DeskPhone window now matches the web phone screen exactly - same teal accent, same whites and greys, no more blue. Also, the modern web phone window no longer auto-opens on launch; the \u0027Open Modern Phone UI\u0027 button in Settings still opens it on demand.",
+        "devNotes":  "Zero functional changes. (1) Themes/Palettes/Google.xaml re-pointed at the canonical web palette (apps/web/src/08-app-split/ui-tokens.jsx GV_CLEAN + 10-deskphone-web.jsx COLORS): all blue accent keys (Primary, AccentBlue/Dark/Light, BubbleOut, BorderFocus, BgSelected, PrimaryContainer family) moved to the teal family #00796B/#00695C/#E0F2F1/#003731; blue-tinted neutrals de-blued to Google greys (#202124/#3C4043/#5F6368/#9AA0A6 text, #DADCE0 borders, #F1F3F4/#F8F9FA/#FFFFFF surfaces); green/red accents aligned to web values (#1E8E3E/#CEEAD6, #D93025/#FCE8E6); amber family kept (no web equivalent). (2) App.xaml default merged palette BlueGold -\u003e Google (light is the product default; runtime still applies PreferredPalette via ThemeService, where dark=BlueGold). (3) Removed the OpenModernUiOnLaunch auto-open block in MainViewModel (post-_api.Start() Task.Delay(1500)+OpenWebShell); OpenModernUiCommand and the settings button remain for manual open. No change to HFP/MAP/PBAP/relay/audio/API logic."
+    },
+    {
         "timestamp":  "2026-06-11 17:29:08",
         "version":  "b302",
         "notes":  "Critical fix for the half-dead state b301 introduced: closing the classic DeskPhone window while the modern phone window was open killed the engine (Bluetooth API, webapp link, all buttons) but left the app running - the webapp said \u0027waiting for your PC\u0027 and nothing responded until a full restart. Closing the classic window now closes the whole app cleanly, exactly like before. Closing just the modern window keeps everything running.",

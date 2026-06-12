@@ -2971,19 +2971,6 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _api.Start();
         AppendDebug($"[API] {_api.StartupResult}");
 
-        // Modern UI on launch: the app's face is the same web phone screen the
-        // webapp shows, served from our own loopback server just started above.
-        // Delayed a beat so the listener is warm and the main window settles;
-        // WebShellWindow also retries its first navigation to cover the race.
-        if (_settings.Current.OpenModernUiOnLaunch)
-        {
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(1500);
-                Dispatch(() => OpenWebShell(ModernUiUrl, maximize: true));
-            });
-        }
-
         // ── Cloud relay (same data sources as the local API) ──────────────
         _relay.GetStatus   = _api.GetStatus;
         _relay.GetMessages = _api.GetMessages;
