@@ -13,6 +13,9 @@ import { cleanTheme, NC_FONT_STACK } from '../ui-tokens.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { runAIJob } from '../../01-core.js';
 
+const RANK_LAST_RUN_KEY = 'ot_river_rank_last_run_v1';
+const RANK_MIN_GAP_MS = 4 * 60 * 1000; // 4-min cross-tab throttle
+
 // ── color helpers ───────────────────────────────────────────────────────────
 function hexToRgb(hex) {
   let h = String(hex || '').replace('#', '').trim();
@@ -170,6 +173,14 @@ export function TaskRiverPanel({
       const t = setTimeout(() => setRankNonce(n => n + 1), 4000 - elapsed);
       return () => clearTimeout(t);
     }
+    // Cross-tab throttle: skip if another tab ranked recently AND this isn't a retry or
+    // a user-forced reprioritize (reprioritize() clears lastRankKeyRef to signal forced).
+    const isUserForced = lastRankKeyRef.current === '';
+    const sinceLastRank = Date.now() - Number(localStorage.getItem(RANK_LAST_RUN_KEY) || 0);
+    if (!isUserForced && retryStreakRef.current === 0 && sinceLastRank < RANK_MIN_GAP_MS) {
+      const t = setTimeout(() => setRankNonce(n => n + 1), RANK_MIN_GAP_MS - sinceLastRank + 500);
+      return () => clearTimeout(t);
+    }
     // New content or forced retry — cancel any waiting countdown and rank now
     cancelRetry();
     rankInFlight.current = true;
@@ -178,6 +189,7 @@ export function TaskRiverPanel({
     const settle = (state, meta) => {
       if (settled) return; settled = true; rankInFlight.current = false;
       if (meta) {
+        try { localStorage.setItem(RANK_LAST_RUN_KEY, String(Date.now())); } catch {}
         setAiMeta(meta); lastRankKeyRef.current = rankKey; retryStreakRef.current = 0;
       } else if (state === 'error') {
         retryStreakRef.current += 1;

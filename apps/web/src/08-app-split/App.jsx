@@ -890,8 +890,15 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   // Best-effort: batch-generate one-sentence email summaries and merge them into the
   // already-rendered messages by id. Runs after the raw mail is on screen; if the AI
   // gateway is slow or down, the snippets simply remain.
+  const EMAIL_SUMMARIES_IDS_KEY = 'ot_email_summaries_ids_v1';
   async function applyEmailSummaries(msgs) {
     if (!Array.isArray(msgs) || msgs.length === 0) return;
+    // Skip if we've already summarized this exact set of messages (cross-tab dedup).
+    const msgIds = msgs.map(m => m.id).filter(Boolean).sort().join(',');
+    try {
+      if (localStorage.getItem(EMAIL_SUMMARIES_IDS_KEY) === msgIds) return;
+      localStorage.setItem(EMAIL_SUMMARIES_IDS_KEY, msgIds);
+    } catch {}
     try {
       const emails = msgs.map((m) => {
         const subj = m?.payload?.headers?.find(h => h.name === "Subject")?.value || "";
