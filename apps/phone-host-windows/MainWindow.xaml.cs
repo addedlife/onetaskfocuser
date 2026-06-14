@@ -18,6 +18,11 @@ public partial class MainWindow : Window
     private const double ConversationStackThreshold = 760;
     private const double CallsStackThreshold = 780;
 
+    // The web shell is the only window users see. MainWindow stays hidden as
+    // the plumbing host (services, ViewModel, WPF lifetime, stage mode).
+    private const string WebShellUrl = "http://127.0.0.1:8765/?standalone=deskphone";
+    private WebShellWindow? _webShell;
+
     private bool _isAdjustingBounds;
     private bool _isStageMode;
     private bool _stageActivated;
@@ -85,6 +90,17 @@ public partial class MainWindow : Window
             SyncLogWindow();
             UpdateWindowFrameCompensation();
             QueueScrollToNewestMessage();
+        };
+
+        // Open the web shell as the visible DeskPhone window; keep this WPF
+        // window hidden so it doesn't appear in the taskbar or on screen.
+        Loaded += (_, _) =>
+        {
+            ShowInTaskbar = false;
+            _webShell = new WebShellWindow(WebShellUrl);
+            _webShell.Closed += (_, _) => Close();
+            _webShell.Show();
+            Hide();
         };
 
         SizeChanged += (_, _) => ApplyResponsiveLayout();
@@ -173,21 +189,35 @@ public partial class MainWindow : Window
 
     public bool BringToFront()
     {
+        if (_webShell is { } shell)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                shell.Show();
+                if (shell.WindowState == WindowState.Minimized)
+                    shell.WindowState = WindowState.Normal;
+                shell.Activate();
+            });
+            return true;
+        }
         if (Dispatcher.CheckAccess())
             BringToFrontOnUi();
         else
             Dispatcher.Invoke(BringToFrontOnUi);
-
         return true;
     }
 
     public bool HideWindow()
     {
+        if (_webShell is { } shell)
+        {
+            Dispatcher.Invoke(() => shell.WindowState = WindowState.Minimized);
+            return true;
+        }
         if (Dispatcher.CheckAccess())
             WindowState = WindowState.Minimized;
         else
             Dispatcher.Invoke(() => { WindowState = WindowState.Minimized; });
-
         return true;
     }
 

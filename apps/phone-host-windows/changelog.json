@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-14 00:36:58",
+        "version":  "b311",
+        "notes":  "The old WPF UI is retired. DeskPhone now opens as a WebView2 window showing the same web UI as the Shamash webapp — one design everywhere. The WPF window stays hidden as the background plumbing host.",
+        "devNotes":  "MainWindow.xaml.cs: added WebShellUrl constant + _webShell field. Second Loaded handler opens WebShellWindow(WebShellUrl), hides MainWindow (ShowInTaskbar=false, Hide()), wires _webShell.Closed to Close() so app lifetime is tied to the shell. BringToFront and HideWindow updated to forward to _webShell when set. No changes to MainViewModel.cs."
+    },
+    {
         "timestamp":  "2026-06-14 00:27:15",
         "version":  "b310",
         "notes":  "Webapp hides the DeskPhone window automatically when its iframe is embedded — no more looking at the same UI twice. New POST /hide endpoint minimizes to taskbar; webapp restores the window when leaving the Phone panel.",
