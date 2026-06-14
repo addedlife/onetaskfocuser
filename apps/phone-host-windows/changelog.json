@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-14 01:19:15",
+        "version":  "b313",
+        "notes":  "DeskPhone WebView2 shell now reflows cleanly when you drag the window smaller — call history stacks below messages instead of overflowing. Conversation search stays over the message pane only, not the call rail. Settings → Appearance adds Show/Hide native WPF UI for the legacy XAML window (hidden by default).",
+        "devNotes":  "Web (10-deskphone-web.jsx, bundled into host web/): moved dp-thread-header inside dp-thread-messages so ThreadSearchBar no longer spans the call-history column; added container queries on dp-thread-pane (≤700px stacks call history below messages) and dp-thread-messages (≤520px wraps header search/actions); relaxed thread-detail grid mins from minmax(340px)/minmax(260px) to minmax(0,1fr)/minmax(200px). Host: ControlApiService POST /toggle-main-window + ToggleMainWindow callback; MainWindow.ToggleMainWindowXamlUi() shows/hides WPF MainWindow (ShowInTaskbar, default hidden); mainWindowXamlVisible in /status; Settings Appearance ShellButton. WebShellWindow.xaml: ClipToBounds + WebView2 stretch. MainViewModel wires _api.ToggleMainWindow. Gates: npm run build + dotnet build -c Debug 0 errors before Release."
+    },
+    {
         "timestamp":  "2026-06-14 00:47:15",
         "version":  "b312",
         "notes":  "DeskPhone pushes phone state instantly on Bluetooth connect and disconnect, instead of waiting up to 30 seconds for the next heartbeat. Commands from remote browsers (dial, send, etc.) now arrive via a persistent Firestore streaming connection — delivering in milliseconds at zero polling cost. Heartbeat slowed to 5 minutes as a liveness-only backup.",
