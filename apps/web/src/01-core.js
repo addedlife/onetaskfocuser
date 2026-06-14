@@ -6,11 +6,12 @@ import 'firebase/compat/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA",
-  // Our own domain (not the shared *.firebaseapp.com) so the Google sign-in round-trip
-  // is same-origin and survives mobile browsers' cross-site storage blocking. Requires
-  // the /__/auth/* proxy in netlify.toml plus this domain in Firebase Authorized Domains
-  // and the Google OAuth client's Authorized redirect URIs.
-  authDomain: "onetaskfocuser.netlify.app",
+  // Temporarily using Firebase's default authDomain while onetaskfocuser.netlify.app is
+  // paused. Revert to "onetaskfocuser.netlify.app" once the Netlify account resets and
+  // the relay drain bug is fixed (same-origin mode survives mobile cross-site storage
+  // blocking better; requires the /__/auth/* proxy in netlify.toml + that domain in
+  // Firebase Authorized Domains + Google OAuth redirect URIs).
+  authDomain: "onetaskonly-app.firebaseapp.com",
   projectId: "onetaskonly-app",
   storageBucket: "onetaskonly-app.firebasestorage.app",
   messagingSenderId: "1017463520129",
