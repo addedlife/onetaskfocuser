@@ -3830,9 +3830,12 @@ const css = `
 }
 .dp-message-shell {
   height: 100%;
-  min-height: 0;
+  min-width: 0;
+  container-type: size;
+  container-name: message-shell;
   display: grid;
-  grid-template-columns: minmax(210px, var(--dp-message-list-width, 300px)) 7px minmax(0, 1fr);
+  /* User drag width is a cap; cqw keeps the list from eating the thread when the shell narrows. */
+  grid-template-columns: minmax(0, min(var(--dp-message-list-width, 300px), 36cqw)) 7px minmax(0, 1fr);
   background: var(--dp-bg-main);
   border-top: 1px solid var(--dp-border);
   overflow: hidden;
@@ -5450,7 +5453,7 @@ const css = `
   .dp-message-shell,
   .dp-message-shell.is-list-hidden {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(220px, 320px) minmax(0, 1fr);
+    grid-template-rows: minmax(128px, min(36%, 240px)) minmax(0, 1fr);
   }
   .dp-message-shell.is-list-hidden {
     grid-template-rows: minmax(0, 1fr);
@@ -5465,8 +5468,42 @@ const css = `
     border-right: 0;
     border-bottom: 1px solid var(--dp-border);
   }
+  .dp-message-list-header {
+    padding: 8px 12px 4px;
+  }
+  .dp-message-list-header .dp-history-status,
+  .dp-message-list-header .dp-filter-grid {
+    display: none;
+  }
+  .dp-message-header-top {
+    margin: 0 0 4px 2px;
+  }
+  .dp-message-header-top h2 {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .dp-message-search {
+    height: 36px;
+    border-radius: 18px;
+    padding: 4px 10px;
+  }
+  .dp-conversation-row {
+    min-height: 52px;
+    padding: 8px 10px 8px 12px;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+  }
+  .dp-conversation-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 16px;
+    font-size: 13px;
+  }
   .dp-thread-header {
     grid-template-columns: auto minmax(0, 1fr);
+    padding: 8px 12px;
+  }
+  .dp-thread-identity span {
+    display: none;
   }
   .dp-thread-search,
   .dp-thread-actions {
@@ -5480,8 +5517,28 @@ const css = `
     display: none;
   }
   .dp-thread-calls {
-    max-height: 240px;
+    max-height: min(152px, 28vh);
     border-top: 1px solid var(--dp-border);
+    background: var(--dp-bg-sidebar);
+  }
+  .dp-thread-calls-header {
+    padding: 6px 10px;
+    min-height: 36px;
+  }
+  .dp-thread-calls-header > div:first-child span,
+  .dp-thread-calls .dp-call-filter-grid {
+    display: none;
+  }
+  .dp-thread-calls-header strong {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--dp-muted);
+  }
+  .dp-thread-call-row {
+    padding: 7px 10px;
+    min-height: 44px;
   }
   .dp-prompt,
   .dp-call-banner {
@@ -5507,6 +5564,57 @@ const css = `
     max-height: 260px;
   }
 }
+@container message-shell (max-width: 900px) {
+  .dp-message-shell:not(.is-list-hidden) .dp-message-list-header .dp-history-status {
+    display: none;
+  }
+  .dp-message-shell:not(.is-list-hidden) .dp-message-list-header {
+    padding: 10px 12px 6px;
+  }
+  .dp-message-shell:not(.is-list-hidden) .dp-message-search {
+    height: 40px;
+  }
+  .dp-message-shell:not(.is-list-hidden) .dp-filter-grid button {
+    height: 30px;
+    font-size: 12px;
+    padding: 0 8px;
+  }
+  .dp-message-shell:not(.is-list-hidden) .dp-conversation-row {
+    min-height: 56px;
+    padding: 10px 10px 10px 12px;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+  }
+  .dp-message-shell:not(.is-list-hidden) .dp-conversation-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 17px;
+  }
+}
+@container message-shell (max-width: 720px) {
+  .dp-message-shell:not(.is-list-hidden) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(120px, min(34%, 220px)) minmax(0, 1fr);
+  }
+  .dp-message-shell:not(.is-list-hidden) .dp-message-splitter {
+    display: none;
+  }
+  .dp-message-shell:not(.is-list-hidden) .dp-conversation-pane {
+    border-right: 0;
+    border-bottom: 1px solid var(--dp-border);
+  }
+  .dp-message-shell:not(.is-list-hidden) .dp-message-list-header .dp-filter-grid {
+    display: none;
+  }
+  .dp-message-shell:not(.is-list-hidden) .dp-message-header-top h2 {
+    font-size: 14px;
+  }
+}
+@container message-shell (max-height: 560px) {
+  .dp-message-shell:not(.is-list-hidden) .dp-message-list-header .dp-filter-grid,
+  .dp-message-shell:not(.is-list-hidden) .dp-message-list-header .dp-history-status {
+    display: none;
+  }
+}
 @container thread-pane (max-width: 700px) {
   .dp-thread-detail-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -5516,8 +5624,34 @@ const css = `
     display: none;
   }
   .dp-thread-calls {
-    max-height: min(240px, 35vh);
+    max-height: min(152px, 28vh);
     border-top: 1px solid var(--dp-border);
+    background: var(--dp-bg-sidebar);
+  }
+  .dp-thread-calls-header {
+    padding: 6px 10px;
+    min-height: 36px;
+  }
+  .dp-thread-calls-header > div:first-child span,
+  .dp-thread-calls .dp-call-filter-grid {
+    display: none;
+  }
+  .dp-thread-calls-header strong {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--dp-muted);
+  }
+  .dp-thread-call-row {
+    padding: 7px 10px;
+    min-height: 44px;
+  }
+  .dp-thread-identity span {
+    display: none;
+  }
+  .dp-thread-header {
+    padding: 8px 12px;
   }
 }
 @container thread-messages (max-width: 520px) {
