@@ -1839,6 +1839,9 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         ? "DeskPhone follows the active Shamash/OneTask color scheme when that app is open."
         : "DeskPhone ignores Shamash/OneTask theme changes and keeps its own appearance setting.";
 
+    public IReadOnlyDictionary<string, string>? LastThemeColors => _settings.Current.LastThemeColors;
+    public string PreferredPalette => _settings.Current.PreferredPalette;
+
     private string _themeSyncRefreshStatus = "";
     public string ThemeSyncRefreshStatus
     {
@@ -2714,6 +2717,11 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 isSendingMessage = IsSendingMessage,
                 showReconnectPrompt = ShowReconnectPrompt,
                 syncThemeWithShamash = SyncThemeWithShamash,
+                activeTheme      = new
+                {
+                    palette = PreferredPalette,
+                    colors = LastThemeColors
+                },
                 pauseHistoryActivity = PauseHistoryActivity,
                 isDarkModeEnabled = IsDarkModeEnabled,
                 mainWindowXamlVisible,
@@ -2989,11 +2997,17 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 if (mapped == null) return;
                 ThemeService.ApplyPalette(mapped);
                 ThemeService.ApplyBridgeColors(colors);
+                _settings.Current.LastThemeColors = colors.ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase);
                 _settings.Current.PreferredPalette = mapped;
                 _settings.Current.DarkModeEnabled = string.Equals(mapped, "BlueGold", StringComparison.OrdinalIgnoreCase);
                 _settings.Save();
                 OnPropertyChanged(nameof(IsDarkModeEnabled));
                 OnPropertyChanged(nameof(ThemeModeLabel));
+
+                if (Application.Current.MainWindow is DeskPhone.MainWindow mw)
+                {
+                    mw.PushThemeToWebShell(mapped, colors);
+                }
             });
             return Task.FromResult(true);
         };

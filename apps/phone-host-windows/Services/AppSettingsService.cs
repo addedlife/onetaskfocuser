@@ -73,6 +73,8 @@ public class AppSettingsService
 
         public bool SyncThemeWithShamash { get; set; } = true;
 
+        public Dictionary<string, string> LastThemeColors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
         // Open the modern web phone UI (the webapp's phone screen, served from
         // this app's own loopback server) automatically on launch.
         public bool OpenModernUiOnLaunch { get; set; } = true;

@@ -101,6 +101,10 @@ public partial class MainWindow : Window
         {
             ShowInTaskbar = false;
             _webShell = new WebShellWindow(WebShellUrl);
+            if (DataContext is MainViewModel vm && vm.LastThemeColors != null && vm.LastThemeColors.Count > 0)
+            {
+                _webShell.PushTheme(vm.PreferredPalette, vm.LastThemeColors);
+            }
             _webShell.Closed += (_, _) => Close();
             _webShell.Show();
             Hide();
@@ -244,6 +248,14 @@ public partial class MainWindow : Window
         }
 
         return _mainWindowXamlVisible;
+    }
+
+    public void PushThemeToWebShell(string palette, System.Collections.Generic.IReadOnlyDictionary<string, string> colors)
+    {
+        if (_webShell != null)
+        {
+            _webShell.PushTheme(palette, colors);
+        }
     }
 
     private bool ExitStageModeOnUi(string token = "", bool force = false)
