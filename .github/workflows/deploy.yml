@@ -34,9 +34,9 @@ jobs:
         working-directory: apps/web/functions
         run: |
           echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
-          echo "Gemini_Overflow_01=${{ secrets.GEMINI_OVERFLOW_01 }}" >> .env
+          echo "GEMINI_OVERFLOW_01=${{ secrets.GEMINI_OVERFLOW_01 }}" >> .env
           echo "PHONE_RELAY_SECRET=${{ secrets.PHONE_RELAY_SECRET }}" >> .env
-          echo 'FIREBASE_SERVICE_ACCOUNT_JSON=${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}' >> .env
+          echo 'ADMIN_SA_JSON=${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}' >> .env
           echo "MCP_READ_TOKEN=${{ secrets.MCP_READ_TOKEN }}" >> .env
           echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env
           echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env

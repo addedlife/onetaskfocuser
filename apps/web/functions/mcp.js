@@ -330,7 +330,7 @@ function db() {
 }
 
 function serviceAccount() {
-  const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const rawJson = process.env.ADMIN_SA_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (rawJson) {
     const parsed = JSON.parse(rawJson);
     if (parsed.project_id !== PROJECT_ID) throw new Error("Service account is not scoped to onetaskonly-app.");

@@ -7,7 +7,7 @@ let adminAuth = null;
 let adminDb = null;
 
 function firebaseServiceAccount() {
-  const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const rawJson = process.env.ADMIN_SA_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (rawJson) return JSON.parse(rawJson);
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;

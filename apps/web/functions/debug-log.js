@@ -13,7 +13,7 @@ const { corsHeaders } = require("./cors-helper");
 
 let adminDb = null;
 function firebaseServiceAccount() {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const raw = process.env.ADMIN_SA_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (raw) return JSON.parse(raw);
   const p = process.env.FIREBASE_PROJECT_ID;
   const e = process.env.FIREBASE_CLIENT_EMAIL;
