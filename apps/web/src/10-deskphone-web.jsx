@@ -3832,11 +3832,11 @@ const css = `
   height: 100%;
   min-height: 0;
   min-width: 0;
-  container-type: size;
+  container-type: inline-size;
   container-name: message-shell;
   display: grid;
-  /* User drag width is a cap; cqw keeps the list from eating the thread when the shell narrows. */
-  grid-template-columns: minmax(0, min(var(--dp-message-list-width, 300px), 36cqw)) 7px minmax(0, 1fr);
+  /* % resolves against the grid container's own inline size (self), so it caps without self-referencing cqw */
+  grid-template-columns: minmax(0, min(var(--dp-message-list-width, 300px), 36%)) 7px minmax(0, 1fr);
   background: var(--dp-bg-main);
   border-top: 1px solid var(--dp-border);
   overflow: hidden;
@@ -5610,12 +5610,7 @@ const css = `
     font-size: 14px;
   }
 }
-@container message-shell (max-height: 560px) {
-  .dp-message-shell:not(.is-list-hidden) .dp-message-list-header .dp-filter-grid,
-  .dp-message-shell:not(.is-list-hidden) .dp-message-list-header .dp-history-status {
-    display: none;
-  }
-}
+/* max-height container query removed — requires container-type:size which collapses block height */
 @container thread-pane (max-width: 700px) {
   .dp-thread-detail-grid {
     grid-template-columns: minmax(0, 1fr);
