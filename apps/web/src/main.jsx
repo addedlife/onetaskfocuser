@@ -32,16 +32,51 @@ if (standaloneView === 'deskphone' || standaloneView === 'phone') {
   function StandaloneShell() {
     const [T, setT] = useState(GV_CLEAN);
     useEffect(() => {
+      // 1. Fetch initial theme from local status API
+      fetch("http://127.0.0.1:8765/status")
+        .then(res => res.json())
+        .then(data => {
+          const active = data?.activeTheme;
+          if (active?.colors && typeof active.colors === 'object') {
+            setT(prev => ({ ...prev, ...active.colors }));
+          }
+        })
+        .catch(() => {});
+
+      // 2. Listen for postMessage from parent iframe (when embedded)
       const onMessage = (event) => {
-        // Only accept messages from the same origin or the loopback host.
         if (event.data?.type !== 'dp-theme') return;
         const next = event.data.T;
         if (next && typeof next === 'object') setT(next);
       };
       window.addEventListener('message', onMessage);
-      // Tell the parent we're ready to receive the theme.
+
+      // 3. Listen for webview theme updates from host
+      let onWebviewMessage;
+      if (window.chrome?.webview) {
+        onWebviewMessage = (event) => {
+          try {
+            const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+            if (data?.type === 'dp-theme-update') {
+              const next = data.colors;
+              if (next && typeof next === 'object') {
+                setT(prev => ({ ...prev, ...next }));
+              }
+            }
+          } catch {}
+        };
+        window.chrome.webview.addEventListener('message', onWebviewMessage);
+      }
+
+      // Tell the parent iframe we're ready
       try { window.parent.postMessage({ type: 'dp-ready' }, '*'); } catch {}
-      return () => window.removeEventListener('message', onMessage);
+
+      return () => {
+        window.removeEventListener('message', onMessage);
+        if (window.chrome?.webview && onWebviewMessage) {
+          window.chrome.webview.removeEventListener('message', onWebviewMessage);
+        }
+      };
     }, []);
     return <DeskPhoneWebPanel T={T} embedded={standaloneEmbedded} />;
   }

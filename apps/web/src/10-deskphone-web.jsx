@@ -3155,10 +3155,6 @@ function SimpleTabContent({
               <span>History Background Fetching</span>
               <input type="checkbox" checked={!pauseHistoryActivity} onChange={(event) => onCommand(`/set-history-paused?paused=${event.target.checked ? 0 : 1}`, "set history background fetching")} />
             </label>
-            <label className="dp-settings-toggle" data-native-source="MainWindow.xaml:4309">
-              <span>Dark mode</span>
-              <input type="checkbox" checked={isDarkModeEnabled} onChange={(event) => onCommand(`/set-dark-mode?enabled=${event.target.checked ? 1 : 0}`, "set dark mode")} />
-            </label>
             <div className="dp-settings-actions dp-settings-tools">
               <ShellButton
                 className="dp-tonal"

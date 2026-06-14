@@ -24,6 +24,8 @@ public partial class WebShellWindow : Window
     private readonly string _url;
     private int _navRetries;
     private const string LoopbackOrigin = "http://127.0.0.1:8765";
+    private string? _lastPalette;
+    private System.Collections.Generic.IReadOnlyDictionary<string, string>? _lastColors;
 
     public WebShellWindow(string url)
     {
@@ -109,5 +111,23 @@ public partial class WebShellWindow : Window
     {
         try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
         catch { /* no default browser handler — nothing sensible to do */ }
+    }
+
+    public void PushTheme(string palette, System.Collections.Generic.IReadOnlyDictionary<string, string> colors)
+    {
+        _lastPalette = palette;
+        _lastColors = colors;
+        if (Web.CoreWebView2 == null) return;
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                type = "dp-theme-update",
+                palette = palette,
+                colors = colors
+            });
+            Web.CoreWebView2.PostWebMessageAsJson(json);
+        }
+        catch { }
     }
 }
