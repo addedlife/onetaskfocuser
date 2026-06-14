@@ -1,6 +1,6 @@
 [
     {
-        "timestamp":  "2026-06-14 03:27:31",
+        "timestamp":  "2026-06-14 03:28:00",
         "version":  "b320",
         "notes":  "Theme propagation: DeskPhone WebView2 standalone shell (WebShellWindow) now receives live Shamash Pro 4 color theme updates from the C# host in real-time. Removed the redundant Dark mode setting checkbox.",
         "devNotes":  "Adds PushThemeToWebShell / PushTheme bridge between MainWindow, WebShellWindow, and WebView2. StandaloneShell in main.jsx fetches initial colors from /status on mount and listens for dp-theme-update messages via window.chrome.webview. Removes Dark mode label toggle from settings appearance section."
