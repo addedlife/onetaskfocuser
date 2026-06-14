@@ -14,7 +14,12 @@ namespace DeskPhone.Services;
 /// </summary>
 public class RelayService : IDisposable
 {
-    private const string DefaultRelayUrl = "https://onetaskfocuser.netlify.app/.netlify/functions/phone-relay";
+    // Firestore REST — writes go directly to Firebase, bypassing the Netlify relay function entirely.
+    // The web API key is intentionally public (Firebase design; security enforced by Firestore rules).
+    private const string FB_PROJECT  = "onetaskonly-app";
+    private const string FB_API_KEY  = "AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA";
+    private const string FS_BASE     = "https://firestore.googleapis.com/v1/projects/" + FB_PROJECT + "/databases/(default)/documents";
+
     private const int PushIntervalMs     = 30_000;  // background heartbeat push every 30 s;
                                                     // queued commands ride the push response
                                                     // (no separate drain poll — see DrainLoop removal)
@@ -44,7 +49,6 @@ public class RelayService : IDisposable
     public Func<List<(string id, string dataUrl)>>? GetRelayMedia { get; set; }
 
     // ── Config ────────────────────────────────────────────────────────────────
-    private string _relayUrl = DefaultRelayUrl;
     private string _relayKey = "";
     public  bool   IsEnabled => !string.IsNullOrWhiteSpace(_relayKey);
 
@@ -93,8 +97,8 @@ public class RelayService : IDisposable
     public void Configure(string relayKey, string? relayUrl)
     {
         _relayKey = relayKey?.Trim() ?? "";
-        if (!string.IsNullOrWhiteSpace(relayUrl))
-            _relayUrl = relayUrl.TrimEnd('/');
+        // relayUrl is no longer used — the host writes directly to Firestore (see FS_BASE).
+        // Kept in the signature so the settings layer needs no change.
     }
 
     public void Start()
@@ -102,7 +106,7 @@ public class RelayService : IDisposable
         if (!IsEnabled) return;
         _cts = new CancellationTokenSource();
         _ = Task.Run(() => PushLoopAsync(_cts.Token));
-        LogLine?.Invoke($"[RELAY] Started — pushing to {_relayUrl}");
+        LogLine?.Invoke($"[RELAY] Started — writing directly to Firestore ({FB_PROJECT})");
     }
 
     public void Stop()
@@ -150,49 +154,73 @@ public class RelayService : IDisposable
             // references resolve the moment a phone reads it.
             await UploadPendingMediaAsync();
 
-            // Build state blob: status + recent messages + calls + contacts
+            // Build state blob: status + recent messages + calls + contacts.
+            // relayReceivedAt is stamped here (previously the Netlify function did it)
+            // since the host now writes directly to Firestore.
+            var nowMs        = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             var statusJson   = GetStatus();
             var messagesJson = GetMessages?.Invoke(MessageRelayLimit, false) ?? "[]";
             var callsJson    = GetCalls?.Invoke() ?? "[]";
             var contactsJson = GetContacts?.Invoke() ?? "[]";
+            var lanUrl       = GetLanUrl?.Invoke() ?? "";
+            var resultsJson  = "[" + string.Join(",", _commandResults) + "]";
+            var stateJson    = $"{{\"status\":{statusJson},\"messages\":{messagesJson},\"calls\":{callsJson},\"contacts\":{contactsJson},\"commandResults\":{resultsJson},\"lanUrl\":\"{lanUrl}\",\"pushedAt\":{nowMs},\"relayReceivedAt\":{nowMs}}}";
 
-            // Inline-assemble the outer object without deserializing everything —
-            // these are already valid JSON strings, just stitch them together.
-            var lanUrl      = GetLanUrl?.Invoke() ?? "";
-            var resultsJson = "[" + string.Join(",", _commandResults) + "]";
-            var stateJson = $"{{\"status\":{statusJson},\"messages\":{messagesJson},\"calls\":{callsJson},\"contacts\":{contactsJson},\"commandResults\":{resultsJson},\"lanUrl\":\"{lanUrl}\",\"pushedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
-
-            using var content = new StringContent(stateJson, Encoding.UTF8, "application/json");
-            using var req     = new HttpRequestMessage(HttpMethod.Post, $"{_relayUrl}?action=push") { Content = content };
-            req.Headers.Add("X-Relay-Secret", _relayKey);
-            using var resp = await _http.SendAsync(req);
-            if (!resp.IsSuccessStatusCode)
+            // Write state directly to Firestore — no Netlify hop.
+            var fsStateBody = $"{{\"fields\":{{\"data\":{{\"stringValue\":{JsonSerializer.Serialize(stateJson)}}}}}}}";
+            var stateUrl    = $"{FS_BASE}/phone-relay/state?key={FB_API_KEY}&updateMask.fieldPaths=data";
+            using var stateContent = new StringContent(fsStateBody, Encoding.UTF8, "application/json");
+            using var stateReq     = new HttpRequestMessage(HttpMethod.Patch, stateUrl) { Content = stateContent };
+            using var stateResp    = await _http.SendAsync(stateReq);
+            if (!stateResp.IsSuccessStatusCode)
             {
-                var body = await resp.Content.ReadAsStringAsync();
-                throw new Exception($"HTTP {(int)resp.StatusCode} — {body[..Math.Min(200, body.Length)]}");
+                var body = await stateResp.Content.ReadAsStringAsync();
+                throw new Exception($"Firestore state PATCH HTTP {(int)stateResp.StatusCode} — {body[..Math.Min(200, body.Length)]}");
             }
             _lastPush = DateTime.UtcNow;
 
-            // The push response carries any commands a remote browser queued. Draining them
-            // here — piggybacked on the heartbeat — replaces the old standalone 2 s drain poll
-            // that read the Firestore commands doc ~43k times/day. Dispatch is best-effort and
-            // must never fail the push (state is already saved), so swallow any parse error.
-            try
-            {
-                var respBody = await resp.Content.ReadAsStringAsync();
-                DispatchCommandsFromResponse(respBody);
-            }
-            catch (Exception ex)
-            {
-                LogLine?.Invoke($"[RELAY DRAIN] {ex.GetType().Name}: {ex.Message}");
-            }
+            // Drain any commands a remote browser queued, directly from Firestore.
+            // Best-effort — a drain failure must never fail the push (state is already saved).
+            try { await DrainCommandsAsync(); }
+            catch (Exception ex) { LogLine?.Invoke($"[RELAY DRAIN] {ex.GetType().Name}: {ex.Message}"); }
         }
         finally { _pushGate.Release(); }
     }
 
-    // Upload resized picture-text previews to phone-media/{id}, once each. Runs inside
-    // the push gate so _uploadedMedia is touched single-threaded. A failed upload is
-    // simply retried on the next push (the id isn't marked done).
+    private async Task DrainCommandsAsync()
+    {
+        var url = $"{FS_BASE}/phone-relay/commands?key={FB_API_KEY}";
+        using var resp = await _http.GetAsync(url);
+        if (resp.StatusCode == System.Net.HttpStatusCode.NotFound) return; // doc not created yet
+        if (!resp.IsSuccessStatusCode) return;
+
+        // Extract the commands JSON array string stored in the Firestore "data" field.
+        var docJson = await resp.Content.ReadAsStringAsync();
+        string commandsJson;
+        using (var doc = JsonDocument.Parse(docJson))
+        {
+            if (!doc.RootElement.TryGetProperty("fields", out var fields) ||
+                !fields.TryGetProperty("data", out var data) ||
+                !data.TryGetProperty("stringValue", out var sv))
+                return;
+            commandsJson = sv.GetString() ?? "[]";
+        }
+
+        if (commandsJson.Length <= 2) return; // "[]" — nothing to do
+
+        DispatchCommandsFromString(commandsJson);
+
+        // Clear the commands doc immediately so commands don't re-execute on the next heartbeat.
+        var clearBody    = "{\"fields\":{\"data\":{\"stringValue\":\"[]\"}}}";
+        var clearUrl     = $"{FS_BASE}/phone-relay/commands?key={FB_API_KEY}&updateMask.fieldPaths=data";
+        using var clearContent = new StringContent(clearBody, Encoding.UTF8, "application/json");
+        using var clearReq     = new HttpRequestMessage(HttpMethod.Patch, clearUrl) { Content = clearContent };
+        await _http.SendAsync(clearReq);
+    }
+
+    // Upload resized picture-text previews to phone-media/{id} directly in Firestore,
+    // once each. Runs inside the push gate so _uploadedMedia is touched single-threaded.
+    // A failed upload is simply retried on the next push (the id isn't marked done).
     private async Task UploadPendingMediaAsync()
     {
         var media = GetRelayMedia?.Invoke();
@@ -203,12 +231,11 @@ public class RelayService : IDisposable
             if (_uploadedMedia.Contains(id)) continue;
             try
             {
-                // id is hex and dataUrl is a base64 data: URL — no JSON-special chars.
-                var body = $"{{\"id\":\"{id}\",\"dataUrl\":\"{dataUrl}\"}}";
-                using var content = new StringContent(body, Encoding.UTF8, "application/json");
-                using var req = new HttpRequestMessage(HttpMethod.Post, $"{_relayUrl}?action=push-media") { Content = content };
-                req.Headers.Add("X-Relay-Secret", _relayKey);
-                using var resp = await _http.SendAsync(req);
+                var fsBody   = $"{{\"fields\":{{\"data\":{{\"stringValue\":{JsonSerializer.Serialize(dataUrl)}}}}}}}";
+                var mediaUrl = $"{FS_BASE}/phone-media/{Uri.EscapeDataString(id)}?key={FB_API_KEY}&updateMask.fieldPaths=data";
+                using var content = new StringContent(fsBody, Encoding.UTF8, "application/json");
+                using var req     = new HttpRequestMessage(HttpMethod.Patch, mediaUrl) { Content = content };
+                using var resp    = await _http.SendAsync(req);
                 if (resp.IsSuccessStatusCode) _uploadedMedia.Add(id);
                 else LogLine?.Invoke($"[RELAY MEDIA] {id} → HTTP {(int)resp.StatusCode}");
             }
@@ -253,18 +280,16 @@ public class RelayService : IDisposable
         });
     }
 
-    // ── Command dispatch: commands ride the push response ────────────────────
-    // The relay returns { ok, commands:[...] } from ?action=push. Parse that array and fire
-    // each command. This replaced the old DrainLoop, which polled ?action=drain every 2 s and
-    // read the Firestore commands doc ~43k times/day even when nothing was queued.
-    private void DispatchCommandsFromResponse(string respBody)
+    // ── Command dispatch ──────────────────────────────────────────────────────
+    // Parses a raw JSON array string (the Firestore "data" field value from phone-relay/commands)
+    // and fires each command. Called from DrainCommandsAsync after reading Firestore directly.
+    private void DispatchCommandsFromString(string commandsJson)
     {
-        if (string.IsNullOrWhiteSpace(respBody)) return;
-        using var doc = JsonDocument.Parse(respBody);
-        if (doc.RootElement.ValueKind != JsonValueKind.Object) return;
-        if (!doc.RootElement.TryGetProperty("commands", out var cmds) || cmds.ValueKind != JsonValueKind.Array) return;
+        if (string.IsNullOrWhiteSpace(commandsJson)) return;
+        using var doc = JsonDocument.Parse(commandsJson);
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return;
 
-        foreach (var cmdEl in cmds.EnumerateArray())
+        foreach (var cmdEl in doc.RootElement.EnumerateArray())
         {
             var path = cmdEl.TryGetProperty("path", out var pEl) ? (pEl.GetString() ?? "") : "";
             if (string.IsNullOrWhiteSpace(path)) continue;
