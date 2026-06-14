@@ -110,6 +110,15 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     const id = setInterval(probe, 25000);
     return () => { cancelled = true; clearInterval(id); };
   }, [suiteView]);
+  // When DeskPhone's own UI is live in the iframe, minimize the WPF window so
+  // the user isn't looking at the same UI twice. Restore it when they leave.
+  useEffect(() => {
+    if (!deskPhoneDirect || suiteView !== "deskphone") return;
+    fetch("http://127.0.0.1:8765/hide", { method: "POST", cache: "no-store" }).catch(() => {});
+    return () => {
+      fetch("http://127.0.0.1:8765/show", { method: "POST", cache: "no-store" }).catch(() => {});
+    };
+  }, [deskPhoneDirect, suiteView]);
   const deskPhoneLaunchAtRef = useRef(0);
   const lastDeskPhoneThemeRef = useRef("");
   const [justComp, setJustComp] = useState(false);
