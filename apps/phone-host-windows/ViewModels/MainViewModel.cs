@@ -2650,6 +2650,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             List<object> knownDevices = new();
             List<object> scannedDevices = new();
             string selectedDeviceAddress = "";
+            var mainWindowXamlVisible = false;
             lock (_msgLock)
             {
                 messageCount = _allMessages.Count;
@@ -2679,6 +2680,8 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                     isPaired = d.IsPaired
                 }).Cast<object>().ToList();
                 selectedDeviceAddress = SelectedDevice?.Address.ToString() ?? "";
+                if (Application.Current.MainWindow is DeskPhone.MainWindow window)
+                    mainWindowXamlVisible = window.IsMainWindowXamlVisible;
             });
 
             var currentCall = CurrentCall;
@@ -2713,6 +2716,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 syncThemeWithShamash = SyncThemeWithShamash,
                 pauseHistoryActivity = PauseHistoryActivity,
                 isDarkModeEnabled = IsDarkModeEnabled,
+                mainWindowXamlVisible,
                 themeSyncLabel = ThemeSyncLabel,
                 themeSyncRefreshStatus = ThemeSyncRefreshStatus,
                 showBuildUpdatePrompt = ShowBuildUpdatePrompt,
@@ -2927,6 +2931,16 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                     ok = window.HideWindow();
             });
             return Task.FromResult(ok);
+        };
+        _api.ToggleMainWindow = () =>
+        {
+            var visible = false;
+            Dispatch(() =>
+            {
+                if (Application.Current.MainWindow is DeskPhone.MainWindow window)
+                    visible = window.ToggleMainWindowXamlUi();
+            });
+            return Task.FromResult(visible);
         };
         _api.Handoff = (target, value) =>
         {

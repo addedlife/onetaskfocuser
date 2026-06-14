@@ -1,5 +1,12 @@
 # Verification Log
 
+## 2026-06-14 DeskPhone WebView2 — WPF UI toggle, resize reflow, thread search scope (4.17.61)
+
+- Scope: finish interrupted session — three DeskPhone WebView2 fixes shipped together (web + native host source).
+- Web (`10-deskphone-web.jsx`): thread header (including conversation search) moved inside `dp-thread-messages` so search no longer spans the call-history rail; container queries on thread pane/messages stack call history below messages when pane ≤700px and wrap header controls when messages column ≤520px; flexible grid min-widths replace rigid 340px/260px floors that caused overflow on drag-resize.
+- Native host (`ControlApiService.cs`, `MainWindow.xaml.cs`, `MainViewModel.cs`, `WebShellWindow.xaml`): `POST /toggle-main-window` + `mainWindowXamlVisible` in `/status`; Settings → Appearance button shows/hides legacy WPF MainWindow (default hidden); WebView2 stretches/clips to window bounds.
+- Gates: `npm run build` (apps/web) → 0 errors; `dotnet build -c Debug` (phone-host-windows) → 0 errors. BUILD-VERIFIED ONLY for resize reflow and WPF toggle — runtime smoke on live DeskPhone WebView2 shell recommended.
+
 ## 2026-06-12 One design system — DeskPhone teal restyle (b303), webapp embeds DeskPhone (4.17.49), tokens consolidated (4.17.50)
 
 - Scope: three sequential releases. (1) b303: WPF DeskPhone restyled to match the web phone screen exactly — pure style, zero functional changes. (2) web 4.17.49: the desktop Phone screen auto-embeds the UI DeskPhone itself serves when the loopback host answers. (3) web 4.17.50: 10-deskphone-web's COLORS palette now derives from ui-tokens GV_CLEAN.

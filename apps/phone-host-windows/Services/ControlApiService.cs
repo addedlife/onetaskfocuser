@@ -24,6 +24,7 @@ namespace DeskPhone.Services;
 ///   POST /toggle-message-pin?id=ID → pin or unpin a message in the local store
 ///   POST /show               → bring window to front
 ///   POST /hide               → minimize window to taskbar
+///   POST /toggle-main-window → show or hide the native WPF MainWindow (default hidden)
 ///   POST /accept-build-update /snooze-build-update /show-build-update-prompt
 ///   POST /refresh         → force inbox refresh
 ///   POST /handoff?target=X → open DeskPhone to a native UI target for temporary web shortcuts
@@ -106,6 +107,7 @@ public class ControlApiService : IDisposable
     public Func<string, string, Task<bool>>? OfferBuildUpdate { get; set; }
     public Func<Task<bool>>?                 ShowApp     { get; set; }
     public Func<Task<bool>>?                 HideApp     { get; set; }
+    public Func<Task<bool>>?                 ToggleMainWindow { get; set; }
     public Func<string, string, Task<bool>>? Handoff     { get; set; }
     public Func<double, double, double, double, bool, string, Task<bool>>? SetStageBounds { get; set; }
     public Func<string, Task<bool>>?         PulseStage  { get; set; }
@@ -668,6 +670,11 @@ public class ControlApiService : IDisposable
             {
                 bool ok = HideApp is not null && await HideApp();
                 body = Json("result", ok ? "hidden" : "hide unavailable");
+            }
+            else if (method == "POST" && path == "/toggle-main-window")
+            {
+                bool visible = ToggleMainWindow is not null && await ToggleMainWindow();
+                body = JsonSerializer.Serialize(new { result = visible ? "shown" : "hidden", visible });
             }
             else if (method == "POST" && path == "/handoff")
             {

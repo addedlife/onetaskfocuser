@@ -7,8 +7,10 @@
         MinWidth="720" MinHeight="540"
         WindowStartupLocation="CenterScreen"
         Background="#0B0F14">
-    <Grid>
-        <wv2:WebView2 x:Name="Web" />
+    <Grid ClipToBounds="True">
+        <wv2:WebView2 x:Name="Web"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch" />
         <StackPanel x:Name="Fallback"
                     Visibility="Collapsed"
                     VerticalAlignment="Center" HorizontalAlignment="Center"

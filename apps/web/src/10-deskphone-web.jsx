@@ -2245,132 +2245,131 @@ function MessagesSlice({
           </div>
         ) : (
           <div className="dp-thread-layout" data-native-source="MainWindow.xaml:1623">
-            <header className="dp-thread-header" data-native-source="MainWindow.xaml:1623">
-              <div className="dp-thread-avatar">{selectedConversation.avatarInitial}</div>
-              <div className="dp-thread-identity">
-                <strong>{selectedConversation.displayName}</strong>
-                <span>{selectedConversation.formattedPhone}</span>
-              </div>
-              <ThreadSearchBar
-                value={threadSearch}
-                onChange={setThreadSearch}
-                matchCount={threadMatchCount}
-                currentIndex={activeThreadSearchCursor}
-                onPrevious={() => stepThreadSearchMatch("previous")}
-                onNext={() => stepThreadSearchMatch("next")}
-              />
-              <div className="dp-thread-actions" data-native-source="MainWindow.xaml:1738">
-                <details className="dp-thread-actions-menu" onClick={(event) => event.stopPropagation()}>
-                  <summary title="Conversation actions" aria-label="Conversation actions">{icon("more_vert", 20)}</summary>
-                  <div className="dp-floating-menu">
-                    {!showMessagesList ? (
-                      <button
-                        type="button"
-                        data-native-source="MainWindow.xaml:1831"
-                        onClick={(event) => {
-                          closeThreadActionMenu(event);
-                          setShowMessagesList(true);
-                        }}
-                      >
-                        {icon("menu_open", 18)}
-                        <span>Show threads</span>
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      data-native-source="MainWindow.xaml:1738"
-                      onClick={(event) => {
-                        closeThreadActionMenu(event);
-                        runConversationAction("toggle-conversation-block", "toggle conversation block", selectedConversation.number);
-                      }}
-                    >
-                      {icon("block", 18)}
-                      <span>Block / unblock locally</span>
-                    </button>
-                    <button
-                      type="button"
-                      data-native-source="MainWindow.xaml:1742"
-                      onClick={(event) => {
-                        closeThreadActionMenu(event);
-                        runConversationAction("toggle-conversation-pin", "toggle conversation pin", selectedConversation.number);
-                      }}
-                    >
-                      {icon("push_pin", 18)}
-                      <span>Pin / unpin conversation</span>
-                    </button>
-                    <button
-                      type="button"
-                      data-native-source="MainWindow.xaml:1746"
-                      onClick={(event) => {
-                        closeThreadActionMenu(event);
-                        runConversationAction("toggle-conversation-mute", "toggle conversation mute", selectedConversation.number);
-                      }}
-                    >
-                      {icon("notifications_off", 18)}
-                      <span>Mute / unmute alerts</span>
-                    </button>
-                    <button
-                      type="button"
-                      data-native-source="MainWindow.xaml:1750"
-                      onClick={(event) => {
-                        closeThreadActionMenu(event);
-                        runConversationAction("mark-conversation-read", "mark read", selectedConversation.number);
-                      }}
-                    >
-                      {icon("mark_email_read", 18)}
-                      <span>Mark read</span>
-                    </button>
-                    <button
-                      type="button"
-                      data-native-source="MainWindow.xaml:1755"
-                      onClick={(event) => {
-                        closeThreadActionMenu(event);
-                        runConversationAction("mark-conversation-unread", "mark unread", selectedConversation.number);
-                      }}
-                    >
-                      {icon("mark_email_unread", 18)}
-                      <span>Mark unread</span>
-                    </button>
-                    <button
-                      type="button"
-                      data-native-source="MainWindow.xaml:1760"
-                      onClick={(event) => {
-                        closeThreadActionMenu(event);
-                        onOpenContactEditor(selectedConversation.number, "new");
-                      }}
-                    >
-                      {icon("person_add", 18)}
-                      <span>Add contact</span>
-                    </button>
-                    <button
-                      type="button"
-                      data-native-source="MainWindow.xaml:1766"
-                      onClick={(event) => {
-                        closeThreadActionMenu(event);
-                        onOpenContactEditor(selectedConversation.number, "edit");
-                      }}
-                    >
-                      {icon("edit", 18)}
-                      <span>Edit contact</span>
-                    </button>
-                    <button
-                      type="button"
-                      data-native-source="MainWindow.xaml:1776"
-                      onClick={(event) => {
-                        closeThreadActionMenu(event);
-                        callNumber(selectedConversation.number);
-                      }}
-                    >
-                      {icon("call", 18)}
-                      <span>Call</span>
-                    </button>
-                  </div>
-                </details>
-              </div>
-            </header>
-
             <div className="dp-thread-detail-grid" data-native-source="MainWindow.xaml:1611">
               <main className="dp-thread-messages" data-native-source="MainWindow.xaml:1845">
+                <header className="dp-thread-header" data-native-source="MainWindow.xaml:1623">
+                  <div className="dp-thread-avatar">{selectedConversation.avatarInitial}</div>
+                  <div className="dp-thread-identity">
+                    <strong>{selectedConversation.displayName}</strong>
+                    <span>{selectedConversation.formattedPhone}</span>
+                  </div>
+                  <ThreadSearchBar
+                    value={threadSearch}
+                    onChange={setThreadSearch}
+                    matchCount={threadMatchCount}
+                    currentIndex={activeThreadSearchCursor}
+                    onPrevious={() => stepThreadSearchMatch("previous")}
+                    onNext={() => stepThreadSearchMatch("next")}
+                  />
+                  <div className="dp-thread-actions" data-native-source="MainWindow.xaml:1738">
+                    <details className="dp-thread-actions-menu" onClick={(event) => event.stopPropagation()}>
+                      <summary title="Conversation actions" aria-label="Conversation actions">{icon("more_vert", 20)}</summary>
+                      <div className="dp-floating-menu">
+                        {!showMessagesList ? (
+                          <button
+                            type="button"
+                            data-native-source="MainWindow.xaml:1831"
+                            onClick={(event) => {
+                              closeThreadActionMenu(event);
+                              setShowMessagesList(true);
+                            }}
+                          >
+                            {icon("menu_open", 18)}
+                            <span>Show threads</span>
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          data-native-source="MainWindow.xaml:1738"
+                          onClick={(event) => {
+                            closeThreadActionMenu(event);
+                            runConversationAction("toggle-conversation-block", "toggle conversation block", selectedConversation.number);
+                          }}
+                        >
+                          {icon("block", 18)}
+                          <span>Block / unblock locally</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-native-source="MainWindow.xaml:1742"
+                          onClick={(event) => {
+                            closeThreadActionMenu(event);
+                            runConversationAction("toggle-conversation-pin", "toggle conversation pin", selectedConversation.number);
+                          }}
+                        >
+                          {icon("push_pin", 18)}
+                          <span>Pin / unpin conversation</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-native-source="MainWindow.xaml:1746"
+                          onClick={(event) => {
+                            closeThreadActionMenu(event);
+                            runConversationAction("toggle-conversation-mute", "toggle conversation mute", selectedConversation.number);
+                          }}
+                        >
+                          {icon("notifications_off", 18)}
+                          <span>Mute / unmute alerts</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-native-source="MainWindow.xaml:1750"
+                          onClick={(event) => {
+                            closeThreadActionMenu(event);
+                            runConversationAction("mark-conversation-read", "mark read", selectedConversation.number);
+                          }}
+                        >
+                          {icon("mark_email_read", 18)}
+                          <span>Mark read</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-native-source="MainWindow.xaml:1755"
+                          onClick={(event) => {
+                            closeThreadActionMenu(event);
+                            runConversationAction("mark-conversation-unread", "mark unread", selectedConversation.number);
+                          }}
+                        >
+                          {icon("mark_email_unread", 18)}
+                          <span>Mark unread</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-native-source="MainWindow.xaml:1760"
+                          onClick={(event) => {
+                            closeThreadActionMenu(event);
+                            onOpenContactEditor(selectedConversation.number, "new");
+                          }}
+                        >
+                          {icon("person_add", 18)}
+                          <span>Add contact</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-native-source="MainWindow.xaml:1766"
+                          onClick={(event) => {
+                            closeThreadActionMenu(event);
+                            onOpenContactEditor(selectedConversation.number, "edit");
+                          }}
+                        >
+                          {icon("edit", 18)}
+                          <span>Edit contact</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-native-source="MainWindow.xaml:1776"
+                          onClick={(event) => {
+                            closeThreadActionMenu(event);
+                            callNumber(selectedConversation.number);
+                          }}
+                        >
+                          {icon("call", 18)}
+                          <span>Call</span>
+                        </button>
+                      </div>
+                    </details>
+                  </div>
+                </header>
                 {pinnedMessages.length ? (
                   <div className="dp-pinned-message-strip" data-native-source="MainWindow.xaml:2670">
                     <div className="dp-pinned-strip-title">
@@ -3017,6 +3016,7 @@ function SimpleTabContent({
     const syncThemeWithShamash = Boolean(status?.syncThemeWithShamash ?? status?.SyncThemeWithShamash);
     const pauseHistoryActivity = Boolean(status?.pauseHistoryActivity ?? status?.PauseHistoryActivity);
     const isDarkModeEnabled = Boolean(status?.isDarkModeEnabled ?? status?.IsDarkModeEnabled);
+    const mainWindowXamlVisible = Boolean(status?.mainWindowXamlVisible ?? status?.MainWindowXamlVisible);
     const knownDevices = getApiList(status?.knownDevices || status?.KnownDevices);
     const scannedDevices = getApiList(status?.scannedDevices || status?.ScannedDevices);
     const deviceAddress = (device) => device?.address || device?.Address || "";
@@ -3164,6 +3164,15 @@ function SimpleTabContent({
               <span>Dark mode</span>
               <input type="checkbox" checked={isDarkModeEnabled} onChange={(event) => onCommand(`/set-dark-mode?enabled=${event.target.checked ? 1 : 0}`, "set dark mode")} />
             </label>
+            <div className="dp-settings-actions dp-settings-tools">
+              <ShellButton
+                className="dp-tonal"
+                iconName={mainWindowXamlVisible ? "visibility_off" : "desktop_windows"}
+                onClick={() => onCommand("/toggle-main-window", "toggle native WPF window")}
+              >
+                {mainWindowXamlVisible ? "Hide native WPF UI" : "Show native WPF UI"}
+              </ShellButton>
+            </div>
           </section>
         )}
         {settingsSection === "contact-sync" && (
@@ -4094,6 +4103,8 @@ const css = `
   min-height: 0;
   background: var(--dp-bg-main);
   overflow: hidden;
+  container-type: inline-size;
+  container-name: thread-pane;
 }
 .dp-no-conversation {
   height: 100%;
@@ -4126,7 +4137,7 @@ const css = `
   height: 100%;
   min-width: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
 }
 .dp-thread-header {
@@ -4134,7 +4145,7 @@ const css = `
   border-bottom: 1px solid var(--dp-border);
   padding: 10px 16px;
   display: grid;
-  grid-template-columns: auto minmax(150px, auto) minmax(220px, 1fr) auto;
+  grid-template-columns: auto minmax(0, auto) minmax(80px, 1fr) auto;
   align-items: center;
   gap: 12px;
 }
@@ -4256,19 +4267,21 @@ const css = `
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(340px, 1fr) 7px minmax(260px, var(--dp-call-history-width, 360px));
+  grid-template-columns: minmax(0, 1fr) 7px minmax(200px, var(--dp-call-history-width, 360px));
   overflow: hidden;
 }
 .dp-thread-messages {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   position: relative;
   background: var(--dp-bg-main);
+  container-type: inline-size;
+  container-name: thread-messages;
 }
 .dp-thread-messages:has(.dp-pinned-message-strip) {
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
 .dp-pinned-message-strip {
   display: grid;
@@ -5492,6 +5505,28 @@ const css = `
   }
   .dp-contacts-list {
     max-height: 260px;
+  }
+}
+@container thread-pane (max-width: 700px) {
+  .dp-thread-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .dp-thread-inner-splitter {
+    display: none;
+  }
+  .dp-thread-calls {
+    max-height: min(240px, 35vh);
+    border-top: 1px solid var(--dp-border);
+  }
+}
+@container thread-messages (max-width: 520px) {
+  .dp-thread-header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .dp-thread-search,
+  .dp-thread-actions {
+    grid-column: 1 / -1;
   }
 }
 /* Mobile top-nav bar — visible only on ≤560px; hidden on wider screens */

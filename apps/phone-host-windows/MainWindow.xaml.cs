@@ -22,6 +22,9 @@ public partial class MainWindow : Window
     // the plumbing host (services, ViewModel, WPF lifetime, stage mode).
     private const string WebShellUrl = "http://127.0.0.1:8765/?standalone=deskphone";
     private WebShellWindow? _webShell;
+    private bool _mainWindowXamlVisible;
+
+    public bool IsMainWindowXamlVisible => _mainWindowXamlVisible;
 
     private bool _isAdjustingBounds;
     private bool _isStageMode;
@@ -219,6 +222,28 @@ public partial class MainWindow : Window
         else
             Dispatcher.Invoke(() => { WindowState = WindowState.Minimized; });
         return true;
+    }
+
+    /// <summary>Show or hide the native WPF shell (MainWindow). Default is hidden — WebShellWindow is the user-facing UI.</summary>
+    public bool ToggleMainWindowXamlUi()
+    {
+        _mainWindowXamlVisible = !_mainWindowXamlVisible;
+        if (_mainWindowXamlVisible)
+        {
+            ShowInTaskbar = true;
+            Show();
+            if (WindowState == WindowState.Minimized)
+                WindowState = WindowState.Normal;
+            Activate();
+            ApplyResponsiveLayout();
+        }
+        else
+        {
+            Hide();
+            ShowInTaskbar = false;
+        }
+
+        return _mainWindowXamlVisible;
     }
 
     private bool ExitStageModeOnUi(string token = "", bool force = false)
