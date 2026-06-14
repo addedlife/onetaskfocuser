@@ -1,5 +1,13 @@
 # Verification Log
 
+## 2026-06-14 DeskPhone b314 — message-list responsive layout (4.17.62)
+
+- Scope: finish rate-limit-frozen Cursor session — CSS-only fix for the DeskPhone WebView2 message-list column overflow + stacked layout chrome.
+- Web (`10-deskphone-web.jsx`, v4.17.62): `dp-message-shell` made a container-query root (`container-type:size`, `container-name:message-shell`). List column changed from `minmax(210px, saved-width)` to `minmax(0, min(saved-width, 36cqw))` so the saved drag width is a cap, not a floor — list shrinks proportionally. `@container message-shell (≤720px)` stacks list above thread based on actual shell width instead of viewport; `@container (≤900px)` trims filter buttons and avatars for denser rows. Stacked/narrow states hide filter tabs, history badge, phone-number subtitle; `dp-thread-calls` compacted to `min(152px,28vh)` with muted sidebar bg and small uppercase `CALLS` label; vertical split row heights reduced `220–320px → 128–240px`.
+- Native host (b314): `changelog.json` + `build.num` 314→315; Release build archived to `deployed-builds/b314`; desktop shortcuts updated (Latest + Previous b313); deploy commit `009e6ff`. Running b313 received build-update handoff offer.
+- Web commit `235986a` pushed to `origin/main`; Netlify Git-triggered deploy initiated.
+- Gates: `npm run build` (apps/web) → 0 errors, bundle `index-CjZmGE6O.js`; `dotnet build -c Release` → 0 errors + deploy.ps1 OK. BUILD-VERIFIED ONLY — runtime smoke on live DeskPhone WebView2 shell recommended after accepting b314 handoff.
+
 ## 2026-06-14 DeskPhone WebView2 — WPF UI toggle, resize reflow, thread search scope (4.17.61)
 
 - Scope: finish interrupted session — three DeskPhone WebView2 fixes shipped together (web + native host source).
