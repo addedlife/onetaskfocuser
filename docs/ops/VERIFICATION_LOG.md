@@ -1,5 +1,13 @@
 # Verification Log
 
+## 2026-06-14 Recording Duplication Fix — Prevent existing tasks/shailos from showing in ConvCapture (4.17.66)
+
+- Scope: recording transcript parsing duplicates existing tasks/shailos during conversation extraction.
+- Fix:
+  - Backend (`_ai-core.cjs`): Updated prompt rules for `conversation.extract.v1` to explicitly instruct the model to only return NEW items and NOT copy existing tasks or shailos into the output arrays.
+  - Web (`ConvCapture.jsx`): Added a client-side filter to deduplicate newly parsed tasks and shailos against existing ones before displaying them for review.
+- Gates: `npm run build` in `apps/web` -> 0 errors. BUILD-VERIFIED.
+
 ## 2026-06-14 DeskPhone b321 — standalone WebView2 theme propagation & cache-busting (4.17.65)
 
 - Scope: theme propagation in the standalone WebView2 native shell (`WebShellWindow`) which was previously rendering default colors (`T=GV_CLEAN`) due to browser caching, missing initialization pushes, and empty startup settings.

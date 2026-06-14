@@ -181,13 +181,37 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       }
 
       const parsed = await aiParseConversation(transcript, tasks, shailos, aiOpts);
+
+      const existingTaskTexts = new Set(
+        (tasks || []).map(t => (t.text || '').trim().toLowerCase()).filter(Boolean)
+      );
+      const existingShailaTexts = new Set(
+        (shailos || []).flatMap(s => [
+          (s.synopsis || '').trim().toLowerCase(),
+          (s.content || '').trim().toLowerCase(),
+          (s.text || '').trim().toLowerCase()
+        ].filter(Boolean))
+      );
+
+      const filteredTasks = (parsed.tasks || []).filter(t => {
+        const txt = (t.text || '').trim().toLowerCase();
+        return txt && !existingTaskTexts.has(txt);
+      });
+      const filteredShailos = (parsed.shailos || []).filter(s => {
+        const syn = (s.synopsis || '').trim().toLowerCase();
+        const content = (s.content || '').trim().toLowerCase();
+        if (syn && existingShailaTexts.has(syn)) return false;
+        if (content && existingShailaTexts.has(content)) return false;
+        return true;
+      });
+
       const allItems = [];
       const add = (cat, arr) => (arr || []).forEach(item => {
         const next = cat === 'scheduleItems' ? normalizeScheduleItem(item) : item;
         allItems.push({ id: uid(), cat, approved: true, ...next });
       });
-      add('tasks', parsed.tasks);
-      add('shailos', parsed.shailos);
+      add('tasks', filteredTasks);
+      add('shailos', filteredShailos);
       add('gotBacks', parsed.gotBacks);
       add('completions', parsed.completions);
       add('scheduleItems', parsed.scheduleItems);
