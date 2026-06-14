@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-14 00:07:18",
+        "version":  "b305",
+        "notes":  "Heartbeat slowed from 5 seconds to 30 seconds. Phone state (texts, calls, contacts) still pushes instantly when anything changes — the slower heartbeat only affects the background liveness ping. Net result: Firestore writes drop from ~17,000/day to ~1,400/day, keeping the relay comfortably inside the free tier.",
+        "devNotes":  "RelayService.cs: PushIntervalMs 5_000 → 30_000. PushNow() is unchanged and still fires immediately on any real event (new text, call state change, sent message, read flag, command result), so the user-visible latency of live phone data is unaffected. The only thing the 30s interval now controls is the liveness heartbeat (relayReceivedAt timestamp) used by the browser to determine if DeskPhone is online. A 30s staleness window is imperceptible in practice. No change to drain logic, command handling, media upload, or HFP/MAP/PBAP/audio."
+    },
+    {
         "timestamp":  "2026-06-13 23:54:41",
         "version":  "b304",
         "notes":  "Quota fix: DeskPhone no longer pings the cloud for commands every 2 seconds. Remote actions (dial, text, hang up, mark read) now ride the existing ~5-second heartbeat instead of a separate poll, cutting tens of thousands of Firestore reads per day with no change to how the phone behaves. Live phone state (incoming texts/calls) is still pushed instantly; only remote commands shift from a ~2s to a ~5s worst-case arrival.",

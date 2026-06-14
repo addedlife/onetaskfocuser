@@ -15,7 +15,7 @@ namespace DeskPhone.Services;
 public class RelayService : IDisposable
 {
     private const string DefaultRelayUrl = "https://onetaskfocuser.netlify.app/.netlify/functions/phone-relay";
-    private const int PushIntervalMs     = 5_000;   // background heartbeat push every 5 s;
+    private const int PushIntervalMs     = 30_000;  // background heartbeat push every 30 s;
                                                     // queued commands ride the push response
                                                     // (no separate drain poll — see DrainLoop removal)
     private const int MessageRelayLimit  = 150;     // messages in the cloud blob — onSnapshot re-sends the
