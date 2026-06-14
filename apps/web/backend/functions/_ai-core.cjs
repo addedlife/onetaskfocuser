@@ -974,10 +974,10 @@ const AI_JOB_REGISTRY = {
     task: "dashboard-river-rank",
     output: "json",
     shape: "object",
-    genConfig: { temperature: 0.1, maxOutputTokens: 1400 },
+    genConfig: { temperature: 0.1, maxOutputTokens: 3000 },
     schema: '{"ranking":[{"id":"item id copied exactly","score":"0-100 urgency","label":"terse 3-7 word restatement, no trailing punctuation","reason":"1-3 word priority tag e.g. deadline today / awaiting reply / payment due / routine"}]}',
     buildPrompt(input = {}) {
-      const items = ensureArray(input.items || [], "items").slice(0, 60).map(it => ({
+      const items = ensureArray(input.items || [], "items").slice(0, 100).map(it => ({
         id: cleanString(it?.id, 120),
         type: cleanString(it?.type, 20),
         text: cleanString(it?.text, 220),
@@ -987,8 +987,8 @@ const AI_JOB_REGISTRY = {
         YESHIVISH_SYSTEM,
         "You are prioritizing ONE unified action list ('the river') that mixes tasks, shailos (halachic questions awaiting the rabbi's answer), calendar events, and emails for an executive.",
         "Give every item a 'score' from 0 to 100 for how much it needs his attention right now: 100 = urgent, time-critical, blocking, or a hard deadline; 0 = trivial, informational, no action.",
+        "SHAILOS ARE ALWAYS THE HIGHEST PRIORITY. Any open shaila (type='shaila') MUST score 90 or above — a real person is waiting for a reply. Do not let any task, email, or calendar item outrank a shaila unless the shaila is marked as already answered.",
         "Weigh real consequence, not the source type. An email with a clear ask, a payment due, or a question awaiting reply can outrank a routine task. A newsletter, notification, or no-reply blast scores low. A meeting happening now or within the hour scores high; a routine recurring event scores low unless imminent.",
-        "Shailos awaiting an answer are real obligations — weigh by how long they have waited and their consequence.",
         "Score EVERY id you are given, exactly once, and copy each id verbatim. Do not invent ids or add commentary.",
         "Also write 'label': a terse 3-7 word restatement of what the item is — no fluff, no trailing punctuation. For an email, lead with what it actually wants.",
         "Also write 'reason': a 1-3 word tag for why it ranks where it does (e.g. 'deadline today', 'awaiting reply', 'payment due', 'happening now', 'routine', 'fyi').",

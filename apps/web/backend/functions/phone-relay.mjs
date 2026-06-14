@@ -3,9 +3,11 @@
  *
  * Routes (via ?action= query param):
  *   GET  ?action=state    → webapp reads latest phone state  (requires Firebase ID token)
- *   POST ?action=push     → DeskPhone pushes state blob      (requires X-Relay-Secret)
+ *   POST ?action=push     → DeskPhone pushes state blob; response carries any queued
+ *                           commands so a separate drain poll is unnecessary (X-Relay-Secret)
  *   POST ?action=command  → webapp queues a command          (requires Firebase ID token)
  *   GET  ?action=drain    → DeskPhone drains command queue   (requires X-Relay-Secret)
+ *                           [legacy — superseded by the push response; kept for back-compat]
  *
  * Auth design:
  *   - state / command: webapp sends "Authorization: Bearer {firebaseIdToken}" header.
@@ -154,10 +156,27 @@ export const handler = async (event) => {
     } catch (_) { /* non-JSON payload — store untouched */ }
     try {
       await fsSet("state", toStore);
-      return ok({ ok: true });
     } catch (e) {
       return err(500, "Failed to write state: " + e.message);
     }
+    // Piggyback the command drain onto the heartbeat push. DeskPhone used to run a
+    // SEPARATE poll (?action=drain) every 2 s, reading the commands doc ~43k times/day
+    // even when idle. Now each ~5 s push returns any queued commands in the same round
+    // trip, so the host no longer needs the standalone drain loop. (?action=drain stays
+    // below for back-compat with hosts that haven't updated yet.)
+    let commands = [];
+    try {
+      const pending = JSON.parse((await fsGet("commands")) || "[]");
+      if (pending.length > 0) {
+        await fsSet("commands", JSON.stringify([])); // clear FIRST so a failure leaves the
+        commands = pending;                          // queue intact rather than double-deliver
+      }
+    } catch (_) {
+      // A drain failure must never fail the push — state is already saved. Leave the
+      // queue untouched; the next heartbeat retries it.
+      commands = [];
+    }
+    return ok({ ok: true, commands });
   }
 
   // ── POST push-media (DeskPhone → cloud, relay secret required) ───────────
