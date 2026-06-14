@@ -1,15 +1,15 @@
 [
     {
+        "timestamp":  "2026-06-14 03:33:51",
+        "version":  "b321",
+        "notes":  "Theme sync fix: WebView2 standalone shell now receives fallback palette defaults from C# host, handles theme pushes at window initialization, and implements dynamic build cache-busting.",
+        "devNotes":  "Pre-populates LastThemeColors with palette defaults in MainViewModel. Adds PushTheme to InitializeAsync in WebShellWindow.xaml.cs. Adds dynamic WebShellUrl property with build-info version parameter in MainWindow.xaml.cs."
+    },
+    {
         "timestamp":  "2026-06-14 03:33:37",
         "version":  "b320",
         "notes":  "Theme propagation: DeskPhone WebView2 standalone shell (WebShellWindow) now receives live Shamash Pro 4 color theme updates from the C# host in real-time. Removed the redundant Dark mode setting checkbox.",
         "devNotes":  "Adds PushThemeToWebShell / PushTheme bridge between MainWindow, WebShellWindow, and WebView2. StandaloneShell in main.jsx fetches initial colors from /status on mount and listens for dp-theme-update messages via window.chrome.webview. Removes Dark mode label toggle from settings appearance section."
-    },
-    {
-        "timestamp":  "2026-06-14 03:32:00",
-        "version":  "b321",
-        "notes":  "Theme sync fix: WebView2 standalone shell now receives fallback palette defaults from C# host, handles theme pushes at window initialization, and implements dynamic build cache-busting.",
-        "devNotes":  "Pre-populates LastThemeColors with palette defaults in MainViewModel. Adds PushTheme to InitializeAsync in WebShellWindow.xaml.cs. Adds dynamic WebShellUrl property with build-info version parameter in MainWindow.xaml.cs."
     },
     {
         "timestamp":  "2026-06-14 03:16:35",
