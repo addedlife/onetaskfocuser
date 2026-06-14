@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-14 02:53:35",
+        "version":  "b315",
+        "notes":  "Hotfix: the DeskPhone message screen was blank white after the b314 responsive-layout update. The conversation list and thread pane now render correctly again.",
+        "devNotes":  "Root cause: the b314 CSS change added container-type:size to dp-message-shell but accidentally dropped min-height:0. container-type:size creates block-size containment which suppresses intrinsic height sizing; without min-height:0 the grid track had no floor and the shell collapsed to 0px height, producing a blank white surface. Fix: restored min-height:0 alongside min-width:0 (both are needed — min-height:0 lets the grid track shrink past content height, min-width:0 prevents inline overflow). Gates: npm run build 0 errors (bundle index-MTb-dVwx.js); dotnet build -c Release 0 errors."
+    },
+    {
         "timestamp":  "2026-06-14 02:47:43",
         "version":  "b314",
         "notes":  "Message list no longer overflows when the DeskPhone window narrows — the conversation column now shrinks proportionally with the window instead of holding a fixed width. When space is really tight the list stacks above the thread, and both panels drop extra chrome (filter tabs, subtitles, history badge) to keep the content readable.",
