@@ -45,13 +45,14 @@ jobs:
           echo "GOOGLE_SEARCH_API_KEY=${{ secrets.GOOGLE_SEARCH_API_KEY }}" >> .env
           echo "GOOGLE_SEARCH_CSE_ID=${{ secrets.GOOGLE_SEARCH_CSE_ID }}" >> .env
 
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
       - name: Deploy to Firebase
         working-directory: apps/web
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/firebase-sa.json
-        run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}' > /tmp/firebase-sa.json
-          firebase deploy --only hosting,functions --project onetaskonly-app --non-interactive
+        run: firebase deploy --only hosting,functions --project onetaskonly-app --non-interactive
