@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-14 02:56:19",
+        "version":  "b316",
+        "notes":  "Hotfix: DeskPhone message screen is no longer blank white. The responsive layout is now stable across all window sizes.",
+        "devNotes":  "Root cause of blank screen (persisted through b315): container-type:size creates both inline and block containment. The block containment suppresses the element\u0027s intrinsic height even with height:100% and min-height:0 in certain grid contexts. Additionally, cqw units inside an element\u0027s own properties look up the ancestor chain, not the element itself — so 36cqw resolved against the viewport (no ancestor container defined), not the shell width. Fix: (1) container-type:size -\u003e container-type:inline-size (inline containment only; block height works normally). (2) 36cqw -\u003e 36% (percentage in grid-template-columns resolves against the grid container\u0027s own inline size — the element itself). (3) Removed @container message-shell (max-height:560px) block — height queries require container-type:size. The width-based @container queries for \u003c=720px and \u003c=900px still work correctly with inline-size containment. Gates: npm run build 0 errors (bundle index-5q0y98tO.js); dotnet build -c Release 0 errors."
+    },
+    {
         "timestamp":  "2026-06-14 02:53:35",
         "version":  "b315",
         "notes":  "Hotfix: the DeskPhone message screen was blank white after the b314 responsive-layout update. The conversation list and thread pane now render correctly again.",
