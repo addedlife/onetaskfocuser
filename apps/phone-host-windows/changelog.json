@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-14 03:09:06",
+        "version":  "b317",
+        "notes":  "Style sync: DeskPhone WebView2 now always inherits the Shamash Pro 4 color theme automatically. The manual Refresh Sync button and Sync theme toggle have been removed from Appearance settings.",
+        "devNotes":  "Web (4.17.63, commit 4783642): deskPhoneThemeSyncEnabled hardcoded true in App.jsx (was AS?.deskPhoneThemeSync !== false) so the 2.5s theme-poll always pushes the current palette to the host. Removed the Refresh Sync ShellButton (MainWindow.xaml:4288) and Sync theme with Shamash label/checkbox (MainWindow.xaml:4258) from the settingsSection==appearance panel in 10-deskphone-web.jsx. Native build picks up updated apps/web/dist (index-DALEsvwn.js) which the csproj copies into output/web/. Gates: npm run build 0 errors (bundle index-DALEsvwn.js); dotnet build -c Release 0 errors."
+    },
+    {
         "timestamp":  "2026-06-14 02:56:19",
         "version":  "b316",
         "notes":  "Hotfix: DeskPhone message screen is no longer blank white. The responsive layout is now stable across all window sizes.",
