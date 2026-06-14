@@ -1,14 +1,14 @@
 # Verification Log
 
-## 2026-06-14 DeskPhone b320 — theme propagation to standalone WebShell (4.17.65)
+## 2026-06-14 DeskPhone b321 — standalone WebView2 theme propagation & cache-busting (4.17.65)
 
-- Scope: theme propagation in the standalone WebView2 native shell (`WebShellWindow`) which was previously rendering default colors (`T=GV_CLEAN`) since it has no parent iframe to send it `postMessage` theme events.
+- Scope: theme propagation in the standalone WebView2 native shell (`WebShellWindow`) which was previously rendering default colors (`T=GV_CLEAN`) due to browser caching, missing initialization pushes, and empty startup settings.
 - Fix:
-  - C# host: `AppSettingsService.Settings` persists `LastThemeColors` dictionary across app restarts; `MainViewModel.cs` updates this dictionary inside `ApplyTheme` and invokes `mw.PushThemeToWebShell` to dispatch a WebView2 `dp-theme-update` message; `/status` endpoint exposes `activeTheme` containing `palette` and `colors`.
-  - WebView2: `WebShellWindow` stores `_lastColors` and pushes to `Web.CoreWebView2` as soon as it initializes.
+  - C# host: `AppSettingsService.Settings` persists `LastThemeColors` dictionary across app restarts; `MainViewModel.cs` pre-populates the dictionary with theme defaults (BlueGold, Claude, Google) if empty, and exposes `activeTheme` via `/status`. `MainWindow.xaml.cs` appends dynamic version cache-busting parameters (`&v=b321`) to `WebShellUrl` using `build-info.json`.
+  - WebView2: `WebShellWindow.xaml.cs` stores `_lastColors` and pushes them as a web message to `Web.CoreWebView2` as soon as it initializes.
   - Web (`main.jsx`): `StandaloneShell` fetches initial theme colors from `/status` on mount and listens for `dp-theme-update` web messages via `window.chrome.webview` to update React state `T` in real-time.
   - Settings: Removed the redundant, non-functional "Dark mode" toggle checkbox from appearance panel in `10-deskphone-web.jsx`.
-- Gates: `npm run build` → 0 errors, bundle `index-DzbVC8Eo.js`; `dotnet build -c Release` → 0 errors + deploy.ps1 OK. BUILD-VERIFIED — b320 deployed, launched, and checked.
+- Gates: `npm run build` → 0 errors, bundle `index-DzbVC8Eo.js`; `dotnet build -c Release` → 0 errors + deploy.ps1 OK. BUILD-VERIFIED — b321 deployed, launched, and checked.
 
 
 ## 2026-06-14 DeskPhone b314 — message-list responsive layout (4.17.62)
