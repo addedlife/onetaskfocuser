@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { AuthGate } from './00-auth.jsx';
 import { DeskPhoneWebPanel } from './10-deskphone-web.jsx';
@@ -22,9 +22,31 @@ const standaloneEmbedded = (() => {
 })();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
+
 if (standaloneView === 'deskphone' || standaloneView === 'phone') {
   document.title = 'DeskPhone';
-  root.render(<DeskPhoneWebPanel T={GV_CLEAN} embedded={standaloneEmbedded} />);
+
+  // StandaloneShell: listens for postMessage theme pushes from the parent
+  // Shamash frame (App.jsx) and re-renders with the live T object.
+  // Zero cloud cost — pure local iframe messaging, no polling.
+  function StandaloneShell() {
+    const [T, setT] = useState(GV_CLEAN);
+    useEffect(() => {
+      const onMessage = (event) => {
+        // Only accept messages from the same origin or the loopback host.
+        if (event.data?.type !== 'dp-theme') return;
+        const next = event.data.T;
+        if (next && typeof next === 'object') setT(next);
+      };
+      window.addEventListener('message', onMessage);
+      // Tell the parent we're ready to receive the theme.
+      try { window.parent.postMessage({ type: 'dp-ready' }, '*'); } catch {}
+      return () => window.removeEventListener('message', onMessage);
+    }, []);
+    return <DeskPhoneWebPanel T={T} embedded={standaloneEmbedded} />;
+  }
+
+  root.render(<StandaloneShell />);
 } else {
   root.render(<AuthGate />);
 }

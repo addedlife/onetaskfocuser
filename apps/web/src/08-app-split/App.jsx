@@ -121,6 +121,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   }, [deskPhoneDirect, suiteView]);
   const deskPhoneLaunchAtRef = useRef(0);
   const lastDeskPhoneThemeRef = useRef("");
+  const deskPhoneIframeRef = useRef(null);
+  const deskPhoneTRef = useRef(null); // always holds latest T; updated each render
   const [justComp, setJustComp] = useState(false);
   const [showRip, setShowRip] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -1417,6 +1419,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       : "claude";
   const deskPhoneThemeSyncEnabled = true; // always live — user toggle removed
   const deskPhoneThemeQuery = useMemo(() => buildDeskPhoneThemeQuery(deskPhoneThemePalette, T), [deskPhoneThemePalette, T]);
+  deskPhoneTRef.current = T; // keep ref current for postMessage effects
   // Share theme with Shaila sub-app via localStorage
   try { localStorage.setItem('onetask_theme', JSON.stringify(sc)); } catch(e) {}
   // Share the selected AI route with the Shaila sub-app; both still call the same server gateway.
@@ -2604,30 +2607,28 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash || ""}`);
   }, [syncDeskPhoneTheme]);
 
+  // Push the live Shamash Pro 4 theme to the DeskPhone iframe via postMessage
+  // whenever the palette changes. Zero cloud cost — pure local frame messaging.
+  // deskPhoneTRef is updated every render below (after T is computed).
   useEffect(() => {
-    if (!deskPhoneThemeSyncEnabled) return;
-    let stopped = false;
-    const poll = async () => {
-      try {
-        const res = await fetch("http://127.0.0.1:8765/status", { cache: "no-store" });
-        if (!res.ok) throw new Error("DeskPhone status failed");
-        if (stopped) return;
-        if (!deskPhoneOnline) {
-          await syncDeskPhoneTheme(true);
-        } else {
-          setDeskPhoneOnline(true);
-        }
-      } catch {
-        if (!stopped) setDeskPhoneOnline(false);
-      }
+    const iframe = deskPhoneIframeRef.current;
+    if (!iframe) return;
+    try { iframe.contentWindow?.postMessage({ type: 'dp-theme', T: deskPhoneTRef.current }, '*'); } catch {}
+  }, [deskPhoneThemeQuery]); // deskPhoneThemeQuery is a stable string that encodes T
+
+  // Listen for 'dp-ready' from the iframe so we can send the theme on first load
+  // (the onLoad fires before React state is flushed; this message arrives after).
+  useEffect(() => {
+    const onMessage = (event) => {
+      if (event.data?.type !== 'dp-ready') return;
+      const iframe = deskPhoneIframeRef.current;
+      if (!iframe) return;
+      try { iframe.contentWindow?.postMessage({ type: 'dp-theme', T: deskPhoneTRef.current }, '*'); } catch {}
     };
-    poll();
-    const id = window.setInterval(poll, 2500);
-    return () => {
-      stopped = true;
-      window.clearInterval(id);
-    };
-  }, [deskPhoneOnline, deskPhoneThemeSyncEnabled, syncDeskPhoneTheme]);
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
 
   // Handle Google Health OAuth callback (/health-callback?code=...&state=uid)
   // IMPORTANT: both effects must remain ABOVE the `if (!AS) return` guard —
@@ -3645,12 +3646,17 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             </div>
           ) : deskPhoneDirect ? (
             // DeskPhone is reachable on this PC — embed the UI it serves itself.
+            // Theme is pushed via postMessage whenever T changes (zero cloud cost).
             <div style={{ width: "100%", height: "100%", animation: `nc-phone-surface-fade ${DUR.base} ${EASE.standard}` }}>
               <iframe
+                ref={deskPhoneIframeRef}
                 src="http://127.0.0.1:8765/?standalone=deskphone&embedded=1"
                 style={{ width: "100%", height: "100%", border: "none", borderRadius: 0, display: "block" }}
                 title="DeskPhone"
                 sandbox="allow-scripts allow-same-origin allow-forms"
+                onLoad={() => {
+                  try { deskPhoneIframeRef.current?.contentWindow?.postMessage({ type: 'dp-theme', T }, '*'); } catch {}
+                }}
               />
             </div>
           ) : (
