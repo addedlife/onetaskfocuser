@@ -3150,12 +3150,7 @@ function SimpleTabContent({
           <section className="dp-settings-panel" data-native-source="MainWindow.xaml:4000" aria-label="Appearance settings">
             <div className="dp-settings-actions dp-settings-tools">
               <ShellButton className="dp-tonal" iconName="restart_alt" nativeSource="MainWindow.xaml:4235" onClick={() => onCommand("/reset-ui-scale", "reset appearance")}>Reset</ShellButton>
-              <ShellButton className="dp-tonal" iconName="sync" nativeSource="MainWindow.xaml:4288" onClick={() => onCommand("/refresh-theme-sync", "refresh theme sync")}>Refresh Sync</ShellButton>
             </div>
-            <label className="dp-settings-toggle" data-native-source="MainWindow.xaml:4258">
-              <span>Sync theme with Shamash app</span>
-              <input type="checkbox" checked={syncThemeWithShamash} onChange={(event) => onCommand(`/set-theme-sync?enabled=${event.target.checked ? 1 : 0}`, "set theme sync")} />
-            </label>
             <label className="dp-settings-toggle" data-native-source="MainWindow.xaml:4294">
               <span>History Background Fetching</span>
               <input type="checkbox" checked={!pauseHistoryActivity} onChange={(event) => onCommand(`/set-history-paused?paused=${event.target.checked ? 0 : 1}`, "set history background fetching")} />

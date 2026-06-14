@@ -1415,7 +1415,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     : isDark
       ? "navyGold"
       : "claude";
-  const deskPhoneThemeSyncEnabled = AS?.deskPhoneThemeSync !== false;
+  const deskPhoneThemeSyncEnabled = true; // always live — user toggle removed
   const deskPhoneThemeQuery = useMemo(() => buildDeskPhoneThemeQuery(deskPhoneThemePalette, T), [deskPhoneThemePalette, T]);
   // Share theme with Shaila sub-app via localStorage
   try { localStorage.setItem('onetask_theme', JSON.stringify(sc)); } catch(e) {}
