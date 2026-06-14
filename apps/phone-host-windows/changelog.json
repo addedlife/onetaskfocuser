@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-14 02:47:43",
+        "version":  "b314",
+        "notes":  "Message list no longer overflows when the DeskPhone window narrows — the conversation column now shrinks proportionally with the window instead of holding a fixed width. When space is really tight the list stacks above the thread, and both panels drop extra chrome (filter tabs, subtitles, history badge) to keep the content readable.",
+        "devNotes":  "Web (10-deskphone-web.jsx, bundled into host web/): dp-message-shell becomes a container-query root (container-type:size, name:message-shell). List column changed from minmax(210px, saved-width) to minmax(0, min(saved-width, 36cqw)) so the saved drag width becomes a cap, not a floor. Container query @container message-shell (≤720px) stacks the list above the thread (grid-template-rows minmax(120px, min(34%,220px)) 1fr) based on shell width rather than viewport width. @container (≤900px) trims filter-button height and avatar size for denser rows. Stacked/narrow overrides hide dp-history-status, dp-filter-grid, dp-call-filter-grid, and the phone-number subtitle (dp-thread-identity span); shrink dp-thread-calls max-height to min(152px,28vh) with muted sidebar bg and compact CALLS label; reduce dp-thread-call-row/dp-conversation-row padding. Same compact call-history treatment applied inside @container thread-pane (≤700px) block for consistency. Vertical split row height floor/cap reduced 220–320px → 128–240px so thread gets more room when stacked. Gates: npm run build 0 errors (bundle index-CjZmGE6O.js); dotnet build -c Release 0 errors."
+    },
+    {
         "timestamp":  "2026-06-14 01:19:15",
         "version":  "b313",
         "notes":  "DeskPhone WebView2 shell now reflows cleanly when you drag the window smaller — call history stacks below messages instead of overflowing. Conversation search stays over the message pane only, not the call rail. Settings → Appearance adds Show/Hide native WPF UI for the legacy XAML window (hidden by default).",
