@@ -729,7 +729,7 @@ export function HealthPage({
           onStartGoogleHealth={async () => {
             setConnectLoading(true);
             setConnectError(null);
-            const dlog = (msg, data) => fetch("/.netlify/functions/debug-log", {
+            const dlog = (msg, data) => fetch("/api/debug-log", {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ source: "fe:connect", msg, data }),
             }).catch(() => {});
@@ -741,7 +741,7 @@ export function HealthPage({
                 setConnectLoading(false);
                 return;
               }
-              const r    = await fetch(`/.netlify/functions/google-health?action=authorize-url`, {
+              const r    = await fetch(`/api/google-health?action=authorize-url`, {
                 headers: { Authorization: `Bearer ${token}` },
               });
               const data = await r.json();

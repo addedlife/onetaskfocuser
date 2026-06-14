@@ -330,7 +330,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const callsSigRef = useRef("");
   const contactsSigRef = useRef("");
   const C = cleanTheme(T);
-  const RELAY_BASE = "/.netlify/functions/phone-relay";
+  const RELAY_BASE = "/api/phone-relay";
 
   // ── Transport resolution (the ONE connection control) ─────────────────────
   // transportMode is the user override: 'auto' (default) | 'direct' | 'relay'.

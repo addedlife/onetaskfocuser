@@ -1,0 +1,54 @@
+name: Deploy to Firebase
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: apps/web
+        env:
+          GIT_COMMIT: ${{ github.sha }}
+        run: npm run build && node scripts/copy-shailos-to-dist.cjs
+
+      - name: Install functions deps
+        working-directory: apps/web/functions
+        run: npm ci
+
+      - name: Write functions .env
+        working-directory: apps/web/functions
+        run: |
+          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+          echo "Gemini_Overflow_01=${{ secrets.GEMINI_OVERFLOW_01 }}" >> .env
+          echo "PHONE_RELAY_SECRET=${{ secrets.PHONE_RELAY_SECRET }}" >> .env
+          echo "FIREBASE_SERVICE_ACCOUNT_JSON=${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" >> .env
+          echo "MCP_READ_TOKEN=${{ secrets.MCP_READ_TOKEN }}" >> .env
+          echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env
+          echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env
+          echo "GOOGLE_HEALTH_CLIENT_ID=${{ secrets.GOOGLE_HEALTH_CLIENT_ID }}" >> .env
+          echo "GOOGLE_HEALTH_CLIENT_SECRET=${{ secrets.GOOGLE_HEALTH_CLIENT_SECRET }}" >> .env
+          echo "GOOGLE_SEARCH_API_KEY=${{ secrets.GOOGLE_SEARCH_API_KEY }}" >> .env
+          echo "GOOGLE_SEARCH_CSE_ID=${{ secrets.GOOGLE_SEARCH_CSE_ID }}" >> .env
+
+      - name: Deploy to Firebase
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only hosting,functions
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          PROJECT_ID: onetaskonly-app

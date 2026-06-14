@@ -20,6 +20,9 @@ deploy_temp.zip
 .netlify/
 .launcher/
 
+# Firebase Functions secrets (written by CI, never committed)
+functions/.env
+
 # Claude Code project files
 .claude/
 

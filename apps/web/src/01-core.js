@@ -832,7 +832,7 @@ const Store = {
   listenShailos(callback) {
     const col = this.shailosCol();
     if (!col) return () => {};
-    const dlog = (msg, data) => fetch("/.netlify/functions/debug-log", {
+    const dlog = (msg, data) => fetch("/api/debug-log", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source: "fe:shailaListener", msg, data }),
     }).catch(() => {});
@@ -1534,7 +1534,7 @@ function isTaskAged(task, pris, thresholds) {
 
 // The server gateway chooses the default Gemini model; Settings can override it once for every AI job.
 export const GEMINI_MODEL = "server-configured";
-export const AI_PROXY_ENDPOINT = "/.netlify/functions/ai-proxy";
+export const AI_PROXY_ENDPOINT = "/api/ai-proxy";
 
 function normalizeAiOpts(aiOpts) {
   if (!aiOpts || typeof aiOpts === "string") return {};

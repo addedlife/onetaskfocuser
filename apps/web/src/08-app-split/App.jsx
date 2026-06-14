@@ -502,7 +502,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const loadAppConfig = useCallback(async () => {
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
-        const r = await fetchWithTimeout("/.netlify/functions/app-config", {}, 12000);
+        const r = await fetchWithTimeout("/api/app-config", {}, 12000);
         const d = await r.json();
         const cfg = d.ai || null;
         const integrations = d?.integrations || {};
@@ -595,7 +595,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const callGoogleWorkspace = useCallback(async (action, payload = {}) => {
     if (!user?.getIdToken) throw new Error("Sign in again before connecting Google Workspace.");
     const idToken = await user.getIdToken();
-    const r = await fetchWithTimeout("/.netlify/functions/google-workspace", {
+    const r = await fetchWithTimeout("/api/google-workspace", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -612,7 +612,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const callChiefProfile = useCallback(async (action, payload = {}) => {
     if (!user?.getIdToken) throw new Error("Sign in again before updating Chief profile.");
     const idToken = await user.getIdToken();
-    const r = await fetch("/.netlify/functions/chief-profile", {
+    const r = await fetch("/api/chief-profile", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2640,7 +2640,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     const path  = window.location.pathname;
     if (path === "/health-callback" && code) {
       window.history.replaceState({}, "", "/");
-      const dlog = (msg, data) => fetch("/.netlify/functions/debug-log", {
+      const dlog = (msg, data) => fetch("/api/debug-log", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: "fe:callback", msg, data }),
       }).catch(() => {});
@@ -2650,7 +2650,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       if (err) {
         dlog("Google returned error in callback", { error: err, errDesc });
       }
-      fetch(`/.netlify/functions/google-health?action=exchange&code=${encodeURIComponent(code)}&state=${encodeURIComponent(state || "")}`)
+      fetch(`/api/google-health?action=exchange&code=${encodeURIComponent(code)}&state=${encodeURIComponent(state || "")}`)
         .then(async r => {
           const data = await r.json();
           dlog(`exchange response status ${r.status}`, { status: r.status, success: !!data?.success, error: data?.error });
@@ -2756,7 +2756,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
   // ── Health data helpers (go through backend so Firestore rules don't apply) ─
   async function loadHealthFromFirebase() {
-    const dlog = (msg, data) => fetch("/.netlify/functions/debug-log", {
+    const dlog = (msg, data) => fetch("/api/debug-log", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source: "fe:loadHealth", msg, data }),
     }).catch(() => {});
@@ -2768,7 +2768,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     const idToken = user?.getIdToken ? await user.getIdToken() : null;
     if (!idToken) { dlog("skipped: user has no getIdToken", { uid: user?.uid }); return; }
     try {
-      const res  = await fetch(`/.netlify/functions/google-health?action=load`, {
+      const res  = await fetch(`/api/google-health?action=load`, {
         headers: { Authorization: `Bearer ${idToken}` },
       });
       const json = await res.json();
@@ -2788,7 +2788,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     const idToken = user?.getIdToken ? await user.getIdToken() : null;
     if (!idToken) return;
     try {
-      const res = await fetch(`/.netlify/functions/google-health?action=save-entry`, {
+      const res = await fetch(`/api/google-health?action=save-entry`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
         body: JSON.stringify(data),
@@ -2819,7 +2819,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     const idToken = user?.getIdToken ? await user.getIdToken() : null;
     if (!idToken) return;
     try {
-      const res = await fetch(`/.netlify/functions/google-health?action=sync`, {
+      const res = await fetch(`/api/google-health?action=sync`, {
         headers: { Authorization: `Bearer ${idToken}` },
       });
       if (!res.ok) return;

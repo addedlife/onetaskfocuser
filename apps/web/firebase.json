@@ -1,0 +1,46 @@
+{
+  "hosting": {
+    "public": "dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [
+      {
+        "source": "/assets/**",
+        "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+      },
+      {
+        "source": "/index.html",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }]
+      },
+      {
+        "source": "/sw.js",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, must-revalidate" },
+          { "key": "Service-Worker-Allowed", "value": "/" }
+        ]
+      },
+      {
+        "source": "/manifest.webmanifest",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }]
+      }
+    ],
+    "rewrites": [
+      { "source": "/api/ai-proxy",          "function": "aiProxy",         "region": "us-central1" },
+      { "source": "/api/app-config",        "function": "appConfig",       "region": "us-central1" },
+      { "source": "/api/debug-log",         "function": "debugLog",        "region": "us-central1" },
+      { "source": "/api/chief-profile",     "function": "chiefProfile",    "region": "us-central1" },
+      { "source": "/api/google-workspace",  "function": "googleWorkspace", "region": "us-central1" },
+      { "source": "/api/google-health",     "function": "googleHealth",    "region": "us-central1" },
+      { "source": "/api/phone-relay",       "function": "phoneRelay",      "region": "us-central1" },
+      { "source": "/api/mcp",              "function": "mcp",             "region": "us-central1" },
+      { "source": "/api/google-search",     "function": "googleSearch",    "region": "us-central1" },
+      { "source": "/mcp",                  "function": "mcp",             "region": "us-central1" },
+      { "source": "/shailos/**",           "destination": "/shailos/index.html" },
+      { "source": "/health-callback",      "destination": "/index.html" },
+      { "source": "/**",                   "destination": "/index.html" }
+    ]
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20"
+  }
+}
