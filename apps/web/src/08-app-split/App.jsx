@@ -3608,6 +3608,16 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
       {!shellHidden && suiteView === "deskphone" && (
         <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: Z.panel, overflow: "hidden", background: T.bg, borderLeft: `1px solid ${T.brdS || T.brd}` }}>
+          {/* Live surface indicator — which phone surface is on screen right now.
+              Teal = DeskPhone's own served UI (direct loopback embed); amber = the
+              webapp's bundled fallback panel. pointerEvents none: never blocks the UI. */}
+          {!IS_MOBILE_DEVICE && (
+            <div aria-label={deskPhoneDirect ? "Showing DeskPhone's own UI (direct)" : "Showing the webapp's built-in phone panel"}
+              style={{ position: "absolute", top: 8, right: 12, zIndex: 5, pointerEvents: "none", display: "flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 999, background: "rgba(255,255,255,0.92)", border: `1px solid ${GV_CLEAN.divider}`, color: GV_CLEAN.muted, fontSize: 11, fontWeight: 600, fontFamily: NC_FONT_STACK, letterSpacing: 0.2, boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
+              <span style={{ width: 7, height: 7, borderRadius: 99, background: deskPhoneDirect ? GV_CLEAN.accent : GV_CLEAN.warning, boxShadow: deskPhoneDirect ? "0 0 5px rgba(0,121,107,0.55)" : "none" }} />
+              {deskPhoneDirect ? "DeskPhone · live" : "Web fallback"}
+            </div>
+          )}
           {IS_MOBILE_DEVICE ? (
             // Phone: cloud-relay surface only — the direct/LAN DeskPhone panel can't reach a PC from a phone.
             <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "12px 14px", boxSizing: "border-box", minHeight: 0 }}>
