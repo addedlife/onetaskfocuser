@@ -48,6 +48,11 @@ public partial class WebShellWindow : Window
             core.Settings.AreDefaultContextMenusEnabled = true;
             core.Settings.IsStatusBarEnabled = false;
 
+            if (_lastColors != null)
+            {
+                PushTheme(_lastPalette ?? "", _lastColors);
+            }
+
             // The web UI's Talk feature needs the mic; the page is our own
             // loopback origin, so grant silently instead of prompting.
             core.PermissionRequested += (_, e) =>
