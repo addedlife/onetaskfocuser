@@ -16,11 +16,15 @@ const standaloneView = (() => {
   try { return (new URLSearchParams(window.location.search).get('standalone') || '').toLowerCase(); }
   catch { return ''; }
 })();
+const standaloneEmbedded = (() => {
+  try { return new URLSearchParams(window.location.search).get('embedded') === '1'; }
+  catch { return false; }
+})();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 if (standaloneView === 'deskphone' || standaloneView === 'phone') {
   document.title = 'DeskPhone';
-  root.render(<DeskPhoneWebPanel T={GV_CLEAN} />);
+  root.render(<DeskPhoneWebPanel T={GV_CLEAN} embedded={standaloneEmbedded} />);
 } else {
   root.render(<AuthGate />);
 }

@@ -3638,7 +3638,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             // DeskPhone is reachable on this PC — embed the UI it serves itself.
             <div style={{ width: "100%", height: "100%", animation: `nc-phone-surface-fade ${DUR.base} ${EASE.standard}` }}>
               <iframe
-                src="http://127.0.0.1:8765/?standalone=deskphone"
+                src="http://127.0.0.1:8765/?standalone=deskphone&embedded=1"
                 style={{ width: "100%", height: "100%", border: "none", borderRadius: 0, display: "block" }}
                 title="DeskPhone"
                 sandbox="allow-scripts allow-same-origin allow-forms"
@@ -3648,6 +3648,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             <div style={{ width: "100%", height: "100%", animation: `nc-phone-surface-fade ${DUR.base} ${EASE.standard}` }}>
               <DeskPhoneWebPanel
                 T={T}
+                embedded={true}
                 onOnlineChange={setDeskPhoneOnline}
                 onClose={()=>openCommandView("focus")}
                 onLaunchNative={bringDeskPhoneForward}

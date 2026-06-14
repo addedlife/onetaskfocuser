@@ -3265,7 +3265,7 @@ const css = `
   overflow: hidden;
 }
 .dp-web-root.is-embedded .dp-shell {
-  height: 620px;
+  height: 100dvh;
   min-height: 620px;
 }
 .dp-shell.is-collapsed {
