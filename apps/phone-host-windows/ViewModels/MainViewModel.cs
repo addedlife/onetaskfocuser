@@ -358,7 +358,13 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     public bool IsFullyConnected
     {
         get => _isFullyConnected;
-        set { _isFullyConnected = value; OnPropertyChanged(); }
+        set
+        {
+            if (_isFullyConnected == value) return;
+            _isFullyConnected = value;
+            OnPropertyChanged();
+            _relay.PushNow(); // phone just connected or disconnected — push state immediately
+        }
     }
 
     private string _statusHfp = "Not connected";

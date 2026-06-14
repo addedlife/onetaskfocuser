@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-14 00:47:15",
+        "version":  "b312",
+        "notes":  "DeskPhone pushes phone state instantly on Bluetooth connect and disconnect, instead of waiting up to 30 seconds for the next heartbeat. Commands from remote browsers (dial, send, etc.) now arrive via a persistent Firestore streaming connection — delivering in milliseconds at zero polling cost. Heartbeat slowed to 5 minutes as a liveness-only backup.",
+        "devNotes":  "RelayService.cs: PushIntervalMs 30_000 → 300_000 (5 min). Added _streamHttp (Timeout.InfiniteTimeSpan) for streaming. Start() now also launches ListenCommandsAsync alongside PushLoopAsync. ListenCommandsAsync POSTs to Firestore documents:listen and reads newline-delimited JSON chunks; OnListenEvent extracts documentChange.document.fields.data.stringValue and dispatches commands; ClearCommandsAsync PATCHes doc back to []; BackoffAsync provides exponential backoff (1s..30s, cap 5 attempts) on reconnects. DrainCommandsAsync removed — no more polling on heartbeat. Dispose() also disposes _streamHttp. MainViewModel.cs: IsFullyConnected setter now guards against redundant sets and calls _relay.PushNow() so HFP/MAP connect-disconnect triggers an immediate state push."
+    },
+    {
         "timestamp":  "2026-06-14 00:36:58",
         "version":  "b311",
         "notes":  "The old WPF UI is retired. DeskPhone now opens as a WebView2 window showing the same web UI as the Shamash webapp — one design everywhere. The WPF window stays hidden as the background plumbing host.",

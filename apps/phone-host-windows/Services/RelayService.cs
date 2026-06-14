@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -20,9 +21,9 @@ public class RelayService : IDisposable
     private const string FB_API_KEY  = "AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA";
     private const string FS_BASE     = "https://firestore.googleapis.com/v1/projects/" + FB_PROJECT + "/databases/(default)/documents";
 
-    private const int PushIntervalMs     = 30_000;  // background heartbeat push every 30 s;
-                                                    // queued commands ride the push response
-                                                    // (no separate drain poll — see DrainLoop removal)
+    private const int PushIntervalMs     = 300_000; // backup heartbeat: 5 min liveness-only.
+                                                    // Commands arrive via Firestore streaming listener — no polling.
+                                                    // Phone connect/disconnect fires PushNow() immediately.
     private const int MessageRelayLimit  = 150;     // messages in the cloud blob — onSnapshot re-sends the
                                                     // WHOLE doc to every device on each change, so keep it
                                                     // small (mobile-data friendly, well under Firestore's
@@ -54,7 +55,8 @@ public class RelayService : IDisposable
 
     // ── State ─────────────────────────────────────────────────────────────────
     private CancellationTokenSource _cts      = new();
-    private readonly HttpClient     _http     = new() { Timeout = TimeSpan.FromMilliseconds(HttpTimeoutMs) };
+    private readonly HttpClient     _http       = new() { Timeout = TimeSpan.FromMilliseconds(HttpTimeoutMs) };
+    private readonly HttpClient     _streamHttp = new() { Timeout = Timeout.InfiniteTimeSpan }; // for the Firestore streaming listen connection
     private DateTime                _lastPush = DateTime.MinValue;
     private int                     _pushErrors;
 
@@ -106,6 +108,7 @@ public class RelayService : IDisposable
         if (!IsEnabled) return;
         _cts = new CancellationTokenSource();
         _ = Task.Run(() => PushLoopAsync(_cts.Token));
+        _ = Task.Run(() => ListenCommandsAsync(_cts.Token));
         LogLine?.Invoke($"[RELAY] Started — writing directly to Firestore ({FB_PROJECT})");
     }
 
@@ -178,44 +181,111 @@ public class RelayService : IDisposable
                 throw new Exception($"Firestore state PATCH HTTP {(int)stateResp.StatusCode} — {body[..Math.Min(200, body.Length)]}");
             }
             _lastPush = DateTime.UtcNow;
-
-            // Drain any commands a remote browser queued, directly from Firestore.
-            // Best-effort — a drain failure must never fail the push (state is already saved).
-            try { await DrainCommandsAsync(); }
-            catch (Exception ex) { LogLine?.Invoke($"[RELAY DRAIN] {ex.GetType().Name}: {ex.Message}"); }
         }
         finally { _pushGate.Release(); }
     }
 
-    private async Task DrainCommandsAsync()
+    // ── Firestore streaming listener: commands → host ──────────────────────────
+    // Keeps a long-lived HTTP connection to Firestore's Listen API.
+    // When a browser writes a command to phone-relay/commands, Firestore pushes the
+    // documentChange event here within milliseconds — zero polling, zero idle reads.
+    private async Task ListenCommandsAsync(CancellationToken ct)
     {
-        var url = $"{FS_BASE}/phone-relay/commands?key={FB_API_KEY}";
-        using var resp = await _http.GetAsync(url);
-        if (resp.StatusCode == System.Net.HttpStatusCode.NotFound) return; // doc not created yet
-        if (!resp.IsSuccessStatusCode) return;
+        var listenUrl = $"https://firestore.googleapis.com/v1/projects/{FB_PROJECT}/databases/(default)/documents:listen?key={FB_API_KEY}";
+        var docPath   = $"projects/{FB_PROJECT}/databases/(default)/documents/phone-relay/commands";
+        var addTarget = $"{{\"addTarget\":{{\"documents\":{{\"documents\":[\"{docPath}\"]}},\"targetId\":1}}}}";
 
-        // Extract the commands JSON array string stored in the Firestore "data" field.
-        var docJson = await resp.Content.ReadAsStringAsync();
-        string commandsJson;
-        using (var doc = JsonDocument.Parse(docJson))
+        int attempt = 0;
+        while (!ct.IsCancellationRequested)
         {
-            if (!doc.RootElement.TryGetProperty("fields", out var fields) ||
-                !fields.TryGetProperty("data", out var data) ||
-                !data.TryGetProperty("stringValue", out var sv))
-                return;
-            commandsJson = sv.GetString() ?? "[]";
-        }
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Post, listenUrl)
+                {
+                    Content = new StringContent(addTarget, Encoding.UTF8, "application/json")
+                };
+                using var resp = await _streamHttp.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
 
-        if (commandsJson.Length <= 2) return; // "[]" — nothing to do
+                if (!resp.IsSuccessStatusCode)
+                {
+                    LogLine?.Invoke($"[RELAY LISTEN] HTTP {(int)resp.StatusCode}");
+                    attempt = await BackoffAsync(attempt, ct);
+                    continue;
+                }
+
+                attempt = 0;
+                LogLine?.Invoke("[RELAY LISTEN] command listener connected");
+
+                await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+                using var reader = new StreamReader(stream);
+
+                while (!ct.IsCancellationRequested)
+                {
+                    var line = await reader.ReadLineAsync(ct);
+                    if (line == null) break; // stream closed
+
+                    // Firestore streams as a JSON array: "[", then "{...}", then ",{...}" — never closes "]".
+                    var trimmed = line.TrimStart(' ', ',', '[').Trim();
+                    if (trimmed.Length < 2 || trimmed[0] != '{') continue;
+
+                    try
+                    {
+                        using var evt = JsonDocument.Parse(trimmed);
+                        OnListenEvent(evt.RootElement);
+                    }
+                    catch { /* malformed chunk — skip */ }
+                }
+
+                if (!ct.IsCancellationRequested)
+                    LogLine?.Invoke("[RELAY LISTEN] stream ended — reconnecting");
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch (Exception ex)
+            {
+                LogLine?.Invoke($"[RELAY LISTEN] {ex.GetType().Name}: {ex.Message}");
+            }
+
+            attempt = await BackoffAsync(attempt, ct);
+        }
+    }
+
+    private void OnListenEvent(JsonElement root)
+    {
+        if (!root.TryGetProperty("documentChange", out var docChange)) return;
+        if (!docChange.TryGetProperty("document", out var document)) return;
+        if (!document.TryGetProperty("fields", out var fields)) return;
+        if (!fields.TryGetProperty("data", out var data)) return;
+        if (!data.TryGetProperty("stringValue", out var sv)) return;
+
+        var commandsJson = sv.GetString() ?? "[]";
+        if (commandsJson.Length <= 2) return; // empty array "[]"
 
         DispatchCommandsFromString(commandsJson);
+        _ = ClearCommandsAsync();
+    }
 
-        // Clear the commands doc immediately so commands don't re-execute on the next heartbeat.
-        var clearBody    = "{\"fields\":{\"data\":{\"stringValue\":\"[]\"}}}";
-        var clearUrl     = $"{FS_BASE}/phone-relay/commands?key={FB_API_KEY}&updateMask.fieldPaths=data";
-        using var clearContent = new StringContent(clearBody, Encoding.UTF8, "application/json");
-        using var clearReq     = new HttpRequestMessage(HttpMethod.Patch, clearUrl) { Content = clearContent };
-        await _http.SendAsync(clearReq);
+    private async Task ClearCommandsAsync()
+    {
+        try
+        {
+            const string clearBody = "{\"fields\":{\"data\":{\"stringValue\":\"[]\"}}}";
+            var clearUrl = $"{FS_BASE}/phone-relay/commands?key={FB_API_KEY}&updateMask.fieldPaths=data";
+            using var content = new StringContent(clearBody, Encoding.UTF8, "application/json");
+            using var req = new HttpRequestMessage(HttpMethod.Patch, clearUrl) { Content = content };
+            await _http.SendAsync(req);
+        }
+        catch (Exception ex)
+        {
+            LogLine?.Invoke($"[RELAY CLEAR] {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private static async Task<int> BackoffAsync(int attempt, CancellationToken ct)
+    {
+        var delay = Math.Min(30_000, 1_000 << Math.Min(attempt, 5));
+        try { await Task.Delay(delay, ct); }
+        catch (OperationCanceledException) { }
+        return Math.Min(attempt + 1, 5);
     }
 
     // Upload resized picture-text previews to phone-media/{id} directly in Firestore,
@@ -281,8 +351,8 @@ public class RelayService : IDisposable
     }
 
     // ── Command dispatch ──────────────────────────────────────────────────────
-    // Parses a raw JSON array string (the Firestore "data" field value from phone-relay/commands)
-    // and fires each command. Called from DrainCommandsAsync after reading Firestore directly.
+    // Parses a raw JSON array string (the Firestore "data" field from phone-relay/commands)
+    // and fires each command. Called from OnListenEvent when the streaming listener detects a change.
     private void DispatchCommandsFromString(string commandsJson)
     {
         if (string.IsNullOrWhiteSpace(commandsJson)) return;
@@ -405,6 +475,7 @@ public class RelayService : IDisposable
     {
         Stop();
         _http.Dispose();
+        _streamHttp.Dispose();
         _pushGate.Dispose();
     }
 }
