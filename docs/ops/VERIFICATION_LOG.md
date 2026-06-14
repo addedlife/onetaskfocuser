@@ -7,6 +7,12 @@
 - Native host (`ControlApiService.cs`, `MainWindow.xaml.cs`, `MainViewModel.cs`, `WebShellWindow.xaml`): `POST /toggle-main-window` + `mainWindowXamlVisible` in `/status`; Settings → Appearance button shows/hides legacy WPF MainWindow (default hidden); WebView2 stretches/clips to window bounds.
 - Gates: `npm run build` (apps/web) → 0 errors; `dotnet build -c Debug` (phone-host-windows) → 0 errors. BUILD-VERIFIED ONLY for resize reflow and WPF toggle — runtime smoke on live DeskPhone WebView2 shell recommended.
 
+## 2026-06-14 DeskPhone b313 — native Release deploy (WebView2 reflow + WPF toggle)
+
+- Scope: changelog + Release deploy for the b313 host build carrying the WebView2 fixes from 864d953.
+- b313 (`changelog.json`, `build.num` 313→314): Release build archived to `deployed-builds/b313`; desktop shortcuts updated (Latest + Previous b312); deploy commit `f3d6d37`.
+- Gates: `npm run build` → 0 errors; `dotnet build -c Release` → 0 errors + deploy.ps1 OK. RUNTIME-VERIFIED: `http://127.0.0.1:8765/status` reports `"build":"b313  06/14/26 1:19 am"`, `mainWindowXamlVisible:false`. Running instance received build-update handoff offer (user accept required).
+
 ## 2026-06-12 One design system — DeskPhone teal restyle (b303), webapp embeds DeskPhone (4.17.49), tokens consolidated (4.17.50)
 
 - Scope: three sequential releases. (1) b303: WPF DeskPhone restyled to match the web phone screen exactly — pure style, zero functional changes. (2) web 4.17.49: the desktop Phone screen auto-embeds the UI DeskPhone itself serves when the loopback host answers. (3) web 4.17.50: 10-deskphone-web's COLORS palette now derives from ui-tokens GV_CLEAN.
