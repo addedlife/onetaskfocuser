@@ -2985,7 +2985,6 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
             Dispatch(() =>
             {
-                if (!_settings.Current.SyncThemeWithShamash) return;
                 var mapped = MapCommandCenterPalette(palette);
                 if (mapped == null) return;
                 ThemeService.ApplyPalette(mapped);

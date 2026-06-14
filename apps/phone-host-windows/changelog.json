@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-14 03:16:35",
+        "version":  "b319",
+        "notes":  "Style sync: DeskPhone WebView2 iframe now receives the live Shamash Pro 4 color theme instantly via postMessage — no polling, no cloud cost. The WPF palette sync guard removed so native colors always follow the web app.",
+        "devNotes":  "Root cause of b318 not matching: main.jsx hardcoded T={GV_CLEAN} for standalone mode so the iframe always rendered default tokens regardless of /theme POSTs. Fix: StandaloneShell component in main.jsx listens for postMessage {type:\u0027dp-theme\u0027,T} from the parent App.jsx frame and re-renders with the live T. App.jsx: added deskPhoneIframeRef + deskPhoneTRef (updated every render); postMessage effect fires on deskPhoneThemeQuery change; dp-ready listener fires on iframe first load; removed the 2.5s setInterval poll that was hitting 127.0.0.1:8765/status every 2.5s. MainViewModel.cs: removed SyncThemeWithShamash guard from ApplyTheme so WPF palette always applies. Gates: npm run build 0 errors; dotnet build -c Release 0 errors."
+    },
+    {
         "timestamp":  "2026-06-14 03:09:43",
         "version":  "b318",
         "notes":  "Style sync: DeskPhone WebView2 now always inherits the Shamash Pro 4 color theme automatically. The manual Refresh Sync button and Sync theme toggle have been removed from Appearance settings.",
