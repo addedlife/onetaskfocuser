@@ -3830,6 +3830,7 @@ const css = `
 }
 .dp-message-shell {
   height: 100%;
+  min-height: 0;
   min-width: 0;
   container-type: size;
   container-name: message-shell;
