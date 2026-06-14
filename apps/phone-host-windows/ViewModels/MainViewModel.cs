@@ -2912,6 +2912,16 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             });
             return Task.FromResult(ok);
         };
+        _api.HideApp = () =>
+        {
+            var ok = false;
+            Dispatch(() =>
+            {
+                if (Application.Current.MainWindow is DeskPhone.MainWindow window)
+                    ok = window.HideWindow();
+            });
+            return Task.FromResult(ok);
+        };
         _api.Handoff = (target, value) =>
         {
             var ok = false;

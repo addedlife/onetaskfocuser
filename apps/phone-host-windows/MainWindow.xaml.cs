@@ -181,6 +181,16 @@ public partial class MainWindow : Window
         return true;
     }
 
+    public bool HideWindow()
+    {
+        if (Dispatcher.CheckAccess())
+            WindowState = WindowState.Minimized;
+        else
+            Dispatcher.Invoke(() => { WindowState = WindowState.Minimized; });
+
+        return true;
+    }
+
     private bool ExitStageModeOnUi(string token = "", bool force = false)
     {
         if (!_isStageMode)

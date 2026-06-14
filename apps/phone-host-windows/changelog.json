@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-14 00:27:15",
+        "version":  "b310",
+        "notes":  "Webapp hides the DeskPhone window automatically when its iframe is embedded — no more looking at the same UI twice. New POST /hide endpoint minimizes to taskbar; webapp restores the window when leaving the Phone panel.",
+        "devNotes":  "ControlApiService.cs: added HideApp callback + POST /hide endpoint (mirrors ShowApp/POST /show). MainWindow.xaml.cs: added HideWindow() method (minimizes on UI thread). MainViewModel.cs: wired _api.HideApp. App.jsx: useEffect on [deskPhoneDirect, suiteView] calls /hide when DeskPhone iframe is active, restores on cleanup via /show."
+    },
+    {
         "timestamp":  "2026-06-14 00:18:26",
         "version":  "b309",
         "notes":  "DeskPhone no longer routes phone state through Netlify at all. Texts, calls, and contacts now write directly to Firebase — Netlify is completely out of the loop for the relay. This eliminates the remaining ~1,400 Netlify function calls per day from DeskPhone heartbeats. Commands from remote browsers still queue in Firebase as before; DeskPhone reads and clears them directly on the same 30-second heartbeat cycle.",

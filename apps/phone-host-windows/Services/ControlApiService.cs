@@ -22,6 +22,8 @@ namespace DeskPhone.Services;
 ///   POST /send?to=X&body=Y → send SMS via MAP
 ///   POST /send-with-attachments → send SMS/MMS JSON payload via MAP
 ///   POST /toggle-message-pin?id=ID → pin or unpin a message in the local store
+///   POST /show               → bring window to front
+///   POST /hide               → minimize window to taskbar
 ///   POST /accept-build-update /snooze-build-update /show-build-update-prompt
 ///   POST /refresh         → force inbox refresh
 ///   POST /handoff?target=X → open DeskPhone to a native UI target for temporary web shortcuts
@@ -103,6 +105,7 @@ public class ControlApiService : IDisposable
     public Func<string>?                     GetRelayStatus { get; set; }
     public Func<string, string, Task<bool>>? OfferBuildUpdate { get; set; }
     public Func<Task<bool>>?                 ShowApp     { get; set; }
+    public Func<Task<bool>>?                 HideApp     { get; set; }
     public Func<string, string, Task<bool>>? Handoff     { get; set; }
     public Func<double, double, double, double, bool, string, Task<bool>>? SetStageBounds { get; set; }
     public Func<string, Task<bool>>?         PulseStage  { get; set; }
@@ -660,6 +663,11 @@ public class ControlApiService : IDisposable
             {
                 bool ok = ShowApp is not null && await ShowApp();
                 body = Json("result", ok ? "shown" : "show unavailable");
+            }
+            else if (method == "POST" && path == "/hide")
+            {
+                bool ok = HideApp is not null && await HideApp();
+                body = Json("result", ok ? "hidden" : "hide unavailable");
             }
             else if (method == "POST" && path == "/handoff")
             {
