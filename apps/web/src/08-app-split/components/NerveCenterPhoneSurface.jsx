@@ -576,7 +576,15 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     }));
   }, [contacts, number, composeSearch, composeIsNew]);
 
-  useEffect(() => { refresh(); const id = setInterval(refresh, 6500); return () => clearInterval(id); }, [refresh]);
+  // On relay transport the onSnapshot listener (below) delivers updates in real time —
+  // no REST poll needed, and polling would hit the Netlify function ~13k times/day for nothing.
+  // On direct LAN transport there is no listener, so the poll stays.
+  useEffect(() => {
+    refresh();
+    if (usingRelay) return;
+    const id = setInterval(refresh, 6500);
+    return () => clearInterval(id);
+  }, [refresh, usingRelay]);
 
   // Waking the tab (or unlocking the laptop) re-resolves the best path right
   // away — back at the PC means direct, on the road means relay, no clicks.
