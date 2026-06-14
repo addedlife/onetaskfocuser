@@ -20,7 +20,24 @@ public partial class MainWindow : Window
 
     // The web shell is the only window users see. MainWindow stays hidden as
     // the plumbing host (services, ViewModel, WPF lifetime, stage mode).
-    private const string WebShellUrl = "http://127.0.0.1:8765/?standalone=deskphone";
+    private static string WebShellUrl => $"http://127.0.0.1:8765/?standalone=deskphone&v={GetBuildNumber()}";
+    
+    private static string GetBuildNumber()
+    {
+        try
+        {
+            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "build-info.json");
+            if (File.Exists(path))
+            {
+                var content = File.ReadAllText(path);
+                var match = System.Text.RegularExpressions.Regex.Match(content, @"""version""\s*:\s*""([^""]+)""");
+                if (match.Success) return match.Groups[1].Value;
+            }
+        }
+        catch { }
+        return "1";
+    }
+
     private WebShellWindow? _webShell;
     private bool _mainWindowXamlVisible;
 

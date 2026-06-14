@@ -1839,7 +1839,63 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         ? "DeskPhone follows the active Shamash/OneTask color scheme when that app is open."
         : "DeskPhone ignores Shamash/OneTask theme changes and keeps its own appearance setting.";
 
-    public IReadOnlyDictionary<string, string>? LastThemeColors => _settings.Current.LastThemeColors;
+    public IReadOnlyDictionary<string, string> LastThemeColors
+    {
+        get
+        {
+            var colors = _settings.Current.LastThemeColors;
+            if (colors != null && colors.Count > 0)
+                return colors;
+
+            var fallback = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (string.Equals(PreferredPalette, "BlueGold", StringComparison.OrdinalIgnoreCase))
+            {
+                fallback["bg"] = "#07111F";
+                fallback["bgW"] = "#0D1B2E";
+                fallback["card"] = "#122235";
+                fallback["text"] = "#F7FAFF";
+                fallback["tSoft"] = "#D6DEE9";
+                fallback["tFaint"] = "#6C7A8C";
+                fallback["brd"] = "#24384F";
+                fallback["brdS"] = "#304258";
+                fallback["primary"] = "#F2C14E";
+                fallback["onPrimary"] = "#1F1600";
+                fallback["tonal"] = "#3A321B";
+                fallback["onTonal"] = "#FFE7A3";
+            }
+            else if (string.Equals(PreferredPalette, "Claude", StringComparison.OrdinalIgnoreCase))
+            {
+                fallback["bg"] = "#F4EFE6";
+                fallback["bgW"] = "#FAF8F5";
+                fallback["card"] = "#FFFFFF";
+                fallback["text"] = "#2B2A27";
+                fallback["tSoft"] = "#5C5B57";
+                fallback["tFaint"] = "#8A8984";
+                fallback["brd"] = "#E6DFD3";
+                fallback["brdS"] = "#F0EADF";
+                fallback["primary"] = "#7C5A3E";
+                fallback["onPrimary"] = "#FFFFFF";
+                fallback["tonal"] = "#F5EFEB";
+                fallback["onTonal"] = "#7C5A3E";
+            }
+            else
+            {
+                fallback["bg"] = "#FFFFFF";
+                fallback["bgW"] = "#F8F9FA";
+                fallback["card"] = "#FFFFFF";
+                fallback["text"] = "#202124";
+                fallback["tSoft"] = "#5F6368";
+                fallback["tFaint"] = "#9AA0A6";
+                fallback["brd"] = "#DADCE0";
+                fallback["brdS"] = "#F1F3F4";
+                fallback["primary"] = "#00796B";
+                fallback["onPrimary"] = "#FFFFFF";
+                fallback["tonal"] = "#F1F3F4";
+                fallback["onTonal"] = "#00796B";
+            }
+            return fallback;
+        }
+    }
     public string PreferredPalette => _settings.Current.PreferredPalette;
 
     private string _themeSyncRefreshStatus = "";
