@@ -15,8 +15,9 @@ namespace DeskPhone.Services;
 public class RelayService : IDisposable
 {
     private const string DefaultRelayUrl = "https://onetaskfocuser.netlify.app/.netlify/functions/phone-relay";
-    private const int PushIntervalMs     = 5_000;   // background heartbeat push every 5 s
-    private const int DrainIntervalMs    = 2_000;   // poll for commands every 2 s
+    private const int PushIntervalMs     = 5_000;   // background heartbeat push every 5 s;
+                                                    // queued commands ride the push response
+                                                    // (no separate drain poll — see DrainLoop removal)
     private const int MessageRelayLimit  = 150;     // messages in the cloud blob — onSnapshot re-sends the
                                                     // WHOLE doc to every device on each change, so keep it
                                                     // small (mobile-data friendly, well under Firestore's
@@ -52,7 +53,6 @@ public class RelayService : IDisposable
     private readonly HttpClient     _http     = new() { Timeout = TimeSpan.FromMilliseconds(HttpTimeoutMs) };
     private DateTime                _lastPush = DateTime.MinValue;
     private int                     _pushErrors;
-    private int                     _drainErrors;
 
     // PushNow coalescing: serialize all pushes through one gate, and collapse a
     // burst of PushNow() calls (e.g. 5 texts at once) into a single trailing push.
@@ -102,7 +102,6 @@ public class RelayService : IDisposable
         if (!IsEnabled) return;
         _cts = new CancellationTokenSource();
         _ = Task.Run(() => PushLoopAsync(_cts.Token));
-        _ = Task.Run(() => DrainLoopAsync(_cts.Token));
         LogLine?.Invoke($"[RELAY] Started — pushing to {_relayUrl}");
     }
 
@@ -173,6 +172,20 @@ public class RelayService : IDisposable
                 throw new Exception($"HTTP {(int)resp.StatusCode} — {body[..Math.Min(200, body.Length)]}");
             }
             _lastPush = DateTime.UtcNow;
+
+            // The push response carries any commands a remote browser queued. Draining them
+            // here — piggybacked on the heartbeat — replaces the old standalone 2 s drain poll
+            // that read the Firestore commands doc ~43k times/day. Dispatch is best-effort and
+            // must never fail the push (state is already saved), so swallow any parse error.
+            try
+            {
+                var respBody = await resp.Content.ReadAsStringAsync();
+                DispatchCommandsFromResponse(respBody);
+            }
+            catch (Exception ex)
+            {
+                LogLine?.Invoke($"[RELAY DRAIN] {ex.GetType().Name}: {ex.Message}");
+            }
         }
         finally { _pushGate.Release(); }
     }
@@ -240,41 +253,20 @@ public class RelayService : IDisposable
         });
     }
 
-    // ── Drain loop: cloud commands → execute on DeskPhone ────────────────────
-    private async Task DrainLoopAsync(CancellationToken ct)
+    // ── Command dispatch: commands ride the push response ────────────────────
+    // The relay returns { ok, commands:[...] } from ?action=push. Parse that array and fire
+    // each command. This replaced the old DrainLoop, which polled ?action=drain every 2 s and
+    // read the Firestore commands doc ~43k times/day even when nothing was queued.
+    private void DispatchCommandsFromResponse(string respBody)
     {
-        while (!ct.IsCancellationRequested)
+        if (string.IsNullOrWhiteSpace(respBody)) return;
+        using var doc = JsonDocument.Parse(respBody);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object) return;
+        if (!doc.RootElement.TryGetProperty("commands", out var cmds) || cmds.ValueKind != JsonValueKind.Array) return;
+
+        foreach (var cmdEl in cmds.EnumerateArray())
         {
-            try
-            {
-                await Task.Delay(DrainIntervalMs, ct);
-                await DrainCommandsAsync();
-                _drainErrors = 0;
-            }
-            catch (OperationCanceledException) { break; }
-            catch (Exception ex)
-            {
-                _drainErrors++;
-                if (_drainErrors <= 3)
-                    LogLine?.Invoke($"[RELAY DRAIN] {ex.GetType().Name}: {ex.Message}");
-            }
-        }
-    }
-
-    private async Task DrainCommandsAsync()
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Get, $"{_relayUrl}?action=drain");
-        req.Headers.Add("X-Relay-Secret", _relayKey);
-        using var resp = await _http.SendAsync(req);
-        if (!resp.IsSuccessStatusCode) return;
-
-        var json = await resp.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(json);
-        if (doc.RootElement.ValueKind != JsonValueKind.Array) return;
-
-        foreach (var cmdEl in doc.RootElement.EnumerateArray())
-        {
-            var path = cmdEl.GetProperty("path").GetString() ?? "";
+            var path = cmdEl.TryGetProperty("path", out var pEl) ? (pEl.GetString() ?? "") : "";
             if (string.IsNullOrWhiteSpace(path)) continue;
             var id       = cmdEl.TryGetProperty("id", out var idEl) ? (idEl.GetString() ?? "") : "";
             var queuedAt = cmdEl.TryGetProperty("queuedAt", out var qEl) && qEl.TryGetInt64(out var qv) ? qv : 0L;

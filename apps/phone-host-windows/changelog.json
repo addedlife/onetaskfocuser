@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-13 23:54:41",
+        "version":  "b304",
+        "notes":  "Quota fix: DeskPhone no longer pings the cloud for commands every 2 seconds. Remote actions (dial, text, hang up, mark read) now ride the existing ~5-second heartbeat instead of a separate poll, cutting tens of thousands of Firestore reads per day with no change to how the phone behaves. Live phone state (incoming texts/calls) is still pushed instantly; only remote commands shift from a ~2s to a ~5s worst-case arrival.",
+        "devNotes":  "Root cause of the ~50k Firestore reads/day: RelayService.DrainLoopAsync polled ?action=drain every 2s, and phone-relay.mjs read the commands doc on each drain (~43,200 reads/day even when idle/empty). Fix: removed DrainLoopAsync, DrainCommandsAsync, DrainIntervalMs and _drainErrors; Start() no longer spawns the drain task. Commands now piggyback the heartbeat: phone-relay.mjs push handler writes state, then reads+clears the commands doc (clear-first so a failure leaves the queue intact rather than double-delivering) and returns { ok, commands:[...] }. RelayService.PushStateAsync reads that response body and dispatches via new DispatchCommandsFromResponse, reusing the same ExecuteCommandAsync fan-out (TTL/ack/PushNow unchanged). ?action=drain kept server-side for back-compat with un-updated hosts. Net: host idle Firestore reads 43k/day -\u003e 0; the 5s push adds ~17k/day only while relay enabled, and only one read per push regardless of command count. No change to HFP/MAP/PBAP/audio, PushNow coalescing, or media upload."
+    },
+    {
         "timestamp":  "2026-06-12 00:02:03",
         "version":  "b303",
         "notes":  "Pure style release: the classic DeskPhone window now matches the web phone screen exactly - same teal accent, same whites and greys, no more blue. Also, the modern web phone window no longer auto-opens on launch; the \u0027Open Modern Phone UI\u0027 button in Settings still opens it on demand.",
