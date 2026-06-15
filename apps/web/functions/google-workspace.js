@@ -2,6 +2,7 @@ const { corsHeaders, allowedOrigin } = require("./cors-helper");
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
+const USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
 const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 const TOKEN_SAFETY_MS = 2 * 60 * 1000;
@@ -62,8 +63,39 @@ async function authedUser(req) {
   return { uid: canonicalUid(decoded), firebaseUid: decoded.uid, email: decoded.email || "" };
 }
 
-function tokenDoc(db, uid) {
+// ── Per-account token storage ────────────────────────────────────────────────
+// Old shape: one token at serverOnlyGoogleWorkspaceTokens/{uid}.
+// New shape: one token per Google account at .../{uid}/accounts/{email}, so a
+// single app-user can connect several Google accounts (e.g. work + personal)
+// and view them merged. The legacy single doc is migrated on first read.
+function legacyTokenDoc(db, uid) {
   return db.collection("serverOnlyGoogleWorkspaceTokens").doc(uid);
+}
+function accountsCol(db, uid) {
+  return db.collection("serverOnlyGoogleWorkspaceTokens").doc(uid).collection("accounts");
+}
+function accountRef(db, uid, email) {
+  return accountsCol(db, uid).doc(String(email).toLowerCase());
+}
+
+function decodeIdTokenEmail(idToken) {
+  try {
+    const payload = String(idToken || "").split(".")[1];
+    if (!payload) return "";
+    const json = Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+    return String(JSON.parse(json).email || "").toLowerCase().trim();
+  } catch {
+    return "";
+  }
+}
+
+async function fetchUserinfoEmail(accessToken) {
+  try {
+    const data = await googleJson(USERINFO_URL, accessToken);
+    return String(data.email || "").toLowerCase().trim();
+  } catch {
+    return "";
+  }
 }
 
 async function postTokenForm(fields) {
@@ -96,9 +128,6 @@ async function exchangeCode(req, user, body) {
   if (!code) throw httpError(400, "Missing Google authorization code.");
   const origin = allowedOrigin(req.headers.origin || "");
   const { db } = admin();
-  const doc = tokenDoc(db, user.uid);
-  const previous = await doc.get();
-  const previousRefreshToken = previous.exists ? previous.data()?.refreshToken : "";
   const tokens = await postTokenForm({
     code,
     client_id: clientId,
@@ -106,11 +135,20 @@ async function exchangeCode(req, user, body) {
     redirect_uri: origin,
     grant_type: "authorization_code",
   });
+  // Figure out which Google account this token belongs to so we can key it.
+  let email = decodeIdTokenEmail(tokens.id_token);
+  if (!email && tokens.access_token) email = await fetchUserinfoEmail(tokens.access_token);
+  if (!email) email = String(user.email || "primary").toLowerCase();
+
+  const ref = accountRef(db, user.uid, email);
+  const previous = await ref.get();
+  const previousRefreshToken = previous.exists ? previous.data()?.refreshToken : "";
   const refreshToken = tokens.refresh_token || previousRefreshToken;
   if (!refreshToken) {
     throw httpError(400, "Google did not return a refresh token. Revoke this app in Google permissions, then connect again.");
   }
-  await doc.set({
+  await ref.set({
+    googleEmail: email,
     refreshToken,
     accessToken: tokens.access_token || "",
     expiresAt: Date.now() + Math.max(60, Number(tokens.expires_in || 3600) - 60) * 1000,
@@ -121,16 +159,36 @@ async function exchangeCode(req, user, body) {
     appEmail: user.email,
     updatedAt: new Date().toISOString(),
   }, { merge: true });
-  return { connected: true };
+  return { connected: true, account: email, accounts: await connectedEmails(user) };
 }
 
-async function accessTokenFor(user) {
+// Returns [{ email, ... }] for every connected Google account, migrating the
+// legacy single-token doc into an account entry the first time it's seen.
+async function listAccountDocs(user) {
+  const { db } = admin();
+  const snap = await accountsCol(db, user.uid).get();
+  if (!snap.empty) return snap.docs.map(d => ({ email: d.id, ...d.data() }));
+  const legacy = await legacyTokenDoc(db, user.uid).get();
+  if (legacy.exists && legacy.data()?.refreshToken) {
+    const data = legacy.data();
+    const email = String(data.googleEmail || data.appEmail || user.email || "primary").toLowerCase();
+    await accountRef(db, user.uid, email).set({ ...data, googleEmail: email, migratedAt: new Date().toISOString() }, { merge: true });
+    return [{ email, ...data }];
+  }
+  return [];
+}
+
+async function connectedEmails(user) {
+  return (await listAccountDocs(user)).map(a => a.email);
+}
+
+async function accessTokenFor(user, email) {
   const { clientId, available } = config();
   if (!available) throw httpError(503, "Google Workspace server auth is not configured.");
   const { db } = admin();
-  const doc = tokenDoc(db, user.uid);
-  const snap = await doc.get();
-  if (!snap.exists || !snap.data()?.refreshToken) throw httpError(401, "Google Workspace is not connected.");
+  const ref = accountRef(db, user.uid, email);
+  const snap = await ref.get();
+  if (!snap.exists || !snap.data()?.refreshToken) throw httpError(401, `Google account ${email} is not connected.`);
   const data = snap.data();
   if (data.accessToken && Number(data.expiresAt || 0) > Date.now() + TOKEN_SAFETY_MS) return data.accessToken;
   const refreshed = await postTokenForm({
@@ -140,13 +198,26 @@ async function accessTokenFor(user) {
     grant_type: "refresh_token",
   });
   const accessToken = refreshed.access_token;
-  await doc.set({
+  await ref.set({
     accessToken,
     expiresAt: Date.now() + Math.max(60, Number(refreshed.expires_in || 3600) - 60) * 1000,
     tokenType: refreshed.token_type || "Bearer",
     refreshedAt: new Date().toISOString(),
   }, { merge: true });
   return accessToken;
+}
+
+// Resolve which account an action targets: explicit body.account, else the
+// single connected account, else error asking the caller to specify.
+async function resolveAccount(user, body) {
+  const requested = String(body.account || "").toLowerCase().trim();
+  const accounts = await connectedEmails(user);
+  if (!accounts.length) throw httpError(401, "Google Workspace is not connected.");
+  if (requested) {
+    if (!accounts.includes(requested)) throw httpError(404, `Google account ${requested} is not connected.`);
+    return requested;
+  }
+  return accounts[0];
 }
 
 function sortCalEvents(events) {
@@ -206,45 +277,105 @@ async function fetchGmailData(accessToken) {
   const list = await googleJson(`https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=${query}`, accessToken);
   if (!list.messages?.length) return [];
   return Promise.all(list.messages.slice(0, 20).map(message =>
-    googleJson(`https://www.googleapis.com/gmail/v1/users/me/messages/${message.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`, accessToken)
+    googleJson(`https://www.googleapis.com/gmail/v1/users/me/messages/${message.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date&metadataHeaders=Message-ID`, accessToken)
   ));
 }
 
-async function summary(user) {
-  const accessToken = await accessTokenFor(user);
-  const [calendar, gmail] = await Promise.allSettled([fetchCalendarData(accessToken), fetchGmailData(accessToken)]);
-  if (calendar.status === "rejected" && calendar.reason?.statusCode === 401) throw calendar.reason;
-  if (gmail.status === "rejected" && gmail.reason?.statusCode === 401) throw gmail.reason;
+function messageIdHeader(message) {
+  const headers = message?.payload?.headers || [];
+  const found = headers.find(h => String(h.name || "").toLowerCase() === "message-id");
+  return found ? String(found.value || "").trim() : "";
+}
+
+// Parse body.accounts into either "all" or a lowercased array of emails.
+function normalizeAccountFilter(value) {
+  if (!value || value === "all") return "all";
+  const list = Array.isArray(value) ? value : [value];
+  const emails = list.map(v => String(v).toLowerCase().trim()).filter(Boolean);
+  return emails.length ? emails : "all";
+}
+
+async function summary(user, body = {}) {
+  const accounts = await listAccountDocs(user);
+  if (!accounts.length) throw httpError(401, "Google Workspace is not connected.");
+  const filter = normalizeAccountFilter(body.accounts);
+  const targets = filter === "all" ? accounts : accounts.filter(a => filter.includes(a.email));
+  const used = targets.length ? targets : accounts;
+
+  const perAccount = await Promise.all(used.map(async acct => {
+    try {
+      const accessToken = await accessTokenFor(user, acct.email);
+      const [cal, gm] = await Promise.allSettled([fetchCalendarData(accessToken), fetchGmailData(accessToken)]);
+      return {
+        email: acct.email,
+        calendar: cal.status === "fulfilled" ? cal.value.map(e => ({ ...e, sourceAccount: acct.email })) : [],
+        gmail: gm.status === "fulfilled" ? gm.value.map(m => ({ ...m, sourceAccount: acct.email })) : [],
+        error: [
+          cal.status === "rejected" ? cal.reason.message : "",
+          gm.status === "rejected" ? gm.reason.message : "",
+        ].filter(Boolean).join("; "),
+      };
+    } catch (e) {
+      return { email: acct.email, calendar: [], gmail: [], error: `${acct.email}: ${e.message}` };
+    }
+  }));
+
+  // Merge + dedupe across accounts. The same invite shows in both mailboxes with
+  // the same iCalUID; the same email carries the same RFC822 Message-ID header.
+  const calSeen = new Set();
+  const calendarEvents = sortCalEvents(
+    perAccount.flatMap(p => p.calendar).filter(e => {
+      const key = e.iCalUID || e.id;
+      if (calSeen.has(key)) return false;
+      calSeen.add(key);
+      return true;
+    })
+  ).slice(0, 30);
+
+  const mailSeen = new Set();
+  const gmailMessages = perAccount.flatMap(p => p.gmail).filter(m => {
+    const key = messageIdHeader(m) || m.id;
+    if (mailSeen.has(key)) return false;
+    mailSeen.add(key);
+    return true;
+  }).slice(0, 30);
+
   return {
     connected: true,
-    calendarEvents: calendar.status === "fulfilled" ? calendar.value : [],
-    gmailMessages: gmail.status === "fulfilled" ? gmail.value : [],
-    errors: [
-      calendar.status === "rejected" ? calendar.reason.message : "",
-      gmail.status === "rejected" ? gmail.reason.message : "",
-    ].filter(Boolean),
+    accounts: accounts.map(a => a.email),
+    selectedAccounts: used.map(a => a.email),
+    calendarEvents,
+    gmailMessages,
+    errors: perAccount.map(p => p.error).filter(Boolean),
   };
 }
 
 async function statusAction(user) {
   const { available } = config();
-  if (!available) return { available: false, connected: false };
-  const { db } = admin();
-  const snap = await tokenDoc(db, user.uid).get();
-  return { available: true, connected: !!(snap.exists && snap.data()?.refreshToken) };
+  if (!available) return { available: false, connected: false, accounts: [] };
+  const accounts = await connectedEmails(user);
+  return { available: true, connected: accounts.length > 0, accounts };
+}
+
+async function listAccountsAction(user) {
+  const { available } = config();
+  if (!available) return { available: false, accounts: [] };
+  return { available: true, accounts: await connectedEmails(user) };
 }
 
 async function gmailMessage(user, body) {
   const id = String(body.id || "").trim();
   if (!id) throw httpError(400, "Missing Gmail message id.");
-  const accessToken = await accessTokenFor(user);
+  const email = await resolveAccount(user, body);
+  const accessToken = await accessTokenFor(user, email);
   return googleJson(`https://www.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=full`, accessToken);
 }
 
 async function createCalendarEvent(user, body) {
   const eventBody = body.eventBody;
   if (!eventBody || typeof eventBody !== "object") throw httpError(400, "Missing calendar event body.");
-  const accessToken = await accessTokenFor(user);
+  const email = await resolveAccount(user, body);
+  const accessToken = await accessTokenFor(user, email);
   return googleJson("https://www.googleapis.com/calendar/v3/calendars/primary/events", accessToken, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -256,21 +387,27 @@ async function deleteCalendarEvent(user, body) {
   const eventId = String(body.eventId || "").trim();
   const calendarId = String(body.calendarId || "primary").trim() || "primary";
   if (!eventId) throw httpError(400, "Missing calendar event id.");
-  const accessToken = await accessTokenFor(user);
+  // An event can only be deleted from the account that owns it. Prefer the
+  // event's source account if the client tells us; else fall back to default.
+  const email = await resolveAccount(user, body);
+  const accessToken = await accessTokenFor(user, email);
   await googleJson(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, accessToken, { method: "DELETE" });
   return { deleted: true, eventId, calendarId };
 }
 
-async function disconnect(user) {
+async function disconnect(user, body = {}) {
   const { db } = admin();
-  const doc = tokenDoc(db, user.uid);
-  const snap = await doc.get();
-  const token = snap.exists ? (snap.data()?.accessToken || snap.data()?.refreshToken || "") : "";
-  if (token) {
-    await fetch(`${REVOKE_URL}?token=${encodeURIComponent(token)}`, { method: "POST" }).catch(() => {});
+  const requested = String(body.account || "").toLowerCase().trim();
+  const accounts = await listAccountDocs(user);
+  const targets = requested ? accounts.filter(a => a.email === requested) : accounts;
+  for (const acct of targets) {
+    const token = acct.accessToken || acct.refreshToken || "";
+    if (token) await fetch(`${REVOKE_URL}?token=${encodeURIComponent(token)}`, { method: "POST" }).catch(() => {});
+    await accountRef(db, user.uid, acct.email).delete().catch(() => {});
   }
-  await doc.delete().catch(() => {});
-  return { connected: false };
+  // Clean up any lingering legacy doc when fully disconnecting.
+  if (!requested) await legacyTokenDoc(db, user.uid).delete().catch(() => {});
+  return { connected: (await connectedEmails(user)).length > 0, accounts: await connectedEmails(user) };
 }
 
 module.exports = async (req, res) => {
@@ -285,12 +422,13 @@ module.exports = async (req, res) => {
     const action = String(body.action || "status");
     const user = await authedUser(req);
     if (action === "status")              return res.status(200).set(headers).json(await statusAction(user));
+    if (action === "listAccounts")        return res.status(200).set(headers).json(await listAccountsAction(user));
     if (action === "exchange")            return res.status(200).set(headers).json(await exchangeCode(req, user, body));
-    if (action === "summary")             return res.status(200).set(headers).json(await summary(user));
+    if (action === "summary")             return res.status(200).set(headers).json(await summary(user, body));
     if (action === "gmailMessage")        return res.status(200).set(headers).json(await gmailMessage(user, body));
     if (action === "createCalendarEvent") return res.status(200).set(headers).json(await createCalendarEvent(user, body));
     if (action === "deleteCalendarEvent") return res.status(200).set(headers).json(await deleteCalendarEvent(user, body));
-    if (action === "disconnect")          return res.status(200).set(headers).json(await disconnect(user));
+    if (action === "disconnect")          return res.status(200).set(headers).json(await disconnect(user, body));
     return res.status(400).set(headers).json({ error: "Unknown Google Workspace action." });
   } catch (error) {
     return res.status(error.statusCode || 500).set(headers).json({ error: error.message || "Google Workspace request failed." });

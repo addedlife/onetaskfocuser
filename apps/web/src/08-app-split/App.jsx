@@ -188,6 +188,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const [googleServerAuthAvailable, setGoogleServerAuthAvailable] = useState(false);
   const [googleServerConnected, setGoogleServerConnected] = useState(false);
   const [googleAuthMode, setGoogleAuthMode] = useState("token");
+  // Multi-account: every connected Google account email, and which of them the
+  // user is currently viewing ("all" = both/merged, or a single email).
+  const [googleAccounts, setGoogleAccounts] = useState([]);
+  const [googleAccountFilter, setGoogleAccountFilter] = useState(() => {
+    try { return localStorage.getItem('ot_google_account_filter') || 'all'; } catch { return 'all'; }
+  });
   const gTokenClientRef = useRef(null);
 
   // Insights tab state
@@ -661,9 +667,13 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const loadGoogleWorkspaceFromServer = useCallback(async () => {
     setGoogleLoading(true);
     try {
-      const d = await callGoogleWorkspace("summary");
+      let filter = "all";
+      try { filter = localStorage.getItem("ot_google_account_filter") || "all"; } catch {}
+      const accountsArg = filter && filter !== "all" ? [filter] : "all";
+      const d = await callGoogleWorkspace("summary", { accounts: accountsArg });
       setCalendarEvents(d.calendarEvents || []);
       setGmailMessages(d.gmailMessages || []);
+      if (Array.isArray(d.accounts)) setGoogleAccounts(d.accounts);
       setGoogleServerConnected(true);
       setGoogleToken(GOOGLE_SERVER_TOKEN);
       setGoogleWasConnected(true);
@@ -684,6 +694,15 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     }
   }, [callGoogleWorkspace]);
 
+  // Switch which account(s) are shown (an email, or "all" for both merged),
+  // persist the choice, and re-pull the merged+deduped summary from the server.
+  const selectGoogleAccountFilter = useCallback((value) => {
+    const next = value || "all";
+    setGoogleAccountFilter(next);
+    try { localStorage.setItem("ot_google_account_filter", next); } catch {}
+    loadGoogleWorkspaceFromServer();
+  }, [loadGoogleWorkspaceFromServer]);
+
   useEffect(() => {
     const clientId = effectiveGoogleClientId;
     if (!clientId) { gTokenClientRef.current = null; return; }
@@ -693,7 +712,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         console.log('[Google] initCodeClient');
         gTokenClientRef.current = window.google.accounts.oauth2.initCodeClient({
           client_id: serverGoogleClientId,
-          scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly',
+          scope: 'openid email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly',
           ux_mode: 'popup',
           include_granted_scopes: true,
           callback: async (resp) => {
@@ -728,6 +747,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         if (localStorage.getItem('ot_google_connected') === '1') {
           callGoogleWorkspace("status")
             .then(d => {
+              if (Array.isArray(d.accounts)) setGoogleAccounts(d.accounts);
               if (d.connected) {
                 setGoogleServerConnected(true);
                 setGoogleToken(GOOGLE_SERVER_TOKEN);
@@ -741,7 +761,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       console.log('[Google] initTokenClient');
       gTokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        scope: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly',
+        scope: 'openid email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly',
         callback: (resp) => {
           console.log('[Google] OAuth callback error:', resp.error || 'none', '| has token:', !!resp.access_token);
           if (resp.error) {
@@ -798,6 +818,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     if (useGoogleServerAuth) {
       callGoogleWorkspace("status")
         .then(d => {
+          if (Array.isArray(d.accounts)) setGoogleAccounts(d.accounts);
           if (d.connected) {
             setGoogleServerConnected(true);
             setGoogleToken(GOOGLE_SERVER_TOKEN);
@@ -3558,6 +3579,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           googleError={googleError}
           googleToken={googleToken}
           googleClientId={effectiveGoogleClientId || null}
+          googleAccounts={googleAccounts}
+          googleAccountFilter={googleAccountFilter}
+          onSelectGoogleAccount={selectGoogleAccountFilter}
           onConnectGoogle={connectGoogle}
           onDisconnectGoogle={disconnectGoogle}
           onLoadEmailDetail={loadGoogleEmailDetail}

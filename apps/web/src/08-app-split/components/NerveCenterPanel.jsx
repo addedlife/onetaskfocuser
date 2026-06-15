@@ -706,7 +706,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
   );
 }
 
-function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
+function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
   const viewportW = useViewportWidth();
   const [healthCardVisible, setHealthCardVisible] = useState(() => {
     try { return localStorage.getItem("nc_health_card_visible") !== "0"; } catch { return true; }
@@ -3068,6 +3068,26 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           return (
             <React.Fragment>
             <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", gap: 6, minHeight: 0 }}>
+              {/* Account toggle: per-account chips + Both when 2+ connected, and a
+                  way to add another Google account. Shown whenever connected. */}
+              {googleToken && googleAccounts.length >= 1 && (
+                <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap", padding: "0 2px" }}>
+                  {googleAccounts.length > 1 && [...googleAccounts.map(em => ({ key: em, label: em.split("@")[0] })), { key: "all", label: "Both" }].map(opt => {
+                    const active = opt.key === "all" ? googleAccountFilter === "all" : googleAccountFilter === opt.key;
+                    return (
+                      <button key={opt.key} onClick={() => onSelectGoogleAccount && onSelectGoogleAccount(opt.key)}
+                        title={opt.key === "all" ? "Show both accounts merged" : opt.key}
+                        style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: active ? 700 : 500, color: active ? "#fff" : C.muted, background: active ? accentBlue : "transparent", border: `1px solid ${active ? accentBlue : C.divider}`, borderRadius: 999, padding: "2px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                  <button onClick={onConnectGoogle} title="Connect another Google account"
+                    style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: 500, color: C.faint, background: "transparent", border: `1px dashed ${C.divider}`, borderRadius: 999, padding: "2px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                    + account
+                  </button>
+                </div>
+              )}
               <div style={lowerGridStyle}>
 
               {!googleConfigured && (
