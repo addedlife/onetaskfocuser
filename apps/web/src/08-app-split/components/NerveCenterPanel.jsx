@@ -2169,8 +2169,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const metaF = dense ? ncType.small : ncType.meta;  // 11 vs 12
     const lineH = dense ? 1.05 : 1.3;
 
-    // Each card's top line is the AI per-category summary, or Waiting on summary.
-    const signalNote = nerveSignalNote;
+    // Each card's top line is the AI per-category summary, or a spinner while updating.
+    const signalNote = area => {
+      const note = nerveSignalNote(area);
+      if (!ncSummaryLoading || !note) return note || null;
+      return <span style={{ display:"inline-flex", alignItems:"center", gap:4 }}><span style={{ flexShrink:0, width:7, height:7, borderRadius:"50%", border:`1.5px solid ${C.faint}`, borderTopColor:"transparent", animation:"ot-spin 0.8s linear infinite" }} />{note}</span>;
+    };
     // Phone link state as a single dot color: green = live, accent = active call/incoming,
     // gray = offline/stale. Shown in the Phone card's corner so status reads at a glance.
     const phoneDotColor = phoneStatusSummary?.online
@@ -2403,7 +2407,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const isAccordion = isMobileDevice ? mobileLayout === "accordion" : desktopLayout === "accordion";
     const sectionCtx = { C, expandedIds: mobileExpanded, menuId: mobileMenuOpen, onExpand: mobileExpandToggle, onMenuToggle: mobileMenuToggle, onMenuClose: mobileMenuClose, expandable: isAccordion, fullHeight: !isAccordion };
 
-    const signalNote = nerveSignalNote;
+    const signalNote = area => {
+      const note = nerveSignalNote(area);
+      if (!ncSummaryLoading || !note) return note || null;
+      return <span style={{ display:"inline-flex", alignItems:"center", gap:4 }}><span style={{ flexShrink:0, width:7, height:7, borderRadius:"50%", border:`1.5px solid ${C.faint}`, borderTopColor:"transparent", animation:"ot-spin 0.8s linear infinite" }} />{note}</span>;
+    };
 
     const fmtTimeM = (raw) => { try { const d = new Date(raw); const now = new Date(); return d.toDateString()===now.toDateString() ? d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : d.toLocaleDateString([],{month:"short",day:"numeric"}); } catch { return ""; } };
     const gmailHdr = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || "";
