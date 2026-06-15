@@ -703,17 +703,59 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     loadGoogleWorkspaceFromServer();
   }, [loadGoogleWorkspaceFromServer]);
 
+  // iOS redirect: Google popup is blocked on iOS, so GIS uses redirect mode and returns
+  // the auth code as a URL param. Capture it immediately on mount (before Firebase Auth
+  // resolves) and clean the URL so a page refresh doesn't re-submit a spent code.
+  const pendingOAuthCodeRef = useRef(null);
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      if (code) {
+        pendingOAuthCodeRef.current = code;
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    } catch {}
+  }, []); // eslint-disable-line
+
+  // Exchange the captured code once Firebase Auth user is ready (iOS redirect path).
+  useEffect(() => {
+    if (!user?.getIdToken || !pendingOAuthCodeRef.current) return;
+    const code = pendingOAuthCodeRef.current;
+    pendingOAuthCodeRef.current = null;
+    setGoogleLoading(true);
+    callGoogleWorkspace("exchange", { code })
+      .then(async d => {
+        setGoogleServerConnected(true);
+        setGoogleToken(GOOGLE_SERVER_TOKEN);
+        setGoogleWasConnected(true);
+        if (Array.isArray(d.accounts)) setGoogleAccounts(d.accounts);
+        try {
+          localStorage.setItem('ot_google_connected', '1');
+          localStorage.removeItem('ot_google_token');
+          localStorage.removeItem('ot_google_token_expiry');
+        } catch {}
+        setGoogleError(null);
+        await loadGoogleWorkspaceFromServer();
+      })
+      .catch(e => setGoogleError(e.message || 'Google Workspace connection failed.'))
+      .finally(() => setGoogleLoading(false));
+  }, [user, callGoogleWorkspace, loadGoogleWorkspaceFromServer]); // eslint-disable-line
+
   useEffect(() => {
     const clientId = effectiveGoogleClientId;
     if (!clientId) { gTokenClientRef.current = null; return; }
     function initClient() {
       if (!window.google?.accounts?.oauth2) { console.warn('[Google] GIS loaded but oauth2 not ready'); return; }
       if (useGoogleServerAuth) {
-        console.log('[Google] initCodeClient');
+        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        console.log('[Google] initCodeClient', isIOS ? '(redirect/iOS)' : '(popup)');
         gTokenClientRef.current = window.google.accounts.oauth2.initCodeClient({
           client_id: serverGoogleClientId,
           scope: 'openid email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly',
-          ux_mode: 'popup',
+          ux_mode: isIOS ? 'redirect' : 'popup',
+          ...(isIOS ? { redirect_uri: window.location.origin } : {}),
           include_granted_scopes: true,
           callback: async (resp) => {
             console.log('[Google] Code callback error:', resp.error || 'none', '| has code:', !!resp.code);
