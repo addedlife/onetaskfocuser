@@ -673,6 +673,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       const d = await callGoogleWorkspace("summary", { accounts: accountsArg });
       setCalendarEvents(d.calendarEvents || []);
       setGmailMessages(d.gmailMessages || []);
+      applyEmailSummaries(d.gmailMessages || []); // non-blocking enhancement
       if (Array.isArray(d.accounts)) setGoogleAccounts(d.accounts);
       setGoogleServerConnected(true);
       setGoogleToken(GOOGLE_SERVER_TOKEN);
@@ -996,12 +997,6 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       console.warn('[Google] AI email summary failed:', e.message);
     }
   }
-  // Trigger email summaries whenever messages or AI config changes — covers both the
-  // server-auth path (loadGoogleWorkspaceFromServer) and the browser-token path.
-  useEffect(() => {
-    if (!gmailMessages?.length || !aiOpts) return;
-    applyEmailSummaries(gmailMessages);
-  }, [gmailMessages, aiOpts]); // eslint-disable-line
 
   // Auto-fetch when token arrives; refresh while visible and on focus.
   useEffect(() => {
