@@ -964,14 +964,15 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   // Best-effort: batch-generate one-sentence email summaries and merge them into the
   // already-rendered messages by id. Runs after the raw mail is on screen; if the AI
   // gateway is slow or down, the snippets simply remain.
+  // Dedup key uses sessionStorage (not localStorage) so it resets on every page load —
+  // aiSummary lives only in React state, so we must regenerate after any hard reload.
   const EMAIL_SUMMARIES_IDS_KEY = 'ot_email_summaries_ids_v1';
   async function applyEmailSummaries(msgs) {
     if (!Array.isArray(msgs) || msgs.length === 0) return;
-    // Skip if we've already summarized this exact set of messages (cross-tab dedup).
     const msgIds = msgs.map(m => m.id).filter(Boolean).sort().join(',');
     try {
-      if (localStorage.getItem(EMAIL_SUMMARIES_IDS_KEY) === msgIds) return;
-      localStorage.setItem(EMAIL_SUMMARIES_IDS_KEY, msgIds);
+      if (sessionStorage.getItem(EMAIL_SUMMARIES_IDS_KEY) === msgIds) return;
+      sessionStorage.setItem(EMAIL_SUMMARIES_IDS_KEY, msgIds);
     } catch {}
     try {
       const emails = msgs.map((m) => {
@@ -995,6 +996,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       console.warn('[Google] AI email summary failed:', e.message);
     }
   }
+  // Trigger email summaries whenever messages or AI config changes — covers both the
+  // server-auth path (loadGoogleWorkspaceFromServer) and the browser-token path.
+  useEffect(() => {
+    if (!gmailMessages?.length || !aiOpts) return;
+    applyEmailSummaries(gmailMessages);
+  }, [gmailMessages, aiOpts]); // eslint-disable-line
 
   // Auto-fetch when token arrives; refresh while visible and on focus.
   useEffect(() => {
