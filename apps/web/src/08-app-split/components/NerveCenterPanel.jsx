@@ -1196,18 +1196,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // dashboard.snapshot.v1: single consolidated call replacing separate nervecenter_summary + task_suggestions calls.
   // One flash-lite slot on page load instead of three.
   useEffect(() => {
-    const now = Date.now();
     if (ncInFlightRef.current) return undefined;
-    const failStreak = ncFailStreakRef.current;
-    const gapMs = failStreak > 0
-      ? Math.min(15 * 60 * 1000, SNAPSHOT_MIN_GAP_MS * 2 ** failStreak)
-      : SNAPSHOT_MIN_GAP_MS;
-    const sinceLast = now - readStorageNumber(SNAPSHOT_LAST_RUN_KEY);
-    if (sinceLast < gapMs) {
-      if (failStreak === 0) setNcSummaryLoading(true);
-      const t = window.setTimeout(() => setNcSummaryRefreshNonce(n => n + 1), gapMs - sinceLast + 60);
-      return () => window.clearTimeout(t);
-    }
+    // Wait for AI config before scanning; show spinner while it's still loading.
+    if (!aiOpts) { if (aiConfigLoading) setNcSummaryLoading(true); return undefined; }
     ncInFlightRef.current = true;
     setNcSummaryLoading(true);
     setNcSummaryError(false);
