@@ -147,8 +147,13 @@ async function exchangeCode(req, user, body) {
   if (!refreshToken) {
     throw httpError(400, "Google did not return a refresh token. Revoke this app in Google permissions, then connect again.");
   }
+  // The first account ever connected becomes "primary": it's listed first and
+  // is where new calendar events are created by default. Reconnecting keeps it.
+  const existingCol = await accountsCol(db, user.uid).get();
+  const isPrimary = (previous.exists ? !!previous.data()?.primary : false) || existingCol.empty;
   await ref.set({
     googleEmail: email,
+    primary: isPrimary,
     refreshToken,
     accessToken: tokens.access_token || "",
     expiresAt: Date.now() + Math.max(60, Number(tokens.expires_in || 3600) - 60) * 1000,
@@ -164,16 +169,28 @@ async function exchangeCode(req, user, body) {
 
 // Returns [{ email, ... }] for every connected Google account, migrating the
 // legacy single-token doc into an account entry the first time it's seen.
+function sortPrimaryFirst(accounts) {
+  // Primary account first, then the rest alphabetically by email — stable order
+  // for the toggle and for picking a default target account.
+  return [...accounts].sort((a, b) => {
+    const ap = a.primary ? 0 : 1;
+    const bp = b.primary ? 0 : 1;
+    if (ap !== bp) return ap - bp;
+    return a.email < b.email ? -1 : a.email > b.email ? 1 : 0;
+  });
+}
+
 async function listAccountDocs(user) {
   const { db } = admin();
   const snap = await accountsCol(db, user.uid).get();
-  if (!snap.empty) return snap.docs.map(d => ({ email: d.id, ...d.data() }));
+  if (!snap.empty) return sortPrimaryFirst(snap.docs.map(d => ({ email: d.id, ...d.data() })));
   const legacy = await legacyTokenDoc(db, user.uid).get();
   if (legacy.exists && legacy.data()?.refreshToken) {
     const data = legacy.data();
     const email = String(data.googleEmail || data.appEmail || user.email || "primary").toLowerCase();
-    await accountRef(db, user.uid, email).set({ ...data, googleEmail: email, migratedAt: new Date().toISOString() }, { merge: true });
-    return [{ email, ...data }];
+    // The pre-existing single account was the original one → treat it as primary.
+    await accountRef(db, user.uid, email).set({ ...data, googleEmail: email, primary: true, migratedAt: new Date().toISOString() }, { merge: true });
+    return [{ email, primary: true, ...data }];
   }
   return [];
 }
@@ -211,13 +228,15 @@ async function accessTokenFor(user, email) {
 // single connected account, else error asking the caller to specify.
 async function resolveAccount(user, body) {
   const requested = String(body.account || "").toLowerCase().trim();
-  const accounts = await connectedEmails(user);
-  if (!accounts.length) throw httpError(401, "Google Workspace is not connected.");
+  const docs = await listAccountDocs(user);
+  if (!docs.length) throw httpError(401, "Google Workspace is not connected.");
   if (requested) {
-    if (!accounts.includes(requested)) throw httpError(404, `Google account ${requested} is not connected.`);
+    const match = docs.find(d => d.email === requested);
+    if (!match) throw httpError(404, `Google account ${requested} is not connected.`);
     return requested;
   }
-  return accounts[0];
+  // Default target = primary account (rabbidanziger), already sorted first.
+  return docs[0].email;
 }
 
 function sortCalEvents(events) {
