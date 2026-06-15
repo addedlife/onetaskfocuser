@@ -36,16 +36,13 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   const [deskPhoneSyncNote, setDeskPhoneSyncNote] = useState("");
   const pris = AS.priorities;
 
+  // Gemini-only since the Firebase (Spark/Blaze) migration — OpenAI and Claude were dropped.
+  // The live server catalog (aiConfig.catalog) overrides this; the fallback only shows if
+  // app-config can't be fetched, so keep it in sync with the backend MODEL_CATALOG.
   const modelCatalog = aiConfig?.catalog || [
     {provider:"gemini", model:"gemini-3.1-pro-preview", label:"Gemini 3.1 Pro Preview", tier:"frontier"},
     {provider:"gemini", model:"gemini-3-flash-preview", label:"Gemini 3 Flash Preview", tier:"fast"},
     {provider:"gemini", model:"gemini-3.1-flash-lite", label:"Gemini 3.1 Flash-Lite", tier:"budget"},
-    {provider:"openai", model:"gpt-5.5", label:"GPT-5.5", tier:"frontier"},
-    {provider:"openai", model:"gpt-5.4-mini", label:"GPT-5.4 Mini", tier:"fast"},
-    {provider:"openai", model:"gpt-5.4-nano", label:"GPT-5.4 Nano", tier:"budget"},
-    {provider:"claude", model:"claude-opus-4-7", label:"Claude Opus 4.7", tier:"frontier"},
-    {provider:"claude", model:"claude-sonnet-4-6", label:"Claude Sonnet 4.6", tier:"fast"},
-    {provider:"claude", model:"claude-haiku-4-5-20251001", label:"Claude Haiku 4.5", tier:"budget"},
   ];
   const selectedProvider = AS.aiProvider || aiConfig?.provider || aiConfig?.defaultProvider || "gemini";
   const selectedModel = AS.aiModel || aiConfig?.model || aiConfig?.textModel || "";

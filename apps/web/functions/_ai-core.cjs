@@ -13,7 +13,7 @@ function isAllowedOrigin(origin) {
 }
 
 const DEFAULT_PROVIDER = "gemini";
-const DEFAULT_GEMINI_MODEL = "gemini-3.1-pro-preview";
+const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
 const QUOTA_FALLBACK_GEMINI_MODEL = "gemini-3.1-flash-lite";
 const DEFAULT_CALENDAR_TIME_ZONE = "America/New_York";
 const GEMINI_DEFAULT_SAFE_RPM = 4;
