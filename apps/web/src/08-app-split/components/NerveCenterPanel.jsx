@@ -770,6 +770,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const [ncSummaryRefreshNonce, setNcSummaryRefreshNonce] = useState(0);
   const ncInFlightRef = useRef(false); // a summary scan is in flight (survives effect re-runs)
   const ncFailStreakRef = useRef(0);   // consecutive failed scans → exponential retry backoff
+  const lastScanTimeRef = useRef(0);   // ms timestamp of the most recent snapshot scan start
   const [chiefLoading, setChiefLoading] = useState(false);
   const [chiefError, setChiefError] = useState("");
   const [chiefPrompt, setChiefPrompt] = useState("");
@@ -1199,11 +1200,20 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     if (ncInFlightRef.current) return undefined;
     // Wait for AI config before scanning; show spinner while it's still loading.
     if (!aiOpts) { if (aiConfigLoading) setNcSummaryLoading(true); return undefined; }
+    // Settle after first run: re-triggers within 5 min (tab switches, minor data changes)
+    // are silently deferred — no spinner, current result stays visible.
+    const now = Date.now();
+    const SESSION_GAP_MS = 5 * 60 * 1000;
+    if (lastScanTimeRef.current > 0 && now - lastScanTimeRef.current < SESSION_GAP_MS) {
+      const wait = SESSION_GAP_MS - (now - lastScanTimeRef.current) + 100;
+      const t = window.setTimeout(() => setNcSummaryRefreshNonce(n => n + 1), wait);
+      return () => window.clearTimeout(t);
+    }
+    lastScanTimeRef.current = now;
     ncInFlightRef.current = true;
     setNcSummaryLoading(true);
     setNcSummaryError(false);
     setTaskSuggestionsLoading(true);
-    writeStorageNumber(SNAPSHOT_LAST_RUN_KEY, now);
     const scanKeyAtStart = ncSummaryScanKey;
     const existingKeys = new Set(
       primaryTaskQueue
@@ -1731,8 +1741,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // It must NOT touch Gmail/Calendar — re-fetching app-config here re-triggered the Google
   // load and discarded already-computed email summaries (a wasted, visible AI re-run).
   const retryNcSummary = () => {
-    removeStorageKey(SNAPSHOT_CACHE_KEY);
-    removeStorageKey(SNAPSHOT_LAST_RUN_KEY);
+    lastScanTimeRef.current = 0; // bypass in-session rate limit for manual rescan
     ncFailStreakRef.current = 0;
     setNcSummaryError(false);
     onRefreshCalendar?.();
