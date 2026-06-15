@@ -1197,17 +1197,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // One flash-lite slot on page load instead of three.
   useEffect(() => {
     const now = Date.now();
-    const cached = readStorageJson(SNAPSHOT_CACHE_KEY);
-    if (cached?.scanKey === ncSummaryScanKey && cached?.result?.supercrunch && now - Number(cached.ts || 0) < SNAPSHOT_CACHE_MS) {
-      setNcSummary({ supercrunch: cached.result.supercrunch, signals: cached.result.signals || [] });
-      setNcSummaryError(false);
-      if (!ncInFlightRef.current) setNcSummaryLoading(false);
-      if (Array.isArray(cached.result.taskSuggestions)) {
-        setTaskSuggestions(cached.result.taskSuggestions);
-        setTaskSuggestionsLoading(false);
-      }
-      return undefined;
-    }
     if (ncInFlightRef.current) return undefined;
     const failStreak = ncFailStreakRef.current;
     const gapMs = failStreak > 0
@@ -1215,14 +1204,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       : SNAPSHOT_MIN_GAP_MS;
     const sinceLast = now - readStorageNumber(SNAPSHOT_LAST_RUN_KEY);
     if (sinceLast < gapMs) {
-      if (cached?.result?.supercrunch) {
-        setNcSummary({ supercrunch: cached.result.supercrunch, signals: cached.result.signals || [] });
-        setNcSummaryLoading(false);
-        if (Array.isArray(cached.result.taskSuggestions)) {
-          setTaskSuggestions(cached.result.taskSuggestions);
-          setTaskSuggestionsLoading(false);
-        }
-      } else if (failStreak === 0) { setNcSummaryLoading(true); }
+      if (failStreak === 0) setNcSummaryLoading(true);
       const t = window.setTimeout(() => setNcSummaryRefreshNonce(n => n + 1), gapMs - sinceLast + 60);
       return () => window.clearTimeout(t);
     }
@@ -1758,10 +1740,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // It must NOT touch Gmail/Calendar — re-fetching app-config here re-triggered the Google
   // load and discarded already-computed email summaries (a wasted, visible AI re-run).
   const retryNcSummary = () => {
-    removeStorageKey(NC_SUMMARY_CACHE_KEY);
-    removeStorageKey(NC_SUMMARY_LAST_RUN_KEY);
-    ncFailStreakRef.current = 0; // manual retry overrides the failure backoff
+    removeStorageKey(SNAPSHOT_CACHE_KEY);
+    removeStorageKey(SNAPSHOT_LAST_RUN_KEY);
+    ncFailStreakRef.current = 0;
     setNcSummaryError(false);
+    onRefreshCalendar?.();
     setNcSummaryRefreshNonce(n => n + 1);
   };
   const nerveSupercrunch = cleanOneLine(
