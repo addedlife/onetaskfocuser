@@ -55,4 +55,4 @@ jobs:
 
       - name: Deploy to Firebase
         working-directory: apps/web
-        run: firebase deploy --only hosting,functions --project onetaskonly-app --non-interactive
+        run: firebase deploy --only hosting,functions --project onetaskonly-app --non-interactive --force
