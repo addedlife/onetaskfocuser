@@ -1564,9 +1564,20 @@ async function callAIProxy(payload, timeoutMs = AI_PROXY_TIMEOUT_MS) {
   const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
   try {
+    const headers = {"Content-Type": "application/json"};
+    // Attach the Firebase ID token so the gateway can confirm a signed-in user before
+    // spending on an AI call. If there's no token (e.g. dev mock user), we still send the
+    // request — the gateway answers 401 and we degrade to null below, same as a timeout.
+    try {
+      const u = (typeof firebase !== "undefined" && firebase.auth) ? firebase.auth().currentUser : null;
+      if (u && typeof u.getIdToken === "function") {
+        const tok = await u.getIdToken();
+        if (tok) headers["Authorization"] = `Bearer ${tok}`;
+      }
+    } catch (_) { /* token fetch failed → gateway will 401 → handled below */ }
     const r = await fetch(AI_PROXY_ENDPOINT, {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      headers,
       body: JSON.stringify(payload),
       signal: ctrl ? ctrl.signal : undefined,
     });
