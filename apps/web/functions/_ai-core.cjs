@@ -893,7 +893,7 @@ const AI_JOB_REGISTRY = {
     task: "dashboard-river-rank",
     output: "json",
     shape: "object",
-    genConfig: { temperature: 0.1, maxOutputTokens: 3000 },
+    genConfig: { temperature: 0.1, maxOutputTokens: 8192 },
     schema: '{"ranking":[{"id":"item id copied exactly","score":"0-100 urgency","label":"terse 3-7 word restatement, no trailing punctuation","reason":"1-3 word priority tag e.g. deadline today / awaiting reply / payment due / routine"}]}',
     buildPrompt(input = {}) {
       const items = ensureArray(input.items || [], "items").slice(0, 100).map(it => ({

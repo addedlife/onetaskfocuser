@@ -199,7 +199,7 @@ export function TaskRiverPanel({
     };
     const watchdog = setTimeout(() => settle('error'), 29000);
     const payload = items.map(i => ({ id: i.id, type: i.type, text: (i.text || '').slice(0, 200), meta: i.meta || '' }));
-    runAIJob('dashboard.river_rank.v1', { items: payload, currentTime: now.toLocaleString() }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 3000 } })
+    runAIJob('dashboard.river_rank.v1', { items: payload, currentTime: now.toLocaleString() }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 8192 } })
       .then(job => {
         const ranking = job?.output?.ranking;
         if (Array.isArray(ranking) && ranking.length) {
