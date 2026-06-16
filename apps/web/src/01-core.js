@@ -6,12 +6,11 @@ import 'firebase/compat/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA",
-  // Temporarily using Firebase's default authDomain while onetaskfocuser.netlify.app is
-  // paused. Revert to "onetaskfocuser.netlify.app" once the Netlify account resets and
-  // the relay drain bug is fixed (same-origin mode survives mobile cross-site storage
-  // blocking better; requires the /__/auth/* proxy in netlify.toml + that domain in
-  // Firebase Authorized Domains + Google OAuth redirect URIs).
-  authDomain: "onetaskonly-app.firebaseapp.com",
+  // Same-origin authDomain so iOS Safari's ITP doesn't block the cross-origin iframe
+  // Firebase uses to restore redirect-auth state. The /__/auth/* proxy in netlify.toml
+  // forwards these to onetaskonly-app.firebaseapp.com transparently.
+  // Google OAuth redirect URI must include: https://onetaskfocuser.netlify.app/__/auth/handler
+  authDomain: "onetaskfocuser.netlify.app",
   projectId: "onetaskonly-app",
   storageBucket: "onetaskonly-app.firebasestorage.app",
   messagingSenderId: "1017463520129",
