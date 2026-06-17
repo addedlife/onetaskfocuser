@@ -1008,7 +1008,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       const onVisible = () => {
         if (document.visibilityState === "visible") load();
       };
-      const t = setInterval(load, 15 * 60000);
+      // Server mode renews tokens silently (no re-prompt), so we can poll for fresh mail/calendar
+      // more often without bouncing the user to Google. 5 min keeps the inbox feeling live while
+      // open; focus/visibility cover active use. (Token mode below uses the same cadence.)
+      const t = setInterval(load, 5 * 60000);
       document.addEventListener("visibilitychange", onVisible);
       window.addEventListener("focus", load);
       return () => {

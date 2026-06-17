@@ -3,10 +3,10 @@ Shamash Pro 4 context kernel
 Read this first; then read only the matching row in docs/ops/CONTEXT_INDEX.md.
 
 - Active source: C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App
-- Live app: https://onetaskfocuser.netlify.app
+- Live app: https://onetaskonly-app.firebaseapp.com (the .web.app twin auto-redirects here)
 - Git origin: https://github.com/addedlife/onetaskfocuser.git
 - Git main is reconciled to Pro 4; normal push target is origin/main.
 - Production source only: apps/web, apps/shailos, apps/phone-host-windows.
 - Old folders are rollback/archive only.
 - Verify current state from docs/ops/VERIFICATION_LOG.md before edits.
-- Web release standard: after verified web changes, commit and push to `origin/main`; Netlify should auto-build from `apps/web` via root `netlify.toml`. Verify production picked up the pushed commit/asset. Use manual `netlify deploy` only if Git-triggered deploy fails or the thread explicitly asks for it.
+- Web release standard: after verified web changes, commit and push to `origin/main`; the GitHub Action `.github/workflows/deploy.yml` auto-builds `apps/web` and runs `firebase deploy --only hosting,functions`. Verify the Action is green and production picked up the change. (Netlify is no longer in the deploy path.)

@@ -468,7 +468,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 <li>Go to <span style={{fontWeight:700}}>console.cloud.google.com</span> → select your project</li>
                 <li>APIs & Services → Enable <span style={{fontWeight:700}}>Google Calendar API</span> + <span style={{fontWeight:700}}>Gmail API</span></li>
                 <li>Credentials → Create → OAuth 2.0 Client ID → Web Application</li>
-                <li>Add origins: <span style={{fontFamily:"monospace",background:T.card,padding:"1px 4px",borderRadius:3}}>https://onetaskfocuser.netlify.app</span></li>
+                <li>Add origins: <span style={{fontFamily:"monospace",background:T.card,padding:"1px 4px",borderRadius:3}}>https://onetaskonly-app.firebaseapp.com</span></li>
                 <li>Copy the Client ID and paste below</li>
               </ol>
             </div>

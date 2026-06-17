@@ -27,9 +27,8 @@ This workspace becomes live only after every gate below passes.
 
 ## Current Status
 
-Promoted to production at `https://onetaskfocuser.netlify.app`.
-
-Production deploy: `6a01194dc5d71bfed30a76ea`.
+Promoted to production at `https://onetaskonly-app.firebaseapp.com` (Firebase Hosting; the
+`.web.app` twin auto-redirects here). Deploys run via `.github/workflows/deploy.yml` on push to `main`.
 
 Latest production check passed external HTTP checks for the main app, Shailos, app config, and AI proxy. AI currently falls back to `gemini-2.5-flash-lite` when `gemini-2.5-flash` is quota-limited.
 

@@ -158,7 +158,7 @@ This is pure protection and low-risk; ship it first.
 ---
 
 ## 8. Diagnostic tooling available (use it to verify on devices)
-- **`?diag=1`** → `https://onetaskfocuser.netlify.app/?diag=1` shows a black overlay
+- **`?diag=1`** → `https://onetaskonly-app.firebaseapp.com/?diag=1` shows a black overlay
   (`src/diagnostics.jsx`): build commit/time (is the device on fresh code?), account uid,
   online state, latest-snapshot source (server vs CACHE), last server-sync age, load
   status, whether a SW controls the page. Buttons: Force resync, Reset Firestore cache,

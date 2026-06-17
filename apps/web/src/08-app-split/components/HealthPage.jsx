@@ -672,10 +672,10 @@ export function HealthPage({
                   "Go to console.cloud.google.com and open (or create) your project",
                   'Go to APIs & Services → Library, search for "Google Health API", and click Enable',
                   'Go to APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID (Web application)',
-                  'Add authorized redirect URI: https://onetaskfocuser.netlify.app/health-callback',
+                  'Add authorized redirect URI: https://onetaskonly-app.web.app/health-callback',
                   "Copy the Client ID and Client Secret",
-                  "In Netlify dashboard → Site configuration → Environment variables, add GOOGLE_HEALTH_CLIENT_ID and GOOGLE_HEALTH_CLIENT_SECRET",
-                  "Trigger a new Netlify deploy after setting the env vars",
+                  "Add GOOGLE_HEALTH_CLIENT_ID and GOOGLE_HEALTH_CLIENT_SECRET as GitHub repo secrets (the deploy workflow reads them)",
+                  "Push to main (or re-run the deploy workflow) to apply the new secrets",
                 ]}
               />
               <SetupStep num={2} color="#EA4335" title="Connect your Google account"

@@ -1439,7 +1439,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
             // Opens the Shamash Pro 4 web app at the phone/messages view.
             Process.Start(new ProcessStartInfo(
-                "https://onetaskfocuser.netlify.app/?view=deskphone") { UseShellExecute = true });
+                "https://onetaskonly-app.firebaseapp.com/?view=deskphone") { UseShellExecute = true });
         }
         catch (Exception ex)
         {
@@ -2892,7 +2892,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _api.SetPauseHistoryActivity = paused => { Dispatch(() => PauseHistoryActivity = paused); return Task.CompletedTask; };
         _api.SetDarkModeEnabled = enabled => { Dispatch(() => IsDarkModeEnabled = enabled); return Task.CompletedTask; };
         _api.OpenLiveLog = () => { Dispatch(() => ShowLiveLog = true); return Task.CompletedTask; };
-        _api.OpenWebUi = () => { Dispatch(() => OpenInDefaultBrowser("https://onetaskfocuser.netlify.app/?suite=phone")); return Task.CompletedTask; };
+        _api.OpenWebUi = () => { Dispatch(() => OpenInDefaultBrowser("https://onetaskonly-app.firebaseapp.com/?suite=phone")); return Task.CompletedTask; };
         _api.OpenAudioConsole = () => { Dispatch(() => OpenWebShell("http://127.0.0.1:8765/audio-bridge")); return Task.CompletedTask; };
         _api.ClearLog = () => { Dispatch(ClearDebugLog); return Task.CompletedTask; };
         _api.RunUiAuditor = () => { RunUiAuditor(); return Task.CompletedTask; };
@@ -3091,7 +3091,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
             var key   = _settings.Current.RelayKey;
             var url   = string.IsNullOrWhiteSpace(_settings.Current.RelayUrl)
-                        ? "https://onetaskfocuser.netlify.app/.netlify/functions/phone-relay"
+                        ? "https://onetaskonly-app.firebaseapp.com/api/phone-relay"
                         : _settings.Current.RelayUrl;
             return $"{{\"enabled\":{(_relay.IsEnabled ? "true" : "false")},\"key\":\"{key}\",\"relayUrl\":\"{url}\"}}";
         };
@@ -3133,7 +3133,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         // The Shamash UI opens in the DEFAULT BROWSER, not the embedded shell:
         // the user's signed-in session (Firebase) lives in their browser profile,
         // and the production app reaches this host directly via loopback.
-        OpenShamashUiCommand     = new RelayCommand(_ => OpenInDefaultBrowser("https://onetaskfocuser.netlify.app/?suite=phone"));
+        OpenShamashUiCommand     = new RelayCommand(_ => OpenInDefaultBrowser("https://onetaskonly-app.firebaseapp.com/?suite=phone"));
         OpenModernUiCommand      = new RelayCommand(_ => OpenWebShell(ModernUiUrl, maximize: true));
         OpenAudioConsoleCommand  = new RelayCommand(_ => OpenWebShell("http://127.0.0.1:8765/audio-bridge"));
         ForgetDeviceCommand    = new RelayCommand(addr => { if (addr is string a) { _settings.ForgetDevice(a); RefreshKnownDevices(); } });

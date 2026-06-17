@@ -4,8 +4,8 @@ Date: 2026-05-10
 
 ## Current Production
 
-- Live URL: `https://onetaskfocuser.netlify.app`
-- Production deploy: `6a01194dc5d71bfed30a76ea`
+- Live URL: `https://onetaskonly-app.firebaseapp.com` (the `.web.app` twin auto-redirects here)
+- Production deploy: Firebase Hosting via `.github/workflows/deploy.yml` (push to `main`)
 - Source: `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App`
 - Native DeskPhone shortcut: `C:\Users\ydanz\OneDrive\Desktop\DeskPhone.lnk`
 - Native DeskPhone launcher target: `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App\apps\phone-host-windows\deployed-builds\launcher\DeskPhoneLauncher.exe`

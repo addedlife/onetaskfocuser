@@ -1,7 +1,11 @@
 // All Shailos AI calls route through the same OneTask AI gateway.
+import { auth } from '../firebase';
 
-const AI_PROXY = "/.netlify/functions/ai-proxy";
-const SERPER_PROXY = "/.netlify/functions/serper-proxy";
+// Firebase-hosted function routes (post-Netlify migration). ai-proxy is auth-gated (the live
+// proxy requires a Firebase ID token to stop anonymous bill abuse); google-search replaced the
+// old serper-proxy with an identical { query, num } → { results } contract.
+const AI_PROXY = "/api/ai-proxy";
+const SERPER_PROXY = "/api/google-search";
 
 function getSharedAiConfig(): any {
   try {
@@ -16,9 +20,16 @@ async function runAiJob(job: string, input: object, task = "shailos"): Promise<a
   const provider = cfg.provider || cfg.aiProvider || "gemini";
   const model = cfg.model || "";
   const geminiCredential = cfg.geminiCredential || cfg.aiGeminiCredential || "auto";
+  // ai-proxy is auth-gated — attach the shared Firebase ID token. Shailos runs same-origin
+  // under /shailos/ on the same Firebase project, so it shares the signed-in session.
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  try {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
+  } catch { /* no signed-in user → proxy will 401, surfaced below */ }
   const r = await fetch(AI_PROXY, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ job, input, task, provider, model, geminiCredential }),
   });
   const data = await r.json().catch(() => ({ error: r.statusText }));
