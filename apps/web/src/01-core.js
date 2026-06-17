@@ -4,27 +4,15 @@ import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 
-// Host-aware authDomain: use the origin that's actually serving the app so Firebase Auth's
-// OAuth handler is SAME-ORIGIN. That's what dodges the iOS Safari / Android ITP block on the
-// cross-origin storage signInWithRedirect needs — the bug that bounced mobile back to login.
-//   • Firebase Hosting auto-serves /__/auth/* on *.web.app and *.firebaseapp.com (LIVE now,
-//     while Netlify is paused) — and those domains are pre-authorized in Google OAuth.
-//   • Netlify serves /__/auth/* via the proxy in netlify.toml (used once Netlify is back).
-//     That domain's redirect URI (https://onetaskfocuser.netlify.app/__/auth/handler) must be
-//     added manually under Google Cloud → Credentials → Authorized redirect URIs.
-//   • Anything else (localhost dev, unknown/custom host) falls back to the project's Firebase
-//     domain, where desktop popup sign-in works fine.
-function _resolveAuthDomain() {
-  try {
-    const h = window.location.hostname;
-    if (/(\.web\.app|\.firebaseapp\.com|\.netlify\.app)$/i.test(h)) return h;
-  } catch (_) {}
-  return "onetaskonly-app.firebaseapp.com";
-}
-
+// Static authDomain pinned to onetaskonly-app.firebaseapp.com — the single canonical sign-in
+// origin. It's the ONLY origin whose OAuth redirect URI (/__/auth/handler) is registered in
+// Google Cloud (Firebase's default), so *.web.app would fail with Error 400 redirect_uri_mismatch.
+// index.html bounces web.app visitors here, and sw.js leaves /__/ paths to the network, so the
+// app is always served from this same host and Firebase Auth's handler stays SAME-ORIGIN — which
+// is what lets signInWithRedirect survive iOS Safari / Android ITP.
 const firebaseConfig = {
   apiKey: "AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA",
-  authDomain: _resolveAuthDomain(),
+  authDomain: "onetaskonly-app.firebaseapp.com",
   projectId: "onetaskonly-app",
   storageBucket: "onetaskonly-app.firebasestorage.app",
   messagingSenderId: "1017463520129",
