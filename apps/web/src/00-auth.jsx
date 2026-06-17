@@ -1,24 +1,30 @@
-// === 00-auth.js ===
+// === 00-auth.jsx ===
+//
+// Clean rebuild (2026-06-17): Google-only sign-in, single canonical origin.
+//
+// AuthGate listens to Firebase Auth state. It shows the LoginScreen when signed out and
+// renders <App user={...} onSignOut={...} /> when signed in.
+//
+// Identity / data continuity: the app keys all Firestore data on `canonicalUid(user)` =
+// the email prefix (see 01-core.js). Google sign-in is the only method, so e.g.
+// rabbidanziger@hocsouthbend.org → "rabbidanziger" — the same path it has always used.
+//
+// Same-origin auth: `authDomain` is pinned to the canonical host (onetaskonly-app.web.app)
+// in 01-core.js, and index.html bounces the firebaseapp.com twin to it. That keeps Firebase's
+// /__/auth handler same-origin, which is what lets signInWithRedirect survive iOS Safari ITP.
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import firebase from 'firebase/compat/app';
 import { App } from './08-app-split/index.jsx';
 import { DiagnosticsOverlay } from './diagnostics.jsx';
-// AuthGate: Listens to Firebase Auth state.
-// Shows LoginScreen when signed out; renders <App user={...} onSignOut={...} /> when signed in.
-//
-// Username/password auth: email stored internally as `username@onetaskapp.local`
-// Google auth: email prefix used as canonical UID, so same account regardless of domain.
 
-const _AUTH_DOMAIN = "onetaskapp.local";
 const _AUTH_STAY_SIGNED_IN_KEY = "ot_auth_stay_signed_in";
-const _AUTH_LAST_UID_KEY = "ot_last_uid";
-const _AUTH_FRESH_LOGIN_KEY = "ot_fresh_login";
+const _AUTH_LAST_UID_KEY       = "ot_last_uid";
+const _AUTH_FRESH_LOGIN_KEY    = "ot_fresh_login";
 // Remember the last working Google account so cold starts can pre-select it (login_hint)
-// and so the recovery screen can show "Continue as <email>". Only Google emails are
-// stored here — that's the verified identity the Firestore rules authorize.
+// and the recovery screen can show "Continue as <email>".
 const _AUTH_LAST_GOOGLE_EMAIL_KEY = "ot_last_google_email";
-// Set just before an auto-recovery sign-out so we don't loop, cleared on a good load.
+// Set just before an auto-recovery sign-out so it can't loop; cleared on a good load.
 const _AUTH_RECOVERY_KEY = "ot_access_recovery";
 
 function _readLastGoogleEmail() {
@@ -31,19 +37,15 @@ function _rememberGoogleEmail(email) {
   try { localStorage.setItem(_AUTH_LAST_GOOGLE_EMAIL_KEY, e); } catch (_) {}
 }
 
-// Use redirect auth on iOS / Android — popups are blocked by iOS Safari
+// Use redirect auth on iOS / Android — popups are blocked by iOS Safari.
 function _isMobileOrTablet() {
   if (typeof navigator === "undefined") return false;
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
-function _toEmail(username) {
-  return `${username.toLowerCase().trim()}@${_AUTH_DOMAIN}`;
-}
-
 function _readStaySignedIn() {
-  try { return localStorage.getItem(_AUTH_STAY_SIGNED_IN_KEY) !== "0"; } catch(_) { return true; }
+  try { return localStorage.getItem(_AUTH_STAY_SIGNED_IN_KEY) !== "0"; } catch (_) { return true; }
 }
 
 function _getAuthPersistence(staySignedIn = true) {
@@ -55,7 +57,48 @@ async function _setAuthPersistence(staySignedIn = true) {
   await firebase.auth().setPersistence(_getAuthPersistence(staySignedIn));
 }
 
-// Localhost-only dev bypass — creates a mock user so the preview can render the full app
+// Sign in with Google. Mobile uses the redirect flow (result captured in AuthGate boot());
+// desktop uses a popup. Returns the user on the popup path, null on the redirect path
+// (the page reloads). Shared by the login button and the recovery flow.
+async function _signInWithGoogle(staySignedIn = true) {
+  await _setAuthPersistence(staySignedIn);
+  try { localStorage.setItem(_AUTH_STAY_SIGNED_IN_KEY, staySignedIn ? "1" : "0"); } catch (_) {}
+
+  const provider = new firebase.auth.GoogleAuthProvider();
+  // Pre-select the last working Google account so cold start / recovery is one tap.
+  const lastEmail = _readLastGoogleEmail();
+  if (lastEmail) provider.setCustomParameters({ login_hint: lastEmail });
+
+  if (_isMobileOrTablet()) {
+    await firebase.auth().signInWithRedirect(provider);
+    return null; // page reloads after the redirect
+  }
+
+  const cred = await firebase.auth().signInWithPopup(provider);
+  const u = cred.user;
+  const emailPrefix = (u.email || "").split("@")[0].toLowerCase();
+  if (emailPrefix && (!u.displayName || u.displayName !== emailPrefix)) {
+    try { await u.updateProfile({ displayName: emailPrefix }); } catch (_) {}
+  }
+  try { sessionStorage.setItem(_AUTH_FRESH_LOGIN_KEY, u.uid); } catch (_) {}
+  _rememberGoogleEmail(u.email);
+  return u;
+}
+
+// Map a Firebase auth error code to a human, actionable message. Returns "" for the
+// benign cancellations we want to swallow silently.
+function _googleErrorMessage(e) {
+  const code = e?.code || "";
+  if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return "";
+  if (code === "auth/no-auth-event") return "";
+  if (code === "auth/unauthorized-domain")
+    return "This domain isn't authorized for Google sign-in. Add it under Firebase → Authentication → Settings → Authorized domains, then try again.";
+  if (code === "auth/web-storage-unsupported" || code === "auth/operation-not-supported-in-this-environment")
+    return "Your browser is blocking the storage Google sign-in needs (common in private mode or strict tracking prevention). Allow site data for this app, then try again.";
+  return `Google sign-in didn't complete${code ? ` [${code}]` : ""}. Please try again.`;
+}
+
+// Localhost-only dev bypass — creates a mock user so the preview can render the full app.
 window.__OT_DEV = (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"));
 window.__OT_DEV_USER = window.__OT_DEV ? {
   uid: "dev_test_user",
@@ -89,16 +132,15 @@ function AuthGate() {
   const [authError, setAuthError] = React.useState("");
   const [recoveryNotice, setRecoveryNotice] = React.useState("");
 
-  // Called by App when a cold-started session is restored but Firestore denies it
-  // (a "bad profile" with no access). Rather than leaving the user on a silently-empty
-  // app that they have to manually sign out of, route straight back to Google sign-in
-  // with an explanation. Guarded by a session flag so it can't loop.
+  // Called by App when a cold-started session is restored but Firestore denies it (a "bad
+  // profile" with no access). Rather than stranding the user on a silently-empty app, route
+  // straight back to Google sign-in with an explanation. Guarded so it can't loop.
   const handleSessionLostAccess = React.useCallback(() => {
     try { sessionStorage.setItem(_AUTH_RECOVERY_KEY, "1"); } catch (_) {}
     const last = _readLastGoogleEmail();
     setRecoveryNotice(
       last
-        ? `This sign-in lost access to your data. Sign in with Google${last ? ` as ${last}` : ""} to restore your tasks and shailos.`
+        ? `This sign-in lost access to your data. Sign in with Google as ${last} to restore your tasks and shailos.`
         : "This sign-in lost access to your data. Sign in with Google to restore your tasks and shailos."
     );
     try { firebase.auth().signOut(); } catch (_) {}
@@ -113,16 +155,14 @@ function AuthGate() {
     let unsub = null;
 
     async function boot() {
-      // On mobile the previous page may have done signInWithRedirect;
-      // capture the result before setting up onAuthStateChanged.
+      // On mobile the previous page may have done signInWithRedirect; capture that result
+      // before wiring up onAuthStateChanged.
       try {
         const result = await firebase.auth().getRedirectResult();
         if (result?.user && alive) {
           const u = result.user;
-          // Mark as a fresh login so downstream code can skip stale caches.
           try { sessionStorage.setItem(_AUTH_FRESH_LOGIN_KEY, u.uid); } catch {}
           try { localStorage.setItem(_AUTH_STAY_SIGNED_IN_KEY, "1"); } catch {}
-          // Remember the working Google identity for next cold start's login_hint.
           _rememberGoogleEmail(u.email);
           const emailPrefix = (u.email || "").split("@")[0].toLowerCase();
           if (emailPrefix && (!u.displayName || u.displayName !== emailPrefix)) {
@@ -130,19 +170,8 @@ function AuthGate() {
           }
         }
       } catch (e) {
-        // Redirect sign-in returned an error. This used to be logged only, so the user
-        // silently landed back on the login screen with no idea why. Surface the
-        // actionable cases (this is the likely "login is broken" report on mobile).
-        if (e.code && e.code !== "auth/no-auth-event") {
-          console.warn("[Auth] getRedirectResult error:", e.code);
-          if (e.code === "auth/unauthorized-domain") {
-            setAuthError("This domain isn't authorized for Google sign-in. Add it under Firebase → Authentication → Settings → Authorized domains, then try again.");
-          } else if (e.code === "auth/web-storage-unsupported" || e.code === "auth/operation-not-supported-in-this-environment") {
-            setAuthError("Your browser is blocking the storage Google sign-in needs (common in private mode or strict tracking prevention). Allow site data for this app, then try again — or sign in with a username and password.");
-          } else {
-            setAuthError(`Google sign-in didn't complete [${e.code}]. Try again, or use a username and password.`);
-          }
-        }
+        const msg = _googleErrorMessage(e);
+        if (msg) { console.warn("[Auth] getRedirectResult error:", e.code); setAuthError(msg); }
       }
 
       if (!alive) return;
@@ -154,12 +183,10 @@ function AuthGate() {
 
       unsub = firebase.auth().onAuthStateChanged(u => {
         if (u) {
-          // Detect UID switch (different Google account, etc.) and bust stale caches.
+          // Detect a UID switch (different Google account) and bust stale caches.
           try {
             const prev = localStorage.getItem(_AUTH_LAST_UID_KEY);
-            if (prev && prev !== u.uid) {
-              sessionStorage.setItem(_AUTH_FRESH_LOGIN_KEY, u.uid);
-            }
+            if (prev && prev !== u.uid) sessionStorage.setItem(_AUTH_FRESH_LOGIN_KEY, u.uid);
             localStorage.setItem(_AUTH_LAST_UID_KEY, u.uid);
           } catch {}
         }
@@ -169,10 +196,7 @@ function AuthGate() {
     }
 
     boot();
-    return () => {
-      alive = false;
-      if (unsub) unsub();
-    };
+    return () => { alive = false; if (unsub) unsub(); };
   }, []);
 
   // ?diag=1 overlays the on-device diagnostics readout on top of whatever is rendering.
@@ -193,201 +217,75 @@ function AuthGate() {
   return withDiag(<AppErrorBoundary><App user={user} onSignOut={() => firebase.auth().signOut()} onSessionLostAccess={handleSessionLostAccess} /></AppErrorBoundary>);
 }
 
-// ── Login / Sign-up screen ──────────────────────────────────────────────────
+// ── Login screen (Google-only) ───────────────────────────────────────────────
 function LoginScreen({ onLogin, initialError = "" }) {
-  const [mode, setMode]         = React.useState("login"); // "login"|"signup"
-  const [username, setUsername] = React.useState("");
-  const [password, setPassword] = React.useState("");
   const [err, setErr]           = React.useState(initialError);
   const [loading, setLoading]   = React.useState(false);
-  const [showPw, setShowPw]     = React.useState(false);
   const [staySignedIn, setStaySignedIn] = React.useState(_readStaySignedIn);
 
   const S = {
     bg:"#EDE5D8", card:"#F5EFE5", text:"#3D3633",
-    tSoft:"#6E5848", tFaint:"#7E6858", brd:"#D8CEBC", input:"#E4DACB",
-    divider:"#D0C4B0"
+    tSoft:"#6E5848", tFaint:"#7E6858", brd:"#D8CEBC",
   };
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    const u = username.trim();
-    if (!u)           { setErr("Username is required."); return; }
-    if (u.length < 2) { setErr("Username must be at least 2 characters."); return; }
-    if (!password)    { setErr("Password is required."); return; }
-    setLoading(true); setErr("");
-
-    const email = _toEmail(u);
-    const auth  = firebase.auth();
-    try {
-      await _setAuthPersistence(staySignedIn);
-      try { localStorage.setItem(_AUTH_STAY_SIGNED_IN_KEY, staySignedIn ? "1" : "0"); } catch(_) {}
-      let cred;
-      if (mode === "login") {
-        cred = await auth.signInWithEmailAndPassword(email, password);
-      } else {
-        if (password.length < 6) { setErr("Password must be at least 6 characters."); setLoading(false); return; }
-        cred = await auth.createUserWithEmailAndPassword(email, password);
-        await cred.user.updateProfile({ displayName: u });
-      }
-      onLogin(cred.user);
-    } catch(e) {
-      const map = {
-        "auth/user-not-found":      "No account with that username.",
-        "auth/wrong-password":      "Incorrect password.",
-        "auth/invalid-credential":  "Incorrect username or password.",
-        "auth/email-already-in-use":"That username is already taken.",
-        "auth/weak-password":       "Password must be at least 6 characters.",
-        "auth/too-many-requests":   "Too many attempts. Try again in a few minutes.",
-        "auth/web-storage-unsupported":"This browser is blocking saved sign-in storage. Allow site data for this app, then sign in again.",
-      };
-      setErr(map[e.code] || e.message);
-    } finally { setLoading(false); }
-  }
 
   async function handleGoogleSignIn() {
     setLoading(true); setErr("");
     try {
-      await _setAuthPersistence(staySignedIn);
-      try { localStorage.setItem(_AUTH_STAY_SIGNED_IN_KEY, staySignedIn ? "1" : "0"); } catch(_) {}
-      const provider = new firebase.auth.GoogleAuthProvider();
-      // Pre-select the last working Google account so recovery / cold start is one tap.
-      const lastEmail = _readLastGoogleEmail();
-      if (lastEmail) provider.setCustomParameters({ login_hint: lastEmail });
-
-      if (_isMobileOrTablet()) {
-        // iOS Safari blocks popups; use redirect flow.
-        // The result is captured in AuthGate boot() via getRedirectResult().
-        await firebase.auth().signInWithRedirect(provider);
-        return; // page will reload after the redirect
-      }
-
-      const cred = await firebase.auth().signInWithPopup(provider);
-      const u = cred.user;
-      const emailPrefix = (u.email || "").split("@")[0].toLowerCase();
-      if (emailPrefix && (!u.displayName || u.displayName !== emailPrefix)) {
-        try { await u.updateProfile({ displayName: emailPrefix }); } catch(_) {}
-      }
-      try { sessionStorage.setItem(_AUTH_FRESH_LOGIN_KEY, u.uid); } catch(_) {}
-      _rememberGoogleEmail(u.email);
-      onLogin(cred.user);
-    } catch(e) {
-      if (e.code !== "auth/popup-closed-by-user") {
-        if (e.code === "auth/web-storage-unsupported") {
-          setErr("This browser blocks saved sign-in. Allow site data for this app, then try again.");
-        } else if (e.code === "auth/unauthorized-domain") {
-          setErr("Domain not authorized — add onetaskfocuser.netlify.app to Firebase → Auth → Settings → Authorized domains.");
-        } else {
-          setErr((e.code ? `[${e.code}] ` : "") + e.message);
-        }
-      }
-    } finally { setLoading(false); }
+      const u = await _signInWithGoogle(staySignedIn);
+      if (u) onLogin(u); // popup path; redirect path reloads the page
+    } catch (e) {
+      const msg = _googleErrorMessage(e);
+      if (msg) setErr(msg);
+    } finally {
+      setLoading(false);
+    }
   }
-
-  function switchMode() { setMode(m => m === "login" ? "signup" : "login"); setErr(""); }
 
   return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", background:S.bg, fontFamily:"system-ui", padding:20 }}>
-      <div style={{ width:"100%", maxWidth:360, background:S.card, borderRadius:22, padding:"36px 28px 28px", boxShadow:"0 8px 40px rgba(0,0,0,0.10)", animation:"ot-fade 0.3s" }}>
+      <div style={{ width:"100%", maxWidth:360, background:S.card, borderRadius:22, padding:"40px 28px 32px", boxShadow:"0 8px 40px rgba(0,0,0,0.10)", animation:"ot-fade 0.3s" }}>
 
         {/* Logo */}
         <div style={{ textAlign:"center", marginBottom:28 }}>
           <div style={{ fontSize:36, lineHeight:1, marginBottom:10 }}>◎</div>
           <h1 style={{ fontSize:22, fontWeight:700, color:S.text, fontFamily:"Georgia,serif", margin:0, letterSpacing:0.5 }}>Shamash Pro 4</h1>
-          <p style={{ fontSize:12, color:S.tFaint, marginTop:5, fontFamily:"system-ui" }}>
-            {mode === "login" ? "Sign in to continue" : "Create your account"}
-          </p>
+          <p style={{ fontSize:12, color:S.tFaint, marginTop:5, fontFamily:"system-ui" }}>Sign in to continue</p>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          {/* Username */}
-          <div style={{ marginBottom:14 }}>
-            <label style={{ fontSize:10, fontWeight:700, color:S.tSoft, display:"block", marginBottom:5, letterSpacing:1, textTransform:"uppercase" }}>Username</label>
-            <input
-              value={username} onChange={e => { setUsername(e.target.value); setErr(""); }}
-              autoCapitalize="none" autoCorrect="off" spellCheck="false" autoComplete="username"
-              style={{ width:"100%", padding:"11px 14px", borderRadius:10, border:`1.5px solid ${S.brd}`, background:S.input, color:S.text, fontSize:14, outline:"none", fontFamily:"system-ui", boxSizing:"border-box" }}
-            />
-          </div>
+        <label style={{ display:"flex", alignItems:"center", gap:9, margin:"0 0 18px", color:S.tSoft, fontSize:12, lineHeight:1.35, cursor:"pointer", userSelect:"none" }}>
+          <input
+            type="checkbox"
+            checked={staySignedIn}
+            onChange={e => setStaySignedIn(e.target.checked)}
+            style={{ width:16, height:16, margin:0, accentColor:S.text, cursor:"pointer", flex:"0 0 auto" }}
+          />
+          <span>Stay signed in on this device</span>
+        </label>
 
-          {/* Password */}
-          <div style={{ marginBottom:20 }}>
-            <label style={{ fontSize:10, fontWeight:700, color:S.tSoft, display:"block", marginBottom:5, letterSpacing:1, textTransform:"uppercase" }}>Password</label>
-            <div style={{ position:"relative" }}>
-              <input
-                type={showPw ? "text" : "password"}
-                value={password} onChange={e => { setPassword(e.target.value); setErr(""); }}
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                style={{ width:"100%", padding:"11px 40px 11px 14px", borderRadius:10, border:`1.5px solid ${S.brd}`, background:S.input, color:S.text, fontSize:14, outline:"none", fontFamily:"system-ui", boxSizing:"border-box" }}
-              />
-              <button type="button" onClick={() => setShowPw(v => !v)}
-                style={{ position:"absolute", right:10, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", fontSize:14, color:S.tFaint, lineHeight:1, padding:4 }}>
-                {showPw ? "🙈" : "👁"}
-              </button>
-            </div>
-          </div>
-
-          <label style={{ display:"flex", alignItems:"center", gap:9, margin:"-8px 0 18px", color:S.tSoft, fontSize:12, lineHeight:1.35, cursor:"pointer", userSelect:"none" }}>
-            <input
-              type="checkbox"
-              checked={staySignedIn}
-              onChange={e => setStaySignedIn(e.target.checked)}
-              style={{ width:16, height:16, margin:0, accentColor:S.text, cursor:"pointer", flex:"0 0 auto" }}
-            />
-            <span>Stay signed in on this device</span>
-          </label>
-
-          {err && (
-            <p style={{ fontSize:12, color:"#C94040", marginBottom:14, lineHeight:1.5, fontFamily:"system-ui" }}>{err}</p>
-          )}
-
-          <button type="submit" disabled={loading} style={{
-            width:"100%", padding:"13px", borderRadius:12, border:"none",
-            background: loading ? S.brd : S.text,
-            color: loading ? S.tFaint : S.bg,
-            fontSize:14, fontWeight:700, cursor: loading ? "default" : "pointer",
-            fontFamily:"system-ui", transition:"opacity 0.15s", opacity: loading ? 0.7 : 1,
-          }}>
-            {loading
-              ? (mode === "login" ? "Signing in…" : "Creating account…")
-              : (mode === "login" ? "Sign in" : "Create account")}
-          </button>
-        </form>
-
-        {/* Divider */}
-        <div style={{ display:"flex", alignItems:"center", gap:10, margin:"18px 0" }}>
-          <div style={{ flex:1, height:1, background:S.divider }}/>
-          <span style={{ fontSize:11, color:S.tFaint }}>or</span>
-          <div style={{ flex:1, height:1, background:S.divider }}/>
-        </div>
+        {err && (
+          <p style={{ fontSize:12, color:"#C94040", marginBottom:14, lineHeight:1.5, fontFamily:"system-ui" }}>{err}</p>
+        )}
 
         {/* Google Sign-In */}
         <button onClick={handleGoogleSignIn} disabled={loading} style={{
-          width:"100%", padding:"11px 14px", borderRadius:12, border:`1.5px solid ${S.brd}`,
-          background:S.bg, color:S.text, fontSize:13, fontWeight:600,
+          width:"100%", padding:"13px 14px", borderRadius:12, border:`1.5px solid ${S.brd}`,
+          background:S.bg, color:S.text, fontSize:14, fontWeight:700,
           cursor: loading ? "default" : "pointer", fontFamily:"system-ui",
           display:"flex", alignItems:"center", justifyContent:"center", gap:10,
           opacity: loading ? 0.6 : 1,
         }}>
           {/* Google "G" logo */}
-          <svg width="16" height="16" viewBox="0 0 48 48">
+          <svg width="18" height="18" viewBox="0 0 48 48">
             <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
             <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
             <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
             <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
           </svg>
-          Continue with Google
+          {loading ? "Signing in…" : "Continue with Google"}
         </button>
-
-        <div style={{ textAlign:"center", marginTop:16 }}>
-          <button onClick={switchMode} style={{ background:"none", border:"none", cursor:"pointer", fontSize:12, color:S.tSoft, fontFamily:"system-ui", textDecoration:"underline", textUnderlineOffset:2 }}>
-            {mode === "login" ? "No account? Create one →" : "Already have an account? Sign in →"}
-          </button>
-        </div>
       </div>
     </div>
   );
 }
 
-
-export { AuthGate, LoginScreen, _AUTH_DOMAIN, _toEmail };
+export { AuthGate };

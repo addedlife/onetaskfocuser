@@ -1,10 +1,6 @@
 [build]
   base = "apps/web"
 
-# Proxy Firebase Auth handler to same origin so iOS Safari's ITP doesn't block
-# cross-origin iframe storage — required for signInWithRedirect on mobile.
-[[redirects]]
-  from = "/__/auth/*"
-  to = "https://onetaskonly-app.firebaseapp.com/__/auth/:splat"
-  status = 200
-  force = true
+# Auth no longer routes through Netlify. The app is deployed to Firebase Hosting
+# (.github/workflows/deploy.yml) and Firebase Auth's /__/auth handler is served same-origin
+# on the canonical onetaskonly-app.web.app. No Netlify auth proxy is needed.

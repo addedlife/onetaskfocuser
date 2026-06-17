@@ -4,27 +4,15 @@ import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 
-// Host-aware authDomain: use the origin that's actually serving the app so Firebase Auth's
-// OAuth handler is SAME-ORIGIN. That's what dodges the iOS Safari / Android ITP block on the
-// cross-origin storage signInWithRedirect needs — the bug that bounced mobile back to login.
-//   • Firebase Hosting auto-serves /__/auth/* on *.web.app and *.firebaseapp.com (LIVE now,
-//     while Netlify is paused) — and those domains are pre-authorized in Google OAuth.
-//   • Netlify serves /__/auth/* via the proxy in netlify.toml (used once Netlify is back).
-//     That domain's redirect URI (https://onetaskfocuser.netlify.app/__/auth/handler) must be
-//     added manually under Google Cloud → Credentials → Authorized redirect URIs.
-//   • Anything else (localhost dev, unknown/custom host) falls back to the project's Firebase
-//     domain, where desktop popup sign-in works fine.
-function _resolveAuthDomain() {
-  try {
-    const h = window.location.hostname;
-    if (/(\.web\.app|\.firebaseapp\.com|\.netlify\.app)$/i.test(h)) return h;
-  } catch (_) {}
-  return "onetaskonly-app.firebaseapp.com";
-}
-
+// Static authDomain pinned to the single canonical origin. index.html bounces the
+// firebaseapp.com twin to onetaskonly-app.web.app, so the app is always served from this same
+// host — which keeps Firebase Auth's /__/auth handler SAME-ORIGIN. That same-origin handler is
+// what lets signInWithRedirect survive iOS Safari ITP (the bug that bounced mobile to login).
+// onetaskonly-app.web.app is a Firebase-authorized domain and an OAuth redirect URI by default,
+// so no console setup is required.
 const firebaseConfig = {
   apiKey: "AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA",
-  authDomain: _resolveAuthDomain(),
+  authDomain: "onetaskonly-app.web.app",
   projectId: "onetaskonly-app",
   storageBucket: "onetaskonly-app.firebasestorage.app",
   messagingSenderId: "1017463520129",
