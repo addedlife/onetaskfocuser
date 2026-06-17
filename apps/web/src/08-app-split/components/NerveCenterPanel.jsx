@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, textOnColor } from '../../01-core.js';
-import { cleanTheme, cleanToolbarButton, gvIconButton, gvTextButton, NC_FONT_STACK, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
+import { cleanTheme, cleanToolbarButton, gvIconButton, gvTextButton, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthCard } from './HealthCard.jsx';
@@ -575,7 +575,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
     ? { flex: "1 1 0", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }
     : { maxHeight: "min(52vh, 460px)", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" };
   return (
-    <div style={{ background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: 10, overflow: "hidden",
+    <div style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 12, overflow: "hidden",
       ...(fullHeight ? { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 } : {}) }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px 4px 10px", minHeight: 28 }}>
         <button
@@ -583,17 +583,17 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
           style={{ all: "unset", boxSizing: "border-box", display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0, cursor: expandable ? "pointer" : "default" }}
           aria-expanded={expandable ? expanded : undefined}
         >
-          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
-          <span style={{ fontSize: NC_TYPE.body, fontWeight: 700, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0 }}>{title}</span>
-          {count > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, background: C.hover, borderRadius: 99, padding: "1px 5px", flexShrink: 0 }}>{count}</span>}
+          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, color: C.muted, flexShrink: 0 }}>{suiteIcon(icon, 16)}</span>
+          <span style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0 }}>{title}</span>
+          {count > 0 && <span style={{ fontSize: 11, fontWeight: 500, color: C.faint, fontFamily: NC_MONO_STACK, background: C.hover, borderRadius: 99, padding: "1px 6px", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{count}</span>}
           {preview != null && preview !== "" && (
             // Small single-line caption next to the title — visible in every layout (incl. the
             // always-expanded mobile sections), kept to one line so it never pushes card
             // content (emails, events) down.
-            <span style={{ fontSize: NC_TYPE.small, lineHeight: 1.2, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "italic" }}>{preview}</span>
+            <span style={{ fontSize: NC_TYPE.small, lineHeight: 1.2, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{preview}</span>
           )}
           {expandable && (
-            <span style={{ marginLeft: "auto", color: expanded ? C.muted : C.faint, display: "flex", flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("chevron_right", 18)}</span>
+            <span style={{ marginLeft: "auto", color: expanded ? C.muted : C.faint, display: "flex", flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("expand_more", 18)}</span>
           )}
         </button>
         {primaryBtn}
@@ -667,17 +667,17 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
   // so the scroll-away behavior is suspended.
   const headerCollapsed = !stickyHeader && scrolled && !expanded && !collapsed;
   return (
-    <div style={{ position: "relative", background: tint ? `linear-gradient(${tint}, ${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: 10, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
+    <div style={{ position: "relative", background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 12, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
       {stickyHeader ? (
         // Sticky header: never collapses. Shows icon chip + title label + summary on separate line.
         <button onClick={onOpen} title={title} aria-label={title}
-          style={{ display: "flex", flexDirection: "column", width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "6px 10px 5px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0, borderBottom: `1px solid ${hexToRgba(accentColor, 0.18) || C.divider}` }}>
+          style={{ display: "flex", flexDirection: "column", width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "6px 10px 5px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0, borderBottom: `1px solid ${C.divider}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, 13)}</span>
-            <span style={{ fontSize: NC_TYPE.label, fontWeight: 700, color: accentColor || C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0.3, textTransform: "uppercase" }}>{title}</span>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, color: C.muted, flexShrink: 0 }}>{suiteIcon(icon, 15)}</span>
+            <span style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: 0 }}>{title}</span>
           </div>
           {summary && (
-            <span style={{ display: "block", fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: 26, fontStyle: "italic" }}>{summary}</span>
+            <span style={{ display: "block", fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: 26, fontStyle: "normal" }}>{summary}</span>
           )}
         </button>
       ) : (
@@ -686,8 +686,8 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
         <div style={{ display: "flex", alignItems: "center", width: "100%", flexShrink: 0, minWidth: 0, maxHeight: headerCollapsed ? 0 : (dense ? 22 : 56), opacity: headerCollapsed ? 0 : 1, overflow: "hidden", pointerEvents: headerCollapsed ? "none" : "auto", transition: "max-height 0.2s ease, opacity 0.15s ease" }}>
           <button onClick={onToggleExpand || onOpen} title={title} aria-label={title} aria-expanded={onToggleExpand ? expanded : undefined}
             style={{ display: "flex", alignItems: "center", gap: dense ? 5 : 7, flex: 1, textAlign: "left", border: "none", background: "transparent", padding: headerCollapsed ? "0 10px" : (dense ? "2px 9px" : "7px 11px 6px"), cursor: (onToggleExpand || onOpen) ? "pointer" : "default", minWidth: 0 }}>
-            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: dense ? 16 : 22, height: dense ? 16 : 22, borderRadius: dense ? 5 : 6, background: chipBg, color: accentColor || C.muted, flexShrink: 0 }}>{suiteIcon(icon, dense ? 11 : 14)}</span>
-            <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.small, fontWeight: 400, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "italic" }}>{summary}</span>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: dense ? 16 : 22, height: dense ? 16 : 22, color: C.muted, flexShrink: 0 }}>{suiteIcon(icon, dense ? 13 : 16)}</span>
+            <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.small, fontWeight: 400, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{summary}</span>
             {onToggleExpand && <span style={{ display: "flex", color: C.faint, flexShrink: 0 }}>{suiteIcon(expanded ? "close_fullscreen" : "expand_content", 12)}</span>}
           </button>
           {onToggleExpand && onOpen && (
