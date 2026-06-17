@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-06-17 17:11:02",
+        "version":  "b322",
+        "notes":  "Buttons and relay now target the live Firebase host after the Netlify-to-Firebase migration: Open Web UI opens onetaskonly-app.firebaseapp.com and the cloud phone-relay default endpoint is /api/phone-relay. The old onetaskfocuser.netlify.app URLs were dead.",
+        "devNotes":  "MainViewModel.cs: replaced the /?view=deskphone and /?suite=phone Open-Web-UI links and the GetRelayStatus default endpoint /.netlify/functions/phone-relay with https://onetaskonly-app.firebaseapp.com equivalents and https://onetaskonly-app.firebaseapp.com/api/phone-relay for the relay."
+    },
+    {
         "timestamp":  "2026-06-14 03:33:51",
         "version":  "b321",
         "notes":  "Theme sync fix: WebView2 standalone shell now receives fallback palette defaults from C# host, handles theme pushes at window initialization, and implements dynamic build cache-busting.",
