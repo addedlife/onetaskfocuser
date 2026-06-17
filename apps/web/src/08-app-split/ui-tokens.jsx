@@ -21,6 +21,11 @@ export const GV_CLEAN = {
 
 export const NC_FONT_STACK = '"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
 
+// Monospace stack for numerals — times, counts, metadata. Tabular, "engineered" feel
+// (the strongest contemporary signal). Falls back through the OS mono faces if the
+// JetBrains Mono webfont (loaded in index.html) hasn't arrived yet.
+export const NC_MONO_STACK = '"JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", "Segoe UI Mono", Menlo, Consolas, monospace';
+
 export const NC_TYPE = {
   title: 16,
   body: 14,
