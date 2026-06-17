@@ -1,12 +1,17 @@
 // Bump this version whenever stale-asset purging is needed; the activate handler
 deletes every cache that doesn't match, so installed PWAs drop old bundles on update.
-const CACHE_NAME = "onetask-offline-v6";
+const CACHE_NAME = "onetask-offline-v7";
 const STATIC_URLS = ["/", "/index.html", "/manifest.webmanifest"];
 
 function shouldRuntimeCache(request) {
   if (request.method !== "GET") return false;
   const url = new URL(request.url);
   if (url.pathname.startsWith("/.netlify/functions/")) return false;
+  // Firebase Auth's reserved helper paths (OAuth handler, hidden iframe, helper scripts).
+  // With a same-origin authDomain these live on THIS origin under /__/, so they MUST go
+  // straight to the network — never cached, never index.html-fallback. See the fetch
+  // handler note below.
+  if (url.pathname.startsWith("/__/")) return false;
   if (url.hostname.includes("firestore.googleapis.com")) return false;
   if (url.hostname.includes("firebaseio.com")) return false;
   if (url.hostname.includes("identitytoolkit.googleapis.com")) return false;
@@ -86,9 +91,18 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (!shouldRuntimeCache(event.request)) return;
-
   const url = new URL(event.request.url);
+
+  // Never intercept Firebase Auth's reserved /__/ paths. Once authDomain is same-origin
+  // (e.g. *.web.app), the Google OAuth handler, the hidden iframe getRedirectResult()
+  // relies on, and the auth helper scripts are all served from /__/auth/* on THIS origin
+  // and fall under the SW scope. If the SW answers them from cache — or, on a slow mobile
+  // link, falls back to index.html after the 6s networkFirst timeout — the redirect result
+  // can never be read and Google sign-in bounces straight back to the login screen (on both
+  // iOS and Android). Returning here leaves them to the browser's normal network fetch.
+  if (url.origin === self.location.origin && url.pathname.startsWith("/__/")) return;
+
+  if (!shouldRuntimeCache(event.request)) return;
   if (event.request.mode === "navigate") {
     event.respondWith(networkFirst(event.request));
     return;
