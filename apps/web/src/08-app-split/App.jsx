@@ -1008,10 +1008,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       const onVisible = () => {
         if (document.visibilityState === "visible") load();
       };
-      // Server mode renews tokens silently (no re-prompt), so we can poll for fresh mail/calendar
-      // more often without bouncing the user to Google. 5 min keeps the inbox feeling live while
-      // open; focus/visibility cover active use. (Token mode below uses the same cadence.)
-      const t = setInterval(load, 5 * 60000);
+      // Idle background poll is deliberately conservative so it doesn't churn AI dashboard
+      // summaries or Google API quota while the tab just sits open. Real freshness comes from the
+      // focus + visibilitychange handlers below, which refresh the moment you look at the app.
+      const t = setInterval(load, 15 * 60000);
       document.addEventListener("visibilitychange", onVisible);
       window.addEventListener("focus", load);
       return () => {

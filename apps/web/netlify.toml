@@ -1,3 +1,10 @@
+# ============================================================================
+# ⛔ DEPRECATED — paused Netlify config. NOT the live deploy. See backend/DEPRECATED.md.
+# Production is Firebase Hosting + Functions via .github/workflows/deploy.yml (source
+# = apps/web/functions). Nothing here ships unless Netlify is deliberately reactivated.
+# Kept only as a rollback path. Do not edit expecting a production effect.
+# ============================================================================
+
 [build]
   command = "npm run build && node scripts/copy-shailos-to-dist.cjs"
   publish = "dist"
