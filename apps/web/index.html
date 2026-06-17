@@ -4,6 +4,26 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Shamash Pro 4</title>
+<script>
+/* Canonical sign-in origin. Google's OAuth client authorizes the redirect URI
+   https://onetaskonly-app.firebaseapp.com/__/auth/handler (Firebase's default) but NOT
+   the .web.app handler, so Google sign-in on *.web.app fails with Error 400
+   redirect_uri_mismatch. Until the .web.app redirect URI is added in Google Cloud, send
+   web.app visitors to the firebaseapp.com origin (same app, same Firestore data, and a
+   SAME-ORIGIN authDomain there so iOS/Android ITP is satisfied). Runs before the bundle,
+   the service worker, and any auth attempt; preserves path + query + hash; no-op on every
+   other host. */
+(function () {
+  try {
+    if (window.location.hostname === "onetaskonly-app.web.app") {
+      window.location.replace(
+        "https://onetaskonly-app.firebaseapp.com" +
+        window.location.pathname + window.location.search + window.location.hash
+      );
+    }
+  } catch (e) {}
+})();
+</script>
 <meta name="theme-color" content="#00796B">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
