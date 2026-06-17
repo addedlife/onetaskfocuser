@@ -2206,7 +2206,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
         {/* slim time bar (layout buttons moved to top) */}
         <div style={{ display:"flex", alignItems:"baseline", gap:8, padding:"0 2px 4px", flexShrink:0, minWidth:0 }}>
-          <span style={{ fontSize:19, fontWeight:300, color:C.text, fontFamily:NC_FONT_STACK, letterSpacing:-0.5 }}>{clockParts.timeMain}</span>
+          <span style={{ fontSize:19, fontWeight:400, color:C.text, fontFamily:NC_MONO_STACK, fontVariantNumeric:"tabular-nums", letterSpacing:0 }}>{clockParts.timeMain}</span>
           <span style={{ fontSize:11, color:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>{nowDate.toLocaleDateString([], { weekday:"short", month:"short", day:"numeric" })}</span>
         </div>
 
@@ -2334,7 +2334,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             )}
             {!calendarEvents ? emptyMsg("Loading…") : upcomingCal.length === 0 ? emptyMsg("Nothing upcoming.") : upcomingCal.map(row => (
               <div key={row.evt?.id||row.index} style={{ display:"grid", gridTemplateColumns:"auto minmax(0,1fr)", gap: dense?6:8, padding:`${padY}px ${dense?10:12}px`, alignItems:"start" }}>
-                <span style={{ fontSize:metaF, color:row.now?C.accent:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap", paddingTop: dense?0:1, fontWeight:row.now?700:400, minWidth: dense?44:54 }}>
+                <span style={{ fontSize:metaF, color:row.now?C.accent:C.faint, fontFamily:NC_MONO_STACK, fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap", paddingTop: dense?0:1, fontWeight:row.now?700:400, minWidth: dense?44:54 }}>
                   {row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                 </span>
                 <span style={{ fontSize:bodyF, color:row.now||row.special?C.text:C.muted, fontFamily:NC_FONT_STACK, fontWeight:row.now||row.special?600:400, lineHeight:lineH }}>
@@ -2446,7 +2446,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Time strip — tap to reveal the timeline */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 2px 2px" }}>
             <button onClick={() => setMobileTimelineOpen(o => !o)} style={{ all: "unset", display: "flex", alignItems: "baseline", gap: 10, minWidth: 0, cursor: "pointer" }} aria-expanded={mobileTimelineOpen} title="Show timeline">
-              <span style={{ fontSize: 22, fontWeight: 300, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: -0.5 }}>{clockParts.timeMain}</span>
+              <span style={{ fontSize: 22, fontWeight: 400, color: C.text, fontFamily: NC_MONO_STACK, fontVariantNumeric: "tabular-nums", letterSpacing: 0 }}>{clockParts.timeMain}</span>
               <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK }}>{nowDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
               <span style={{ alignSelf: "center", color: C.faint, display: "flex", transform: mobileTimelineOpen ? "rotate(90deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("chevron_right", 14)}</span>
             </button>
@@ -2543,7 +2543,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Nothing upcoming today.</div>
               ) : calendarRows.filter(r=>!r.past).slice(0,40).map(row => (
                 <div key={row.evt?.id||row.index} style={{ display:"grid",gridTemplateColumns:"auto minmax(0,1fr)",gap:8,padding: dense?"1px 12px":"3px 12px",borderTop:`1px solid ${C.divider}`,alignItems:"start" }}>
-                  <span style={{ fontSize:ncType.meta,color:row.now?C.accent:C.faint,fontFamily:NC_FONT_STACK,whiteSpace:"nowrap",paddingTop:1,fontWeight:row.now?700:400,minWidth:54 }}>
+                  <span style={{ fontSize:ncType.meta,color:row.now?C.accent:C.faint,fontFamily:NC_MONO_STACK,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap",paddingTop:1,fontWeight:row.now?700:400,minWidth:54 }}>
                     {row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                   </span>
                   <span style={{ fontSize: dense?ncType.meta:ncType.body,color:row.now||row.special?C.text:C.muted,fontFamily:NC_FONT_STACK,fontWeight:row.now||row.special?600:400,lineHeight: dense?1.12:ncType.line,whiteSpace:"normal",wordBreak:"break-word" }}>
@@ -2588,7 +2588,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     style={{ display:"flex",alignItems:"baseline",gap:6,padding: dense?"1px 12px":"3px 12px",borderTop:`1px solid ${C.divider}`,textDecoration:"none",color:"inherit",minWidth:0 }}>
                     <span style={{fontSize: dense?ncType.meta:ncType.body,fontWeight:600,color:C.text,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{from}</span>
                     <span style={{flex:1,minWidth:0,fontSize:ncType.meta,color:C.muted,fontFamily:NC_FONT_STACK,...(msg.aiSummary?{whiteSpace:"normal",wordBreak:"break-word"}:{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"})}}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
-                    <span style={{fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,flexShrink:0,whiteSpace:"nowrap"}}>{date}</span>
+                    <span style={{fontSize:ncType.meta,color:C.faint,fontFamily:NC_MONO_STACK,fontVariantNumeric:"tabular-nums",flexShrink:0,whiteSpace:"nowrap"}}>{date}</span>
                   </a>
                 );
               })}
@@ -3249,7 +3249,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   ),
                   minimal: (
                     <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, background: C.bg, padding: "16px 8px 10px" }}>
-                      <div style={{ fontSize: 36, fontWeight: 200, lineHeight: 1, color: C.text, letterSpacing: -1, textAlign: "center", maxWidth: "100%" }}>{clockParts.timeMain}</div>
+                      <div style={{ fontSize: 36, fontWeight: 300, lineHeight: 1, color: C.text, letterSpacing: -0.5, textAlign: "center", maxWidth: "100%", fontFamily: NC_MONO_STACK, fontVariantNumeric: "tabular-nums" }}>{clockParts.timeMain}</div>
                       {secBar}
                     </div>
                   ),
