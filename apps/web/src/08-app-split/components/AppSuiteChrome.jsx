@@ -149,6 +149,16 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
+      {/* Reload — always-reachable manual refresh. In installed/standalone (PWA) mode there's
+          no browser address bar, so there's no Ctrl+R / pull-to-refresh to pick up a new deploy.
+          index.html is served no-cache, so a plain reload fetches the latest hashed bundle.
+          Styled muted so it stays unobtrusive in the bottom cluster. */}
+      <button onClick={() => { try { window.location.reload(); } catch (_) {} }} title="Reload — get the latest version"
+        style={navButton(false, { color: C.faint })}>
+        {suiteIcon("refresh", ic(18))}
+        {displayOpen && "Reload"}
+      </button>
+
       {/* Settings */}
       <button onClick={onSettings} title="Settings"
         style={navButton(false)}>
