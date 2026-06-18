@@ -317,6 +317,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     fontWeightScale: 400,
     nerveCenterPaneWeights: { tasks: 1, shailos: 1, phone: 1 },
     nerveCenterGooglePaneHeight: 244,
+    features: { moveUpPopup: false, chief: false, health: false },
   };
 
   // ─── Load / Save ─────────────────────────────────────────────────────────
@@ -368,6 +369,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         if (!s.fontWeightScale) s.fontWeightScale = 400;
         if (!s.nerveCenterPaneWeights) s.nerveCenterPaneWeights = { tasks: 1, shailos: 1, phone: 1 };
         if (!s.nerveCenterGooglePaneHeight) s.nerveCenterGooglePaneHeight = 244;
+        if (!s.features) s.features = { moveUpPopup: false, chief: false, health: false };
         // Permanent: strip "home" custom priority on every load AND directly patch Firestore settings doc.
         // Direct patch bypasses the debounced save (which gets skipped when _listenV5 sets adoptedRemote=true),
         // so the Firestore settings doc is fixed immediately and future snapshots arrive clean.
@@ -1710,11 +1712,20 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     setOptLoading(true);
     try {
       const {optimized, alreadyOptimal, insight, pinOverride} = await aiOptTasksWithAnalysis(tasksRef.current, pris, aiOpts);
+      const moveUpEnabled = AS.features?.moveUpPopup === true;
       if (pinOverride) {
         uT(() => optimized); // apply normal reorder (pins respected) first
-        setOptConfirm({kind:"pinOverride", ...pinOverride, normalInsight: insight});
+        if (moveUpEnabled) {
+          setOptConfirm({kind:"pinOverride", ...pinOverride, normalInsight: insight});
+        } else {
+          showToast(insight || "Queue reordered ✦", 3500);
+        }
       } else if (alreadyOptimal) {
-        setOptConfirm({kind:"optimal", insight, optimized});
+        if (moveUpEnabled) {
+          setOptConfirm({kind:"optimal", insight, optimized});
+        } else {
+          showToast(insight || "Queue looks good ✦", 3500);
+        }
       } else {
         uT(() => optimized);
         showToast(insight || "Queue reordered ✦", 3500);
@@ -3579,6 +3590,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           onDelete={() => curT && delTask(curT.id)}
           topOffset={noticeTopOffset}
           clockTime={clockTime}
+          features={AS.features || {}}
         />
       )}
 

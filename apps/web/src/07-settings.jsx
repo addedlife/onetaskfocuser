@@ -118,6 +118,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
     {id:"schedule",   label:"Schedule"},
     {id:"account",    label:"Account"},
     {id:"google",     label:"Google"},
+    {id:"features",   label:"Features"},
   ];
 
   const settingsType = {
@@ -488,6 +489,44 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 <span style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",lineHeight:settingsType.line}}>Client ID saved. Go to your launchpad and tap <strong>Connect Google</strong> to authorize.</span>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── FEATURES TAB ── */}
+        {sTab === "features" && (
+          <div>
+            <h4 style={sh}>Experimental Features</h4>
+            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 20px",lineHeight:settingsType.line}}>
+              These features are paused or experimental. Toggle them on to re-enable.
+            </p>
+
+            <div style={rowSB}>
+              <div>
+                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>AI move-up popup</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>When AI suggests moving a task above your pinned items, show a confirmation dialog</p>
+              </div>
+              <button onClick={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,moveUpPopup:!ft.moveUpPopup}};})} style={tog(AS.features?.moveUpPopup===true)}><div style={knob(AS.features?.moveUpPopup===true)}/></button>
+            </div>
+
+            <div style={{height:1,background:T.brdS,margin:"0 0 18px"}}/>
+
+            <div style={rowSB}>
+              <div>
+                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Chief of Staff</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>AI-powered chief of staff — shows in the sidebar under Experimental</p>
+              </div>
+              <button onClick={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,chief:!ft.chief}};})} style={tog(AS.features?.chief===true)}><div style={knob(AS.features?.chief===true)}/></button>
+            </div>
+
+            <div style={{height:1,background:T.brdS,margin:"0 0 18px"}}/>
+
+            <div style={rowSB}>
+              <div>
+                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Health</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Health tracking and wellness features — shows in the sidebar under Experimental</p>
+              </div>
+              <button onClick={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,health:!ft.health}};})} style={tog(AS.features?.health===true)}><div style={knob(AS.features?.health===true)}/></button>
+            </div>
           </div>
         )}
 

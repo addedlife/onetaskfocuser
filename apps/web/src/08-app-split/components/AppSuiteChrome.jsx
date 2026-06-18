@@ -2,7 +2,7 @@ import React from 'react';
 import { cleanTheme, NC_FONT_STACK, NC_TYPE, suiteIcon } from '../ui-tokens.jsx';
 import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
 
-function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreActions, topOffset = 0, forceCompact = false, clockTime = null, onSettings }) {
+function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreActions, topOffset = 0, forceCompact = false, clockTime = null, onSettings, features = {} }) {
   const mainApps = [
     { id: "focus",      label: "Tasks",      icon: "rule"          },
     { id: "shailos",    label: "Shailos",    icon: "question_mark" },
@@ -12,7 +12,11 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
     { id: "health",     label: "Health",     icon: "monitor_heart" },
     { id: "taskriver",  label: "TaskRiver",  icon: "water"         },
     { id: "chief",      label: "Chief",      icon: "psychology"    },
-  ];
+  ].filter(app => {
+    if (app.id === "chief")  return features.chief  === true;
+    if (app.id === "health") return features.health === true;
+    return true;
+  });
   const C = cleanTheme(T);
   const displayOpen = open && !forceCompact;
   const W = displayOpen ? 184 : 64;
