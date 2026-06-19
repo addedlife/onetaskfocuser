@@ -1,98 +1,147 @@
 import React, { useEffect, useState } from 'react';
 
+// ─── ShamashPro Design Token System ──────────────────────────────────────────
+// All layout, motion, and typographic tokens live as CSS custom properties on
+// :root (defined in NC_GLOBAL_CSS below). JS exports are var() reference strings,
+// never raw values. To change a token: edit the CSS var — every consumer updates
+// automatically. DevTools overrides a single var and every surface repaints.
+//
+// Prefix: --shp- (ShamashPro) — namespace for future app-wide expansion.
+//
+// COLOR EXCEPTION: GV_CLEAN and category colors stay as JS hex strings because
+// hexToRgba() needs the real hex value for dynamic tinting. Colors are mirrored
+// as --shp-color-* vars for documentation and future CSS-class use, but the
+// JS hex objects remain the runtime source of truth.
+//
+// Z-INDEX EXCEPTION: Z stays as JS numbers. Fixed overlays can be outside the
+// .nc-suite-root DOM subtree and CSS var inheritance may not reach them.
+
 export const suiteIcon = (name, size = 20) => (
   <span className="material-symbols-rounded" style={{ fontSize: size }}>{name}</span>
 );
 
+// ─── Color Palette ────────────────────────────────────────────────────────────
+// JS hex strings — needed by hexToRgba for dynamic tinting throughout the panel.
+// Mirrored as --shp-color-* CSS vars in :root below.
 export const GV_CLEAN = {
-  bg: "#FFFFFF",
-  bgSoft: "#F8F9FA",
-  hover: "#F1F3F4",
-  divider: "#DADCE0",
-  text: "#202124",
-  muted: "#5F6368",
-  faint: "#9AA0A6",
-  accent: "#00796B",
+  bg:         "#FFFFFF",
+  bgSoft:     "#F8F9FA",
+  hover:      "#F1F3F4",
+  divider:    "#DADCE0",
+  text:       "#202124",
+  muted:      "#5F6368",
+  faint:      "#9AA0A6",
+  accent:     "#00796B",
   accentDark: "#00695C",
-  success: "#1E8E3E",
-  danger: "#D93025",
-  warning: "#F9AB00",
+  success:    "#1E8E3E",
+  danger:     "#D93025",
+  warning:    "#F9AB00",
 };
 
 export const NC_FONT_STACK = '"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
 
-// Monospace stack for numerals — times, counts, metadata. Tabular, "engineered" feel
-// (the strongest contemporary signal). Falls back through the OS mono faces if the
-// JetBrains Mono webfont (loaded in index.html) hasn't arrived yet.
+// Monospace stack for numerals — times, counts, metadata. Tabular, "engineered"
+// feel. Falls back through OS mono faces if JetBrains Mono hasn't loaded yet.
 export const NC_MONO_STACK = '"JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", "Segoe UI Mono", Menlo, Consolas, monospace';
 
+// ─── Typography ───────────────────────────────────────────────────────────────
+// Each value is a CSS var reference. Change --shp-type-* in :root to retheme.
+// `label` and `control` are kept as aliases for back-compat; prefer meta/body.
+// `line` is a line-height alias — kept for legacy callers; prefer LINE.* directly.
 export const NC_TYPE = {
-  title: 16,
-  body: 14,
-  meta: 12,
-  label: 12,
-  small: 11,
-  control: 14,
-  line: 1.28,
+  title:   "var(--shp-type-title)",  // 16px
+  body:    "var(--shp-type-body)",   // 14px
+  meta:    "var(--shp-type-meta)",   // 12px
+  label:   "var(--shp-type-meta)",   // alias — same as meta
+  small:   "var(--shp-type-small)",  // 11px
+  control: "var(--shp-type-body)",   // alias — same as body
+  line:    "var(--shp-line-base)",   // line-height alias (1.3)
 };
 
-// ─── Z-index layering system ──────────────────────────────────────────────
-// One ordered scale for every fixed/absolute overlay. Higher = closer to the
-// user. Always reference these names instead of hand-picking magic numbers.
+// ─── Z-index layering ─────────────────────────────────────────────────────────
+// Kept as JS numbers: fixed overlays are often outside the app root and must
+// resolve without CSS custom property inheritance.
 export const Z = {
-  panel:         7600,   // full-screen surface panels (sit beside the sidebar)
-  overlay:       9000,   // standard modal backdrops, zen mode, full-screen overlays
-  docked:        9200,   // minimized / docked pills
-  nudgeCard:     9400,   // docked nudge cards (corner)
-  nudge:         9490,   // centered nudge cards
-  modal:         9500,   // standard modals
-  toast:         9800,   // toasts & undo bars
-  modalCritical: 9900,   // critical confirmation modals (must sit above toasts)
-  celebration:   9990,   // streak / celebration animations
-  systemBar:     10000,  // offline notice bar
-  systemBarTop:  10001,  // update / connection notice bar (topmost)
+  panel:         7600,
+  overlay:       9000,
+  docked:        9200,
+  nudgeCard:     9400,
+  nudge:         9490,
+  modal:         9500,
+  toast:         9800,
+  modalCritical: 9900,
+  celebration:   9990,
+  systemBar:     10000,
+  systemBarTop:  10001,
 };
 
-// ─── Motion ───────────────────────────────────────────────────────────────
-// Three durations, two easings — every transition/animation draws from these.
-export const DUR = { fast: "0.12s", base: "0.2s", slow: "0.32s" };
-export const EASE = {
-  standard: "cubic-bezier(.2, 0, 0, 1)",   // most UI motion
-  decelerate: "cubic-bezier(0, 0, 0, 1)",  // elements entering the screen
+// ─── Motion ───────────────────────────────────────────────────────────────────
+export const DUR = {
+  fast: "var(--shp-dur-fast)",
+  base: "var(--shp-dur-base)",
+  slow: "var(--shp-dur-slow)",
 };
-// Standard transition for interactive surfaces — never use `transition: all`.
+export const EASE = {
+  standard:   "var(--shp-ease-standard)",
+  decelerate: "var(--shp-ease-decelerate)",
+};
+// Standard transition — never use `transition: all`.
+// DUR/EASE resolve to CSS vars; the browser substitutes their values at paint time.
 export const TRANSITION = `background-color ${DUR.fast} ${EASE.standard}, border-color ${DUR.fast} ${EASE.standard}, color ${DUR.fast} ${EASE.standard}, box-shadow ${DUR.base} ${EASE.standard}, transform ${DUR.fast} ${EASE.standard}, opacity ${DUR.base} ${EASE.standard}`;
 
-// ─── Elevation ────────────────────────────────────────────────────────────
-// Named shadow tiers — higher = more lifted. Replaces ad-hoc box shadows.
+// ─── Elevation ────────────────────────────────────────────────────────────────
+// CSS var strings. Assign directly: `boxShadow: ELEV[3]`.
 export const ELEV = {
-  1: "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)",
-  2: "0 2px 8px rgba(0,0,0,0.10)",
-  3: "0 6px 20px rgba(0,0,0,0.14)",
-  4: "0 12px 40px rgba(0,0,0,0.20)",
-  drawer: "-8px 0 24px rgba(0,0,0,0.14)", // side-drawer horizontal shadow
+  1:      "var(--shp-elev-1)",
+  2:      "var(--shp-elev-2)",
+  3:      "var(--shp-elev-3)",
+  4:      "var(--shp-elev-4)",
+  drawer: "var(--shp-elev-drawer)",
 };
 
-// ─── Spacing (4-pt grid) ──────────────────────────────────────────────────
-export const SP = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
+// ─── Spacing (4-pt grid) ──────────────────────────────────────────────────────
+export const SP = {
+  xs:  "var(--shp-space-xs)",
+  sm:  "var(--shp-space-sm)",
+  md:  "var(--shp-space-md)",
+  lg:  "var(--shp-space-lg)",
+  xl:  "var(--shp-space-xl)",
+  xxl: "var(--shp-space-xxl)",
+};
 
-// ─── Shape Scale (M3-aligned, 4-dp step system) ───────────────────────────
+// ─── Shape Scale ──────────────────────────────────────────────────────────────
 // xs=chips/badges  sm=buttons/inputs/rows  md=cards/panels  pill=full-round
-export const RADIUS = { xs: 4, sm: 8, md: 12, pill: 999 };
+export const RADIUS = {
+  xs:   "var(--shp-radius-xs)",
+  sm:   "var(--shp-radius-sm)",
+  md:   "var(--shp-radius-md)",
+  pill: "var(--shp-radius-pill)",
+};
 
-// ─── Icon Scale ───────────────────────────────────────────────────────────
-// Consistent sizes for Material Symbols across all contexts.
-export const ICON = { xs: 12, sm: 14, md: 16, lg: 18, xl: 20 };
+// ─── Icon Scale ───────────────────────────────────────────────────────────────
+// Pass to suiteIcon(name, ICON.sm) or use as fontSize in style objects.
+export const ICON = {
+  xs: "var(--shp-icon-xs)",
+  sm: "var(--shp-icon-sm)",
+  md: "var(--shp-icon-md)",
+  lg: "var(--shp-icon-lg)",
+  xl: "var(--shp-icon-xl)",
+};
 
-// ─── Line Heights ─────────────────────────────────────────────────────────
-export const LINE = { tight: 1.2, base: 1.3, body: 1.4, loose: 1.5 };
+// ─── Line Heights ─────────────────────────────────────────────────────────────
+export const LINE = {
+  tight: "var(--shp-line-tight)",
+  base:  "var(--shp-line-base)",
+  body:  "var(--shp-line-body)",
+  loose: "var(--shp-line-loose)",
+};
 
 // One consistent modal backdrop tint.
 export const SCRIM = "rgba(0, 0, 0, 0.38)";
 
-// ─── Category Identity Colors ─────────────────────────────────────────────
-// App-level semantic palette — section accent hues. Source of truth; do not
-// re-define locally in component files.
+// ─── Category Identity Colors ─────────────────────────────────────────────────
+// Hex strings — used with hexToRgba for dynamic tinting. Also mirrored as
+// --shp-color-gold etc. in :root for any CSS-class-based overrides.
 export const GOLD      = "#C9923C";
 export const GOLD_BG   = "rgba(201,146,60,0.055)";
 export const GOLD_BRD  = "rgba(201,146,60,0.16)";
@@ -103,18 +152,88 @@ export function useViewportWidth() {
   const [width, setWidth] = useState(() => (
     typeof window === "undefined" ? 1440 : window.innerWidth
   ));
-
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const onResize = () => setWidth(window.innerWidth);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-
   return width;
 }
 
 export const NC_GLOBAL_CSS = `
+:root {
+  /* ── ShamashPro Design Tokens ─────────────────────────────────────────────
+     Single source of truth for every layout, motion, and typographic value.
+     Override any token here (or per-theme) and every surface updates at once.
+     JS exports in ui-tokens.jsx are var() reference strings pointing here.   */
+
+  /* Shape */
+  --shp-radius-xs:   4px;
+  --shp-radius-sm:   8px;
+  --shp-radius-md:   12px;
+  --shp-radius-pill: 999px;
+
+  /* Elevation / shadow */
+  --shp-elev-1:      0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shp-elev-2:      0 2px 8px rgba(0,0,0,0.10);
+  --shp-elev-3:      0 6px 20px rgba(0,0,0,0.14);
+  --shp-elev-4:      0 12px 40px rgba(0,0,0,0.20);
+  --shp-elev-drawer: -8px 0 24px rgba(0,0,0,0.14);
+
+  /* Spacing (4-pt grid) */
+  --shp-space-xs:  4px;
+  --shp-space-sm:  8px;
+  --shp-space-md:  12px;
+  --shp-space-lg:  16px;
+  --shp-space-xl:  24px;
+  --shp-space-xxl: 32px;
+
+  /* Icon sizes */
+  --shp-icon-xs: 12px;
+  --shp-icon-sm: 14px;
+  --shp-icon-md: 16px;
+  --shp-icon-lg: 18px;
+  --shp-icon-xl: 20px;
+
+  /* Typography */
+  --shp-type-title: 16px;
+  --shp-type-body:  14px;
+  --shp-type-meta:  12px;
+  --shp-type-small: 11px;
+
+  /* Line heights (unitless) */
+  --shp-line-tight: 1.2;
+  --shp-line-base:  1.3;
+  --shp-line-body:  1.4;
+  --shp-line-loose: 1.5;
+
+  /* Motion */
+  --shp-dur-fast:        0.12s;
+  --shp-dur-base:        0.2s;
+  --shp-dur-slow:        0.32s;
+  --shp-ease-standard:   cubic-bezier(.2, 0, 0, 1);
+  --shp-ease-decelerate: cubic-bezier(0, 0, 0, 1);
+
+  /* Semantic colors — mirrored from GV_CLEAN for CSS-class use and DevTools
+     inspection. JS side stays hex so hexToRgba() can parse it directly. */
+  --shp-color-bg:        #FFFFFF;
+  --shp-color-bg-soft:   #F8F9FA;
+  --shp-color-hover:     #F1F3F4;
+  --shp-color-divider:   #DADCE0;
+  --shp-color-text:      #202124;
+  --shp-color-muted:     #5F6368;
+  --shp-color-faint:     #9AA0A6;
+  --shp-color-accent:    #00796B;
+  --shp-color-success:   #1E8E3E;
+  --shp-color-danger:    #D93025;
+  --shp-color-warning:   #F9AB00;
+
+  /* Category identity */
+  --shp-color-gold:      #C9923C;
+  --shp-color-cat-mail:  #3D6CB5;
+  --shp-color-cat-phone: #8A63B5;
+}
 .nc-suite-root,
 .nc-suite-root :where(button, input, textarea, select, p, span, div, a, label, h1, h2, h3, h4, h5, h6, li, summary) {
   font-family: ${NC_FONT_STACK} !important;
@@ -253,24 +372,24 @@ export const NC_GLOBAL_CSS = `
 `;
 
 export const cleanTheme = (theme = {}) => ({
-  bg: theme.card || GV_CLEAN.bg,
-  bgSoft: theme.bgW || GV_CLEAN.bgSoft,
-  hover: theme.tonal || theme.bgW || GV_CLEAN.hover,
-  divider: theme.brdS || theme.brd || GV_CLEAN.divider,
-  text: theme.text || GV_CLEAN.text,
-  muted: theme.tSoft || GV_CLEAN.muted,
-  faint: theme.tFaint || GV_CLEAN.faint,
-  accent: theme.primary || GV_CLEAN.accent,
+  bg:        theme.card  || GV_CLEAN.bg,
+  bgSoft:    theme.bgW   || GV_CLEAN.bgSoft,
+  hover:     theme.tonal || theme.bgW || GV_CLEAN.hover,
+  divider:   theme.brdS  || theme.brd || GV_CLEAN.divider,
+  text:      theme.text  || GV_CLEAN.text,
+  muted:     theme.tSoft || GV_CLEAN.muted,
+  faint:     theme.tFaint || GV_CLEAN.faint,
+  accent:    theme.primary || GV_CLEAN.accent,
   accentDark: theme.onTonal || theme.primary || GV_CLEAN.accentDark,
-  success: theme.success || GV_CLEAN.success,
-  danger: theme.danger || GV_CLEAN.danger,
-  warning: theme.warning || GV_CLEAN.warning,
+  success:   theme.success || GV_CLEAN.success,
+  danger:    theme.danger  || GV_CLEAN.danger,
+  warning:   theme.warning || GV_CLEAN.warning,
 });
 
 export const gvIconButton = (overrides = {}, C = GV_CLEAN) => ({
   width: 40,
   height: 40,
-  borderRadius: 20,
+  borderRadius: RADIUS.pill,
   border: "none",
   background: "transparent",
   color: C.muted,
@@ -282,19 +401,19 @@ export const gvIconButton = (overrides = {}, C = GV_CLEAN) => ({
   ...overrides,
   // index.html sets button{min-height:36px} globally; min-height beats height, so
   // without an inline minHeight any icon button shorter than 36px silently renders
-  // at 36px and props row heights open (why "compact" rows never got compact).
+  // at 36px and props row heights open.
   minHeight: overrides.minHeight ?? overrides.height ?? 40,
 });
 
 export const gvTextButton = (overrides = {}, C = GV_CLEAN) => ({
   minHeight: 40,
   padding: "0 16px",
-  borderRadius: 4,
+  borderRadius: RADIUS.xs,
   border: `1px solid ${C.divider}`,
   background: "transparent",
   color: C.muted,
   cursor: "pointer",
-  fontSize: 14,
+  fontSize: NC_TYPE.body,
   fontWeight: 500,
   fontFamily: NC_FONT_STACK,
   display: "flex",
@@ -307,12 +426,12 @@ export const gvTextButton = (overrides = {}, C = GV_CLEAN) => ({
 export const cleanToolbarButton = (active = false, C = GV_CLEAN, overrides = {}) => ({
   minHeight: 40,
   padding: "0 14px",
-  borderRadius: 4,
+  borderRadius: RADIUS.xs,
   border: "1px solid transparent",
   background: active ? C.hover : "transparent",
   color: active ? C.text : C.muted,
   cursor: "pointer",
-  fontSize: 14,
+  fontSize: NC_TYPE.body,
   fontWeight: 500,
   fontFamily: NC_FONT_STACK,
   display: "flex",
@@ -347,9 +466,9 @@ export function getInitialSuiteView() {
 }
 
 // ─── NerveCenter Section Header Styles ───────────────────────────────────────
-// Shared style functions for the three primary panel headers (Tasks / Shailos / Phone).
-// Keeping the logic here ensures all three headers stay visually identical and that
-// design decisions — divider opacity, padding, icon size — have a single source of truth.
+// Shared style functions for the three primary panel headers (Tasks/Shailos/Phone).
+// Logic lives here so all three headers are guaranteed identical and design
+// decisions — divider, padding, icon size — have a single source of truth.
 export const ncSectionHeaderStyle = (C, overrides = {}) => ({
   minHeight: 30,
   padding: "3px 10px",
@@ -358,7 +477,7 @@ export const ncSectionHeaderStyle = (C, overrides = {}) => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  gap: 8,
+  gap: SP.sm,
   ...overrides,
 });
 
