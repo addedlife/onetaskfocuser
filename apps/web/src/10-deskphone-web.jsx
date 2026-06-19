@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GV_CLEAN } from './08-app-split/ui-tokens.jsx';
+import { GV_CLEAN, NC_TYPE, RADIUS } from './08-app-split/ui-tokens.jsx';
 
 const DEFAULT_HOST = "http://127.0.0.1:8765";
 const RAIL_COLLAPSED_KEY = "deskphone_web_rail_collapsed";
@@ -6218,12 +6218,12 @@ export function DeskPhoneWebPanel({
 
           {deleteAllCallsConfirm && (
             <div style={{position:"fixed",inset:0,zIndex:9900,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={() => setDeleteAllCallsConfirm(false)}>
-              <div onClick={e=>e.stopPropagation()} style={{background:COLORS.bgMain,borderRadius:18,padding:"24px 28px",maxWidth:360,boxShadow:"0 4px 16px rgba(0,0,0,0.15)"}}>
-                <p style={{fontSize:16,fontWeight:600,color:COLORS.textPrimary,margin:"0 0 12px"}}>Delete all call history?</p>
-                <p style={{fontSize:14,color:COLORS.textMuted,margin:"0 0 20px",lineHeight:1.5}}>This will permanently delete all calls from DeskPhone Web.</p>
+              <div onClick={e=>e.stopPropagation()} style={{background:COLORS.bgMain,borderRadius:RADIUS.md,padding:"24px 28px",maxWidth:360,boxShadow:"0 4px 16px rgba(0,0,0,0.15)"}}>
+                <p style={{fontSize:NC_TYPE.title,fontWeight:600,color:COLORS.textPrimary,margin:"0 0 12px"}}>Delete all call history?</p>
+                <p style={{fontSize:NC_TYPE.body,color:COLORS.textMuted,margin:"0 0 20px",lineHeight:1.5}}>This will permanently delete all calls from DeskPhone Web.</p>
                 <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-                  <button onClick={() => setDeleteAllCallsConfirm(false)} style={{padding:"8px 16px",borderRadius:8,border:`1px solid ${COLORS.border}`,background:"transparent",color:COLORS.textMuted,cursor:"pointer",fontSize:14,fontWeight:500,fontFamily:"inherit"}}>Cancel</button>
-                  <button onClick={() => {setDeleteAllCallsConfirm(false); runCommand("/delete-all-call-history", "delete all call history");}} style={{padding:"8px 16px",borderRadius:8,border:"none",background:COLORS.accentRed,color:COLORS.textOnAccent,cursor:"pointer",fontSize:14,fontWeight:600,fontFamily:"inherit"}}>Delete All</button>
+                  <button onClick={() => setDeleteAllCallsConfirm(false)} style={{padding:"8px 16px",borderRadius:RADIUS.sm,border:`1px solid ${COLORS.border}`,background:"transparent",color:COLORS.textMuted,cursor:"pointer",fontSize:NC_TYPE.body,fontWeight:500,fontFamily:"inherit"}}>Cancel</button>
+                  <button onClick={() => {setDeleteAllCallsConfirm(false); runCommand("/delete-all-call-history", "delete all call history");}} style={{padding:"8px 16px",borderRadius:RADIUS.sm,border:"none",background:COLORS.accentRed,color:COLORS.textOnAccent,cursor:"pointer",fontSize:NC_TYPE.body,fontWeight:600,fontFamily:"inherit"}}>Delete All</button>
                 </div>
               </div>
             </div>
