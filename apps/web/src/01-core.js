@@ -1249,19 +1249,9 @@ const SCHEMES = {
   materialDark:{name:"Material Dark", bg:"#0F141B",bgW:"#18202B",card:"#1E2733",text:"#EEF3FA",tSoft:"#C4CCD8",tFaint:"#98A4B3",brd:"#3B4756",brdS:"#293441",grad:["#0F141B","#141B24","#1E2733"],primary:"#A8C7FA",onPrimary:"#062E6F",tonal:"#1F3B63",onTonal:"#D3E3FD",glow:true},
   claude:    {name:"Claude Cream",    bg:"#FAF9F6",bgW:"#F0EDE6",card:"#FFFFFF",text:"#1F1A15",tSoft:"#51443A",tFaint:"#73665B",brd:"#DCD6CB",brdS:"#EEE9E1",grad:["#FAF9F6","#F2EFE8","#E8E1D7"],primary:"#9A452B",onPrimary:"#FFFFFF",tonal:"#F7E4DA",onTonal:"#71331F"},
   navyGold:  {name:"Navy Gold",       bg:"#07111F",bgW:"#0D1B2E",card:"#122235",text:"#F7FAFF",tSoft:"#D6DEE9",tFaint:"#A5B3C4",brd:"#304258",brdS:"#1F3147",grad:["#07111F","#0B1728","#122235"],primary:"#F2C14E",onPrimary:"#1F1600",tonal:"#3A321B",onTonal:"#FFE7A3",glow:true},
-  midnight:  {name:"Midnight Focus",  bg:"#1A1B2E",bgW:"#222340",card:"#252748",text:"#E0DCF0",tSoft:"#9994B8",tFaint:"#AAA5C8",brd:"#3A3860",brdS:"#2E2D50",grad:["#1A1B2E","#1E1F38","#222340"]},
-  forest:    {name:"Forest Calm",     bg:"#E4EBE0",bgW:"#D4DDD0",card:"#EEF2EB",text:"#344030",tSoft:"#50624A",tFaint:"#4F5F49",brd:"#C4D0BC",brdS:"#D8E0D4",grad:["#E4EBE0","#D8E2D2","#CCD6C4"]},
-  sunset:    {name:"Warm Sunset",     bg:"#F0E0D0",bgW:"#E8D4C0",card:"#F8EEE2",text:"#4A3428",tSoft:"#705040",tFaint:"#765040",brd:"#DCC8B4",brdS:"#E8D8C8",grad:["#F0E0D0","#E8D0BC","#E0C4B0"]},
   ocean:     {name:"Ocean Breeze",    bg:"#DDE8EE",bgW:"#CCDCE4",card:"#EAF0F4",text:"#2A3840",tSoft:"#486070",tFaint:"#495E6B",brd:"#B8CCD6",brdS:"#D0DDE4",grad:["#DDE8EE","#D0DEE6","#C4D4DE"]},
-  lavender:  {name:"Lavender Haze",   bg:"#EAE6F2",bgW:"#DFD9EC",card:"#F2EFF7",text:"#36304A",tSoft:"#564878",tFaint:"#665578",brd:"#CCC6E0",brdS:"#DDD8EC",grad:["#EAE6F2","#E4DEF0","#DAD2EA"]},
   sage:      {name:"Sage & Cream",    bg:"#E6EDE4",bgW:"#D6DFD2",card:"#EEF3EC",text:"#2E4030",tSoft:"#4A6248",tFaint:"#50614E",brd:"#C0CEBC",brdS:"#D4DECE",grad:["#E6EDE4","#DAEBD6","#CEDEC8"]},
-  slate:     {name:"Dusty Slate",     bg:"#E4ECF0",bgW:"#D6E2E8",card:"#EEF3F6",text:"#2C3E46",tSoft:"#466070",tFaint:"#4B6370",brd:"#BECCD6",brdS:"#D2DFE6",grad:["#E4ECF0","#D8E8F0","#CCDEE8"]},
-  rose:      {name:"Dusty Rose",      bg:"#F0E4E4",bgW:"#E6D4D4",card:"#F6EEEE",text:"#422C2C",tSoft:"#6A4444",tFaint:"#745050",brd:"#D4BCBC",brdS:"#E6D0D0",grad:["#F0E4E4","#ECD8D8","#E6CCCC"]},
-  parchment: {name:"Old Parchment",   bg:"#F2EAD8",bgW:"#EAE0C8",card:"#F8F2E8",text:"#3C2E18",tSoft:"#5E4A2A",tFaint:"#715A38",brd:"#DCC8A0",brdS:"#EAD8B8",grad:["#F2EAD8","#ECE2CA","#E6D6BA"]},
-  starlit:   {name:"Starlit Night",   bg:"#0C1220",bgW:"#111828",card:"#141E30",text:"#EEF2FF",tSoft:"#C0CCE8",tFaint:"#8899BB",brd:"#263050",brdS:"#1C2640",grad:["#0C1220","#101826","#141E30"],glow:true},
   obsidian:  {name:"Obsidian",        bg:"#181818",bgW:"#202020",card:"#242424",text:"#E0E0E0",tSoft:"#999999",tFaint:"#949494",brd:"#363636",brdS:"#2A2A2A",grad:["#181818","#1E1E1E","#242424"]},
-  deepocean: {name:"Deep Ocean",      bg:"#0A1628",bgW:"#0E1C32",card:"#12223C",text:"#C8D8F0",tSoft:"#AFC4E4",tFaint:"#96ADD0",brd:"#1E3450",brdS:"#162A42",grad:["#0A1628","#0E1C32","#12223C"],glow:true},
-  ember:     {name:"Dying Ember",     bg:"#1A1210",bgW:"#221816",card:"#281E1A",text:"#E8D0C0",tSoft:"#D2B8A8",tFaint:"#B79C8A",brd:"#3A2820",brdS:"#2E2018",grad:["#1A1210","#201614","#261A18"]},
 };
 Object.keys(SCHEMES).forEach(id => { SCHEMES[id] = ensureSchemeContrast(SCHEMES[id]); });
 
