@@ -1,10 +1,7 @@
 // MCP server — read-only Firestore tools for OneTask/Shailos
 // (Converted from mcp.mjs — ESM → CJS, Web Fetch API → Express req/res)
 
-const { cert, getApps, initializeApp } = require("firebase-admin/app");
-const { getFirestore } = require("firebase-admin/firestore");
-
-const PROJECT_ID = "onetaskonly-app";
+const { FIREBASE_PROJECT_ID, getAdminDb } = require("./_config.cjs");
 const USER_KEY = "rabbidanziger";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -110,7 +107,7 @@ module.exports = async (req, res) => {
     return res.status(status).set({ ...corsHeaders, "Content-Type": "application/json; charset=utf-8" }).json({
       name: "onetask-firestore-readonly",
       status: authProblem ? "locked" : "ready",
-      project: PROJECT_ID, userKey: USER_KEY, endpoint: "/mcp",
+      project: FIREBASE_PROJECT_ID, userKey: USER_KEY, endpoint: "/mcp",
       tools: tools.map(t => t.name),
       auth: authProblem ? authProblem.message : "authorized",
     });
@@ -319,29 +316,7 @@ function normalizeValue(value) {
 }
 
 function userDoc() {
-  return db().collection("users").doc(USER_KEY);
-}
-
-function db() {
-  if (!getApps().length) {
-    initializeApp({ credential: cert(serviceAccount()), projectId: PROJECT_ID });
-  }
-  return getFirestore();
-}
-
-function serviceAccount() {
-  const rawJson = process.env.ADMIN_SA_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (rawJson) {
-    const parsed = JSON.parse(rawJson);
-    if (parsed.project_id !== PROJECT_ID) throw new Error("Service account is not scoped to onetaskonly-app.");
-    return parsed;
-  }
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  if (!projectId || !clientEmail || !privateKey) throw new Error("Firebase service account is not configured.");
-  if (projectId !== PROJECT_ID) throw new Error("Configured Firebase project is not onetaskonly-app.");
-  return { projectId, clientEmail, privateKey };
+  return getAdminDb().collection("users").doc(USER_KEY);
 }
 
 function authorize(req) {

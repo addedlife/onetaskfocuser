@@ -18,10 +18,9 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type, X-Relay-Secret, Authorization",
 };
 
-const FB_PROJECT = "onetaskonly-app";
-const FB_API_KEY = "AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA";
-const FS_BASE = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents/phone-relay`;
-const FS_MEDIA_BASE = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents/phone-media`;
+const { FIREBASE_PROJECT_ID, FIREBASE_WEB_API_KEY } = require("./_config.cjs");
+const FS_BASE = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/phone-relay`;
+const FS_MEDIA_BASE = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/phone-media`;
 
 function sendOk(res, body) {
   return res.status(200).set({ ...CORS, "Content-Type": "application/json" }).json(body);
@@ -32,7 +31,7 @@ function sendErr(res, statusCode, msg) {
 }
 
 async function fsGet(docId, idToken = null) {
-  const url = `${FS_BASE}/${docId}?key=${FB_API_KEY}`;
+  const url = `${FS_BASE}/${docId}?key=${FIREBASE_WEB_API_KEY}`;
   const headers = {};
   if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
   const r = await fetch(url, { headers });
@@ -45,7 +44,7 @@ async function fsGet(docId, idToken = null) {
 }
 
 async function fsSet(docId, value) {
-  const url = `${FS_BASE}/${docId}?key=${FB_API_KEY}&updateMask.fieldPaths=data`;
+  const url = `${FS_BASE}/${docId}?key=${FIREBASE_WEB_API_KEY}&updateMask.fieldPaths=data`;
   const r = await fetch(url, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -58,7 +57,7 @@ async function fsSet(docId, value) {
 }
 
 async function fsSetMedia(docId, dataUrl) {
-  const url = `${FS_MEDIA_BASE}/${encodeURIComponent(docId)}?key=${FB_API_KEY}&updateMask.fieldPaths=data`;
+  const url = `${FS_MEDIA_BASE}/${encodeURIComponent(docId)}?key=${FIREBASE_WEB_API_KEY}&updateMask.fieldPaths=data`;
   const r = await fetch(url, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },

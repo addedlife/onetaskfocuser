@@ -6,6 +6,7 @@
 //   FIREBASE_SERVICE_ACCOUNT_JSON (or FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY)
 
 const { corsHeaders } = require("./cors-helper");
+const { getAdminDb, getAdminAuth, googleHealthClientId, googleHealthClientSecret } = require("./_config.cjs");
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const HEALTH_V4 = "https://health.googleapis.com/v4";
@@ -17,42 +18,13 @@ const SCOPES = [
   "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
 ].join(" ");
 
-let adminDb = null;
-function firebaseServiceAccount() {
-  const raw = process.env.ADMIN_SA_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (raw) return JSON.parse(raw);
-  const p = process.env.FIREBASE_PROJECT_ID;
-  const e = process.env.FIREBASE_CLIENT_EMAIL;
-  const k = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  if (!p || !e || !k) return null;
-  return { projectId: p, clientEmail: e, privateKey: k };
-}
-function getDb() {
-  if (adminDb) return adminDb;
-  const sa = firebaseServiceAccount();
-  if (!sa) throw new Error("Missing Firebase service account env vars");
-  const { cert, getApps, initializeApp } = require("firebase-admin/app");
-  const { getFirestore } = require("firebase-admin/firestore");
-  const app = getApps()[0] || initializeApp({ credential: cert(sa), projectId: sa.projectId || sa.project_id });
-  adminDb = getFirestore(app);
-  return adminDb;
-}
-
-let adminAuth = null;
-function getAuth() {
-  if (adminAuth) return adminAuth;
-  getDb();
-  const { getAuth: _getAuth } = require("firebase-admin/auth");
-  adminAuth = _getAuth();
-  return adminAuth;
-}
 
 async function authedUid(req) {
   const header = req.headers.authorization || "";
   const token  = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
   if (!token) { const e = new Error("Sign in required"); e.statusCode = 401; throw e; }
   try {
-    const decoded = await getAuth().verifyIdToken(token);
+    const decoded = await getAdminAuth().verifyIdToken(token);
     return decoded.uid;
   } catch (_) {
     const e = new Error("Invalid or expired sign-in"); e.statusCode = 401; throw e;
@@ -61,7 +33,7 @@ async function authedUid(req) {
 
 async function dlog(source, msg, data) {
   try {
-    const db = getDb();
+    const db = getAdminDb();
     await db.collection("debugLogs").add({
       ts:     Date.now(),
       source: `gh:${source}`,
@@ -84,8 +56,8 @@ async function ensureFreshToken(db, userId) {
     body: new URLSearchParams({
       grant_type: "refresh_token",
       refresh_token: cfg.googleRefreshToken,
-      client_id: process.env.GOOGLE_HEALTH_CLIENT_ID || "",
-      client_secret: process.env.GOOGLE_HEALTH_CLIENT_SECRET || "",
+      client_id: googleHealthClientId(),
+      client_secret: googleHealthClientSecret(),
     }),
   });
   const t = await res.json();
@@ -139,8 +111,8 @@ module.exports = async (req, res) => {
 
   if (req.method === "OPTIONS") return res.status(204).set(headers).end();
 
-  const clientId     = process.env.GOOGLE_HEALTH_CLIENT_ID     || "";
-  const clientSecret = process.env.GOOGLE_HEALTH_CLIENT_SECRET || "";
+  const clientId     = googleHealthClientId();
+  const clientSecret = googleHealthClientSecret();
   const action       = q.action;
 
   const PROTECTED = new Set(["authorize-url", "load", "sync", "save-entry", "disconnect"]);
@@ -179,7 +151,7 @@ module.exports = async (req, res) => {
     const tokens = await r.json();
     await dlog("exchange", `token endpoint status ${r.status}`, { status: r.status, hasAccess: !!tokens.access_token, hasRefresh: !!tokens.refresh_token });
     if (!tokens.access_token) return res.status(400).set(headers).json({ error: tokens.error_description || tokens.error || "Token exchange failed" });
-    const db = getDb();
+    const db = getAdminDb();
     await db.collection("healthConfig").doc(userId).set({
       oauthType: "google",
       googleAccessToken: tokens.access_token,
@@ -194,7 +166,7 @@ module.exports = async (req, res) => {
   if (action === "sync") {
     const userId = authedUserId;
     await dlog("sync", "start", { userId });
-    const db = getDb();
+    const db = getAdminDb();
     let accessToken;
     try { accessToken = await ensureFreshToken(db, userId); }
     catch (err) { return res.status(500).set(headers).json({ error: String(err.message || err) }); }
@@ -250,7 +222,7 @@ module.exports = async (req, res) => {
 
   if (action === "load") {
     const userId = authedUserId;
-    const db = getDb();
+    const db = getAdminDb();
     try {
       const configDoc = await db.collection("healthConfig").doc(userId).get();
       const cfg = configDoc.exists ? configDoc.data() : null;
@@ -274,7 +246,7 @@ module.exports = async (req, res) => {
     const userId = authedUserId;
     const body = req.body || {};
     if (!body.date) return res.status(400).set(headers).json({ error: "Missing date" });
-    const db = getDb();
+    const db = getAdminDb();
     const { date, ...rest } = body;
     try {
       await db.collection("healthData").doc(userId).collection("log").doc(date)
@@ -287,7 +259,7 @@ module.exports = async (req, res) => {
 
   if (action === "disconnect") {
     const userId = authedUserId;
-    const db = getDb();
+    const db = getAdminDb();
     try {
       const snap  = await db.collection("healthConfig").doc(userId).get();
       const token = snap.data()?.googleAccessToken;

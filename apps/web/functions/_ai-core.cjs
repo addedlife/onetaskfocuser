@@ -120,32 +120,14 @@ function millisUntilNextPacificMidnight(now = new Date()) {
   return (24 * 60 * 60 * 1000) - elapsed;
 }
 
-function firebaseServiceAccount() {
-  const rawJson = process.env.ADMIN_SA_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (rawJson) return JSON.parse(rawJson);
-
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  if (!projectId || !clientEmail || !privateKey) return null;
-  return { projectId, clientEmail, privateKey };
-}
-
 function firestoreLimiter() {
   if (process.env.GEMINI_RATE_LIMIT_STORE === "memory") return null;
   if (firestoreLimiterChecked) return firestoreLimiterDb;
   firestoreLimiterChecked = true;
 
   try {
-    const serviceAccount = firebaseServiceAccount();
-    if (!serviceAccount) return null;
-    const { cert, getApps, initializeApp } = require("firebase-admin/app");
-    const { getFirestore } = require("firebase-admin/firestore");
-    const app = getApps()[0] || initializeApp({
-      credential: cert(serviceAccount),
-      projectId: serviceAccount.projectId || serviceAccount.project_id,
-    });
-    firestoreLimiterDb = getFirestore(app);
+    const { getAdminDb } = require("./_config.cjs");
+    firestoreLimiterDb = getAdminDb();
   } catch (e) {
     console.warn("[AI] Firestore rate limiter unavailable; using in-memory limiter:", e.message);
     firestoreLimiterDb = null;
@@ -1824,18 +1806,10 @@ async function processAiPayload(payload = {}) {
 function publicAiConfig() {
   const provider = defaultProviderFor("text", "general");
   const model = modelFor(provider, "text", "general");
-  const googleClientId = String(
-    process.env.GOOGLE_CLIENT_ID ||
-    process.env.GOOGLE_OAUTH_CLIENT_ID ||
-    process.env.VITE_GOOGLE_CLIENT_ID ||
-    ""
-  ).trim();
-  const googleClientSecret = String(
-    process.env.GOOGLE_CLIENT_SECRET ||
-    process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
-    ""
-  ).trim();
-  const googleServerAuthAvailable = !!(googleClientId && googleClientSecret && firebaseServiceAccount());
+  const { googleWorkspaceClientId, googleWorkspaceClientSecret, firebaseServiceAccount: _configSA } = require("./_config.cjs");
+  const googleClientId = googleWorkspaceClientId();
+  const googleClientSecret = googleWorkspaceClientSecret();
+  const googleServerAuthAvailable = !!(googleClientId && googleClientSecret && _configSA());
   return {
     ai: {
       defaultProvider: provider,

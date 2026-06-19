@@ -1,4 +1,5 @@
 const { corsFor, processAiPayload } = require("./_ai-core.cjs");
+const { getAdminAuth } = require("./_config.cjs");
 
 // ── Auth gate ───────────────────────────────────────────────────────────────
 // This endpoint spends real money on every call (Claude/Gemini). Without an auth
@@ -6,23 +7,11 @@ const { corsFor, processAiPayload } = require("./_ai-core.cjs");
 // security (it only constrains browsers; curl can spoof Origin). So we require a
 // valid Firebase ID token, same as chief-profile.js. Uses the ADMIN_SA_JSON
 // service-account env the other functions already rely on.
-let _adminAuth = null;
-function _getAdminAuth() {
-  if (_adminAuth) return _adminAuth;
-  const raw = process.env.ADMIN_SA_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!raw) { const e = new Error("Auth not configured"); e.statusCode = 503; throw e; }
-  const sa = JSON.parse(raw);
-  const { cert, getApps, initializeApp } = require("firebase-admin/app");
-  const { getAuth } = require("firebase-admin/auth");
-  const app = getApps()[0] || initializeApp({ credential: cert(sa), projectId: sa.projectId || sa.project_id });
-  _adminAuth = getAuth(app);
-  return _adminAuth;
-}
 async function _requireUser(authorizationHeader) {
   const h = authorizationHeader || "";
   const token = h.startsWith("Bearer ") ? h.slice(7).trim() : "";
   if (!token) { const e = new Error("Sign-in required"); e.statusCode = 401; throw e; }
-  await _getAdminAuth().verifyIdToken(token);
+  await getAdminAuth().verifyIdToken(token);
 }
 
 module.exports = async (req, res) => {

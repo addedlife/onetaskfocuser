@@ -2,35 +2,7 @@
 // Firestore paths: users/{uid}/chiefProfile/profile  and  .../markdown
 
 const { corsHeaders } = require("./cors-helper");
-
-let adminAuth = null;
-let adminDb = null;
-
-function firebaseServiceAccount() {
-  const rawJson = process.env.ADMIN_SA_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (rawJson) return JSON.parse(rawJson);
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  if (!projectId || !clientEmail || !privateKey) return null;
-  return { projectId, clientEmail, privateKey };
-}
-
-function adminClient() {
-  if (adminAuth && adminDb) return { auth: adminAuth, db: adminDb };
-  const serviceAccount = firebaseServiceAccount();
-  if (!serviceAccount) throw httpError(503, "Chief profile needs Firebase service-account env vars.");
-  const { cert, getApps, initializeApp } = require("firebase-admin/app");
-  const { getAuth } = require("firebase-admin/auth");
-  const { getFirestore } = require("firebase-admin/firestore");
-  const app = getApps()[0] || initializeApp({
-    credential: cert(serviceAccount),
-    projectId: serviceAccount.projectId || serviceAccount.project_id,
-  });
-  adminAuth = getAuth(app);
-  adminDb = getFirestore(app);
-  return { auth: adminAuth, db: adminDb };
-}
+const { getAdminDb, getAdminAuth } = require("./_config.cjs");
 
 function httpError(statusCode, message) {
   const error = new Error(message);
@@ -47,7 +19,7 @@ async function authedUser(req) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
   if (!token) throw httpError(401, "Missing app sign-in token.");
-  const { auth } = adminClient();
+  const auth = getAdminAuth();
   const decoded = await auth.verifyIdToken(token);
   return { uid: canonicalUid(decoded), firebaseUid: decoded.uid, email: decoded.email || "" };
 }
@@ -181,7 +153,7 @@ module.exports = async (req, res) => {
     const body = req.body || {};
     const action = String(body.action || "get");
     const user = await authedUser(req);
-    const { db } = adminClient();
+    const db = getAdminDb();
     let profile = await readProfile(db, user);
 
     if (action === "appendNote") {

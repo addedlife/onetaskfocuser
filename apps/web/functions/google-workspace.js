@@ -1,4 +1,5 @@
 const { corsHeaders, allowedOrigin } = require("./cors-helper");
+const { getAdminDb, getAdminAuth, googleWorkspaceClientId, googleWorkspaceClientSecret, firebaseServiceAccount } = require("./_config.cjs");
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
@@ -6,42 +7,6 @@ const USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
 const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 const TOKEN_SAFETY_MS = 2 * 60 * 1000;
-
-let adminAuth = null;
-let adminDb = null;
-
-function googleClientId() {
-  return String(process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || "").trim();
-}
-function googleClientSecret() {
-  return String(process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET || "").trim();
-}
-
-function firebaseServiceAccount() {
-  const rawJson = process.env.ADMIN_SA_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (rawJson) return JSON.parse(rawJson);
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  if (!projectId || !clientEmail || !privateKey) return null;
-  return { projectId, clientEmail, privateKey };
-}
-
-function admin() {
-  if (adminAuth && adminDb) return { auth: adminAuth, db: adminDb };
-  const serviceAccount = firebaseServiceAccount();
-  if (!serviceAccount) throw httpError(503, "Google Workspace server auth needs Firebase service-account env vars.");
-  const { cert, getApps, initializeApp } = require("firebase-admin/app");
-  const { getAuth } = require("firebase-admin/auth");
-  const { getFirestore } = require("firebase-admin/firestore");
-  const app = getApps()[0] || initializeApp({
-    credential: cert(serviceAccount),
-    projectId: serviceAccount.projectId || serviceAccount.project_id,
-  });
-  adminAuth = getAuth(app);
-  adminDb = getFirestore(app);
-  return { auth: adminAuth, db: adminDb };
-}
 
 function httpError(statusCode, message) {
   const error = new Error(message);
@@ -58,7 +23,7 @@ async function authedUser(req) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
   if (!token) throw httpError(401, "Missing app sign-in token.");
-  const { auth } = admin();
+  const auth = getAdminAuth();
   const decoded = await auth.verifyIdToken(token);
   return { uid: canonicalUid(decoded), firebaseUid: decoded.uid, email: decoded.email || "" };
 }
@@ -113,8 +78,8 @@ async function postTokenForm(fields) {
 }
 
 function config() {
-  const clientId = googleClientId();
-  const clientSecret = googleClientSecret();
+  const clientId = googleWorkspaceClientId();
+  const clientSecret = googleWorkspaceClientSecret();
   return { clientId, available: !!(clientId && clientSecret && firebaseServiceAccount()) };
 }
 
@@ -127,11 +92,11 @@ async function exchangeCode(req, user, body) {
   const code = String(body.code || "").trim();
   if (!code) throw httpError(400, "Missing Google authorization code.");
   const origin = allowedOrigin(req.headers.origin || "");
-  const { db } = admin();
+  const db = getAdminDb();
   const tokens = await postTokenForm({
     code,
     client_id: clientId,
-    client_secret: googleClientSecret(),
+    client_secret: googleWorkspaceClientSecret(),
     redirect_uri: origin,
     grant_type: "authorization_code",
   });
@@ -181,7 +146,7 @@ function sortPrimaryFirst(accounts) {
 }
 
 async function listAccountDocs(user) {
-  const { db } = admin();
+  const db = getAdminDb();
   const snap = await accountsCol(db, user.uid).get();
   if (!snap.empty) return sortPrimaryFirst(snap.docs.map(d => ({ email: d.id, ...d.data() })));
   const legacy = await legacyTokenDoc(db, user.uid).get();
@@ -202,7 +167,7 @@ async function connectedEmails(user) {
 async function accessTokenFor(user, email) {
   const { clientId, available } = config();
   if (!available) throw httpError(503, "Google Workspace server auth is not configured.");
-  const { db } = admin();
+  const db = getAdminDb();
   const ref = accountRef(db, user.uid, email);
   const snap = await ref.get();
   if (!snap.exists || !snap.data()?.refreshToken) throw httpError(401, `Google account ${email} is not connected.`);
@@ -210,7 +175,7 @@ async function accessTokenFor(user, email) {
   if (data.accessToken && Number(data.expiresAt || 0) > Date.now() + TOKEN_SAFETY_MS) return data.accessToken;
   const refreshed = await postTokenForm({
     client_id: clientId,
-    client_secret: googleClientSecret(),
+    client_secret: googleWorkspaceClientSecret(),
     refresh_token: data.refreshToken,
     grant_type: "refresh_token",
   });
@@ -415,7 +380,7 @@ async function deleteCalendarEvent(user, body) {
 }
 
 async function disconnect(user, body = {}) {
-  const { db } = admin();
+  const db = getAdminDb();
   const requested = String(body.account || "").toLowerCase().trim();
   const accounts = await listAccountDocs(user);
   const targets = requested ? accounts.filter(a => a.email === requested) : accounts;
