@@ -1,21 +1,25 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DeskPhoneWebPanel } from '../../10-deskphone-web.jsx';
-import { buildDeskPhoneThemeQuery, NC_FONT_STACK, suiteIcon } from '../ui-tokens.jsx';
+import { buildDeskPhoneThemeQuery, cleanTheme, ELEV, gvIconButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
 
 function SuiteShailosPanel({ T, action, onClose, sidebarW = 0 }) {
+  const C = cleanTheme(T);
   return (
-    <div style={{position:"fixed",inset:`0 0 0 ${sidebarW}px`,zIndex:7600,overflow:"hidden",background:T.card,borderLeft:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"flex",flexDirection:"column"}}>
-      <div style={{height:52,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 16px",borderBottom:`1px solid ${T.brd}`,background:T.card,flexShrink:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-          {suiteIcon("question_mark", 21)}
-          <div style={{minWidth:0}}>
-            <div style={{fontSize:15,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK}}>Shailos Tracker</div>
-            <div style={{fontSize:13,color:T.tFaint,fontFamily:NC_FONT_STACK}}>Questions, answers, and follow-up</div>
+    <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7600, overflow: "hidden", background: C.bg, borderLeft: `1px solid ${C.divider}`, boxShadow: ELEV.drawer, display: "flex", flexDirection: "column" }}>
+      <div style={{ height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `0 ${SP.lg}`, borderBottom: `1px solid ${C.divider}`, background: C.bg, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: SP.sm, minWidth: 0 }}>
+          {suiteIcon("question_mark", ICON.xl)}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK }}>Shailos Tracker</div>
+            <div style={{ fontSize: NC_TYPE.body, color: C.faint, fontFamily: NC_FONT_STACK }}>Questions, answers, and follow-up</div>
           </div>
         </div>
-        <button onClick={onClose} title="Back to tasks" style={{width:36,height:36,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("close", 19)}</button>
+        <button onClick={onClose} title="Back to tasks"
+          style={gvIconButton({ width: 36, height: 36, borderRadius: RADIUS.md, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.muted }, C)}>
+          {suiteIcon("close", ICON.lg)}
+        </button>
       </div>
-      <iframe src={action ? `/shailos/?action=${action}` : "/shailos/"} title="Shailos Tracker" style={{flex:1,border:"none",width:"100%",background:T.bg}}/>
+      <iframe src={action ? `/shailos/?action=${action}` : "/shailos/"} title="Shailos Tracker" style={{ flex: 1, border: "none", width: "100%", background: C.bgSoft }} />
     </div>
   );
 }
