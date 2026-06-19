@@ -1,5 +1,5 @@
 import React from 'react';
-import { NC_FONT_STACK, NC_TYPE } from '../ui-tokens.jsx';
+import { NC_FONT_STACK, NC_TYPE, RADIUS, suiteIcon, ICON } from '../ui-tokens.jsx';
 
 // Demo data — used only when no real health history is present
 const DEMO_HR_SERIES = [
@@ -102,7 +102,7 @@ export function HealthCard({
   const lineColor = C.muted || "#999";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, overflow: "hidden", flexShrink: 0 }}>
 
       {/* Drag handle — grab this top bar to resize */}
       <div
@@ -110,7 +110,7 @@ export function HealthCard({
         title="Drag to resize"
         style={{ height: 8, cursor: "row-resize", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, touchAction: "none" }}
       >
-        <span style={{ width: 36, height: 2, borderRadius: 2, background: C.divider, opacity: 0.6 }} />
+        <span style={{ width: 36, height: 2, borderRadius: RADIUS.xs, background: C.divider, opacity: 0.6 }} />
       </div>
 
       {/* Content row */}
@@ -127,7 +127,7 @@ export function HealthCard({
           </div>
           <button
             onClick={onOpenHealth}
-            style={{ marginTop: 4, fontSize: 9.5, color: C.muted, background: "none", border: `1px solid ${C.divider}`, borderRadius: 5, padding: "2px 7px", cursor: "pointer", fontFamily: NC_FONT_STACK, fontWeight: 500, whiteSpace: "nowrap", lineHeight: 1.4 }}
+            style={{ marginTop: 4, fontSize: NC_TYPE.small, color: C.muted, background: "none", border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, padding: "2px 7px", cursor: "pointer", fontFamily: NC_FONT_STACK, fontWeight: 500, whiteSpace: "nowrap", lineHeight: 1.4 }}
           >
             Open ↗
           </button>
@@ -183,8 +183,8 @@ export function HealthCard({
         <button
           onClick={onDismiss}
           title="Hide health card"
-          style={{ marginLeft: 8, alignSelf: "flex-start", marginTop: 1, width: 18, height: 18, borderRadius: "50%", border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: C.faint, padding: 0, flexShrink: 0, fontSize: 14, lineHeight: 1 }}
-        >×</button>
+          style={{ marginLeft: 8, alignSelf: "flex-start", marginTop: 1, width: 18, height: 18, borderRadius: RADIUS.pill, border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: C.faint, padding: 0, flexShrink: 0, lineHeight: 1 }}
+        >{suiteIcon("close", ICON.xs)}</button>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { cleanTheme, DUR, EASE, gvIconButton, gvTextButton, NC_FONT_STACK, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
+import { cleanTheme, DUR, EASE, ELEV, gvIconButton, gvTextButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { db } from '../../01-core.js';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
@@ -206,7 +206,7 @@ function PhoneMmsImage({ attachment, C }) {
 
   if (src) {
     return <img src={src} alt="" loading="lazy"
-      style={{ maxWidth: "100%", maxHeight: 280, borderRadius: 6, marginTop: 4, display: "block", objectFit: "contain" }} />;
+      style={{ maxWidth: "100%", maxHeight: 280, borderRadius: RADIUS.xs, marginTop: 4, display: "block", objectFit: "contain" }} />;
   }
   return <div style={{ fontSize: 12, color: C.faint, padding: "4px 0", display: "flex", alignItems: "center", gap: 4 }}>
     {suiteIcon("image", 14)} {failed ? "image unavailable" : "loading image…"}
@@ -856,7 +856,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const phoneLeadIconStyle = (color, background = "transparent") => ({
     width: dense ? 15 : 18,
     height: dense ? 15 : 18,
-    borderRadius: 99,
+    borderRadius: RADIUS.pill,
     background,
     display: "inline-flex",
     alignItems: "center",
@@ -902,9 +902,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     const dir = (c.direction || c.Direction || (typeof c.type === "string" ? c.type : "") || (typeof c.callType === "string" ? c.callType : "") || "").toLowerCase();
     if (dir.includes("miss")) return { icon: "call_missed", color: C.danger };
     // Check outgoing BEFORE checking incoming so "outgoing" (contains "in") doesn't misfire
-    if (typeNum === 2 || dir.includes("out") || dir.includes("dial") || dir.includes("egress")) return { icon: "call_made", color: T.tSoft };
-    if (typeNum === 1 || dir.includes("incoming") || dir.includes("inbound") || dir.includes("receiv") || dir === "in") return { icon: "call_received", color: T.tSoft };
-    return { icon: "call", color: T.tSoft };
+    if (typeNum === 2 || dir.includes("out") || dir.includes("dial") || dir.includes("egress")) return { icon: "call_made", color: C.muted };
+    if (typeNum === 1 || dir.includes("incoming") || dir.includes("inbound") || dir.includes("receiv") || dir === "in") return { icon: "call_received", color: C.muted };
+    return { icon: "call", color: C.muted };
   };
 
   const callKindLabel = c => {
@@ -993,8 +993,8 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // Incoming SMS = sms icon; outgoing = outgoing_mail icon
   // Android SMS type codes: 1=inbox/received, 2=sent, 4=outbox/pending, 5=failed, 6=queued
   const msgDirIcon = m => {
-    if (isOutgoingMessage(m)) return { icon: "outgoing_mail", color: T.tSoft };
-    return { icon: "sms", color: T.tSoft };
+    if (isOutgoingMessage(m)) return { icon: "outgoing_mail", color: C.muted };
+    return { icon: "sms", color: C.muted };
   };
 
   // Compose helpers — open from row, open new, close
@@ -1015,7 +1015,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   }, [composeOpen, composeIsNew, selected?.number, composeAnchorId]);
 
   const renderComposeBox = (extraStyle = {}) => (
-    <div style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 8, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8, ...extraStyle }}>
+    <div style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, padding: `${SP.sm} ${SP.md}`, display: "flex", flexDirection: "column", gap: SP.sm, ...extraStyle }}>
       {composeIsNew && (
         <div style={{ position: "relative" }}>
           <input value={composeSearch} onChange={e => setComposeSearch(e.target.value)}
@@ -1023,7 +1023,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             onBlur={() => setTimeout(() => setComposeFocused(false), 160)}
             placeholder="Search contact or enter number..."
             autoFocus
-            style={{ width: "100%", height: 36, boxSizing: "border-box", padding: "0 12px", borderRadius: 18, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: 14, fontWeight: 400, outline: "none" }} />
+            style={{ width: "100%", height: 36, boxSizing: "border-box", padding: `0 ${SP.md}`, borderRadius: RADIUS.pill, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: NC_TYPE.body, fontWeight: 400, outline: "none" }} />
           {composeFocused && suggestions.length > 0 && (
             <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 300 }}>
               <SuggestionList onPick={s => { setSelected({ name: s.name, number: s.num }); setNumber(s.num); setComposeSearch(s.name); setComposeIsNew(false); }} />
@@ -1043,9 +1043,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           <textarea ref={composeBodyRef} value={body} onChange={e => setBody(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendSms(); } }}
             placeholder="Message..." rows={2}
-            style={{ boxSizing: "border-box", borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, padding: "8px 12px", fontSize: 14, fontFamily: "system-ui", resize: "none", outline: "none", width: "100%" }} />
+            style={{ boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, padding: `${SP.sm} ${SP.md}`, fontSize: NC_TYPE.body, fontFamily: "system-ui", resize: "none", outline: "none", width: "100%" }} />
           <button onClick={sendSms} disabled={!body.trim() || !!busy || (!selected && !number.trim())}
-            style={{ width: 40, height: 40, borderRadius: 20, border: "none", background: body.trim() ? C.accent : "transparent", color: body.trim() ? "#fff" : C.faint, cursor: body.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0 }}>
+            style={{ width: 40, height: 40, borderRadius: RADIUS.pill, border: "none", background: body.trim() ? C.accent : "transparent", color: body.trim() ? "#fff" : C.faint, cursor: body.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: `background ${DUR.fast} ${EASE.standard}`, flexShrink: 0 }}>
             {suiteIcon("send", 16)}
           </button>
         </div>
@@ -1070,11 +1070,11 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
 
   // Suggestion list — shared between dialer and compose-new modes
   const SuggestionList = ({ onPick, style = {} }) => suggestions.length === 0 ? null : (
-    <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, overflow: "hidden", boxShadow: "0 6px 20px rgba(60,64,67,0.18)", ...style }}>
+    <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, overflow: "hidden", boxShadow: ELEV[3], ...style }}>
       {suggestions.map((s, i) => (
         <button key={i} onMouseDown={e => e.preventDefault()} onClick={() => onPick(s)}
           style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer" }}>
-          <span style={{ width: 28, height: 28, borderRadius: 99, background: C.hover, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, flexShrink: 0 }}>{suiteIcon("person", 13)}</span>
+          <span style={{ width: 28, height: 28, borderRadius: RADIUS.pill, background: C.hover, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, flexShrink: 0 }}>{suiteIcon("person", ICON.sm)}</span>
           <span style={{ minWidth: 0 }}>
             <span style={{ display: "block", fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
             <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted }}>{s.num}</span>
@@ -1112,7 +1112,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
 
       {(isIncoming || isOnCall || vmCount > 0) && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: dense ? 20 : (compact ? 28 : 36), padding: "0 2px" }}>
-          <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: isIncoming ? C.success : isOnCall ? C.warning : C.danger }} />
+          <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, flexShrink: 0, background: isIncoming ? C.success : isOnCall ? C.warning : C.danger }} />
           <span style={{ flex: 1, minWidth: 0, fontSize: compact ? 13 : 14, fontWeight: 500, color: isIncoming ? C.success : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {callerDisplay && (isIncoming || isOnCall) ? `${isIncoming ? "Incoming" : "On call"} · ${callerDisplay}` : `${vmCount} voicemail${vmCount === 1 ? "" : "s"}`}
           </span>
@@ -1125,13 +1125,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             states online/offline); it only shows in the full phone view. ── */}
       {usingRelay && !compact && (
         relayStale ? (
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, lineHeight: 1.4, color: C.warning, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: 8, padding: "8px 10px" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: SP.sm, fontSize: NC_TYPE.meta, lineHeight: 1.4, color: C.warning, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, padding: `${SP.sm} ${SP.sm}` }}>
             <span style={{ marginTop: 1, flexShrink: 0, color: C.warning }}>{suiteIcon("cloud_off", 16)}</span>
             <span>Your PC looks offline — last update {relayAgeLabel(relayAgeMs)} ago. New texts &amp; calls won't arrive here until DeskPhone reconnects on your PC.</span>
           </div>
         ) : phoneLinkLive ? (
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: C.success, padding: "0 2px" }}>
-            <span style={{ width: 7, height: 7, borderRadius: 99, flexShrink: 0, background: C.success }} />
+            <span style={{ width: 7, height: 7, borderRadius: RADIUS.pill, flexShrink: 0, background: C.success }} />
             <span>Live · connected to your PC{deviceName ? ` · ${deviceName}` : ""}</span>
           </div>
         ) : null
@@ -1207,18 +1207,18 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           </button>
           {showTransportMenu && (
             <div style={{ position: "absolute", right: 0, bottom: "calc(100% + 6px)", zIndex: 60, minWidth: 200,
-              background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 10,
-              boxShadow: "0 6px 24px rgba(0,0,0,.28)", padding: 6 }}>
+              background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm,
+              boxShadow: ELEV[3], padding: SP.xs }}>
               {[["auto", "Auto (recommended)", "Direct when this browser can reach your PC, cloud relay otherwise"],
                 ["direct", "This PC only", "Always talk to DeskPhone on this machine"],
                 ["relay", "Cloud relay only", "Always go through the cloud"]].map(([val, label, hint]) => (
                 <button key={val} title={hint}
                   onClick={() => { setTransportMode(val); setShowTransportMenu(false); refresh(true); }}
                   style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
-                    fontSize: 12, padding: "7px 9px", borderRadius: 7, border: "none", cursor: "pointer",
+                    fontSize: NC_TYPE.meta, padding: "7px 9px", borderRadius: RADIUS.sm, border: "none", cursor: "pointer",
                     background: transportMode === val ? C.bgSoft : "transparent",
                     color: C.text, fontWeight: transportMode === val ? 700 : 400 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: 99, flexShrink: 0,
+                  <span style={{ width: 7, height: 7, borderRadius: RADIUS.pill, flexShrink: 0,
                     background: transportMode === val ? C.success : C.divider }} />
                   {label}
                 </button>
@@ -1234,15 +1234,15 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         <div style={{ display: "flex", flexDirection: "column", gap:6 }}>
           {/* Number input */}
           <div style={{ position: "relative" }}>
-            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.tFaint, pointerEvents: "none", lineHeight: 1, display: "flex" }}>{suiteIcon("search", 15)}</span>
+            <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: C.faint, pointerEvents: "none", lineHeight: 1, display: "flex" }}>{suiteIcon("search", 15)}</span>
             <input value={number} onChange={e => setNumber(e.target.value)}
               onFocus={() => setInputFocused(true)}
               onBlur={() => setTimeout(() => setInputFocused(false), 160)}
               onKeyDown={e => e.key === "Enter" && dial()}
               placeholder="Name or number"
-              style={{ width: "100%", height: 40, boxSizing: "border-box", padding: "0 46px 0 32px", borderRadius: 20, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: 14, fontWeight: 400, outline: "none" }} />
+              style={{ width: "100%", height: 40, boxSizing: "border-box", padding: "0 46px 0 32px", borderRadius: RADIUS.pill, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: NC_TYPE.body, fontWeight: 400, outline: "none" }} />
             <button onClick={dial} disabled={!number.trim() || !!busy} title="Call"
-              style={{ position: "absolute", right: 4, top: 4, width: 32, height: 32, borderRadius: 99, border: "none", background: number.trim() ? C.success : "transparent", color: number.trim() ? "#fff" : C.faint, cursor: number.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              style={gvIconButton({ position: "absolute", right: 4, top: 4, width: 32, height: 32, background: number.trim() ? C.success : "transparent", color: number.trim() ? "#fff" : C.faint, cursor: number.trim() ? "pointer" : "default", minHeight: 32 }, C)}>
               {suiteIcon("call", 14)}
             </button>
           </div>
@@ -1254,7 +1254,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 4 }}>
             {DIALER_KEYS.map(k => (
               <button key={k} onClick={() => setNumber(prev => prev + k)}
-                style={{ height: 40, borderRadius: 4, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, cursor: "pointer", fontSize: 15, fontWeight: 400, fontFamily: "system-ui" }}>
+                style={{ height: 40, borderRadius: RADIUS.xs, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, cursor: "pointer", fontSize: NC_TYPE.title, fontWeight: 400, fontFamily: "system-ui" }}>
                 {k}
               </button>
             ))}
@@ -1281,7 +1281,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                 return (
                   <div key={`${thread._key || thread._who}-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, background: expanded ? C.hover : "transparent" }}>
                     <span style={phoneLeadIconStyle(isUnread ? C.accent : msgColor, isUnread ? C.hover : "transparent")}>{suiteIcon(msgIcon, 14)}</span>
-                    <button onClick={() => setExpandedPhoneMessageId(expanded ? null : actionId)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: T.text }}>
+                    <button onClick={() => setExpandedPhoneMessageId(expanded ? null : actionId)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: C.text }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
                         <span style={{ flex: 1, fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, fontWeight: isUnread ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread._name}</span>
                         {time && <span style={{ fontSize: NC_TYPE.meta, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
@@ -1337,7 +1337,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                             const sendFailed = /fail/i.test(sendStatus);
                             return (
                               <div key={`${thread._who}-${messageTimeMs(msg)}-${msgIdx}`} style={{ alignSelf: outgoing ? "flex-end" : "flex-start", maxWidth: "92%", minWidth: 0 }}>
-                                <div style={{ borderRadius: 8, border: `1px solid ${outgoing ? (sendFailed ? C.danger : "transparent") : C.divider}`, background: outgoing ? C.hover : C.bgSoft, color: C.text, padding: "7px 9px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                                <div style={{ borderRadius: RADIUS.sm, border: `1px solid ${outgoing ? (sendFailed ? C.danger : "transparent") : C.divider}`, background: outgoing ? C.hover : C.bgSoft, color: C.text, padding: "7px 9px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                                   {msgText && linkedMessageParts(msgText, { color: C.accent })}
                                   {(msg.attachments || []).filter(a => a.isImage).map((a, ai) => (
                                     <PhoneMmsImage key={a.mediaId || ai} attachment={a} C={C} />
@@ -1345,7 +1345,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                                   {!msgText && !(msg.attachments || []).some(a => a.isImage) && "(no text)"}
                                 </div>
                                 {(msgTime || (outgoing && sendStatus)) && (
-                                  <div style={{ fontSize: 11, color: C.faint, marginTop: 2, textAlign: outgoing ? "right" : "left" }}>
+                                  <div style={{ fontSize: NC_TYPE.small, color: C.faint, marginTop: 2, textAlign: outgoing ? "right" : "left" }}>
                                     {outgoing && sendStatus && (
                                       <span style={{ color: sendFailed ? C.danger : C.faint, fontWeight: sendFailed ? 600 : 400 }}>
                                         {msg.sendStatusLabel || msg.SendStatusLabel || sendStatus}{msgTime ? " · " : ""}
@@ -1367,10 +1367,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                               zIndex: 2,
                               display: "flex",
                               alignItems: "center",
-                              gap: 4,
-                              padding:4,
+                              gap: SP.xs,
+                              padding: SP.xs,
                               border: `1px solid ${C.divider}`,
-                              borderRadius: 99,
+                              borderRadius: RADIUS.pill,
                               background: C.bg,
                               boxShadow: `0 2px 8px ${C.shadow || "rgba(15,23,42,0.18)"}`,
                             }}
@@ -1434,7 +1434,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                         {time && <span style={{ fontSize: NC_TYPE.meta, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
                       </div>
                       {needsCallback ? (
-                        <span style={{ display: "inline-block", marginTop: 1, fontSize: NC_TYPE.small, lineHeight: 1.15, fontWeight: 700, color: C.danger, background: C.bgSoft, borderRadius: 99, padding: "1px 6px" }}>Needs callback</span>
+                        <span style={{ display: "inline-block", marginTop: 1, fontSize: NC_TYPE.small, lineHeight: 1.15, fontWeight: 700, color: C.danger, background: C.bgSoft, borderRadius: RADIUS.pill, padding: `1px ${SP.xs}` }}>Needs callback</span>
                       ) : resolved ? (
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 3, marginTop: 1, fontSize: NC_TYPE.small, lineHeight: 1.15, fontWeight: 600, color: C.success }}>{suiteIcon("check_circle", 11)} Resolved</span>
                       ) : (num && num !== name && <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted, marginTop: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: NC_TYPE.line }}>{num}</span>)}
@@ -1475,13 +1475,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       {/* Compact card always shows a status dot — even with no texts/calls — so the phone's
           live/stale/offline state is visible at a glance instead of a blank card. */}
       {compact && !error && !(statusOnline && (hasMessages || hasCalls)) && (
-        <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 4px", fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0 }}>
-          <span style={{ width: 8, height: 8, borderRadius: 99, flexShrink: 0, background: phoneLinkLive ? C.success : relayStale ? C.warning : C.faint }} />
+        <div style={{ display: "flex", alignItems: "center", gap: SP.xs, padding: `${SP.xs} ${SP.xs}`, fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0 }}>
+          <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, flexShrink: 0, background: phoneLinkLive ? C.success : relayStale ? C.warning : C.faint }} />
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{phoneLinkLive ? "Connected · no recent calls or texts" : relayStale ? `PC offline · ${relayAgeLabel(relayAgeMs)}` : "DeskPhone offline"}</span>
         </div>
       )}
-      {!statusOnline && !error && !compact && <div style={{ fontSize: 13, color: C.muted, padding: "6px 2px" }}>Open DeskPhone to connect calls and texts.</div>}
-      {error && <div style={{ fontSize: 13, color: C.danger, background: C.bgSoft, borderRadius: 8, padding: "8px 10px", marginTop: 2 }}>{error}</div>}
+      {!statusOnline && !error && !compact && <div style={{ fontSize: NC_TYPE.meta, color: C.muted, padding: `${SP.xs} 2px` }}>Open DeskPhone to connect calls and texts.</div>}
+      {error && <div style={{ fontSize: NC_TYPE.meta, color: C.danger, background: C.bgSoft, borderRadius: RADIUS.sm, padding: `${SP.sm} ${SP.sm}`, marginTop: 2 }}>{error}</div>}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DeskPhoneWebPanel } from '../../10-deskphone-web.jsx';
 import { buildDeskPhoneThemeQuery, cleanTheme, ELEV, gvIconButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
 
+
 function SuiteShailosPanel({ T, action, onClose, sidebarW = 0 }) {
   const C = cleanTheme(T);
   return (
@@ -25,6 +26,7 @@ function SuiteShailosPanel({ T, action, onClose, sidebarW = 0 }) {
 }
 
 function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch, sidebarW = 0 }) {
+  const C = cleanTheme(T);
   const api = "http://127.0.0.1:8765";
   const stageRef = useRef(null);
   const lastThemeRef = useRef("");
@@ -132,29 +134,47 @@ function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch,
   }, [docked, pulseStage, releaseStage]);
 
   return (
-    <div style={{position:"fixed",inset:`0 0 0 ${sidebarW}px`,zIndex:7600,overflow:"hidden",background:`linear-gradient(160deg, ${T.bg} 0%, ${T.bgW} 100%)`,borderLeft:`1px solid ${T.brd}`,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.25)",display:"grid",gridTemplateRows:"auto 1fr",padding:"clamp(12px,2vw,18px)",boxSizing:"border-box",gap:12,fontFamily:NC_FONT_STACK}}>
-      <div style={{height:52,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"0 14px",border:`1px solid ${T.brd}`,borderRadius:16,background:T.card}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-          {suiteIcon("smartphone", 22)}
-          <div style={{minWidth:0}}>
-            <div style={{fontSize:15,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK}}>Phone</div>
-            <div style={{fontSize:13,color:T.tFaint,fontFamily:NC_FONT_STACK}}>{status ? `${status.build || "DeskPhone"} - ${status.hfp || "Phone"} - ${status.map || "Messages"}` : "Waiting for DeskPhone"}</div>
+    <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7600, overflow: "hidden", background: `linear-gradient(160deg, ${C.bg} 0%, ${C.bgSoft} 100%)`, borderLeft: `1px solid ${C.divider}`, boxShadow: ELEV.drawer, display: "grid", gridTemplateRows: "auto 1fr", padding: "clamp(12px,2vw,18px)", boxSizing: "border-box", gap: SP.md, fontFamily: NC_FONT_STACK }}>
+      <div style={{ height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", gap: SP.md, padding: `0 ${SP.md}`, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, background: C.bg }}>
+        <div style={{ display: "flex", alignItems: "center", gap: SP.sm, minWidth: 0 }}>
+          {suiteIcon("smartphone", ICON.xl)}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK }}>Phone</div>
+            <div style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>{status ? `${status.build || "DeskPhone"} - ${status.hfp || "Phone"} - ${status.map || "Messages"}` : "Waiting for DeskPhone"}</div>
           </div>
         </div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <button onClick={()=>{if (!status) onLaunch?.(); syncStage(); setTimeout(syncStage, 900);}} title={status ? "Dock DeskPhone" : "Open DeskPhone"} style={{height:36,padding:"0 12px",borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:500,fontSize:14,display:"flex",alignItems:"center",gap:6}}>{suiteIcon("open_in_new",17)} {status ? "Dock" : "Open"}</button>
-          <button onClick={syncStage} disabled={!!busy} title="Move DeskPhone to the dock position" style={{height:36,padding:"0 12px",borderRadius:12,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:500,fontSize:14,display:"flex",alignItems:"center",gap:6}}>{suiteIcon("fit_screen",17)} Position</button>
-          <button onClick={()=>releaseStage()} disabled={!!busy} title="Release DeskPhone sizing" style={{width:36,height:36,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("close_fullscreen", 18)}</button>
-          <button onClick={refresh} title="Refresh status" style={{width:36,height:36,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.tSoft,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("refresh", 18)}</button>
+        <div style={{ display: "flex", gap: SP.sm, alignItems: "center" }}>
+          <button onClick={() => { if (!status) onLaunch?.(); syncStage(); setTimeout(syncStage, 900); }} title={status ? "Dock DeskPhone" : "Open DeskPhone"}
+            style={{ height: 36, padding: `0 ${SP.md}`, borderRadius: RADIUS.md, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, cursor: "pointer", fontWeight: 500, fontSize: NC_TYPE.body, display: "flex", alignItems: "center", gap: SP.xs }}>
+            {suiteIcon("open_in_new", ICON.md)} {status ? "Dock" : "Open"}
+          </button>
+          <button onClick={syncStage} disabled={!!busy} title="Move DeskPhone to the dock position"
+            style={{ height: 36, padding: `0 ${SP.md}`, borderRadius: RADIUS.md, border: "none", background: C.accent, color: "#fff", cursor: "pointer", fontWeight: 500, fontSize: NC_TYPE.body, display: "flex", alignItems: "center", gap: SP.xs }}>
+            {suiteIcon("fit_screen", ICON.md)} Position
+          </button>
+          <button onClick={() => releaseStage()} disabled={!!busy} title="Release DeskPhone sizing"
+            style={gvIconButton({ width: 36, height: 36, borderRadius: RADIUS.md, border: `1px solid ${C.divider}`, background: C.bgSoft }, C)}>
+            {suiteIcon("close_fullscreen", ICON.md)}
+          </button>
+          <button onClick={refresh} title="Refresh status"
+            style={gvIconButton({ width: 36, height: 36, borderRadius: RADIUS.md, border: `1px solid ${C.divider}`, background: C.bgSoft }, C)}>
+            {suiteIcon("refresh", ICON.md)}
+          </button>
         </div>
       </div>
-      <div ref={stageRef} style={{position:"relative",minHeight:0,border:`1px solid ${T.brd}`,borderRadius:18,background:T.card,boxShadow:T.shadowLg || "0 18px 60px rgba(0,0,0,0.18)",overflow:"auto",padding:"clamp(16px,2.4vw,28px)",boxSizing:"border-box",display:"grid",gridTemplateColumns:"minmax(280px,420px) minmax(320px,1fr)",gap:16,alignItems:"start"}}>
-        <div style={{display:"grid",gap:12}}>
-          <div style={{fontSize:22,fontWeight:500,color:T.text,fontFamily:NC_FONT_STACK,display:"flex",alignItems:"center",gap:10}}>{suiteIcon("phone_in_talk",28)} Phone</div>
-          {error && <div style={{fontSize:13,lineHeight:1.45,color:T.danger,background:"#FFE1E1",border:"1px solid #F0B5B5",borderRadius:12,padding:10}}>{error}</div>}
-          <div style={{display:"grid",gap:8}}>
-            <button onClick={()=>{if (!status) onLaunch?.(); syncStage(); setTimeout(syncStage, 900);}} style={{height:44,borderRadius:14,border:"none",background:T.primary || T.text,color:T.onPrimary || T.bg,cursor:"pointer",fontWeight:500,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>{suiteIcon("desktop_windows",19)} Dock DeskPhone</button>
-            <button onClick={()=>releaseStage()} style={{height:40,borderRadius:12,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,cursor:"pointer",fontWeight:500,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>{suiteIcon("open_in_full",18)} Release</button>
+      <div ref={stageRef} style={{ position: "relative", minHeight: 0, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, background: C.bg, boxShadow: ELEV[3], overflow: "auto", padding: "clamp(16px,2.4vw,28px)", boxSizing: "border-box", display: "grid", gridTemplateColumns: "minmax(280px,420px) minmax(320px,1fr)", gap: SP.lg, alignItems: "start" }}>
+        <div style={{ display: "grid", gap: SP.md }}>
+          <div style={{ fontSize: 22, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, display: "flex", alignItems: "center", gap: SP.sm }}>{suiteIcon("phone_in_talk", 28)} Phone</div>
+          {error && <div style={{ fontSize: NC_TYPE.body, lineHeight: 1.45, color: C.danger, background: `${C.danger}18`, border: `1px solid ${C.danger}40`, borderRadius: RADIUS.md, padding: SP.sm }}>{error}</div>}
+          <div style={{ display: "grid", gap: SP.sm }}>
+            <button onClick={() => { if (!status) onLaunch?.(); syncStage(); setTimeout(syncStage, 900); }}
+              style={{ height: 44, borderRadius: RADIUS.md, border: "none", background: C.accent, color: "#fff", cursor: "pointer", fontWeight: 500, fontSize: NC_TYPE.body, display: "flex", alignItems: "center", justifyContent: "center", gap: SP.sm }}>
+              {suiteIcon("desktop_windows", ICON.lg)} Dock DeskPhone
+            </button>
+            <button onClick={() => releaseStage()}
+              style={{ height: 40, borderRadius: RADIUS.md, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, cursor: "pointer", fontWeight: 500, fontSize: NC_TYPE.body, display: "flex", alignItems: "center", justifyContent: "center", gap: SP.sm }}>
+              {suiteIcon("open_in_full", ICON.md)} Release
+            </button>
           </div>
         </div>
         <DeskPhoneWebPanel T={T} onOnlineChange={onOnlineChange} onLaunchNative={onLaunch} embedded />

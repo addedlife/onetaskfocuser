@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanTheme, NC_FONT_STACK, NC_TYPE, suiteIcon } from '../ui-tokens.jsx';
+import { cleanTheme, DUR, EASE, NC_FONT_STACK, NC_TYPE, RADIUS, suiteIcon } from '../ui-tokens.jsx';
 import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
 
 function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreActions, topOffset = 0, forceCompact = false, clockTime = null, onSettings, features = {} }) {
@@ -44,7 +44,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
   const navButton = (isActive = false, overrides = {}) => ({
     height: BTN_H,
     padding: displayOpen ? "0 12px" : "0",
-    borderRadius: 20,
+    borderRadius: RADIUS.pill,
     cursor: "pointer",
     border: "none",
     background: isActive ? C.hover : "transparent",
@@ -80,7 +80,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       background: C.bg,
       backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
       borderRight: `1px solid ${C.divider}`,
-      transition: "width 0.20s cubic-bezier(0.4,0,0.2,1)",
+      transition: `width ${DUR.base} ${EASE.standard}`,
       // Short (landscape-phone) viewports can't fit the whole nav column; scroll
       // vertically so the bottom cluster (clock, toggle, version) is never clipped.
       overflowY: "auto",
@@ -92,7 +92,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         style={navButton(ncActive, {
           marginBottom: px(10),
           fontSize: Math.max(12, px(15)),
-          ...(ncActive ? { borderRadius: "20px 0 0 20px" } : {}),
+          ...(ncActive ? { borderRadius: `${RADIUS.pill} 0 0 ${RADIUS.pill}` } : {}),
         })}>
         {suiteIcon("hub", ic(20))}
         {displayOpen && "NerveCenter"}
@@ -174,7 +174,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       <div title={now.toLocaleString()} style={{
         width: displayOpen ? "100%" : 44,
         minHeight: displayOpen ? px(50) : Math.max(34, px(44)),
-        borderRadius: displayOpen ? 8 : 22,
+        borderRadius: displayOpen ? RADIUS.sm : RADIUS.pill,
         border: `1px solid ${C.divider}`,
         background: C.bgSoft,
         color: C.text,
@@ -195,7 +195,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       {/* Collapse / expand toggle */}
       <button onClick={onToggle} title={displayOpen ? "Collapse sidebar" : "Expand sidebar"} disabled={forceCompact}
         style={{
-          width: displayOpen ? "100%" : 40, height: Math.max(24, px(34)), borderRadius:16,
+          width: displayOpen ? "100%" : 40, height: Math.max(24, px(34)), borderRadius: RADIUS.pill,
           border: `1px solid ${C.divider}`,
           background: "transparent", color: C.faint, cursor: forceCompact ? "default" : "pointer",
           opacity: forceCompact ? 0.45 : 1,
@@ -258,7 +258,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         borderBottom: "20px solid transparent",
         borderLeft: `16px solid ${C.hover}`,
         pointerEvents: "none",
-        transition: "left 0.20s cubic-bezier(0.4,0,0.2,1)",
+        transition: `left ${DUR.base} ${EASE.standard}`,
       }} />
     )}
     </>

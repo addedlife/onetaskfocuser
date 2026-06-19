@@ -9,7 +9,7 @@
  * invented priority or reasons. One continuous color bar runs down the left edge.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { cleanTheme, NC_FONT_STACK } from '../ui-tokens.jsx';
+import { cleanTheme, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { runAIJob } from '../../01-core.js';
 
@@ -288,43 +288,44 @@ export function TaskRiverPanel({
       display: visible ? 'flex' : 'none', flexDirection: 'column', borderLeft: `1px solid ${C.divider}`,
       overflow: 'hidden', ...waterBg,
     }}>
-      <div style={{ flexShrink: 0, padding: '14px clamp(14px,3vw,32px) 8px', display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+      <div style={{ flexShrink: 0, padding: '14px clamp(14px,3vw,32px) 8px', display: 'flex', alignItems: 'baseline', gap: SP.sm, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 23, fontWeight: 300, letterSpacing: -0.5, color: C.text, fontFamily: NC_FONT_STACK }}>The River</span>
-        <span style={{ fontSize: 12, color: (retryIn !== null || aiState === 'error') ? (C.warning || '#C8A84C') : C.muted, fontFamily: NC_FONT_STACK }}>{view.length} items · {statusText}</span>
+        <span style={{ fontSize: NC_TYPE.meta, color: (retryIn !== null || aiState === 'error') ? (C.warning || '#C8A84C') : C.muted, fontFamily: NC_FONT_STACK }}>{view.length} items · {statusText}</span>
         <button onClick={reprioritize}
           title={manual ? 'Reset manual order and re-rank with AI' : 'Force a fresh AI ranking'}
-          style={{ marginLeft: 'auto', fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 500,
+          style={{ marginLeft: 'auto', fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: 500,
             color: (manual || aiState === 'error' || retryIn !== null) ? '#fff' : C.faint,
             background: (manual || aiState === 'error' || retryIn !== null) ? rgba(COL_SHAILA, 0.9) : 'transparent',
             border: `1px solid ${(manual || aiState === 'error' || retryIn !== null) ? rgba(COL_SHAILA, 0.9) : C.divider}`,
-            borderRadius: 16, padding: '4px 12px', cursor: 'pointer' }}>
-          {(aiState === 'error' || retryIn !== null) ? '↻ Retry now' : '↻ Re-prioritize'}
+            borderRadius: RADIUS.pill, padding: '4px 12px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: SP.xs }}>
+          {suiteIcon('refresh', ICON.xs)} {(aiState === 'error' || retryIn !== null) ? 'Retry' : 'Re-prioritize'}
         </button>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', position: 'relative', padding: '2px clamp(8px,2vw,24px) 12px' }}>
         {view.length === 0 ? (
-          <div style={{ padding: '50px 20px', textAlign: 'center', color: C.faint, fontFamily: NC_FONT_STACK, fontSize: 15 }}>The river is still. Nothing waiting.</div>
+          <div style={{ padding: '50px 20px', textAlign: 'center', color: C.faint, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.title }}>The river is still. Nothing waiting.</div>
         ) : (
           <div style={{ position: 'relative', paddingLeft: 14 }}>
-            <div aria-hidden style={{ position: 'absolute', left: 0, top: 4, bottom: 4, width: 7, borderRadius: 5, background: riverGradient, boxShadow: `0 0 0 1px ${rgba('#000', 0.04)}` }} />
+            <div aria-hidden style={{ position: 'absolute', left: 0, top: 4, bottom: 4, width: 7, borderRadius: RADIUS.xs, background: riverGradient, boxShadow: `0 0 0 1px ${rgba('#000', 0.04)}` }} />
             {view.map((it) => {
               const isDrag = dragId === it.id;
               return (
                 <div key={it.id} data-river-row={it.id} onClick={() => act(it)}
-                  style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 8,
-                    padding: '3px 6px 3px 10px', minHeight: 26, cursor: 'pointer', borderRadius: 7,
+                  style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: SP.sm,
+                    padding: '3px 6px 3px 10px', minHeight: 26, cursor: 'pointer', borderRadius: RADIUS.sm,
                     background: isDrag ? rgba(it.color, 0.12) : 'transparent', transition: 'background .12s' }}>
-                  <span style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 7, overflow: 'hidden' }}>
-                    {it.meta && <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: 'nowrap' }}>{it.meta}</span>}
-                    <span style={{ fontSize: 13, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', minWidth: 0 }}>
+                  <span style={{ minWidth: 0, display: 'flex', alignItems: 'baseline', gap: SP.xs, overflow: 'hidden' }}>
+                    {it.meta && <span style={{ fontSize: NC_TYPE.small, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: 'nowrap' }}>{it.meta}</span>}
+                    <span style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', minWidth: 0 }}>
                       {it.pinned && <span style={{ color: it.color, marginRight: 4 }}>★</span>}{it.line}
                     </span>
-                    {it.reason && <span style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK, fontStyle: 'italic', flexShrink: 0, whiteSpace: 'nowrap', marginLeft: 'auto', paddingLeft: 6 }}>{it.reason}</span>}
+                    {it.reason && <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, fontStyle: 'italic', flexShrink: 0, whiteSpace: 'nowrap', marginLeft: 'auto', paddingLeft: 6 }}>{it.reason}</span>}
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                    <button onPointerDown={onHandleDown(it.id)} onTouchStart={onHandleDown(it.id)} title="Drag to reorder" style={{ ...mini(C, false), cursor: 'grab', touchAction: 'none', fontSize: 14 }}>⠿</button>
-                    {it.type === 'task' && <button onClick={() => act(it)} title="Done" style={{ ...mini(C, false), color: it.color, fontSize: 14 }}>✓</button>}
+                    <button onPointerDown={onHandleDown(it.id)} onTouchStart={onHandleDown(it.id)} title="Drag to reorder" style={{ ...mini(C, false), cursor: 'grab', touchAction: 'none' }}>{suiteIcon('drag_indicator', ICON.sm)}</button>
+                    {it.type === 'task' && <button onClick={() => act(it)} title="Done" style={{ ...mini(C, false), color: it.color }}>{suiteIcon('check', ICON.sm)}</button>}
                   </span>
                 </div>
               );
@@ -334,17 +335,17 @@ export function TaskRiverPanel({
       </div>
 
       {/* Color legend */}
-      <div style={{ flexShrink: 0, borderTop: `1px solid ${rgba('#888', 0.1)}`, padding: '6px clamp(14px,3vw,32px)', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK, letterSpacing: 0.3 }}>Color key</span>
+      <div style={{ flexShrink: 0, borderTop: `1px solid ${rgba('#888', 0.1)}`, padding: '6px clamp(14px,3vw,32px)', display: 'flex', alignItems: 'center', gap: SP.lg, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, letterSpacing: 0.3 }}>Color key</span>
         {[
           { color: COL_TASK,   label: 'Task' },
           { color: COL_SHAILA, label: 'Shaila' },
           { color: COL_CAL,    label: 'Calendar' },
           { color: COL_MAIL,   label: 'Email' },
         ].map(({ color, label }) => (
-          <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 0 1px ${rgba(color, 0.4)}` }} />
-            <span style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK }}>{label}</span>
+          <span key={label} style={{ display: 'flex', alignItems: 'center', gap: SP.xs }}>
+            <span style={{ width: 7, height: 7, borderRadius: RADIUS.pill, background: color, flexShrink: 0, boxShadow: `0 0 0 1px ${rgba(color, 0.4)}` }} />
+            <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK }}>{label}</span>
           </span>
         ))}
       </div>
@@ -353,7 +354,7 @@ export function TaskRiverPanel({
 }
 
 function mini(C, disabled) {
-  return { width: 22, height: 22, borderRadius: 6, border: 'none', background: 'transparent',
+  return { width: 22, height: 22, borderRadius: RADIUS.xs, border: 'none', background: 'transparent',
     color: disabled ? C.faint : C.muted, opacity: disabled ? 0.3 : 0.85, cursor: disabled ? 'default' : 'pointer',
-    fontSize: 9, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: NC_FONT_STACK };
+    lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: NC_FONT_STACK };
 }

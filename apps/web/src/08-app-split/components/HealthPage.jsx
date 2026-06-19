@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { NC_FONT_STACK, NC_TYPE, suiteIcon } from '../ui-tokens.jsx';
+import { ELEV, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 const M = {
@@ -148,21 +148,21 @@ function MetricCard({ metricKey, values, todayVal, period, C }) {
 
   return (
     <div style={{
-      background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 12,
-      padding: 18, display: "flex", flexDirection: "column", gap: 14,
+      background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md,
+      padding: SP.lg, display: "flex", flexDirection: "column", gap: SP.md,
       minHeight: 180, position: "relative", overflow: "hidden",
     }}>
       {/* Subtle color splash */}
       <div style={{
         position: "absolute", top: -24, right: -24, width: 100, height: 100,
-        borderRadius: "50%", background: `${m.color}0D`, pointerEvents: "none",
+        borderRadius: RADIUS.pill, background: `${m.color}0D`, pointerEvents: "none",
       }} />
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <div style={{
-            width: 30, height: 30, borderRadius: 8,
+            width: 30, height: 30, borderRadius: RADIUS.sm,
             background: `${m.color}18`,
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
           }}>
@@ -172,9 +172,9 @@ function MetricCard({ metricKey, values, todayVal, period, C }) {
         </div>
         {change !== null && (
           <span style={{
-            fontSize: 11, fontWeight: 600, color: changeColor,
+            fontSize: NC_TYPE.small, fontWeight: 600, color: changeColor,
             fontFamily: NC_FONT_STACK, background: `${changeColor}14`,
-            borderRadius: 10, padding: "2px 7px",
+            borderRadius: RADIUS.pill, padding: "2px 7px",
           }}>
             {change > 0 ? "+" : ""}{change.toFixed(1)}%
           </span>
@@ -214,7 +214,7 @@ function MetricCard({ metricKey, values, todayVal, period, C }) {
       {/* Mini chart */}
       {nums.length > 1 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={{ overflow: "hidden", borderRadius: 4 }}>
+          <div style={{ overflow: "hidden", borderRadius: RADIUS.xs }}>
             <MiniBarChart values={nums} color={m.color} height={48} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -237,15 +237,15 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
         width: "min(420px,94vw)", background: C.bg,
-        border: `1px solid ${C.divider}`, borderRadius: 16,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.28)",
+        border: `1px solid ${C.divider}`, borderRadius: RADIUS.md,
+        boxShadow: ELEV[4],
         fontFamily: NC_FONT_STACK, overflow: "hidden",
       }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "18px 20px 14px", borderBottom: `1px solid ${C.divider}` }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Connect Health Data</span>
-          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: "50%", border: "none",
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: RADIUS.pill, border: "none",
             background: C.hover || "transparent", cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", color: C.muted }}>
             <span className="material-symbols-rounded" style={{ fontSize: 16 }}>close</span>
@@ -256,11 +256,11 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
           {/* Google Health — primary option */}
           <div style={{
             border: `2px solid ${googleHealthLinked ? C.success || "#34A853" : connectError ? C.danger || "#EA4335" : C.accent}`,
-            borderRadius: 12, padding: "16px 18px",
+            borderRadius: RADIUS.md, padding: "16px 18px",
             background: googleHealthLinked ? `${C.success || "#34A853"}08` : `${C.accent}06`,
             display: "flex", gap: 14, alignItems: "center",
           }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+            <div style={{ width: 44, height: 44, borderRadius: RADIUS.md, flexShrink: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
               background: `${C.accent}18` }}>
               <span className="material-symbols-rounded" style={{ fontSize: 22, color: C.accent }}>monitor_heart</span>
@@ -268,7 +268,7 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Google Health</span>
-                <span style={{ fontSize: 9.5, fontWeight: 600, padding: "1px 7px", borderRadius: 8,
+                <span style={{ fontSize: 9.5, fontWeight: 600, padding: "1px 7px", borderRadius: RADIUS.sm,
                   background: googleHealthLinked ? `${C.success || "#34A853"}20` : `${C.accent}18`,
                   color: googleHealthLinked ? C.success || "#34A853" : C.accent }}>
                   {googleHealthLinked ? "Connected" : "Recommended"}
@@ -328,7 +328,7 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
           </button>
 
           {showOther && (
-            <div style={{ border: `1px solid ${C.divider}`, borderRadius: 10, padding: "12px 14px",
+            <div style={{ border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, padding: "12px 14px",
               background: C.bgSoft || C.bg, fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
               <strong style={{ color: C.text }}>Apple Health:</strong>{" "}
               iOS-native, not accessible from the web. Install "Health Auto Export" on iPhone and point it at this app's Firebase endpoint, or use Manual entry.
@@ -352,7 +352,7 @@ function ManualEntryModal({ C, onClose, onSave }) {
       <label style={{ fontSize: 11.5, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK }}>{label}</label>
       <input type="number" value={value} onChange={e => set(e.target.value)} placeholder={placeholder}
         style={{
-          height: 36, borderRadius: 8, border: `1px solid ${C.divider}`,
+          height: 36, borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`,
           background: C.bgSoft || C.bg, color: C.text, fontFamily: NC_FONT_STACK,
           fontSize: 13, padding: "0 11px", outline: "none", boxSizing: "border-box", width: "100%",
         }}
@@ -378,8 +378,8 @@ function ManualEntryModal({ C, onClose, onSave }) {
       display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
         width: "min(380px,94vw)", background: C.bg,
-        border: `1px solid ${C.divider}`, borderRadius: 14,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.28)", padding: "20px 22px",
+        border: `1px solid ${C.divider}`, borderRadius: RADIUS.md,
+        boxShadow: ELEV[4], padding: "20px 22px",
         fontFamily: NC_FONT_STACK,
       }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 16 }}>Log Today's Data</div>
@@ -391,12 +391,12 @@ function ManualEntryModal({ C, onClose, onSave }) {
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
           <button onClick={onClose} style={{
-            height: 34, padding: "0 16px", borderRadius: 8,
+            height: 34, padding: "0 16px", borderRadius: RADIUS.sm,
             border: `1px solid ${C.divider}`, background: "none", color: C.muted,
             cursor: "pointer", fontSize: 12.5, fontFamily: NC_FONT_STACK,
           }}>Cancel</button>
           <button onClick={handleSave} style={{
-            height: 34, padding: "0 18px", borderRadius: 8,
+            height: 34, padding: "0 18px", borderRadius: RADIUS.sm,
             border: "none", background: C.accent, color: "#fff",
             cursor: "pointer", fontSize: 12.5, fontFamily: NC_FONT_STACK, fontWeight: 600,
           }}>Save</button>
@@ -485,7 +485,7 @@ export function HealthPage({
         background: C.bg,
       }}>
         <button onClick={onClose} style={{
-          width: 32, height: 32, borderRadius: "50%", border: "none",
+          width: 32, height: 32, borderRadius: RADIUS.pill, border: "none",
           background: C.hover || "transparent", cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
           color: C.muted, flexShrink: 0,
@@ -498,7 +498,7 @@ export function HealthPage({
           <div>
             <div style={{ fontSize: 16, fontWeight: 700, color: C.text, lineHeight: 1.2 }}>Health</div>
             <div style={{ fontSize: 11, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
-              <div style={{ width: 5, height: 5, borderRadius: "50%", background: connected ? "#34A853" : C.faint, flexShrink: 0 }} />
+              <div style={{ width: 5, height: 5, borderRadius: RADIUS.pill, background: connected ? "#34A853" : C.faint, flexShrink: 0 }} />
               {sourceLabel}
               {isDemo && " · connect a source to see live data"}
             </div>
@@ -516,7 +516,7 @@ export function HealthPage({
               background: period === p.id ? C.bg : "transparent",
               color: period === p.id ? C.text : C.muted,
               cursor: "pointer", fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 500,
-              boxShadow: period === p.id ? "0 1px 4px rgba(0,0,0,0.12)" : "none",
+              boxShadow: period === p.id ? ELEV[1] : "none",
               transition: "all 0.15s",
             }}>{p.label}</button>
           ))}
@@ -525,7 +525,7 @@ export function HealthPage({
         {/* Actions */}
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           <button onClick={() => setShowManual(true)} title="Log data manually" style={{
-            height: 32, padding: "0 12px", borderRadius: 16,
+            height: 32, padding: "0 12px", borderRadius: RADIUS.pill,
             border: `1px solid ${C.divider}`, background: C.bg, color: C.text,
             cursor: "pointer", fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 500,
             display: "flex", alignItems: "center", gap: 5,
@@ -534,7 +534,7 @@ export function HealthPage({
           </button>
           {connected && (
             <button onClick={handleSync} disabled={syncing} title="Sync now" style={{
-              height: 32, padding: "0 12px", borderRadius: 16,
+              height: 32, padding: "0 12px", borderRadius: RADIUS.pill,
               border: `1px solid ${C.divider}`, background: C.bg, color: C.text,
               cursor: syncing ? "wait" : "pointer", fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 500,
               display: "flex", alignItems: "center", gap: 5, opacity: syncing ? 0.6 : 1,
@@ -543,7 +543,7 @@ export function HealthPage({
             </button>
           )}
           <button onClick={() => setShowConnect(true)} style={{
-            height: 32, padding: "0 14px", borderRadius: 16,
+            height: 32, padding: "0 14px", borderRadius: RADIUS.pill,
             border: "none", background: C.accent, color: "#fff",
             cursor: "pointer", fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 600,
             display: "flex", alignItems: "center", gap: 5,
@@ -563,7 +563,7 @@ export function HealthPage({
         {isDemo && (
           <div style={{
             display: "flex", alignItems: "center", gap: 10,
-            padding: "10px 14px", borderRadius: 10, marginBottom: 18,
+            padding: "10px 14px", borderRadius: RADIUS.sm, marginBottom: 18,
             background: `${C.accent}10`, border: `1px solid ${C.accent}30`,
           }}>
             <span className="material-symbols-rounded" style={{ fontSize: 16, color: C.accent }}>info</span>
@@ -577,7 +577,7 @@ export function HealthPage({
         {isConnectedNoData && (
           <div style={{
             display: "flex", alignItems: "center", gap: 10,
-            padding: "10px 14px", borderRadius: 10, marginBottom: 18,
+            padding: "10px 14px", borderRadius: RADIUS.sm, marginBottom: 18,
             background: `${C.success || "#34A853"}10`, border: `1px solid ${C.success || "#34A853"}30`,
           }}>
             <span className="material-symbols-rounded" style={{ fontSize: 16, color: C.success || "#34A853" }}>check_circle</span>
@@ -586,7 +586,7 @@ export function HealthPage({
             </span>
             <button onClick={handleSync} disabled={syncing} style={{
               marginLeft: "auto", flexShrink: 0, height: 28, padding: "0 12px",
-              borderRadius: 14, border: `1px solid ${C.success || "#34A853"}`, background: "none",
+              borderRadius: RADIUS.md, border: `1px solid ${C.success || "#34A853"}`, background: "none",
               color: C.success || "#34A853", cursor: syncing ? "wait" : "pointer",
               fontSize: 11.5, fontFamily: NC_FONT_STACK, fontWeight: 600, opacity: syncing ? 0.6 : 1,
             }}>{syncing ? "Syncing…" : "Sync now"}</button>
@@ -608,7 +608,7 @@ export function HealthPage({
               return (
                 <div key={key} style={{
                   display: "flex", alignItems: "center", gap: 8,
-                  background: `${m.color}10`, borderRadius: 10, padding: "8px 14px",
+                  background: `${m.color}10`, borderRadius: RADIUS.sm, padding: "8px 14px",
                   border: `1px solid ${m.color}28`, flex: 1, minWidth: 130,
                 }}>
                   <div style={{ position: "relative", width: 42, height: 42, flexShrink: 0 }}>
@@ -701,7 +701,7 @@ export function HealthPage({
             <button
               onClick={() => onSetHealthCardVisible(!healthCardVisible)}
               style={{
-                width: 42, height: 24, borderRadius: 12, border: "none",
+                width: 42, height: 24, borderRadius: RADIUS.pill, border: "none",
                 background: healthCardVisible ? C.accent : C.divider,
                 cursor: "pointer", padding: 0, position: "relative", flexShrink: 0,
                 transition: "background 0.2s",
@@ -709,7 +709,7 @@ export function HealthPage({
             >
               <span style={{
                 position: "absolute", top: 3, left: healthCardVisible ? 21 : 3,
-                width: 18, height: 18, borderRadius: "50%", background: "#fff",
+                width: 18, height: 18, borderRadius: RADIUS.pill, background: "#fff",
                 boxShadow: "0 1px 4px rgba(0,0,0,0.18)",
                 transition: "left 0.2s",
               }} />
@@ -777,7 +777,7 @@ function SetupStep({ num, color, title, steps, C }) {
   const [open, setOpen] = useState(false);
   return (
     <div style={{
-      border: `1px solid ${C.divider}`, borderRadius: 10, overflow: "hidden",
+      border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, overflow: "hidden",
     }}>
       <button onClick={() => setOpen(v => !v)} style={{
         width: "100%", display: "flex", alignItems: "center", gap: 10,
@@ -785,7 +785,7 @@ function SetupStep({ num, color, title, steps, C }) {
         textAlign: "left",
       }}>
         <div style={{
-          width: 22, height: 22, borderRadius: "50%", background: `${color}18`,
+          width: 22, height: 22, borderRadius: RADIUS.pill, background: `${color}18`,
           display: "flex", alignItems: "center", justifyContent: "center",
           flexShrink: 0, fontSize: 11, fontWeight: 700, color, fontFamily: NC_FONT_STACK,
         }}>{num}</div>
