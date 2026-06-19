@@ -217,6 +217,15 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               <button onClick={handleGenSchemes} disabled={schemeGenLoading} style={{minHeight:40,fontSize:settingsType.control,color:T.tSoft,background:"none",border:`1px dashed ${T.brd}`,borderRadius:RADIUS.sm,padding:"8px 16px",cursor:schemeGenLoading?"default":"pointer",fontFamily:"system-ui",opacity:schemeGenLoading?0.6:1}}>
                 {schemeGenLoading ? "Generating…" : "✦ Generate more themes"}
               </button>
+              {Object.keys(AS.customSchemes || {}).length > 0 && (
+                <button onClick={()=>{
+                  const n = Object.keys(AS.customSchemes || {}).length;
+                  if (!window.confirm(`Remove all ${n} generated theme${n===1?"":"s"}? Your 8 built-in themes stay, and you can generate more anytime.`)) return;
+                  setAS(p=>({...p, customSchemes:{}, colorScheme: SCHEMES[p.colorScheme] ? p.colorScheme : "claude"}));
+                }} style={{minHeight:40,fontSize:settingsType.control,color:T.tSoft,background:"none",border:`1px solid ${T.brd}`,borderRadius:RADIUS.sm,padding:"8px 16px",cursor:"pointer",fontFamily:"system-ui"}}>
+                  Clear generated ({Object.keys(AS.customSchemes || {}).length})
+                </button>
+              )}
               {schemeGenErr && <span style={{fontSize:settingsType.help,color:T.danger,fontFamily:"system-ui",lineHeight:settingsType.line}}>{schemeGenErr}</span>}
             </div>
             <div style={{height:1,background:T.brdS,margin:"18px 0 14px"}}/>
