@@ -7,6 +7,14 @@ import { registerOfflineShell } from './offline-support.js';
 
 registerOfflineShell();
 
+// Dev-only UI drift logger — opt in with ?uiaudit=1. Lazily imported so it is
+// never loaded or run in normal/production use. Read-only; changes nothing visual.
+try {
+  if (new URLSearchParams(window.location.search).has('uiaudit')) {
+    import('./dev/ui-audit.js').then((m) => m.startUiAudit()).catch(() => {});
+  }
+} catch {}
+
 // Standalone DeskPhone surface: the native Windows app embeds the exact same
 // phone screen the webapp shows, served from DeskPhone's own loopback server
 // (http://127.0.0.1:8765/?standalone=deskphone). Everything it renders comes
