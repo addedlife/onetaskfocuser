@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, textOnColor } from '../../01-core.js';
-import { cleanTheme, cleanToolbarButton, gvIconButton, gvTextButton, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
+import { CAT_MAIL, CAT_PHONE, cleanTheme, cleanToolbarButton, ELEV, GOLD, GOLD_BG, GOLD_BRD, gvIconButton, gvTextButton, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, ncSectionHeaderStyle, ncSectionIconStyle, ncSectionTitleStyle, ncSmallIconBtnStyle, RADIUS, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthCard } from './HealthCard.jsx';
@@ -605,7 +605,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
             {menuOpen && (
               <>
                 <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={onMenuClose} />
-                <div style={{ position: "absolute", right: 0, top: 28, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, minWidth: 168, boxShadow: "0 6px 24px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+                <div style={{ position: "absolute", right: 0, top: 28, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, minWidth: 168, boxShadow: ELEV[3], overflow: "hidden" }}>
                   {menuItems.map((item, i) => (
                     <button key={i} onClick={() => { onMenuClose(); item.run?.(); }}
                       style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "11px 14px", border: "none", borderBottom: i < menuItems.length - 1 ? `1px solid ${C.divider}` : "none", background: "transparent", color: C.text, cursor: "pointer", fontSize: 13, fontFamily: NC_FONT_STACK, textAlign: "left" }}>
@@ -692,7 +692,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
           </button>
           {onToggleExpand && onOpen && (
             <button onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`}
-              style={gvIconButton({ width: 26, height: dense ? 18 : 24, borderRadius: 5, color: C.faint, marginRight: 4 }, C)}>{suiteIcon("open_in_new", 12)}</button>
+              style={gvIconButton({ width: 26, height: dense ? 18 : 24, borderRadius: RADIUS.xs, color: C.faint, marginRight: 4 }, C)}>{suiteIcon("open_in_new", 12)}</button>
           )}
         </div>
       )}
@@ -911,15 +911,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     }
   }
 
-  const GOLD = "#C9923C";
-  const GOLD_BG = "rgba(201,146,60,0.055)";
-  const GOLD_BRD = "rgba(201,146,60,0.16)";
-  // Category accent colors. Mail and Phone deliberately avoid red/green — those read as
-  // urgency/status signals, not neutral category identity. Each hue is distinct so the cards
-  // stay glanceable: Mail = slate blue, Phone = violet, Tasks = teal, Shailos = gold,
-  // Calendar = amber.
-  const CAT_MAIL = "#3D6CB5";
-  const CAT_PHONE = "#8A63B5";
   const C = cleanTheme(T);
   const ncType = NC_TYPE;
   const availableW = Math.max(0, viewportW - sidebarW);
@@ -939,17 +930,17 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // through colour, not chrome. Each section passes its own accent colour.
   const tintedPanel = (accent = C.accent) => {
     const tint = hexToRgba(accent, 0.04);
-    return { background: tint ? `linear-gradient(${tint},${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: 8, display: "flex", flexDirection: "column", minHeight: isTablet && !isStacked ? 420 : 0, overflow: "hidden", boxShadow: "none" };
+    return { background: tint ? `linear-gradient(${tint},${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: RADIUS.md, display: "flex", flexDirection: "column", minHeight: isTablet && !isStacked ? 420 : 0, overflow: "hidden", boxShadow: "none" };
   };
   const ncPanel = tintedPanel(C.accent); // default; overridden per-section below
   const ncScrollPane = { overflow: "auto", flex: "1 1 auto", minHeight: 0, overscrollBehavior: "contain", scrollbarGutter: "stable", ...(isStacked ? { touchAction: "pan-y" } : {}) };
   const ncTaskBody = { flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", overscrollBehavior: "contain" };
   const ncTaskList = (isStacked || showAllTasks) ? ncScrollPane : { ...ncScrollPane, flex: "0 0 auto", overflow: "visible", maxHeight: "none" };
   const ncTasksPanel = showAllTasks ? ncPanel : { ...ncPanel, alignSelf: "start", width: "100%" };
-  const ncHeader = { minHeight: 30, padding: "3px 10px", borderBottom: `1px solid ${hexToRgba(C.divider, 0.5) || C.divider}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 };
-  const ncTitle = { fontSize: ncType.title, fontWeight: "var(--nc-font-weight-strong, 500)", color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.18 };
-  const ncSectionIcon = (accent = C.accent) => ({ width: 26, height: 26, borderRadius:12, background: "transparent", color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
-  const ncSmallIconButton = (active = false, accent = C.muted) => gvIconButton({ width: 26, height: 26, background: active ? C.hover : "transparent", color: active ? accent : C.muted }, C);
+  const ncHeader = ncSectionHeaderStyle(C);
+  const ncTitle = ncSectionTitleStyle(C);
+  const ncSectionIcon = (accent = C.accent) => ncSectionIconStyle(accent, C);
+  const ncSmallIconButton = (active = false, accent = C.muted) => ncSmallIconBtnStyle(active, accent, C);
   const phoneStatusColor = phoneStatusSummary.tone === "incoming" ? C.success : phoneStatusSummary.tone === "call" ? C.warning : phoneStatusSummary.online ? C.success : C.faint;
   const rawNowDate = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());
   const nowDate = Number.isFinite(rawNowDate.getTime()) ? rawNowDate : new Date();
@@ -1756,7 +1747,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     return nerveStatusLabel;
   };
   const nerveSummaryStrip = (style = {}) => (
-    <div style={{ flexShrink: 0, padding: "3px 10px", borderRadius: 7, background: C.bgSoft, fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.22, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...style }}>
+    <div style={{ flexShrink: 0, padding: "3px 10px", borderRadius: RADIUS.sm, background: C.bgSoft, fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.22, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...style }}>
       {nerveSupercrunch}
       {ncSummaryLoading && !ncSummary?.supercrunch && <span style={{ opacity: 0.55 }}>...</span>}
     </div>
@@ -1776,7 +1767,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       </span>
       {ncSummaryRetryable && (
         <button type="button" onClick={retryNcSummary} title="Try the summary again" aria-label="Retry summary"
-          style={{ fontSize: NC_TYPE.small, fontWeight: 600, color: C.accent, background: "none", border: `1px solid ${C.accent}`, borderRadius: 6, padding: "1px 8px", cursor: "pointer", fontFamily: NC_FONT_STACK }}>
+          style={{ fontSize: NC_TYPE.small, fontWeight: 600, color: C.accent, background: "none", border: `1px solid ${C.accent}`, borderRadius: RADIUS.sm, padding: "1px 8px", cursor: "pointer", fontFamily: NC_FONT_STACK }}>
           Try again
         </button>
       )}
@@ -1796,7 +1787,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           onClick={retryNcSummary}
           title="Refresh summary" aria-label="Refresh summary"
           disabled={ncSummaryLoading}
-          style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 5, border: "none", background: "transparent", color: C.faint, cursor: ncSummaryLoading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: ncSummaryLoading ? 0.4 : 1, ...(ncSummaryLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }}>
+          style={{ flexShrink: 0, width: 24, height: 24, borderRadius: RADIUS.xs, border: "none", background: "transparent", color: C.faint, cursor: ncSummaryLoading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: ncSummaryLoading ? 0.4 : 1, ...(ncSummaryLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }}>
           {suiteIcon("autorenew", 13)}
         </button>
       </div>
@@ -1812,7 +1803,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             onClick={() => setChiefRefreshNonce(n => n + 1)}
             title="Suggest something else" aria-label="Suggest something else"
             disabled={chiefLoading}
-            style={{ flexShrink: 0, width: 24, height: 24, borderRadius: 5, border: "none", background: "transparent", color: chiefLoading ? C.faint : C.accent, cursor: chiefLoading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: chiefLoading ? 0.4 : 1, ...(chiefLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }}>
+            style={{ flexShrink: 0, width: 24, height: 24, borderRadius: RADIUS.xs, border: "none", background: "transparent", color: chiefLoading ? C.faint : C.accent, cursor: chiefLoading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: chiefLoading ? 0.4 : 1, ...(chiefLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }}>
             {suiteIcon("autorenew", 14)}
           </button>
         </div>
@@ -2050,10 +2041,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         <span style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, whiteSpace: "nowrap" }}>{row.source}</span>
                       </div>
                       <input value={row.text} onChange={e => updateTaskSuggestion(row.id, { text: e.target.value })}
-                        style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${C.divider}`, borderRadius: 7, background: C.bg, color: C.text, padding: "7px 8px", fontSize: NC_TYPE.control, fontFamily: NC_FONT_STACK, outline: "none" }} />
+                        style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, background: C.bg, color: C.text, padding: "7px 8px", fontSize: NC_TYPE.control, fontFamily: NC_FONT_STACK, outline: "none" }} />
                       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto", gap: 6, alignItems: "center" }}>
                         <select value={row.priorityId || defaultSuggestionPriorityId} onChange={e => updateTaskSuggestion(row.id, { priorityId: e.target.value })}
-                          style={{ minWidth: 0, height: 30, border: `1px solid ${C.divider}`, borderRadius: 7, background: C.bg, color: C.text, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, padding: "0 6px" }}>
+                          style={{ minWidth: 0, height: 30, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, background: C.bg, color: C.text, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, padding: "0 6px" }}>
                           {taskSuggestionPriorities.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                         </select>
                         <button type="button" onClick={() => dismissTaskSuggestion(row)} title="Dismiss suggestion" aria-label="Dismiss suggestion"
@@ -2348,7 +2339,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         {/* Actions drawer */}
         {actionsOpen && (
           <div style={{ position:"fixed", inset:`0 0 0 ${sidebarW}px`, zIndex:7800, display:"flex", justifyContent:"flex-end", background:"rgba(0,0,0,0.28)" }} onClick={()=>setActionsOpen(false)}>
-            <aside onClick={e=>e.stopPropagation()} style={{ width:"min(540px,94vw)", height:"100%", background:C.bg, borderLeft:`1px solid ${C.divider}`, boxShadow:"-10px 0 28px rgba(60,64,67,0.18)", display:"flex", flexDirection:"column" }}>
+            <aside onClick={e=>e.stopPropagation()} style={{ width:"min(540px,94vw)", height:"100%", background:C.bg, borderLeft:`1px solid ${C.divider}`, boxShadow:ELEV.drawer, display:"flex", flexDirection:"column" }}>
               <div style={{ height:64, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 18px", borderBottom:`1px solid ${C.divider}`, flexShrink:0 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:NC_TYPE.title, fontWeight:500, fontFamily:NC_FONT_STACK, color:C.text }}>{suiteIcon("apps",20)} More Actions</div>
                 <button onClick={()=>setActionsOpen(false)} style={gvIconButton({},C)}>{suiteIcon("close",17)}</button>
@@ -2649,7 +2640,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         {/* Actions drawer (same as desktop) */}
         {actionsOpen && (
           <div style={{ position:"fixed",inset:`0 0 0 ${sidebarW}px`,zIndex:7800,display:"flex",justifyContent:"flex-end",background:"rgba(0,0,0,0.28)" }} onClick={()=>setActionsOpen(false)}>
-            <aside onClick={e=>e.stopPropagation()} style={{ width:"min(540px,94vw)",height:"100%",background:C.bg,borderLeft:`1px solid ${C.divider}`,boxShadow:"-10px 0 28px rgba(60,64,67,0.18)",display:"flex",flexDirection:"column" }}>
+            <aside onClick={e=>e.stopPropagation()} style={{ width:"min(540px,94vw)",height:"100%",background:C.bg,borderLeft:`1px solid ${C.divider}`,boxShadow:ELEV.drawer,display:"flex",flexDirection:"column" }}>
               <div style={{height:64,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 18px",borderBottom:`1px solid ${C.divider}`,flexShrink:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,fontSize:NC_TYPE.title,fontWeight:500,fontFamily:NC_FONT_STACK,color:C.text}}>{suiteIcon("apps",20)} More Actions</div>
                 <button onClick={()=>setActionsOpen(false)} style={gvIconButton({},C)}>{suiteIcon("close",17)}</button>
@@ -2782,9 +2773,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     onChange={e => { setTaskDraft(e.target.value); e.target.style.height = "34px"; e.target.style.height = Math.min(e.target.scrollHeight, 88) + "px"; }}
                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(taskPriority, { mrsW: taskComposerMrsW }); } if (e.key === "Escape") { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); } }}
                     placeholder={taskComposerMrsW ? "Mrs W task" : `${priorities.find(p => p.id === taskPriority)?.ncLabel || "Task"} task`}
-                    style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: 7, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "7px 10px", fontSize: ncType.meta, fontWeight: 400, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
+                    style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "7px 10px", fontSize: ncType.meta, fontWeight: 400, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
                   <button onClick={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })} disabled={!taskDraft.trim()} title="Save task" aria-label="Save task"
-                    style={{ width: 30, height: 30, borderRadius: 7, border: "none", background: taskComposerMrsW ? "#A8D8B9" : activePriColor, color: taskComposerMrsW ? "#123D25" : textOnColor(activePriColor), cursor: taskDraft.trim() ? "pointer" : "default", opacity: taskDraft.trim() ? 1 : 0.38, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    style={{ width: 30, height: 30, borderRadius: RADIUS.sm, border: "none", background: taskComposerMrsW ? "#A8D8B9" : activePriColor, color: taskComposerMrsW ? "#123D25" : textOnColor(activePriColor), cursor: taskDraft.trim() ? "pointer" : "default", opacity: taskDraft.trim() ? 1 : 0.38, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {suiteIcon("check", 15)}
                   </button>
                   <button onClick={() => { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); }} title="Cancel" aria-label="Cancel task entry"
@@ -2803,7 +2794,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       onChange={e => { setTaskDraft(e.target.value); e.target.style.height = "34px"; e.target.style.height = Math.min(e.target.scrollHeight, 88) + "px"; }}
                       onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(taskPriority, { mrsW: taskComposerMrsW }); } if (e.key === "Escape") { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); } }}
                       placeholder={`${priorities.find(p => p.id === taskPriority)?.ncLabel || "Task"} task`}
-                      style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: 7, border: `1px solid ${activePriColor}`, background: C.bgSoft, color: C.text, padding: "7px 10px", fontSize: ncType.body, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
+                      style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${activePriColor}`, background: C.bgSoft, color: C.text, padding: "7px 10px", fontSize: ncType.body, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
                     <button onClick={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })} disabled={!taskDraft.trim()} title="Save"
                       style={{ width: 32, height: 32, borderRadius: 8, border: "none", background: activePriColor, color: textOnColor(activePriColor), cursor: taskDraft.trim() ? "pointer" : "default", opacity: taskDraft.trim() ? 1 : 0.38, display: "flex", alignItems: "center", justifyContent: "center" }}>
                       {suiteIcon("check", 15)}
@@ -2852,7 +2843,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       </button>
                     )}
                     {(!touchLayout || actionsOpen) && !isEditing && (
-                      <div className={touchLayout ? "" : "nc-hover-actions"} data-open={actionsOpen ? "true" : undefined} style={{ display: "flex", gap: 4, justifyContent: touchLayout ? "flex-start" : "flex-end", gridColumn: touchLayout ? "2 / 4" : "auto", marginTop: touchLayout ? -4 : 0, ...(touchLayout ? {} : { position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", zIndex: 2, background: C.bg, borderRadius: 8, boxShadow: "0 1px 8px rgba(60,64,67,0.12)", padding:4 }) }}>
+                      <div className={touchLayout ? "" : "nc-hover-actions"} data-open={actionsOpen ? "true" : undefined} style={{ display: "flex", gap: 4, justifyContent: touchLayout ? "flex-start" : "flex-end", gridColumn: touchLayout ? "2 / 4" : "auto", marginTop: touchLayout ? -4 : 0, ...(touchLayout ? {} : { position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", zIndex: 2, background: C.bg, borderRadius: 8, boxShadow: ELEV[1], padding:4 }) }}>
                         <button onClick={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }} title="Mark done" aria-label="Mark done" style={gvTextButton({ minHeight: 34, height: 34, padding: "0 10px", fontSize: NC_TYPE.small, border: "none", background: C.bgSoft, color: C.success }, C)}>
                           {suiteIcon("check", 17)} <span>Done</span>
                         </button>
@@ -2912,13 +2903,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     <span style={{ fontSize: ncType.small, fontWeight: 500, color: GOLD, background: chipBg, border: `1px solid ${GOLD_BRD}`, borderRadius: 999, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 1 }}>{chipLabel}</span>
                   </button>
                 );
-              }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: T.tFaint }}>No pending shailos.</div>}
+              }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No pending shailos.</div>}
 
               {/* Recently completed shailos */}
               {shailosCompleted.length > 0 && (
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 16px 5px", borderTop: `1px solid ${C.divider}` }}>
-                    <span style={{ color: "T.success" }}>{suiteIcon("check_circle", 15)}</span>
+                    <span style={{ color: C.success }}>{suiteIcon("check_circle", 15)}</span>
                     <span style={{ fontSize: ncType.label, fontWeight: 500, color: C.muted, letterSpacing: 0, textTransform: "uppercase" }}>Recently resolved</span>
                   </div>
                   {shailosCompleted.map(s => {
@@ -2927,7 +2918,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       <div key={s.id} style={{ display: "grid", gridTemplateColumns: "16px minmax(0,1fr) auto", gap:8, padding: "7px 16px 7px 0", alignItems: "start", opacity: 0.72, minHeight: 34 }}>
                         <span style={{ width: 8, height: 8, borderRadius: 99, background: C.success, flexShrink: 0, marginTop: 5 }} />
                         <span style={{ paddingLeft: 5, paddingTop: 1, fontSize: ncType.meta, fontWeight: "var(--nc-font-weight-normal, 400)", lineHeight: ncType.line, color: C.muted, wordBreak: "break-word", textDecoration: "line-through" }}>{text}</span>
-                        <span style={{ fontSize: ncType.small, fontWeight: 500, color: "T.success", background: "rgba(46,125,50,0.10)", border: "1px solid rgba(46,125,50,0.22)", borderRadius: 999, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 1 }}>Done</span>
+                        <span style={{ fontSize: ncType.small, fontWeight: 500, color: C.success, background: "rgba(46,125,50,0.10)", border: "1px solid rgba(46,125,50,0.22)", borderRadius: 999, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 1 }}>Done</span>
                       </div>
                     );
                   })}
@@ -3000,7 +2991,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           const isFocus = ncViewMode === "focus";
           const tintedCard = (accent) => {
             const tint = hexToRgba(accent, isFocus ? 0.02 : 0.04);
-            return { background: tint ? `linear-gradient(${tint},${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: isFocus ? 4 : 6, flex: isStacked ? "1 1 0" : 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" };
+            return { background: tint ? `linear-gradient(${tint},${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: isFocus ? RADIUS.xs : RADIUS.md, flex: isStacked ? "1 1 0" : 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" };
           };
           const cardWrap = tintedCard(CAT_MAIL); // overridden per-card inline
           const cardHead = isFocus
@@ -3008,7 +2999,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             : {
                 minHeight: isStacked ? 24 : 28,
                 padding: isStacked ? "3px 8px" : "5px 10px 3px",
-                borderBottom: `1px solid ${softBorder(C.divider, 0.5)}`,
+                borderBottom: `1px solid ${C.divider}`,
                 flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6,
               };
           const cardBody = { flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: isStacked ? "2px 8px 6px" : (isFocus ? "6px 12px 8px" : "4px 12px 8px"), overscrollBehavior: "contain", scrollbarGutter: "stable" };
@@ -3086,25 +3077,25 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               {/* Not connected — never been connected: show connect button */}
               {notConnected && !googleError && !googleWasConnected && (
                 <button onClick={onConnectGoogle}
-                  style={{ flex: 1, borderRadius: 16, border: `1px dashed ${T.brd}`, background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tSoft, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.control, fontWeight: 500, transition: "all 0.15s" }}
+                  style={{ flex: 1, borderRadius: 16, border: `1px dashed ${C.divider}`, background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: C.muted, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.control, fontWeight: 500, transition: "all 0.15s" }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = accentBlue; e.currentTarget.style.color = accentBlue; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = T.brd; e.currentTarget.style.color = T.tSoft; }}>
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.divider; e.currentTarget.style.color = C.muted; }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                   Connect Google Calendar &amp; Gmail
                 </button>
               )}
               {/* Was connected before — spinner until timeout, then show reconnect button */}
               {notConnected && !googleError && googleWasConnected && !reconnectTimedOut && (
-                <div style={{ flex: 1, borderRadius: 16, border: `1px solid ${T.brd}`, background: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tFaint, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.meta }}>
-                  <div style={{ width: 11, height: 11, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                <div style={{ flex: 1, borderRadius: 16, border: `1px solid ${C.divider}`, background: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: C.faint, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.meta }}>
+                  <div style={{ width: 11, height: 11, borderRadius: "50%", border: `2px solid ${C.muted}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
                   Reconnecting…
                 </div>
               )}
               {notConnected && !googleError && googleWasConnected && reconnectTimedOut && (
                 <button onClick={onConnectGoogle}
-                  style={{ flex: 1, borderRadius: 16, border: `1px dashed ${T.brd}`, background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: T.tSoft, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.control, fontWeight: 500, transition: "all 0.15s" }}
+                  style={{ flex: 1, borderRadius: 16, border: `1px dashed ${C.divider}`, background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: C.muted, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.control, fontWeight: 500, transition: "all 0.15s" }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = accentBlue; e.currentTarget.style.color = accentBlue; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = T.brd; e.currentTarget.style.color = T.tSoft; }}>
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.divider; e.currentTarget.style.color = C.muted; }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
                   Reconnect Google
                 </button>
@@ -3112,18 +3103,18 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
               {/* Error banner */}
               {googleError && (
-                <div style={{ ...cardWrap, borderColor: T.warning, flexDirection: "row", alignItems: "center", padding: "0 14px", gap: 10 }}>
-                  <span style={{ fontSize: NC_TYPE.meta, color: T.warning, fontFamily: NC_FONT_STACK, flex: 1 }}>{googleError}</span>
+                <div style={{ ...cardWrap, borderColor: C.warning, flexDirection: "row", alignItems: "center", padding: "0 14px", gap: 10 }}>
+                  <span style={{ fontSize: NC_TYPE.meta, color: C.warning, fontFamily: NC_FONT_STACK, flex: 1 }}>{googleError}</span>
                   <button onClick={onConnectGoogle} style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: 500, color: accentBlue, background: "none", border: `1px solid ${accentBlue}`, borderRadius: 8, padding: "5px 12px", cursor: "pointer", flexShrink: 0 }}>Retry</button>
-                  <button onClick={onDisconnectGoogle} style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: T.tFaint, background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: 0 }}>✕</button>
+                  <button onClick={onDisconnectGoogle} title="Disconnect" style={ncSmallIconButton()}>{suiteIcon("close", ICON.sm)}</button>
                 </div>
               )}
 
               {/* Loading (before any data) */}
               {googleLoading && !calendarEvents && !gmailMessages && !googleError && (
                 <div style={{ ...cardWrap, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  <div style={{ width: 13, height: 13, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
-                  <span style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Loading…</span>
+                  <div style={{ width: 13, height: 13, borderRadius: "50%", border: `2px solid ${C.muted}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                  <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>Loading…</span>
                 </div>
               )}
 
@@ -3133,32 +3124,28 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   <div style={cardHead}>
                     <span style={headLabel}>{suiteIcon("calendar_today", 11)} Today</span>
                     <div className="nc-card-action" style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
-                      <button onClick={() => setShowAddEvent(true)} title="Add event"
-                         style={{ fontSize: 16, color: T.tFaint, background: "none", border: "none", cursor: "pointer", lineHeight: 1, opacity: .6, padding: 0, display: "flex" }}
-                         onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .6}>+</button>
-                      <a href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer" title="Open Google Calendar"
-                         style={{ fontSize: 14, color: T.tFaint, textDecoration: "none", lineHeight: 1, opacity: .6, display: "flex" }}
-                         onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .6}>↗</a>
-                      <button onClick={onRefreshCalendar || onConnectGoogle} title="Refresh" style={{ fontSize: 14, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .6, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .6}>↺</button>
-                      <button onClick={onDisconnectGoogle} title="Disconnect" style={{ fontSize: 14, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .35, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = .85} onMouseLeave={e => e.currentTarget.style.opacity = .35}>✕</button>
+                      {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${C.faint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+                      <button onClick={() => setShowAddEvent(true)} title="Add event" style={ncSmallIconButton()}>{suiteIcon("add", ICON.sm)}</button>
+                      <a href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer" title="Open Google Calendar" style={{ ...ncSmallIconButton(), textDecoration: "none" }}>{suiteIcon("open_in_new", ICON.sm)}</a>
+                      <button onClick={onRefreshCalendar || onConnectGoogle} title="Refresh" style={ncSmallIconButton()}>{suiteIcon("refresh", ICON.sm)}</button>
+                      <button onClick={onDisconnectGoogle} title="Disconnect Google" style={ncSmallIconButton()}>{suiteIcon("link_off", ICON.sm)}</button>
                     </div>
                   </div>
                   <div style={cardBody}>
                     {!calendarEvents ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap:8 }}>
-                        <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
-                        <span style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Loading calendar…</span>
+                        <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${C.muted}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                        <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>Loading calendar…</span>
                       </div>
                     ) : calendarRows.length === 0 ? (
                       <div style={{ minHeight: "100%", display: "flex", flexDirection: "column", justifyContent: "center", gap: 8 }}>
                         {calendarNowLine("now-empty")}
-                        <p style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK, margin: "0", textAlign: "center" }}>Nothing today</p>
+                        <p style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, margin: "0", textAlign: "center" }}>Nothing today</p>
                       </div>
                     ) : (
                       <React.Fragment>
                       {specialCalendarRows.length > 0 && (
-                        <div style={{ border: `1px solid ${softBorder(accentBlue, 0.24)}`, background: softBg(accentBlue, 0.08), borderRadius: 7, padding: "8px 9px", margin: "2px 0 6px" }}>
+                        <div style={{ border: `1px solid ${softBorder(accentBlue, 0.24)}`, background: softBg(accentBlue, 0.08), borderRadius: RADIUS.sm, padding: "8px 9px", margin: "2px 0 6px" }}>
                           {specialCalendarRows.map(row => (
                             <div key={`special-${row.evt?.id || row.index}`} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 8, alignItems: "start", fontFamily: NC_FONT_STACK }}>
                               <span style={{ minWidth: 0, color: C.text, fontSize: NC_TYPE.control, fontWeight: 600, lineHeight: 1.22, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{row.evt?.summary || "(no title)"}</span>
@@ -3174,7 +3161,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       const rowStyle = { position: "relative", overflow: "hidden", display: "flex", gap: isStacked ? 7 : 10, alignItems: "flex-start", padding: dense ? "1px 4px" : (isStacked ? "5px 2px" : "8px 4px"), textDecoration: "none", color: "inherit", borderRadius: 4, background: lifted ? softBg(accentBlue, row.now ? 0.10 : 0.055) : "transparent" };
                       const inner = (
                         <>
-                          <span style={{ position: "relative", zIndex: 2, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: now ? accentBlue : T.tFaint, fontWeight: lifted ? 600 : 400, flexShrink: 0, width: isStacked ? 54 : 66, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
+                          <span style={{ position: "relative", zIndex: 2, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: now ? accentBlue : C.faint, fontWeight: lifted ? 600 : 400, flexShrink: 0, width: isStacked ? 54 : 66, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
                           <div style={{ position: "relative", zIndex: 2, flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                               {now && <span style={{ width: 5, height: 5, borderRadius: "50%", background: accentBlue, flexShrink: 0 }} />}
@@ -3184,7 +3171,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         </>
                       );
                       return evt.htmlLink
-                        ? <React.Fragment key={evt.id || i}>{!hasCurrentCalendarEvent && i === calendarNowInsertIndex && calendarNowLine("now-line")}<a ref={now ? calendarNowRef : null} href={evt.htmlLink} target="_blank" rel="noopener noreferrer" style={{ ...rowStyle, scrollMarginBlock: now ? "50%" : undefined }} onMouseEnter={e => e.currentTarget.style.background = T.bgW || 'rgba(255,255,255,0.05)'} onMouseLeave={e => e.currentTarget.style.background = rowStyle.background}>{now && currentEventNowRule()}{inner}</a></React.Fragment>
+                        ? <React.Fragment key={evt.id || i}>{!hasCurrentCalendarEvent && i === calendarNowInsertIndex && calendarNowLine("now-line")}<a ref={now ? calendarNowRef : null} href={evt.htmlLink} target="_blank" rel="noopener noreferrer" style={{ ...rowStyle, scrollMarginBlock: now ? "50%" : undefined }} onMouseEnter={e => e.currentTarget.style.background = C.bgSoft} onMouseLeave={e => e.currentTarget.style.background = rowStyle.background}>{now && currentEventNowRule()}{inner}</a></React.Fragment>
                         : <React.Fragment key={evt.id || i}>{!hasCurrentCalendarEvent && i === calendarNowInsertIndex && calendarNowLine("now-line")}<div ref={now ? calendarNowRef : null} style={{ ...rowStyle, scrollMarginBlock: now ? "50%" : undefined }}>{now && currentEventNowRule()}{inner}</div></React.Fragment>;
                     })}
                     {!hasCurrentCalendarEvent && calendarNowInsertIndex === calendarRows.length && calendarNowLine("now-line-end")}
@@ -3201,7 +3188,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const timeDigits = ampmMatch ? clockParts.timeMain.slice(0, -ampmMatch[0].length) : clockParts.timeMain;
                 const timePeriod = ampmMatch ? ampmMatch[1] : "";
                 const clockFF = '"Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif';
-                const base = { borderRadius: 10, minHeight: 0, overflow: "hidden", fontFamily: clockFF, fontVariantNumeric: "tabular-nums", userSelect: "none", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" };
+                const base = { borderRadius: RADIUS.md, minHeight: 0, overflow: "hidden", fontFamily: clockFF, fontVariantNumeric: "tabular-nums", userSelect: "none", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" };
                 const openMenu = e => { e.preventDefault(); setClockMenuPos({ x: e.clientX, y: e.clientY }); };
                 const hp = (deg, r) => { const a = (deg - 90) * Math.PI / 180; return [50 + Math.cos(a) * r, 50 + Math.sin(a) * r]; };
                 const hrA = ((nowDate.getHours() % 12) / 12) * 360 + (nowDate.getMinutes() / 60) * 30;
@@ -3281,7 +3268,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         {timeDigits.split("").map((ch, i) => (
                           ch === ":"
                             ? <span key={i} style={{ fontSize: 24, fontWeight: 300, color: C.faint, lineHeight: 1, paddingBottom: 6 }}>:</span>
-                            : <span key={i} style={{ fontSize: 30, fontWeight: 700, lineHeight: 1, color: C.text, background: C.hover, borderRadius: 7, padding: "8px 6px", minWidth: 34, textAlign: "center", display: "inline-flex", justifyContent: "center" }}>{ch}</span>
+                            : <span key={i} style={{ fontSize: 30, fontWeight: 700, lineHeight: 1, color: C.text, background: C.hover, borderRadius: RADIUS.sm, padding: "8px 6px", minWidth: 34, textAlign: "center", display: "inline-flex", justifyContent: "center" }}>{ch}</span>
                         ))}
                         {timePeriod && <span style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginLeft: 2, alignSelf: "flex-end", paddingBottom: 8 }}>{timePeriod}</span>}
                       </div>
@@ -3389,21 +3376,19 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   <div style={cardHead}>
                     <span style={headLabel}>{suiteIcon("mail", 11)} Mail</span>
                     <div className="nc-card-action" style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${T.tFaint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
-                      <a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" title="Open Gmail"
-                         style={{ fontSize: 14, color: T.tFaint, textDecoration: "none", opacity: .6, lineHeight: 1 }}
-                         onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .6}>↗</a>
-                      <button onClick={onRefreshCalendar || onConnectGoogle} title="Refresh mail and calendar" style={{ fontSize: 14, color: T.tFaint, background: "none", border: "none", cursor: "pointer", padding: 0, opacity: .6, lineHeight: 1 }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = .6}>↺</button>
+                      {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${C.faint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
+                      <a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" title="Open Gmail" style={{ ...ncSmallIconButton(), textDecoration: "none" }}>{suiteIcon("open_in_new", ICON.sm)}</a>
+                      <button onClick={onRefreshCalendar || onConnectGoogle} title="Refresh mail and calendar" style={ncSmallIconButton()}>{suiteIcon("refresh", ICON.sm)}</button>
                     </div>
                   </div>
                   <div style={cardBody}>
                     {!gmailMessages ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap:8 }}>
-                        <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${T.tSoft}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
-                        <span style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK }}>Loading mail…</span>
+                        <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${C.muted}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                        <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>Loading mail…</span>
                       </div>
                     ) : gmailMessages.length === 0 ? (
-                      <p style={{ fontSize: NC_TYPE.meta, color: T.tFaint, fontFamily: NC_FONT_STACK, margin: "12px 0", textAlign: "center" }}>Inbox zero 🎉</p>
+                      <p style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, margin: "12px 0", textAlign: "center" }}>Inbox zero 🎉</p>
                     ) : (
                       <React.Fragment>
                       {gmailMessages.map((msg, i) => {
@@ -3415,9 +3400,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       return (
                         <React.Fragment key={msg.id || i}>
                         <div className="nc-action-row"
-                          style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: dense ? "1px 4px" : (isStacked ? "5px 2px" : "8px 4px"), borderRadius: 4, background: selected ? (T.bgW || 'rgba(255,255,255,0.05)') : "transparent" }}
+                          style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: dense ? "1px 4px" : (isStacked ? "5px 2px" : "8px 4px"), borderRadius: 4, background: selected ? (C.bgSoft) : "transparent" }}
                           onMouseEnter={e => {
-                            e.currentTarget.style.background = T.bgW || 'rgba(255,255,255,0.05)';
+                            e.currentTarget.style.background = C.bgSoft;
                             clearTimeout(hoverTimerRef.current);
                             hoverTimerRef.current = setTimeout(() => {
                               const rect = e.currentTarget.getBoundingClientRect();
@@ -3439,11 +3424,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                           </button>
                           <a href={url} target="_blank" rel="noopener noreferrer" title="Open in Gmail"
                             className="nc-hover-actions"
-                            style={{ color: C.faint, textDecoration: "none", fontSize: NC_TYPE.meta, lineHeight: 1.4, padding: "1px 2px", flexShrink: 0 }}
-                            onClick={e => e.stopPropagation()}>↗</a>
+                            style={{ color: C.faint, textDecoration: "none", display: "flex", alignItems: "center", flexShrink: 0 }}
+                            onClick={e => e.stopPropagation()}>{suiteIcon("open_in_new", ICON.xs)}</a>
                         </div>
                         {selected && selectedEmailSource && (
-                          <div style={{ margin: "2px 0 8px", padding: "10px 10px 11px", borderRadius: 6, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, fontFamily: NC_FONT_STACK }}>
+                          <div style={{ margin: "2px 0 8px", padding: "10px 10px 11px", borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, fontFamily: NC_FONT_STACK }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
                               <div style={{ minWidth: 0 }}>
                                 <div style={{ fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, whiteSpace: "normal", wordBreak: "break-word" }}>{gmailHeader(selectedEmailSource, 'Subject') || '(no subject)'}</div>
@@ -3451,7 +3436,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                               </div>
                               <button type="button" onClick={() => { setSelectedEmailId(null); setEmailDetailError(""); }}
                                 title="Close message"
-                                style={{ width: 24, height: 24, minHeight: 0, border: "none", background: "transparent", color: C.faint, cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0 }}>x</button>
+                                style={ncSmallIconButton()}>{suiteIcon("close", ICON.sm)}</button>
                             </div>
                             {emailDetailLoadingId === selectedEmailId ? (
                               <div style={{ display: "flex", alignItems: "center", gap:8, fontSize: NC_TYPE.meta, color: C.muted }}>
@@ -3480,17 +3465,17 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
             {/* ── Gmail hover tooltip ── */}
             {hoverEmail && (
-              <div style={{ position: "fixed", top: hoverEmail.top, left: hoverEmail.left, zIndex: 9999, background: T.card, border: `1px solid ${T.brd}`, borderRadius: 10, padding: "10px 14px", maxWidth: 320, boxShadow: "0 8px 28px rgba(0,0,0,0.22)", fontFamily: NC_FONT_STACK, pointerEvents: "none" }}>
-                <div style={{ fontSize: NC_TYPE.meta, fontWeight: 500, color: T.tSoft, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fmtFrom(hoverEmail.from)}</div>
-                <div style={{ fontSize: NC_TYPE.control, color: T.text, fontWeight: 500, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{hoverEmail.subject}</div>
-                {hoverEmail.snippet && <div style={{ fontSize: NC_TYPE.meta, color: T.tFaint, lineHeight: NC_TYPE.line }}>{hoverEmail.snippet}</div>}
+              <div style={{ position: "fixed", top: hoverEmail.top, left: hoverEmail.left, zIndex: 9999, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, padding: "10px 14px", maxWidth: 320, boxShadow: ELEV[3], fontFamily: NC_FONT_STACK, pointerEvents: "none" }}>
+                <div style={{ fontSize: NC_TYPE.meta, fontWeight: 500, color: C.muted, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fmtFrom(hoverEmail.from)}</div>
+                <div style={{ fontSize: NC_TYPE.control, color: C.text, fontWeight: 500, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{hoverEmail.subject}</div>
+                {hoverEmail.snippet && <div style={{ fontSize: NC_TYPE.meta, color: C.faint, lineHeight: LINE.body }}>{hoverEmail.snippet}</div>}
               </div>
             )}
 
             {/* ── Add Event modal ── */}
             {showAddEvent && (
               <div style={{ position: "fixed", inset: 0, zIndex: 9990, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)" }} onClick={() => { setShowAddEvent(false); setAddEventText(''); setAddEventError(null); }}>
-                <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8, padding: "24px 22px 18px", width: "min(460px,92vw)", boxShadow: "0 12px 32px rgba(60,64,67,0.22)", fontFamily: NC_FONT_STACK }} onClick={e => e.stopPropagation()}>
+                <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, padding: "24px 22px 18px", width: "min(460px,92vw)", boxShadow: ELEV[4], fontFamily: NC_FONT_STACK }} onClick={e => e.stopPropagation()}>
                   <div style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text, marginBottom: 12 }}>Add Event</div>
                   <textarea autoFocus rows={4}
                     placeholder='e.g. "Speech at BYHSI on Thu May 14 at 12:55pm – 2pm, remind me 30 mins and 1 hr before"'
@@ -3499,7 +3484,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleAddEvent(); } }}
                     style={{ width: "100%", boxSizing: "border-box", borderRadius: 8, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, fontSize: NC_TYPE.control, padding: "12px 14px", resize: "none", fontFamily: NC_FONT_STACK, outline: "none", lineHeight: NC_TYPE.line }}
                   />
-                  {addEventError && <div style={{ fontSize: NC_TYPE.meta, color: "T.warning", marginTop: 6 }}>{addEventError}</div>}
+                  {addEventError && <div style={{ fontSize: NC_TYPE.meta, color: C.warning, marginTop: 6 }}>{addEventError}</div>}
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
                     <button onClick={() => { setShowAddEvent(false); setAddEventText(''); setAddEventError(null); }} style={{ padding: "8px 16px", borderRadius: 4, border: `1px solid ${C.divider}`, background: "none", color: C.muted, cursor: "pointer", fontSize: NC_TYPE.control, fontWeight: 500 }}>Cancel</button>
                     <button onClick={handleAddEvent} disabled={addEventLoading || !addEventText.trim()} style={{ padding: "8px 18px", borderRadius: 4, border: "none", background: accentBlue, color: "#fff", cursor: addEventLoading ? "wait" : "pointer", fontSize: NC_TYPE.control, fontWeight: 500, opacity: (!addEventText.trim() || addEventLoading) ? 0.55 : 1 }}>
@@ -3514,7 +3499,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             {clockMenuPos && (
               <>
                 <div style={{ position: "fixed", inset: 0, zIndex: 9090 }} onClick={() => setClockMenuPos(null)} />
-                <div onMouseDown={e => e.stopPropagation()} style={{ position: "fixed", left: Math.min(clockMenuPos.x, window.innerWidth - 212), top: Math.min(clockMenuPos.y, window.innerHeight - 460), zIndex: 9091, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 10, padding: 6, minWidth: 200, maxHeight: "min(455px, 85vh)", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", display: "flex", flexDirection: "column", gap: 2 }}>
+                <div onMouseDown={e => e.stopPropagation()} style={{ position: "fixed", left: Math.min(clockMenuPos.x, window.innerWidth - 212), top: Math.min(clockMenuPos.y, window.innerHeight - 460), zIndex: 9091, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, padding: 6, minWidth: 200, maxHeight: "min(455px, 85vh)", overflowY: "auto", boxShadow: ELEV[3], display: "flex", flexDirection: "column", gap: 2 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "6px 8px 4px" }}>Clock Style</div>
                   {[
                     { id: "digital", label: "Digital",  desc: "Date + time + seconds bar"  },
@@ -3530,7 +3515,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     const active = clockStyle === opt.id;
                     return (
                       <button key={opt.id} onClick={() => { setClockStyle(opt.id); try { localStorage.setItem("nc_clock_style", opt.id); } catch {} setClockMenuPos(null); }}
-                        style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", padding: "7px 10px", borderRadius: 7, border: "none", background: active ? C.hover : "transparent", cursor: "pointer", width: "100%", textAlign: "left" }}>
+                        style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", padding: "7px 10px", borderRadius: RADIUS.sm, border: "none", background: active ? C.hover : "transparent", cursor: "pointer", width: "100%", textAlign: "left" }}>
                         <span style={{ fontSize: NC_TYPE.control, fontWeight: active ? 600 : 400, color: active ? C.text : C.muted, fontFamily: NC_FONT_STACK }}>{opt.label}</span>
                         <span style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 1 }}>{opt.desc}</span>
                       </button>
@@ -3549,7 +3534,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         {/* Actions drawer */}
         {actionsOpen && (
           <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7800, display: "flex", justifyContent: "flex-end", background: "rgba(0,0,0,0.28)" }} onClick={() => setActionsOpen(false)}>
-            <aside onClick={e => e.stopPropagation()} style={{ width: "min(540px,94vw)", height: "100%", background: C.bg, borderLeft: `1px solid ${C.divider}`, boxShadow: "-10px 0 28px rgba(60,64,67,0.18)", display: "flex", flexDirection: "column" }}>
+            <aside onClick={e => e.stopPropagation()} style={{ width: "min(540px,94vw)", height: "100%", background: C.bg, borderLeft: `1px solid ${C.divider}`, boxShadow: ELEV.drawer, display: "flex", flexDirection: "column" }}>
               <div style={{ height: 64, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: NC_TYPE.title, fontWeight: 500, fontFamily: NC_FONT_STACK, color: C.text }}>
                   {suiteIcon("apps", 20)} More Actions

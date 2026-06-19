@@ -70,13 +70,34 @@ export const ELEV = {
   2: "0 2px 8px rgba(0,0,0,0.10)",
   3: "0 6px 20px rgba(0,0,0,0.14)",
   4: "0 12px 40px rgba(0,0,0,0.20)",
+  drawer: "-8px 0 24px rgba(0,0,0,0.14)", // side-drawer horizontal shadow
 };
 
 // ─── Spacing (4-pt grid) ──────────────────────────────────────────────────
 export const SP = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
 
+// ─── Shape Scale (M3-aligned, 4-dp step system) ───────────────────────────
+// xs=chips/badges  sm=buttons/inputs/rows  md=cards/panels  pill=full-round
+export const RADIUS = { xs: 4, sm: 8, md: 12, pill: 999 };
+
+// ─── Icon Scale ───────────────────────────────────────────────────────────
+// Consistent sizes for Material Symbols across all contexts.
+export const ICON = { xs: 12, sm: 14, md: 16, lg: 18, xl: 20 };
+
+// ─── Line Heights ─────────────────────────────────────────────────────────
+export const LINE = { tight: 1.2, base: 1.3, body: 1.4, loose: 1.5 };
+
 // One consistent modal backdrop tint.
 export const SCRIM = "rgba(0, 0, 0, 0.38)";
+
+// ─── Category Identity Colors ─────────────────────────────────────────────
+// App-level semantic palette — section accent hues. Source of truth; do not
+// re-define locally in component files.
+export const GOLD      = "#C9923C";
+export const GOLD_BG   = "rgba(201,146,60,0.055)";
+export const GOLD_BRD  = "rgba(201,146,60,0.16)";
+export const CAT_MAIL  = "#3D6CB5";
+export const CAT_PHONE = "#8A63B5";
 
 export function useViewportWidth() {
   const [width, setWidth] = useState(() => (
@@ -324,3 +345,47 @@ export function getInitialSuiteView() {
     return "nervecenter";
   }
 }
+
+// ─── NerveCenter Section Header Styles ───────────────────────────────────────
+// Shared style functions for the three primary panel headers (Tasks / Shailos / Phone).
+// Keeping the logic here ensures all three headers stay visually identical and that
+// design decisions — divider opacity, padding, icon size — have a single source of truth.
+export const ncSectionHeaderStyle = (C, overrides = {}) => ({
+  minHeight: 30,
+  padding: "3px 10px",
+  borderBottom: `1px solid ${C.divider}`,
+  flexShrink: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  ...overrides,
+});
+
+export const ncSectionTitleStyle = (C) => ({
+  fontSize: NC_TYPE.title,
+  fontWeight: "var(--nc-font-weight-strong, 500)",
+  color: C.text,
+  fontFamily: NC_FONT_STACK,
+  lineHeight: LINE.tight,
+});
+
+export const ncSectionIconStyle = (accent, C) => ({
+  width: 26,
+  height: 26,
+  borderRadius: RADIUS.md,
+  background: "transparent",
+  color: accent || C.accent,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0,
+});
+
+export const ncSmallIconBtnStyle = (active = false, accent, C) => gvIconButton({
+  width: 26,
+  height: 26,
+  background: active ? C.hover : "transparent",
+  color: active ? (accent || C.muted) : C.muted,
+  minHeight: 26,
+}, C);

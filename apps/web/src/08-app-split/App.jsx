@@ -24,6 +24,41 @@ const GOOGLE_TOKEN_EXPIRY_SKEW_MS = 60 * 1000;
 const GOOGLE_SILENT_REAUTH_COOLDOWN_MS = 10 * 60 * 1000;
 const GOOGLE_SILENT_REAUTH_LAST_KEY = "ot_google_silent_reauth_last";
 
+// ─── Email summary session cache ─────────────────────────────────────────────
+// Per-email content hash so summaries survive visibility changes + polls within
+// one tab session without ever persisting stale data across page loads.
+// FNV-1a 32-bit — same algorithm as hashChiefValue.
+const EMAIL_SUMMARY_SESSION_KEY = 'ot_email_summary_v2';
+
+function emailContentHash(m) {
+  const subj = m?.payload?.headers?.find(h => h.name === "Subject")?.value || "";
+  const snip = (m.snippet || "").slice(0, 120);
+  const raw = `${m.internalDate || ""}|${subj}|${snip}`;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < raw.length; i++) { h ^= raw.charCodeAt(i); h = (h * 0x01000193) >>> 0; }
+  return h.toString(36);
+}
+
+function readEmailSummarySession() {
+  try { return JSON.parse(sessionStorage.getItem(EMAIL_SUMMARY_SESSION_KEY) || "{}"); } catch { return {}; }
+}
+
+function writeEmailSummarySession(patch) {
+  try {
+    const prev = readEmailSummarySession();
+    sessionStorage.setItem(EMAIL_SUMMARY_SESSION_KEY, JSON.stringify({ ...prev, ...patch }));
+  } catch {}
+}
+
+function preMergeEmailSummaries(msgs) {
+  if (!Array.isArray(msgs) || msgs.length === 0) return msgs;
+  const cache = readEmailSummarySession();
+  return msgs.map(m => {
+    const h = emailContentHash(m);
+    return (cache[h] && !m.aiSummary) ? { ...m, aiSummary: cache[h] } : m;
+  });
+}
+
 function clearStoredGoogleBrowserToken() {
   try {
     localStorage.removeItem('ot_google_token');
@@ -674,8 +709,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       const accountsArg = filter && filter !== "all" ? [filter] : "all";
       const d = await callGoogleWorkspace("summary", { accounts: accountsArg });
       setCalendarEvents(d.calendarEvents || []);
-      setGmailMessages(d.gmailMessages || []);
-      applyEmailSummaries(d.gmailMessages || []); // non-blocking enhancement
+      const rawMsgs = d.gmailMessages || [];
+      setGmailMessages(preMergeEmailSummaries(rawMsgs));
+      applyEmailSummaries(rawMsgs); // AI-summarize only cache misses
       if (Array.isArray(d.accounts)) setGoogleAccounts(d.accounts);
       setGoogleServerConnected(true);
       setGoogleToken(GOOGLE_SERVER_TOKEN);
@@ -964,21 +1000,16 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     );
   }
 
-  // Best-effort: batch-generate one-sentence email summaries and merge them into the
-  // already-rendered messages by id. Runs after the raw mail is on screen; if the AI
-  // gateway is slow or down, the snippets simply remain.
-  // Dedup key uses sessionStorage (not localStorage) so it resets on every page load —
-  // aiSummary lives only in React state, so we must regenerate after any hard reload.
-  const EMAIL_SUMMARIES_IDS_KEY = 'ot_email_summaries_ids_v1';
+  // Best-effort: generate one-sentence summaries for emails that aren't in the session
+  // cache. Cached summaries are applied synchronously (preMergeEmailSummaries) before
+  // setGmailMessages, so there is never a blink. AI only runs for cache misses.
   async function applyEmailSummaries(msgs) {
     if (!Array.isArray(msgs) || msgs.length === 0) return;
-    const msgIds = msgs.map(m => m.id).filter(Boolean).sort().join(',');
+    const cache = readEmailSummarySession();
+    const needsAI = msgs.filter(m => !cache[emailContentHash(m)]);
+    if (needsAI.length === 0) return;
     try {
-      if (sessionStorage.getItem(EMAIL_SUMMARIES_IDS_KEY) === msgIds) return;
-      sessionStorage.setItem(EMAIL_SUMMARIES_IDS_KEY, msgIds);
-    } catch {}
-    try {
-      const emails = msgs.map((m) => {
+      const emails = needsAI.map(m => {
         const subj = m?.payload?.headers?.find(h => h.name === "Subject")?.value || "";
         const snip = (m.snippet || "").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim().slice(0, 350);
         return { subject: subj, body: snip };
@@ -986,12 +1017,17 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       const job = await runAIJob("dashboard.email_summaries.v1", { emails }, aiOpts || {});
       const summaries = Array.isArray(job?.output) ? job.output : null;
       if (!summaries) return;
+      const newCache = {};
       const byId = new Map();
-      msgs.forEach((m, i) => {
-        if (m?.id && typeof summaries[i] === "string") byId.set(m.id, summaries[i].replace(/^"|"$/g, ""));
+      needsAI.forEach((m, i) => {
+        if (m?.id && typeof summaries[i] === "string") {
+          const s = summaries[i].replace(/^"|"$/g, "");
+          byId.set(m.id, s);
+          newCache[emailContentHash(m)] = s;
+        }
       });
       if (!byId.size) return;
-      // Merge by id so a refresh that swapped the list mid-flight isn't clobbered.
+      writeEmailSummarySession(newCache);
       setGmailMessages(prev => Array.isArray(prev)
         ? prev.map(m => byId.has(m.id) ? { ...m, aiSummary: byId.get(m.id) } : m)
         : prev);
@@ -1059,8 +1095,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       });
       const mailP = fetchGmailData(googleToken).then(msgs => {
         if (cancelled) return;
-        setGmailMessages(msgs);
-        applyEmailSummaries(msgs); // non-blocking enhancement
+        setGmailMessages(preMergeEmailSummaries(msgs));
+        applyEmailSummaries(msgs); // AI-summarize only cache misses
       }).catch(err => {
         if (cancelled) return;
         if (err?.message === 'token_expired') { handleExpired(); return; }
