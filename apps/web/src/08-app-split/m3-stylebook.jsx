@@ -129,5 +129,30 @@ export const M3_EXPECT = {
   button:      { borderRadius: M3_SHAPE.full, height: M3_CONTROL_H },
 };
 
-export const M3 = { searchField, filterChip, listRow, button, card, M3_EXPECT, M3_SHAPE };
+// ─── M3_SPEC — the clearinghouse the runtime override reads ────────────────────
+// One declarative entry per element kind, listing the STRUCTURAL values to force
+// (radius / size / spacing / type). Theme-independent; colors stay with the live
+// theme (overriding color at runtime risks white-on-white and the theme already
+// centralizes it). The override engine (dev/ui-style-override.js) looks each
+// element up here and forces these values — with NO edits to the page source.
+// Numbers are px. Add a kind here and the override engine covers it automatically.
+export const M3_SPEC = {
+  searchField: { borderRadius: M3_SHAPE.full, height: 40,        fontSize: 14, padding: "0 16px" }, // pill — all searches match
+  textField:   { borderRadius: M3_SHAPE.sm,   height: 40,        fontSize: 14, padding: "0 12px" }, // boxy input
+  textarea:    { borderRadius: M3_SHAPE.md,                      fontSize: 14, padding: "10px 12px" },
+  select:      { borderRadius: M3_SHAPE.sm,   height: 40,        fontSize: 14, padding: "0 12px" },
+  button:      { borderRadius: M3_SHAPE.full, height: 40,        fontSize: 14, fontWeight: 500, padding: "0 16px" },
+  iconButton:  { borderRadius: M3_SHAPE.full, width: 40, height: 40 },
+  filterChip:  { borderRadius: M3_SHAPE.full, height: 32,        fontSize: 12, fontWeight: 500, padding: "0 12px" }, // in/out/missed/all match
+  badge:       { borderRadius: M3_SHAPE.full, height: 20,        fontSize: 11, padding: "0 6px" },
+  listRow:     { minHeight: 48,                                  fontSize: 14, padding: "8px 12px" }, // content rows line up
+  card:        { borderRadius: M3_SHAPE.md },
+  modal:       { borderRadius: M3_SHAPE.md },
+  toggle:      { borderRadius: M3_SHAPE.full },
+  navRailItem: { borderRadius: M3_SHAPE.full, height: 40,        fontSize: 12 },
+  tab:         { borderRadius: M3_SHAPE.sm,   height: 40,        fontSize: 12 },
+  avatar:      { borderRadius: M3_SHAPE.full },
+};
+
+export const M3 = { searchField, filterChip, listRow, button, card, M3_EXPECT, M3_SPEC, M3_SHAPE };
 export default M3;

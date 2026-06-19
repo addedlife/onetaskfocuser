@@ -10,8 +10,14 @@ registerOfflineShell();
 // Dev-only UI drift logger — opt in with ?uiaudit=1. Lazily imported so it is
 // never loaded or run in normal/production use. Read-only; changes nothing visual.
 try {
-  if (new URLSearchParams(window.location.search).has('uiaudit')) {
+  const q = new URLSearchParams(window.location.search);
+  if (q.has('uiaudit')) {
     import('./dev/ui-audit.js').then((m) => m.startUiAudit()).catch(() => {});
+  }
+  // Master-style enforcer: force every classified element to the M3 master at
+  // runtime (no source edits). Opt in with ?uistyle=1; reload without it to revert.
+  if (q.has('uistyle')) {
+    import('./dev/ui-style-override.js').then((m) => m.startUiStyle()).catch(() => {});
   }
 } catch {}
 
