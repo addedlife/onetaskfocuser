@@ -458,6 +458,32 @@ function AppContent() {
         r.style.setProperty('--ot-on-primary',  sc.onPrimary || sc.bg || '#FFFFFF');
         r.style.setProperty('--ot-tonal',       sc.tonal || sc.brdS || '#F7E4DA');
         r.style.setProperty('--ot-on-tonal',    sc.onTonal || sc.text || '#71331F');
+        // M3 secondary (muted, same hue) + tertiary (hue +60) derived from primary —
+        // mirrors deriveAccents() in the web suite so Shailos keeps accent parity.
+        const primary = sc.primary || sc.text || '#C96442';
+        const toHsl = (hex: string) => {
+          let x = hex.replace('#', ''); if (x.length === 3) x = x.split('').map(c => c + c).join('');
+          const cr = parseInt(x.slice(0, 2), 16) / 255, cg = parseInt(x.slice(2, 4), 16) / 255, cb = parseInt(x.slice(4, 6), 16) / 255;
+          const mx = Math.max(cr, cg, cb), mn = Math.min(cr, cg, cb), l = (mx + mn) / 2; let h = 0, s = 0;
+          if (mx !== mn) { const d = mx - mn; s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === cr ? (cg - cb) / d + (cg < cb ? 6 : 0) : mx === cg ? (cb - cr) / d + 2 : (cr - cg) / d + 4; h /= 6; }
+          return { h: h * 360, s, l };
+        };
+        const toHex = (h: number, s: number, l: number) => {
+          h = (((h % 360) + 360) % 360) / 360;
+          const f = (p: number, q: number, t: number) => { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1 / 6) return p + (q - p) * 6 * t; if (t < 1 / 2) return q; if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p; };
+          let cr: number, cg: number, cb: number;
+          if (s === 0) { cr = cg = cb = l; } else { const q = l < 0.5 ? l * (1 + s) : l + s - l * s; const p = 2 * l - q; cr = f(p, q, h + 1 / 3); cg = f(p, q, h); cb = f(p, q, h - 1 / 3); }
+          const c = (v: number) => Math.round(v * 255).toString(16).padStart(2, '0');
+          return `#${c(cr)}${c(cg)}${c(cb)}`.toUpperCase();
+        };
+        const onCol = (hex: string) => { const x = hex.replace('#', ''); const cr = parseInt(x.slice(0, 2), 16), cg = parseInt(x.slice(2, 4), 16), cb = parseInt(x.slice(4, 6), 16); return (cr * 299 + cg * 587 + cb * 114) / 1000 < 140 ? '#FFFFFF' : '#1A1A1A'; };
+        const ph = toHsl(primary);
+        const secondary = toHex(ph.h, Math.max(0, ph.s * 0.45), ph.l);
+        const tertiary = toHex(ph.h + 60, Math.max(0.18, Math.min(ph.s * 0.85, 0.7)), ph.l);
+        r.style.setProperty('--ot-secondary', secondary);
+        r.style.setProperty('--ot-on-secondary', onCol(secondary));
+        r.style.setProperty('--ot-tertiary', tertiary);
+        r.style.setProperty('--ot-on-tertiary', onCol(tertiary));
       } catch {}
     };
     apply();

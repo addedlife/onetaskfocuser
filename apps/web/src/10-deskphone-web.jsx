@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GV_CLEAN, NC_TYPE, RADIUS } from './08-app-split/ui-tokens.jsx';
+import { deriveAccents, GV_CLEAN, NC_TYPE, RADIUS } from './08-app-split/ui-tokens.jsx';
 
 const DEFAULT_HOST = "http://127.0.0.1:8765";
 const RAIL_COLLAPSED_KEY = "deskphone_web_rail_collapsed";
@@ -133,6 +133,7 @@ export function buildDeskPhoneWebVars(theme = {}) {
   const muted = dpReadableAcross(theme.tSoft || COLORS.textMuted, surfaces, 4.5);
   const disabled = dpReadableAcross(theme.tFaint || muted, [pageBg, bg, bgSoft].filter(dpIsHexColor), 4.5);
   const accentText = dpReadableAcross(theme.onTonal || accent, [pageBg, bg, bgSoft].filter(dpIsHexColor), 4.5);
+  const { secondary: dpSecondary, onSecondary: dpOnSecondary, tertiary: dpTertiary, onTertiary: dpOnTertiary } = deriveAccents(accent);
   const successLight = dpReadableSurface(theme.successLight || COLORS.accentGreenLight, bgSoft, theme.success || COLORS.accentGreen, 4.5);
   const dangerLight = dpReadableSurface(theme.dangerLight || COLORS.accentRedLight, bgSoft, theme.danger || COLORS.accentRed, 4.5);
   const success = dpReadableAcross(theme.success || COLORS.accentGreen, [pageBg, bg, bgSoft, successLight].filter(dpIsHexColor), 4.5);
@@ -157,6 +158,10 @@ export function buildDeskPhoneWebVars(theme = {}) {
     "--dp-blue": accent,
     "--dp-blue-dark": accentText,
     "--dp-blue-light": theme.tonal || selected,
+    "--dp-secondary": dpSecondary,
+    "--dp-on-secondary": dpOnSecondary,
+    "--dp-tertiary": dpTertiary,
+    "--dp-on-tertiary": dpOnTertiary,
     "--dp-green": success,
     "--dp-green-dark": successText,
     "--dp-green-light": successLight,
@@ -3218,6 +3223,8 @@ function ParityLedgerPanel({ rows }) {
   );
 }
 
+const DP_ACCENTS = deriveAccents(COLORS.accentBlue);
+
 const css = `
 .dp-web-root {
   --dp-bg-main: ${COLORS.bgMain};
@@ -3228,6 +3235,10 @@ const css = `
   --dp-blue: ${COLORS.accentBlue};
   --dp-blue-dark: ${COLORS.accentBlueDark};
   --dp-blue-light: ${COLORS.accentBlueLight};
+  --dp-secondary: ${DP_ACCENTS.secondary};
+  --dp-on-secondary: ${DP_ACCENTS.onSecondary};
+  --dp-tertiary: ${DP_ACCENTS.tertiary};
+  --dp-on-tertiary: ${DP_ACCENTS.onTertiary};
   --dp-green: ${COLORS.accentGreen};
   --dp-green-dark: ${COLORS.accentGreenDark};
   --dp-green-light: ${COLORS.accentGreenLight};
@@ -3252,14 +3263,14 @@ const css = `
   --md-sys-color-on-primary: var(--dp-on-primary, #FFFFFF);
   --md-sys-color-primary-container: var(--dp-blue-light);
   --md-sys-color-on-primary-container: var(--dp-blue-dark);
-  --md-sys-color-secondary: var(--dp-blue);
-  --md-sys-color-on-secondary: var(--dp-on-primary, #FFFFFF);
-  --md-sys-color-secondary-container: var(--dp-blue-light);
-  --md-sys-color-on-secondary-container: var(--dp-blue-dark);
-  --md-sys-color-tertiary: var(--dp-blue);
-  --md-sys-color-on-tertiary: var(--dp-on-primary, #FFFFFF);
-  --md-sys-color-tertiary-container: var(--dp-blue-light);
-  --md-sys-color-on-tertiary-container: var(--dp-blue-dark);
+  --md-sys-color-secondary: var(--dp-secondary);
+  --md-sys-color-on-secondary: var(--dp-on-secondary, #FFFFFF);
+  --md-sys-color-secondary-container: color-mix(in srgb, var(--dp-secondary) 16%, var(--dp-bg-main));
+  --md-sys-color-on-secondary-container: color-mix(in srgb, var(--dp-secondary) 70%, var(--dp-text));
+  --md-sys-color-tertiary: var(--dp-tertiary);
+  --md-sys-color-on-tertiary: var(--dp-on-tertiary, #FFFFFF);
+  --md-sys-color-tertiary-container: color-mix(in srgb, var(--dp-tertiary) 16%, var(--dp-bg-main));
+  --md-sys-color-on-tertiary-container: color-mix(in srgb, var(--dp-tertiary) 70%, var(--dp-text));
   --md-sys-color-error: var(--dp-red);
   --md-sys-color-on-error: var(--dp-on-danger, #FFFFFF);
   --md-sys-color-error-container: var(--dp-red-light);

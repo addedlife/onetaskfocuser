@@ -1,5 +1,14 @@
 # Verification Log
 
+## 2026-06-21 M3 secondary + tertiary accents — derived, distinct (4.26.96)
+
+- Scope: secondary/tertiary M3 roles previously mirrored primary (the 8 themes define a single accent). Now derived properly: secondary = same hue at ~45% saturation (muted companion), tertiary = hue +60° at capped saturation (distinct complement) — Material 3's own model — computed from each theme's one primary.
+- `ui-tokens.jsx`: new `deriveAccents(primaryHex)` (HSL helpers `_hexToHsl`/`_hslToHex`/`_onColor`). `themeVarsCss(T)` emits `--shp-color-secondary/-on-secondary/-tertiary/-on-tertiary`; M3 secondary/tertiary roles reference them (containers via `color-mix`), primary as first-paint fallback.
+- `10-deskphone-web.jsx`: imports `deriveAccents`; `buildDeskPhoneWebVars` emits `--dp-secondary/-on-secondary/-tertiary/-on-tertiary`; static `.dp-web-root` defaults via module-level `DP_ACCENTS`; M3 secondary/tertiary roles remapped onto them.
+- `apps/shailos` (`App.tsx` + `index.css`): local mirror of `deriveAccents` in the theme writer emits `--ot-secondary/-on-secondary/-tertiary/-on-tertiary`; index.css secondary/tertiary roles reference them.
+- Gates: `npm run build` (apps/web) → 0 errors; `npm run build` (apps/shailos) → 0 errors. RUNTIME-VERIFIED in dev preview: Claude Cream resolves primary `#9A452B` → secondary `#7B554A` (muted brown) → tertiary `#7C9233` (olive), all valid, no console errors, app renders intact. Derivation eyeballed across all 8 theme primaries — every theme yields a distinct, harmonious 3-accent set (e.g. googleVoice teal→deep-teal+indigo, material blue→muted-blue+purple, navyGold gold→tan+green); no clashes.
+- Note: the full `@material/web` component migration remains deferred — see `M3_INTEGRATION_HANDOFF.md` (unchanged).
+
 ## 2026-06-21 App-wide Material 3 token bridge — theme-reactive, all 3 surfaces (4.26.95)
 
 - Scope: the `--md-sys-color-*` bridge was static and theme-blind — it pointed at `--shp-color-*` hardcoded to the googleVoice defaults, with no runtime writer connecting the active theme. Only ~8 of M3's ~40 color roles existed; the rest fell back to M3 default purple. Shailos and DeskPhone web carried no M3 token vocabulary at all.
