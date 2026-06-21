@@ -59,7 +59,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
   const railTime = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const railDate = now.toLocaleDateString([], { month: "short", day: "numeric" });
   const hebrewDate = (() => {
-    try { return new Intl.DateTimeFormat('en-u-ca-hebrew', { month: 'long', day: 'numeric' }).format(now); }
+    try { return new Intl.DateTimeFormat('he-IL-u-ca-hebrew', { month: 'long', day: 'numeric' }).format(now); }
     catch (_) { return ''; }
   })();
 
@@ -192,7 +192,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       {/* Persistent clock — always shows time, English date, and Hebrew date */}
       <div title={now.toLocaleString()} style={{
         width: displayOpen ? "100%" : 44,
-        minHeight: displayOpen ? px(50) : Math.max(62, px(74)),
+        minHeight: displayOpen ? px(62) : Math.max(62, px(74)),
         borderRadius: displayOpen ? RADIUS.sm : RADIUS.pill,
         border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text,
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
@@ -201,8 +201,8 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         boxSizing: "border-box",
       }}>
         <span style={{ fontSize: displayOpen ? Math.max(13, px(18)) : Math.max(10, px(12)), fontWeight: 600, lineHeight: 1.1, whiteSpace: "nowrap" }}>{railTime}</span>
-        {(!displayOpen || s > 0.7) && <span style={{ fontSize: displayOpen ? NC_TYPE.small : 9, color: C.muted, marginTop: displayOpen ? 3 : 2, lineHeight: 1, whiteSpace: "nowrap" }}>{railDate}</span>}
-        {hebrewDate && (!displayOpen || s > 0.7) && <span style={{ fontSize: 9, color: C.faint, marginTop: 2, lineHeight: 1, whiteSpace: "nowrap" }}>{hebrewDate}</span>}
+        {s > 0.55 && <span style={{ fontSize: displayOpen ? NC_TYPE.small : 9, color: C.muted, marginTop: displayOpen ? 3 : 2, lineHeight: 1, whiteSpace: "nowrap" }}>{railDate}</span>}
+        {hebrewDate && s > 0.55 && <span style={{ fontSize: 9, color: C.faint, marginTop: 2, lineHeight: 1, whiteSpace: "nowrap", direction: "rtl" }}>{hebrewDate}</span>}
       </div>
 
       {/* Collapse toggle — real M3 outlined icon button */}
