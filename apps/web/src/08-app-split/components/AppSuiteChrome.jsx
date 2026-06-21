@@ -56,11 +56,23 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
 
   const rawNow = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());
   const now = Number.isFinite(rawNow.getTime()) ? rawNow : new Date();
-  const railTime = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  // Expanded: "2:56 AM" — Collapsed: "2:56a" (no space, single letter) to fit 44px
+  const railTimeFull = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const railTime = displayOpen
+    ? railTimeFull
+    : railTimeFull.replace(/\s*AM$/i, 'a').replace(/\s*PM$/i, 'p');
   const railDate = now.toLocaleDateString([], { month: "short", day: "numeric" });
+  // Hebrew date with gematria day letters (ח not 8). Special-cases: 15=טו, 16=טז.
   const hebrewDate = (() => {
-    try { return new Intl.DateTimeFormat('he-IL-u-ca-hebrew', { month: 'long', day: 'numeric' }).format(now); }
-    catch (_) { return ''; }
+    try {
+      const dayN = parseInt(new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric' }).format(now), 10);
+      const month = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', { month: 'long' }).format(now);
+      const ones = ['','א','ב','ג','ד','ה','ו','ז','ח','ט'];
+      const tens = ['','י','כ','ל'];
+      const letter = dayN === 15 ? 'טו' : dayN === 16 ? 'טז'
+        : (tens[Math.floor(dayN / 10)] || '') + (ones[dayN % 10] || '');
+      return `${letter} ${month}`;
+    } catch (_) { return ''; }
   })();
 
   const ncActive = active === "nervecenter";
