@@ -56,10 +56,12 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
 
   const rawNow = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());
   const now = Number.isFinite(rawNow.getTime()) ? rawNow : new Date();
-  const railTime = displayOpen
-    ? now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-    : now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  const railTime = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const railDate = now.toLocaleDateString([], { month: "short", day: "numeric" });
+  const hebrewDate = (() => {
+    try { return new Intl.DateTimeFormat('en-u-ca-hebrew', { month: 'long', day: 'numeric' }).format(now); }
+    catch (_) { return ''; }
+  })();
 
   const ncActive = active === "nervecenter";
 
@@ -187,18 +189,20 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         {displayOpen && "Reload"}
       </button>
 
-      {/* Persistent clock */}
+      {/* Persistent clock — always shows time, English date, and Hebrew date */}
       <div title={now.toLocaleString()} style={{
         width: displayOpen ? "100%" : 44,
-        minHeight: displayOpen ? px(50) : Math.max(34, px(44)),
+        minHeight: displayOpen ? px(50) : Math.max(62, px(74)),
         borderRadius: displayOpen ? RADIUS.sm : RADIUS.pill,
         border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text,
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
         marginBottom: px(6), fontFamily: NC_FONT_STACK, fontVariantNumeric: "tabular-nums",
-        overflow: "hidden", flexShrink: 0,
+        overflow: "hidden", flexShrink: 0, padding: displayOpen ? 0 : "6px 2px",
+        boxSizing: "border-box",
       }}>
-        <span style={{ fontSize: displayOpen ? Math.max(13, px(18)) : Math.max(11, px(13)), fontWeight: 600, lineHeight: 1.05, whiteSpace: "nowrap" }}>{railTime}</span>
-        {displayOpen && s > 0.7 && <span style={{ fontSize: NC_TYPE.small, color: C.muted, marginTop: 3, lineHeight: 1 }}>{railDate}</span>}
+        <span style={{ fontSize: displayOpen ? Math.max(13, px(18)) : Math.max(10, px(12)), fontWeight: 600, lineHeight: 1.1, whiteSpace: "nowrap" }}>{railTime}</span>
+        {(!displayOpen || s > 0.7) && <span style={{ fontSize: displayOpen ? NC_TYPE.small : 9, color: C.muted, marginTop: displayOpen ? 3 : 2, lineHeight: 1, whiteSpace: "nowrap" }}>{railDate}</span>}
+        {hebrewDate && (!displayOpen || s > 0.7) && <span style={{ fontSize: 9, color: C.faint, marginTop: 2, lineHeight: 1, whiteSpace: "nowrap" }}>{hebrewDate}</span>}
       </div>
 
       {/* Collapse toggle — real M3 outlined icon button */}
