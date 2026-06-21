@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { cleanTheme, DUR, EASE, ELEV, gvIconButton, gvTextButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
+import { cleanTheme, DUR, EASE, ELEV, gvIconButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
+import { ActionBtn, IconBtn } from '../m3.jsx';
 import { db } from '../../01-core.js';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
@@ -1051,21 +1052,18 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         </div>
       )}
       {composeIsNew && !selected && (
-        <button onClick={closeCompose} style={gvTextButton({ alignSelf: "flex-end", height: 32, fontSize: NC_TYPE.meta }, C)}>
-          {suiteIcon("close", 13)} Cancel
-        </button>
+        <ActionBtn variant="outlined" icon="close" iconSize={13} height={32} labelSize={NC_TYPE.meta} onClick={closeCompose} style={{ alignSelf: "flex-end" }}>Cancel</ActionBtn>
       )}
     </div>
   );
 
   // Small neutral action button (white/card background) — used on each row
   const AB = ({ icon, title, onClick }) => (
-    <button onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); onClick(); }} title={title}
-      aria-label={title}
-      style={gvTextButton({ minHeight: 32, height: 32, padding: "0 9px", fontSize: NC_TYPE.small, gap:6, border: "none", background: C.bgSoft }, C)}>
-      {suiteIcon(icon, 14)}
-      <span>{title.replace(" back", "")}</span>
-    </button>
+    <ActionBtn variant="tonal" icon={icon} iconSize={14} height={32} labelSize={NC_TYPE.small}
+      title={title} aria-label={title}
+      onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); onClick(); }}>
+      {title.replace(" back", "")}
+    </ActionBtn>
   );
 
   // Suggestion list — shared between dialer and compose-new modes
@@ -1147,20 +1145,14 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       <div style={{ display: "flex", gap: 6, alignItems: "center", minHeight: compact ? 30 : 44 }}>
         {isIncoming ? (
           <>
-            <button onClick={() => post("/answer", "answer")} disabled={!!busy} title="Answer"
-              style={gvTextButton({ border: "none", background: C.success, color: "#fff" }, C)}>
-              {suiteIcon("phone_callback", 14)} Answer
-            </button>
-            <button onClick={() => post("/hangup", "decline")} disabled={!!busy} title="Decline"
-              style={gvTextButton({ border: "none", background: C.danger, color: "#fff" }, C)}>
-              {suiteIcon("call_end", 14)} Decline
-            </button>
+            <ActionBtn variant="filled" icon="phone_callback" iconSize={14} containerColor={C.success} labelColor="#fff"
+              onClick={() => post("/answer", "answer")} disabled={!!busy} title="Answer">Answer</ActionBtn>
+            <ActionBtn variant="filled" icon="call_end" iconSize={14} containerColor={C.danger} labelColor="#fff"
+              onClick={() => post("/hangup", "decline")} disabled={!!busy} title="Decline">Decline</ActionBtn>
           </>
         ) : isOnCall ? (
-          <button onClick={() => post("/hangup", "hangup")} disabled={!!busy} title="Hang up"
-            style={gvTextButton({ border: "none", background: C.danger, color: "#fff" }, C)}>
-            {suiteIcon("call_end", 14)} Hang up
-          </button>
+          <ActionBtn variant="filled" icon="call_end" iconSize={14} containerColor={C.danger} labelColor="#fff"
+            onClick={() => post("/hangup", "hangup")} disabled={!!busy} title="Hang up">Hang up</ActionBtn>
         ) : null}
         <div style={{ flex: 1 }} />
         <button onClick={refresh} disabled={!!busy} title="Refresh phone" style={phoneIconButton(false)}>{suiteIcon("refresh", 15)}</button>
@@ -1464,9 +1456,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
               })}
           {onMoreHistory && (
             <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
-              <button onClick={onMoreHistory} style={gvTextButton({ height: 32, fontSize: NC_TYPE.meta }, C)}>
-                {suiteIcon("history", 13)} More history
-              </button>
+              <ActionBtn variant="outlined" icon="history" iconSize={13} height={32} labelSize={NC_TYPE.meta} onClick={onMoreHistory}>More history</ActionBtn>
             </div>
           )}
         </div>

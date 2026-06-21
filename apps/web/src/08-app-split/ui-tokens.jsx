@@ -575,41 +575,9 @@ export const gvIconButton = (overrides = {}, C = GV_CLEAN) => ({
   minHeight: overrides.minHeight ?? overrides.height ?? 40,
 });
 
-export const gvTextButton = (overrides = {}, C = GV_CLEAN) => ({
-  minHeight: 40,
-  padding: "0 16px",
-  borderRadius: RADIUS.xs,
-  border: `1px solid ${C.divider}`,
-  background: "transparent",
-  color: C.muted,
-  cursor: "pointer",
-  fontSize: NC_TYPE.body,
-  fontWeight: 500,
-  fontFamily: NC_FONT_STACK,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 6,
-  ...overrides,
-});
-
-export const cleanToolbarButton = (active = false, C = GV_CLEAN, overrides = {}) => ({
-  minHeight: 40,
-  padding: "0 14px",
-  borderRadius: RADIUS.xs,
-  border: "1px solid transparent",
-  background: active ? C.hover : "transparent",
-  color: active ? C.text : C.muted,
-  cursor: "pointer",
-  fontSize: NC_TYPE.body,
-  fontWeight: 500,
-  fontFamily: NC_FONT_STACK,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 8,
-  ...overrides,
-});
+// gvTextButton + cleanToolbarButton were removed in M3 Phase A — every call site
+// now renders a real @material/web button via <ActionBtn> in m3.jsx. gvIconButton
+// remains until the icon-button slice converts its call sites.
 
 export function buildDeskPhoneThemeQuery(palette, theme = {}) {
   const qs = new URLSearchParams({ palette });

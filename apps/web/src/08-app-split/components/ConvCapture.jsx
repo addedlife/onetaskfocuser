@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, aiParseConversation, fmtMs, uid } from '../../01-core.js';
 import { deletePendingRecording, savePendingRecording, transcribePendingRecording, updatePendingRecordingError } from '../../09-transcription-pen.js';
-import { cleanTheme, ELEV, gvIconButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
+import { cleanTheme, ELEV, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
+import { IconBtn } from '../m3.jsx';
 
 function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalendar, tasks, shailos, pris, aiOpts, T, callMode=false }) {
   const C = cleanTheme(T);
@@ -321,9 +322,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
   const overlayS = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: SP.lg };
   const cardS    = { background: C.bg, borderRadius: RADIUS.md, maxWidth: 560, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: ELEV[4], fontFamily: 'inherit' };
   const CloseBtn = () => (
-    <button onClick={onClose} style={gvIconButton({ width: 32, height: 32, borderRadius: RADIUS.pill }, C)}>
-      {suiteIcon("close", ICON.md)}
-    </button>
+    <IconBtn icon="close" iconSize={ICON.md} size={32} onClick={onClose} aria-label="Close" />
   );
 
   // ── Choose source: mic vs. another screen's audio ─────────────────────────

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DeskPhoneWebPanel } from '../../10-deskphone-web.jsx';
-import { buildDeskPhoneThemeQuery, cleanTheme, ELEV, gvIconButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
+import { buildDeskPhoneThemeQuery, cleanTheme, ELEV, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
+import { ActionBtn, IconBtn } from '../m3.jsx';
 
 
 function SuiteShailosPanel({ T, action, onClose, sidebarW = 0 }) {
@@ -15,10 +16,8 @@ function SuiteShailosPanel({ T, action, onClose, sidebarW = 0 }) {
             <div style={{ fontSize: NC_TYPE.body, color: C.faint, fontFamily: NC_FONT_STACK }}>Questions, answers, and follow-up</div>
           </div>
         </div>
-        <button onClick={onClose} title="Back to tasks"
-          style={gvIconButton({ width: 36, height: 36, borderRadius: RADIUS.md, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.muted }, C)}>
-          {suiteIcon("close", ICON.lg)}
-        </button>
+        <IconBtn variant="tonal" icon="close" iconSize={ICON.lg} size={36}
+          color={C.muted} containerColor={C.bgSoft} onClick={onClose} title="Back to tasks" />
       </div>
       <iframe src={action ? `/shailos/?action=${action}` : "/shailos/"} title="Shailos Tracker" style={{ flex: 1, border: "none", width: "100%", background: C.bgSoft }} />
     </div>
@@ -148,18 +147,12 @@ function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch,
             style={{ height: 36, padding: `0 ${SP.md}`, borderRadius: RADIUS.md, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, cursor: "pointer", fontWeight: 500, fontSize: NC_TYPE.body, display: "flex", alignItems: "center", gap: SP.xs }}>
             {suiteIcon("open_in_new", ICON.md)} {status ? "Dock" : "Open"}
           </button>
-          <button onClick={syncStage} disabled={!!busy} title="Move DeskPhone to the dock position"
-            style={{ height: 36, padding: `0 ${SP.md}`, borderRadius: RADIUS.md, border: "none", background: C.accent, color: "#fff", cursor: "pointer", fontWeight: 500, fontSize: NC_TYPE.body, display: "flex", alignItems: "center", gap: SP.xs }}>
-            {suiteIcon("fit_screen", ICON.md)} Position
-          </button>
-          <button onClick={() => releaseStage()} disabled={!!busy} title="Release DeskPhone sizing"
-            style={gvIconButton({ width: 36, height: 36, borderRadius: RADIUS.md, border: `1px solid ${C.divider}`, background: C.bgSoft }, C)}>
-            {suiteIcon("close_fullscreen", ICON.md)}
-          </button>
-          <button onClick={refresh} title="Refresh status"
-            style={gvIconButton({ width: 36, height: 36, borderRadius: RADIUS.md, border: `1px solid ${C.divider}`, background: C.bgSoft }, C)}>
-            {suiteIcon("refresh", ICON.md)}
-          </button>
+          <ActionBtn variant="filled" icon="fit_screen" iconSize={ICON.md} height={36}
+            onClick={syncStage} disabled={!!busy} title="Move DeskPhone to the dock position">Position</ActionBtn>
+          <IconBtn variant="tonal" icon="close_fullscreen" iconSize={ICON.md} size={36}
+            containerColor={C.bgSoft} onClick={() => releaseStage()} disabled={!!busy} title="Release DeskPhone sizing" />
+          <IconBtn variant="tonal" icon="refresh" iconSize={ICON.md} size={36}
+            containerColor={C.bgSoft} onClick={refresh} title="Refresh status" />
         </div>
       </div>
       <div ref={stageRef} style={{ position: "relative", minHeight: 0, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, background: C.bg, boxShadow: ELEV[3], overflow: "auto", padding: "clamp(16px,2.4vw,28px)", boxSizing: "border-box", display: "grid", gridTemplateColumns: "minmax(280px,420px) minmax(320px,1fr)", gap: SP.lg, alignItems: "start" }}>

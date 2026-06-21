@@ -1,5 +1,14 @@
 # Verification Log
 
+## 2026-06-21 M3 Phase A (slice 1) — buttons: text/action/toolbar + small-file icons → @material/web (4.26.97)
+
+- Scope: M3 component migration **Phase A, slice 1**. Replaced hand-coded button lookalikes with real `@material/web` components: every `gvTextButton` (8 sites: Answer/Decline/Hang up, Cancel, Done, Delete, "More history", row got-back), `cleanToolbarButton` (3 sites: Add, Open ×2), and the ConvCapture close (1) + SuitePanels (3 icon + 1 "Position" action) buttons.
+- New shared module `m3.jsx`: wraps the real components via `@lit/react` `createComponent` and exposes ergonomic `ActionBtn` / `IconBtn` helpers (single home; other phases reuse). Dead `gvTextButton` + `cleanToolbarButton` style-object helpers deleted from `ui-tokens.jsx`; `gvIconButton` remains pending the icon-button slice.
+- Files: `m3.jsx` (new), `ui-tokens.jsx`, `NerveCenterPanel.jsx`, `NerveCenterPhoneSurface.jsx`, `ConvCapture.jsx`, `SuitePanels.jsx`.
+- Theming: per-instance `--md-*` component tokens (sanctioned pattern). Semantic colors preserved (Answer=success, Decline/Delete=danger, Add=GOLD); dense heights preserved via `--md-*-button-container-height` (32/34px) + `--md-*-button-label-text-size`. Primary-accent actions inherit the theme bridge (no override).
+- Gates: `npm run build` (apps/web) → 0 errors. RUNTIME-VERIFIED in dev preview (port 5178): no console errors; token probe — all M3 roles resolve to real theme colors (primary/secondary/tertiary distinct, none transparent); converted "More history" renders as `md-outlined-button` w/ Segoe UI font, theme on-surface color, **exact 31.99px height** (density preserved); record modal close renders as a themed `md-icon-button`. Preview viewport locked at 342px (mobile layout) — desktop full-panel buttons not eyeballed here; pending owner desktop QA + the full 8-theme matrix.
+- Next: icon buttons (`gvIconButton` ×46 + `ncSmallIconBtnStyle`/`phoneIconButton`) in NerveCenterPanel + NerveCenterPhoneSurface — Phase A slice 2.
+
 ## 2026-06-21 M3 secondary + tertiary accents — derived, distinct (4.26.96)
 
 - Scope: secondary/tertiary M3 roles previously mirrored primary (the 8 themes define a single accent). Now derived properly: secondary = same hue at ~45% saturation (muted companion), tertiary = hue +60° at capped saturation (distinct complement) — Material 3's own model — computed from each theme's one primary.

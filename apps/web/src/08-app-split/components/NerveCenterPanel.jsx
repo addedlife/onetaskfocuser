@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, textOnColor } from '../../01-core.js';
-import { CAT_MAIL, CAT_PHONE, cleanTheme, cleanToolbarButton, ELEV, GOLD, GOLD_BG, GOLD_BRD, gvIconButton, gvTextButton, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, ncSectionHeaderStyle, ncSectionIconStyle, ncSectionTitleStyle, ncSmallIconBtnStyle, RADIUS, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
+import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BG, GOLD_BRD, gvIconButton, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, ncSectionHeaderStyle, ncSectionIconStyle, ncSectionTitleStyle, ncSmallIconBtnStyle, RADIUS, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
+import { ActionBtn, IconBtn } from '../m3.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthCard } from './HealthCard.jsx';
@@ -2844,12 +2845,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     )}
                     {(!touchLayout || actionsOpen) && !isEditing && (
                       <div className={touchLayout ? "" : "nc-hover-actions"} data-open={actionsOpen ? "true" : undefined} style={{ display: "flex", gap: 4, justifyContent: touchLayout ? "flex-start" : "flex-end", gridColumn: touchLayout ? "2 / 4" : "auto", marginTop: touchLayout ? -4 : 0, ...(touchLayout ? {} : { position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", zIndex: 2, background: C.bg, borderRadius: RADIUS.sm, boxShadow: ELEV[1], padding:4 }) }}>
-                        <button onClick={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }} title="Mark done" aria-label="Mark done" style={gvTextButton({ minHeight: 34, height: 34, padding: "0 10px", fontSize: NC_TYPE.small, border: "none", background: C.bgSoft, color: C.success }, C)}>
-                          {suiteIcon("check", 17)} <span>Done</span>
-                        </button>
-                        <button onClick={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} title="Delete task" aria-label="Delete task" style={gvTextButton({ minHeight: 34, height: 34, padding: "0 10px", fontSize: NC_TYPE.small, border: "none", background: C.bgSoft, color: C.danger }, C)}>
-                          {suiteIcon("close", 15)} <span>Delete</span>
-                        </button>
+                        <ActionBtn variant="tonal" icon="check" iconSize={17} height={34} labelSize={NC_TYPE.small} containerColor={C.bgSoft} labelColor={C.success} onClick={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }} title="Mark done" aria-label="Mark done">Done</ActionBtn>
+                        <ActionBtn variant="tonal" icon="close" iconSize={15} height={34} labelSize={NC_TYPE.small} containerColor={C.bgSoft} labelColor={C.danger} onClick={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} title="Delete task" aria-label="Delete task">Delete</ActionBtn>
                       </div>
                     )}
                   </div>
@@ -2876,12 +2873,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <span style={ncTitle}>Shailos</span>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <button onClick={onOpenShailaAdd} style={cleanToolbarButton(false, C, { border: "none", background: GOLD, color: "#fff" })}>
-                  {suiteIcon("add", 15)} Add
-                </button>
-                <button onClick={onOpenShailos} style={cleanToolbarButton(false, C, { color: GOLD })}>
-                  {suiteIcon("open_in_full", 15)} Open
-                </button>
+                <ActionBtn variant="filled" icon="add" iconSize={15} containerColor={GOLD} labelColor="#fff" onClick={onOpenShailaAdd}>Add</ActionBtn>
+                <ActionBtn variant="text" icon="open_in_full" iconSize={15} labelColor={GOLD} onClick={onOpenShailos}>Open</ActionBtn>
                 <button onClick={() => { setActionCategoryId("shailos"); setActionsOpen(true); }} title="Shailos actions" style={ncSmallIconButton(false, GOLD)}>{suiteIcon("apps", 14)}</button>
               </div>
             </div>
@@ -2945,9 +2938,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </span>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <button onClick={onOpenPhone} style={cleanToolbarButton(false, C)}>
-                  {suiteIcon("open_in_full", 15)} Open
-                </button>
+                <ActionBtn variant="text" icon="open_in_full" iconSize={15} onClick={onOpenPhone}>Open</ActionBtn>
                 <button onClick={() => { setActionCategoryId("phone"); setActionsOpen(true); }} title="Phone actions" style={ncSmallIconButton()}>{suiteIcon("apps", 14)}</button>
               </div>
             </div>
