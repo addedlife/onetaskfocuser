@@ -35,7 +35,6 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
   const C = cleanTheme(T);
   const displayOpen = open && !forceCompact;
   const W = displayOpen ? 184 : 64;
-  const rightPad = displayOpen ? 12 : 10;
 
   // Height-aware scale: shrink rail to fit short (landscape-phone) viewports.
   const [winH, setWinH] = React.useState(() => (typeof window !== "undefined" ? window.innerHeight : 800));
@@ -63,7 +62,6 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
   const railDate = now.toLocaleDateString([], { month: "short", day: "numeric" });
 
   const ncActive = active === "nervecenter";
-  const arrowLeft = W - rightPad;
 
   // Bridge: map app theme T into M3 CSS custom properties so web components pick up the theme.
   const fabIconColor = textOnColor(C.accent);
@@ -128,12 +126,9 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         <span slot="icon" className="material-symbols-rounded" style={{ fontSize: 24 }}>mic</span>
       </Fab>
 
-      {/* NerveCenter — hub, styled distinctively; right side flattens when active for arrow cap */}
+      {/* NerveCenter — hub */}
       <button onClick={() => onSelect("nervecenter")} title="NerveCenter" aria-label="NerveCenter"
-        style={navBtn(ncActive, {
-          marginBottom: px(4), fontSize: Math.max(12, px(15)),
-          ...(ncActive ? { borderRadius: `${RADIUS.pill} 0 0 ${RADIUS.pill}` } : {}),
-        })}>
+        style={navBtn(ncActive, { marginBottom: px(4), fontSize: Math.max(12, px(15)) })}>
         <Ripple />
         {suiteIcon("hub", ic(24))}
         {displayOpen && "NerveCenter"}
@@ -235,16 +230,6 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       </div>
     </div>
 
-    {/* Arrow cap — flat left face aligns with NerveCenter button's right edge; pokes into NerveCenter pane. */}
-    {ncActive && (
-      <div aria-hidden style={{
-        position: "fixed", left: arrowLeft, top: topOffset + 18, zIndex: 8600,
-        width: 0, height: 0,
-        borderTop: "20px solid transparent", borderBottom: "20px solid transparent",
-        borderLeft: `16px solid ${C.hover}`,
-        pointerEvents: "none", transition: `left ${DUR.base} ${EASE.standard}`,
-      }} />
-    )}
     </>
   );
 }
