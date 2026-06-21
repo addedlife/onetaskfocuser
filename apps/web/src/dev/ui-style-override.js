@@ -11,7 +11,23 @@
 // It overrides STRUCTURE only (radius / size / spacing / type), never color — the
 // theme system already centralizes color, and forcing color risks white-on-white.
 
-import { M3_SPEC } from '../08-app-split/m3-stylebook.jsx';
+const M3_SPEC = {
+  searchField: { borderRadius: 999, height: 40, fontSize: 14, padding: "0 16px" },
+  textField:   { borderRadius: 8,   height: 40, fontSize: 14, padding: "0 12px" },
+  textarea:    { borderRadius: 12,              fontSize: 14, padding: "10px 12px" },
+  select:      { borderRadius: 8,   height: 40, fontSize: 14, padding: "0 12px" },
+  button:      { borderRadius: 999, height: 40, fontSize: 14, fontWeight: 500, padding: "0 16px" },
+  iconButton:  { borderRadius: 999, width: 40,  height: 40 },
+  filterChip:  { borderRadius: 999, height: 32, fontSize: 12, fontWeight: 500, padding: "0 12px" },
+  badge:       { borderRadius: 999, height: 20, fontSize: 11, padding: "0 6px" },
+  listRow:     { minHeight: 48,                 fontSize: 14, padding: "8px 12px" },
+  card:        { borderRadius: 12 },
+  modal:       { borderRadius: 12 },
+  toggle:      { borderRadius: 999 },
+  navRailItem: { borderRadius: 999, height: 40, fontSize: 12 },
+  tab:         { borderRadius: 8,   height: 40, fontSize: 12 },
+  avatar:      { borderRadius: 999 },
+};
 
 const PX = (n) => (typeof n === 'number' ? n + 'px' : n);
 const CSSPROP = {

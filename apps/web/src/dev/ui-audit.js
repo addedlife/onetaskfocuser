@@ -14,7 +14,12 @@
 // It compares STRUCTURE only (radius / height / font size), never color — the
 // theme system owns color.
 
-import { M3_EXPECT } from '../08-app-split/m3-stylebook.jsx';
+const M3_EXPECT = {
+  searchField: { borderRadius: 999, height: 40, fontSize: 14 },
+  filterChip:  { borderRadius: 999, height: 32, fontSize: 12 },
+  listRow:     { minHeight: 48 },
+  button:      { borderRadius: 999, height: 40 },
+};
 
 const LS_KEY = '__ui_audit_v1';
 const PILL_MIN = 100; // computed radius >= this (px) counts as a "pill"
