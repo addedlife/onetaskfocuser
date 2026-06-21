@@ -11,6 +11,8 @@
     "lint": "eslint src/*.js src/*.jsx"
   },
   "dependencies": {
+    "@lit/react": "^1.0.8",
+    "@material/web": "^2.4.1",
     "@netlify/blobs": "^9.1.2",
     "firebase": "^10.8.1",
     "firebase-admin": "^13.9.0",
