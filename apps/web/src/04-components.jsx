@@ -5,6 +5,19 @@ import { IC } from './02-icons.jsx';
 import { isTaskAged, getTaskAgeHours, gP, pBg, textOnColor, _lum, priText, runAIJob, uid, db, Store, DEF_PRI, PALETTE, cleanYT, aiDetectShailaAnswers } from './01-core.js';
 import { getShabbosWindow, getCachedLocation, requestLocation } from './shabbos.js';
 import { ELEV, NC_FONT_STACK, NC_TYPE, RADIUS, SP } from './08-app-split/ui-tokens.jsx';
+import { createComponent } from '@lit/react';
+import { MdFilledButton } from '@material/web/button/filled-button.js';
+import { MdOutlinedButton } from '@material/web/button/outlined-button.js';
+import { MdTextButton } from '@material/web/button/text-button.js';
+import { MdFilledTonalButton } from '@material/web/button/filled-tonal-button.js';
+import { MdFilterChip } from '@material/web/chips/filter-chip.js';
+import { MdChipSet } from '@material/web/chips/chip-set.js';
+const FilledButton   = createComponent({ react: React, tagName: 'md-filled-button',       elementClass: MdFilledButton });
+const OutlinedButton = createComponent({ react: React, tagName: 'md-outlined-button',     elementClass: MdOutlinedButton });
+const TextButton     = createComponent({ react: React, tagName: 'md-text-button',         elementClass: MdTextButton });
+const TonalButton    = createComponent({ react: React, tagName: 'md-filled-tonal-button', elementClass: MdFilledTonalButton });
+const FilterChip     = createComponent({ react: React, tagName: 'md-filter-chip',         elementClass: MdFilterChip });
+const ChipSet        = createComponent({ react: React, tagName: 'md-chip-set',            elementClass: MdChipSet });
 
 function Ripple({color}) {
   return <div style={{position:"absolute",inset:0,zIndex:0,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -610,11 +623,11 @@ function ZenDumpReview({tasks, pris, T, onSubmit, onDismiss, parsing}) {
         </div>
         {/* Footer */}
         <div style={{padding:"12px 20px",borderTop:`1px solid ${T.brd}`,display:"flex",gap:10}}>
-          <button onClick={onDismiss} style={{flex:1,padding:"10px",borderRadius:RADIUS.pill,border:`1px solid ${T.brd}`,background:"transparent",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,fontWeight:600,color:T.tSoft,cursor:"pointer"}}>Dismiss</button>
-          <button onClick={handleSubmit} disabled={items.length===0 || submitting}
-            style={{flex:2,padding:"10px",borderRadius:RADIUS.pill,border:"none",background:items.length>0&&!submitting?T.text:T.brd,fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,fontWeight:700,color:items.length>0&&!submitting?T.bg:T.tFaint,cursor:items.length>0&&!submitting?"pointer":"default"}}>
-            {submitting ? "Adding..." : `Add ${items.length} item${items.length===1?"":"s"}`}
-          </button>
+          <OutlinedButton onClick={onDismiss} style={{flex:1}}>Dismiss</OutlinedButton>
+          <FilledButton onClick={handleSubmit} disabled={items.length===0||submitting}
+            style={{"flex":2,"--md-filled-button-container-color":T.text,"--md-filled-button-label-text-color":T.bg||"#fff"}}>
+            {submitting?"Adding...":`Add ${items.length} item${items.length===1?"":"s"}`}
+          </FilledButton>
         </div>
       </div>
     </div>
@@ -635,8 +648,9 @@ function PriEditor({T, onAdd, onClose}) {
         {PALETTE.map(x => <button key={x} onClick={()=>setC(x)} style={{width:28,height:28,borderRadius:"50%",background:x,border:c===x?`3px solid ${T.text}`:"2px solid transparent",cursor:"pointer"}}/>)}
       </div>
       <div style={{display:"flex",gap:SP.sm}}>
-        <button onClick={onClose} style={{flex:1,padding:10,borderRadius:RADIUS.pill,border:`1px solid ${T.brd}`,background:T.card,cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,color:T.tSoft}}>Cancel</button>
-        <button onClick={()=>{if(l.trim()) onAdd(l.trim(), c);}} style={{flex:1,padding:10,borderRadius:RADIUS.pill,border:"none",background:c,color:textOnColor(c),cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,opacity:l.trim()?1:.4}}>Add</button>
+        <OutlinedButton onClick={onClose} style={{flex:1}}>Cancel</OutlinedButton>
+        <FilledButton onClick={()=>{if(l.trim()) onAdd(l.trim(), c);}} disabled={!l.trim()}
+          style={{flex:1,"--md-filled-button-container-color":c,"--md-filled-button-label-text-color":textOnColor(c)}}>Add</FilledButton>
       </div>
     </div>
   );
@@ -744,12 +758,12 @@ function BodyDoubleTimer({T, minimized, onMinimize, onRestore, onClose}) {
             <p style={{fontSize:NC_TYPE.meta,color:T.tSoft,fontFamily:"system-ui",margin:"0 0 16px"}}>Work alongside a virtual partner. Pick your session length:</p>
             <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:12}}>
               {PRESETS.map((o, i) => (
-                <button key={o} onClick={()=>start(o)} style={{flex:1,padding:"12px 8px",borderRadius:RADIUS.pill,border:`1.5px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,color:T.text}}>{LABELS[i]}</button>
+                <OutlinedButton key={o} onClick={()=>start(o)} style={{flex:1}}>{LABELS[i]}</OutlinedButton>
               ))}
             </div>
             <div style={{display:"flex",gap:SP.sm,alignItems:"center"}}>
               <input type="number" min="1" max="480" value={customMin} onChange={e=>setCustomMin(e.target.value)} placeholder="Custom minutes" onKeyDown={e=>{if(e.key==="Enter")startCustom();}} style={{flex:1,padding:"10px 12px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,outline:"none"}}/>
-              <button onClick={startCustom} disabled={!customMin||parseInt(customMin)<1} style={{padding:"10px 16px",borderRadius:RADIUS.pill,border:"none",background:customMin&&parseInt(customMin)>0?"#3A7098":T.brd,color:"#fff",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,opacity:customMin&&parseInt(customMin)>0?1:.4}}>Go</button>
+              <FilledButton onClick={startCustom} disabled={!customMin||parseInt(customMin)<1} style={{"--md-filled-button-container-color":"#3A7098"}}>Go</FilledButton>
             </div>
           </>
         ) : (
@@ -764,9 +778,9 @@ function BodyDoubleTimer({T, minimized, onMinimize, onRestore, onClose}) {
             </svg>
             <p style={{fontSize:NC_TYPE.meta,color:T.tSoft,fontFamily:NC_FONT_STACK,margin:"0 0 14px"}}>{done ? "Session complete! Great work 🎉" : "You're not alone. Keep going."}</p>
             <div style={{display:"flex",gap:SP.sm}}>
-              {!done && <button onClick={()=>{clearInterval(tickRef.current);setRunning(p=>!p);}} style={{flex:1,padding:10,borderRadius:RADIUS.pill,border:`1px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,color:T.tSoft}}>{running?"Pause":"Resume"}</button>}
-              <button onClick={()=>{clearInterval(tickRef.current);setDur(null);setDone(false);}} style={{flex:1,padding:10,borderRadius:RADIUS.pill,border:"none",background:T.bgW,cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,color:T.tSoft}}>Reset</button>
-              <button onClick={onClose} style={{flex:1,padding:10,borderRadius:RADIUS.pill,border:"none",background:"#3A7098",color:"#fff",cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,fontWeight:600}}>Done</button>
+              {!done && <OutlinedButton onClick={()=>{clearInterval(tickRef.current);setRunning(p=>!p);}} style={{flex:1}}>{running?"Pause":"Resume"}</OutlinedButton>}
+              <OutlinedButton onClick={()=>{clearInterval(tickRef.current);setDur(null);setDone(false);}} style={{flex:1}}>Reset</OutlinedButton>
+              <FilledButton onClick={onClose} style={{flex:1,"--md-filled-button-container-color":"#3A7098"}}>Done</FilledButton>
             </div>
           </>
         )}
@@ -812,10 +826,11 @@ function BrainDump({T, pris, onCapture, onClose}) {
           Enter to send · Shift+Enter for new line · Esc to close
         </p>
         <div style={{display:"flex",gap:SP.sm}}>
-          <button onClick={onClose} style={{flex:1,padding:SP.md,borderRadius:RADIUS.pill,border:`1px solid ${T.brd}`,background:"transparent",cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,color:T.tSoft}}>Cancel</button>
-          <button onClick={handleSubmit} disabled={!text.trim()} style={{flex:2,padding:SP.md,borderRadius:RADIUS.pill,border:"none",background:T.text,color:T.bg||"#fff",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,opacity:text.trim()?1:.4}}>
+          <OutlinedButton onClick={onClose} style={{flex:1}}>Cancel</OutlinedButton>
+          <FilledButton onClick={handleSubmit} disabled={!text.trim()}
+            style={{flex:2,"--md-filled-button-container-color":T.text,"--md-filled-button-label-text-color":T.bg||"#fff"}}>
             Send to AI ✦
-          </button>
+          </FilledButton>
         </div>
       </div>
     </div>
@@ -832,7 +847,7 @@ function OverwhelmBanner({count, threshold, onShowAll, T}) {
         <p style={{fontSize:NC_TYPE.meta,fontWeight:700,margin:0,fontFamily:NC_FONT_STACK,color:"#8A6020"}}>Overwhelm mode</p>
         <p style={{fontSize:NC_TYPE.small,margin:0,fontFamily:NC_FONT_STACK,color:"#8A6020"}}>Showing top 3 of {count}. Just focus on these.</p>
       </div>
-      <button onClick={onShowAll} style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:"#8A6020",background:"none",border:"1px solid #8A602040",borderRadius:RADIUS.pill,padding:"4px 10px",cursor:"pointer"}}>Show all</button>
+      <TextButton onClick={onShowAll} style={{"--md-text-button-label-text-color":"#8A6020"}}>Show all</TextButton>
     </div>
   );
 }
@@ -1008,15 +1023,19 @@ function PostItStack({tasks, pris, T, open, onToggle, onUncomp, onClone, sidebar
                 <p style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:"system-ui",margin:0}}>{tasks.length} task{tasks.length!==1?"s":""} conquered</p>
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <button onClick={()=>setViewMode("stack")} title="Stack view" style={{background:viewMode==="stack"?T.text:(T.card||"#fff"),border:`1px solid ${T.brd}`,borderRadius:RADIUS.pill,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:SP.xs,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:viewMode==="stack"?(T.bg||"#fff"):T.tSoft,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}><IC.Stack s={12} c={viewMode==="stack"?(T.bg||"#fff"):T.tSoft}/>Stack</button>
-                <button onClick={()=>setViewMode("board")} title="Board view" style={{background:viewMode==="board"?T.text:(T.card||"#fff"),border:`1px solid ${T.brd}`,borderRadius:RADIUS.pill,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:SP.xs,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:viewMode==="board"?(T.bg||"#fff"):T.tSoft,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}><IC.Bulk s={12} c={viewMode==="board"?(T.bg||"#fff"):T.tSoft}/>Board</button>
-                <button onClick={onToggle} style={{background:T.bgW,border:`1px solid ${T.brd}`,borderRadius:RADIUS.pill,padding:"6px 14px",cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,fontWeight:600,color:T.tSoft}}>Close</button>
+                <ChipSet>
+                  <FilterChip label="Stack" selected={viewMode==="stack"} onClick={()=>setViewMode("stack")}/>
+                  <FilterChip label="Board" selected={viewMode==="board"} onClick={()=>setViewMode("board")}/>
+                </ChipSet>
+                <OutlinedButton onClick={onToggle}>Close</OutlinedButton>
               </div>
             </div>
-            <div style={{display:"flex",gap:SP.xs,marginBottom:14,flexWrap:"wrap",position:"sticky",top:48,background:T.bg||"#f5f0e8",paddingBottom:6,zIndex:4}}>
-              {[["completed","Recent"],["priority","Priority"],["speed","Fastest"],["entered","Date added"]].map(([k,l])=>(
-                <button key={k} onClick={()=>setSortBy(k)} style={{padding:"4px 12px",borderRadius:RADIUS.pill,border:`1px solid ${sortBy===k?T.text:T.brd}`,background:sortBy===k?T.text:"transparent",color:sortBy===k?(T.bg||"#fff"):T.tSoft,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,cursor:"pointer"}}>{l}</button>
-              ))}
+            <div style={{position:"sticky",top:48,background:T.bg||"#f5f0e8",paddingBottom:6,zIndex:4,marginBottom:14}}>
+              <ChipSet>
+                {[["completed","Recent"],["priority","Priority"],["speed","Fastest"],["entered","Date added"]].map(([k,l])=>(
+                  <FilterChip key={k} label={l} selected={sortBy===k} onClick={()=>setSortBy(k)}/>
+                ))}
+              </ChipSet>
             </div>
             {viewMode === "board" ? (
               <>

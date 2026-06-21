@@ -18,6 +18,17 @@ import { compactNerveSummary, nerveSummarySource, NerveCenterPanel } from './com
 import { TaskRiverPanel } from './components/TaskRiverPanel.jsx';
 import { ConvCapture } from './components/ConvCapture.jsx';
 import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack } from './utils/shailosQueue.js';
+import { createComponent } from '@lit/react';
+import { MdIconButton } from '@material/web/iconbutton/icon-button.js';
+import { MdOutlinedIconButton } from '@material/web/iconbutton/outlined-icon-button.js';
+import { MdFilledIconButton } from '@material/web/iconbutton/filled-icon-button.js';
+import { MdFilledButton } from '@material/web/button/filled-button.js';
+import { MdOutlinedButton } from '@material/web/button/outlined-button.js';
+const IconButton         = createComponent({ react: React, tagName: 'md-icon-button',          elementClass: MdIconButton });
+const OutlinedIconButton = createComponent({ react: React, tagName: 'md-outlined-icon-button', elementClass: MdOutlinedIconButton });
+const FilledIconButton   = createComponent({ react: React, tagName: 'md-filled-icon-button',   elementClass: MdFilledIconButton });
+const FilledButton       = createComponent({ react: React, tagName: 'md-filled-button',        elementClass: MdFilledButton });
+const OutlinedButton     = createComponent({ react: React, tagName: 'md-outlined-button',      elementClass: MdOutlinedButton });
 
 const GOOGLE_SERVER_TOKEN = "__server_google_workspace__";
 const GOOGLE_TOKEN_EXPIRY_SKEW_MS = 60 * 1000;
@@ -3817,11 +3828,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       {todayCompCount > 0 && <span style={{fontSize:11,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.faint,letterSpacing:.3,display:"flex",alignItems:"center",gap:4}}>{suiteIcon("done",11)} {todayCompCount} today</span>}
                     </div>
                     <div style={{display:"flex",alignItems:"center",gap:4}}>
-                      {AS.legacyCompleteUI && <button onClick={()=>legacyCompTask(curT.id)} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",width:40,height:40,borderRadius:RADIUS.pill,opacity:.35,transition:"opacity 0.2s"}} onMouseEnter={e=>e.currentTarget.style.opacity=0.9} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Clock s={CK-4} c={cardColor0}/></button>}
-                      <button onClick={()=>setZen(true)} title="Enter Zen mode" style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",width:40,height:40,borderRadius:RADIUS.pill,opacity:.45,transition:"opacity 0.2s"}} onMouseEnter={e=>e.currentTarget.style.opacity=.95} onMouseLeave={e=>e.currentTarget.style.opacity=.45}><IC.Zen s={CK+4} c={cardColor0}/></button>
-                      <button onClick={()=>compTask(curT.id)} title="Done" style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",width:40,height:40,borderRadius:RADIUS.pill,opacity:.55,transition:"opacity 0.2s"}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.55}>
+                      {AS.legacyCompleteUI && <IconButton onClick={()=>legacyCompTask(curT.id)} title="Legacy complete (no timestamp)" style={{opacity:.35}}><IC.Clock s={CK-4} c={cardColor0}/></IconButton>}
+                      <IconButton onClick={()=>setZen(true)} title="Enter Zen mode" style={{opacity:.45}}><IC.Zen s={CK+4} c={cardColor0}/></IconButton>
+                      <IconButton onClick={()=>compTask(curT.id)} title="Done" style={{opacity:.55}}>
                         <IC.Check s={CK} c={cardColor0}/>
-                      </button>
+                      </IconButton>
                     </div>
                   </div>
                 );
@@ -3859,7 +3870,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       {editId === curT.id ? (
                         <div style={{display:"flex",gap:8,width:"100%"}} onFocus={pauseZ} onBlur={resumeZ}>
                           <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(curT.id);if(e.key==="Escape")setEditId(null);}} style={{flex:1,fontSize:"clamp(16px,3vw,22px)",fontFamily:"Georgia,serif",border:`2px solid ${_fcBrd}`,borderRadius:RADIUS.md,padding:"10px 16px",outline:"none",color:_fc,background:_fcBgL}}/>
-                          <button onClick={()=>saveEd(curT.id)} style={{background:_fcBg,color:_fc,border:"none",borderRadius:RADIUS.pill,padding:"10px 18px",cursor:"pointer",fontSize:NC_TYPE.body,fontWeight:600,fontFamily:NC_FONT_STACK}}>Save</button>
+                          <FilledButton onClick={()=>saveEd(curT.id)} style={{"--md-filled-button-container-color":_fcBg,"--md-filled-button-label-text-color":_fc}}>Save</FilledButton>
                         </div>
                       ) : (
                         <div onClick={()=>startEd(curT)} style={{cursor:"text",maxHeight:"100%",overflow:"hidden",width:"100%"}}>
@@ -3881,19 +3892,13 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
                     {/* Park + Reflect quick-action row */}
                     <div style={{display:"flex",gap:8,justifyContent:"center",width:"100%"}}>
-                      <button onClick={()=>parkTask(curT.id)}
-                        style={{flex:1,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.faint,background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.pill,cursor:"pointer",letterSpacing:.3,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}
-                        onMouseEnter={e=>{e.currentTarget.style.borderColor=C.divider;e.currentTarget.style.color=C.muted;}}
-                        onMouseLeave={e=>{e.currentTarget.style.borderColor=C.divider;e.currentTarget.style.color=C.faint;}}>
+                      <OutlinedButton onClick={()=>parkTask(curT.id)} style={{flex:1,"--md-outlined-button-outline-color":C.divider,"--md-outlined-button-label-text-color":C.faint}}>
                         💤 Park til tomorrow
-                      </button>
+                      </OutlinedButton>
                       {getTaskAgeHours(curT) >= 72 && (
-                        <button onClick={()=>setShowBlockReflect(true)}
-                          style={{flex:1,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.faint,background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.pill,cursor:"pointer",letterSpacing:.3,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}
-                          onMouseEnter={e=>{e.currentTarget.style.borderColor=C.divider;e.currentTarget.style.color=C.muted;}}
-                          onMouseLeave={e=>{e.currentTarget.style.borderColor=C.divider;e.currentTarget.style.color=C.faint;}}>
+                        <OutlinedButton onClick={()=>setShowBlockReflect(true)} style={{flex:1,"--md-outlined-button-outline-color":C.divider,"--md-outlined-button-label-text-color":C.faint}}>
                           🔍 What's in the way?
-                        </button>
+                        </OutlinedButton>
                       )}
                     </div>
                   </>
@@ -3961,7 +3966,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       <button type="button" onClick={()=>setEntryEnergy(e=>e===null?"high":e==="high"?"low":null)} title={entryEnergy?`Energy: ${entryEnergy}`:"Set energy"} style={{width:40,height:40,borderRadius:RADIUS.pill,border:`1.5px solid ${entryEnergy?C.accent:C.divider}`,background:entryEnergy==="high"?`${C.accent}18`:entryEnergy==="low"?`${C.muted}18`:C.bgSoft,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}>
                         {entryEnergy==="high"?"⚡":entryEnergy==="low"?"🌊":"·"}
                       </button>
-                      <button type="button" onClick={addTask} style={{background:gP(pris,selPri).color,border:"none",borderRadius:RADIUS.pill,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}><IC.Plus s={16} c={textOnColor(gP(pris,selPri).color)}/></button>
+                      <FilledIconButton onClick={addTask} style={{"--md-filled-icon-button-container-color":gP(pris,selPri).color,"--md-filled-icon-button-icon-color":textOnColor(gP(pris,selPri).color),flexShrink:0}}><IC.Plus s={16} c={textOnColor(gP(pris,selPri).color)}/></FilledIconButton>
                     </form>
                     {newTask.trim().length>3 && (
                       <button onClick={()=>{const txt=newTask.trim();if(!txt)return;setNewTask("");setSelPri(null);setShowBD({id:"__new__",text:txt,priority:selPri});}} style={{marginTop:6,width:"100%",padding:"6px 0",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:700,color:priText(gP(pris,selPri).color),background:"none",border:`1px dashed ${gP(pris,selPri).color}60`,borderRadius:RADIUS.pill,cursor:"pointer",letterSpacing:.5,opacity:.85}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.75}>
@@ -3974,11 +3979,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
               {/* Queue shortcut — direct access from tasks */}
               <div style={{textAlign:"center",paddingBottom:8}}>
-                <button onClick={()=>switchTab("queue")} style={{background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.pill,padding:"0 16px",height:32,display:"inline-flex",alignItems:"center",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:NC_TYPE.meta,fontWeight:600,color:C.faint,letterSpacing:.5,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}
-                  onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.muted;}}
-                  onMouseLeave={e=>{e.currentTarget.style.color=C.faint;e.currentTarget.style.borderColor=C.divider;}}>
+                <OutlinedButton onClick={()=>switchTab("queue")} style={{"--md-outlined-button-outline-color":C.divider,"--md-outlined-button-label-text-color":C.faint}}>
                   Queue · {effectiveCount}
-                </button>
+                </OutlinedButton>
               </div>
 
 
@@ -4021,11 +4024,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               return (
                 <div style={{position:"fixed",top:"clamp(12px,2vh,20px)",left:(sidebarW + 12) + "px",zIndex:200,width:"fit-content",height:"fit-content"}}>
                   {lpMenu && <div onClick={()=>setLpMenu(false)} style={{position:"fixed",inset:0,zIndex:9998}}/>}
-                  <button onClick={()=>setLpMenu(p=>!p)} style={{width:40,height:40,borderRadius:RADIUS.pill,background:T.glow?`${C.bg}cc`:C.bg,border:`1px solid ${C.divider}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:T.glow?`0 0 12px ${C.divider}80`:T.shadow,transition:"box-shadow 0.2s",position:"relative",zIndex:10000}}
+                  <OutlinedIconButton onClick={()=>setLpMenu(p=>!p)}
+                    style={{"--md-outlined-icon-button-container-color":T.glow?`${C.bg}cc`:C.bg,"--md-outlined-icon-button-outline-color":C.divider,boxShadow:T.glow?`0 0 12px ${C.divider}80`:T.shadow,position:"relative",zIndex:10000}}
                     onMouseEnter={e=>{e.currentTarget.style.boxShadow=T.glow?`0 0 20px ${C.divider}`:"0 4px 16px rgba(0,0,0,0.12)";}}
                     onMouseLeave={e=>{e.currentTarget.style.boxShadow=T.glow?`0 0 12px ${C.divider}80`:T.shadow;}}>
                     <IC.List s={16} c={C.muted}/>
-                  </button>
+                  </OutlinedIconButton>
                   {lpMenu && (
                     <div style={{position:"fixed",top:"clamp(56px,calc(2vh + 44px),72px)",left:(sidebarW + 12) + "px",background:C.bg,border:`1px solid ${C.divider}`,borderRadius:RADIUS.md,padding:"8px 0",minWidth:200,zIndex:10000,boxShadow:T.glow?`0 4px 30px ${T.bg}cc, 0 0 20px ${C.divider}60`:"0 8px 32px rgba(0,0,0,0.18)",animation:"ot-fade 0.15s",maxHeight:"calc(100vh - 80px)",overflowY:"auto"}}
                       onClick={()=>setLpMenu(false)}>
