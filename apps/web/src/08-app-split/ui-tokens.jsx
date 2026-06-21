@@ -233,6 +233,18 @@ export const NC_GLOBAL_CSS = `
   --shp-color-gold:      #C9923C;
   --shp-color-cat-mail:  #3D6CB5;
   --shp-color-cat-phone: #8A63B5;
+
+  /* Material Web 3 bridge — wires @material/web components to ShamashPro tokens.
+     Typeface tokens resolve inside shadow DOM; color tokens pick up theme accent/divider. */
+  --md-ref-typeface-plain: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --md-ref-typeface-brand: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --md-sys-color-primary:     var(--shp-color-accent,  #00796B);
+  --md-sys-color-on-primary:  #ffffff;
+  --md-sys-color-outline:     var(--shp-color-divider, #DADCE0);
+  --md-sys-color-on-surface:  var(--shp-color-text,    #202124);
+  --md-sys-color-surface:     var(--shp-color-bg,      #FFFFFF);
+  --md-sys-color-surface-variant:    var(--shp-color-bg-soft, #F8F9FA);
+  --md-sys-color-on-surface-variant: var(--shp-color-muted,   #5F6368);
 }
 .nc-suite-root,
 .nc-suite-root :where(button, input, textarea, select, p, span, div, a, label, h1, h2, h3, h4, h5, h6, li, summary) {

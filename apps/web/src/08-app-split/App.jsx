@@ -24,11 +24,15 @@ import { MdOutlinedIconButton } from '@material/web/iconbutton/outlined-icon-but
 import { MdFilledIconButton } from '@material/web/iconbutton/filled-icon-button.js';
 import { MdFilledButton } from '@material/web/button/filled-button.js';
 import { MdOutlinedButton } from '@material/web/button/outlined-button.js';
+import { MdList } from '@material/web/list/list.js';
+import { MdListItem } from '@material/web/list/list-item.js';
 const IconButton         = createComponent({ react: React, tagName: 'md-icon-button',          elementClass: MdIconButton });
 const OutlinedIconButton = createComponent({ react: React, tagName: 'md-outlined-icon-button', elementClass: MdOutlinedIconButton });
 const FilledIconButton   = createComponent({ react: React, tagName: 'md-filled-icon-button',   elementClass: MdFilledIconButton });
 const FilledButton       = createComponent({ react: React, tagName: 'md-filled-button',        elementClass: MdFilledButton });
 const OutlinedButton     = createComponent({ react: React, tagName: 'md-outlined-button',      elementClass: MdOutlinedButton });
+const List               = createComponent({ react: React, tagName: 'md-list',                 elementClass: MdList });
+const ListItem           = createComponent({ react: React, tagName: 'md-list-item',            elementClass: MdListItem });
 
 const GOOGLE_SERVER_TOKEN = "__server_google_workspace__";
 const GOOGLE_TOKEN_EXPIRY_SKEW_MS = 60 * 1000;
@@ -3978,11 +3982,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               </div>
 
               {/* Queue shortcut — direct access from tasks */}
-              <div style={{textAlign:"center",paddingBottom:8}}>
-                <OutlinedButton onClick={()=>switchTab("queue")} style={{"--md-outlined-button-outline-color":C.divider,"--md-outlined-button-label-text-color":C.faint}}>
-                  Queue · {effectiveCount}
-                </OutlinedButton>
-              </div>
+              <List style={{borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,"--md-list-item-label-text-color":C.faint,"--md-list-item-label-text-font":"var(--md-ref-typeface-plain)"}}>
+                <ListItem type="button" onClick={()=>switchTab("queue")}>
+                  <span slot="headline">Queue · {effectiveCount}</span>
+                </ListItem>
+              </List>
 
 
             </div>{/* end spine */}

@@ -1027,7 +1027,7 @@ function PostItStack({tasks, pris, T, open, onToggle, onUncomp, onClone, sidebar
                   <FilterChip label="Stack" selected={viewMode==="stack"} onClick={()=>setViewMode("stack")}/>
                   <FilterChip label="Board" selected={viewMode==="board"} onClick={()=>setViewMode("board")}/>
                 </ChipSet>
-                <OutlinedButton onClick={onToggle}>Close</OutlinedButton>
+                <OutlinedButton onClick={onToggle}><span>Close</span></OutlinedButton>
               </div>
             </div>
             <div style={{position:"sticky",top:48,background:T.bg||"#f5f0e8",paddingBottom:6,zIndex:4,marginBottom:14}}>
