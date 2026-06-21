@@ -80,21 +80,48 @@ const FilledButton = createComponent({ react: React, tagName: 'md-filled-button'
 | Navigation bar (labs) | `labs/navigationbar/...` | `md-navigation-bar` |
 | Card (labs) | `labs/card/...` | `md-card` |
 
+### M3 bridge tokens — MANDATORY, already wired, never remove (STANDING)
+
+`@material/web` components render in **shadow DOM**. The app's `.nc-suite-root` CSS rules cannot
+reach inside shadow DOM. Without explicit bridge tokens, every M3 component ships with Times New
+Roman and M3-default purple — visually broken.
+
+**The bridge is already live** in `src/08-app-split/ui-tokens.jsx` `:root`:
+```
+--md-ref-typeface-plain / --md-ref-typeface-brand  → Segoe UI (app font)
+--md-sys-color-primary / --md-sys-color-on-primary  → teal accent / white
+--md-sys-color-outline                              → app divider gray
+--md-sys-color-on-surface / --md-sys-color-surface  → app text / bg
+--md-sys-color-surface-variant / -on-surface-variant → bg-soft / muted
+```
+
+**Rules:**
+- **Never remove** any `--md-*` token from `ui-tokens.jsx`. They are load-bearing.
+- **Before shipping** any new `@material/web` component type, verify its visual tokens
+  (font, color, outline) resolve correctly in the browser — not just that the build passes.
+- **When a component looks wrong** (wrong font, wrong color), the fix is always a bridge token
+  in `ui-tokens.jsx` `:root`, never an inline `style` hack on every usage site.
+- **Text node children** in M3 buttons/list items must be wrapped in `<span>` for reliable
+  shadow DOM slot pickup: `<FilledButton><span>Save</span></FilledButton>`.
+
 ### When NO component exists — fallback rule
 If the element type has **no `@material/web` equivalent** (e.g. priority circles, clock display,
-task card hero, navigation rail, toast/snackbar, PostIt stack), hand-code it — but **match M3
-spec exactly** using the recipes in `src/08-app-split/m3-stylebook.jsx` and tokens from
-`src/08-app-split/ui-tokens.jsx`. Zero improvisation: shape from `M3_SHAPE`, sizing from
-`M3_SPEC`, spacing from `SP`, type from `NC_TYPE`, motion from `TRANSITION`.
+task card hero, navigation rail, toast/snackbar, PostIt stack), hand-code it using
+`src/08-app-split/ui-tokens.jsx` tokens only:
+`RADIUS` · `NC_TYPE` · `NC_FONT_STACK` · `SP` · `ELEV` · `TRANSITION`
+Zero improvisation: no magic numbers, no inline font strings, no raw `system-ui`.
 
 ### What this rule catches (things I must never do again)
 - Writing a `<button style={{borderRadius: RADIUS.pill}}>` when `MdFilledButton` exists.
 - Writing a `<span style={{...}}>` badge when `MdFilterChip` or `MdBadge` exists.
 - Writing a custom dropdown/select when `MdOutlinedSelect` exists.
-- Writing inline transition strings when `TRANSITION` from `ui-tokens.jsx` is the token.
+- Shipping M3 components without verifying fonts/colors in the browser (bridge tokens required).
+- Putting text node children directly in M3 buttons without a `<span>` wrapper.
 
 ### Quick check before writing any UI
 1. Is the element type in the component map above? → use the `@material/web` component.
-2. Not in the map? → use `m3-stylebook.jsx` recipes exactly, no improvising.
-3. Writing a new file or editing an existing one? → check existing `createComponent` imports first
-   (see `AppSuiteChrome.jsx`) and reuse the wrapper, don't re-import the same component twice.
+2. Not in the map? → hand-code with `ui-tokens.jsx` values only, no improvising.
+3. New `createComponent` wrapper? → check existing wrappers in the same file first; don't
+   re-import the same component twice (see `AppSuiteChrome.jsx` for the pattern).
+4. After adding any M3 component: open the browser and confirm font is Segoe UI and colors
+   match the theme. If not, add/fix the bridge token in `ui-tokens.jsx` — not inline styles.
