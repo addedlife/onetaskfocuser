@@ -165,7 +165,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
         try {
           const geminiTranscript = await transcribePendingRecording(
             pending.id, aiOpts,
-            `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew and Yiddish terminology. Common words: shaila/shailos, halacha, gemara, Shabbos, davening, daven, bracha, mutar, assur, kashrus, Rashi, Rambam, psak, teshuvah, beis din, shiur, kollel, bochur, yeshiva, Hashem, Baruch Hashem, kiddush, Yom Tov, Pesach, Sukkos, Shavuos, chavrusa, beis medrash, machlokes, pshat, tzaddik, tzedakah, chasuna, mazel tov, maariv, mincha, shacharis, tefillin, mezuzah, sukkah, mikvah, niddah, safeik, treif, fleishig, milchig, pareve, shidduch, simcha.\n\nReturn only the verbatim transcript. No summary, no rephrasing, no meta-commentary.`
+            `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew, Aramaic, and Yiddish terminology.\n\nKey terms to recognize correctly:\n- shaila/shaylos/shailah = halachic question | psak/paskening/posek = ruling/decisor\n- Shabbos, Yom Tov, Pesach, Sukkos, Shavuos, Yom Kippur, Rosh Hashana\n- davening, shacharis, mincha, maariv, mussaf, kiddush, havdalah\n- mutar (permitted), assur (forbidden), lechatchila (ideally), bedieved (after the fact)\n- fleishig (meat), milchig (dairy), pareve (neutral), treif (not kosher)\n- bishul (cooking), borer (selecting), melachos (Shabbos forbidden labors)\n- toiveling/toiveled (immersing in mikveh), eruv, niddah\n- kitniyos, chametz, bishul akum, chalav yisrael, pas yisrael\n- safek/safeik (doubt), bittul (nullification), chazaka (presumption)\n- machlokes (dispute), svara (argument), nafka mina (practical difference)\n- d'oraisa (biblical), d'rabbanan (rabbinic), geder (boundary)\n- chatzos (midday/midnight), shkiah (sunset), tzeis (nightfall), bein hashmashos\n- mamash (truly), takeh (really), tachlis (bottom line), nebech (unfortunately)\n- Rashi, Tosafos, Rambam, Ramban, Shulchan Aruch, Mishna Berura\n- shiur/shiurim, kollel, yeshiva, beis medrash, chavrusa, bochur\n- chasuna, sheva brachos, shidduch, simcha, mazel tov, tzedakah\n\nReturn only the verbatim transcript. No summary, no classification, no meta-commentary.`
           );
           if (geminiTranscript?.trim()) transcript = geminiTranscript.trim();
         } catch(transcriptErr) {
@@ -242,6 +242,22 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
     }));
   }
 
+  function updateShailaField(id, field, value) {
+    setItems(prev => prev.map(it => it.id === id ? { ...it, [field]: value } : it));
+  }
+
+  function promoteToSchedule(taskId) {
+    setItems(prev => {
+      const task = prev.find(it => it.id === taskId);
+      if (!task) return prev;
+      return [...prev, normalizeScheduleItem({
+        id: uid(), cat: 'scheduleItems', approved: true,
+        text: task.text, when: task.schedulingHint || '',
+        date: null, time: null, durationMinutes: null,
+      })];
+    });
+  }
+
   function scheduleDescription(it) {
     const parts = [];
     if (it.date) parts.push(`date: ${it.date}`);
@@ -275,7 +291,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       if (scheduleItems.length) onRefreshCalendar?.();
       approved.forEach(it => {
         if (it.cat === 'tasks')         onApply(it.text, it.priority || 'eventually');
-        else if (it.cat === 'shailos') onApply(it.text || it.synopsis || it.content || 'Shaila', 'shaila');
+        else if (it.cat === 'shailos') onApply(it.content || it.text || it.synopsis || 'Shaila', 'shaila');
         else if (it.cat === 'reminders') onApply(it.text, 'eventually');
         // completions + gotBacks are info-only for now
       });
@@ -455,13 +471,43 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
                     <input type="checkbox" checked={it.approved} onChange={() => toggleApproved(it.id)}
                       style={{ marginTop: 5, accentColor: color, flexShrink: 0, cursor: 'pointer', width: 14, height: 14 }}/>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <input
-                        value={it.text || it.synopsis || ''}
-                        onChange={e => updateText(it.id, e.target.value)}
-                        style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${C.divider}`, color: C.text, fontSize: NC_TYPE.body, fontFamily: NC_FONT_STACK, padding: '2px 0', outline: 'none', boxSizing: 'border-box' }}
-                      />
-                      {!['completions', 'gotBacks'].includes(cat) && (
-                        <div style={{ display: 'flex', gap: SP.sm, alignItems: 'center', flexWrap: 'wrap', marginTop: SP.xs }}>
+
+                      {/* ── Shaila: question form + asker + answer ── */}
+                      {it.cat === 'shailos' ? (<>
+                        <div style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, marginBottom: 2 }}>Question</div>
+                        <textarea
+                          value={it.content || it.text || it.synopsis || ''}
+                          onChange={e => updateShailaField(it.id, 'content', e.target.value)}
+                          rows={2}
+                          style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${C.divider}`, color: C.text, fontSize: NC_TYPE.body, fontFamily: NC_FONT_STACK, padding: '2px 0', outline: 'none', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.45 }}
+                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: SP.xs }}>
+                          <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, whiteSpace: 'nowrap' }}>Asker</span>
+                          <input
+                            value={it.askerName || ''}
+                            onChange={e => updateShailaField(it.id, 'askerName', e.target.value)}
+                            placeholder="Name (optional)"
+                            style={{ flex: 1, background: 'none', border: 'none', borderBottom: `1px dashed ${C.divider}`, color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, padding: '2px 0', outline: 'none' }}
+                          />
+                        </div>
+                        {it.answer != null ? (
+                          <div style={{ marginTop: SP.xs }}>
+                            <div style={{ fontSize: NC_TYPE.small, color: '#C8A84C', fontFamily: NC_FONT_STACK, marginBottom: 2 }}>CC / Answer</div>
+                            <textarea
+                              value={it.answer || ''}
+                              onChange={e => updateShailaField(it.id, 'answer', e.target.value)}
+                              placeholder="Rabbi's ruling (if given)"
+                              rows={2}
+                              style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${C.divider}`, color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, padding: '2px 0', outline: 'none', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.45 }}
+                            />
+                          </div>
+                        ) : (
+                          <button onClick={() => updateShailaField(it.id, 'answer', '')}
+                            style={{ marginTop: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, padding: 0, textDecoration: 'underline' }}>
+                            + Add answer
+                          </button>
+                        )}
+                        <div style={{ display: 'flex', gap: SP.sm, alignItems: 'center', marginTop: SP.xs }}>
                           <select value={it.cat} onChange={e => updateCategory(it.id, e.target.value)}
                             style={{ fontSize: NC_TYPE.meta, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, color: C.muted, padding: '2px 6px', cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
                             <option value="tasks">Task</option>
@@ -471,51 +517,60 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
                           </select>
                           <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK }}>Save as</span>
                         </div>
-                      )}
-                      {it.cat === 'tasks' && (
-                        <select value={it.priority || 'eventually'} onChange={e => updatePriority(it.id, e.target.value)}
-                          style={{ marginTop: 5, fontSize: NC_TYPE.meta, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, color: C.muted, padding: '2px 6px', cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
-                          {pris.filter(p => !p.deleted).map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-                          <option value="shaila">Shaila</option>
-                        </select>
-                      )}
-                      {it.cat === 'scheduleItems' && (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 82px', gap: SP.xs, marginTop: 7 }}>
-                          <input
-                            value={it.date || ''}
-                            onChange={e => updateScheduleField(it.id, 'date', e.target.value)}
-                            placeholder="Date"
-                            style={{ minWidth: 0, background: C.bgSoft, border: `1px solid ${scheduleMissingDetails(it).includes('date') ? C.warning : C.divider}`, borderRadius: RADIUS.xs, color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
-                          />
-                          <input
-                            value={it.time || ''}
-                            onChange={e => updateScheduleField(it.id, 'time', e.target.value)}
-                            placeholder="Time"
-                            style={{ minWidth: 0, background: C.bgSoft, border: `1px solid ${scheduleMissingDetails(it).includes('time') ? C.warning : C.divider}`, borderRadius: RADIUS.xs, color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
-                          />
-                          <input
-                            value={it.durationMinutes || ''}
-                            onChange={e => updateScheduleField(it.id, 'durationMinutes', e.target.value)}
-                            placeholder="Min"
-                            inputMode="numeric"
-                            style={{ minWidth: 0, background: C.bgSoft, border: `1px solid ${scheduleMissingDetails(it).includes('duration') ? C.warning : C.divider}`, borderRadius: RADIUS.xs, color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
-                          />
-                          <input
-                            value={it.when || ''}
-                            onChange={e => updateScheduleField(it.id, 'when', e.target.value)}
-                            placeholder="Original wording / notes"
-                            style={{ gridColumn: '1 / -1', minWidth: 0, background: 'transparent', border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, color: C.muted, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}
-                          />
-                          {scheduleMissingDetails(it).length > 0 && (
-                            <div style={{ gridColumn: '1 / -1', fontSize: NC_TYPE.small, color: C.warning, fontFamily: NC_FONT_STACK }}>
-                              Needs {scheduleMissingDetails(it).join(', ')} before adding to Calendar{it.unclearReason ? ` - ${it.unclearReason}` : ''}.
-                            </div>
+                      </>) : (<>
+
+                        {/* ── All other categories: standard text input ── */}
+                        <input
+                          value={it.text || it.synopsis || ''}
+                          onChange={e => updateText(it.id, e.target.value)}
+                          style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${C.divider}`, color: C.text, fontSize: NC_TYPE.body, fontFamily: NC_FONT_STACK, padding: '2px 0', outline: 'none', boxSizing: 'border-box' }}
+                        />
+                        {!['completions', 'gotBacks'].includes(cat) && (
+                          <div style={{ display: 'flex', gap: SP.sm, alignItems: 'center', flexWrap: 'wrap', marginTop: SP.xs }}>
+                            <select value={it.cat} onChange={e => updateCategory(it.id, e.target.value)}
+                              style={{ fontSize: NC_TYPE.meta, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, color: C.muted, padding: '2px 6px', cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+                              <option value="tasks">Task</option>
+                              <option value="shailos">Shaila</option>
+                              <option value="scheduleItems">Schedule</option>
+                              <option value="reminders">Reminder</option>
+                            </select>
+                            <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK }}>Save as</span>
+                          </div>
+                        )}
+                        {it.cat === 'tasks' && (<>
+                          <select value={it.priority || 'eventually'} onChange={e => updatePriority(it.id, e.target.value)}
+                            style={{ marginTop: 5, fontSize: NC_TYPE.meta, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, color: C.muted, padding: '2px 6px', cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+                            {pris.filter(p => !p.deleted).map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                            <option value="shaila">Shaila</option>
+                          </select>
+                          {it.schedulingHint && (
+                            <button onClick={() => promoteToSchedule(it.id)}
+                              style={{ display: 'block', marginTop: 5, background: '#9B59B615', border: `1px solid #9B59B640`, borderRadius: RADIUS.xs, color: '#9B59B6', fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, padding: '3px 8px', cursor: 'pointer', textAlign: 'left' }}>
+                              📅 Also add to Calendar: {it.schedulingHint}
+                            </button>
                           )}
-                        </div>
-                      )}
-                      {(it.cat === 'completions' || it.cat === 'gotBacks') && (
-                        <div style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 2, fontStyle: 'italic' }}>Info only — no action taken</div>
-                      )}
+                        </>)}
+                        {it.cat === 'scheduleItems' && (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 82px', gap: SP.xs, marginTop: 7 }}>
+                            <input value={it.date || ''} onChange={e => updateScheduleField(it.id, 'date', e.target.value)} placeholder="Date"
+                              style={{ minWidth: 0, background: C.bgSoft, border: `1px solid ${scheduleMissingDetails(it).includes('date') ? C.warning : C.divider}`, borderRadius: RADIUS.xs, color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}/>
+                            <input value={it.time || ''} onChange={e => updateScheduleField(it.id, 'time', e.target.value)} placeholder="Time"
+                              style={{ minWidth: 0, background: C.bgSoft, border: `1px solid ${scheduleMissingDetails(it).includes('time') ? C.warning : C.divider}`, borderRadius: RADIUS.xs, color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}/>
+                            <input value={it.durationMinutes || ''} onChange={e => updateScheduleField(it.id, 'durationMinutes', e.target.value)} placeholder="Min" inputMode="numeric"
+                              style={{ minWidth: 0, background: C.bgSoft, border: `1px solid ${scheduleMissingDetails(it).includes('duration') ? C.warning : C.divider}`, borderRadius: RADIUS.xs, color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}/>
+                            <input value={it.when || ''} onChange={e => updateScheduleField(it.id, 'when', e.target.value)} placeholder="Original wording / notes"
+                              style={{ gridColumn: '1 / -1', minWidth: 0, background: 'transparent', border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, color: C.muted, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}/>
+                            {scheduleMissingDetails(it).length > 0 && (
+                              <div style={{ gridColumn: '1 / -1', fontSize: NC_TYPE.small, color: C.warning, fontFamily: NC_FONT_STACK }}>
+                                Needs {scheduleMissingDetails(it).join(', ')} before adding to Calendar{it.unclearReason ? ` — ${it.unclearReason}` : ''}.
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {(it.cat === 'completions' || it.cat === 'gotBacks') && (
+                          <div style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 2, fontStyle: 'italic' }}>Info only — no action taken</div>
+                        )}
+                      </>)}
                     </div>
                   </div>
                 ))}

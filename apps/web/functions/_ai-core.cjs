@@ -286,20 +286,31 @@ function scheduleGeminiSlot(model, estimatedTokens, credentialId = "primary") {
 const YESHIVISH_SYSTEM = `You are assisting a rabbi and Orthodox Jewish community. You understand "Yeshivish", a dialect blending English with Hebrew, Aramaic, and Yiddish Torah terms.
 
 Key vocabulary:
-- shaila/shaylos = halachic question(s) | psak/paskening = halachic ruling
-- halacha = Jewish law | gemara = Talmud | mishnah = Mishna | chumash = Pentateuch
-- Rashi/Tosafos = classic Talmud commentators | Rambam/Ramban = medieval authorities
-- Shabbos = Sabbath | Yom Tov = Jewish holiday | davening = prayer
-- shiur = Torah class | kollel = full-time Torah study institution
-- beis medrash = Torah study hall | rosh yeshiva = yeshiva head
-- chavrusa = study partner | machlokes = halachic dispute | svara = logical argument
-- mutar/assur = permitted/forbidden | kashrus = dietary laws | treif = non-kosher
-- fleishig/milchig/pareve = meat / dairy / neutral | mikvah = ritual bath
-- mezuzah = doorpost parchment | tefillin = phylacteries | bracha = blessing
-- kiddush = Shabbos wine sanctification | teshuvah = repentance
-- tzaddik = righteous person | tzedakah = charity | chasuna = wedding
-- mazel tov = congratulations | Baruch Hashem / B"H = thank God / with God's help
-- pshat = simple meaning | tachlis = bottom line / practical point
+- shaila/shaylos/shailah = halachic question(s) | psak/paskening/posek = halachic ruling/decisor
+- halacha = Jewish law | gemara = Talmud | mishnah = Mishna | chumash = Pentateuch | parsha = Torah portion
+- Rashi/Tosafos = classic Talmud commentators | Rambam/Ramban/Shulchan Aruch/Mishna Berura = halachic authorities
+- Shabbos = Sabbath | Yom Tov = Jewish holiday | Yom Kippur/Rosh Hashana/Pesach/Sukkos/Shavuos = major holidays
+- davening/daven = prayer | shacharis/mincha/maariv/mussaf = morning/afternoon/evening/additional prayer
+- shiur/shiurim = Torah class(es) | kollel = full-time Torah study institution | yeshiva = Torah academy
+- beis medrash = Torah study hall | rosh yeshiva/rebbe = yeshiva head/teacher | bochur = yeshiva student
+- chavrusa = study partner | machlokes = halachic dispute | svara = logical argument | pshat = simple meaning
+- mutar/assur = permitted/forbidden | lechatchila/bedieved = ideally/after the fact
+- d'oraisa/d'rabbanan = biblical/rabbinic level | safek = doubt | bittul = nullification | chazaka = presumption
+- kashrus/kosher = dietary laws | treif = non-kosher | bishul = cooking | borer = selecting
+- fleishig/milchig/pareve = meat/dairy/neutral | chalav yisrael = Jewish-supervised milk
+- pas yisrael/bishul yisrael = Jewish-supervised bread/cooking | bishul akum = non-Jewish cooking
+- toiveling/toiveled = immersing vessels in mikveh | mikvah = ritual bath | niddah = family purity laws
+- kitniyos = legumes (Pesach) | chametz = leavened grain (forbidden on Pesach)
+- mezuzah = doorpost parchment | tefillin = phylacteries | bracha/brachos = blessing(s)
+- kiddush = Shabbos/Yom Tov sanctification | havdalah = end-of-Shabbos ceremony
+- eruv = boundary enabling Shabbos carrying | melachos = forbidden Shabbos labors
+- chatzos = halachic midday/midnight | shkiah = sunset | tzeis = nightfall | zman/zmanim = halachic time(s)
+- bein hashmashos = twilight period | beis din = rabbinical court | geder = halachic boundary
+- teshuvah = repentance | tzaddik = righteous person | tzedakah = charity | chasuna = wedding
+- mazel tov = congratulations | sheva brachos = post-wedding celebrations
+- Baruch Hashem / B"H = thank God | mamash = truly/literally | takeh = really/indeed
+- tachlis = bottom line / practical point | nebech = unfortunately | klal = general rule
+- nafka mina = practical halachic difference | nochri/goy = non-Jew | ger = convert
 
 Interpret all content in this Torah, halachic, and Orthodox Jewish community context. When processing voice transcripts or tasks, recognize and correctly interpret these terms even when phonetically transcribed.`;
 
@@ -533,6 +544,7 @@ function normalizeConversationExtract(value) {
     tasks: ensureArray(o.tasks || []).map(item => ({
       text: cleanString(item?.text, 500),
       priority: ["now", "today", "eventually"].includes(item?.priority) ? item.priority : "eventually",
+      schedulingHint: item?.schedulingHint ? cleanString(item.schedulingHint, 200) : null,
     })).filter(item => item.text),
     completions: ensureArray(o.completions || []).map(item => ({
       text: cleanString(item?.text, 500),
@@ -651,7 +663,7 @@ const AI_JOB_REGISTRY = {
     output: "json",
     shape: "object",
     genConfig: { temperature: 0.1, maxOutputTokens: 8192 },
-    schema: '{"tasks":[{"text":"...","priority":"now|today|eventually"}],"completions":[{"text":"...","matchedTask":null}],"shailos":[{"synopsis":"...","content":"...","askerName":null,"answer":""}],"gotBacks":[{"synopsis":"...","matchedShailaIndex":null}],"scheduleItems":[{"text":"event title","when":null,"date":null,"time":null,"durationMinutes":null,"missingDetails":["date","time","duration"],"unclearReason":"what is unclear"}],"reminders":[{"text":"..."}]}',
+    schema: '{"tasks":[{"text":"full description — who, what, context","priority":"now|today|eventually","schedulingHint":null}],"completions":[{"text":"...","matchedTask":null}],"shailos":[{"synopsis":"Topic: Core Question","content":"Is it permitted to...?","askerName":null,"answer":""}],"gotBacks":[{"synopsis":"...","matchedShailaIndex":null}],"scheduleItems":[{"text":"event title","when":null,"date":null,"time":null,"durationMinutes":null,"missingDetails":["date","time","duration"],"unclearReason":"what is unclear"}],"reminders":[{"text":"..."}]}',
     buildPrompt(input = {}) {
       return compactLines([
         YESHIVISH_SYSTEM,
@@ -660,10 +672,12 @@ const AI_JOB_REGISTRY = {
         `Current task queue:\n${truncateText(input.taskSnap || input.currentTasks || "(none)", 6000)}`,
         `Open shailos:\n${truncateText(input.shailaSnap || input.currentShailos || "(none)", 6000)}`,
         "Rules: Extract ONLY new items discussed in the transcript. Do NOT include any tasks from the 'Current task queue' in the 'tasks' output array. Do NOT include any shailos from the 'Open shailos' list in the 'shailos' output array. The current task queue and open shailos lists are provided ONLY so you can reference their 1-based indices in 'completions[].matchedTask' or 'gotBacks[].matchedShailaIndex' if the transcript mentions they are completed or resolved.",
-        "Never merge unrelated items; clean wording while preserving halachic/Jewish terms.",
+        "Never merge unrelated items; preserve halachic/Jewish terms exactly.",
         "Halachic questions always go to shailos. Got-back answers go to gotBacks. Fixed-time appointments, meetings, calls at a date/time, deadlines with a time, and calendar entries go to scheduleItems even when details are incomplete.",
         "Never downgrade an intended calendar event into a task because date, time, or duration is missing. Put unclear fields as null and list them in missingDetails.",
         "For scheduleItems, text is only the event title/action, date is the spoken date if clear, time is the spoken start time if clear, durationMinutes is the duration if clear, and unclearReason explains ambiguity briefly.",
+        "TASKS — write text with full context: include the person's name, what needs to be done, and any relevant detail. Bad: 'Call back'. Good: 'Call Mrs. Lerman about the stove kashrus question'. If the speaker mentions a specific date or time for the task (e.g. 'Tuesday at 3pm', 'this Sunday morning'), put that in schedulingHint; otherwise schedulingHint is null.",
+        "SHAILOS — write content as a natural halachic question in question form: 'Is it permitted to...?', 'What is the halacha regarding...?', 'Can one...?'. Include the full scenario detail (the specific item, action, and circumstances). Extract askerName when a person's name is identifiable as the one who asked. If an answer or ruling was given in the recording, capture it verbatim in answer.",
         responseJsonInstruction("object", this.schema),
       ]);
     },
