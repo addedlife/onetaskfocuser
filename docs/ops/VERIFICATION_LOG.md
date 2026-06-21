@@ -1,5 +1,15 @@
 # Verification Log
 
+## 2026-06-21 App-wide Material 3 token bridge — theme-reactive, all 3 surfaces (4.26.95)
+
+- Scope: the `--md-sys-color-*` bridge was static and theme-blind — it pointed at `--shp-color-*` hardcoded to the googleVoice defaults, with no runtime writer connecting the active theme. Only ~8 of M3's ~40 color roles existed; the rest fell back to M3 default purple. Shailos and DeskPhone web carried no M3 token vocabulary at all.
+- Web suite (`ui-tokens.jsx`): expanded `:root` to the FULL M3 system-token set (all color roles + `--md-sys-shape-corner-*`). Base roles reference the reactive `--shp-color-*` layer; container/variant tones derive via `color-mix(... toward --shp-color-text)` so they auto-adapt light/dark. Added base vars `--shp-color-card / -divider-soft / -on-accent / -accent-dark` and `--shp-radius-lg/-xl`. New `themeVarsCss(T)` export emits a `:root{}` override of `--shp-color-*` from the active theme.
+- Web suite (`App.jsx`): render `<style>{themeVarsCss(T)}</style>` immediately after `NC_GLOBAL_CSS` so it wins the cascade — the theme-switch hook the global-color-token redesign required. Every `@material/web` component now follows the active theme.
+- DeskPhone web (`10-deskphone-web.jsx`): added the M3 role + shape + typeface bridge into the static `.dp-web-root` rule, mapped onto DeskPhone's own theme-reactive, contrast-corrected `--dp-*` layer (set inline by `buildDeskPhoneWebVars` on the same element). Travels with both embedded and standalone WebView2 surfaces.
+- Shailos (`apps/shailos/src/index.css`): added the full M3 `:root` block mapped onto its reactive `--ot-*` layer + `--ot-radius-*` shape scale. Additive only — nothing consumes the tokens yet, so zero visual change to Shailos; it now speaks the same M3 vocabulary.
+- Scope boundary: this is the token FOUNDATION. It does not convert the ~932 hand-coded `C.*` color usages to `@material/web` components — that is the separate component-migration campaign documented in `M3_INTEGRATION_HANDOFF.md`.
+- Gates: `npm run build` (apps/web) → 0 errors; `npm run build` (apps/shailos) → 0 errors. RUNTIME-VERIFIED in dev preview (port 5178): probed all derived roles via `background-color` — every role resolves to a valid color (no transparent/invalid), no console errors. Theme reactivity proven by switching Claude Cream ↔ Navy Gold and reloading: `--md-sys-color-primary` flipped `#9A452B` ↔ `#F2C14E`, `surface` `#FFFFFF` ↔ `#122235`, and the `color-mix` surface ramp auto-inverted (containers darker in light, lighter in dark). DeskPhone standalone surface: M3 `primary` === `--dp-blue`, all roles valid, shape `medium` = 12px. Original theme restored after testing.
+
 ## 2026-06-14 Recording Duplication Fix — Prevent existing tasks/shailos from showing in ConvCapture (4.17.66)
 
 - Scope: recording transcript parsing duplicates existing tasks/shailos during conversation extraction.

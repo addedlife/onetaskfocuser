@@ -172,6 +172,8 @@ export const NC_GLOBAL_CSS = `
   --shp-radius-xs:   4px;
   --shp-radius-sm:   8px;
   --shp-radius-md:   12px;
+  --shp-radius-lg:   16px;
+  --shp-radius-xl:   28px;
   --shp-radius-pill: 999px;
 
   /* Elevation / shadow */
@@ -217,34 +219,102 @@ export const NC_GLOBAL_CSS = `
 
   /* Semantic colors — mirrored from GV_CLEAN for CSS-class use and DevTools
      inspection. JS side stays hex so hexToRgba() can parse it directly. */
-  --shp-color-bg:        #FFFFFF;
-  --shp-color-bg-soft:   #F8F9FA;
-  --shp-color-hover:     #F1F3F4;
-  --shp-color-divider:   #DADCE0;
-  --shp-color-text:      #202124;
-  --shp-color-muted:     #5F6368;
-  --shp-color-faint:     #9AA0A6;
-  --shp-color-accent:    #00796B;
-  --shp-color-success:   #1E8E3E;
-  --shp-color-danger:    #D93025;
-  --shp-color-warning:   #F9AB00;
+  --shp-color-bg:           #FFFFFF;
+  --shp-color-bg-soft:      #F8F9FA;
+  --shp-color-card:         #FFFFFF;
+  --shp-color-hover:        #F1F3F4;
+  --shp-color-divider:      #DADCE0;
+  --shp-color-divider-soft: #E8EAED;
+  --shp-color-text:         #202124;
+  --shp-color-muted:        #5F6368;
+  --shp-color-faint:        #9AA0A6;
+  --shp-color-accent:       #00796B;
+  --shp-color-on-accent:    #FFFFFF;
+  --shp-color-accent-dark:  #00695C;
+  --shp-color-success:      #1E8E3E;
+  --shp-color-danger:       #D93025;
+  --shp-color-warning:      #F9AB00;
 
   /* Category identity */
   --shp-color-gold:      #C9923C;
   --shp-color-cat-mail:  #3D6CB5;
   --shp-color-cat-phone: #8A63B5;
 
-  /* Material Web 3 bridge — wires @material/web components to ShamashPro tokens.
-     Typeface tokens resolve inside shadow DOM; color tokens pick up theme accent/divider. */
+  /* ── Material 3 system tokens — the full @material/web bridge ──────────────
+     @material/web components render in shadow DOM and read --md-sys-*. The app's
+     .nc-suite-root CSS cannot reach inside; these tokens are how every component
+     gets the app's font, color, and shape. BASE roles point at the reactive
+     --shp-color-* layer (rewritten per active theme by themeVarsCss() below, via
+     a <style> tag in App.jsx). DERIVED roles use color-mix() over those base
+     roles — every surface here is Chromium/WebView2, so color-mix is safe — and
+     mix toward --shp-color-text (= on-surface), which flips dark/light, so
+     container/variant tones auto-adapt to every theme. NEVER remove these. */
+
+  /* Typeface */
   --md-ref-typeface-plain: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
   --md-ref-typeface-brand: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --md-sys-color-primary:     var(--shp-color-accent,  #00796B);
-  --md-sys-color-on-primary:  #ffffff;
-  --md-sys-color-outline:     var(--shp-color-divider, #DADCE0);
-  --md-sys-color-on-surface:  var(--shp-color-text,    #202124);
-  --md-sys-color-surface:     var(--shp-color-bg,      #FFFFFF);
-  --md-sys-color-surface-variant:    var(--shp-color-bg-soft, #F8F9FA);
-  --md-sys-color-on-surface-variant: var(--shp-color-muted,   #5F6368);
+
+  /* Primary */
+  --md-sys-color-primary:                  var(--shp-color-accent, #00796B);
+  --md-sys-color-on-primary:               var(--shp-color-on-accent, #FFFFFF);
+  --md-sys-color-primary-container:        var(--shp-color-tonal, color-mix(in srgb, var(--shp-color-accent, #00796B) 16%, var(--shp-color-card, #FFFFFF)));
+  --md-sys-color-on-primary-container:     var(--shp-color-on-tonal, var(--shp-color-accent-dark, #00695C));
+
+  /* Secondary — themes define a single accent, so secondary mirrors primary */
+  --md-sys-color-secondary:                var(--shp-color-accent, #00796B);
+  --md-sys-color-on-secondary:             var(--shp-color-on-accent, #FFFFFF);
+  --md-sys-color-secondary-container:      var(--shp-color-tonal, color-mix(in srgb, var(--shp-color-accent, #00796B) 14%, var(--shp-color-card, #FFFFFF)));
+  --md-sys-color-on-secondary-container:   var(--shp-color-on-tonal, var(--shp-color-accent-dark, #00695C));
+
+  /* Tertiary — mirrors primary */
+  --md-sys-color-tertiary:                 var(--shp-color-accent, #00796B);
+  --md-sys-color-on-tertiary:              var(--shp-color-on-accent, #FFFFFF);
+  --md-sys-color-tertiary-container:       var(--shp-color-tonal, color-mix(in srgb, var(--shp-color-accent, #00796B) 14%, var(--shp-color-card, #FFFFFF)));
+  --md-sys-color-on-tertiary-container:    var(--shp-color-on-tonal, var(--shp-color-accent-dark, #00695C));
+
+  /* Error */
+  --md-sys-color-error:                    var(--shp-color-danger, #D93025);
+  --md-sys-color-on-error:                 #FFFFFF;
+  --md-sys-color-error-container:          color-mix(in srgb, var(--shp-color-danger, #D93025) 14%, var(--shp-color-card, #FFFFFF));
+  --md-sys-color-on-error-container:       color-mix(in srgb, var(--shp-color-danger, #D93025) 70%, var(--shp-color-text, #202124));
+
+  /* Surface & background */
+  --md-sys-color-background:               var(--shp-color-bg, #FFFFFF);
+  --md-sys-color-on-background:            var(--shp-color-text, #202124);
+  --md-sys-color-surface:                  var(--shp-color-card, #FFFFFF);
+  --md-sys-color-on-surface:               var(--shp-color-text, #202124);
+  --md-sys-color-surface-variant:          var(--shp-color-bg-soft, #F8F9FA);
+  --md-sys-color-on-surface-variant:       var(--shp-color-muted, #5F6368);
+  --md-sys-color-surface-dim:              var(--shp-color-bg, #FFFFFF);
+  --md-sys-color-surface-bright:           var(--shp-color-card, #FFFFFF);
+  --md-sys-color-surface-container-lowest:  var(--shp-color-card, #FFFFFF);
+  --md-sys-color-surface-container-low:     color-mix(in srgb, var(--shp-color-card, #FFFFFF) 96%, var(--shp-color-text, #202124));
+  --md-sys-color-surface-container:         color-mix(in srgb, var(--shp-color-card, #FFFFFF) 94%, var(--shp-color-text, #202124));
+  --md-sys-color-surface-container-high:    color-mix(in srgb, var(--shp-color-card, #FFFFFF) 91%, var(--shp-color-text, #202124));
+  --md-sys-color-surface-container-highest: color-mix(in srgb, var(--shp-color-card, #FFFFFF) 88%, var(--shp-color-text, #202124));
+
+  /* Outline */
+  --md-sys-color-outline:                  var(--shp-color-divider, #DADCE0);
+  --md-sys-color-outline-variant:          var(--shp-color-divider-soft, color-mix(in srgb, var(--shp-color-divider, #DADCE0) 55%, var(--shp-color-card, #FFFFFF)));
+
+  /* Inverse */
+  --md-sys-color-inverse-surface:          var(--shp-color-text, #202124);
+  --md-sys-color-inverse-on-surface:       var(--shp-color-card, #FFFFFF);
+  --md-sys-color-inverse-primary:          color-mix(in srgb, var(--shp-color-accent, #00796B) 60%, var(--shp-color-card, #FFFFFF));
+
+  /* Fixed / misc */
+  --md-sys-color-shadow:                   #000000;
+  --md-sys-color-scrim:                    #000000;
+  --md-sys-color-surface-tint:             var(--shp-color-accent, #00796B);
+
+  /* M3 shape scale → ShamashPro radius scale */
+  --md-sys-shape-corner-none:        0;
+  --md-sys-shape-corner-extra-small: var(--shp-radius-xs, 4px);
+  --md-sys-shape-corner-small:       var(--shp-radius-sm, 8px);
+  --md-sys-shape-corner-medium:      var(--shp-radius-md, 12px);
+  --md-sys-shape-corner-large:       var(--shp-radius-lg, 16px);
+  --md-sys-shape-corner-extra-large: var(--shp-radius-xl, 28px);
+  --md-sys-shape-corner-full:        var(--shp-radius-pill, 999px);
 }
 .nc-suite-root,
 .nc-suite-root :where(button, input, textarea, select, p, span, div, a, label, h1, h2, h3, h4, h5, h6, li, summary) {
@@ -382,6 +452,39 @@ export const NC_GLOBAL_CSS = `
   to   { opacity: 1; }
 }
 `;
+
+// ─── Theme → CSS-var writer ─────────────────────────────────────────────────
+// Returns a `:root{…}` rule that pins the reactive --shp-color-* layer to the
+// active theme (T). Rendered as a <style> right AFTER NC_GLOBAL_CSS in App.jsx,
+// so it wins the cascade and every M3 role (which references --shp-color-*)
+// repaints the instant the theme changes. This is the single runtime bridge
+// between the JS theme object and the CSS custom-property layer — change a value
+// here and every @material/web component and token consumer follows.
+// Optional roles (tonal/on-tonal) are emitted ONLY when the theme defines them;
+// when absent, the M3 *-container roles fall back to their color-mix derivation.
+export function themeVarsCss(T = {}) {
+  const accent = T.primary || T.accent || GV_CLEAN.accent;
+  const decl = [
+    `--shp-color-bg:${T.bg || GV_CLEAN.bg}`,
+    `--shp-color-bg-soft:${T.bgW || GV_CLEAN.bgSoft}`,
+    `--shp-color-card:${T.card || T.bg || GV_CLEAN.bg}`,
+    `--shp-color-hover:${T.tonal || T.bgW || GV_CLEAN.hover}`,
+    `--shp-color-divider:${T.brd || GV_CLEAN.divider}`,
+    `--shp-color-divider-soft:${T.brdS || T.brd || GV_CLEAN.divider}`,
+    `--shp-color-text:${T.text || GV_CLEAN.text}`,
+    `--shp-color-muted:${T.tSoft || GV_CLEAN.muted}`,
+    `--shp-color-faint:${T.tFaint || GV_CLEAN.faint}`,
+    `--shp-color-accent:${accent}`,
+    `--shp-color-on-accent:${T.onPrimary || '#FFFFFF'}`,
+    `--shp-color-accent-dark:${T.onTonal || T.primary || GV_CLEAN.accentDark}`,
+    `--shp-color-success:${T.success || GV_CLEAN.success}`,
+    `--shp-color-danger:${T.danger || GV_CLEAN.danger}`,
+    `--shp-color-warning:${T.warning || GV_CLEAN.warning}`,
+  ];
+  if (T.tonal) decl.push(`--shp-color-tonal:${T.tonal}`);
+  if (T.onTonal) decl.push(`--shp-color-on-tonal:${T.onTonal}`);
+  return `:root{${decl.join(';')};}`;
+}
 
 export const cleanTheme = (theme = {}) => ({
   bg:        theme.card  || GV_CLEAN.bg,

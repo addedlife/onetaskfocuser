@@ -18,6 +18,59 @@
   --ot-radius:     12px;
   --ot-radius-lg:  16px;
   --ot-radius-xl:  20px;
+
+  /* ── Material 3 bridge — maps @material/web roles onto Shailos' own
+     theme-reactive --ot-* layer (rewritten at runtime from onetask_theme in
+     App.tsx). Keeps Shailos on the same M3 token vocabulary as the web suite
+     and DeskPhone so any @material/web component themes correctly. Base roles
+     point at --ot-*; container/variant tones derive via color-mix toward
+     on-surface (= --ot-text), which flips dark/light. NEVER remove. */
+  --md-ref-typeface-plain: 'Google Sans', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --md-ref-typeface-brand: 'Google Sans', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --md-sys-color-primary: var(--ot-primary);
+  --md-sys-color-on-primary: var(--ot-on-primary);
+  --md-sys-color-primary-container: var(--ot-tonal);
+  --md-sys-color-on-primary-container: var(--ot-on-tonal);
+  --md-sys-color-secondary: var(--ot-primary);
+  --md-sys-color-on-secondary: var(--ot-on-primary);
+  --md-sys-color-secondary-container: var(--ot-tonal);
+  --md-sys-color-on-secondary-container: var(--ot-on-tonal);
+  --md-sys-color-tertiary: var(--ot-primary);
+  --md-sys-color-on-tertiary: var(--ot-on-primary);
+  --md-sys-color-tertiary-container: var(--ot-tonal);
+  --md-sys-color-on-tertiary-container: var(--ot-on-tonal);
+  --md-sys-color-error: #D93025;
+  --md-sys-color-on-error: #FFFFFF;
+  --md-sys-color-error-container: color-mix(in srgb, #D93025 14%, var(--ot-card));
+  --md-sys-color-on-error-container: color-mix(in srgb, #D93025 70%, var(--ot-text));
+  --md-sys-color-background: var(--ot-bg);
+  --md-sys-color-on-background: var(--ot-text);
+  --md-sys-color-surface: var(--ot-card);
+  --md-sys-color-on-surface: var(--ot-text);
+  --md-sys-color-surface-variant: var(--ot-border-s);
+  --md-sys-color-on-surface-variant: var(--ot-text-soft);
+  --md-sys-color-surface-dim: var(--ot-bg);
+  --md-sys-color-surface-bright: var(--ot-card);
+  --md-sys-color-surface-container-lowest: var(--ot-card);
+  --md-sys-color-surface-container-low: color-mix(in srgb, var(--ot-card) 96%, var(--ot-text));
+  --md-sys-color-surface-container: color-mix(in srgb, var(--ot-card) 94%, var(--ot-text));
+  --md-sys-color-surface-container-high: color-mix(in srgb, var(--ot-card) 91%, var(--ot-text));
+  --md-sys-color-surface-container-highest: color-mix(in srgb, var(--ot-card) 88%, var(--ot-text));
+  --md-sys-color-outline: var(--ot-border);
+  --md-sys-color-outline-variant: var(--ot-border-s);
+  --md-sys-color-inverse-surface: var(--ot-text);
+  --md-sys-color-inverse-on-surface: var(--ot-card);
+  --md-sys-color-inverse-primary: color-mix(in srgb, var(--ot-primary) 60%, var(--ot-card));
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-color-surface-tint: var(--ot-primary);
+  --md-sys-shape-corner-none: 0;
+  --md-sys-shape-corner-extra-small: var(--ot-radius-sm);
+  --md-sys-shape-corner-small: var(--ot-radius-sm);
+  --md-sys-shape-corner-medium: var(--ot-radius);
+  --md-sys-shape-corner-large: var(--ot-radius-lg);
+  --md-sys-shape-corner-extra-large: var(--ot-radius-xl);
+  --md-sys-shape-corner-full: 999px;
 }
 
 body {

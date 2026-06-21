@@ -9,7 +9,7 @@ import { SettingsModal } from '../07-settings.jsx';
 import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, listPendingRecordings, PENDING_EVENT, formatPendingAge } from '../09-transcription-pen.js';
 import { DeskPhoneWebPanel } from '../10-deskphone-web.jsx';
 import { isOfflineShellReady } from '../offline-support.js';
-import { buildDeskPhoneThemeQuery, cleanTheme, DUR, EASE, ELEV, getInitialSuiteView, GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, NC_TYPE, RADIUS, suiteIcon, useViewportWidth, Z } from './ui-tokens.jsx';
+import { buildDeskPhoneThemeQuery, cleanTheme, DUR, EASE, ELEV, getInitialSuiteView, GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, NC_TYPE, RADIUS, suiteIcon, themeVarsCss, useViewportWidth, Z } from './ui-tokens.jsx';
 import { AppSuiteChrome } from './components/AppSuiteChrome.jsx';
 import { DeskPhoneSuitePanel, SuiteShailosPanel } from './components/SuitePanels.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './components/NerveCenterPhoneSurface.jsx';
@@ -3083,6 +3083,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   return (
     <div ref={appRef} className="nc-suite-root" style={{overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:NC_FONT_STACK,color:C.text,display:"flex",flexDirection:"column",alignItems:"center","--nc-font-weight-normal":fontWeightNormal,"--nc-font-weight-strong":fontWeightStrong}}>
       <style>{NC_GLOBAL_CSS}</style>
+      {/* Theme-reactive M3 bridge: pins --shp-color-* (and thus every --md-sys-color-* role) to the active theme T. Must come AFTER NC_GLOBAL_CSS to win the cascade. */}
+      <style>{themeVarsCss(T)}</style>
 
       {/* Overlays */}
       {zen && curT && <ZenMode task={curT} pris={pris} T={T} onExit={exitZen} onDone={(isl)=>isl?legacyCompTask(curT.id):compTask(curT.id)}

@@ -3240,6 +3240,59 @@ const css = `
   --dp-border: ${COLORS.border};
   --dp-border-strong: #BDC1C6;
   --dp-bg-surface: ${COLORS.bgMain};
+
+  /* ── Material 3 bridge — maps @material/web roles onto DeskPhone's own
+     theme-reactive, contrast-corrected --dp-* layer (set inline by
+     buildDeskPhoneWebVars on this same element). Lives here so it travels with
+     both the embedded panel and the standalone WebView2 phone surface, and
+     follows every theme push without a separate writer. NEVER remove. */
+  --md-ref-typeface-plain: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --md-ref-typeface-brand: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --md-sys-color-primary: var(--dp-blue);
+  --md-sys-color-on-primary: var(--dp-on-primary, #FFFFFF);
+  --md-sys-color-primary-container: var(--dp-blue-light);
+  --md-sys-color-on-primary-container: var(--dp-blue-dark);
+  --md-sys-color-secondary: var(--dp-blue);
+  --md-sys-color-on-secondary: var(--dp-on-primary, #FFFFFF);
+  --md-sys-color-secondary-container: var(--dp-blue-light);
+  --md-sys-color-on-secondary-container: var(--dp-blue-dark);
+  --md-sys-color-tertiary: var(--dp-blue);
+  --md-sys-color-on-tertiary: var(--dp-on-primary, #FFFFFF);
+  --md-sys-color-tertiary-container: var(--dp-blue-light);
+  --md-sys-color-on-tertiary-container: var(--dp-blue-dark);
+  --md-sys-color-error: var(--dp-red);
+  --md-sys-color-on-error: var(--dp-on-danger, #FFFFFF);
+  --md-sys-color-error-container: var(--dp-red-light);
+  --md-sys-color-on-error-container: var(--dp-red);
+  --md-sys-color-background: var(--dp-bg-main);
+  --md-sys-color-on-background: var(--dp-text);
+  --md-sys-color-surface: var(--dp-bg-main);
+  --md-sys-color-on-surface: var(--dp-text);
+  --md-sys-color-surface-variant: var(--dp-bg-input);
+  --md-sys-color-on-surface-variant: var(--dp-muted);
+  --md-sys-color-surface-dim: var(--dp-bg-main);
+  --md-sys-color-surface-bright: var(--dp-bg-main);
+  --md-sys-color-surface-container-lowest: var(--dp-bg-main);
+  --md-sys-color-surface-container-low: var(--dp-bg-input);
+  --md-sys-color-surface-container: var(--dp-bg-hover);
+  --md-sys-color-surface-container-high: var(--dp-bg-selected);
+  --md-sys-color-surface-container-highest: var(--dp-bg-selected);
+  --md-sys-color-outline: var(--dp-border);
+  --md-sys-color-outline-variant: var(--dp-border);
+  --md-sys-color-inverse-surface: var(--dp-text);
+  --md-sys-color-inverse-on-surface: var(--dp-bg-main);
+  --md-sys-color-inverse-primary: color-mix(in srgb, var(--dp-blue) 60%, var(--dp-bg-main));
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-color-surface-tint: var(--dp-blue);
+  --md-sys-shape-corner-none: 0;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-extra-large: 28px;
+  --md-sys-shape-corner-full: 999px;
+
   min-height: 100vh;
   width: 100%;
   align-self: stretch;
