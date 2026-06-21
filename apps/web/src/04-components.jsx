@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { IC } from './02-icons.jsx';
 import { isTaskAged, getTaskAgeHours, gP, pBg, textOnColor, _lum, priText, runAIJob, uid, db, Store, DEF_PRI, PALETTE, cleanYT, aiDetectShailaAnswers } from './01-core.js';
 import { getShabbosWindow, getCachedLocation, requestLocation } from './shabbos.js';
-import { ELEV, NC_TYPE, RADIUS, SP } from './08-app-split/ui-tokens.jsx';
+import { ELEV, NC_FONT_STACK, NC_TYPE, RADIUS, SP } from './08-app-split/ui-tokens.jsx';
 
 function Ripple({color}) {
   return <div style={{position:"absolute",inset:0,zIndex:0,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -77,7 +77,7 @@ function Toast({message, color, onDismiss}) {
     <div style={{
       position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
       background: color || "#333", color: "#fff", borderRadius: RADIUS.sm,
-      padding: "9px 12px 9px 18px", fontSize: NC_TYPE.meta, fontFamily: "system-ui", fontWeight: 600,
+      padding: "9px 12px 9px 18px", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: 600,
       zIndex: 99999, animation: "ot-fade 0.3s ease", pointerEvents: "auto",
       boxShadow: "0 4px 20px rgba(0,0,0,0.25)", whiteSpace: "nowrap",
       display: "flex", alignItems: "center", gap: 10
@@ -98,7 +98,7 @@ function AgeBadge({task, pris, thresholds, T}) {
   const label = days >= 1 ? `${days}d` : `${hours}h`;
   return <span title={`${hours}h old`} style={{
     display: "inline-flex", alignItems: "center", gap:SP.xs,
-    fontSize:10, color: "#B85030", fontFamily: "system-ui", fontWeight: 700,
+    fontSize:NC_TYPE.small, color: "#B85030", fontFamily: NC_FONT_STACK, fontWeight: 700,
     animation: "ot-age-pulse 2s ease-in-out infinite", flexShrink: 0
   }}>
     <IC.Clock s={9} c="#B85030"/>{label}
@@ -110,10 +110,10 @@ function EnergyBadge({energy, T}) {
   if (!energy) return null;
   const isHigh = energy === "high";
   return <span style={{
-    fontSize:10, fontFamily: "system-ui", fontWeight: 700,
+    fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: 700,
     color: isHigh ? "#B85030" : "#4A7898",
     border: `1px solid ${isHigh ? "#B85030" : "#4A7898"}`,
-    borderRadius: RADIUS.xs, padding: "1px 4px", flexShrink: 0
+    borderRadius: RADIUS.pill, padding: "0 6px", flexShrink: 0
   }}>{isHigh ? "⚡" : "🌊"}</span>;
 }
 
@@ -131,9 +131,9 @@ function ContextBadges({tags, T}) {
   return <span style={{display:"inline-flex",gap:SP.xs,flexShrink:0,flexWrap:"wrap"}}>
     {tags.map(tag => (
       <span key={tag} style={{
-        fontSize:10, fontFamily: "system-ui", fontWeight: 600,
+        fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: 600,
         background: CTX_TAG_COLORS[tag] + "40", color: CTX_TAG_TEXT[tag] || priText(CTX_TAG_COLORS[tag] || "#666"),
-        borderRadius: RADIUS.xs, padding: "1px 4px"
+        borderRadius: RADIUS.pill, padding: "0 6px"
       }}>{tag}</span>
     ))}
   </span>;
@@ -142,9 +142,9 @@ function ContextBadges({tags, T}) {
 // Mrs W badge
 function MrsWBadge({T}) {
   return <span style={{
-    fontSize:10, fontFamily: "system-ui", fontWeight: 700,
+    fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: 700,
     background: "#D4A0D840", color: "#7A3A7E",
-    border: "1px solid #D4A0D8", borderRadius: RADIUS.xs, padding: "1px 5px", flexShrink: 0
+    border: "1px solid #D4A0D8", borderRadius: RADIUS.pill, padding: "0 6px", flexShrink: 0
   }}>Mrs. W</span>;
 }
 
@@ -157,9 +157,9 @@ function BlockedBadge({task, T}) {
     ageLabel = hrs < 1 ? " <1h" : hrs < 24 ? ` ${hrs}h` : ` ${Math.floor(hrs/24)}d`;
   }
   return <span title={task.blockedNote ? `Blocked: ${task.blockedNote}` : "blocked"} style={{
-    fontSize:10, fontFamily: "system-ui", fontWeight: 700,
+    fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: 700,
     background: "#E0B47240", color: "#8A5A10",
-    borderRadius: RADIUS.xs, padding: "1px 5px", flexShrink: 0
+    borderRadius: RADIUS.pill, padding: "0 6px", flexShrink: 0
   }}>⏸ blocked{ageLabel}</span>;
 }
 
@@ -167,9 +167,9 @@ function BlockedBadge({task, T}) {
 function GoodEnoughBadge({task}) {
   if (!task.goodEnough) return null;
   return <span title="Good enough completion" style={{
-    fontSize:10, fontFamily: "system-ui", fontWeight: 700,
+    fontSize:NC_TYPE.small, fontFamily: NC_FONT_STACK, fontWeight: 700,
     background: "#9BD4A040", color: "#3A7242",
-    borderRadius: RADIUS.xs, padding: "1px 5px", flexShrink: 0
+    borderRadius: RADIUS.pill, padding: "0 6px", flexShrink: 0
   }}>≈ good enough</span>;
 }
 
@@ -610,9 +610,9 @@ function ZenDumpReview({tasks, pris, T, onSubmit, onDismiss, parsing}) {
         </div>
         {/* Footer */}
         <div style={{padding:"12px 20px",borderTop:`1px solid ${T.brd}`,display:"flex",gap:10}}>
-          <button onClick={onDismiss} style={{flex:1,padding:"10px",borderRadius:RADIUS.md,border:`1px solid ${T.brd}`,background:"transparent",fontSize:NC_TYPE.meta,fontFamily:"system-ui",fontWeight:600,color:T.tSoft,cursor:"pointer"}}>Dismiss</button>
+          <button onClick={onDismiss} style={{flex:1,padding:"10px",borderRadius:RADIUS.pill,border:`1px solid ${T.brd}`,background:"transparent",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,fontWeight:600,color:T.tSoft,cursor:"pointer"}}>Dismiss</button>
           <button onClick={handleSubmit} disabled={items.length===0 || submitting}
-            style={{flex:2,padding:"10px",borderRadius:RADIUS.md,border:"none",background:items.length>0&&!submitting?T.text:T.brd,fontSize:NC_TYPE.meta,fontFamily:"system-ui",fontWeight:700,color:items.length>0&&!submitting?T.bg:T.tFaint,cursor:items.length>0&&!submitting?"pointer":"default"}}>
+            style={{flex:2,padding:"10px",borderRadius:RADIUS.pill,border:"none",background:items.length>0&&!submitting?T.text:T.brd,fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,fontWeight:700,color:items.length>0&&!submitting?T.bg:T.tFaint,cursor:items.length>0&&!submitting?"pointer":"default"}}>
             {submitting ? "Adding..." : `Add ${items.length} item${items.length===1?"":"s"}`}
           </button>
         </div>
@@ -622,7 +622,7 @@ function ZenDumpReview({tasks, pris, T, onSubmit, onDismiss, parsing}) {
 }
 
 function TabBtn({active, onClick, icon, label, T}) {
-  return <button onClick={onClick} style={{flex:1,width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"10px 6px",border:"none",borderRadius:RADIUS.sm,background:active?T.card:"transparent",boxShadow:active?"0 2px 12px rgba(0,0,0,0.06)":"none",color:active?T.text:T.tSoft,fontSize:NC_TYPE.small,fontWeight:active?600:400,cursor:"pointer",fontFamily:"system-ui",transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",whiteSpace:"nowrap"}}>{icon}{label}</button>;
+  return <button onClick={onClick} style={{flex:1,width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"10px 6px",border:"none",borderRadius:RADIUS.sm,background:active?T.card:"transparent",boxShadow:active?"0 2px 12px rgba(0,0,0,0.06)":"none",color:active?T.text:T.tSoft,fontSize:NC_TYPE.small,fontWeight:active?600:400,cursor:"pointer",fontFamily:NC_FONT_STACK,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",whiteSpace:"nowrap"}}>{icon}{label}</button>;
 }
 
 function PriEditor({T, onAdd, onClose}) {
@@ -635,8 +635,8 @@ function PriEditor({T, onAdd, onClose}) {
         {PALETTE.map(x => <button key={x} onClick={()=>setC(x)} style={{width:28,height:28,borderRadius:"50%",background:x,border:c===x?`3px solid ${T.text}`:"2px solid transparent",cursor:"pointer"}}/>)}
       </div>
       <div style={{display:"flex",gap:SP.sm}}>
-        <button onClick={onClose} style={{flex:1,padding:10,borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.card,cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:"system-ui",color:T.tSoft}}>Cancel</button>
-        <button onClick={()=>{if(l.trim()) onAdd(l.trim(), c);}} style={{flex:1,padding:10,borderRadius:RADIUS.sm,border:"none",background:c,color:textOnColor(c),cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:"system-ui",opacity:l.trim()?1:.4}}>Add</button>
+        <button onClick={onClose} style={{flex:1,padding:10,borderRadius:RADIUS.pill,border:`1px solid ${T.brd}`,background:T.card,cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,color:T.tSoft}}>Cancel</button>
+        <button onClick={()=>{if(l.trim()) onAdd(l.trim(), c);}} style={{flex:1,padding:10,borderRadius:RADIUS.pill,border:"none",background:c,color:textOnColor(c),cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,opacity:l.trim()?1:.4}}>Add</button>
       </div>
     </div>
   );
@@ -675,8 +675,8 @@ function JustStartTimer({color, T, onDone, onMinimize}) {
         </text>
       </svg>
       <div>
-        <p style={{fontSize:NC_TYPE.meta,fontWeight:700,color,margin:0,fontFamily:"system-ui"}}>Just start — 2 minutes</p>
-        <p style={{fontSize:NC_TYPE.small,color:T.tSoft,margin:0,fontFamily:"system-ui"}}>{secs > 0 ? "You only have to do this long." : "Great start! Keep going 🎉"}</p>
+        <p style={{fontSize:NC_TYPE.meta,fontWeight:700,color,margin:0,fontFamily:NC_FONT_STACK}}>Just start — 2 minutes</p>
+        <p style={{fontSize:NC_TYPE.small,color:T.tSoft,margin:0,fontFamily:NC_FONT_STACK}}>{secs > 0 ? "You only have to do this long." : "Great start! Keep going 🎉"}</p>
       </div>
       <div style={{marginLeft:"auto",display:"flex",flexDirection:"column",gap:SP.xs}}>
         {onMinimize && <button onClick={onMinimize} style={{background:"none",border:"none",cursor:"pointer",padding:SP.xs,opacity:.5}} title="Minimize">–</button>}
@@ -744,12 +744,12 @@ function BodyDoubleTimer({T, minimized, onMinimize, onRestore, onClose}) {
             <p style={{fontSize:NC_TYPE.meta,color:T.tSoft,fontFamily:"system-ui",margin:"0 0 16px"}}>Work alongside a virtual partner. Pick your session length:</p>
             <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:12}}>
               {PRESETS.map((o, i) => (
-                <button key={o} onClick={()=>start(o)} style={{flex:1,padding:"12px 8px",borderRadius:RADIUS.md,border:`1.5px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:"system-ui",color:T.text}}>{LABELS[i]}</button>
+                <button key={o} onClick={()=>start(o)} style={{flex:1,padding:"12px 8px",borderRadius:RADIUS.pill,border:`1.5px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,color:T.text}}>{LABELS[i]}</button>
               ))}
             </div>
             <div style={{display:"flex",gap:SP.sm,alignItems:"center"}}>
-              <input type="number" min="1" max="480" value={customMin} onChange={e=>setCustomMin(e.target.value)} placeholder="Custom minutes" onKeyDown={e=>{if(e.key==="Enter")startCustom();}} style={{flex:1,padding:"10px 12px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:NC_TYPE.meta,fontFamily:"system-ui",outline:"none"}}/>
-              <button onClick={startCustom} disabled={!customMin||parseInt(customMin)<1} style={{padding:"10px 16px",borderRadius:RADIUS.sm,border:"none",background:customMin&&parseInt(customMin)>0?"#3A7098":T.brd,color:"#fff",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:"system-ui",opacity:customMin&&parseInt(customMin)>0?1:.4}}>Go</button>
+              <input type="number" min="1" max="480" value={customMin} onChange={e=>setCustomMin(e.target.value)} placeholder="Custom minutes" onKeyDown={e=>{if(e.key==="Enter")startCustom();}} style={{flex:1,padding:"10px 12px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,outline:"none"}}/>
+              <button onClick={startCustom} disabled={!customMin||parseInt(customMin)<1} style={{padding:"10px 16px",borderRadius:RADIUS.pill,border:"none",background:customMin&&parseInt(customMin)>0?"#3A7098":T.brd,color:"#fff",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,opacity:customMin&&parseInt(customMin)>0?1:.4}}>Go</button>
             </div>
           </>
         ) : (
@@ -762,11 +762,11 @@ function BodyDoubleTimer({T, minimized, onMinimize, onRestore, onClose}) {
               <text x={70} y={66} textAnchor="middle" fontSize={22} fill={T.text} fontFamily="system-ui" fontWeight={700}>{fmt(secs)}</text>
               <text x={70} y={84} textAnchor="middle" fontSize={10} fill={T.tFaint} fontFamily="system-ui">{done?"Complete!":"remaining"}</text>
             </svg>
-            <p style={{fontSize:NC_TYPE.meta,color:T.tSoft,fontFamily:"system-ui",margin:"0 0 14px"}}>{done ? "Session complete! Great work 🎉" : "You're not alone. Keep going."}</p>
+            <p style={{fontSize:NC_TYPE.meta,color:T.tSoft,fontFamily:NC_FONT_STACK,margin:"0 0 14px"}}>{done ? "Session complete! Great work 🎉" : "You're not alone. Keep going."}</p>
             <div style={{display:"flex",gap:SP.sm}}>
-              {!done && <button onClick={()=>{clearInterval(tickRef.current);setRunning(p=>!p);}} style={{flex:1,padding:10,borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:"system-ui",color:T.tSoft}}>{running?"Pause":"Resume"}</button>}
-              <button onClick={()=>{clearInterval(tickRef.current);setDur(null);setDone(false);}} style={{flex:1,padding:10,borderRadius:RADIUS.sm,border:"none",background:T.bgW,cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:"system-ui",color:T.tSoft}}>Reset</button>
-              <button onClick={onClose} style={{flex:1,padding:10,borderRadius:RADIUS.sm,border:"none",background:"#3A7098",color:"#fff",cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:"system-ui",fontWeight:600}}>Done</button>
+              {!done && <button onClick={()=>{clearInterval(tickRef.current);setRunning(p=>!p);}} style={{flex:1,padding:10,borderRadius:RADIUS.pill,border:`1px solid ${T.brd}`,background:T.bgW,cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,color:T.tSoft}}>{running?"Pause":"Resume"}</button>}
+              <button onClick={()=>{clearInterval(tickRef.current);setDur(null);setDone(false);}} style={{flex:1,padding:10,borderRadius:RADIUS.pill,border:"none",background:T.bgW,cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,color:T.tSoft}}>Reset</button>
+              <button onClick={onClose} style={{flex:1,padding:10,borderRadius:RADIUS.pill,border:"none",background:"#3A7098",color:"#fff",cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,fontWeight:600}}>Done</button>
             </div>
           </>
         )}
@@ -790,10 +790,10 @@ function BrainDump({T, pris, onCapture, onClose}) {
     <div style={{position:"fixed",inset:0,zIndex:8600,background:"rgba(0,0,0,0.48)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:RADIUS.md,padding:"24px 20px",maxWidth:480,width:"90%",maxHeight:"86vh",overflowY:"auto",boxShadow:ELEV[4]}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-          <h3 style={{fontSize:15,fontWeight:600,margin:0,fontFamily:"system-ui",display:"flex",alignItems:"center",gap:SP.sm}}><IC.Brain s={16} c={T.text}/>Brain Dump</h3>
+          <h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:0,fontFamily:NC_FONT_STACK,display:"flex",alignItems:"center",gap:SP.sm}}><IC.Brain s={16} c={T.text}/>Brain Dump</h3>
           <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:NC_TYPE.title,color:T.tSoft}}>✕</button>
         </div>
-        <p style={{fontSize:NC_TYPE.meta,color:T.tSoft,fontFamily:"system-ui",margin:"0 0 14px",lineHeight:1.5}}>
+        <p style={{fontSize:NC_TYPE.meta,color:T.tSoft,fontFamily:NC_FONT_STACK,margin:"0 0 14px",lineHeight:1.5}}>
           Stream of consciousness — just type everything on your mind. AI will sort, prioritize, and break it into tasks.
         </p>
         <textarea
@@ -808,12 +808,12 @@ function BrainDump({T, pris, onCapture, onClose}) {
           rows={9}
           style={{width:"100%",padding:"14px 16px",borderRadius:RADIUS.md,border:`1.5px solid ${T.brd}`,outline:"none",fontSize:NC_TYPE.body,fontFamily:"Georgia,serif",background:T.bgW,color:T.text,lineHeight:1.65,resize:"none",boxSizing:"border-box"}}
         />
-        <p style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:"system-ui",margin:"8px 0 12px",textAlign:"center"}}>
+        <p style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"8px 0 12px",textAlign:"center"}}>
           Enter to send · Shift+Enter for new line · Esc to close
         </p>
         <div style={{display:"flex",gap:SP.sm}}>
-          <button onClick={onClose} style={{flex:1,padding:SP.md,borderRadius:RADIUS.md,border:`1px solid ${T.brd}`,background:"transparent",cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:"system-ui",color:T.tSoft}}>Cancel</button>
-          <button onClick={handleSubmit} disabled={!text.trim()} style={{flex:2,padding:SP.md,borderRadius:RADIUS.md,border:"none",background:T.text,color:T.bg||"#fff",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:"system-ui",opacity:text.trim()?1:.4}}>
+          <button onClick={onClose} style={{flex:1,padding:SP.md,borderRadius:RADIUS.pill,border:`1px solid ${T.brd}`,background:"transparent",cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,color:T.tSoft}}>Cancel</button>
+          <button onClick={handleSubmit} disabled={!text.trim()} style={{flex:2,padding:SP.md,borderRadius:RADIUS.pill,border:"none",background:T.text,color:T.bg||"#fff",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,opacity:text.trim()?1:.4}}>
             Send to AI ✦
           </button>
         </div>
@@ -829,10 +829,10 @@ function OverwhelmBanner({count, threshold, onShowAll, T}) {
     <div style={{background:pBg("#E0B472"),border:"1px solid #E0B47280",borderRadius:RADIUS.md,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
       <span style={{fontSize:18}}>🌊</span>
       <div style={{flex:1}}>
-        <p style={{fontSize:NC_TYPE.meta,fontWeight:700,margin:0,fontFamily:"system-ui",color:"#8A6020"}}>Overwhelm mode</p>
-        <p style={{fontSize:NC_TYPE.small,margin:0,fontFamily:"system-ui",color:"#8A6020"}}>Showing top 3 of {count}. Just focus on these.</p>
+        <p style={{fontSize:NC_TYPE.meta,fontWeight:700,margin:0,fontFamily:NC_FONT_STACK,color:"#8A6020"}}>Overwhelm mode</p>
+        <p style={{fontSize:NC_TYPE.small,margin:0,fontFamily:NC_FONT_STACK,color:"#8A6020"}}>Showing top 3 of {count}. Just focus on these.</p>
       </div>
-      <button onClick={onShowAll} style={{fontSize:10,fontFamily:"system-ui",color:"#8A6020",background:"none",border:"1px solid #8A602040",borderRadius:RADIUS.sm,padding:"4px 8px",cursor:"pointer"}}>Show all</button>
+      <button onClick={onShowAll} style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:"#8A6020",background:"none",border:"1px solid #8A602040",borderRadius:RADIUS.pill,padding:"4px 10px",cursor:"pointer"}}>Show all</button>
     </div>
   );
 }
@@ -902,7 +902,7 @@ function PostItStack({tasks, pris, T, open, onToggle, onUncomp, onClone, sidebar
             </div>
           );
         })}
-        <span style={{position:"absolute",bottom:-4,left:-4,background:T.text,color:T.bg||"#fff",borderRadius:RADIUS.sm,fontSize:NC_TYPE.small,fontFamily:"system-ui",fontWeight:700,padding:"1px 5px",zIndex:10,lineHeight:1.4}}>{tasks.length}</span>
+        <span style={{position:"absolute",bottom:-4,left:-4,background:T.text,color:T.bg||"#fff",borderRadius:RADIUS.pill,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:700,padding:"1px 6px",zIndex:10,lineHeight:1.4}}>{tasks.length}</span>
       </button>
 
       {/* View toggle — visible on launchpad below the stacked cards */}
@@ -1008,14 +1008,14 @@ function PostItStack({tasks, pris, T, open, onToggle, onUncomp, onClone, sidebar
                 <p style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:"system-ui",margin:0}}>{tasks.length} task{tasks.length!==1?"s":""} conquered</p>
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <button onClick={()=>setViewMode("stack")} title="Stack view" style={{background:viewMode==="stack"?T.text:(T.card||"#fff"),border:`1px solid ${T.brd}`,borderRadius:RADIUS.sm,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:SP.xs,fontSize:NC_TYPE.small,fontFamily:"system-ui",fontWeight:600,color:viewMode==="stack"?(T.bg||"#fff"):T.tSoft,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}><IC.Stack s={12} c={viewMode==="stack"?(T.bg||"#fff"):T.tSoft}/>Stack</button>
-                <button onClick={()=>setViewMode("board")} title="Board view" style={{background:viewMode==="board"?T.text:(T.card||"#fff"),border:`1px solid ${T.brd}`,borderRadius:RADIUS.sm,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:SP.xs,fontSize:NC_TYPE.small,fontFamily:"system-ui",fontWeight:600,color:viewMode==="board"?(T.bg||"#fff"):T.tSoft,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}><IC.Bulk s={12} c={viewMode==="board"?(T.bg||"#fff"):T.tSoft}/>Board</button>
-                <button onClick={onToggle} style={{background:T.bgW,border:`1px solid ${T.brd}`,borderRadius:RADIUS.sm,padding:"6px 14px",cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:"system-ui",fontWeight:600,color:T.tSoft}}>Close</button>
+                <button onClick={()=>setViewMode("stack")} title="Stack view" style={{background:viewMode==="stack"?T.text:(T.card||"#fff"),border:`1px solid ${T.brd}`,borderRadius:RADIUS.pill,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:SP.xs,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:viewMode==="stack"?(T.bg||"#fff"):T.tSoft,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}><IC.Stack s={12} c={viewMode==="stack"?(T.bg||"#fff"):T.tSoft}/>Stack</button>
+                <button onClick={()=>setViewMode("board")} title="Board view" style={{background:viewMode==="board"?T.text:(T.card||"#fff"),border:`1px solid ${T.brd}`,borderRadius:RADIUS.pill,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:SP.xs,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:viewMode==="board"?(T.bg||"#fff"):T.tSoft,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}><IC.Bulk s={12} c={viewMode==="board"?(T.bg||"#fff"):T.tSoft}/>Board</button>
+                <button onClick={onToggle} style={{background:T.bgW,border:`1px solid ${T.brd}`,borderRadius:RADIUS.pill,padding:"6px 14px",cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,fontWeight:600,color:T.tSoft}}>Close</button>
               </div>
             </div>
             <div style={{display:"flex",gap:SP.xs,marginBottom:14,flexWrap:"wrap",position:"sticky",top:48,background:T.bg||"#f5f0e8",paddingBottom:6,zIndex:4}}>
               {[["completed","Recent"],["priority","Priority"],["speed","Fastest"],["entered","Date added"]].map(([k,l])=>(
-                <button key={k} onClick={()=>setSortBy(k)} style={{padding:"4px 10px",borderRadius:RADIUS.sm,border:`1px solid ${sortBy===k?T.text:T.brd}`,background:sortBy===k?T.text:"transparent",color:sortBy===k?(T.bg||"#fff"):T.tSoft,fontSize:NC_TYPE.small,fontFamily:"system-ui",fontWeight:600,cursor:"pointer"}}>{l}</button>
+                <button key={k} onClick={()=>setSortBy(k)} style={{padding:"4px 12px",borderRadius:RADIUS.pill,border:`1px solid ${sortBy===k?T.text:T.brd}`,background:sortBy===k?T.text:"transparent",color:sortBy===k?(T.bg||"#fff"):T.tSoft,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,cursor:"pointer"}}>{l}</button>
               ))}
             </div>
             {viewMode === "board" ? (
@@ -1067,7 +1067,7 @@ function PostItStack({tasks, pris, T, open, onToggle, onUncomp, onClone, sidebar
                       onMouseEnter={e=>{e.currentTarget.style.transform="rotate(0deg) scale(1.02)";e.currentTarget.style.zIndex=100;e.currentTarget.style.marginTop=i===0?"0":"0";}}
                       onMouseLeave={e=>{e.currentTarget.style.transform=`rotate(${rot}deg)`;e.currentTarget.style.zIndex=i+1;e.currentTarget.style.marginTop=i===0?"0":"-8px";}}
                     >
-                      <p style={{fontSize:15,lineHeight:1.55,margin:"0 0 10px",color:T.text,fontFamily:"Georgia,serif",wordBreak:"break-word"}}>
+                      <p style={{fontSize:NC_TYPE.body,lineHeight:1.55,margin:"0 0 10px",color:T.text,fontFamily:"Georgia,serif",wordBreak:"break-word"}}>
                         {task.goodEnough && <span style={{fontSize:10,opacity:.6,marginRight:3}}>≈</span>}
                         {task.text}
                       </p>

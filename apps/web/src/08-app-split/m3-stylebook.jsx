@@ -154,5 +154,16 @@ export const M3_SPEC = {
   avatar:      { borderRadius: M3_SHAPE.full },
 };
 
-export const M3 = { searchField, filterChip, listRow, button, card, M3_EXPECT, M3_SPEC, M3_SHAPE };
+// ─── M3_SCALE — the canonical value sets the universal override snaps EVERY element to ─
+// "Override all style values with the corresponding master value" = for any element,
+// each raw style value is replaced by the nearest value on these scales. This is what
+// makes coverage total (every element, not a hand-picked subset). Radius is pill-aware:
+// anything already fully-round stays round; everything else snaps to the finite scale.
+export const M3_SCALE = {
+  radius: [4, 8, 12],                         // + pill (detected, not in list); 1–3px left as hairlines
+  type:   [11, 12, 14, 16, 18, 22, 28, 36],   // full type scale incl. display sizes
+  space:  [0, 4, 8, 12, 16, 24, 32],          // 4-pt spacing grid (padding + gap)
+};
+
+export const M3 = { searchField, filterChip, listRow, button, card, M3_EXPECT, M3_SPEC, M3_SCALE, M3_SHAPE };
 export default M3;

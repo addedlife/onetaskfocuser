@@ -3809,7 +3809,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 const cardColor0 = cp0.isShaila ? "#C8A84C" : cp0.color;
                 const CK = 28;
                 return (
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"0 2px",height:CK}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"0 2px",height:40}}>
                     <div style={{display:"flex",alignItems:"baseline",gap:10}}>
                       <span style={{fontSize:CK,fontFamily:NC_FONT_STACK,fontWeight:300,color:C.muted,letterSpacing:3,lineHeight:1,display:"block"}}>
                         {clockTime.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
@@ -3817,20 +3817,20 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       {todayCompCount > 0 && <span style={{fontSize:11,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.faint,letterSpacing:.3,display:"flex",alignItems:"center",gap:4}}>{suiteIcon("done",11)} {todayCompCount} today</span>}
                     </div>
                     <div style={{display:"flex",alignItems:"center",gap:4}}>
-                      {AS.legacyCompleteUI && <button onClick={()=>legacyCompTask(curT.id)} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",width:CK,height:CK,opacity:.35,transition:"opacity 0.2s"}} onMouseEnter={e=>e.currentTarget.style.opacity=0.9} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Clock s={CK-4} c={cardColor0}/></button>}
-                      <button onClick={()=>setZen(true)} title="Enter Zen mode" style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",width:CK+8,height:CK+8,opacity:.45,transition:"opacity 0.2s"}} onMouseEnter={e=>e.currentTarget.style.opacity=.95} onMouseLeave={e=>e.currentTarget.style.opacity=.45}><IC.Zen s={CK+4} c={cardColor0}/></button>
-                      <button onClick={()=>compTask(curT.id)} title="Done" style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",width:CK,height:CK,opacity:.55,transition:"opacity 0.2s"}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.55}>
+                      {AS.legacyCompleteUI && <button onClick={()=>legacyCompTask(curT.id)} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",width:40,height:40,borderRadius:RADIUS.pill,opacity:.35,transition:"opacity 0.2s"}} onMouseEnter={e=>e.currentTarget.style.opacity=0.9} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Clock s={CK-4} c={cardColor0}/></button>}
+                      <button onClick={()=>setZen(true)} title="Enter Zen mode" style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",width:40,height:40,borderRadius:RADIUS.pill,opacity:.45,transition:"opacity 0.2s"}} onMouseEnter={e=>e.currentTarget.style.opacity=.95} onMouseLeave={e=>e.currentTarget.style.opacity=.45}><IC.Zen s={CK+4} c={cardColor0}/></button>
+                      <button onClick={()=>compTask(curT.id)} title="Done" style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",width:40,height:40,borderRadius:RADIUS.pill,opacity:.55,transition:"opacity 0.2s"}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.55}>
                         <IC.Check s={CK} c={cardColor0}/>
                       </button>
                     </div>
                   </div>
                 );
               })() : (
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"0 2px",height:28}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"0 2px",height:40}}>
                   <span style={{fontSize:28,fontFamily:NC_FONT_STACK,fontWeight:300,color:C.muted,letterSpacing:3,lineHeight:1,display:"block"}}>
                     {clockTime.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                   </span>
-                  <div style={{width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",opacity:.3}}><IC.Check s={28} c={C.divider}/></div>
+                  <div style={{width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",opacity:.3}}><IC.Check s={28} c={C.divider}/></div>
                 </div>
               )}
 
@@ -3850,7 +3850,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 return (
                   <>
                     {/* Card — full column width */}
-                    <div style={{background:cardColor,borderRadius:"clamp(22px,4vw,32px)",padding:"clamp(28px,5vh,56px) clamp(24px,4vw,48px)",width:"100%",minHeight:"clamp(130px,20vh,260px)",textAlign:"center",boxShadow:`0 12px 50px ${cardColor}35`,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",transform:justComp?"scale(0.94)":"scale(1)",opacity:justComp?.3:1,animation:"ot-fade 0.3s",position:"relative",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"hidden",gap:8}}>
+                    <div style={{background:cardColor,borderRadius:28,padding:"clamp(28px,5vh,56px) clamp(24px,4vw,48px)",width:"100%",minHeight:"clamp(130px,20vh,260px)",textAlign:"center",boxShadow:`0 12px 50px ${cardColor}35`,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",transform:justComp?"scale(0.94)":"scale(1)",opacity:justComp?.3:1,animation:"ot-fade 0.3s",position:"relative",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",overflow:"hidden",gap:8}}>
                       {showRip && <Ripple color={_fc}/>}
                       {/* Completion flash overlay */}
                       {compFlash && <div style={{position:"absolute",inset:0,borderRadius:"inherit",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10,animation:"ot-comp-flash 0.6s forwards",pointerEvents:"none",background:cardColor}}><span style={{fontSize:72,color:_fc,lineHeight:1,display:"flex",alignItems:"center"}}>{suiteIcon("done",72)}</span></div>}
@@ -3859,7 +3859,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       {editId === curT.id ? (
                         <div style={{display:"flex",gap:8,width:"100%"}} onFocus={pauseZ} onBlur={resumeZ}>
                           <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(curT.id);if(e.key==="Escape")setEditId(null);}} style={{flex:1,fontSize:"clamp(16px,3vw,22px)",fontFamily:"Georgia,serif",border:`2px solid ${_fcBrd}`,borderRadius:RADIUS.md,padding:"10px 16px",outline:"none",color:_fc,background:_fcBgL}}/>
-                          <button onClick={()=>saveEd(curT.id)} style={{background:_fcBg,color:_fc,border:"none",borderRadius:RADIUS.md,padding:"10px 18px",cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:NC_FONT_STACK}}>Save</button>
+                          <button onClick={()=>saveEd(curT.id)} style={{background:_fcBg,color:_fc,border:"none",borderRadius:RADIUS.pill,padding:"10px 18px",cursor:"pointer",fontSize:NC_TYPE.body,fontWeight:600,fontFamily:NC_FONT_STACK}}>Save</button>
                         </div>
                       ) : (
                         <div onClick={()=>startEd(curT)} style={{cursor:"text",maxHeight:"100%",overflow:"hidden",width:"100%"}}>
@@ -3882,14 +3882,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                     {/* Park + Reflect quick-action row */}
                     <div style={{display:"flex",gap:8,justifyContent:"center",width:"100%"}}>
                       <button onClick={()=>parkTask(curT.id)}
-                        style={{flex:1,padding:"7px 0",fontSize:11,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.faint,background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,cursor:"pointer",letterSpacing:.3,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}
+                        style={{flex:1,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.faint,background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.pill,cursor:"pointer",letterSpacing:.3,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}
                         onMouseEnter={e=>{e.currentTarget.style.borderColor=C.divider;e.currentTarget.style.color=C.muted;}}
                         onMouseLeave={e=>{e.currentTarget.style.borderColor=C.divider;e.currentTarget.style.color=C.faint;}}>
                         💤 Park til tomorrow
                       </button>
                       {getTaskAgeHours(curT) >= 72 && (
                         <button onClick={()=>setShowBlockReflect(true)}
-                          style={{flex:1,padding:"7px 0",fontSize:11,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.faint,background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,cursor:"pointer",letterSpacing:.3,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}
+                          style={{flex:1,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.faint,background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.pill,cursor:"pointer",letterSpacing:.3,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}
                           onMouseEnter={e=>{e.currentTarget.style.borderColor=C.divider;e.currentTarget.style.color=C.muted;}}
                           onMouseLeave={e=>{e.currentTarget.style.borderColor=C.divider;e.currentTarget.style.color=C.faint;}}>
                           🔍 What's in the way?
@@ -3958,13 +3958,13 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   <div data-input-area="true" style={{width:"100%",animation:"ot-fade 0.2s"}}>
                     <form onSubmit={addTask} style={{display:"flex",gap:8,alignItems:"flex-end"}}>
                       <textarea ref={inRef} value={newTask} onChange={e=>{setNewTask(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";}} placeholder={selPri==="shaila"?"Who + what shaila?":ph} autoFocus onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addTask(e);}if(e.key==="Escape"){setSelPri(null);setNewTask("");}}} rows={1} style={{flex:1,padding:"clamp(10px,1.5vw,14px) clamp(12px,2vw,18px)",fontSize:"clamp(14px,2vw,16px)",border:`2px solid ${gP(pris,selPri).color}`,borderRadius:RADIUS.md,outline:"none",background:C.bg,color:C.text,fontFamily:"Georgia,serif",resize:"none",overflow:"hidden",minHeight:44,lineHeight:1.4}}/>
-                      <button type="button" onClick={()=>setEntryEnergy(e=>e===null?"high":e==="high"?"low":null)} title={entryEnergy?`Energy: ${entryEnergy}`:"Set energy"} style={{width:44,height:44,borderRadius:RADIUS.md,border:`1.5px solid ${entryEnergy?C.accent:C.divider}`,background:entryEnergy==="high"?`${C.accent}18`:entryEnergy==="low"?`${C.muted}18`:C.bgSoft,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}>
+                      <button type="button" onClick={()=>setEntryEnergy(e=>e===null?"high":e==="high"?"low":null)} title={entryEnergy?`Energy: ${entryEnergy}`:"Set energy"} style={{width:40,height:40,borderRadius:RADIUS.pill,border:`1.5px solid ${entryEnergy?C.accent:C.divider}`,background:entryEnergy==="high"?`${C.accent}18`:entryEnergy==="low"?`${C.muted}18`:C.bgSoft,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}>
                         {entryEnergy==="high"?"⚡":entryEnergy==="low"?"🌊":"·"}
                       </button>
-                      <button type="button" onClick={addTask} style={{background:gP(pris,selPri).color,border:"none",borderRadius:RADIUS.md,width:44,height:44,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}><IC.Plus s={16} c={textOnColor(gP(pris,selPri).color)}/></button>
+                      <button type="button" onClick={addTask} style={{background:gP(pris,selPri).color,border:"none",borderRadius:RADIUS.pill,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}><IC.Plus s={16} c={textOnColor(gP(pris,selPri).color)}/></button>
                     </form>
                     {newTask.trim().length>3 && (
-                      <button onClick={()=>{const txt=newTask.trim();if(!txt)return;setNewTask("");setSelPri(null);setShowBD({id:"__new__",text:txt,priority:selPri});}} style={{marginTop:6,width:"100%",padding:"6px 0",fontSize:11,fontFamily:NC_FONT_STACK,fontWeight:700,color:priText(gP(pris,selPri).color),background:"none",border:`1px dashed ${gP(pris,selPri).color}60`,borderRadius:RADIUS.sm,cursor:"pointer",letterSpacing:.5,opacity:.85}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.75}>
+                      <button onClick={()=>{const txt=newTask.trim();if(!txt)return;setNewTask("");setSelPri(null);setShowBD({id:"__new__",text:txt,priority:selPri});}} style={{marginTop:6,width:"100%",padding:"6px 0",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:700,color:priText(gP(pris,selPri).color),background:"none",border:`1px dashed ${gP(pris,selPri).color}60`,borderRadius:RADIUS.pill,cursor:"pointer",letterSpacing:.5,opacity:.85}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.75}>
                         ✦ Shatter into crystals
                       </button>
                     )}
@@ -3974,7 +3974,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
               {/* Queue shortcut — direct access from tasks */}
               <div style={{textAlign:"center",paddingBottom:8}}>
-                <button onClick={()=>switchTab("queue")} style={{background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.md,padding:"5px 16px",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:12,fontWeight:600,color:C.faint,letterSpacing:.5,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}
+                <button onClick={()=>switchTab("queue")} style={{background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.pill,padding:"0 16px",height:32,display:"inline-flex",alignItems:"center",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:NC_TYPE.meta,fontWeight:600,color:C.faint,letterSpacing:.5,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}
                   onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.muted;}}
                   onMouseLeave={e=>{e.currentTarget.style.color=C.faint;e.currentTarget.style.borderColor=C.divider;}}>
                   Queue · {effectiveCount}
@@ -4021,7 +4021,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               return (
                 <div style={{position:"fixed",top:"clamp(12px,2vh,20px)",left:(sidebarW + 12) + "px",zIndex:200,width:"fit-content",height:"fit-content"}}>
                   {lpMenu && <div onClick={()=>setLpMenu(false)} style={{position:"fixed",inset:0,zIndex:9998}}/>}
-                  <button onClick={()=>setLpMenu(p=>!p)} style={{width:36,height:36,borderRadius:RADIUS.sm,background:T.glow?`${C.bg}cc`:C.bg,border:`1px solid ${C.divider}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:T.glow?`0 0 12px ${C.divider}80`:T.shadow,transition:"box-shadow 0.2s",position:"relative",zIndex:10000}}
+                  <button onClick={()=>setLpMenu(p=>!p)} style={{width:40,height:40,borderRadius:RADIUS.pill,background:T.glow?`${C.bg}cc`:C.bg,border:`1px solid ${C.divider}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:T.glow?`0 0 12px ${C.divider}80`:T.shadow,transition:"box-shadow 0.2s",position:"relative",zIndex:10000}}
                     onMouseEnter={e=>{e.currentTarget.style.boxShadow=T.glow?`0 0 20px ${C.divider}`:"0 4px 16px rgba(0,0,0,0.12)";}}
                     onMouseLeave={e=>{e.currentTarget.style.boxShadow=T.glow?`0 0 12px ${C.divider}80`:T.shadow;}}>
                     <IC.List s={16} c={C.muted}/>
@@ -4031,9 +4031,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       onClick={()=>setLpMenu(false)}>
                       {menuSections.map((sec,si)=>(
                         <div key={si}>
-                          <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,color:C.faint,padding:"8px 16px 4px",fontFamily:NC_FONT_STACK}}>{sec.cat}</div>
+                          <div style={{fontSize:NC_TYPE.small,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,color:C.faint,padding:"8px 16px 4px",fontFamily:NC_FONT_STACK}}>{sec.cat}</div>
                           {sec.items.map((item,ii)=>(
-                            <button key={ii} onClick={item.action} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"7px 16px",background:"none",border:"none",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,color:C.text,textAlign:"left",transition:"background 0.1s"}}
+                            <button key={ii} onClick={item.action} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"7px 16px",background:"none",border:"none",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:NC_TYPE.body,color:C.text,textAlign:"left",transition:"background 0.1s"}}
                               onMouseEnter={e=>{e.currentTarget.style.background=C.bgSoft;}} onMouseLeave={e=>{e.currentTarget.style.background="none";}}>
                               <span style={{width:20,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{item.icon}</span>
                               {item.label}
