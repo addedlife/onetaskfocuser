@@ -2812,39 +2812,45 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   {suiteIcon("add", 17)} <span>New task</span>
                 </button>
               ))}
-              <div ref={taskListRef} style={ncTaskList}>
+              <div ref={taskListRef} style={{ ...ncTaskList, ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }) }}>
               {primaryTasks.length ? primaryTasks.map(t => {
                 const pri = gP(priorities, t.priority);
                 const priColor = pri?.color || C.accent || "#7EB0DE";
                 const isEditing = editingTaskId === t.id;
                 const actionsOpen = openTaskActionsId === t.id;
                 const displayText = nerveDisplaySummary(t, "Untitled task");
-                return (
-                  <div key={t.id} data-nc-task-row="true" className="nc-action-row" style={{ display: "grid", gridTemplateColumns: touchLayout ? (dense ? "16px minmax(0,1fr) 32px" : "16px minmax(0,1fr) 40px") : "16px minmax(0,1fr)", alignItems: dense ? "center" : "start", padding: dense ? "1px 16px 1px 0" : "7px 16px 7px 0", gap: dense?6:8, minHeight: dense ? 16 : 34 }}>
-                    {/* Priority dot */}
-                    <span style={{ width: dense?6:8, height: dense?6:8, borderRadius: RADIUS.pill, background: priColor, flexShrink: 0, marginLeft: dense?5:0, marginTop: dense ? 0 : 5, alignSelf: dense ? "center" : "flex-start" }} />
-                    {/* Text — click to edit inline */}
-                    <div style={{ flex: 1, minWidth: 0, paddingTop: dense?0:1 }}>
-                      {isEditing ? (
-                        <textarea value={editText} autoFocus rows={2}
-                          onChange={e => setEditText(e.target.value)}
-                          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (editText.trim()) onEditTask?.(t.id, editText.trim()); setEditingTaskId(null); } if (e.key === "Escape") setEditingTaskId(null); }}
-                          onBlur={() => { if (editText.trim() && editText !== t.text) onEditTask?.(t.id, editText.trim()); setEditingTaskId(null); }}
-                          style={{ width: "100%", boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${priColor}`, background: C.bgSoft, color: C.text, padding: "6px 8px", fontSize: ncType.body, fontWeight: 400, fontFamily: NC_FONT_STACK, resize: "none", outline: "none", lineHeight: ncType.line }} />
-                      ) : (
-                        <span onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }}
-                          title="Click to edit"
-                          style={{ display: "block", fontSize: dense ? ncType.meta : ncType.body, fontWeight: "var(--nc-font-weight-normal, 400)", lineHeight: dense ? 1.12 : ncType.line, color: C.text, wordBreak: "break-word", cursor: "text" }}>{displayText}</span>
-                      )}
+                // Editing → inline textarea (unchanged behavior). Otherwise a genuine
+                // md-list-item; hover Done/Delete stay a light-DOM sibling inside the
+                // position:relative .nc-action-row wrapper (avoids shadow-DOM slotting).
+                if (isEditing) {
+                  return (
+                    <div key={t.id} data-nc-task-row="true" style={{ display: "grid", gridTemplateColumns: "16px minmax(0,1fr)", alignItems: "start", padding: "7px 16px 7px 0", gap: 8 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, background: priColor, flexShrink: 0, marginTop: 7 }} />
+                      <textarea value={editText} autoFocus rows={2}
+                        onChange={e => setEditText(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (editText.trim()) onEditTask?.(t.id, editText.trim()); setEditingTaskId(null); } if (e.key === "Escape") setEditingTaskId(null); }}
+                        onBlur={() => { if (editText.trim() && editText !== t.text) onEditTask?.(t.id, editText.trim()); setEditingTaskId(null); }}
+                        style={{ width: "100%", boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${priColor}`, background: C.bgSoft, color: C.text, padding: "6px 8px", fontSize: ncType.body, fontWeight: 400, fontFamily: NC_FONT_STACK, resize: "none", outline: "none", lineHeight: ncType.line }} />
                     </div>
-                    {/* Checkmark — plain icon, no pill */}
-                    {touchLayout && !isEditing && (
-                      <button onClick={e => { e.stopPropagation(); setOpenTaskActionsId(actionsOpen ? null : t.id); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={gvIconButton({ width: dense ? 32 : 40, height: dense ? 22 : 40, background: actionsOpen ? C.hover : "transparent" }, C)}>
-                        {suiteIcon("more_horiz", dense ? 15 : 17)}
-                      </button>
+                  );
+                }
+                return (
+                  <div key={t.id} data-nc-task-row="true" className="nc-action-row">
+                    <ListItem type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
+                      <span slot="start" style={{ width: dense?6:8, height: dense?6:8, borderRadius: RADIUS.pill, background: priColor }} />
+                      <span slot="headline" style={{ color: C.text, fontWeight: 500, wordBreak: "break-word" }}>{displayText}</span>
+                      {touchLayout && (
+                        <span slot="end"><IconBtn icon="more_horiz" size={dense?30:36} iconSize={dense?16:18} color={C.muted} title={actionsOpen ? "Hide actions" : "Show actions"} active={actionsOpen} activeBg={C.hover} onClick={e => { e.stopPropagation(); setOpenTaskActionsId(actionsOpen ? null : t.id); }} /></span>
+                      )}
+                    </ListItem>
+                    {!touchLayout && (
+                      <div className="nc-hover-actions" style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", zIndex: 2, display: "flex", gap: 4, background: C.bg, borderRadius: RADIUS.sm, boxShadow: ELEV[1], padding: 4 }}>
+                        <ActionBtn variant="tonal" icon="check" iconSize={17} height={34} labelSize={NC_TYPE.small} containerColor={C.bgSoft} labelColor={C.success} onClick={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }} title="Mark done" aria-label="Mark done">Done</ActionBtn>
+                        <ActionBtn variant="tonal" icon="close" iconSize={15} height={34} labelSize={NC_TYPE.small} containerColor={C.bgSoft} labelColor={C.danger} onClick={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} title="Delete task" aria-label="Delete task">Delete</ActionBtn>
+                      </div>
                     )}
-                    {(!touchLayout || actionsOpen) && !isEditing && (
-                      <div className={touchLayout ? "" : "nc-hover-actions"} data-open={actionsOpen ? "true" : undefined} style={{ display: "flex", gap: 4, justifyContent: touchLayout ? "flex-start" : "flex-end", gridColumn: touchLayout ? "2 / 4" : "auto", marginTop: touchLayout ? -4 : 0, ...(touchLayout ? {} : { position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", zIndex: 2, background: C.bg, borderRadius: RADIUS.sm, boxShadow: ELEV[1], padding:4 }) }}>
+                    {touchLayout && actionsOpen && (
+                      <div style={{ display: "flex", gap: 4, padding: "0 16px 6px 24px" }}>
                         <ActionBtn variant="tonal" icon="check" iconSize={17} height={34} labelSize={NC_TYPE.small} containerColor={C.bgSoft} labelColor={C.success} onClick={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }} title="Mark done" aria-label="Mark done">Done</ActionBtn>
                         <ActionBtn variant="tonal" icon="close" iconSize={15} height={34} labelSize={NC_TYPE.small} containerColor={C.bgSoft} labelColor={C.danger} onClick={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} title="Delete task" aria-label="Delete task">Delete</ActionBtn>
                       </div>
@@ -2878,7 +2884,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <button onClick={() => { setActionCategoryId("shailos"); setActionsOpen(true); }} title="Shailos actions" style={ncSmallIconButton(false, GOLD)}>{suiteIcon("apps", 14)}</button>
               </div>
             </div>
-            <div style={ncScrollPane}>
+            <div style={{ ...ncScrollPane, ...denseListVars({ dense, primary: C.text, secondary: GOLD, hover: GOLD }) }}>
               {/* Active shailos — open + pending get-back */}
               {visibleShailos.length ? visibleShailos.map((s, idx) => {
                 const text = nerveDisplaySummary(s, "Open shaila");
@@ -2886,15 +2892,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const chipLabel = isGetBack ? "Get back" : "Answer";
                 const chipBg = isGetBack ? "rgba(201,146,60,0.22)" : "rgba(201,146,60,0.10)";
                 return (
-                  <button key={s.id} onClick={onOpenShailos}
-                    style={{ width: "100%", textAlign: "left", display: "grid", gridTemplateColumns: "16px minmax(0,1fr) auto", gap:8, padding: dense ? "2px 16px 2px 0" : "8px 16px 8px 0", border: "none", background: GOLD_BG, color: C.text, cursor: "pointer", alignItems: "start", minHeight: dense ? 18 : 38 }}>
-                    <span style={{ width: dense?6:8, height: dense?6:8, borderRadius: RADIUS.pill, background: GOLD, flexShrink: 0, marginLeft: dense?5:0, marginTop: dense?3:5 }} />
-                    <span style={{ paddingLeft: 5, paddingTop: dense?0:1 }}>
-                      <span style={{ display: "block", fontSize: dense ? ncType.meta : ncType.body, fontWeight: "var(--nc-font-weight-strong, 500)", lineHeight: dense ? 1.12 : ncType.line, color: C.text, wordBreak: "break-word" }}>{text}</span>
-                      {!dense && <span style={{ display: "block", fontSize: ncType.label, color: GOLD, fontWeight: 500, marginTop: 1, lineHeight: 1.15 }}>{suiteIcon(isGetBack ? "schedule" : "search", 12)} {isGetBack ? "waiting to reply" : "pending answer"}</span>}
-                    </span>
-                    <span style={{ fontSize: ncType.small, fontWeight: 500, color: GOLD, background: chipBg, border: `1px solid ${GOLD_BRD}`, borderRadius: RADIUS.pill, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 1 }}>{chipLabel}</span>
-                  </button>
+                  <ListItem key={s.id} type="button" onClick={onOpenShailos} style={{ borderRadius: RADIUS.sm }}>
+                    <span slot="start" style={{ width: dense?6:8, height: dense?6:8, borderRadius: RADIUS.pill, background: GOLD }} />
+                    <span slot="headline" style={{ color: C.text, fontWeight: 500, wordBreak: "break-word" }}>{text}</span>
+                    {!dense && <span slot="supporting-text" style={{ color: GOLD, display: "inline-flex", alignItems: "center", gap: 4 }}>{suiteIcon(isGetBack ? "schedule" : "search", 12)} {isGetBack ? "waiting to reply" : "pending answer"}</span>}
+                    <span slot="trailing-supporting-text" style={{ fontSize: ncType.small, fontWeight: 500, color: GOLD, background: chipBg, border: `1px solid ${GOLD_BRD}`, borderRadius: RADIUS.pill, padding: "2px 7px", whiteSpace: "nowrap" }}>{chipLabel}</span>
+                  </ListItem>
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No pending shailos.</div>}
 
@@ -2908,11 +2911,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   {shailosCompleted.map(s => {
                     const text = nerveDisplaySummary(s, "Resolved shaila");
                     return (
-                      <div key={s.id} style={{ display: "grid", gridTemplateColumns: "16px minmax(0,1fr) auto", gap:8, padding: "7px 16px 7px 0", alignItems: "start", opacity: 0.72, minHeight: 34 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, background: C.success, flexShrink: 0, marginTop: 5 }} />
-                        <span style={{ paddingLeft: 5, paddingTop: 1, fontSize: ncType.meta, fontWeight: "var(--nc-font-weight-normal, 400)", lineHeight: ncType.line, color: C.muted, wordBreak: "break-word", textDecoration: "line-through" }}>{text}</span>
-                        <span style={{ fontSize: ncType.small, fontWeight: 500, color: C.success, background: "rgba(46,125,50,0.10)", border: "1px solid rgba(46,125,50,0.22)", borderRadius: RADIUS.pill, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0, marginRight: 4, marginTop: 1 }}>Done</span>
-                      </div>
+                      <ListItem key={s.id} type="text" style={{ opacity: 0.72, borderRadius: RADIUS.sm }}>
+                        <span slot="start" style={{ width: 8, height: 8, borderRadius: RADIUS.pill, background: C.success }} />
+                        <span slot="headline" style={{ color: C.muted, wordBreak: "break-word", textDecoration: "line-through" }}>{text}</span>
+                        <span slot="trailing-supporting-text" style={{ fontSize: ncType.small, fontWeight: 500, color: C.success, background: "rgba(46,125,50,0.10)", border: "1px solid rgba(46,125,50,0.22)", borderRadius: RADIUS.pill, padding: "2px 7px", whiteSpace: "nowrap" }}>Done</span>
+                      </ListItem>
                     );
                   })}
                 </div>

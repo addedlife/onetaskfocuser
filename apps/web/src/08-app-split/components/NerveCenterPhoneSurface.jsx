@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cleanTheme, DUR, EASE, ELEV, gvIconButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
-import { ActionBtn, IconBtn } from '../m3.jsx';
+import { ActionBtn, IconBtn, ListItem, denseListVars } from '../m3.jsx';
 import { db } from '../../01-core.js';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
@@ -1256,7 +1256,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
 
       {/* ── Unified phone activity feed ── */}
       {statusOnline && (hasMessages || hasCalls) && (
-        <div style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", paddingRight: 1 }}>
+        <div style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", paddingRight: 1, ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }) }}>
           {activityItems.map(entry => {
             if (entry.kind === "message") {
                 const thread = entry.item;
@@ -1270,6 +1270,22 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                 const actionId = `msg-${thread._key || thread._who}`;
                 const actionsOpen = openPhoneActionId === actionId;
                 const expanded = expandedPhoneMessageId === actionId;
+                // Collapsed, no inline action/compose → genuine md-list-item (matches the
+                // Mail/Calendar/Tasks rows). The moment the row expands / opens actions /
+                // composes, fall through to the existing grid layout (untouched) so the
+                // intricate conversation + compose machinery keeps working exactly as-is.
+                const composeHere = composeOpen && composeAnchorId === actionId && !composeIsNew;
+                if (!expanded && !actionsOpen && !composeHere) {
+                  return (
+                    <ListItem key={`${thread._key || thread._who}-${idx}`} type="button" onClick={() => setExpandedPhoneMessageId(actionId)} style={{ borderRadius: RADIUS.sm }}>
+                      <span slot="start" style={phoneLeadIconStyle(isUnread ? C.accent : msgColor, isUnread ? C.hover : "transparent")}>{suiteIcon(msgIcon, 14)}</span>
+                      <span slot="headline" style={{ fontWeight: isUnread ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread._name}</span>
+                      {preview && <span slot="supporting-text" style={{ color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preview}</span>}
+                      {time && <span slot="trailing-supporting-text" style={{ color: C.muted }}>{time}</span>}
+                      <span slot="end"><IconBtn icon="more_horiz" size={32} iconSize={17} color={C.muted} title="Show actions" aria-label="Show actions" onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionId); }} /></span>
+                    </ListItem>
+                  );
+                }
                 return (
                   <div key={`${thread._key || thread._who}-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, background: expanded ? C.hover : "transparent" }}>
                     <span style={phoneLeadIconStyle(isUnread ? C.accent : msgColor, isUnread ? C.hover : "transparent")}>{suiteIcon(msgIcon, 14)}</span>
@@ -1417,6 +1433,27 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                 const mKey = missedKey(c);
                 const resolved = isMissed && isMissedCallResolved(c);
                 const needsCallback = isMissed && !resolved;
+                const composeHere = composeOpen && composeAnchorId === actionId && !composeIsNew;
+                if (!actionsOpen && !composeHere) {
+                  return (
+                    <ListItem key={`call-${idx}`} type="button" onClick={() => setOpenPhoneActionId(actionId)} style={{ borderRadius: RADIUS.sm, opacity: resolved ? 0.62 : 1 }}>
+                      <span slot="start" style={phoneLeadIconStyle(color)}>{suiteIcon(icon, 14)}</span>
+                      <span slot="headline" style={{ fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                      {needsCallback ? (
+                        <span slot="supporting-text" style={{ fontWeight: 700, color: C.danger }}>Needs callback</span>
+                      ) : resolved ? (
+                        <span slot="supporting-text" style={{ display: "inline-flex", alignItems: "center", gap: 3, color: C.success }}>{suiteIcon("check_circle", 11)} Resolved</span>
+                      ) : (num && num !== name ? <span slot="supporting-text" style={{ color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{num}</span> : null)}
+                      {time && <span slot="trailing-supporting-text" style={{ color: C.muted }}>{time}</span>}
+                      <span slot="end" style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                        {isMissed && mKey && (resolved
+                          ? <IconBtn icon="undo" size={32} iconSize={16} color={C.muted} title="Reopen missed call" aria-label="Reopen missed call" onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, false); }} />
+                          : <IconBtn icon="check_circle" size={32} iconSize={17} color={C.success} title="Mark resolved" aria-label="Mark resolved" onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, true); }} />)}
+                        <IconBtn icon="more_horiz" size={32} iconSize={17} color={C.muted} title="Show actions" aria-label="Show actions" onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionId); }} />
+                      </span>
+                    </ListItem>
+                  );
+                }
                 return (
                   <div key={`call-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, gridTemplateColumns: "20px minmax(0,1fr) auto", opacity: resolved ? 0.62 : 1 }}>
                     <span style={phoneLeadIconStyle(color)}>{suiteIcon(icon, 14)}</span>
