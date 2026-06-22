@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, textOnColor } from '../../01-core.js';
 import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BG, GOLD_BRD, gvIconButton, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, ncSectionHeaderStyle, ncSectionIconStyle, ncSectionTitleStyle, ncSmallIconBtnStyle, RADIUS, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
-import { ActionBtn, IconBtn } from '../m3.jsx';
+import { ActionBtn, IconBtn, List, ListItem, AssistChip, FilterChip, ChipSet, Divider, CircularProgress, denseListVars } from '../m3.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthCard } from './HealthCard.jsx';
@@ -2985,17 +2985,26 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             return { background: tint ? `linear-gradient(${tint},${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: isFocus ? RADIUS.xs : RADIUS.md, flex: isStacked ? "1 1 0" : 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" };
           };
           const cardWrap = tintedCard(CAT_MAIL); // overridden per-card inline
-          const cardHead = isFocus
-            ? { display: "none" }
-            : {
-                minHeight: isStacked ? 24 : 28,
-                padding: isStacked ? "3px 8px" : "5px 10px 3px",
-                borderBottom: `1px solid ${C.divider}`,
-                flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6,
-              };
-          const cardBody = { flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: isStacked ? "2px 8px 6px" : (isFocus ? "6px 12px 8px" : "4px 12px 8px"), overscrollBehavior: "contain", scrollbarGutter: "stable" };
-          // headLabel: ambient watermark — small, spaced, low-opacity; not a structural bar
-          const headLabel = { fontSize: 8, fontWeight: 700, color: C.faint, fontFamily: NC_FONT_STACK, letterSpacing: 1.8, textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0, opacity: 0.7 };
+          // Unified card header — same language as the Tasks/Shailos/Phone panels
+          // (ncSectionIcon + ncTitle) with genuine M3 icon-button actions, replacing the
+          // old 8px watermark so Calendar/Mail read as the same family as the panels.
+          // Hidden in focus mode for a cleaner at-a-glance read.
+          const Spinner = ({ size = 15, color }) => (
+            <CircularProgress indeterminate aria-label="Loading" style={{ "--md-circular-progress-size": `${size}px`, "--md-circular-progress-active-indicator-color": color || C.muted, width: size, height: size, display: "inline-block", verticalAlign: "middle" }} />
+          );
+          const CardAction = ({ icon, iconSize = 18, ...rest }) => <IconBtn icon={icon} size={28} iconSize={iconSize} color={C.muted} {...rest} />;
+          const cardHeader = (icon, title, accent, actions) => isFocus ? null : (
+            <div style={{ ...ncHeader, gap: 6 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <span style={ncSectionIcon(accent)}>{suiteIcon(icon, 16)}</span>
+                <span style={ncTitle}>{title}</span>
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 2, flexShrink: 0 }}>{actions}</span>
+            </div>
+          );
+          // List rows handle their own inset (leading-space token); keep body padding tight.
+          const cardBody = { flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", padding: isStacked ? "2px 6px 6px" : (isFocus ? "4px 8px 8px" : "2px 6px 8px"), overscrollBehavior: "contain", scrollbarGutter: "stable" };
+          const cardListStyle = { ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }), padding: 0, background: "transparent" };
           const selectedEmail = selectedEmailId ? (gmailMessages || []).find(msg => msg.id === selectedEmailId) : null;
           const selectedEmailDetail = selectedEmailId ? emailDetails[selectedEmailId] : null;
           const selectedEmailSource = selectedEmailDetail || selectedEmail;
@@ -3015,20 +3024,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               <span style={{ height: 2, borderRadius: 2, background: nowLineColor, boxShadow: `0 0 0 1px ${softBorder(nowLineColor, 0.18)}` }} />
             </div>
           );
-          const currentEventNowRule = () => (
-            <span aria-hidden="true" style={{
-              position: "absolute",
-              left: isStacked ? 64 : 82,
-              right: 6,
-              top: "50%",
-              height: 2,
-              borderRadius: 2,
-              background: nowLineColor,
-              boxShadow: `0 0 0 1px ${softBorder(nowLineColor, 0.16)}`,
-              zIndex: 1,
-              pointerEvents: "none",
-            }} />
-          );
 
           return (
             <React.Fragment>
@@ -3036,21 +3031,20 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               {/* Account toggle: per-account chips + Both when 2+ connected, and a
                   way to add another Google account. Shown whenever connected. */}
               {googleToken && googleAccounts.length >= 1 && (
-                <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap", padding: "0 2px" }}>
-                  {googleAccounts.length > 1 && [...googleAccounts.map(em => ({ key: em, label: em.split("@")[0] })), { key: "all", label: "Both" }].map(opt => {
-                    const active = opt.key === "all" ? googleAccountFilter === "all" : googleAccountFilter === opt.key;
-                    return (
-                      <button key={opt.key} onClick={() => onSelectGoogleAccount && onSelectGoogleAccount(opt.key)}
-                        title={opt.key === "all" ? "Show both accounts merged" : opt.key}
-                        style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: active ? 700 : 500, color: active ? "#fff" : C.muted, background: active ? accentBlue : "transparent", border: `1px solid ${active ? accentBlue : C.divider}`, borderRadius: RADIUS.pill, padding: "2px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                  <button onClick={onConnectGoogle} title="Connect another Google account"
-                    style={{ fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: 500, color: C.faint, background: "transparent", border: `1px dashed ${C.divider}`, borderRadius: RADIUS.pill, padding: "2px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>
-                    + account
-                  </button>
+                <div style={{ padding: "0 2px", "--md-filter-chip-container-height": "28px", "--md-assist-chip-container-height": "28px", "--md-filter-chip-label-text-size": NC_TYPE.meta, "--md-assist-chip-label-text-size": NC_TYPE.meta }}>
+                  <ChipSet>
+                    {googleAccounts.length > 1 && [...googleAccounts.map(em => ({ key: em, label: em.split("@")[0] })), { key: "all", label: "Both" }].map(opt => {
+                      const active = opt.key === "all" ? googleAccountFilter === "all" : googleAccountFilter === opt.key;
+                      return (
+                        <FilterChip key={opt.key} label={opt.label} selected={active}
+                          title={opt.key === "all" ? "Show both accounts merged" : opt.key}
+                          onClick={() => onSelectGoogleAccount && onSelectGoogleAccount(opt.key)} />
+                      );
+                    })}
+                    <AssistChip label="account" title="Connect another Google account" onClick={onConnectGoogle}>
+                      <span slot="icon" className="material-symbols-rounded" style={{ fontSize: 16 }}>add</span>
+                    </AssistChip>
+                  </ChipSet>
                 </div>
               )}
               <div style={lowerGridStyle}>
@@ -3112,20 +3106,17 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               {/* ── Calendar card ── */}
               {(calendarEvents !== null || (googleLoading && googleToken)) && (
                 <div className="nc-card-group" style={tintedCard(C.warning)}>
-                  <div style={cardHead}>
-                    <span style={headLabel}>{suiteIcon("calendar_today", 11)} Today</span>
-                    <div className="nc-card-action" style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${C.faint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
-                      <button onClick={() => setShowAddEvent(true)} title="Add event" style={ncSmallIconButton()}>{suiteIcon("add", ICON.sm)}</button>
-                      <a href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer" title="Open Google Calendar" style={{ ...ncSmallIconButton(), textDecoration: "none" }}>{suiteIcon("open_in_new", ICON.sm)}</a>
-                      <button onClick={onRefreshCalendar || onConnectGoogle} title="Refresh" style={ncSmallIconButton()}>{suiteIcon("refresh", ICON.sm)}</button>
-                      <button onClick={onDisconnectGoogle} title="Disconnect Google" style={ncSmallIconButton()}>{suiteIcon("link_off", ICON.sm)}</button>
-                    </div>
-                  </div>
+                  {cardHeader("calendar_today", "Today", C.warning, <>
+                    {googleLoading && <Spinner size={13} color={C.faint} />}
+                    <CardAction icon="add" title="Add event" onClick={() => setShowAddEvent(true)} />
+                    <CardAction icon="open_in_new" title="Open Google Calendar" href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer" />
+                    <CardAction icon="refresh" title="Refresh" onClick={onRefreshCalendar || onConnectGoogle} />
+                    <CardAction icon="link_off" title="Disconnect Google" onClick={onDisconnectGoogle} />
+                  </>)}
                   <div style={cardBody}>
                     {!calendarEvents ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap:8 }}>
-                        <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${C.muted}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                        <Spinner size={16} />
                         <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>Loading calendar…</span>
                       </div>
                     ) : calendarRows.length === 0 ? (
@@ -3136,37 +3127,43 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     ) : (
                       <React.Fragment>
                       {specialCalendarRows.length > 0 && (
-                        <div style={{ border: `1px solid ${softBorder(accentBlue, 0.24)}`, background: softBg(accentBlue, 0.08), borderRadius: RADIUS.sm, padding: "8px 9px", margin: "2px 0 6px" }}>
-                          {specialCalendarRows.map(row => (
-                            <div key={`special-${row.evt?.id || row.index}`} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 8, alignItems: "start", fontFamily: NC_FONT_STACK }}>
-                              <span style={{ minWidth: 0, color: C.text, fontSize: NC_TYPE.control, fontWeight: 600, lineHeight: 1.22, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{row.evt?.summary || "(no title)"}</span>
-                              <span style={{ color: row.now ? C.danger : C.accent, fontSize: NC_TYPE.meta, fontWeight: 600, whiteSpace: "nowrap" }}>{row.now ? "Now" : row.label}</span>
-                            </div>
-                          ))}
+                        <div style={{ border: `1px solid ${softBorder(accentBlue, 0.24)}`, background: softBg(accentBlue, 0.06), borderRadius: RADIUS.sm, margin: "2px 2px 6px", overflow: "hidden" }}>
+                          <List style={cardListStyle}>
+                            {specialCalendarRows.map(row => {
+                              const item = (
+                                <>
+                                  <span slot="headline" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: C.text, fontWeight: 600 }}>{row.evt?.summary || "(no title)"}</span>
+                                  <span slot="trailing-supporting-text" style={{ color: row.now ? C.danger : C.accent, fontWeight: 600, whiteSpace: "nowrap" }}>{row.now ? "Now" : row.label}</span>
+                                </>
+                              );
+                              return row.evt?.htmlLink
+                                ? <ListItem key={`special-${row.evt?.id || row.index}`} type="link" href={row.evt.htmlLink} target="_blank">{item}</ListItem>
+                                : <ListItem key={`special-${row.evt?.id || row.index}`} type="text">{item}</ListItem>;
+                            })}
+                          </List>
                         </div>
                       )}
+                      <List style={cardListStyle}>
                       {calendarRows.map((row, i) => {
-                      const evt = row.evt;
-                      const now = row.now;
-                      const lifted = row.special || row.now;
-                      const rowStyle = { position: "relative", overflow: "hidden", display: "flex", gap: isStacked ? 7 : 10, alignItems: "flex-start", padding: dense ? "1px 4px" : (isStacked ? "5px 2px" : "8px 4px"), textDecoration: "none", color: "inherit", borderRadius: RADIUS.xs, background: lifted ? softBg(accentBlue, row.now ? 0.10 : 0.055) : "transparent" };
-                      const inner = (
-                        <>
-                          <span style={{ position: "relative", zIndex: 2, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, color: now ? accentBlue : C.faint, fontWeight: lifted ? 600 : 400, flexShrink: 0, width: isStacked ? 54 : 66, textAlign: "right", paddingTop: 1 }}>{fmtEvtTime(evt)}</span>
-                          <div style={{ position: "relative", zIndex: 2, flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                              {now && <span style={{ width: 5, height: 5, borderRadius: "50%", background: accentBlue, flexShrink: 0 }} />}
-                              <span style={{ fontSize: NC_TYPE.control, color: lifted ? C.text : C.muted, fontWeight: lifted ? 600 : 400, fontFamily: NC_FONT_STACK, whiteSpace: "normal", wordBreak: "break-word", opacity: row.routine && !lifted ? 0.78 : 1 }}>{evt.summary || "(no title)"}</span>
-                            </div>
-                          </div>
-                        </>
-                      );
-                      return evt.htmlLink
-                        ? <React.Fragment key={evt.id || i}>{!hasCurrentCalendarEvent && i === calendarNowInsertIndex && calendarNowLine("now-line")}<a ref={now ? calendarNowRef : null} href={evt.htmlLink} target="_blank" rel="noopener noreferrer" style={{ ...rowStyle, scrollMarginBlock: now ? "50%" : undefined }} onMouseEnter={e => e.currentTarget.style.background = C.bgSoft} onMouseLeave={e => e.currentTarget.style.background = rowStyle.background}>{now && currentEventNowRule()}{inner}</a></React.Fragment>
-                        : <React.Fragment key={evt.id || i}>{!hasCurrentCalendarEvent && i === calendarNowInsertIndex && calendarNowLine("now-line")}<div ref={now ? calendarNowRef : null} style={{ ...rowStyle, scrollMarginBlock: now ? "50%" : undefined }}>{now && currentEventNowRule()}{inner}</div></React.Fragment>;
-                    })}
-                    {!hasCurrentCalendarEvent && calendarNowInsertIndex === calendarRows.length && calendarNowLine("now-line-end")}
-                    </React.Fragment>
+                        const evt = row.evt;
+                        const now = row.now;
+                        const lifted = row.special || row.now;
+                        const tint = now ? softBg(accentBlue, 0.12) : lifted ? softBg(accentBlue, 0.06) : null;
+                        const item = (
+                          <>
+                            {tint && <div slot="container" style={{ background: tint, borderRadius: RADIUS.sm }} />}
+                            <span slot="headline" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: lifted ? C.text : C.muted, fontWeight: lifted ? 600 : 500, opacity: row.routine && !lifted ? 0.78 : 1 }}>{evt.summary || "(no title)"}</span>
+                            <span slot="trailing-supporting-text" style={{ color: now ? accentBlue : C.faint, fontWeight: now ? 700 : 500, whiteSpace: "nowrap" }}>{now ? "Now" : fmtEvtTime(evt)}</span>
+                          </>
+                        );
+                        const li = evt.htmlLink
+                          ? <ListItem ref={now ? calendarNowRef : null} type="link" href={evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.sm, scrollMarginBlock: now ? "50%" : undefined }}>{item}</ListItem>
+                          : <ListItem ref={now ? calendarNowRef : null} type="text" style={{ borderRadius: RADIUS.sm, scrollMarginBlock: now ? "50%" : undefined }}>{item}</ListItem>;
+                        return <React.Fragment key={evt.id || i}>{!hasCurrentCalendarEvent && i === calendarNowInsertIndex && calendarNowLine("now-line")}{li}</React.Fragment>;
+                      })}
+                      {!hasCurrentCalendarEvent && calendarNowInsertIndex === calendarRows.length && calendarNowLine("now-line-end")}
+                      </List>
+                      </React.Fragment>
                     )}
                   </div>
                 </div>
@@ -3364,24 +3361,21 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               {/* ── Gmail card ── */}
               {(gmailMessages !== null || (googleLoading && googleToken)) && (
                 <div className="nc-card-group" style={tintedCard(CAT_MAIL)}>
-                  <div style={cardHead}>
-                    <span style={headLabel}>{suiteIcon("mail", 11)} Mail</span>
-                    <div className="nc-card-action" style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      {googleLoading && <div style={{ width: 9, height: 9, borderRadius: "50%", border: `1.5px solid ${C.faint}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
-                      <a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" title="Open Gmail" style={{ ...ncSmallIconButton(), textDecoration: "none" }}>{suiteIcon("open_in_new", ICON.sm)}</a>
-                      <button onClick={onRefreshCalendar || onConnectGoogle} title="Refresh mail and calendar" style={ncSmallIconButton()}>{suiteIcon("refresh", ICON.sm)}</button>
-                    </div>
-                  </div>
+                  {cardHeader("mail", "Mail", CAT_MAIL, <>
+                    {googleLoading && <Spinner size={13} color={C.faint} />}
+                    <CardAction icon="open_in_new" title="Open Gmail" href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" />
+                    <CardAction icon="refresh" title="Refresh mail and calendar" onClick={onRefreshCalendar || onConnectGoogle} />
+                  </>)}
                   <div style={cardBody}>
                     {!gmailMessages ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap:8 }}>
-                        <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${C.muted}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
+                        <Spinner size={16} />
                         <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>Loading mail…</span>
                       </div>
                     ) : gmailMessages.length === 0 ? (
                       <p style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, margin: "12px 0", textAlign: "center" }}>Inbox zero 🎉</p>
                     ) : (
-                      <React.Fragment>
+                      <List style={cardListStyle}>
                       {gmailMessages.map((msg, i) => {
                       const subject = gmailHeader(msg, 'Subject') || '(no subject)';
                       const from = fmtFrom(gmailHeader(msg, 'From'));
@@ -3390,54 +3384,43 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       const selected = selectedEmailId === msg.id;
                       return (
                         <React.Fragment key={msg.id || i}>
-                        <div className="nc-action-row"
-                          style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: dense ? "1px 4px" : (isStacked ? "5px 2px" : "8px 4px"), borderRadius: RADIUS.xs, background: selected ? (C.bgSoft) : "transparent" }}
+                        <ListItem type="button" onClick={() => handleEmailSelect(msg)}
+                          style={{ borderRadius: RADIUS.sm }}
                           onMouseEnter={e => {
-                            e.currentTarget.style.background = C.bgSoft;
                             clearTimeout(hoverTimerRef.current);
+                            const host = e.currentTarget;
                             hoverTimerRef.current = setTimeout(() => {
-                              const rect = e.currentTarget.getBoundingClientRect();
+                              const rect = host.getBoundingClientRect();
                               setHoverEmail({ id: msg.id, top: rect.bottom + 6, left: rect.left, from: gmailHeader(msg, 'From'), subject, snippet: msg.snippet || '' });
                             }, 400);
                           }}
-                          onMouseLeave={e => {
-                            e.currentTarget.style.background = 'transparent';
-                            clearTimeout(hoverTimerRef.current);
-                            setHoverEmail(null);
-                            if (selectedEmailId !== msg.id) e.currentTarget.style.background = 'transparent';
-                          }}
+                          onMouseLeave={() => { clearTimeout(hoverTimerRef.current); setHoverEmail(null); }}
                         >
-                          <button type="button" onClick={() => handleEmailSelect(msg)}
-                            style={{ flex: 1, minWidth: 0, minHeight: 0, border: "none", background: "transparent", color: "inherit", textAlign: "left", padding: 0, cursor: "pointer", fontFamily: NC_FONT_STACK, display: "flex", alignItems: "baseline", gap: 6 }}>
-                            <span style={{ fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: "nowrap" }}>{from}</span>
-                            <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, ...(msg.aiSummary ? { whiteSpace: "normal", wordBreak: "break-word" } : { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }) }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
-                            <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, flexShrink: 0, whiteSpace: "nowrap" }}>{date}</span>
-                          </button>
-                          <a href={url} target="_blank" rel="noopener noreferrer" title="Open in Gmail"
-                            className="nc-hover-actions"
-                            style={{ color: C.faint, textDecoration: "none", display: "flex", alignItems: "center", flexShrink: 0 }}
-                            onClick={e => e.stopPropagation()}>{suiteIcon("open_in_new", ICON.xs)}</a>
-                        </div>
+                          {selected && <div slot="container" style={{ background: C.bgSoft, borderRadius: RADIUS.sm }} />}
+                          <span slot="headline" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: C.text, fontWeight: 600 }}>{from}</span>
+                          <span slot="supporting-text" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: C.muted }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
+                          <span slot="trailing-supporting-text" style={{ color: C.faint, whiteSpace: "nowrap" }}>{date}</span>
+                        </ListItem>
                         {selected && selectedEmailSource && (
-                          <div style={{ margin: "2px 0 8px", padding: "10px 10px 11px", borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, fontFamily: NC_FONT_STACK }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
+                          <div style={{ margin: "0 2px 8px", padding: "10px 12px 12px", borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: NC_FONT_STACK }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
                               <div style={{ minWidth: 0 }}>
-                                <div style={{ fontSize: NC_TYPE.control, fontWeight: 500, color: C.text, whiteSpace: "normal", wordBreak: "break-word" }}>{gmailHeader(selectedEmailSource, 'Subject') || '(no subject)'}</div>
+                                <div style={{ fontSize: NC_TYPE.control, fontWeight: 600, color: C.text, lineHeight: 1.3, whiteSpace: "normal", wordBreak: "break-word" }}>{gmailHeader(selectedEmailSource, 'Subject') || '(no subject)'}</div>
                                 <div style={{ fontSize: NC_TYPE.meta, color: C.muted, whiteSpace: "normal", wordBreak: "break-word", marginTop: 2 }}>{fmtFrom(gmailHeader(selectedEmailSource, 'From'))}</div>
                               </div>
-                              <button type="button" onClick={() => { setSelectedEmailId(null); setEmailDetailError(""); }}
-                                title="Close message"
-                                style={ncSmallIconButton()}>{suiteIcon("close", ICON.sm)}</button>
+                              <span style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                                <CardAction icon="open_in_new" title="Open in Gmail" href={url} target="_blank" rel="noopener noreferrer" />
+                                <CardAction icon="close" title="Close message" onClick={() => { setSelectedEmailId(null); setEmailDetailError(""); }} />
+                              </span>
                             </div>
                             {emailDetailLoadingId === selectedEmailId ? (
                               <div style={{ display: "flex", alignItems: "center", gap:8, fontSize: NC_TYPE.meta, color: C.muted }}>
-                                <div style={{ width: 11, height: 11, borderRadius: "50%", border: `2px solid ${C.muted}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />
-                                Loading full message...
+                                <Spinner size={13} /> Loading full message…
                               </div>
                             ) : emailDetailError ? (
                               <div style={{ fontSize: NC_TYPE.meta, color: C.danger }}>{emailDetailError}</div>
                             ) : (
-                              <div style={{ fontSize: NC_TYPE.meta, lineHeight: 1.5, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: isStacked ? 150 : 220, overflowY: "auto", paddingRight: 2 }}>
+                              <div style={{ fontSize: NC_TYPE.meta, lineHeight: 1.55, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: isStacked ? 150 : 200, overflowY: "auto", paddingRight: 2 }}>
                                 {selectedEmailBody || "No message body available."}
                               </div>
                             )}
@@ -3446,7 +3429,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         </React.Fragment>
                       );
                     })}
-                    </React.Fragment>
+                    </List>
                     )}
                   </div>
                 </div>

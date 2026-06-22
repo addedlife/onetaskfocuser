@@ -8,6 +8,14 @@ import { MdIconButton } from '@material/web/iconbutton/icon-button.js';
 import { MdFilledIconButton } from '@material/web/iconbutton/filled-icon-button.js';
 import { MdFilledTonalIconButton } from '@material/web/iconbutton/filled-tonal-icon-button.js';
 import { MdOutlinedIconButton } from '@material/web/iconbutton/outlined-icon-button.js';
+import { MdList } from '@material/web/list/list.js';
+import { MdListItem } from '@material/web/list/list-item.js';
+import { MdAssistChip } from '@material/web/chips/assist-chip.js';
+import { MdFilterChip } from '@material/web/chips/filter-chip.js';
+import { MdSuggestionChip } from '@material/web/chips/suggestion-chip.js';
+import { MdChipSet } from '@material/web/chips/chip-set.js';
+import { MdDivider } from '@material/web/divider/divider.js';
+import { MdCircularProgress } from '@material/web/progress/circular-progress.js';
 
 // ─── Shared @material/web button layer ───────────────────────────────────────
 // Single home for the real Google Material 3 button + icon-button components,
@@ -28,6 +36,45 @@ export const IconButton        = createComponent({ react: React, tagName: 'md-ic
 export const FilledIconButton  = createComponent({ react: React, tagName: 'md-filled-icon-button',      elementClass: MdFilledIconButton });
 export const TonalIconButton   = createComponent({ react: React, tagName: 'md-filled-tonal-icon-button', elementClass: MdFilledTonalIconButton });
 export const OutlinedIconButton = createComponent({ react: React, tagName: 'md-outlined-icon-button',   elementClass: MdOutlinedIconButton });
+
+// ─── List, chips, divider, progress ───────────────────────────────────────────
+// Same single-home pattern: the real M3 list/chip/divider/progress elements,
+// wrapped once. List rows (md-list-item) read --md-list-item-* density tokens —
+// see DENSE_LIST_VARS below for the app's tuned dense-but-airy NerveCenter rhythm.
+export const List            = createComponent({ react: React, tagName: 'md-list',              elementClass: MdList });
+export const ListItem        = createComponent({ react: React, tagName: 'md-list-item',         elementClass: MdListItem });
+export const AssistChip      = createComponent({ react: React, tagName: 'md-assist-chip',       elementClass: MdAssistChip });
+export const FilterChip      = createComponent({ react: React, tagName: 'md-filter-chip',       elementClass: MdFilterChip });
+export const SuggestionChip  = createComponent({ react: React, tagName: 'md-suggestion-chip',   elementClass: MdSuggestionChip });
+export const ChipSet         = createComponent({ react: React, tagName: 'md-chip-set',          elementClass: MdChipSet });
+export const Divider         = createComponent({ react: React, tagName: 'md-divider',           elementClass: MdDivider });
+export const CircularProgress = createComponent({ react: React, tagName: 'md-circular-progress', elementClass: MdCircularProgress });
+
+// DENSE_LIST_VARS — NerveCenter's tuned md-list-item density. M3's stock two-line
+// row is 72px; that's far too tall for a dashboard. These tokens crush it to a
+// dense-but-breathing ~52px (comfortable) / ~40px (compact) while keeping real M3
+// ripple, focus ring, and slot layout. Pass via `style` on <List> (tokens inherit
+// into each <ListItem>). Colours come in from the caller (theme C.*).
+export function denseListVars({ dense = false, primary, secondary, trailing, hover } = {}) {
+  return {
+    '--md-list-item-two-line-container-height': dense ? '40px' : '52px',
+    '--md-list-item-one-line-container-height': dense ? '34px' : '44px',
+    '--md-list-item-top-space': dense ? '3px' : '6px',
+    '--md-list-item-bottom-space': dense ? '3px' : '6px',
+    '--md-list-item-leading-space': '12px',
+    '--md-list-item-trailing-space': '12px',
+    '--md-list-item-label-text-size': dense ? '12px' : '13.5px',
+    '--md-list-item-label-text-line-height': dense ? '15px' : '17px',
+    '--md-list-item-label-text-weight': '500',
+    '--md-list-item-supporting-text-size': dense ? '11px' : '12px',
+    '--md-list-item-supporting-text-line-height': dense ? '13px' : '15px',
+    '--md-list-item-trailing-supporting-text-size': dense ? '10.5px' : '11.5px',
+    ...(primary ? { '--md-list-item-label-text-color': primary } : {}),
+    ...(secondary ? { '--md-list-item-supporting-text-color': secondary, '--md-list-item-trailing-supporting-text-color': secondary, '--md-list-item-leading-icon-color': secondary, '--md-list-item-trailing-icon-color': secondary } : {}),
+    ...(trailing ? { '--md-list-item-trailing-supporting-text-color': trailing } : {}),
+    ...(hover ? { '--md-list-item-hover-state-layer-color': hover } : {}),
+  };
+}
 
 // Variant → [component, token-prefix]. The prefix matches each component's
 // --md-<prefix>-* custom-property namespace (verified against @material/web v2.4).
