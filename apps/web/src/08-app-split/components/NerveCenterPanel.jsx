@@ -586,6 +586,96 @@ function assignCalendarColumns(rows) {
   });
 }
 
+// Google-Calendar-style day timeline body: all-day chips + a scrollable 24h grid with
+// absolutely-positioned event blocks (side-by-side columns for overlaps), faded past
+// events, and an rAF-driven now-line. Shared by the full-panel calendar card AND the
+// card-grid ("boxes") calendar box so the "live time" view is identical in both.
+// The parent owns the refs: `scrollRef` is the scroll container (auto-centered on now)
+// and `nowLineRef` is the now-line div whose `top` is driven by rAF each frame.
+function CalendarTimeline({ calendarRows, nowDate, C, scrollRef, nowLineRef }) {
+  const LABEL_W = 40;
+  const PX_MIN = TIMELINE_PX_HR / 60;
+  const TOTAL_H = 24 * TIMELINE_PX_HR;
+  const nowLineColor = C.success || C.accent || "#1A9E78";
+  const allDayRows = calendarRows.filter(r => !!r.evt?.start?.date && !r.evt?.start?.dateTime);
+  const timedRows = calendarRows.filter(r => !!r.evt?.start?.dateTime && r.startMs > 0);
+  const timedWithCols = assignCalendarColumns(timedRows);
+  const evtAccent = evt => GCAL_COLORS[evt?.colorId] || C.warning;
+  const h24 = nowDate.getHours(), m24 = nowDate.getMinutes();
+  const nowTimeLabel = `${h24 % 12 || 12}:${String(m24).padStart(2, "0")}${h24 >= 12 ? "p" : "a"}`;
+  return (
+    <>
+      {allDayRows.length > 0 && (
+        <div style={{ padding: `3px 4px 3px ${LABEL_W + 4}px`, borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", flexWrap: "wrap", gap: 3 }}>
+          {allDayRows.map(row => (
+            <span key={row.evt.id || row.index} style={{ fontSize: NC_TYPE.small, fontWeight: 500, color: row.past ? C.faint : C.text, background: row.past ? C.hover : softBg(evtAccent(row.evt), 0.22), borderRadius: RADIUS.xs, padding: "1px 6px", opacity: row.past ? 0.7 : 1 }}>
+              {row.evt.summary || "(no title)"}
+            </span>
+          ))}
+        </div>
+      )}
+      <div ref={scrollRef} style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
+        <div style={{ position: "relative", height: TOTAL_H }}>
+          {/* Event column — events positioned absolutely by time */}
+          <div style={{ position: "absolute", left: LABEL_W, right: 0, top: 0, bottom: 0 }}>
+            {Array.from({ length: 24 }, (_, h) => (
+              <div key={h} style={{ position: "absolute", top: h * TIMELINE_PX_HR, left: 0, right: 0, height: 1, background: C.divider, opacity: h === 0 ? 0 : 0.5, pointerEvents: "none" }} />
+            ))}
+            {timedWithCols.map(row => {
+              const s = new Date(row.evt.start.dateTime);
+              const eDate = row.evt.end?.dateTime ? new Date(row.evt.end.dateTime) : s;
+              const startMin = s.getHours() * 60 + s.getMinutes();
+              const endMin = Math.max(startMin + 15, eDate.getHours() * 60 + eDate.getMinutes());
+              const top = startMin * PX_MIN;
+              const height = Math.max(22, (endMin - startMin) * PX_MIN);
+              const color = evtAccent(row.evt);
+              return (
+                <div key={row.evt.id || row.index}
+                  title={`${row.evt.summary || "(no title)"}\n${row.label}`}
+                  role={row.evt.htmlLink ? "link" : undefined}
+                  tabIndex={row.evt.htmlLink ? 0 : undefined}
+                  onClick={row.evt.htmlLink ? () => window.open(row.evt.htmlLink, "_blank") : undefined}
+                  onKeyDown={row.evt.htmlLink ? e => { if (e.key === "Enter") window.open(row.evt.htmlLink, "_blank"); } : undefined}
+                  style={{
+                    position: "absolute", top, height,
+                    left: `${(row.col / row.colCount) * 100}%`,
+                    width: `calc(${100 / row.colCount}% - 2px)`,
+                    background: softBg(color, row.past ? 0.06 : row.now ? 0.22 : 0.14),
+                    borderLeft: `2px solid ${softBorder(color, row.past ? 0.3 : 0.8)}`,
+                    borderRadius: `0 ${RADIUS.xs}px ${RADIUS.xs}px 0`,
+                    overflow: "hidden", cursor: row.evt.htmlLink ? "pointer" : "default",
+                    padding: "2px 4px", boxSizing: "border-box", opacity: row.past ? 0.55 : 1,
+                  }}>
+                  <div style={{ fontSize: 10, fontWeight: row.now ? 700 : 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.2, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                    {row.evt.summary || "(no title)"}
+                  </div>
+                  {height >= 34 && (
+                    <div style={{ fontSize: 9, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.2, marginTop: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                      {row.label}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {/* Hour labels */}
+          {Array.from({ length: 24 }, (_, h) => h > 0 && (
+            <span key={h} style={{ position: "absolute", top: h * TIMELINE_PX_HR, left: 0, width: LABEL_W - 4, textAlign: "right", transform: "translateY(-50%)", fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1, pointerEvents: "none", fontVariantNumeric: "tabular-nums" }}>
+              {h < 12 ? `${h}a` : h === 12 ? "12p" : `${h - 12}p`}
+            </span>
+          ))}
+          {/* Now-line — style.top driven by rAF each frame; JSX top:0 never changes so React never resets it */}
+          <div ref={nowLineRef} style={{ position: "absolute", left: 0, right: 0, top: 0, zIndex: 3, pointerEvents: "none", display: "flex", alignItems: "center" }}>
+            <span style={{ width: LABEL_W - 4, textAlign: "right", fontSize: 9, color: nowLineColor, fontWeight: 700, fontFamily: NC_FONT_STACK, flexShrink: 0, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{nowTimeLabel}</span>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: nowLineColor, flexShrink: 0 }} />
+            <div style={{ flex: 1, height: 2, background: nowLineColor, borderRadius: 1 }} />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // Mobile "nerve center" accordion section. Hoisted to module scope (NOT defined inside
 // NerveCenterPanel) so its component identity stays stable across renders — otherwise the
 // per-second clock re-render recreated the function, remounting every section and dropping
@@ -837,6 +927,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const [expandedRows, setExpandedRows] = useState(() => new Set()); // box-mode rows tapped open to reveal full text
   const toggleRow = key => setExpandedRows(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
   const [mobileTimelineOpen, setMobileTimelineOpen] = useState(false); // mobile hero timeline reveal
+  // Card-grid ("boxes") calendar box: "agenda" (compact upcoming list) or "timeline" (the
+  // Google-Calendar-style live-time day grid, same as the full-panel card). Persisted.
+  const [calCardView, setCalCardView] = useState(() => { try { return localStorage.getItem("nc_cal_card_view") || "timeline"; } catch { return "timeline"; } });
+  const toggleCalCardView = () => setCalCardView(prev => { const next = prev === "timeline" ? "agenda" : "timeline"; try { localStorage.setItem("nc_cal_card_view", next); } catch {} return next; });
   // Mobile nerve-center display mode: "boxes" (the fixed 5-card grid, everything visible at
   // once, each card scrolls internally) or "accordion" (one expandable section open at a time,
   // the whole page scrolls). Persisted so the choice sticks.
@@ -1070,7 +1164,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       el.scrollTo({ top: Math.max(0, topPx - el.clientHeight / 2), behavior: "smooth" });
     });
     return () => cancelAnimationFrame(frame);
-  }, [calendarEvents]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [calendarEvents, calCardView]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const PX_MIN = TIMELINE_PX_HR / 60;
     let raf;
@@ -2349,31 +2443,47 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Calendar */}
           <MobileBox {...boxCtx} {...boxProps("calendar")} icon="calendar_today" title="Calendar" accentColor={C.warning} summary={cardSummary("Calendar")} style={cardStyle} dense={dense}
             onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}>
-            {showAddEvent && (
-              <div style={{ padding:"10px 12px", borderBottom:`1px solid ${C.divider}` }}>
-                <textarea autoFocus value={addEventText} onChange={e=>setAddEventText(e.target.value)} rows={2} placeholder='e.g. "Call David Mon at 3pm"'
-                  onKeyDown={e=>{if((e.metaKey||e.ctrlKey)&&e.key==="Enter"){e.preventDefault();handleAddEvent();}}}
-                  style={{ width:"100%", boxSizing:"border-box", borderRadius:7, border:`1px solid ${C.divider}`, background:C.bgSoft, color:C.text, fontSize:ncType.body, padding:"7px 10px", resize:"none", fontFamily:NC_FONT_STACK, outline:"none" }} />
-                {addEventError && <div style={{ fontSize:ncType.meta, color:C.danger, marginTop:4 }}>{addEventError}</div>}
-                <div style={{ display:"flex", gap:6, marginTop:6, justifyContent:"flex-end" }}>
-                  <ActionBtn variant="text" labelColor={C.muted} onClick={()=>{setShowAddEvent(false);setAddEventText("");setAddEventError(null);}}>Cancel</ActionBtn>
-                  <ActionBtn variant="filled" containerColor={C.accent} labelColor="#fff" disabled={addEventLoading||!addEventText.trim()} onClick={handleAddEvent}>{addEventLoading?"Adding…":"Add"}</ActionBtn>
+            {/* Fill the box as a flex column so the timeline's internal scroll bounds correctly. */}
+            <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0 }}>
+              {showAddEvent && (
+                <div style={{ padding:"10px 12px", borderBottom:`1px solid ${C.divider}`, flexShrink:0 }}>
+                  <textarea autoFocus value={addEventText} onChange={e=>setAddEventText(e.target.value)} rows={2} placeholder='e.g. "Call David Mon at 3pm"'
+                    onKeyDown={e=>{if((e.metaKey||e.ctrlKey)&&e.key==="Enter"){e.preventDefault();handleAddEvent();}}}
+                    style={{ width:"100%", boxSizing:"border-box", borderRadius:7, border:`1px solid ${C.divider}`, background:C.bgSoft, color:C.text, fontSize:ncType.body, padding:"7px 10px", resize:"none", fontFamily:NC_FONT_STACK, outline:"none" }} />
+                  {addEventError && <div style={{ fontSize:ncType.meta, color:C.danger, marginTop:4 }}>{addEventError}</div>}
+                  <div style={{ display:"flex", gap:6, marginTop:6, justifyContent:"flex-end" }}>
+                    <ActionBtn variant="text" labelColor={C.muted} onClick={()=>{setShowAddEvent(false);setAddEventText("");setAddEventError(null);}}>Cancel</ActionBtn>
+                    <ActionBtn variant="filled" containerColor={C.accent} labelColor="#fff" disabled={addEventLoading||!addEventText.trim()} onClick={handleAddEvent}>{addEventLoading?"Adding…":"Add"}</ActionBtn>
+                  </div>
                 </div>
+              )}
+              {/* Agenda ⇄ Live time toggle */}
+              <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", gap:2, padding:"2px 6px", flexShrink:0, borderBottom:`1px solid ${C.divider}` }}>
+                <IconBtn icon="schedule" size={26} iconSize={14} color={calCardView==="timeline"?C.text:C.muted} active={calCardView==="timeline"} activeBg={C.hover} onClick={()=>setCalCardView("timeline")} title="Live time" aria-label="Live time view" />
+                <IconBtn icon="view_agenda" size={26} iconSize={14} color={calCardView==="agenda"?C.text:C.muted} active={calCardView==="agenda"} activeBg={C.hover} onClick={()=>setCalCardView("agenda")} title="Agenda" aria-label="Agenda view" />
               </div>
-            )}
-            {!calendarEvents ? emptyMsg("Loading…") : upcomingCal.length === 0 ? emptyMsg("Nothing upcoming.") : upcomingCal.map(row => {
-              const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
-              const lifted = row.now || row.special;
-              const item = (
-                <>
-                  <span slot="headline" style={{ color: lifted?C.text:C.muted, fontWeight:lifted?600:500, wordBreak:"break-word" }}>{row.evt?.summary||"(no title)"}</span>
-                  <span slot="trailing-supporting-text" style={{ color:row.now?C.accent:C.faint, fontWeight:row.now?700:500, whiteSpace:"nowrap" }}>{row.now?"Now":timeLabel}</span>
-                </>
-              );
-              return row.evt?.htmlLink
-                ? <ListItem key={row.evt?.id||row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.sm }}>{item}</ListItem>
-                : <ListItem key={row.evt?.id||row.index} type="text" style={{ borderRadius: RADIUS.sm }}>{item}</ListItem>;
-            })}
+              {!calendarEvents ? (
+                <div style={{ flex:1, minHeight:0, display:"flex", alignItems:"center" }}>{emptyMsg("Loading…")}</div>
+              ) : calCardView === "timeline" ? (
+                <CalendarTimeline calendarRows={calendarRows} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
+              ) : (
+                <div style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden" }}>
+                  {upcomingCal.length === 0 ? emptyMsg("Nothing upcoming.") : upcomingCal.map(row => {
+                    const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+                    const lifted = row.now || row.special;
+                    const item = (
+                      <>
+                        <span slot="headline" style={{ color: lifted?C.text:C.muted, fontWeight:lifted?600:500, wordBreak:"break-word" }}>{row.evt?.summary||"(no title)"}</span>
+                        <span slot="trailing-supporting-text" style={{ color:row.now?C.accent:C.faint, fontWeight:row.now?700:500, whiteSpace:"nowrap" }}>{row.now?"Now":timeLabel}</span>
+                      </>
+                    );
+                    return row.evt?.htmlLink
+                      ? <ListItem key={row.evt?.id||row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.sm }}>{item}</ListItem>
+                      : <ListItem key={row.evt?.id||row.index} type="text" style={{ borderRadius: RADIUS.sm }}>{item}</ListItem>;
+                  })}
+                </div>
+              )}
+            </div>
           </MobileBox>
         </div>
 
@@ -3111,15 +3221,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
               {/* ── Calendar card — Google Calendar-style daily timeline ── */}
               {(calendarEvents !== null || (googleLoading && googleToken)) && (() => {
-                const LABEL_W = 40;
-                const PX_MIN = TIMELINE_PX_HR / 60;
-                const TOTAL_H = 24 * TIMELINE_PX_HR;
-                const allDayRows = calendarRows.filter(r => !!r.evt?.start?.date && !r.evt?.start?.dateTime);
-                const timedRows = calendarRows.filter(r => !!r.evt?.start?.dateTime && r.startMs > 0);
-                const timedWithCols = assignCalendarColumns(timedRows);
-                const evtAccent = evt => GCAL_COLORS[evt?.colorId] || C.warning;
-                const h24 = nowDate.getHours(), m24 = nowDate.getMinutes();
-                const nowTimeLabel = `${h24 % 12 || 12}:${String(m24).padStart(2, "0")}${h24 >= 12 ? "p" : "a"}`;
                 const acctMenu = googleToken && googleAccounts.length >= 1 ? (
                   <div style={{ position: "relative" }}>
                     <IconBtn icon="manage_accounts" size={28} iconSize={16}
@@ -3166,75 +3267,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>Loading calendar…</span>
                       </div>
                     ) : (
-                      <>
-                        {allDayRows.length > 0 && (
-                          <div style={{ paddingLeft: LABEL_W + 4, padding: `3px 4px 3px ${LABEL_W + 4}px`, borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", flexWrap: "wrap", gap: 3 }}>
-                            {allDayRows.map(row => (
-                              <span key={row.evt.id || row.index} style={{ fontSize: NC_TYPE.small, fontWeight: 500, color: row.past ? C.faint : C.text, background: row.past ? C.hover : softBg(evtAccent(row.evt), 0.22), borderRadius: RADIUS.xs, padding: "1px 6px", opacity: row.past ? 0.7 : 1 }}>
-                                {row.evt.summary || "(no title)"}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        <div ref={calendarNowRef} style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
-                          <div style={{ position: "relative", height: TOTAL_H }}>
-                            {/* Event column — events positioned absolutely by time */}
-                            <div style={{ position: "absolute", left: LABEL_W, right: 0, top: 0, bottom: 0 }}>
-                              {Array.from({ length: 24 }, (_, h) => (
-                                <div key={h} style={{ position: "absolute", top: h * TIMELINE_PX_HR, left: 0, right: 0, height: 1, background: C.divider, opacity: h === 0 ? 0 : 0.5, pointerEvents: "none" }} />
-                              ))}
-                              {timedWithCols.map(row => {
-                                const s = new Date(row.evt.start.dateTime);
-                                const eDate = row.evt.end?.dateTime ? new Date(row.evt.end.dateTime) : s;
-                                const startMin = s.getHours() * 60 + s.getMinutes();
-                                const endMin = Math.max(startMin + 15, eDate.getHours() * 60 + eDate.getMinutes());
-                                const top = startMin * PX_MIN;
-                                const height = Math.max(22, (endMin - startMin) * PX_MIN);
-                                const color = evtAccent(row.evt);
-                                return (
-                                  <div key={row.evt.id || row.index}
-                                    title={`${row.evt.summary || "(no title)"}\n${row.label}`}
-                                    role={row.evt.htmlLink ? "link" : undefined}
-                                    tabIndex={row.evt.htmlLink ? 0 : undefined}
-                                    onClick={row.evt.htmlLink ? () => window.open(row.evt.htmlLink, "_blank") : undefined}
-                                    onKeyDown={row.evt.htmlLink ? e => { if (e.key === "Enter") window.open(row.evt.htmlLink, "_blank"); } : undefined}
-                                    style={{
-                                      position: "absolute", top, height,
-                                      left: `${(row.col / row.colCount) * 100}%`,
-                                      width: `calc(${100 / row.colCount}% - 2px)`,
-                                      background: softBg(color, row.past ? 0.06 : row.now ? 0.22 : 0.14),
-                                      borderLeft: `2px solid ${softBorder(color, row.past ? 0.3 : 0.8)}`,
-                                      borderRadius: `0 ${RADIUS.xs}px ${RADIUS.xs}px 0`,
-                                      overflow: "hidden", cursor: row.evt.htmlLink ? "pointer" : "default",
-                                      padding: "2px 4px", boxSizing: "border-box", opacity: row.past ? 0.55 : 1,
-                                    }}>
-                                    <div style={{ fontSize: 10, fontWeight: row.now ? 700 : 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.2, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-                                      {row.evt.summary || "(no title)"}
-                                    </div>
-                                    {height >= 34 && (
-                                      <div style={{ fontSize: 9, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.2, marginTop: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-                                        {row.label}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            {/* Hour labels */}
-                            {Array.from({ length: 24 }, (_, h) => h > 0 && (
-                              <span key={h} style={{ position: "absolute", top: h * TIMELINE_PX_HR, left: 0, width: LABEL_W - 4, textAlign: "right", transform: "translateY(-50%)", fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1, pointerEvents: "none", fontVariantNumeric: "tabular-nums" }}>
-                                {h < 12 ? `${h}a` : h === 12 ? "12p" : `${h - 12}p`}
-                              </span>
-                            ))}
-                            {/* Now-line — style.top driven by rAF each frame; JSX top:0 never changes so React never resets it */}
-                            <div ref={calendarNowLineRef} style={{ position: "absolute", left: 0, right: 0, top: 0, zIndex: 3, pointerEvents: "none", display: "flex", alignItems: "center" }}>
-                              <span style={{ width: LABEL_W - 4, textAlign: "right", fontSize: 9, color: nowLineColor, fontWeight: 700, fontFamily: NC_FONT_STACK, flexShrink: 0, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{nowTimeLabel}</span>
-                              <div style={{ width: 8, height: 8, borderRadius: "50%", background: nowLineColor, flexShrink: 0 }} />
-                              <div style={{ flex: 1, height: 2, background: nowLineColor, borderRadius: 1 }} />
-                            </div>
-                          </div>
-                        </div>
-                      </>
+                      <CalendarTimeline calendarRows={calendarRows} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
                     )}
                   </div>
                 );
