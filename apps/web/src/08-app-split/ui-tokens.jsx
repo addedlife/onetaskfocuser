@@ -339,6 +339,17 @@ export const NC_GLOBAL_CSS = `
 .nc-suite-root :where(h1, h2, h3, h4, h5, h6, strong, b) {
   font-weight: var(--nc-font-weight-strong, 500) !important;
 }
+/* M3 buttons carry their label padding on :host([has-icon]) etc. The global
+   *{padding:0} reset (index.html) clobbers that host padding, so the icon hugs
+   the left edge and the label the right → squished "oval blob" buttons. Restore
+   the real M3 leading/trailing space here (chips & list-items pad inner shadow
+   nodes, so the reset never reaches them — only buttons need this). */
+md-filled-button, md-filled-tonal-button, md-outlined-button, md-elevated-button { padding-inline: 24px; }
+md-filled-button[has-icon]:not([trailing-icon]), md-filled-tonal-button[has-icon]:not([trailing-icon]), md-outlined-button[has-icon]:not([trailing-icon]), md-elevated-button[has-icon]:not([trailing-icon]) { padding-inline: 16px 24px; }
+md-filled-button[trailing-icon], md-filled-tonal-button[trailing-icon], md-outlined-button[trailing-icon], md-elevated-button[trailing-icon] { padding-inline: 24px 16px; }
+md-text-button { padding-inline: 12px; }
+md-text-button[has-icon]:not([trailing-icon]) { padding-inline: 12px 16px; }
+md-text-button[trailing-icon] { padding-inline: 16px 12px; }
 .nc-suite-root * {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
