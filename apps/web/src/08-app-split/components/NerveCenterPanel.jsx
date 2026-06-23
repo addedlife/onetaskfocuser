@@ -2468,19 +2468,36 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <CalendarTimeline calendarRows={calendarRows} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
               ) : (
                 <div style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden" }}>
-                  {upcomingCal.length === 0 ? emptyMsg("Nothing upcoming.") : upcomingCal.map(row => {
-                    const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
-                    const lifted = row.now || row.special;
-                    const item = (
+                  {calendarRows.length === 0 ? emptyMsg("No events today.") : (() => {
+                    const pastRows = calendarRows.filter(r => r.past);
+                    const upRows = calendarRows.filter(r => !r.past);
+                    const nlc = C.success || C.accent || "#1A9E78";
+                    const NowBar = (
+                      <div style={{ display:"grid", gridTemplateColumns:"44px minmax(0,1fr)", gap:8, alignItems:"center", padding:"4px 0", margin:"0 2px" }}>
+                        <span style={{ color:nlc, fontSize:NC_TYPE.small, fontWeight:700, textAlign:"right", fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>Now</span>
+                        <span style={{ height:2, borderRadius:2, background:nlc, boxShadow:`0 0 0 1px ${softBorder(nlc,0.18)}` }} />
+                      </div>
+                    );
+                    const mkItem = (row) => {
+                      const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+                      const item = (
+                        <>
+                          <span slot="headline" style={{ color:row.now?C.text:row.past?C.faint:C.muted, fontWeight:row.now?600:500, wordBreak:"break-word" }}>{row.evt?.summary||"(no title)"}</span>
+                          <span slot="trailing-supporting-text" style={{ color:row.now?C.accent:C.faint, fontWeight:row.now?700:500, whiteSpace:"nowrap" }}>{row.now?"Now":timeLabel}</span>
+                        </>
+                      );
+                      return row.evt?.htmlLink
+                        ? <ListItem key={row.evt?.id||row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius:RADIUS.sm, opacity:row.past?0.65:1 }}>{item}</ListItem>
+                        : <ListItem key={row.evt?.id||row.index} type="text" style={{ borderRadius:RADIUS.sm, opacity:row.past?0.65:1 }}>{item}</ListItem>;
+                    };
+                    return (
                       <>
-                        <span slot="headline" style={{ color: lifted?C.text:C.muted, fontWeight:lifted?600:500, wordBreak:"break-word" }}>{row.evt?.summary||"(no title)"}</span>
-                        <span slot="trailing-supporting-text" style={{ color:row.now?C.accent:C.faint, fontWeight:row.now?700:500, whiteSpace:"nowrap" }}>{row.now?"Now":timeLabel}</span>
+                        {pastRows.length > 0 && <List style={cardListStyle}>{pastRows.map(mkItem)}</List>}
+                        {NowBar}
+                        {upRows.length > 0 && <List style={cardListStyle}>{upRows.map(mkItem)}</List>}
                       </>
                     );
-                    return row.evt?.htmlLink
-                      ? <ListItem key={row.evt?.id||row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.sm }}>{item}</ListItem>
-                      : <ListItem key={row.evt?.id||row.index} type="text" style={{ borderRadius: RADIUS.sm }}>{item}</ListItem>;
-                  })}
+                  })()}
                 </div>
               )}
             </div>
