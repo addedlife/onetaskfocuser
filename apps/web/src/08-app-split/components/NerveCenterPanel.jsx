@@ -3267,7 +3267,49 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>Loading calendar…</span>
                       </div>
                     ) : (
-                      <CalendarTimeline calendarRows={calendarRows} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
+                      <>
+                        {/* ── Live timeline — Google Calendar day view ── */}
+                        <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                          <CalendarTimeline calendarRows={calendarRows} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
+                        </div>
+                        {/* ── Compact agenda — at-a-glance daily list with M3 NOW pointer ── */}
+                        {(() => {
+                          const pastRows = calendarRows.filter(r => r.past);
+                          const upcomingRows = calendarRows.filter(r => !r.past);
+                          const agendaListVars = { ...denseListVars({ dense: true, primary: C.text, secondary: C.muted, hover: C.text }), padding: 0, background: "transparent" };
+                          const mkAgendaItem = (row) => {
+                            const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+                            const content = (
+                              <>
+                                <span slot="headline" style={{ color: row.now ? C.text : row.past ? C.faint : C.muted, fontWeight: row.now ? 600 : 400, opacity: row.past ? 0.65 : 1 }}>{row.evt?.summary || "(no title)"}</span>
+                                <span slot="trailing-supporting-text" style={{ color: row.now ? nowLineColor : C.faint, fontWeight: row.now ? 700 : 400, whiteSpace: "nowrap" }}>{row.now ? "Now" : timeLabel}</span>
+                              </>
+                            );
+                            return row.evt?.htmlLink
+                              ? <ListItem key={row.evt?.id || row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.xs, opacity: row.past ? 0.7 : 1 }}>{content}</ListItem>
+                              : <ListItem key={row.evt?.id || row.index} type="text" style={{ borderRadius: RADIUS.xs, opacity: row.past ? 0.7 : 1 }}>{content}</ListItem>;
+                          };
+                          const NowBar = (
+                            <div style={{ display: "grid", gridTemplateColumns: "44px minmax(0,1fr)", gap: 8, alignItems: "center", padding: "4px 0", margin: "0 2px" }}>
+                              <span style={{ color: nowLineColor, fontSize: NC_TYPE.small, fontWeight: 700, textAlign: "right", fontFamily: NC_FONT_STACK, whiteSpace: "nowrap" }}>Now</span>
+                              <span style={{ height: 2, borderRadius: 2, background: nowLineColor, boxShadow: `0 0 0 1px ${softBorder(nowLineColor, 0.18)}` }} />
+                            </div>
+                          );
+                          return (
+                            <div style={{ flex: "0 0 auto", maxHeight: 170, overflowY: "auto", overflowX: "hidden", borderTop: `1px solid ${C.divider}`, overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
+                              {calendarRows.length === 0 ? (
+                                <div style={{ padding: "8px 12px", fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, textAlign: "center" }}>No events today</div>
+                              ) : (
+                                <>
+                                  {pastRows.length > 0 && <List style={agendaListVars}>{pastRows.map(mkAgendaItem)}</List>}
+                                  {NowBar}
+                                  {upcomingRows.length > 0 && <List style={agendaListVars}>{upcomingRows.map(mkAgendaItem)}</List>}
+                                </>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </>
                     )}
                   </div>
                 );
