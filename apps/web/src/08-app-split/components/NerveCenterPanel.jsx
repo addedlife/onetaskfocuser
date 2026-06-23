@@ -53,6 +53,7 @@ function softBorder(color, alpha) {
 }
 
 const MIN_COLLAPSED_TASKS = 5;
+const TIMELINE_PX_HR = 60; // 60 px/hour in the daily timeline — Google Calendar day-view density
 
 // SweepBar — rAF-driven sweep indicator for clock faces.
 // Runs at 60fps via requestAnimationFrame; no state updates, no CSS animation tricks.
@@ -558,6 +559,33 @@ function hexToRgba(hex, a) {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 
+// Google Calendar color palette — keyed by event.colorId (1–11)
+const GCAL_COLORS = {
+  "1": "#7986CB", "2": "#33B679", "3": "#8E24AA", "4": "#E67C73",
+  "5": "#F6BF26", "6": "#F4511E", "7": "#039BE5", "8": "#616161",
+  "9": "#3F51B5", "10": "#0B8043", "11": "#D50000",
+};
+
+// Assigns non-overlapping column slots to overlapping timed calendar events.
+// Returns rows with .col (0-based column index) and .colCount (total columns in the group).
+function assignCalendarColumns(rows) {
+  const sorted = [...rows].sort((a, b) => a.startMs - b.startMs);
+  const colEnds = [];
+  const withCols = sorted.map(row => {
+    const endMs = calendarEndMs(row.evt);
+    let col = 0;
+    while (col < colEnds.length && colEnds[col] > row.startMs) col++;
+    colEnds[col] = endMs;
+    return { ...row, col, endMs };
+  });
+  return withCols.map(row => {
+    const colCount = withCols
+      .filter(o => o.startMs < row.endMs && o.endMs > row.startMs)
+      .reduce((mx, o) => Math.max(mx, o.col + 1), 1);
+    return { ...row, colCount };
+  });
+}
+
 // Mobile "nerve center" accordion section. Hoisted to module scope (NOT defined inside
 // NerveCenterPanel) so its component identity stays stable across renders — otherwise the
 // per-second clock re-render recreated the function, remounting every section and dropping
@@ -750,7 +778,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const taskMoreButtonRef = useRef(null);
   const taskInputRef = useRef(null);
   const stackedTaskInputRef = useRef(null);
-  const calendarNowRef = useRef(null);
+  const calendarNowRef = useRef(null);     // timeline scroll container
+  const calendarNowLineRef = useRef(null); // now-line div — top driven by rAF, not React
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [addEventText, setAddEventText] = useState('');
   const [addEventLoading, setAddEventLoading] = useState(false);
@@ -802,6 +831,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     setChiefProfileDraft(markdownFromChiefProfile(chiefProfile));
   }, [chiefProfile?.updatedAt]); // eslint-disable-line
   const [mobileMenuOpen, setMobileMenuOpen] = useState(null); // id of section whose ··· menu is open
+  const [googleAcctMenuOpen, setGoogleAcctMenuOpen] = useState(false); // account-picker dropdown in calendar/mail card headers
   const [mobileExpanded, setMobileExpanded] = useState(() => new Set()); // ids of expanded accordion sections — all collapsed by default; multiple may stay open
   const [expandedBoxId, setExpandedBoxId] = useState(null); // boxes view: card expanded to page height (null = even 5-way split); ephemeral by design
   const [expandedRows, setExpandedRows] = useState(() => new Set()); // box-mode rows tapped open to reveal full text
@@ -1031,12 +1061,29 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     return nextIndex === -1 ? calendarRows.length : nextIndex;
   }, [calendarRows, calendarMinuteKey]);
   useEffect(() => {
-    if (!calendarNowRef.current || calendarEvents === null) return undefined;
-    const frame = window.requestAnimationFrame(() => {
-      calendarNowRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
+    if (calendarEvents === null) return;
+    const frame = requestAnimationFrame(() => {
+      const el = calendarNowRef.current;
+      if (!el) return;
+      const n = new Date();
+      const topPx = (n.getHours() * 60 + n.getMinutes()) * (TIMELINE_PX_HR / 60);
+      el.scrollTo({ top: Math.max(0, topPx - el.clientHeight / 2), behavior: "smooth" });
     });
-    return () => window.cancelAnimationFrame(frame);
-  }, [calendarMinuteKey, calendarEvents, calendarRows.length]);
+    return () => cancelAnimationFrame(frame);
+  }, [calendarEvents]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const PX_MIN = TIMELINE_PX_HR / 60;
+    let raf;
+    const tick = () => {
+      if (calendarNowLineRef.current) {
+        const n = new Date();
+        calendarNowLineRef.current.style.top = `${(n.getHours() * 60 + n.getMinutes() + n.getSeconds() / 60) * PX_MIN}px`;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const chiefProfileNotes = useMemo(() => profileNotesForPrompt(chiefProfile), [chiefProfile?.updatedAt]);
   const chiefContext = useMemo(() => {
     const bucketDate = new Date(timeBucket * CHIEF_TIME_BUCKET_MS);
@@ -3006,25 +3053,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           return (
             <React.Fragment>
             <div style={{ display: "flex", flexDirection: "column", flex: "0 0 auto", gap: 6, minHeight: 0 }}>
-              {/* Account toggle: per-account chips + Both when 2+ connected, and a
-                  way to add another Google account. Shown whenever connected. */}
-              {googleToken && googleAccounts.length >= 1 && (
-                <div style={{ padding: "0 2px", "--md-filter-chip-container-height": "28px", "--md-assist-chip-container-height": "28px", "--md-filter-chip-label-text-size": NC_TYPE.meta, "--md-assist-chip-label-text-size": NC_TYPE.meta }}>
-                  <ChipSet>
-                    {googleAccounts.length > 1 && [...googleAccounts.map(em => ({ key: em, label: em.split("@")[0] })), { key: "all", label: "Both" }].map(opt => {
-                      const active = opt.key === "all" ? googleAccountFilter === "all" : googleAccountFilter === opt.key;
-                      return (
-                        <FilterChip key={opt.key} label={opt.label} selected={active}
-                          title={opt.key === "all" ? "Show both accounts merged" : opt.key}
-                          onClick={() => onSelectGoogleAccount && onSelectGoogleAccount(opt.key)} />
-                      );
-                    })}
-                    <AssistChip label="account" title="Connect another Google account" onClick={onConnectGoogle}>
-                      <span slot="icon" className="material-symbols-rounded" style={{ fontSize: 16 }}>add</span>
-                    </AssistChip>
-                  </ChipSet>
-                </div>
-              )}
               <div style={lowerGridStyle}>
 
               {!googleConfigured && (
@@ -3081,71 +3109,136 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </div>
               )}
 
-              {/* ── Calendar card ── */}
-              {(calendarEvents !== null || (googleLoading && googleToken)) && (
-                <div className="nc-card-group" style={tintedCard(C.warning)}>
-                  {cardHeader("calendar_today", "Today", C.warning, <>
-                    {googleLoading && <Spinner size={13} color={C.faint} />}
-                    <CardAction icon="add" title="Add event" onClick={() => setShowAddEvent(true)} />
-                    <CardAction icon="open_in_new" title="Open Google Calendar" href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer" />
-                    <CardAction icon="refresh" title="Refresh" onClick={onRefreshCalendar || onConnectGoogle} />
-                    <CardAction icon="link_off" title="Disconnect Google" onClick={onDisconnectGoogle} />
-                  </>)}
-                  <div style={cardBody}>
+              {/* ── Calendar card — Google Calendar-style daily timeline ── */}
+              {(calendarEvents !== null || (googleLoading && googleToken)) && (() => {
+                const LABEL_W = 40;
+                const PX_MIN = TIMELINE_PX_HR / 60;
+                const TOTAL_H = 24 * TIMELINE_PX_HR;
+                const allDayRows = calendarRows.filter(r => !!r.evt?.start?.date && !r.evt?.start?.dateTime);
+                const timedRows = calendarRows.filter(r => !!r.evt?.start?.dateTime && r.startMs > 0);
+                const timedWithCols = assignCalendarColumns(timedRows);
+                const evtAccent = evt => GCAL_COLORS[evt?.colorId] || C.warning;
+                const h24 = nowDate.getHours(), m24 = nowDate.getMinutes();
+                const nowTimeLabel = `${h24 % 12 || 12}:${String(m24).padStart(2, "0")}${h24 >= 12 ? "p" : "a"}`;
+                const acctMenu = googleToken && googleAccounts.length >= 1 ? (
+                  <div style={{ position: "relative" }}>
+                    <IconBtn icon="manage_accounts" size={28} iconSize={16}
+                      color={googleAcctMenuOpen ? accentBlue : C.muted}
+                      title={`Account: ${googleAccountFilter === "all" ? "Both" : googleAccountFilter}`}
+                      onClick={() => setGoogleAcctMenuOpen(p => !p)} />
+                    {googleAcctMenuOpen && (
+                      <>
+                        <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={() => setGoogleAcctMenuOpen(false)} />
+                        <div style={{ position: "absolute", right: 0, top: 30, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, minWidth: 200, boxShadow: ELEV[3], overflow: "hidden" }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "8px 12px 4px" }}>Account</div>
+                          {[...googleAccounts.map(em => ({ key: em, label: em })), ...(googleAccounts.length > 1 ? [{ key: "all", label: "Both accounts" }] : [])].map(opt => {
+                            const active = opt.key === "all" ? googleAccountFilter === "all" : googleAccountFilter === opt.key;
+                            return (
+                              <button key={opt.key} onClick={() => { onSelectGoogleAccount?.(opt.key); setGoogleAcctMenuOpen(false); }}
+                                style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderTop: `1px solid ${C.divider}`, background: active ? softBg(accentBlue, 0.08) : "transparent", color: active ? accentBlue : C.text, cursor: "pointer", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, textAlign: "left", fontWeight: active ? 600 : 400 }}>
+                                <span style={{ width: 14, flexShrink: 0, display: "inline-flex" }}>{active && suiteIcon("check", 13)}</span>
+                                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{opt.label}</span>
+                              </button>
+                            );
+                          })}
+                          <button onClick={() => { onConnectGoogle?.(); setGoogleAcctMenuOpen(false); }}
+                            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderTop: `1px solid ${C.divider}`, background: "transparent", color: C.muted, cursor: "pointer", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, textAlign: "left" }}>
+                            <span style={{ width: 14, flexShrink: 0, display: "inline-flex" }}>{suiteIcon("add", 13)}</span> Add account
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : null;
+                return (
+                  <div className="nc-card-group" style={tintedCard(C.warning)}>
+                    {cardHeader("calendar_today", "Today", C.warning, <>
+                      {googleLoading && <Spinner size={13} color={C.faint} />}
+                      {acctMenu}
+                      <CardAction icon="add" title="Add event" onClick={() => setShowAddEvent(true)} />
+                      <CardAction icon="open_in_new" title="Open Google Calendar" href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener noreferrer" />
+                      <CardAction icon="refresh" title="Refresh" onClick={onRefreshCalendar || onConnectGoogle} />
+                      <CardAction icon="link_off" title="Disconnect Google" onClick={onDisconnectGoogle} />
+                    </>)}
                     {!calendarEvents ? (
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap:8 }}>
+                      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                         <Spinner size={16} />
                         <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>Loading calendar…</span>
                       </div>
-                    ) : calendarRows.length === 0 ? (
-                      <div style={{ minHeight: "100%", display: "flex", flexDirection: "column", justifyContent: "center", gap: 8 }}>
-                        {calendarNowLine("now-empty")}
-                        <p style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, margin: "0", textAlign: "center" }}>Nothing today</p>
-                      </div>
                     ) : (
-                      <React.Fragment>
-                      {specialCalendarRows.length > 0 && (
-                        <div style={{ border: `1px solid ${softBorder(accentBlue, 0.24)}`, background: softBg(accentBlue, 0.06), borderRadius: RADIUS.sm, margin: "2px 2px 6px", overflow: "hidden" }}>
-                          <List style={cardListStyle}>
-                            {specialCalendarRows.map(row => {
-                              const item = (
-                                <>
-                                  <span slot="headline" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: C.text, fontWeight: 600 }}>{row.evt?.summary || "(no title)"}</span>
-                                  <span slot="trailing-supporting-text" style={{ color: row.now ? C.danger : C.accent, fontWeight: 600, whiteSpace: "nowrap" }}>{row.now ? "Now" : row.label}</span>
-                                </>
-                              );
-                              return row.evt?.htmlLink
-                                ? <ListItem key={`special-${row.evt?.id || row.index}`} type="link" href={row.evt.htmlLink} target="_blank">{item}</ListItem>
-                                : <ListItem key={`special-${row.evt?.id || row.index}`} type="text">{item}</ListItem>;
-                            })}
-                          </List>
+                      <>
+                        {allDayRows.length > 0 && (
+                          <div style={{ paddingLeft: LABEL_W + 4, padding: `3px 4px 3px ${LABEL_W + 4}px`, borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", flexWrap: "wrap", gap: 3 }}>
+                            {allDayRows.map(row => (
+                              <span key={row.evt.id || row.index} style={{ fontSize: NC_TYPE.small, fontWeight: 500, color: row.past ? C.faint : C.text, background: row.past ? C.hover : softBg(evtAccent(row.evt), 0.22), borderRadius: RADIUS.xs, padding: "1px 6px", opacity: row.past ? 0.7 : 1 }}>
+                                {row.evt.summary || "(no title)"}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div ref={calendarNowRef} style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
+                          <div style={{ position: "relative", height: TOTAL_H }}>
+                            {/* Event column — events positioned absolutely by time */}
+                            <div style={{ position: "absolute", left: LABEL_W, right: 0, top: 0, bottom: 0 }}>
+                              {Array.from({ length: 24 }, (_, h) => (
+                                <div key={h} style={{ position: "absolute", top: h * TIMELINE_PX_HR, left: 0, right: 0, height: 1, background: C.divider, opacity: h === 0 ? 0 : 0.5, pointerEvents: "none" }} />
+                              ))}
+                              {timedWithCols.map(row => {
+                                const s = new Date(row.evt.start.dateTime);
+                                const eDate = row.evt.end?.dateTime ? new Date(row.evt.end.dateTime) : s;
+                                const startMin = s.getHours() * 60 + s.getMinutes();
+                                const endMin = Math.max(startMin + 15, eDate.getHours() * 60 + eDate.getMinutes());
+                                const top = startMin * PX_MIN;
+                                const height = Math.max(22, (endMin - startMin) * PX_MIN);
+                                const color = evtAccent(row.evt);
+                                return (
+                                  <div key={row.evt.id || row.index}
+                                    title={`${row.evt.summary || "(no title)"}\n${row.label}`}
+                                    role={row.evt.htmlLink ? "link" : undefined}
+                                    tabIndex={row.evt.htmlLink ? 0 : undefined}
+                                    onClick={row.evt.htmlLink ? () => window.open(row.evt.htmlLink, "_blank") : undefined}
+                                    onKeyDown={row.evt.htmlLink ? e => { if (e.key === "Enter") window.open(row.evt.htmlLink, "_blank"); } : undefined}
+                                    style={{
+                                      position: "absolute", top, height,
+                                      left: `${(row.col / row.colCount) * 100}%`,
+                                      width: `calc(${100 / row.colCount}% - 2px)`,
+                                      background: softBg(color, row.past ? 0.06 : row.now ? 0.22 : 0.14),
+                                      borderLeft: `2px solid ${softBorder(color, row.past ? 0.3 : 0.8)}`,
+                                      borderRadius: `0 ${RADIUS.xs}px ${RADIUS.xs}px 0`,
+                                      overflow: "hidden", cursor: row.evt.htmlLink ? "pointer" : "default",
+                                      padding: "2px 4px", boxSizing: "border-box", opacity: row.past ? 0.55 : 1,
+                                    }}>
+                                    <div style={{ fontSize: 10, fontWeight: row.now ? 700 : 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.2, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                                      {row.evt.summary || "(no title)"}
+                                    </div>
+                                    {height >= 34 && (
+                                      <div style={{ fontSize: 9, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.2, marginTop: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                                        {row.label}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {/* Hour labels */}
+                            {Array.from({ length: 24 }, (_, h) => h > 0 && (
+                              <span key={h} style={{ position: "absolute", top: h * TIMELINE_PX_HR, left: 0, width: LABEL_W - 4, textAlign: "right", transform: "translateY(-50%)", fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1, pointerEvents: "none", fontVariantNumeric: "tabular-nums" }}>
+                                {h < 12 ? `${h}a` : h === 12 ? "12p" : `${h - 12}p`}
+                              </span>
+                            ))}
+                            {/* Now-line — style.top driven by rAF each frame; JSX top:0 never changes so React never resets it */}
+                            <div ref={calendarNowLineRef} style={{ position: "absolute", left: 0, right: 0, top: 0, zIndex: 3, pointerEvents: "none", display: "flex", alignItems: "center" }}>
+                              <span style={{ width: LABEL_W - 4, textAlign: "right", fontSize: 9, color: nowLineColor, fontWeight: 700, fontFamily: NC_FONT_STACK, flexShrink: 0, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{nowTimeLabel}</span>
+                              <div style={{ width: 8, height: 8, borderRadius: "50%", background: nowLineColor, flexShrink: 0 }} />
+                              <div style={{ flex: 1, height: 2, background: nowLineColor, borderRadius: 1 }} />
+                            </div>
+                          </div>
                         </div>
-                      )}
-                      <List style={cardListStyle}>
-                      {calendarRows.map((row, i) => {
-                        const evt = row.evt;
-                        const now = row.now;
-                        const lifted = row.special || row.now;
-                        const tint = now ? softBg(accentBlue, 0.12) : lifted ? softBg(accentBlue, 0.06) : null;
-                        const item = (
-                          <>
-                            {tint && <div slot="container" style={{ background: tint, borderRadius: RADIUS.sm }} />}
-                            <span slot="headline" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: lifted ? C.text : C.muted, fontWeight: lifted ? 600 : 500, opacity: row.routine && !lifted ? 0.78 : 1 }}>{evt.summary || "(no title)"}</span>
-                            <span slot="trailing-supporting-text" style={{ color: now ? accentBlue : C.faint, fontWeight: now ? 700 : 500, whiteSpace: "nowrap" }}>{now ? "Now" : fmtEvtTime(evt)}</span>
-                          </>
-                        );
-                        const li = evt.htmlLink
-                          ? <ListItem ref={now ? calendarNowRef : null} type="link" href={evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.sm, scrollMarginBlock: now ? "50%" : undefined }}>{item}</ListItem>
-                          : <ListItem ref={now ? calendarNowRef : null} type="text" style={{ borderRadius: RADIUS.sm, scrollMarginBlock: now ? "50%" : undefined }}>{item}</ListItem>;
-                        return <React.Fragment key={evt.id || i}>{!hasCurrentCalendarEvent && i === calendarNowInsertIndex && calendarNowLine("now-line")}{li}</React.Fragment>;
-                      })}
-                      {!hasCurrentCalendarEvent && calendarNowInsertIndex === calendarRows.length && calendarNowLine("now-line-end")}
-                      </List>
-                      </React.Fragment>
+                      </>
                     )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
 
               {/* ── Clock card — right-click to change style ── */}
@@ -3341,6 +3434,36 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <div className="nc-card-group" style={tintedCard(CAT_MAIL)}>
                   {cardHeader("mail", "Mail", CAT_MAIL, <>
                     {googleLoading && <Spinner size={13} color={C.faint} />}
+                    {googleToken && googleAccounts.length >= 1 && (
+                      <div style={{ position: "relative" }}>
+                        <IconBtn icon="manage_accounts" size={28} iconSize={16}
+                          color={googleAcctMenuOpen ? accentBlue : C.muted}
+                          title={`Account: ${googleAccountFilter === "all" ? "Both" : googleAccountFilter}`}
+                          onClick={() => setGoogleAcctMenuOpen(p => !p)} />
+                        {googleAcctMenuOpen && (
+                          <>
+                            <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={() => setGoogleAcctMenuOpen(false)} />
+                            <div style={{ position: "absolute", right: 0, top: 30, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, minWidth: 200, boxShadow: ELEV[3], overflow: "hidden" }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "8px 12px 4px" }}>Account</div>
+                              {[...googleAccounts.map(em => ({ key: em, label: em })), ...(googleAccounts.length > 1 ? [{ key: "all", label: "Both accounts" }] : [])].map(opt => {
+                                const active = opt.key === "all" ? googleAccountFilter === "all" : googleAccountFilter === opt.key;
+                                return (
+                                  <button key={opt.key} onClick={() => { onSelectGoogleAccount?.(opt.key); setGoogleAcctMenuOpen(false); }}
+                                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderTop: `1px solid ${C.divider}`, background: active ? softBg(accentBlue, 0.08) : "transparent", color: active ? accentBlue : C.text, cursor: "pointer", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, textAlign: "left", fontWeight: active ? 600 : 400 }}>
+                                    <span style={{ width: 14, flexShrink: 0, display: "inline-flex" }}>{active && suiteIcon("check", 13)}</span>
+                                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{opt.label}</span>
+                                  </button>
+                                );
+                              })}
+                              <button onClick={() => { onConnectGoogle?.(); setGoogleAcctMenuOpen(false); }}
+                                style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderTop: `1px solid ${C.divider}`, background: "transparent", color: C.muted, cursor: "pointer", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, textAlign: "left" }}>
+                                <span style={{ width: 14, flexShrink: 0, display: "inline-flex" }}>{suiteIcon("add", 13)}</span> Add account
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                     <CardAction icon="open_in_new" title="Open Gmail" href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" />
                     <CardAction icon="refresh" title="Refresh mail and calendar" onClick={onRefreshCalendar || onConnectGoogle} />
                   </>)}
