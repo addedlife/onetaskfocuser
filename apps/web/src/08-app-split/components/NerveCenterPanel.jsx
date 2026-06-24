@@ -640,7 +640,7 @@ function CalendarTimeline({ calendarRows, nowDate, C, scrollRef, nowLineRef }) {
                     position: "absolute", top, height,
                     left: `${(row.col / row.colCount) * 100}%`,
                     width: `calc(${100 / row.colCount}% - 2px)`,
-                    background: softBg(color, row.past ? 0.06 : row.now ? 0.22 : 0.14),
+                    background: softBg(color, row.past ? 0.28 : row.now ? 0.72 : 0.52),
                     borderLeft: `2px solid ${softBorder(color, row.past ? 0.3 : 0.8)}`,
                     borderRadius: `0 ${RADIUS.xs}px ${RADIUS.xs}px 0`,
                     overflow: "hidden", cursor: row.evt.htmlLink ? "pointer" : "default",
@@ -3285,8 +3285,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       </div>
                     ) : (
                       <>
+                        {/* ── Live timeline (2/3) + compact agenda (1/3) — side by side ── */}
+                        <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "row", overflow: "hidden" }}>
                         {/* ── Live timeline — Google Calendar day view ── */}
-                        <div style={{ flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                        <div style={{ flex: "2 1 0", minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                           <CalendarTimeline calendarRows={calendarRows} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
                         </div>
                         {/* ── Compact agenda — at-a-glance daily list with M3 NOW pointer ── */}
@@ -3313,7 +3315,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                             </div>
                           );
                           return (
-                            <div style={{ flex: "0 0 auto", maxHeight: 170, overflowY: "auto", overflowX: "hidden", borderTop: `1px solid ${C.divider}`, overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
+                            <div style={{ flex: "1 1 0", minWidth: 0, overflowY: "auto", overflowX: "hidden", borderLeft: `1px solid ${C.divider}`, overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
                               {calendarRows.length === 0 ? (
                                 <div style={{ padding: "8px 12px", fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, textAlign: "center" }}>No events today</div>
                               ) : (
@@ -3326,6 +3328,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                             </div>
                           );
                         })()}
+                        </div>{/* end row wrapper */}
                       </>
                     )}
                   </div>
