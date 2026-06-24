@@ -597,8 +597,8 @@ function CalendarTimeline({ calendarRows, nowDate, C, scrollRef, nowLineRef }) {
   const PX_MIN = TIMELINE_PX_HR / 60;
   const TOTAL_H = 24 * TIMELINE_PX_HR;
   const nowLineColor = C.success || C.accent || "#1A9E78";
-  const allDayRows = calendarRows.filter(r => !!r.evt?.start?.date && !r.evt?.start?.dateTime);
-  const timedRows = calendarRows.filter(r => !!r.evt?.start?.dateTime && r.startMs > 0);
+  const allDayRows = calendarRows.filter(r => !!r.evt?.start?.date && !r.evt?.start?.dateTime && !r.tomorrow);
+  const timedRows = calendarRows.filter(r => !!r.evt?.start?.dateTime && r.startMs > 0 && !r.tomorrow);
   const timedWithCols = assignCalendarColumns(timedRows);
   const evtAccent = evt => GCAL_COLORS[evt?.colorId] || C.warning;
   const h24 = nowDate.getHours(), m24 = nowDate.getMinutes();
@@ -1122,16 +1122,24 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const calendarMinuteKey = Math.floor(nowMs / 60000);
   const calendarRows = useMemo(() => {
     const nowForRows = calendarMinuteKey * 60000;
+    const nowD = new Date(nowForRows);
+    const pad = n => String(n).padStart(2, "0");
+    const todayStr    = `${nowD.getFullYear()}-${pad(nowD.getMonth()+1)}-${pad(nowD.getDate())}`;
+    const tomorrowD   = new Date(nowD.getFullYear(), nowD.getMonth(), nowD.getDate() + 1);
+    const tomorrowStr = `${tomorrowD.getFullYear()}-${pad(tomorrowD.getMonth()+1)}-${pad(tomorrowD.getDate())}`;
     return (calendarEvents || [])
       // Drop events cancelled in Google Calendar — the API can still return them as
       // status:"cancelled" (e.g. a deleted instance of a recurring series), and stale
       // caches can hold a one-off after it's deleted. Either way it must not show.
       .filter(evt => evt && evt.status !== "cancelled")
       .map((evt, index) => {
-        const routine = isRoutineCalendarEvent(evt);
-        const now = isCalendarEventCurrent(evt, nowForRows);
-        const past = isCalendarEventPast(evt, nowForRows);
-        const special = !routine && !past;
+        const evtDateStr = (evt?.start?.dateTime || evt?.start?.date || "").slice(0, 10);
+        const tomorrow = evtDateStr === tomorrowStr;
+        const today    = evtDateStr === todayStr || (!tomorrow && !!evt?.start?.dateTime && evtDateStr < tomorrowStr);
+        const routine  = isRoutineCalendarEvent(evt);
+        const now      = !tomorrow && isCalendarEventCurrent(evt, nowForRows);
+        const past     = !tomorrow && isCalendarEventPast(evt, nowForRows);
+        const special  = !routine && !past;
         return {
           evt,
           index,
@@ -1139,6 +1147,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           now,
           past,
           special,
+          tomorrow,
+          today,
           startMs: calendarStartMs(evt),
           label: formatCalendarWindow(evt),
         };
@@ -2468,15 +2478,22 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <CalendarTimeline calendarRows={calendarRows} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
               ) : (
                 <div style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden" }}>
-                  {calendarRows.length === 0 ? emptyMsg("No events today.") : (() => {
+                  {calendarRows.filter(r => !r.tomorrow).length === 0 && calendarRows.filter(r => r.tomorrow).length === 0 ? emptyMsg("No events today.") : (() => {
                     const cardListStyle = { ...denseListVars({ dense: true, primary: C.text, secondary: C.muted, hover: C.text }), padding: 0, background: "transparent" };
-                    const pastRows = calendarRows.filter(r => r.past);
-                    const upRows = calendarRows.filter(r => !r.past);
+                    const pastRows     = calendarRows.filter(r => r.past && !r.tomorrow);
+                    const upRows       = calendarRows.filter(r => !r.past && !r.tomorrow);
+                    const tomorrowRows = calendarRows.filter(r => r.tomorrow);
                     const nlc = C.success || C.accent || "#1A9E78";
                     const NowBar = (
                       <div style={{ display:"grid", gridTemplateColumns:"44px minmax(0,1fr)", gap:8, alignItems:"center", padding:"4px 0", margin:"0 2px" }}>
                         <span style={{ color:nlc, fontSize:NC_TYPE.small, fontWeight:700, textAlign:"right", fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>Now</span>
                         <span style={{ height:2, borderRadius:2, background:nlc, boxShadow:`0 0 0 1px ${softBorder(nlc,0.18)}` }} />
+                      </div>
+                    );
+                    const TomorrowBar = (
+                      <div style={{ display:"grid", gridTemplateColumns:"44px minmax(0,1fr)", gap:8, alignItems:"center", padding:"4px 0", margin:"0 2px" }}>
+                        <span style={{ color:C.muted, fontSize:NC_TYPE.small, fontWeight:700, textAlign:"right", fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>Tmrw</span>
+                        <span style={{ height:1, borderRadius:1, background:C.divider }} />
                       </div>
                     );
                     const mkItem = (row) => {
@@ -2496,6 +2513,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         {pastRows.length > 0 && <List style={cardListStyle}>{pastRows.map(mkItem)}</List>}
                         {NowBar}
                         {upRows.length > 0 && <List style={cardListStyle}>{upRows.map(mkItem)}</List>}
+                        {tomorrowRows.length > 0 && <>{TomorrowBar}<List style={cardListStyle}>{tomorrowRows.map(mkItem)}</List></>}
                       </>
                     );
                   })()}
@@ -3295,8 +3313,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         <div style={{ width: 1, flexShrink: 0, alignSelf: "stretch", background: C.divider }} />
                         {/* ── Compact agenda — at-a-glance daily list with M3 NOW pointer ── */}
                         {(() => {
-                          const pastRows = calendarRows.filter(r => r.past);
-                          const upcomingRows = calendarRows.filter(r => !r.past);
+                          const pastRows     = calendarRows.filter(r => r.past && !r.tomorrow);
+                          const upcomingRows = calendarRows.filter(r => !r.past && !r.tomorrow);
+                          const tomorrowRows = calendarRows.filter(r => r.tomorrow);
                           const agendaListVars = { ...denseListVars({ dense: true, primary: C.text, secondary: C.muted, hover: C.text }), padding: 0, background: "transparent" };
                           const mkAgendaItem = (row) => {
                             const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -3316,15 +3335,23 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                               <span style={{ height: 2, borderRadius: 2, background: nowLineColor, boxShadow: `0 0 0 1px ${softBorder(nowLineColor, 0.18)}` }} />
                             </div>
                           );
+                          const TomorrowBar = (
+                            <div style={{ display: "grid", gridTemplateColumns: "44px minmax(0,1fr)", gap: 8, alignItems: "center", padding: "4px 0", margin: "0 2px" }}>
+                              <span style={{ color: C.muted, fontSize: NC_TYPE.small, fontWeight: 700, textAlign: "right", fontFamily: NC_FONT_STACK, whiteSpace: "nowrap" }}>Tmrw</span>
+                              <span style={{ height: 1, borderRadius: 1, background: C.divider }} />
+                            </div>
+                          );
+                          const todayRows = [...pastRows, ...upcomingRows];
                           return (
                             <div style={{ flex: "1 1 0", minWidth: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
-                              {calendarRows.length === 0 ? (
+                              {todayRows.length === 0 && tomorrowRows.length === 0 ? (
                                 <div style={{ padding: "8px 12px", fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, textAlign: "center" }}>No events today</div>
                               ) : (
                                 <>
                                   {pastRows.length > 0 && <List style={agendaListVars}>{pastRows.map(mkAgendaItem)}</List>}
                                   {NowBar}
                                   {upcomingRows.length > 0 && <List style={agendaListVars}>{upcomingRows.map(mkAgendaItem)}</List>}
+                                  {tomorrowRows.length > 0 && <>{TomorrowBar}<List style={agendaListVars}>{tomorrowRows.map(mkAgendaItem)}</List></>}
                                 </>
                               )}
                             </div>

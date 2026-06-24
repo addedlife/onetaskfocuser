@@ -215,11 +215,13 @@ async function googleJson(url, accessToken, options = {}) {
   return data;
 }
 
-async function fetchCalendarData(accessToken) {
+async function fetchCalendarData(accessToken, { timeMin, timeMax } = {}) {
+  // timeMin/timeMax come from the client (local timezone), fixing the UTC-server bug.
+  // If missing, fall back to UTC day (legacy path).
   const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
-  const eventsUrl = (calId) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=25`;
+  const start = timeMin || new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const end   = timeMax || new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2).toISOString();
+  const eventsUrl = (calId) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=50`;
   let calendars = null;
   try {
     const list = await googleJson("https://www.googleapis.com/calendar/v3/users/me/calendarList?showHidden=false&maxResults=50", accessToken);
@@ -256,9 +258,9 @@ async function fetchGmailData(accessToken) {
   ));
 }
 
-async function summary(user) {
+async function summary(user, body = {}) {
   const accessToken = await accessTokenFor(user);
-  const [calendar, gmail] = await Promise.allSettled([fetchCalendarData(accessToken), fetchGmailData(accessToken)]);
+  const [calendar, gmail] = await Promise.allSettled([fetchCalendarData(accessToken, body), fetchGmailData(accessToken)]);
   if (calendar.status === "rejected" && calendar.reason?.statusCode === 401) throw calendar.reason;
   if (gmail.status === "rejected" && gmail.reason?.statusCode === 401) throw gmail.reason;
   return {
@@ -331,7 +333,7 @@ exports.handler = async function(event) {
     const user = await authedUser(event);
     if (action === "status") return json(200, await status(user), origin);
     if (action === "exchange") return json(200, await exchangeCode(event, user, body), origin);
-    if (action === "summary") return json(200, await summary(user), origin);
+    if (action === "summary") return json(200, await summary(user, body), origin);
     if (action === "gmailMessage") return json(200, await gmailMessage(user, body), origin);
     if (action === "createCalendarEvent") return json(200, await createCalendarEvent(user, body), origin);
     if (action === "deleteCalendarEvent") return json(200, await deleteCalendarEvent(user, body), origin);

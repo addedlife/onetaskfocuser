@@ -722,7 +722,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       let filter = "all";
       try { filter = localStorage.getItem("ot_google_account_filter") || "all"; } catch {}
       const accountsArg = filter && filter !== "all" ? [filter] : "all";
-      const d = await callGoogleWorkspace("summary", { accounts: accountsArg });
+      const _now = new Date();
+      const timeMin = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate()).toISOString();
+      const timeMax = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() + 2).toISOString();
+      const d = await callGoogleWorkspace("summary", { accounts: accountsArg, timeMin, timeMax });
       setCalendarEvents(d.calendarEvents || []);
       const rawMsgs = d.gmailMessages || [];
       setGmailMessages(preMergeEmailSummaries(rawMsgs));
