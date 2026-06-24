@@ -2469,6 +2469,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               ) : (
                 <div style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden" }}>
                   {calendarRows.length === 0 ? emptyMsg("No events today.") : (() => {
+                    const cardListStyle = { ...denseListVars({ dense: true, primary: C.text, secondary: C.muted, hover: C.text }), padding: 0, background: "transparent" };
                     const pastRows = calendarRows.filter(r => r.past);
                     const upRows = calendarRows.filter(r => !r.past);
                     const nlc = C.success || C.accent || "#1A9E78";
@@ -3291,6 +3292,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         <div style={{ flex: "2 1 0", minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                           <CalendarTimeline calendarRows={calendarRows} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
                         </div>
+                        <div style={{ width: 1, flexShrink: 0, alignSelf: "stretch", background: C.divider }} />
                         {/* ── Compact agenda — at-a-glance daily list with M3 NOW pointer ── */}
                         {(() => {
                           const pastRows = calendarRows.filter(r => r.past);
@@ -3315,7 +3317,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                             </div>
                           );
                           return (
-                            <div style={{ flex: "1 1 0", minWidth: 0, overflowY: "auto", overflowX: "hidden", borderLeft: `1px solid ${C.divider}`, overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
+                            <div style={{ flex: "1 1 0", minWidth: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
                               {calendarRows.length === 0 ? (
                                 <div style={{ padding: "8px 12px", fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, textAlign: "center" }}>No events today</div>
                               ) : (
