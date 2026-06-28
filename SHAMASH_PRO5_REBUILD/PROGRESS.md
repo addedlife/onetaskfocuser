@@ -4,13 +4,14 @@
 > first unchecked `[ ]`, do it, then **check it off with a one-line note + date** and commit.
 > Keep commits small. Build-gate (`npm run build` in `app/`) before checking any build-affecting box.
 >
-> **▶ CURRENT POSITION:** **Two full surfaces + a dashboard live — Focus, Shailos, NerveCenter.** Build green
-> (tsc strict + vite, 0 errors). Focus = 3 real tabs (card / queue / insights); Shailos = filters + quick-add +
-> copy + answer dialog; NerveCenter = dashboard with live Tasks + Shailos cards (Calendar/Mail/Phone/Health are
-> honest "needs integration" cards). Rail shows a live clock + Hebrew date; tasks carry `completedAt`. **Next,
-> in order:** (1) Task River surface (replace placeholder); (2) finish Phase 4.1 remaining (inline rename,
-> Shatter, hamburger, Zen); (3) Settings surface (theme + AI-provider, both real now). Firestore (2.1) + AI
-> backend (11) + Google/phone integration stay gated.
+> **▶ CURRENT POSITION:** **⚠ FIDELITY RESET.** Earlier surface rebuilds (Queue / Insights / NerveCenter) were
+> built from memory, NOT from Pro 4 source — they are superficial and MUST be redone to parity (read the source
+> first, per plan rule #4). **Task River is corrected** — now a faithful port of "The River" (unified AI-ranked
+> river, source colours, gradient bar, drag-reorder, honest AI-unavailable fallback). **Next, in order, each
+> source-first:** (1) read the Queue block in `App.jsx` + `06-shelf.jsx` + the badges in `04-components.jsx` →
+> rebuild Queue to parity; (2) same for Insights (`App.jsx` insights block); (3) same for NerveCenter
+> (`NerveCenterPanel.jsx`, 3771 lines). **Hard rule from here: NO surface ships without reading its source
+> first.** Firestore (2.1) + AI backend (11) + Google/phone integration stay gated.
 >
 > **⛔ DROPPED (owner, 2026-06-28 — do NOT build):** Body-Double timer · Just-Start/"Start" timer ·
 > NerveCenter "More actions" pane/drawer (each page uses its own inline action suite instead).
@@ -107,6 +108,16 @@
   in horizontal lanes by priority tier; each card is tinted its tier colour (contrast-safe ink via `readableOn`)
   with a compact age (`fmtMs`) + one-tap Done. Routed in `App.tsx`. Build green. Browser-verified: 4 lanes
   render (Now/Today populated, Shaila/Eventually "calm waters"), no console errors.
+- **2026-06-28 (⚠ FIDELITY CORRECTION — Task River redone from source):** Owner flagged the new surfaces as
+  superficial / not matching Pro 4. Correct — I'd been building from memory and skipping the Phase-0 source
+  read the plan mandates (rule #4). Read the real `TaskRiverPanel.jsx` (360 lines): it is NOT priority lanes —
+  it's ONE unified river of tasks+shailos+calendar+mail, **AI-ranked only** (`dashboard.river_rank.v1`),
+  source-typed colours, gradient bar, drag-reorder, Re-prioritize, honest "AI unavailable" interleave fallback.
+  Rewrote `TaskRiverSurface.tsx` as a faithful port (tasks+shailos live; calendar/mail join with integrations;
+  AI via the gateway, degrades correctly). Caught + fixed a StrictMode bug (cancel-on-cleanup stranded state on
+  "ranking"). Build green; verified: "The River · 4 items · AI unavailable", unified rows, gradient bar, legend,
+  Retry. **TODO — redo the same way (read source FIRST): Queue + Insights (in `App.jsx`, 4823 lines) and
+  NerveCenter (`NerveCenterPanel.jsx`, 3771 lines). No surface ships without reading its source first.**
 
 ---
 
@@ -173,7 +184,7 @@
 - [~] 6.2 Cards — **Tasks + Shailos live** (real store data on md-list, gold Shailos, jump-to-surface arrows). Mail/Phone/Calendar/Health are honest "needs integration" cards (gated on Google/phone).
 - [ ] 6.3 **Calendar** — `CalendarTimeline` (60px/hr, `assignCalendarColumns`, `GCAL_COLORS`, live now-line) + compact M3 agenda + multi-account picker + NOW/Tomorrow dividers + full-view split
 - [ ] 6.4 AI card headlines (Chief scan + caching) + Chief brief/learning profile
-- [~] 6.5 — **TaskRiver surface DONE** (`features/taskriver/TaskRiverSurface.tsx`: active tasks in priority lanes, tier-tinted contrast-safe cards, compact age, one-tap Done). TimelineFace clock, ConvCapture, HealthCard remain.
+- [~] 6.5 — **TaskRiver DONE, faithfully** (`features/taskriver/TaskRiverSurface.tsx`): a true port of Pro 4's "The River" — one unified AI-ranked river of tasks + shailos (calendar/mail join with their integrations), source-typed colours + left gradient bar + legend, drag-to-reorder (persisted, manual wins), Re-prioritize/Retry, honest "AI unavailable" fallback (interleave by type). _(v1 was an invented priority-lanes view — corrected after reading the real source.)_ TimelineFace clock, ConvCapture, HealthCard remain.
 
 ## Phase 7 — DeskPhone (UNIFIED surface)
 - [ ] 7.1 Transport layer (host fetch + cloud relay, 5s poll + signature diff)
