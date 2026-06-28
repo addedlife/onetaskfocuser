@@ -40,6 +40,9 @@
   reinstalled directly in `app/` — 266 pkgs). **`npm run build` passes clean** (tsc strict + vite, 0 errors):
   the whole foundation (theme bridge, m3 layer, store, shell) typechecks and bundles. Committed package-lock.
   Phase 1 is ~done bar mock data + rail clock; next substantive work is Phase 2 (data + AI core).
+- **2026-06-28 (first real surface):** Added `state/data.ts` (tasks+shailos store) and rendered the **Shailos
+  surface for real** on genuine `md-list` (status + Got-back action, gold identity), wired into `App.tsx`.
+  Build green (174 modules, 0 errors). Proves the data→store→M3 pipeline. Other surfaces still placeholder.
 
 ---
 
@@ -65,7 +68,7 @@
 - [x] 1.1 Scaffold `app/` — Vite 6 + React 18 + TS, tsconfig(.app/.node), ESLint flat + Prettier, `5.0.0` in package.json _(needs `npm install`)_
 - [x] 1.2 `m3/` module — `src/m3/index.tsx`: all @material/web wrappers + `IconBtn`/`ActionBtn`/`denseListVars`; `@material/web` pinned **2.4.1**
 - [x] 1.3 `theme/` — `tokens`, `accents.deriveAccents`, `contrast`, 8 `schemes` (full semantic roles), `bridge.globalCss()` + `themeVarsCss()`; applied via `<style>` in `App.tsx`
-- [~] 1.4 Zustand store — **UI slice done** (`state/store.ts`: suiteView/tab/sidebar/scheme + localStorage). Domain slices (tasks/shailos/google/phone/health) land in Phase 2+
+- [~] 1.4 Zustand store — **UI + data slices done** (`state/store.ts` UI: suiteView/tab/sidebar/scheme + localStorage; `state/data.ts`: tasks+shailos seeded from mock, with `toggleDone`/`markGotBack`). Google/phone/health slices land with those features.
 - [~] 1.5 `mock/` seed data — **tasks/shailos/priorities/lists/settings done** (`mock/seed.ts`) + domain model (`lib/types.ts`, ⚠️ verify field fidelity vs `01-core.js` in Phase 0.2). Calendar/gmail/phone/health seeds added alongside those features.
 - [~] 1.6 Switchboard shell — **rail + surface routing done** (`features/switchboard/Switchboard.tsx`; `App.tsx` renders a per-surface placeholder with a live 8-theme switcher as the bridge smoke test). TODO: clock + Hebrew date in rail; swap placeholder for real surface panels as features land
 - [x] 1.7 **Build-gate GREEN** — `npm install` (266 pkgs) + `npm run build` (tsc strict + vite) pass, 0 errors; `dist` builds (~378 kB / 92 kB gz); package-lock committed. _Remaining quick check:_ `npm run dev` browser smoke (rail switches surfaces; theme chips repaint M3) — do on resume
@@ -95,6 +98,7 @@
 - [ ] 4.6 Insights tab (charts, AI insight, AI chat, daily tip)
 
 ## Phase 5 — Shailos
+- [~] 5.0 Shailos SURFACE scaffolded early (`features/shailos/ShailosSurface.tsx`) — live `md-list` render of shailos with status + "Got back" action, in category gold; wired in `App.tsx`. (Full record/transcribe/research below.)
 - [ ] 5.1 `shailosQueue` logic + stores
 - [ ] 5.2 Embedded Shailos mini-app rebuilt (record/transcribe/parse, synopsis, answer, got-back, **Research**, dup-catch, copy/delete, live store, error screen)
 - [ ] 5.3 ShailaManager + MiniPill surfaces; shared `deriveAccents` parity
