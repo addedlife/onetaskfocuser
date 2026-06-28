@@ -76,7 +76,7 @@ export default function BulkTexter({
   onClose,
   sendOne,             // async ({ to, body }) => boolean
   usingRelay = false,  // true when the active transport is the cloud relay (fallback)
-  online = true,       // is the phone host reachable at all
+  online = true,       // host reachable AND the phone's MAP/texting channel is live (status.map)
   onBatchDone,         // optional: called once after a batch so the surface can refresh
 }) {
   const [numbersText, setNumbersText] = useState('');
@@ -166,7 +166,7 @@ export default function BulkTexter({
     onClose?.();
   }, [onClose]);
 
-  const canSend = recipients.length > 0 && message.trim().length > 0;
+  const canSend = recipients.length > 0 && message.trim().length > 0 && !!online;
   const transportNote = usingRelay
     ? 'Fallback route (cloud relay) — sends are paced one at a time as your PC drains them.'
     : 'Live route (direct to your PC) — sends as fast as the Bluetooth bridge allows.';
@@ -182,7 +182,7 @@ export default function BulkTexter({
         <p style={{ ...noteStyle, color: usingRelay ? GV_CLEAN.warning : GV_CLEAN.muted }}>{transportNote}</p>
         {!online && (
           <p style={{ ...noteStyle, color: GV_CLEAN.danger }}>
-            Phone host looks offline — sends will be queued or may fail until it reconnects.
+            No live phone connection for texts (MAP not connected). Sends will fail.
           </p>
         )}
 

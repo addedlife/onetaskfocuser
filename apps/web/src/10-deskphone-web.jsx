@@ -2166,7 +2166,9 @@ function MessagesSlice({
         open={bulkOpen}
         onClose={() => setBulkOpen(false)}
         usingRelay={false}
-        online={online}
+        // Use the same MAP/text channel check as the connection labels so bulk
+        // refuses to start when the phone isn't actually connected for texting.
+        online={online && includesConnected(status?.map || status?.Map || "")}
         sendOne={onBulkSendOne}
       />
       <section className="dp-conversation-pane" data-native-source="MainWindow.xaml:1050">

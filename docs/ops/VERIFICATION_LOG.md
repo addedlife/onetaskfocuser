@@ -1,5 +1,17 @@
 # Verification Log
 
+## 2026-06-28 fix(bulk): recognize live phone MAP connection for texts (4.30.3)
+
+- Bulk text was not recognizing when the phone's MAP channel was actually live for sending (host reachable but "Not connected" for texts).
+- Added `includesConnected` helper to NerveCenterPhoneSurface (matching 10-deskphone-web).
+- Compute `textsOk` from status.map + `bulkReady = phoneLinkLive && textsOk`; pass as `online` to BulkTexter.
+- In BulkTexter: `canSend` now requires `&& !!online`; banner updated to accurate "No live phone connection for texts (MAP not connected). Sends will fail."
+- Updated the 10-deskphone-web call site to pass `online && includesConnected(...)`.
+- Bumped patch: 4.30.2 → 4.30.3 in version.js.
+- Pushed to origin/main (cherry-picked onto current main for clean deploy).
+- Build gate passed. User testing live production; will report keep or revert.
+- Revert: git revert or checkout the files.
+
 ## 2026-06-28 Bulk text (BulkTexter) — paste a list, send to many (4.30.0)
 
 - **Scope:** New `BulkTexter.jsx` component wired into both phone surfaces. Paste a list of phone numbers (newline / comma / semicolon / pipe separated), type one message, optionally set a per-text delay (0–5 s, persisted in localStorage), then send in a paced batch. UX flow: compose → confirm → sending (with linear progress + per-recipient status) → done (retry-failed option). ESC / scrim close stops an in-flight batch gracefully without data loss.

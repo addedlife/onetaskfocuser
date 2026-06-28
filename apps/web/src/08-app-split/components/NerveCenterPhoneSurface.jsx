@@ -215,6 +215,27 @@ function PhoneMmsImage({ attachment, C }) {
   </div>;
 }
 
+// Reused from DeskPhone web UI for consistent MAP/HFP "connected" text detection.
+// Returns true only for positive connected states; "Not connected", "disconnected", errors etc. are false.
+function includesConnected(value) {
+  const lower = String(value || "").trim().toLowerCase();
+  if (!lower) return false;
+  if (
+    lower.includes("not connected") ||
+    lower.includes("disconnected") ||
+    lower.includes("failed") ||
+    lower.includes("rejected") ||
+    lower.includes("timed out") ||
+    lower.includes("denied") ||
+    lower.includes("can't reach") ||
+    lower.includes("cannot reach") ||
+    lower.includes("error")
+  ) {
+    return false;
+  }
+  return lower.includes("connected");
+}
+
 function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, dense = false, onRecordConversation, onRecordCall, onMoreHistory }) {
   // Two transports reach the phone: DIRECT (DeskPhone's HTTP API — loopback or
   // same-origin when this page is served by DeskPhone itself) and RELAY (the
@@ -765,6 +786,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const relayAgeMs = relayReceivedAt > 0 ? Math.max(0, nowTick - relayReceivedAt) : 0;
   const relayStale = usingRelay && relayReceivedAt > 0 && relayAgeMs >= RELAY_LIVE_WINDOW_MS;
   const phoneLinkLive = usingRelay ? (statusOnline && relayReceivedAt > 0 && !relayStale) : statusOnline;
+  // For bulk text we need the actual texting channel (MAP) to be live on the phone,
+  // not just "host responded". Use the same detection as the DeskPhone web UI.
+  const textsOk = includesConnected(status?.map || status?.Map || "");
+  const bulkReady = !!phoneLinkLive && !!textsOk;
   const deviceName = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
   const idleLabel = deviceName ? `Connected · ${deviceName}` : "Connected";
   const statusText = !statusOnline
@@ -1117,7 +1142,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         open={bulkOpen}
         onClose={() => setBulkOpen(false)}
         usingRelay={usingRelay}
-        online={phoneLinkLive}
+        online={bulkReady}
         onBatchDone={() => refresh()}
         sendOne={async ({ to, body }) => {
           if (!to || !body) return false;
