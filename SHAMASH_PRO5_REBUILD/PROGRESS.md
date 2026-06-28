@@ -4,14 +4,13 @@
 > first unchecked `[ ]`, do it, then **check it off with a one-line note + date** and commit.
 > Keep commits small. Build-gate (`npm run build` in `app/`) before checking any build-affecting box.
 >
-> **▶ CURRENT POSITION:** **Phases 1–2 core in; Focus surface now has its real tab chrome.** Build green
-> (tsc strict + vite, 0 errors; 211 modules). The Focus surface hosts a genuine M3 `md-tabs` switch
-> (focus / queue / insights) wired to the UI store's `tab`/`setTab` slice — browser-verified (Segoe font,
-> `#C96442` accent indicator, no console errors). Focus tab = the live one-task card; Queue/Insights are
-> honest placeholders. **Next, in order:** (1) Phase 0.6 spec `ANALYSIS/20-focus.md` (Focus/Queue/Insights
-> from current `App.jsx`), then (2) build the **Queue tab** (4.5) on that spec; (3) finish Phase 4.1 remaining
-> (inline rename, Shatter, hamburger, Zen); (4) Phase 1.6 rail clock + Hebrew date. Real `services/store`
-> Firestore (2.1) stays gated.
+> **▶ CURRENT POSITION:** **Focus app taking shape — tab chrome + Focus card + Queue tab all live.** Build
+> green (tsc strict + vite, 0 errors; 212 modules). The Focus surface has a genuine M3 `md-tabs` switch:
+> **Focus** = the one-task card, **Queue** = the real task list (smart-sort, search, quick-add, opt-in
+> overwhelm, Shelf — browser-verified add→sort→clear), **Insights** = honest placeholder. **Next, in order:**
+> (1) **Insights tab** (4.6 — completion stats + daily tip); (2) finish Phase 4.1 remaining (inline rename,
+> Shatter, hamburger, Zen); (3) Phase 1.6 rail clock + Hebrew date; (4) Phase 5 Shailos depth. Real
+> `services/store` Firestore (2.1) stays gated.
 >
 > **⛔ DROPPED (owner, 2026-06-28 — do NOT build):** Body-Double timer · Just-Start/"Start" timer ·
 > NerveCenter "More actions" pane/drawer (each page uses its own inline action suite instead).
@@ -75,6 +74,12 @@
   body, no console errors, and the bridge themes the tabs (Segoe UI font + `#C96442` accent indicator — not
   M3 purple). _Harness note: `md-tabs` fires `change` async and ignores synthetic host `.click()`; verify tab
   interaction with a composed click on the inner shadow button + a round-trip read._
+- **2026-06-28 (Queue tab — Phase 4.5 core):** Built `features/focus/QueueTab.tsx` — the real task list on
+  genuine `md-list`: `optTasks` smart-sort, search, quick-add (tier chips defaulting to Now, not Shaila),
+  opt-in overwhelm "focus on top 3" (threshold 7), inline Park/Done per row, and the collapsible completed
+  Shelf (restore via undo). Lifted the shared `ageLabel` into `lib/aging.ts` (was duplicated in FocusSurface).
+  Wired into the Focus shell's Queue tab. Build green (212 modules). Browser-verified: add→appears→smart-sorts
+  →field clears, no console errors. Remaining for 4.5: drag-reorder + subtask-group collapse (with Shatter, 4.4).
 
 ---
 
@@ -127,7 +132,7 @@
 - [ ] 4.2 ZenMode + BrainDump + OverwhelmBanner  _(Just-Start & Body-Double timers DROPPED — do not build)_
 - [ ] 4.3 PostItStack (**Stack/Board modes + sort chips**) + BlockReflect + ShailaManager/MiniPill
 - [ ] 4.4 Modals (BulkAdd, TaskBD/Shatter, BlockedModal, ContextTagPicker, ListManager)
-- [ ] 4.5 Queue tab (list, search, quick-add, overwhelm, drag-reorder, subtask groups) + Shelf
+- [~] 4.5 Queue tab — **core DONE** (`features/focus/QueueTab.tsx`): smart-sorted list (`optTasks`), search, quick-add (tier chips, defaults to Now), opt-in overwhelm "focus on top 3" (threshold 7), inline Park/Done per row, collapsible completed Shelf (restore via undo). **Remaining:** drag-reorder + subtask-group collapse (collapse lands with Shatter, 4.4).
 - [ ] 4.6 Insights tab (charts, AI insight, AI chat, daily tip)
 
 ## Phase 5 — Shailos

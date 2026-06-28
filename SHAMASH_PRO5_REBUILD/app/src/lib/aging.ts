@@ -7,6 +7,14 @@ export function getTaskAgeHours(task: Task): number {
   return (Date.now() - task.createdAt) / 3_600_000;
 }
 
+/** Human age label for a task's `createdAt` (shared by the Focus card + the Queue rows). */
+export function ageLabel(createdAt: number): string {
+  const h = Math.floor((Date.now() - createdAt) / 3_600_000);
+  if (h < 1) return 'just now';
+  if (h < 24) return `${h}h old`;
+  return `${Math.floor(h / 24)} days waiting`;
+}
+
 /** Whether a task has exceeded its tier's age threshold (Pro 4 `isTaskAged`). */
 export function isTaskAged(
   task: Task,

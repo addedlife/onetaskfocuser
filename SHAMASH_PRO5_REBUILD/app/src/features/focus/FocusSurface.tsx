@@ -4,16 +4,10 @@ import { useData } from '@/state/data';
 import { useUi, type FocusTab } from '@/state/store';
 import { optTasks } from '@/lib/optimize';
 import { gP } from '@/lib/priorities';
-import { isTaskAged } from '@/lib/aging';
+import { isTaskAged, ageLabel } from '@/lib/aging';
+import { QueueTab } from '@/features/focus/QueueTab';
 import { readableOn, SP, ELEV } from '@/theme';
 import type { EnergyLevel } from '@/lib/types';
-
-function ageLabel(createdAt: number): string {
-  const h = Math.floor((Date.now() - createdAt) / 3_600_000);
-  if (h < 1) return 'just now';
-  if (h < 24) return `${h}h old`;
-  return `${Math.floor(h / 24)} days waiting`;
-}
 
 /**
  * Focus — the signature "one task at a time" card. Shows the top of the smart-sorted queue (optTasks)
@@ -301,11 +295,7 @@ export function FocusSurface() {
       {tab === 'focus' ? (
         <FocusCard />
       ) : tab === 'queue' ? (
-        <ComingSoon
-          title="Queue"
-          blurb="The full task list — search, quick-add, drag-reorder, subtask groups and the completed Shelf — lands here."
-          phase="Phase 4.5"
-        />
+        <QueueTab />
       ) : (
         <ComingSoon
           title="Insights"
