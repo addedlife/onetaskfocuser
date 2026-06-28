@@ -1,6 +1,12 @@
 # Verification Log
 
-## 2026-06-28 fix(bulk): recognize live phone connection (4.30.4)
+## 2026-06-28 fix(bulk): recognize live phone connection (4.30.5)
+
+- Aligned BulkTexter `online` prop to `phoneLinkLive` (the surface's own live/reachable signal) in NerveCenter and the host `online` in deskphone-web path. This makes bulk recognize the same "phone is live" state the rest of the UI shows ("This PC", connected indicators, etc.).
+- Increased direct probe timeout from 1500ms to 3000ms (`PROBE_DIRECT_TIMEOUT_MS`) so the resolver more reliably detects the direct localhost connection when the host is live on this PC (instead of falling back to relay too eagerly).
+- Cleaned up leftover MAP `textsOk`/`bulkReady` calc that was no longer used for the prop.
+- Bumped to 4.30.5.
+- Pushed to main.
 
 - Adjusted to pass phoneLinkLive (the same "phone is live" indicator used by the rest of the surface) as `online` to BulkTexter in both NerveCenter and 10-deskphone paths.
 - This makes BulkTexter recognize when the surface shows the phone as live ("This PC" / connected).

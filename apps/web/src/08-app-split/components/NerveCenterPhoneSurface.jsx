@@ -11,6 +11,11 @@ const PHONE_FETCH_TIMEOUT_MS = 4500;
 // means the PC/DeskPhone is offline and new texts/calls are NOT arriving live.
 const RELAY_LIVE_WINDOW_MS = 30000;
 
+// Longer timeout for the initial direct probe so localhost /status on a busy or just-started
+// DeskPhone host has time to respond. 1500ms was too aggressive and caused fallback to relay
+// even when the direct "live phone connection" (host on this PC) was available.
+const PROBE_DIRECT_TIMEOUT_MS = 3000;
+
 // Compact "27s" / "4m" / "2h" age label for the relay's last-connected time.
 function relayAgeLabel(ms) {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -215,27 +220,6 @@ function PhoneMmsImage({ attachment, C }) {
   </div>;
 }
 
-// Reused from DeskPhone web UI for consistent MAP/HFP "connected" text detection.
-// Returns true only for positive connected states; "Not connected", "disconnected", errors etc. are false.
-function includesConnected(value) {
-  const lower = String(value || "").trim().toLowerCase();
-  if (!lower) return false;
-  if (
-    lower.includes("not connected") ||
-    lower.includes("disconnected") ||
-    lower.includes("failed") ||
-    lower.includes("rejected") ||
-    lower.includes("timed out") ||
-    lower.includes("denied") ||
-    lower.includes("can't reach") ||
-    lower.includes("cannot reach") ||
-    lower.includes("error")
-  ) {
-    return false;
-  }
-  return lower.includes("connected");
-}
-
 function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, dense = false, onRecordConversation, onRecordCall, onMoreHistory }) {
   // Two transports reach the phone: DIRECT (DeskPhone's HTTP API — loopback or
   // same-origin when this page is served by DeskPhone itself) and RELAY (the
@@ -377,7 +361,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // Loopback is exempt from mixed-content blocking, so this probe is safe even
   // from the HTTPS production app.
   const probeDirect = useCallback(async () => {
-    try { return !!(await fetchPhoneJson(`${api}/status`, 1500)); }
+    try { return !!(await fetchPhoneJson(`${api}/status`, PROBE_DIRECT_TIMEOUT_MS)); }
     catch { return false; }
   }, [api]);
 
@@ -786,10 +770,6 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const relayAgeMs = relayReceivedAt > 0 ? Math.max(0, nowTick - relayReceivedAt) : 0;
   const relayStale = usingRelay && relayReceivedAt > 0 && relayAgeMs >= RELAY_LIVE_WINDOW_MS;
   const phoneLinkLive = usingRelay ? (statusOnline && relayReceivedAt > 0 && !relayStale) : statusOnline;
-  // For bulk text we need the actual texting channel (MAP) to be live on the phone,
-  // not just "host responded". Use the same detection as the DeskPhone web UI.
-  const textsOk = includesConnected(status?.map || status?.Map || "");
-  const bulkReady = !!phoneLinkLive && !!textsOk;
   const deviceName = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
   const idleLabel = deviceName ? `Connected · ${deviceName}` : "Connected";
   const statusText = !statusOnline
