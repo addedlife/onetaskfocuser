@@ -1,30 +1,43 @@
 import { create } from 'zustand';
-import type { Task, Shaila } from '@/lib/types';
-import { MOCK_TASKS, MOCK_SHAILOS } from '@/mock/seed';
+import type { Task, Shaila, ShailaStatus } from '@/lib/types';
+import { createStorage } from '@/services/storage';
+
+const storage = createStorage();
 
 /**
- * Domain data store — tasks + shailos. Seeded from mock in dev; Phase 2 swaps the source for the real
- * Firestore-backed Store (same shapes) behind a flag. Actions are minimal for the Phase-1 vertical slice;
- * the full handler set arrives with each feature.
+ * Domain data store — tasks + shailos, hydrated from and persisted through the storage backend (mock in
+ * dev, Firestore later). Mutations write through to storage so changes survive a reload. Actions are
+ * minimal for the current vertical slice; the full handler set arrives with each feature.
  */
 interface DataState {
   tasks: Task[];
   shailos: Shaila[];
+  loaded: boolean;
+  hydrate: () => Promise<void>;
   toggleDone: (id: string) => void;
   markGotBack: (id: string, value: boolean) => void;
 }
 
-export const useData = create<DataState>((set) => ({
-  tasks: MOCK_TASKS,
-  shailos: MOCK_SHAILOS,
-  toggleDone: (id) =>
-    set((s) => ({
-      tasks: s.tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)),
-    })),
-  markGotBack: (id, value) =>
-    set((s) => ({
-      shailos: s.shailos.map((q) =>
-        q.id === id ? { ...q, status: value ? 'got_back' : 'answered' } : q,
-      ),
-    })),
+export const useData = create<DataState>((set, get) => ({
+  tasks: [],
+  shailos: [],
+  loaded: false,
+
+  hydrate: async () => {
+    const s = await storage.load();
+    set({ tasks: s.tasks, shailos: s.shailos, loaded: true });
+  },
+
+  toggleDone: (id) => {
+    const tasks = get().tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t));
+    set({ tasks });
+    void storage.saveTasks(tasks);
+  },
+
+  markGotBack: (id, value) => {
+    const status: ShailaStatus = value ? 'got_back' : 'answered';
+    const shailos = get().shailos.map((q) => (q.id === id ? { ...q, status } : q));
+    set({ shailos });
+    void storage.saveShailos(shailos);
+  },
 }));

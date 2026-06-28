@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { Switchboard } from '@/features/switchboard/Switchboard';
 import { useUi, type SuiteView } from '@/state/store';
 import { getScheme, globalCss, themeVarsCss, SCHEMES, FONT_STACK, SP, type Scheme } from '@/theme';
 import { FilledButton, TonalButton, OutlinedButton, FilterChip, ChipSet, List, ListItem } from '@/m3';
 import { ShailosSurface } from '@/features/shailos/ShailosSurface';
 import { FocusSurface } from '@/features/focus/FocusSurface';
+import { useData } from '@/state/data';
 
 /**
  * The theme bridge in the DOM: `globalCss()` is the static token layer + reset (injected once);
@@ -103,6 +105,10 @@ function SurfacePlaceholder({ view }: { view: SuiteView }) {
 export function App() {
   const scheme = getScheme(useUi((s) => s.schemeId));
   const view = useUi((s) => s.suiteView);
+  const hydrate = useData((s) => s.hydrate);
+  useEffect(() => {
+    void hydrate();
+  }, [hydrate]);
   return (
     <>
       <ThemeStyle scheme={scheme} />

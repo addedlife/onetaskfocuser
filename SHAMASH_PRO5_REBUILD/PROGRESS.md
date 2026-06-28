@@ -52,6 +52,9 @@
   aging, mrsW, optTasks scoring, Yeshivish `YC` map + cleanYeshivish, constants) and built the AI gateway
   `services/ai.ts` (proxy dispatcher + first-step/answer-summary/calendar-event jobs, default provider
   claude, `setIdTokenProvider` hook). All faithful to 01-core.js. Build green (176). Next: `services/store`.
+- **2026-06-28 (Phase 2 storage):** Added persistence abstraction `services/storage.ts` (`StorageBackend` +
+  localStorage `MockStorage` with the catastrophic-delete guard) and wired the data store to it (async
+  hydrate + write-through, so toggles survive reload). Real Firestore backend stays gated. Build green (177).
 
 ---
 
@@ -90,7 +93,7 @@
 >   safe to simplify if a target chokes). • path alias `@/*` resolves via tsconfig + the vite alias.
 
 ## Phase 2 — Data + AI core
-- [ ] 2.1 `services/store` — Firebase bootstrap + reconnect; v5 per-task docs + legacy blob; IndexedDB cache; cross-tab/device sync; local + weekly backups; shailos CRUD + reconcile (mock-backed first)
+- [~] 2.1 `services/storage` — **abstraction + MockStorage done** (`services/storage.ts`: `StorageBackend` interface, localStorage mock seeded from mock data, catastrophic-delete guard; wired into `state/data.ts` via async `hydrate()` + write-through). **GATED — pending:** real `FirestoreStorage` (Firebase bootstrap+reconnect, v5 per-task docs + legacy blob, cross-tab/device sync, transaction-freshness + self-healing listeners, weekly backups, shailos reconcile — behind `?live=1`).
 - [~] 2.2 `services/ai` — **dispatcher done** (`services/ai.ts`: `callAIProxy`/`runAIJob`/`callAI`, `setIdTokenProvider`, 30s abort, default provider **claude**) + self-contained jobs (first-step, answer-summary, parse-calendar-event + defaults). Remaining jobs (optimize/conversation/parse-shailos/braindump/detect-answers/gen-schemes/transcribe-audio) land with their features.
 - [~] 2.3 `lib/` — **done:** `ids`, `dates` (greeting/dayKey/fmtMs), `priorities` (gP), `aging`, `mrsW`, `optimize` (optTasks), `yeshivish` (YC+cleanYeshivish), `constants`; contrast already in `theme/contrast.ts`. **Remaining:** `shabbos` engine + Hebrew-date.
 
