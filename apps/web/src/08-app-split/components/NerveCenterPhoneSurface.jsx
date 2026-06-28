@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cleanTheme, DUR, EASE, ELEV, gvIconButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { ActionBtn, IconBtn, ListItem, denseListVars } from '../m3.jsx';
+import BulkTexter from './BulkTexter.jsx';
 import { db } from '../../01-core.js';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
@@ -311,6 +312,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const [showDialer, setShowDialer] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);    // is compose area visible?
+  const [bulkOpen, setBulkOpen] = useState(false);          // bulk texter dialog visible?
   const [composeIsNew, setComposeIsNew] = useState(false);  // opened as "new message" (has contact search)
   const [composeSearch, setComposeSearch] = useState("");   // contact search in new-compose mode
   const [composeAnchorId, setComposeAnchorId] = useState(null);
@@ -663,8 +665,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // when its HTTP response said so). Callers use this to decide whether user input
   // (e.g. a typed message) is safe to discard. NOTE: refresh() clears the error
   // banner, so failure paths refresh FIRST and set their error after.
-  const post = async (path, label) => {
-    setBusy(label);
+  // opts.quiet — used by the bulk texter: keep the per-send transport + ack logic
+  // (that's what paces the batch) but suppress the surface-wide busy spinner,
+  // error banner, and refresh churn on every single send. The batch reports
+  // per-recipient success on its own and refreshes once when it finishes.
+  const post = async (path, label, opts = {}) => {
+    const quiet = !!opts.quiet;
+    if (!quiet) setBusy(label);
     try {
       if (usingRelayRef.current) {
         // Route command through the cloud relay — DeskPhone drains it within 2 s.
@@ -684,7 +691,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         if (!res.ok) {
           let msg = `Relay rejected the command (${res.status})`;
           try { const d = await res.json(); if (d?.error) msg = d.error; } catch {}
-          setError(msg);
+          if (!quiet) setError(msg);
           return false;
         }
         const queued = await res.json().catch(() => ({}));
@@ -692,48 +699,46 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           // Await DeskPhone's acknowledgement — it rides the state pushes we already
           // receive (~3 s round trip). No ack within 25 s means the PC is offline.
           const ack = await waitForAck(queued.id, 25000);
-          await refresh();
+          if (!quiet) await refresh();
           if (ack && !ack.ok) {
-            setError(ack.error || "DeskPhone could not run the command.");
+            if (!quiet) setError(ack.error || "DeskPhone could not run the command.");
             return false;
           }
           if (!ack) {
-            setError("No confirmation from DeskPhone — your PC looks offline. The command runs if it reconnects within 10 minutes, then expires.");
+            if (!quiet) setError("No confirmation from DeskPhone — your PC looks offline. The command runs if it reconnects within 10 minutes, then expires.");
             return false;
           }
-          setError("");
+          if (!quiet) setError("");
           return true;
         }
         // Relay without command ids (older function) — keep the legacy blind wait.
-        setError("");
+        if (!quiet) setError("");
         await new Promise(r => setTimeout(r, 2500));
       } else {
         const res = await fetch(`${api}${path}`, { method: "POST" });
         if (!res.ok) {
           let msg = `DeskPhone error (${res.status})`;
           try { const d = await res.json(); if (d?.error || d?.message) msg = d.error || d.message; } catch {}
-          await refresh();
-          setError(msg);
+          if (!quiet) { await refresh(); setError(msg); }
           return false;
         }
         const data = await res.json().catch(() => ({}));
         if (data?.success === false || data?.ok === false || data?.result === "failed") {
-          await refresh();
-          setError(data?.error || data?.message || data?.reason || "DeskPhone reported failure.");
+          if (!quiet) { await refresh(); setError(data?.error || data?.message || data?.reason || "DeskPhone reported failure."); }
           return false;
         }
-        setError("");
+        if (!quiet) setError("");
       }
-      await refresh();
+      if (!quiet) await refresh();
       return true;
     }
     catch {
-      setError("DeskPhone did not answer.");
+      if (!quiet) setError("DeskPhone did not answer.");
       transportRef.current = null;   // direct path died mid-command — re-resolve next cycle
-      onOnlineChange?.(false);
+      if (!quiet) onOnlineChange?.(false);
       return false;
     }
-    finally { setBusy(""); }
+    finally { if (!quiet) setBusy(""); }
   };
 
   const dialNum = async (n) => { if (n?.trim()) await post(`/dial?n=${encodeURIComponent(n.trim())}`, "dial"); };
@@ -1108,6 +1113,18 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: dense ? 2 : (compact ? 6 : 12), minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden", color: C.text, animation: `nc-phone-surface-fade ${DUR.base} ${EASE.standard}` }}>
 
+      <BulkTexter
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        usingRelay={usingRelay}
+        online={phoneLinkLive}
+        onBatchDone={() => refresh()}
+        sendOne={async ({ to, body }) => {
+          if (!to || !body) return false;
+          return await post(`/send?to=${encodeURIComponent(to)}&body=${encodeURIComponent(body)}`, "bulk text", { quiet: true });
+        }}
+      />
+
       {(isIncoming || isOnCall || vmCount > 0) && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: dense ? 20 : (compact ? 28 : 36), padding: "0 2px" }}>
           <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, flexShrink: 0, background: isIncoming ? C.success : isOnCall ? C.warning : C.danger }} />
@@ -1137,11 +1154,25 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
 
       {composeOpen && !composeAnchorId && renderComposeBox()}
 
-      {/* ── Control bar: answer/hangup | record | new-msg | keypad toggle ──
-            On the compact card this whole row of PC-oriented controls is hidden so the
-            activity feed gets the space; it returns only for a live/incoming call (where
-            answer/hang-up matter). Full controls live in the expanded phone view. ── */}
-      {(!compact || isIncoming || isOnCall) && (
+      {/* ── Messaging quick-actions ── always visible regardless of compact ── */}
+      <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+        {/* New message button */}
+        <button onClick={openNewMessage} title="New message"
+          style={phoneIconButton(composeOpen && composeIsNew)}>
+          {suiteIcon("edit", 15)}
+        </button>
+        {/* Bulk text button — paste a list, send to many (rides the active transport) */}
+        <button onClick={() => setBulkOpen(true)} title="Bulk text — paste a list, send to many"
+          style={phoneIconButton(bulkOpen)}>
+          {suiteIcon("campaign", 15)}
+        </button>
+      </div>
+
+      {/* ── Control bar: answer/hangup | record | keypad toggle ──
+            On the compact card this row is hidden so the activity feed gets the space;
+            it returns for live/incoming calls (answer/hang-up) AND whenever a messaging
+            action is open (compose or bulk-text) so those buttons stay reachable. ── */}
+      {(!compact || isIncoming || isOnCall || composeOpen || bulkOpen) && (
       <div style={{ display: "flex", gap: 6, alignItems: "center", minHeight: compact ? 30 : 44 }}>
         {isIncoming ? (
           <>
@@ -1168,11 +1199,6 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             {suiteIcon("fiber_manual_record", 14)}
           </button>
         )}
-        {/* New message button */}
-        <button onClick={openNewMessage} title="New message"
-          style={phoneIconButton(composeOpen && composeIsNew)}>
-          {suiteIcon("edit", 15)}
-        </button>
         {/* Keypad toggle */}
         <button onClick={() => setShowDialer(v => !v)} title="Keypad"
           style={phoneIconButton(showDialer)}>
