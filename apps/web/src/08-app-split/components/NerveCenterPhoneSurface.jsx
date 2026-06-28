@@ -1121,7 +1121,28 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         onBatchDone={() => refresh()}
         sendOne={async ({ to, body }) => {
           if (!to || !body) return false;
-          return await post(`/send?to=${encodeURIComponent(to)}&body=${encodeURIComponent(body)}`, "bulk text", { quiet: true });
+          try {
+            if (usingRelayRef.current) {
+              let cmdAuthHeaders = {};
+              try { if (user?.getIdToken) { const tok = await user.getIdToken(); cmdAuthHeaders["Authorization"] = `Bearer ${tok}`; } } catch {}
+              const res = await fetch(`${RELAY_BASE}?action=command`, {
+                method: "POST", headers: { "Content-Type": "application/json", ...cmdAuthHeaders },
+                body: JSON.stringify({ path: `/send?to=${encodeURIComponent(to)}&body=${encodeURIComponent(body)}` })
+              });
+              if (!res.ok) return false;
+              const queued = await res.json().catch(() => ({}));
+              if (queued?.id) {
+                const ack = await waitForAck(queued.id, 25000);
+                return !!(ack && ack.ok);
+              }
+              return true;
+            } else {
+              const res = await fetch(`${api}/send?to=${encodeURIComponent(to)}&body=${encodeURIComponent(body)}`, { method: "POST" });
+              if (!res.ok) return false;
+              const data = await res.json().catch(() => ({}));
+              return data?.result === "sent";
+            }
+          } catch { return false; }
         }}
       />
 
@@ -1154,26 +1175,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
 
       {composeOpen && !composeAnchorId && renderComposeBox()}
 
-      {/* ── Messaging quick-actions ── always visible regardless of compact ── */}
-      <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
-        {/* New message button */}
-        <button onClick={openNewMessage} title="New message"
-          style={phoneIconButton(composeOpen && composeIsNew)}>
-          {suiteIcon("edit", 15)}
-        </button>
-        {/* Bulk text button — paste a list, send to many (rides the active transport) */}
-        <button onClick={() => setBulkOpen(true)} title="Bulk text — paste a list, send to many"
-          style={phoneIconButton(bulkOpen)}>
-          {suiteIcon("campaign", 15)}
-        </button>
-      </div>
-
       {/* ── Control bar: answer/hangup | record | keypad toggle ──
-            On the compact card this row is hidden so the activity feed gets the space;
-            it returns for live/incoming calls (answer/hang-up) AND whenever a messaging
-            action is open (compose or bulk-text) so those buttons stay reachable. ── */}
-      {(!compact || isIncoming || isOnCall || composeOpen || bulkOpen) && (
-      <div style={{ display: "flex", gap: 6, alignItems: "center", minHeight: compact ? 30 : 44 }}>
+            Always visible so that messaging actions (compose, bulk text) and transport status
+            are consistently reachable. ── */}
+      <div style={{ display: "flex", gap: 6, alignItems: "center", minHeight: compact ? 30 : 44, overflowX: "auto" }}>
         {isIncoming ? (
           <>
             <ActionBtn variant="filled" icon="phone_callback" iconSize={14} containerColor={C.success} labelColor="#fff"
@@ -1186,6 +1191,14 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             onClick={() => post("/hangup", "hangup")} disabled={!!busy} title="Hang up">Hang up</ActionBtn>
         ) : null}
         <div style={{ flex: 1 }} />
+        {/* New message button */}
+        <button onClick={openNewMessage} title="New message" style={phoneIconButton(composeOpen && composeIsNew)}>
+          {suiteIcon("edit", 15)}
+        </button>
+        {/* Bulk text button */}
+        <button onClick={() => setBulkOpen(true)} title="Bulk text — paste a list, send to many" style={phoneIconButton(bulkOpen)}>
+          {suiteIcon("campaign", 15)}
+        </button>
         <button onClick={refresh} disabled={!!busy} title="Refresh phone" style={phoneIconButton(false)}>{suiteIcon("refresh", 15)}</button>
         {/* Record general */}
         <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
@@ -1245,7 +1258,6 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           )}
         </span>
       </div>
-      )}
 
       {/* ── Dialer — only when keypad is open (never on the compact card) ── */}
       {showDialer && !compact && (
