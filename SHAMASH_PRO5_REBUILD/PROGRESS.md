@@ -55,6 +55,15 @@
 - **2026-06-28 (Phase 2 storage):** Added persistence abstraction `services/storage.ts` (`StorageBackend` +
   localStorage `MockStorage` with the catastrophic-delete guard) and wired the data store to it (async
   hydrate + write-through, so toggles survive reload). Real Firestore backend stays gated. Build green (177).
+- **2026-06-28 (lib/shabbos + Focus card):** Ported `lib/shabbos.ts` (sunset + Shabbos window). Built the
+  signature **Focus card** (`FocusSurface.tsx`): smart-sorted current task on a priority-colored hero card,
+  badges, Done/Park, priority circles, inline add box (M3 text field + energy chips); added store actions +
+  M3 text fields. Build green (203).
+- **2026-06-28 (BROWSER SMOKE PASSED ✅):** Added a `pro5` preview config (`.claude/launch.json`) and ran the
+  dev server in a real browser. Verified: Focus card renders correctly, rail routes between surfaces, NO
+  console errors, and — the crown jewel — the M3 theme bridge repaints EVERY genuine @material/web component
+  instantly on theme switch (Claude Cream ↔ Navy Gold). The "indistinguishable from pro app" bar is met at
+  the foundation level.
 
 ---
 
@@ -83,7 +92,7 @@
 - [~] 1.4 Zustand store — **UI + data slices done** (`state/store.ts` UI: suiteView/tab/sidebar/scheme + localStorage; `state/data.ts`: tasks+shailos seeded from mock, with `toggleDone`/`markGotBack`). Google/phone/health slices land with those features.
 - [~] 1.5 `mock/` seed data — **tasks/shailos/priorities/lists/settings done** (`mock/seed.ts`) + domain model (`lib/types.ts`, ✓ field fidelity verified vs `01-core.js`) + `lib/constants.ts`. Calendar/gmail/phone/health seeds added alongside those features.
 - [~] 1.6 Switchboard shell — **rail + surface routing done** (`features/switchboard/Switchboard.tsx`; `App.tsx` renders a per-surface placeholder with a live 8-theme switcher as the bridge smoke test). TODO: clock + Hebrew date in rail; swap placeholder for real surface panels as features land
-- [x] 1.7 **Build-gate GREEN** — `npm install` (266 pkgs) + `npm run build` (tsc strict + vite) pass, 0 errors; `dist` builds (~378 kB / 92 kB gz); package-lock committed. _Remaining quick check:_ `npm run dev` browser smoke (rail switches surfaces; theme chips repaint M3) — do on resume
+- [x] 1.7 **Build-gate GREEN + browser smoke PASSED ✅** — `npm install` + `npm run build` pass (tsc strict + vite, 0 errors); **verified in a real browser** via preview config `pro5` (port 5500): Focus card renders (priority-colored hero, contrast-safe text, Done/Park, priority circles, add box), rail routes between surfaces, **no console errors**, and the M3 theme bridge repaints all genuine `@material/web` components live (Claude Cream ↔ Navy Gold). To preview later: `preview_start` config `pro5`, or `cd SHAMASH_PRO5_REBUILD/app && npm run dev`.
 
 > **Known risk areas to check at first build** (TS strict + @lit/react + @material/web v2.4):
 > • `createComponent` prop typing — `onClick`/`disabled`/`selected`/`label`/`type` on wrapped elements may
