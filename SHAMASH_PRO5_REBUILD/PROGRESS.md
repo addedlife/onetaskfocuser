@@ -48,6 +48,10 @@
   priority, parentTask/stepIndex, snoozedUntil, shailaId; shaila content/synopsis/askerName/answererName,
   status `got_back`; priority weight/isShaila) across `lib/types.ts` + new `lib/constants.ts` + mock + data
   + both surfaces. Build green (176). Next: `services/ai` (job dispatcher + typed jobs) + `lib/` utils.
+- **2026-06-28 (Phase 2 lib + AI gateway):** Ported the pure core to `lib/` (ids, dates, priorities/gP,
+  aging, mrsW, optTasks scoring, Yeshivish `YC` map + cleanYeshivish, constants) and built the AI gateway
+  `services/ai.ts` (proxy dispatcher + first-step/answer-summary/calendar-event jobs, default provider
+  claude, `setIdTokenProvider` hook). All faithful to 01-core.js. Build green (176). Next: `services/store`.
 
 ---
 
@@ -87,8 +91,8 @@
 
 ## Phase 2 — Data + AI core
 - [ ] 2.1 `services/store` — Firebase bootstrap + reconnect; v5 per-task docs + legacy blob; IndexedDB cache; cross-tab/device sync; local + weekly backups; shailos CRUD + reconcile (mock-backed first)
-- [ ] 2.2 `services/ai` — proxy gateway (`callAI`, Claude+Gemini, text+audio, 30s timeout) + all jobs (optimize, first-step, parse shailos/conversation/calendar/braindump, gen-schemes, detect-answers, summarize)
-- [ ] 2.3 `lib/` — contrast, dates, hebrew, ids, aging + Mrs. W, `shabbos`
+- [~] 2.2 `services/ai` — **dispatcher done** (`services/ai.ts`: `callAIProxy`/`runAIJob`/`callAI`, `setIdTokenProvider`, 30s abort, default provider **claude**) + self-contained jobs (first-step, answer-summary, parse-calendar-event + defaults). Remaining jobs (optimize/conversation/parse-shailos/braindump/detect-answers/gen-schemes/transcribe-audio) land with their features.
+- [~] 2.3 `lib/` — **done:** `ids`, `dates` (greeting/dayKey/fmtMs), `priorities` (gP), `aging`, `mrsW`, `optimize` (optTasks), `yeshivish` (YC+cleanYeshivish), `constants`; contrast already in `theme/contrast.ts`. **Remaining:** `shabbos` engine + Hebrew-date.
 
 ## Phase 3 — Auth + Switchboard
 - [ ] 3.1 Google sign-in (popup/redirect by device, remember email, stay-signed-in), AuthGate, LoginScreen
