@@ -6,6 +6,7 @@ import { FilledButton, TonalButton, OutlinedButton, FilterChip, ChipSet, List, L
 import { ShailosSurface } from '@/features/shailos/ShailosSurface';
 import { FocusSurface } from '@/features/focus/FocusSurface';
 import { NerveCenterSurface } from '@/features/nervecenter/NerveCenterSurface';
+import { TaskRiverSurface } from '@/features/taskriver/TaskRiverSurface';
 import { useData } from '@/state/data';
 
 /**
@@ -130,6 +131,8 @@ export function App() {
             <FocusSurface />
           ) : view === 'nervecenter' ? (
             <NerveCenterSurface />
+          ) : view === 'taskriver' ? (
+            <TaskRiverSurface />
           ) : (
             <SurfacePlaceholder view={view} />
           )}

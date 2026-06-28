@@ -103,6 +103,10 @@
   are live from the store with jump-to-surface arrows; **Calendar/Mail/Phone/Health** are faithful cards in
   honest "needs integration" empty states (gated on Google/phone, Phases 6.3/7/8). Wired into `App.tsx`. Build
   green. Browser-verified: 6 cards render, no console errors. Next for NC: layout/density switch + AI headlines.
+- **2026-06-28 (Task River — Phase 6.5):** Built `features/taskriver/TaskRiverSurface.tsx` — active tasks flow
+  in horizontal lanes by priority tier; each card is tinted its tier colour (contrast-safe ink via `readableOn`)
+  with a compact age (`fmtMs`) + one-tap Done. Routed in `App.tsx`. Build green. Browser-verified: 4 lanes
+  render (Now/Today populated, Shaila/Eventually "calm waters"), no console errors.
 
 ---
 
@@ -169,7 +173,7 @@
 - [~] 6.2 Cards — **Tasks + Shailos live** (real store data on md-list, gold Shailos, jump-to-surface arrows). Mail/Phone/Calendar/Health are honest "needs integration" cards (gated on Google/phone).
 - [ ] 6.3 **Calendar** — `CalendarTimeline` (60px/hr, `assignCalendarColumns`, `GCAL_COLORS`, live now-line) + compact M3 agenda + multi-account picker + NOW/Tomorrow dividers + full-view split
 - [ ] 6.4 AI card headlines (Chief scan + caching) + Chief brief/learning profile
-- [ ] 6.5 TimelineFace clock, TaskRiver, ConvCapture, HealthCard
+- [~] 6.5 — **TaskRiver surface DONE** (`features/taskriver/TaskRiverSurface.tsx`: active tasks in priority lanes, tier-tinted contrast-safe cards, compact age, one-tap Done). TimelineFace clock, ConvCapture, HealthCard remain.
 
 ## Phase 7 — DeskPhone (UNIFIED surface)
 - [ ] 7.1 Transport layer (host fetch + cloud relay, 5s poll + signature diff)
