@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Dialog,
   OutlinedTextField,
@@ -76,7 +77,7 @@ export default function BulkTexter({
   onClose,
   sendOne,             // async ({ to, body }) => boolean
   usingRelay = false,  // true when the active transport is the cloud relay (fallback)
-  online = true,       // is the phone host reachable at all
+  online = true,       // host reachable AND the phone's MAP/texting channel is live (status.map)
   onBatchDone,         // optional: called once after a batch so the surface can refresh
 }) {
   const [numbersText, setNumbersText] = useState('');
@@ -166,7 +167,7 @@ export default function BulkTexter({
     onClose?.();
   }, [onClose]);
 
-  const canSend = recipients.length > 0 && message.trim().length > 0;
+  const canSend = recipients.length > 0 && message.trim().length > 0 && !!online;
   const transportNote = usingRelay
     ? 'Fallback route (cloud relay) — sends are paced one at a time as your PC drains them.'
     : 'Live route (direct to your PC) — sends as fast as the Bluetooth bridge allows.';
@@ -174,7 +175,7 @@ export default function BulkTexter({
   const fieldStyle = { width: '100%', marginBottom: SPC.md };
   const noteStyle = { fontSize: 12, color: GV_CLEAN.muted, fontFamily: 'inherit', margin: `0 0 ${SPC.md}` };
 
-  return (
+  return createPortal(
     <Dialog open={open} onClosed={handleDialogClosed} aria-label="Bulk text">
       <div slot="headline" style={{ fontFamily: 'inherit' }}>Bulk text</div>
 
@@ -182,7 +183,7 @@ export default function BulkTexter({
         <p style={{ ...noteStyle, color: usingRelay ? GV_CLEAN.warning : GV_CLEAN.muted }}>{transportNote}</p>
         {!online && (
           <p style={{ ...noteStyle, color: GV_CLEAN.danger }}>
-            Phone host looks offline — sends will be queued or may fail until it reconnects.
+            No live phone connection for texts (MAP not connected). Sends will fail.
           </p>
         )}
 
@@ -315,6 +316,7 @@ export default function BulkTexter({
           </>
         )}
       </div>
-    </Dialog>
+    </Dialog>,
+    document.body
   );
 }

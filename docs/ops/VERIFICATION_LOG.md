@@ -1,5 +1,21 @@
 # Verification Log
 
+## 2026-06-28 Bulk text now recognizes live phone MAP connection (prevents failing sends)
+
+- Problem: BulkTexter received `online` prop but ignored it (canSend never checked it; warning banner that existed earlier had been removed in working tree). NerveCenterPhoneSurface only used host-reachability (`!!status` / `phoneLinkLive`) for the prop. 10-deskphone-web computed `textsOk` from `status.map` for labels but passed raw host `online` to BulkTexter. Result: when host was reachable but phone MAP was "Not connected", bulk dialog opened, transport showed "Live", then every `/send` hit the host guard `if (!_map.IsConnected) return false` → `{result:"failed"}` and all rows showed "Failed".
+- Fix (minimal, matches existing patterns):
+  - Added `includesConnected(value)` helper in NerveCenterPhoneSurface.jsx (exact copy of the one already in 10-deskphone-web.jsx).
+  - After `phoneLinkLive`, compute `textsOk = includesConnected(status?.map || status?.Map || "")` and `bulkReady = phoneLinkLive && textsOk`.
+  - Pass `online={bulkReady}` to the BulkTexter instance.
+  - In BulkTexter: `canSend` now requires `&& !!online`; added danger banner when !online: "No live phone connection for texts (MAP not connected). Sends will fail."
+  - Updated the JSDoc comment on the `online` prop.
+  - In 10-deskphone-web.jsx (MessagesSlice where BulkTexter lives): pass `online={online && includesConnected(status?.map || status?.Map || "")}` reusing the existing helper.
+- Both call sites (NerveCenter WebPhone and DeskPhone web standalone) now refuse to start a batch and clearly explain when the actual texting channel (MAP) isn't live.
+- Host-side guard (MapService + /send → "failed") is unchanged and remains the source of truth.
+- Gates: `npm run build` (apps/web) succeeded (pre-existing large-bundle warning only).
+- Revertable: the three files contain only the targeted additions above on top of prior working-tree changes.
+- Files touched for this fix: `apps/web/src/08-app-split/components/BulkTexter.jsx`, `apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx`, `apps/web/src/10-deskphone-web.jsx`.
+
 ## 2026-06-21 M3 Phase A (slice 1) — buttons: text/action/toolbar + small-file icons → @material/web (4.26.97)
 
 - Scope: M3 component migration **Phase A, slice 1**. Replaced hand-coded button lookalikes with real `@material/web` components: every `gvTextButton` (8 sites: Answer/Decline/Hang up, Cancel, Done, Delete, "More history", row got-back), `cleanToolbarButton` (3 sites: Add, Open ×2), and the ConvCapture close (1) + SuitePanels (3 icon + 1 "Position" action) buttons.
