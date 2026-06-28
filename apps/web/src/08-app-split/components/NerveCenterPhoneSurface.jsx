@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cleanTheme, DUR, EASE, ELEV, gvIconButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { ActionBtn, IconBtn, ListItem, denseListVars } from '../m3.jsx';
 import BulkTexter from './BulkTexter.jsx';
@@ -7,7 +7,7 @@ import { db } from '../../01-core.js';
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 const PHONE_FETCH_TIMEOUT_MS = 4500;
 // How fresh the relayed phone state must be for the PC to count as "currently connected".
-// DeskPhone heartbeats to the relay every ~5s, so a gap beyond this (≈6 missed beats)
+// DeskPhone heartbeats to the relay every ~5s, so a gap beyond this (Γëê6 missed beats)
 // means the PC/DeskPhone is offline and new texts/calls are NOT arriving live.
 const RELAY_LIVE_WINDOW_MS = 30000;
 
@@ -20,14 +20,14 @@ function relayAgeLabel(ms) {
   return `${Math.round(s / 86400)}d`;
 }
 
-// True on a real phone/tablet (Android, iPhone, iPad) — by user-agent and touch,
+// True on a real phone/tablet (Android, iPhone, iPad) ΓÇö by user-agent and touch,
 // NOT by window width, so a narrow desktop window is still treated as desktop.
 // Mobile devices can't reach the PC's localhost, so they use the cloud relay only.
 export function isMobilePhoneDevice() {
   if (typeof navigator === "undefined") return false;
   const ua = `${navigator.userAgent || ""} ${navigator.platform || ""}`.toLowerCase();
   if (/android|iphone|ipod|ipad/.test(ua)) return true;
-  // iPadOS 13+ reports as desktop Safari — detect by touch + Mac.
+  // iPadOS 13+ reports as desktop Safari ΓÇö detect by touch + Mac.
   if (/mac/.test(ua) && (navigator.maxTouchPoints || 0) > 1) return true;
   const coarse = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches;
   return !!coarse && (navigator.maxTouchPoints || 0) > 0;
@@ -176,7 +176,7 @@ async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS, extraHead
   }
 }
 
-// Cross-render cache of fetched picture-text previews (mediaId → data: URL) so a thread
+// Cross-render cache of fetched picture-text previews (mediaId ΓåÆ data: URL) so a thread
 // re-render or reopen doesn't refetch the same image.
 const mediaCache = new Map();
 
@@ -211,15 +211,15 @@ function PhoneMmsImage({ attachment, C }) {
       style={{ maxWidth: "100%", maxHeight: 280, borderRadius: RADIUS.xs, marginTop: 4, display: "block", objectFit: "contain" }} />;
   }
   return <div style={{ fontSize: 12, color: C.faint, padding: "4px 0", display: "flex", alignItems: "center", gap: 4 }}>
-    {suiteIcon("image", 14)} {failed ? "image unavailable" : "loading image…"}
+    {suiteIcon("image", 14)} {failed ? "image unavailable" : "loading imageΓÇª"}
   </div>;
 }
 
 function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, dense = false, onRecordConversation, onRecordCall, onMoreHistory }) {
-  // Two transports reach the phone: DIRECT (DeskPhone's HTTP API — loopback or
+  // Two transports reach the phone: DIRECT (DeskPhone's HTTP API ΓÇö loopback or
   // same-origin when this page is served by DeskPhone itself) and RELAY (the
   // cloud blob, reachable from anywhere). The default "auto" mode probes direct
-  // and falls back to relay BY REACHABILITY, not device type — so a desktop
+  // and falls back to relay BY REACHABILITY, not device type ΓÇö so a desktop
   // browser away from home rides the relay, and sitting back down at the PC
   // flips back to direct automatically. isMobile only skips the pointless
   // probe (a phone can never reach the PC's loopback).
@@ -233,7 +233,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const [status, setStatus] = useState(null);
   const [messages, setMessages] = useState([]);
   const [calls, setCalls] = useState([]);
-  // Manually resolved missed calls — stored in Firestore so every browser/device (Chrome,
+  // Manually resolved missed calls ΓÇö stored in Firestore so every browser/device (Chrome,
   // Safari, phone) shares a single source of truth.  localStorage is the fast-init seed
   // only; Firestore is authoritative.  The onSnapshot listener keeps all sessions live.
   const [resolvedMissed, setResolvedMissed] = useState(() => {
@@ -247,7 +247,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     return db.collection("users").doc(uid).collection("appData").doc("phoneState");
   }, [user?.uid]);
 
-  // Subscribe to Firestore doc — real-time across all browsers/devices.
+  // Subscribe to Firestore doc ΓÇö real-time across all browsers/devices.
   useEffect(() => {
     if (!phoneStateDocRef) return;
     let stopped = false;
@@ -266,7 +266,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         try { window.dispatchEvent(new CustomEvent("nc-missed-resolved-sync", { detail: arr })); } catch {}
         setResolvedMissed(next);
       }, err => {
-        console.warn("[PhoneSurface] phoneState listener error — resubscribing:", err);
+        console.warn("[PhoneSurface] phoneState listener error ΓÇö resubscribing:", err);
         try { unsub?.(); } catch (_) {}
         unsub = null;
         if (stopped) return;
@@ -294,7 +294,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       const next = new Set(prev);
       if (resolved) next.add(key); else next.delete(key);
       const arr = [...next].slice(-300);
-      // Write to Firestore — this propagates to every browser/device via the listener above.
+      // Write to Firestore ΓÇö this propagates to every browser/device via the listener above.
       if (phoneStateDocRef) {
         phoneStateDocRef.set({ resolvedMissedCalls: arr }, { merge: true }).catch(() => {});
       }
@@ -308,7 +308,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [selected, setSelected] = useState(null);       // { name, number } — who we're composing to
+  const [selected, setSelected] = useState(null);       // { name, number } ΓÇö who we're composing to
   const [showDialer, setShowDialer] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);    // is compose area visible?
@@ -335,7 +335,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const C = cleanTheme(T);
   const RELAY_BASE = "/api/phone-relay";
 
-  // ── Transport resolution (the ONE connection control) ─────────────────────
+  // ΓöÇΓöÇ Transport resolution (the ONE connection control) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   // transportMode is the user override: 'auto' (default) | 'direct' | 'relay'.
   // transportRef caches the resolved path so auto doesn't probe every cycle:
   // an established 'direct' is trusted until a fetch fails; on 'relay' we
@@ -370,12 +370,12 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     return (await probeDirect()) ? "direct" : "relay";
   }, [transportMode, isMobile, probeDirect]);
 
-  // ── Relay command acknowledgements ─────────────────────────────────────────
+  // ΓöÇΓöÇ Relay command acknowledgements ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   // DeskPhone acknowledges every relayed command by id inside the state blob it
   // pushes (commandResults). post() awaits the ack for its command id, so success
-  // means DeskPhone REALLY ran the command — not just that the cloud queued it.
-  const recentAcksRef = useRef(new Map());   // command id → { ok, error, completedAt }
-  const ackWaitersRef = useRef(new Map());   // command id → resolve(ack)
+  // means DeskPhone REALLY ran the command ΓÇö not just that the cloud queued it.
+  const recentAcksRef = useRef(new Map());   // command id ΓåÆ { ok, error, completedAt }
+  const ackWaitersRef = useRef(new Map());   // command id ΓåÆ resolve(ack)
   const processCommandResults = useCallback((results) => {
     if (!Array.isArray(results)) return;
     results.forEach(r => {
@@ -423,7 +423,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       setContacts(nextContacts);
     }
     // Record when the relay last heard from the PC. On the LAN path there's no relay
-    // stamp (receivedAt=0) — that path's liveness is the just-completed fetch itself.
+    // stamp (receivedAt=0) ΓÇö that path's liveness is the just-completed fetch itself.
     if (receivedAt) setRelayReceivedAt(receivedAt);
   }, []);
 
@@ -433,7 +433,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     refreshInFlightRef.current = true;
 
     // Reads the single state blob DeskPhone pushed to the cloud. Private to the
-    // signed-in user — gated by a Firebase ID token.
+    // signed-in user ΓÇö gated by a Firebase ID token.
     const fetchViaRelay = async () => {
       let relayIdToken = null;
       try { relayIdToken = user?.getIdToken ? await user.getIdToken() : null; } catch {}
@@ -481,7 +481,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         } catch (directErr) {
           if (transportMode !== "auto") throw directErr;
           // Auto failover: the PC vanished mid-session (left home, DeskPhone
-          // closed) — fall through to the relay within the same cycle.
+          // closed) ΓÇö fall through to the relay within the same cycle.
           transport = "relay";
           lastProbeAtRef.current = Date.now();
           payload = await fetchViaRelay();
@@ -496,18 +496,18 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     } catch (e) {
       setStatus(null); setMessages([]); setCalls([]); setRelayReceivedAt(0);
       messagesSigRef.current = ""; callsSigRef.current = ""; contactsSigRef.current = "";
-      transportRef.current = null;   // both paths failed — re-resolve from scratch next cycle
+      transportRef.current = null;   // both paths failed ΓÇö re-resolve from scratch next cycle
       const msg = String(e?.message || "");
       setError(
         msg === "relay:no_state"
-          ? "Waiting for your PC — open DeskPhone so it can relay your texts."
+          ? "Waiting for your PC ΓÇö open DeskPhone so it can relay your texts."
           : msg === "relay:no_auth"
             ? "Sign in to see your phone here."
             : msg === "relay:denied"
               ? "Phone relay blocked by security rules."
               : msg.startsWith("relay:fail")
-                ? "Cloud relay unreachable — try again in a moment."
-                : "Can't reach DeskPhone — make sure it's running on your PC.");
+                ? "Cloud relay unreachable ΓÇö try again in a moment."
+                : "Can't reach DeskPhone ΓÇö make sure it's running on your PC.");
       usingRelayRef.current = false;
       setUsingRelay(false);
       onOnlineChange?.(false);
@@ -516,7 +516,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     }
   }, [api, transportMode, resolveTransport, onOnlineChange, user, applyPhoneState, processCommandResults]);
 
-  // Build phone-number → name map from contacts, covering many possible field names from the DeskPhone API
+  // Build phone-number ΓåÆ name map from contacts, covering many possible field names from the DeskPhone API
   const contactMap = useMemo(() => {
     const map = new Map();
     contacts.forEach(c => {
@@ -527,7 +527,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     return map;
   }, [contacts]);
 
-  // Secondary name map built from call history — calls often carry name directly on the object
+  // Secondary name map built from call history ΓÇö calls often carry name directly on the object
   const callNameMap = useMemo(() => {
     const map = new Map();
     (Array.isArray(calls) ? calls : []).forEach(c => {
@@ -564,7 +564,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     return null;
   }, [contactMap, callNameMap, msgNameMap]);
 
-  // Live contact suggestions — used for both dialer and new-compose contact search
+  // Live contact suggestions ΓÇö used for both dialer and new-compose contact search
   const suggestions = useMemo(() => {
     const q = (composeIsNew ? composeSearch : number).trim().toLowerCase();
     if (!q || contacts.length === 0) return [];
@@ -579,7 +579,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     }));
   }, [contacts, number, composeSearch, composeIsNew]);
 
-  // On relay transport the onSnapshot listener (below) delivers updates in real time —
+  // On relay transport the onSnapshot listener (below) delivers updates in real time ΓÇö
   // no REST poll needed, and polling would hit the Netlify function ~13k times/day for nothing.
   // On direct LAN transport there is no listener, so the poll stays.
   useEffect(() => {
@@ -590,7 +590,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   }, [refresh, usingRelay]);
 
   // Waking the tab (or unlocking the laptop) re-resolves the best path right
-  // away — back at the PC means direct, on the road means relay, no clicks.
+  // away ΓÇö back at the PC means direct, on the road means relay, no clicks.
   useEffect(() => {
     const onWake = () => { if (document.visibilityState !== "hidden") refresh(true); };
     window.addEventListener("focus", onWake);
@@ -609,13 +609,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     return () => clearInterval(id);
   }, [usingRelay]);
 
-  // ── Real-time relay: when we're on the cloud relay (away from the PC's LAN),
+  // ΓöÇΓöÇ Real-time relay: when we're on the cloud relay (away from the PC's LAN),
   // subscribe to the phone-relay/state doc directly instead of relying only on the
   // 6.5 s poll. DeskPhone PushNow()'s the instant a text arrives, so this lands the
   // update on every signed-in device in ~1 s. The poll above stays as a safety net.
   //
   // A Firestore onSnapshot listener is TERMINAL after its error callback fires (it
-  // never reconnects itself), so — exactly like Store.listenShailos — we tear down
+  // never reconnects itself), so ΓÇö exactly like Store.listenShailos ΓÇö we tear down
   // and resubscribe on capped exponential backoff so a transport drop self-heals.
   useEffect(() => {
     if (!usingRelay || !db || !user) return;
@@ -629,7 +629,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       unsub = db.collection("phone-relay").doc("state").onSnapshot(snap => {
         attempt = 0; // a healthy snapshot resets the backoff
         // IGNORE cache emissions. The Firestore SDK replays a locally-cached copy of
-        // the doc first (snap.metadata.fromCache) — which on a phone can be a STALE,
+        // the doc first (snap.metadata.fromCache) ΓÇö which on a phone can be a STALE,
         // empty snapshot (e.g. cached before DeskPhone first pushed). Applying it would
         // destructively wipe the fresh data the REST poll just loaded, leaving a green
         // "connected" icon over an empty feed. Trust only server snapshots; the 6.5s
@@ -642,7 +642,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         applyPhoneState(blob.status, blob.messages, blob.calls, blob.contacts, Number(blob.relayReceivedAt) || 0);
         processCommandResults(blob.commandResults);
       }, err => {
-        console.warn("[Phone] relay listener error — resubscribing:", err);
+        console.warn("[Phone] relay listener error ΓÇö resubscribing:", err);
         try { unsub && unsub(); } catch (_) {}
         unsub = null;
         if (stopped) return;
@@ -665,7 +665,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // when its HTTP response said so). Callers use this to decide whether user input
   // (e.g. a typed message) is safe to discard. NOTE: refresh() clears the error
   // banner, so failure paths refresh FIRST and set their error after.
-  // opts.quiet — used by the bulk texter: keep the per-send transport + ack logic
+  // opts.quiet ΓÇö used by the bulk texter: keep the per-send transport + ack logic
   // (that's what paces the batch) but suppress the surface-wide busy spinner,
   // error banner, and refresh churn on every single send. The batch reports
   // per-recipient success on its own and refreshes once when it finishes.
@@ -674,7 +674,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     if (!quiet) setBusy(label);
     try {
       if (usingRelayRef.current) {
-        // Route command through the cloud relay — DeskPhone drains it within 2 s.
+        // Route command through the cloud relay ΓÇö DeskPhone drains it within 2 s.
         // Include Firebase ID token so the function can gate on auth.
         let cmdAuthHeaders = {};
         try {
@@ -696,7 +696,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         }
         const queued = await res.json().catch(() => ({}));
         if (queued?.id) {
-          // Await DeskPhone's acknowledgement — it rides the state pushes we already
+          // Await DeskPhone's acknowledgement ΓÇö it rides the state pushes we already
           // receive (~3 s round trip). No ack within 25 s means the PC is offline.
           const ack = await waitForAck(queued.id, 25000);
           if (!quiet) await refresh();
@@ -705,13 +705,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             return false;
           }
           if (!ack) {
-            if (!quiet) setError("No confirmation from DeskPhone — your PC looks offline. The command runs if it reconnects within 10 minutes, then expires.");
+            if (!quiet) setError("No confirmation from DeskPhone ΓÇö your PC looks offline. The command runs if it reconnects within 10 minutes, then expires.");
             return false;
           }
           if (!quiet) setError("");
           return true;
         }
-        // Relay without command ids (older function) — keep the legacy blind wait.
+        // Relay without command ids (older function) ΓÇö keep the legacy blind wait.
         if (!quiet) setError("");
         await new Promise(r => setTimeout(r, 2500));
       } else {
@@ -734,7 +734,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     }
     catch {
       if (!quiet) setError("DeskPhone did not answer.");
-      transportRef.current = null;   // direct path died mid-command — re-resolve next cycle
+      transportRef.current = null;   // direct path died mid-command ΓÇö re-resolve next cycle
       if (!quiet) onOnlineChange?.(false);
       return false;
     }
@@ -747,18 +747,18 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     const to = selected?.number || number;
     if (!to?.trim() || !body.trim()) return;
     const ok = await post(`/send?to=${encodeURIComponent(to.trim())}&body=${encodeURIComponent(body.trim())}`, "send");
-    // Only discard the draft once DeskPhone confirmed the send — on failure the
+    // Only discard the draft once DeskPhone confirmed the send ΓÇö on failure the
     // text stays in the compose box so nothing the user typed is ever lost.
     if (ok) { setBody(""); closeCompose(); }
   };
 
-  // Normalize callState so "Idle", "None", "Available" etc. all collapse to "" (shows "Connected · device")
+  // Normalize callState so "Idle", "None", "Available" etc. all collapse to "" (shows "Connected ┬╖ device")
   const callStateRaw = status?.CallState || status?.callState || status?.CurrentCallState || status?.currentCallState || "";
   const callState = /^(idle|none|available|ready|standby|free|disconnected|inactive)$/i.test(callStateRaw.trim()) ? "" : callStateRaw.trim();
   const isIncoming = /ring|incoming/i.test(callState);
   const isOnCall = !!callState && !isIncoming && /^(active|dialing|oncall|callactive)$/i.test(callState.replace(/\s+/g, ""));
   const statusOnline = !!status;
-  // Relay liveness: on mobile the green light means the PC is *currently* pushing — i.e.
+  // Relay liveness: on mobile the green light means the PC is *currently* pushing ΓÇö i.e.
   // the relay heard from it within RELAY_LIVE_WINDOW_MS. A stale stamp = PC/DeskPhone
   // closed, so incoming texts/calls are NOT reaching this device live. On the LAN path
   // there's no relay; liveness is simply whether the just-completed /status fetch worked.
@@ -766,11 +766,11 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const relayStale = usingRelay && relayReceivedAt > 0 && relayAgeMs >= RELAY_LIVE_WINDOW_MS;
   const phoneLinkLive = usingRelay ? (statusOnline && relayReceivedAt > 0 && !relayStale) : statusOnline;
   const deviceName = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
-  const idleLabel = deviceName ? `Connected · ${deviceName}` : "Connected";
+  const idleLabel = deviceName ? `Connected ┬╖ ${deviceName}` : "Connected";
   const statusText = !statusOnline
     ? "DeskPhone offline"
     : relayStale
-      ? `PC offline · last seen ${relayAgeLabel(relayAgeMs)} ago`
+      ? `PC offline ┬╖ last seen ${relayAgeLabel(relayAgeMs)} ago`
       : (isIncoming ? "Incoming call" : isOnCall ? "On call" : callState ? "Call status changed" : idleLabel);
 
   // Report true liveness to the NerveCenter (not just "we have a blob"), and flip it to
@@ -970,9 +970,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     texts: threads.slice(0, 6).map(thread => {
       const latest = thread._latestMessage || thread._messages?.[thread._messages.length - 1] || {};
       const body = messageBody(latest);
-      // Condense to ≤4 words so the summary line stays scannable.
+      // Condense to Γëñ4 words so the summary line stays scannable.
       const words = body.replace(/\s+/g, " ").trim().split(" ");
-      const shortPreview = words.length <= 4 ? body : words.slice(0, 4).join(" ") + "…";
+      const shortPreview = words.length <= 4 ? body : words.slice(0, 4).join(" ") + "ΓÇª";
       return {
         name: thread._name || thread._who || "Unknown",
         preview: shortPreview,
@@ -1003,7 +1003,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     return { icon: "sms", color: C.muted };
   };
 
-  // Compose helpers — open from row, open new, close
+  // Compose helpers ΓÇö open from row, open new, close
   const openCompose = (name, num, anchorId = null) => {
     setSelected({ name, number: num });
     setNumber(num);
@@ -1062,7 +1062,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     </div>
   );
 
-  // Small neutral action button (white/card background) — used on each row
+  // Small neutral action button (white/card background) ΓÇö used on each row
   const AB = ({ icon, title, onClick }) => (
     <ActionBtn variant="tonal" icon={icon} iconSize={14} height={32} labelSize={NC_TYPE.small}
       title={title} aria-label={title}
@@ -1071,7 +1071,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     </ActionBtn>
   );
 
-  // Suggestion list — shared between dialer and compose-new modes
+  // Suggestion list ΓÇö shared between dialer and compose-new modes
   const SuggestionList = ({ onPick, style = {} }) => suggestions.length === 0 ? null : (
     <div style={{ background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, overflow: "hidden", boxShadow: ELEV[3], ...style }}>
       {suggestions.map((s, i) => (
@@ -1087,10 +1087,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     </div>
   );
 
-  // ── One phone screen everywhere ──────────────────────────────────────────
+  // ΓöÇΓöÇ One phone screen everywhere ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   // When this desktop browser reaches DeskPhone directly, the full phone view
   // embeds the exact UI DeskPhone itself serves (?standalone=deskphone) instead
-  // of this summary surface — identical pixels in the webapp and on the PC.
+  // of this summary surface ΓÇö identical pixels in the webapp and on the PC.
   // All hooks above keep running, so the poll still detects the PC going away,
   // flips the transport to relay, and this falls back to the built-in surface
   // transparently. Compact/dense NerveCenter cards always keep the summary UI.
@@ -1129,36 +1129,50 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: dense ? 20 : (compact ? 28 : 36), padding: "0 2px" }}>
           <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, flexShrink: 0, background: isIncoming ? C.success : isOnCall ? C.warning : C.danger }} />
           <span style={{ flex: 1, minWidth: 0, fontSize: compact ? 13 : 14, fontWeight: 500, color: isIncoming ? C.success : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {callerDisplay && (isIncoming || isOnCall) ? `${isIncoming ? "Incoming" : "On call"} · ${callerDisplay}` : `${vmCount} voicemail${vmCount === 1 ? "" : "s"}`}
+            {callerDisplay && (isIncoming || isOnCall) ? `${isIncoming ? "Incoming" : "On call"} ┬╖ ${callerDisplay}` : `${vmCount} voicemail${vmCount === 1 ? "" : "s"}`}
           </span>
         </div>
       )}
 
-      {/* ── PC-link status banner (any relay browser) — tells you whether your PC is
+      {/* ΓöÇΓöÇ PC-link status banner (any relay browser) ΓÇö tells you whether your PC is
             actually connected right now, so you know live texts/calls are arriving. On the
             compact nerve-center card this is suppressed (the card's summary line already
-            states online/offline); it only shows in the full phone view. ── */}
+            states online/offline); it only shows in the full phone view. ΓöÇΓöÇ */}
       {usingRelay && !compact && (
         relayStale ? (
           <div style={{ display: "flex", alignItems: "flex-start", gap: SP.sm, fontSize: NC_TYPE.meta, lineHeight: 1.4, color: C.warning, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, padding: `${SP.sm} ${SP.sm}` }}>
             <span style={{ marginTop: 1, flexShrink: 0, color: C.warning }}>{suiteIcon("cloud_off", 16)}</span>
-            <span>Your PC looks offline — last update {relayAgeLabel(relayAgeMs)} ago. New texts &amp; calls won't arrive here until DeskPhone reconnects on your PC.</span>
+            <span>Your PC looks offline ΓÇö last update {relayAgeLabel(relayAgeMs)} ago. New texts &amp; calls won't arrive here until DeskPhone reconnects on your PC.</span>
           </div>
         ) : phoneLinkLive ? (
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: C.success, padding: "0 2px" }}>
             <span style={{ width: 7, height: 7, borderRadius: RADIUS.pill, flexShrink: 0, background: C.success }} />
-            <span>Live · connected to your PC{deviceName ? ` · ${deviceName}` : ""}</span>
+            <span>Live ┬╖ connected to your PC{deviceName ? ` ┬╖ ${deviceName}` : ""}</span>
           </div>
         ) : null
       )}
 
       {composeOpen && !composeAnchorId && renderComposeBox()}
 
-      {/* ── Control bar: answer/hangup | record | new-msg | keypad toggle ──
-            On the compact card this whole row of PC-oriented controls is hidden so the
-            activity feed gets the space; it returns only for a live/incoming call (where
-            answer/hang-up matter). Full controls live in the expanded phone view. ── */}
-      {(!compact || isIncoming || isOnCall) && (
+      {/* ΓöÇΓöÇ Messaging quick-actions ΓöÇΓöÇ always visible regardless of compact ΓöÇΓöÇ */}
+      <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+        {/* New message button */}
+        <button onClick={openNewMessage} title="New message"
+          style={phoneIconButton(composeOpen && composeIsNew)}>
+          {suiteIcon("edit", 15)}
+        </button>
+        {/* Bulk text button ΓÇö paste a list, send to many (rides the active transport) */}
+        <button onClick={() => setBulkOpen(true)} title="Bulk text ΓÇö paste a list, send to many"
+          style={phoneIconButton(bulkOpen)}>
+          {suiteIcon("campaign", 15)}
+        </button>
+      </div>
+
+      {/* ΓöÇΓöÇ Control bar: answer/hangup | record | keypad toggle ΓöÇΓöÇ
+            On the compact card this row is hidden so the activity feed gets the space;
+            it returns for live/incoming calls (answer/hang-up) AND whenever a messaging
+            action is open (compose or bulk-text) so those buttons stay reachable. ΓöÇΓöÇ */}
+      {(!compact || isIncoming || isOnCall || composeOpen || bulkOpen) && (
       <div style={{ display: "flex", gap: 6, alignItems: "center", minHeight: compact ? 30 : 44 }}>
         {isIncoming ? (
           <>
@@ -1174,7 +1188,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         <div style={{ flex: 1 }} />
         <button onClick={refresh} disabled={!!busy} title="Refresh phone" style={phoneIconButton(false)}>{suiteIcon("refresh", 15)}</button>
         {/* Record general */}
-        <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
+        <button onClick={onRecordConversation} title="Record anything ΓÇö tasks, shailos, notes, got-backs"
           style={phoneIconButton(false)}>
           {suiteIcon("mic", 15)}
         </button>
@@ -1185,22 +1199,12 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             {suiteIcon("fiber_manual_record", 14)}
           </button>
         )}
-        {/* New message button */}
-        <button onClick={openNewMessage} title="New message"
-          style={phoneIconButton(composeOpen && composeIsNew)}>
-          {suiteIcon("edit", 15)}
-        </button>
-        {/* Bulk text button — paste a list, send to many (rides the active transport) */}
-        <button onClick={() => setBulkOpen(true)} title="Bulk text — paste a list, send to many"
-          style={phoneIconButton(bulkOpen)}>
-          {suiteIcon("campaign", 15)}
-        </button>
         {/* Keypad toggle */}
         <button onClick={() => setShowDialer(v => !v)} title="Keypad"
           style={phoneIconButton(showDialer)}>
           {suiteIcon("dialpad", 15)}
         </button>
-        {/* Transport pill — the ONE connection control. Shows how this browser
+        {/* Transport pill ΓÇö the ONE connection control. Shows how this browser
             reaches the phone (direct on this PC, or cloud relay) and how live it
             is; click it to pin a path if Auto ever guesses wrong. */}
         <span style={{ position: "relative", flexShrink: 0 }}>
@@ -1208,16 +1212,16 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             title={
               (usingRelay
                 ? (phoneLinkLive ? "Connected through the cloud relay"
-                  : relayStale ? `PC offline — last update ${relayAgeLabel(relayAgeMs)} ago`
+                  : relayStale ? `PC offline ΓÇö last update ${relayAgeLabel(relayAgeMs)} ago`
                     : "Waiting for your PC via the cloud relay")
-                : (phoneLinkLive ? "Connected directly to DeskPhone on this PC" : "Looking for DeskPhone…"))
-              + (transportMode === "auto" ? " · automatic" : " · pinned — click to change")
+                : (phoneLinkLive ? "Connected directly to DeskPhone on this PC" : "Looking for DeskPhoneΓÇª"))
+              + (transportMode === "auto" ? " ┬╖ automatic" : " ┬╖ pinned ΓÇö click to change")
             }
             style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700,
               border: "none", background: "transparent", cursor: "pointer",
               color: phoneLinkLive ? C.success : relayStale ? C.warning : C.faint, padding: "0 4px" }}>
             {suiteIcon(usingRelay ? (phoneLinkLive ? "cloud" : "cloud_off") : "computer", 15)}
-            <span>{phoneLinkLive ? (usingRelay ? "Live · cloud" : "This PC") : relayStale ? relayAgeLabel(relayAgeMs) : "…"}</span>
+            <span>{phoneLinkLive ? (usingRelay ? "Live ┬╖ cloud" : "This PC") : relayStale ? relayAgeLabel(relayAgeMs) : "ΓÇª"}</span>
           </button>
           {showTransportMenu && (
             <div style={{ position: "absolute", right: 0, bottom: "calc(100% + 6px)", zIndex: 60, minWidth: 200,
@@ -1243,7 +1247,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       </div>
       )}
 
-      {/* ── Dialer — only when keypad is open (never on the compact card) ── */}
+      {/* ΓöÇΓöÇ Dialer ΓÇö only when keypad is open (never on the compact card) ΓöÇΓöÇ */}
       {showDialer && !compact && (
         <div style={{ display: "flex", flexDirection: "column", gap:6 }}>
           {/* Number input */}
@@ -1276,7 +1280,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         </div>
       )}
 
-      {/* ── Unified phone activity feed ── */}
+      {/* ΓöÇΓöÇ Unified phone activity feed ΓöÇΓöÇ */}
       {statusOnline && (hasMessages || hasCalls) && (
         <div style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", paddingRight: 1, ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }) }}>
           {activityItems.map(entry => {
@@ -1292,7 +1296,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                 const actionId = `msg-${thread._key || thread._who}`;
                 const actionsOpen = openPhoneActionId === actionId;
                 const expanded = expandedPhoneMessageId === actionId;
-                // Collapsed, no inline action/compose → genuine md-list-item (matches the
+                // Collapsed, no inline action/compose ΓåÆ genuine md-list-item (matches the
                 // Mail/Calendar/Tasks rows). The moment the row expands / opens actions /
                 // composes, fall through to the existing grid layout (untouched) so the
                 // intricate conversation + compose machinery keeps working exactly as-is.
@@ -1361,7 +1365,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                             const msgText = messageBody(msg);
                             const msgTime = fmtTime(messageTimeMs(msg));
                             // DeskPhone stamps in-flight/failed sends ("Sending", "Confirming",
-                            // "Failed") and the blob carries it — surface it on outgoing bubbles
+                            // "Failed") and the blob carries it ΓÇö surface it on outgoing bubbles
                             // so a failed send is visible remotely, not only on the PC.
                             const sendStatus = String(msg.sendStatus || msg.SendStatus || "").trim();
                             const sendFailed = /fail/i.test(sendStatus);
@@ -1378,7 +1382,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                                   <div style={{ fontSize: NC_TYPE.small, color: C.faint, marginTop: 2, textAlign: outgoing ? "right" : "left" }}>
                                     {outgoing && sendStatus && (
                                       <span style={{ color: sendFailed ? C.danger : C.faint, fontWeight: sendFailed ? 600 : 400 }}>
-                                        {msg.sendStatusLabel || msg.SendStatusLabel || sendStatus}{msgTime ? " · " : ""}
+                                        {msg.sendStatusLabel || msg.SendStatusLabel || sendStatus}{msgTime ? " ┬╖ " : ""}
                                       </span>
                                     )}
                                     {msgTime}
@@ -1491,7 +1495,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                       ) : (num && num !== name && <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted, marginTop: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: NC_TYPE.line }}>{num}</span>)}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
-                      {/* Direct resolve/reopen toggle for missed calls — one tap, no menu. */}
+                      {/* Direct resolve/reopen toggle for missed calls ΓÇö one tap, no menu. */}
                       {isMissed && mKey && (resolved
                         ? <button onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, false); }} title="Reopen missed call" aria-label="Reopen missed call" style={phoneIconButton(false)}>{suiteIcon("undo", 16)}</button>
                         : <button onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, true); }} title="Mark resolved" aria-label="Mark resolved" style={{ ...phoneIconButton(false), color: C.success }}>{suiteIcon("check_circle", 17)}</button>)}
@@ -1521,12 +1525,12 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         </div>
       )}
 
-      {/* Compact card always shows a status dot — even with no texts/calls — so the phone's
+      {/* Compact card always shows a status dot ΓÇö even with no texts/calls ΓÇö so the phone's
           live/stale/offline state is visible at a glance instead of a blank card. */}
       {compact && !error && !(statusOnline && (hasMessages || hasCalls)) && (
         <div style={{ display: "flex", alignItems: "center", gap: SP.xs, padding: `${SP.xs} ${SP.xs}`, fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0 }}>
           <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, flexShrink: 0, background: phoneLinkLive ? C.success : relayStale ? C.warning : C.faint }} />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{phoneLinkLive ? "Connected · no recent calls or texts" : relayStale ? `PC offline · ${relayAgeLabel(relayAgeMs)}` : "DeskPhone offline"}</span>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{phoneLinkLive ? "Connected ┬╖ no recent calls or texts" : relayStale ? `PC offline ┬╖ ${relayAgeLabel(relayAgeMs)}` : "DeskPhone offline"}</span>
         </div>
       )}
       {!statusOnline && !error && !compact && <div style={{ fontSize: NC_TYPE.meta, color: C.muted, padding: `${SP.xs} 2px` }}>Open DeskPhone to connect calls and texts.</div>}
