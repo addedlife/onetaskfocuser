@@ -39,6 +39,7 @@ import { MdOutlinedTextField } from '@material/web/textfield/outlined-text-field
 import { MdFilledTextField } from '@material/web/textfield/filled-text-field.js';
 import { MdTabs } from '@material/web/tabs/tabs.js';
 import { MdPrimaryTab } from '@material/web/tabs/primary-tab.js';
+import { MdDialog } from '@material/web/dialog/dialog.js';
 
 // ── Wrapped elements (one createComponent per element) ───────────────────────
 export const FilledButton = createComponent({ react: React, tagName: 'md-filled-button', elementClass: MdFilledButton });
@@ -72,6 +73,9 @@ export const FilledTextField = createComponent({ react: React, tagName: 'md-fill
 // map surfaces it as an `onChange` prop. Read `activeTabIndex` off the target in the handler.
 export const Tabs = createComponent({ react: React, tagName: 'md-tabs', elementClass: MdTabs, events: { onChange: 'change' } });
 export const PrimaryTab = createComponent({ react: React, tagName: 'md-primary-tab', elementClass: MdPrimaryTab });
+
+// md-dialog manages its own open state + fires `close`/`closed`. Control `open` and re-sync on `onClosed`.
+export const Dialog = createComponent({ react: React, tagName: 'md-dialog', elementClass: MdDialog, events: { onClose: 'close', onClosed: 'closed' } });
 
 // CSS-custom-property bag (TS won't allow arbitrary `--x` keys on CSSProperties directly).
 type CssVars = Record<string, string | number>;

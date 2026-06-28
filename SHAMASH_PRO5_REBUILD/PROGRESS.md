@@ -8,9 +8,10 @@
 > 0 errors; 213 modules). The `md-tabs` switch: **Focus** = the one-task card, **Queue** = the full task list
 > (smart-sort, search, quick-add, overwhelm, Shelf), **Insights** = completion stats + 7-day chart + daily tip
 > (AI insight/chat deferred to Phase 11). Tasks carry a `completedAt` timestamp; the rail shows a live clock +
-> Hebrew date. **Next, in order:** (1) deepen a placeholder surface — Shailos (Phase 5, the highest-priority
-> surface) or NerveCenter (Phase 6); (2) finish Phase 4.1 remaining (inline rename, Shatter, hamburger, Zen).
-> Real `services/store` Firestore (2.1) + AI backend (Phase 11) stay gated (record/transcribe/parse/research).
+> Hebrew date; Shailos has filters + quick-add + copy + an answer-composer dialog. **Next, in order:**
+> (1) NerveCenter (Phase 6) — replace the placeholder with real Tasks + Shailos cards (Mail/Phone/Calendar
+> gated on Google/phone integration); (2) finish Phase 4.1 remaining (inline rename, Shatter, hamburger, Zen).
+> Real `services/store` Firestore (2.1) + AI backend (Phase 11, incl. Shailos record/transcribe/Research) gated.
 >
 > **⛔ DROPPED (owner, 2026-06-28 — do NOT build):** Body-Double timer · Just-Start/"Start" timer ·
 > NerveCenter "More actions" pane/drawer (each page uses its own inline action suite instead).
@@ -90,6 +91,14 @@
   no dep) and a ticking `RailClock` footer in the Switchboard — time + Gregorian + Hebrew date (gold) + greeting
   when open, compact time when collapsed. Build green. Browser-verified: rail reads "11:19 AM / Sun, Jun 28 /
   13 Tamuz 5786 / Good morning", no console errors. Follow-up: sunset-aware Hebrew rollover (hooks into shabbos.ts).
+- **2026-06-28 (Shailos deepened — Phase 5):** Wrapped `md-dialog` (`Dialog`) in `m3/`, added `addShaila` +
+  `answerShaila` store actions, and rebuilt `ShailosSurface`: gold identity, status filter chips with live
+  counts, manual quick-add, copy-to-clipboard, Got-back toggle, and an `md-dialog` answer composer (answer +
+  answerer → `answered`). Build green (bundle ~527 kB w/ dialog). Browser-verified on a **fresh load (clean
+  console)**: open dialog → type answer → Save → shaila flips Pending→Answered, counts update, dialog closes.
+  Record/transcribe/parse/Research/dedup remain AI-gated (Phase 11). _Dev note: editing `m3/index.tsx` triggers
+  a benign HMR `customElements.define` collision ("md-divider already defined") — restart the dev server to
+  clear it; fresh load + production build are clean._
 
 ---
 
@@ -146,9 +155,9 @@
 - [~] 4.6 Insights tab — **core DONE** (`features/focus/InsightsTab.tsx`): done-today/this-week/all-time stat tiles + a 7-day completion bar chart (driven by a new `completedAt` task timestamp) + rotating daily tip. **Deferred:** AI insight + AI chat (need the AI proxy — Phase 11).
 
 ## Phase 5 — Shailos
-- [~] 5.0 Shailos SURFACE scaffolded early (`features/shailos/ShailosSurface.tsx`) — live `md-list` render of shailos with status + "Got back" action, in category gold; wired in `App.tsx`. (Full record/transcribe/research below.)
+- [x] 5.0 Shailos SURFACE (`features/shailos/ShailosSurface.tsx`) — live `md-list` in category gold. **Deepened (2026-06-28):** status filter chips with live counts (All/Pending/Answered/Got back), manual quick-add, copy-to-clipboard, Got-back toggle, and an `md-dialog` answer composer (answer + answerer → status `answered`).
 - [ ] 5.1 `shailosQueue` logic + stores
-- [ ] 5.2 Embedded Shailos mini-app rebuilt (record/transcribe/parse, synopsis, answer, got-back, **Research**, dup-catch, copy/delete, live store, error screen)
+- [~] 5.2 Embedded Shailos mini-app — **non-AI parts DONE** (answer composer, got-back, copy, status filters, manual add, live store via `addShaila`/`answerShaila`). **AI-gated (Phase 11):** record/transcribe/parse, synopsis regen/dictate, **Research** (web+Sefaria), duplicate-catch, error screen.
 - [ ] 5.3 ShailaManager + MiniPill surfaces; shared `deriveAccents` parity
 
 ## Phase 6 — NerveCenter

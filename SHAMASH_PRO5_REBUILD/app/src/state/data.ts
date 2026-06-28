@@ -21,6 +21,8 @@ interface DataState {
   toggleDone: (id: string) => void;
   parkTask: (id: string) => void;
   markGotBack: (id: string, value: boolean) => void;
+  addShaila: (content: string, askerName?: string) => void;
+  answerShaila: (id: string, answer: string, answererName?: string) => void;
 }
 
 /** Tomorrow at 6am local — when a parked task wakes back up. */
@@ -92,6 +94,38 @@ export const useData = create<DataState>((set, get) => ({
   markGotBack: (id, value) => {
     const status: ShailaStatus = value ? 'got_back' : 'answered';
     const shailos = get().shailos.map((q) => (q.id === id ? { ...q, status } : q));
+    set({ shailos });
+    void storage.saveShailos(shailos);
+  },
+
+  addShaila: (content, askerName) => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    const shaila: Shaila = {
+      id: uid(),
+      content: trimmed,
+      synopsis: trimmed.length > 90 ? `${trimmed.slice(0, 88)}…` : trimmed,
+      status: 'pending',
+      createdAt: Date.now(),
+      ...(askerName ? { askerName } : {}),
+    };
+    const shailos = [shaila, ...get().shailos];
+    set({ shailos });
+    void storage.saveShailos(shailos);
+  },
+
+  answerShaila: (id, answer, answererName) => {
+    const trimmed = answer.trim();
+    const shailos = get().shailos.map((q) =>
+      q.id === id
+        ? {
+            ...q,
+            answer: trimmed,
+            status: (trimmed ? 'answered' : q.status) as ShailaStatus,
+            ...(answererName ? { answererName } : {}),
+          }
+        : q,
+    );
     set({ shailos });
     void storage.saveShailos(shailos);
   },
