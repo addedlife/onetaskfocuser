@@ -6,6 +6,7 @@ import { optTasks } from '@/lib/optimize';
 import { gP } from '@/lib/priorities';
 import { isTaskAged, ageLabel } from '@/lib/aging';
 import { QueueTab } from '@/features/focus/QueueTab';
+import { InsightsTab } from '@/features/focus/InsightsTab';
 import { readableOn, SP, ELEV } from '@/theme';
 import type { EnergyLevel } from '@/lib/types';
 
@@ -233,27 +234,6 @@ function FocusCard() {
 
 const TAB_ORDER: FocusTab[] = ['focus', 'queue', 'insights'];
 
-/** Honest placeholder for a Focus sub-tab whose full feature lands in a later phase. */
-function ComingSoon({ title, blurb, phase }: { title: string; blurb: string; phase: string }) {
-  return (
-    <div
-      style={{
-        textAlign: 'center',
-        padding: '48px 28px',
-        border: '1px dashed var(--shp-color-divider)',
-        borderRadius: 'var(--shp-radius-xl)',
-        color: 'var(--shp-color-muted)',
-      }}
-    >
-      <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--shp-color-text)' }}>{title}</div>
-      <div style={{ marginTop: 6, maxWidth: 420, marginLeft: 'auto', marginRight: 'auto' }}>{blurb}</div>
-      <div style={{ marginTop: 12, fontSize: 12, letterSpacing: 0.4, textTransform: 'uppercase' }}>
-        {phase}
-      </div>
-    </div>
-  );
-}
-
 /**
  * Focus surface shell — hosts the genuine M3 `md-tabs` switch (focus / queue / insights) wired to the
  * UI store's `tab` slice. The Focus tab is the live one-task card; Queue and Insights are honest
@@ -297,11 +277,7 @@ export function FocusSurface() {
       ) : tab === 'queue' ? (
         <QueueTab />
       ) : (
-        <ComingSoon
-          title="Insights"
-          blurb="Completion charts, the AI insight, AI chat and your daily tip will live here."
-          phase="Phase 4.6"
-        />
+        <InsightsTab />
       )}
     </div>
   );

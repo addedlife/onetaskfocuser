@@ -65,13 +65,19 @@ export const useData = create<DataState>((set, get) => ({
   },
 
   completeTask: (id) => {
-    const tasks = get().tasks.map((t) => (t.id === id ? { ...t, completed: true } : t));
+    const tasks = get().tasks.map((t) =>
+      t.id === id ? { ...t, completed: true, completedAt: Date.now() } : t,
+    );
     set({ tasks });
     void storage.saveTasks(tasks);
   },
 
   toggleDone: (id) => {
-    const tasks = get().tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t));
+    const tasks = get().tasks.map((t) =>
+      t.id === id
+        ? { ...t, completed: !t.completed, completedAt: !t.completed ? Date.now() : undefined }
+        : t,
+    );
     set({ tasks });
     void storage.saveTasks(tasks);
   },

@@ -16,6 +16,7 @@ export interface Task {
   text: string;
   priority: string; // priority tier id
   completed?: boolean;
+  completedAt?: number; // epoch ms when marked done — powers the Insights completion charts
   createdAt: number; // epoch ms
   listId?: string; // which list (V5 per-task field; in-memory nested under its list)
 

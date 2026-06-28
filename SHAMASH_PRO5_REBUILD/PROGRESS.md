@@ -4,13 +4,13 @@
 > first unchecked `[ ]`, do it, then **check it off with a one-line note + date** and commit.
 > Keep commits small. Build-gate (`npm run build` in `app/`) before checking any build-affecting box.
 >
-> **▶ CURRENT POSITION:** **Focus app taking shape — tab chrome + Focus card + Queue tab all live.** Build
-> green (tsc strict + vite, 0 errors; 212 modules). The Focus surface has a genuine M3 `md-tabs` switch:
-> **Focus** = the one-task card, **Queue** = the real task list (smart-sort, search, quick-add, opt-in
-> overwhelm, Shelf — browser-verified add→sort→clear), **Insights** = honest placeholder. **Next, in order:**
-> (1) **Insights tab** (4.6 — completion stats + daily tip); (2) finish Phase 4.1 remaining (inline rename,
-> Shatter, hamburger, Zen); (3) Phase 1.6 rail clock + Hebrew date; (4) Phase 5 Shailos depth. Real
-> `services/store` Firestore (2.1) stays gated.
+> **▶ CURRENT POSITION:** **Focus app complete — all three tabs are real.** Build green (tsc strict + vite,
+> 0 errors; 213 modules). The `md-tabs` switch: **Focus** = the one-task card, **Queue** = the full task list
+> (smart-sort, search, quick-add, overwhelm, Shelf), **Insights** = completion stats + 7-day chart + daily tip
+> (AI insight/chat deferred to Phase 11). Tasks now carry a `completedAt` timestamp. **Next, in order:**
+> (1) Phase 1.6 rail clock + Hebrew date (quick, visible everywhere); (2) finish Phase 4.1 remaining (inline
+> rename, Shatter, hamburger, Zen); (3) flesh out a placeholder surface — NerveCenter (Phase 6) or Shailos
+> depth (Phase 5, the highest-priority surface). Real `services/store` Firestore (2.1) + AI backend (11) gated.
 >
 > **⛔ DROPPED (owner, 2026-06-28 — do NOT build):** Body-Double timer · Just-Start/"Start" timer ·
 > NerveCenter "More actions" pane/drawer (each page uses its own inline action suite instead).
@@ -80,6 +80,12 @@
   Shelf (restore via undo). Lifted the shared `ageLabel` into `lib/aging.ts` (was duplicated in FocusSurface).
   Wired into the Focus shell's Queue tab. Build green (212 modules). Browser-verified: add→appears→smart-sorts
   →field clears, no console errors. Remaining for 4.5: drag-reorder + subtask-group collapse (with Shatter, 4.4).
+- **2026-06-28 (Insights tab — Phase 4.6 core):** Added a `completedAt` timestamp to the task model (set in
+  `completeTask`/`toggleDone`; seeded across the week) and built `features/focus/InsightsTab.tsx`: done-today/
+  this-week/all-time stat tiles + a 7-day completion bar chart (today's bar in the accent) + a rotating daily
+  tip. AI insight + chat are honestly deferred to the backend (Phase 11). Removed the Focus shell's `ComingSoon`
+  placeholder — all three Focus tabs are now real. Build green (213 modules). Browser-verified: stats read 1/4/4
+  from the seed, chart shows Thu–Sun bars, no console errors.
 
 ---
 
@@ -133,7 +139,7 @@
 - [ ] 4.3 PostItStack (**Stack/Board modes + sort chips**) + BlockReflect + ShailaManager/MiniPill
 - [ ] 4.4 Modals (BulkAdd, TaskBD/Shatter, BlockedModal, ContextTagPicker, ListManager)
 - [~] 4.5 Queue tab — **core DONE** (`features/focus/QueueTab.tsx`): smart-sorted list (`optTasks`), search, quick-add (tier chips, defaults to Now), opt-in overwhelm "focus on top 3" (threshold 7), inline Park/Done per row, collapsible completed Shelf (restore via undo). **Remaining:** drag-reorder + subtask-group collapse (collapse lands with Shatter, 4.4).
-- [ ] 4.6 Insights tab (charts, AI insight, AI chat, daily tip)
+- [~] 4.6 Insights tab — **core DONE** (`features/focus/InsightsTab.tsx`): done-today/this-week/all-time stat tiles + a 7-day completion bar chart (driven by a new `completedAt` task timestamp) + rotating daily tip. **Deferred:** AI insight + AI chat (need the AI proxy — Phase 11).
 
 ## Phase 5 — Shailos
 - [~] 5.0 Shailos SURFACE scaffolded early (`features/shailos/ShailosSurface.tsx`) — live `md-list` render of shailos with status + "Got back" action, in category gold; wired in `App.tsx`. (Full record/transcribe/research below.)
