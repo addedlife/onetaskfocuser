@@ -7,10 +7,10 @@
 > **▶ CURRENT POSITION:** **Focus app complete — all three tabs are real.** Build green (tsc strict + vite,
 > 0 errors; 213 modules). The `md-tabs` switch: **Focus** = the one-task card, **Queue** = the full task list
 > (smart-sort, search, quick-add, overwhelm, Shelf), **Insights** = completion stats + 7-day chart + daily tip
-> (AI insight/chat deferred to Phase 11). Tasks now carry a `completedAt` timestamp. **Next, in order:**
-> (1) Phase 1.6 rail clock + Hebrew date (quick, visible everywhere); (2) finish Phase 4.1 remaining (inline
-> rename, Shatter, hamburger, Zen); (3) flesh out a placeholder surface — NerveCenter (Phase 6) or Shailos
-> depth (Phase 5, the highest-priority surface). Real `services/store` Firestore (2.1) + AI backend (11) gated.
+> (AI insight/chat deferred to Phase 11). Tasks carry a `completedAt` timestamp; the rail shows a live clock +
+> Hebrew date. **Next, in order:** (1) deepen a placeholder surface — Shailos (Phase 5, the highest-priority
+> surface) or NerveCenter (Phase 6); (2) finish Phase 4.1 remaining (inline rename, Shatter, hamburger, Zen).
+> Real `services/store` Firestore (2.1) + AI backend (Phase 11) stay gated (record/transcribe/parse/research).
 >
 > **⛔ DROPPED (owner, 2026-06-28 — do NOT build):** Body-Double timer · Just-Start/"Start" timer ·
 > NerveCenter "More actions" pane/drawer (each page uses its own inline action suite instead).
@@ -86,6 +86,10 @@
   tip. AI insight + chat are honestly deferred to the backend (Phase 11). Removed the Focus shell's `ComingSoon`
   placeholder — all three Focus tabs are now real. Build green (213 modules). Browser-verified: stats read 1/4/4
   from the seed, chart shows Thu–Sun bars, no console errors.
+- **2026-06-28 (rail clock + Hebrew date — Phase 1.6):** Added `lib/dates.hebrewDate()` (Intl Hebrew calendar,
+  no dep) and a ticking `RailClock` footer in the Switchboard — time + Gregorian + Hebrew date (gold) + greeting
+  when open, compact time when collapsed. Build green. Browser-verified: rail reads "11:19 AM / Sun, Jun 28 /
+  13 Tamuz 5786 / Good morning", no console errors. Follow-up: sunset-aware Hebrew rollover (hooks into shabbos.ts).
 
 ---
 
@@ -113,7 +117,7 @@
 - [x] 1.3 `theme/` — `tokens`, `accents.deriveAccents`, `contrast`, 8 `schemes` (full semantic roles), `bridge.globalCss()` + `themeVarsCss()`; applied via `<style>` in `App.tsx`
 - [~] 1.4 Zustand store — **UI + data slices done** (`state/store.ts` UI: suiteView/tab/sidebar/scheme + localStorage; `state/data.ts`: tasks+shailos seeded from mock, with `toggleDone`/`markGotBack`). Google/phone/health slices land with those features.
 - [~] 1.5 `mock/` seed data — **tasks/shailos/priorities/lists/settings done** (`mock/seed.ts`) + domain model (`lib/types.ts`, ✓ field fidelity verified vs `01-core.js`) + `lib/constants.ts`. Calendar/gmail/phone/health seeds added alongside those features.
-- [~] 1.6 Switchboard shell — **rail + surface routing done** (`features/switchboard/Switchboard.tsx`; `App.tsx` renders a per-surface placeholder with a live 8-theme switcher as the bridge smoke test). TODO: clock + Hebrew date in rail; swap placeholder for real surface panels as features land
+- [x] 1.6 Switchboard shell — rail + surface routing + **rail clock / Gregorian / Hebrew-date footer + greeting** done (`features/switchboard/Switchboard.tsx`; `lib/dates.hebrewDate()` via the Intl Hebrew calendar). Real surface panels swap in per-feature as they land (focus ✓, shailos ✓; rest still placeholder). _Follow-up: sunset-aware Hebrew-date rollover via `lib/shabbos.ts`._
 - [x] 1.7 **Build-gate GREEN + browser smoke PASSED ✅** — `npm install` + `npm run build` pass (tsc strict + vite, 0 errors); **verified in a real browser** via preview config `pro5` (port 5500): Focus card renders (priority-colored hero, contrast-safe text, Done/Park, priority circles, add box), rail routes between surfaces, **no console errors**, and the M3 theme bridge repaints all genuine `@material/web` components live (Claude Cream ↔ Navy Gold). To preview later: `preview_start` config `pro5`, or `cd SHAMASH_PRO5_REBUILD/app && npm run dev`.
 
 > **Known risk areas to check at first build** (TS strict + @lit/react + @material/web v2.4):

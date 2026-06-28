@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { IconBtn } from '@/m3';
 import { SP } from '@/theme';
 import { useUi, type SuiteView } from '@/state/store';
+import { greeting, hebrewDate } from '@/lib/dates';
 
 interface Surface {
   id: SuiteView;
@@ -17,6 +19,60 @@ const SURFACES: Surface[] = [
   { id: 'shailos', label: 'Shailos', icon: 'help', gold: true },
   { id: 'health', label: 'Health', icon: 'ecg_heart' },
 ];
+
+/** A `Date` that re-renders on an interval (default every 30s) so the rail clock stays fresh. */
+function useNow(intervalMs = 30_000): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
+/** Rail footer — live clock + Gregorian + Hebrew date + greeting (compact when the rail is collapsed). */
+function RailClock({ open }: { open: boolean }) {
+  const now = useNow();
+  const time = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (!open) {
+    return (
+      <div
+        style={{
+          marginTop: 'auto',
+          paddingTop: SP.sm,
+          textAlign: 'center',
+          fontSize: 11,
+          color: 'var(--shp-color-muted)',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {time.replace(/\s?[AP]M$/i, '')}
+      </div>
+    );
+  }
+  const greg = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  const heb = hebrewDate(now);
+  return (
+    <div
+      style={{
+        marginTop: 'auto',
+        padding: `${SP.sm} 8px 4px`,
+        borderTop: '1px solid var(--shp-color-divider)',
+      }}
+    >
+      <div style={{ fontSize: 20, fontWeight: 600, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+        {time}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--shp-color-muted)', marginTop: 2 }}>{greg}</div>
+      {heb && (
+        <div style={{ fontSize: 12, color: 'var(--shp-color-gold, var(--shp-color-muted))', marginTop: 1 }}>
+          {heb}
+        </div>
+      )}
+      <div style={{ fontSize: 11, color: 'var(--shp-color-muted)', marginTop: 4 }}>{greeting(now)}</div>
+    </div>
+  );
+}
 
 /**
  * The left navigation rail / surface switcher. Nav-rail items have no stable @material/web element
@@ -99,6 +155,8 @@ export function Switchboard() {
           </button>
         );
       })}
+
+      <RailClock open={sidebarOpen} />
     </nav>
   );
 }
