@@ -35,6 +35,8 @@ import { MdLinearProgress } from '@material/web/progress/linear-progress.js';
 import { MdSwitch } from '@material/web/switch/switch.js';
 import { MdCheckbox } from '@material/web/checkbox/checkbox.js';
 import { MdRadio } from '@material/web/radio/radio.js';
+import { MdOutlinedTextField } from '@material/web/textfield/outlined-text-field.js';
+import { MdFilledTextField } from '@material/web/textfield/filled-text-field.js';
 
 // ── Wrapped elements (one createComponent per element) ───────────────────────
 export const FilledButton = createComponent({ react: React, tagName: 'md-filled-button', elementClass: MdFilledButton });
@@ -61,6 +63,8 @@ export const LinearProgress = createComponent({ react: React, tagName: 'md-linea
 export const Switch = createComponent({ react: React, tagName: 'md-switch', elementClass: MdSwitch });
 export const Checkbox = createComponent({ react: React, tagName: 'md-checkbox', elementClass: MdCheckbox });
 export const Radio = createComponent({ react: React, tagName: 'md-radio', elementClass: MdRadio });
+export const OutlinedTextField = createComponent({ react: React, tagName: 'md-outlined-text-field', elementClass: MdOutlinedTextField });
+export const FilledTextField = createComponent({ react: React, tagName: 'md-filled-text-field', elementClass: MdFilledTextField });
 
 // CSS-custom-property bag (TS won't allow arbitrary `--x` keys on CSSProperties directly).
 type CssVars = Record<string, string | number>;

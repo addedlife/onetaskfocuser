@@ -102,8 +102,8 @@
 - [ ] 3.2 AppSuiteChrome rail polish + SuitePanels wrappers on M3
 
 ## Phase 4 — Focus app
-- [~] 4.0 Focus SURFACE scaffolded early (`features/focus/FocusSurface.tsx`) — interim queue-style task list from the store (priority color dot, age, energy, done action) on `md-list`. One-card view = 4.1.
-- [ ] 4.1 Focus tab (card, badges, priority circles+voice, add box+energy, Done/Zen/Park, Shatter, hamburger)
+- [x] 4.0 Focus surface exists (`features/focus/FocusSurface.tsx`) — upgraded from interim list to the real card view (below).
+- [~] 4.1 Focus card — **core DONE**: smart-sorted current task on a priority-colored, contrast-safe hero card; badges (tier/age/energy/group); **Done** + **Park** actions; priority circles that reveal an inline add box with an M3 text field + energy chips; store actions addTask/completeTask/parkTask. **Remaining:** inline rename, Shatter, voice-add on circles, hamburger menu, Zen mode. _(Just-Start & Body-Double timers DROPPED.)_
 - [ ] 4.2 ZenMode + BrainDump + OverwhelmBanner  _(Just-Start & Body-Double timers DROPPED — do not build)_
 - [ ] 4.3 PostItStack (**Stack/Board modes + sort chips**) + BlockReflect + ShailaManager/MiniPill
 - [ ] 4.4 Modals (BulkAdd, TaskBD/Shatter, BlockedModal, ContextTagPicker, ListManager)

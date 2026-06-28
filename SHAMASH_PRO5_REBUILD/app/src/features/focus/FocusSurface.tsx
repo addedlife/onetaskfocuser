@@ -1,91 +1,240 @@
-import { List, ListItem, denseListVars, IconBtn } from '@/m3';
+import { useEffect, useState } from 'react';
+import { FilledButton, OutlinedButton, OutlinedTextField, FilterChip } from '@/m3';
 import { useData } from '@/state/data';
-import { DEFAULT_PRIORITIES } from '@/lib/constants';
-import { SP } from '@/theme';
-
-const PRI_COLOR: Record<string, string> = Object.fromEntries(
-  DEFAULT_PRIORITIES.map((p) => [p.id, p.color]),
-);
-const PRI_WEIGHT: Record<string, number> = Object.fromEntries(
-  DEFAULT_PRIORITIES.map((p) => [p.id, p.weight]),
-);
+import { optTasks } from '@/lib/optimize';
+import { gP } from '@/lib/priorities';
+import { isTaskAged } from '@/lib/aging';
+import { readableOn, SP, ELEV } from '@/theme';
+import type { EnergyLevel } from '@/lib/types';
 
 function ageLabel(createdAt: number): string {
   const h = Math.floor((Date.now() - createdAt) / 3_600_000);
   if (h < 1) return 'just now';
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d waiting`;
+  if (h < 24) return `${h}h old`;
+  return `${Math.floor(h / 24)} days waiting`;
 }
 
 /**
- * Focus — interim queue-style task list (the one-task-at-a-time card view is Phase 4). Second real
- * surface: live tasks from the store on genuine md-list, sorted by priority weight then age, with a
- * priority color dot and a working "done" action.
+ * Focus — the signature "one task at a time" card. Shows the top of the smart-sorted queue (optTasks)
+ * on a priority-colored hero card with contrast-safe text, a Done + Park action pair, the priority
+ * circles, and an inline add box with energy tags. (Zen, Shatter, hamburger, PostIt stack come later.)
  */
 export function FocusSurface() {
   const tasks = useData((s) => s.tasks);
-  const toggleDone = useData((s) => s.toggleDone);
+  const priorities = useData((s) => s.priorities);
+  const addTask = useData((s) => s.addTask);
+  const completeTask = useData((s) => s.completeTask);
+  const parkTask = useData((s) => s.parkTask);
 
-  const open = tasks
-    .filter((t) => !t.completed)
-    .sort(
-      (a, b) =>
-        (PRI_WEIGHT[b.priority] ?? 0) - (PRI_WEIGHT[a.priority] ?? 0) || a.createdAt - b.createdAt,
-    );
+  // Keep the clock + age labels fresh.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 20_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const [selPri, setSelPri] = useState<string | null>(null);
+  const [text, setText] = useState('');
+  const [energy, setEnergy] = useState<EnergyLevel | undefined>(undefined);
+
+  const now = Date.now();
+  const active = tasks.filter(
+    (t) => !t.completed && !t.blocked && !(t.snoozedUntil && t.snoozedUntil > now),
+  );
+  const current = optTasks(active, priorities)[0] ?? null;
+  const doneCount = tasks.filter((t) => t.completed).length;
+  const activePris = priorities.filter((p) => !p.deleted);
+
+  const submit = () => {
+    if (!selPri || !text.trim()) return;
+    addTask(text, selPri, energy);
+    setText('');
+    setEnergy(undefined);
+    setSelPri(null);
+  };
+
+  const cardColor = current ? gP(priorities, current.priority).color : '#FFFFFF';
+  const onCard = readableOn(cardColor);
+  const clock = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
   return (
-    <div style={{ padding: SP.xxl, maxWidth: 820, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 28, fontWeight: 600, margin: 0 }}>Focus</h1>
-      <p style={{ color: 'var(--shp-color-muted)', marginTop: SP.sm }}>
-        {open.length} open {open.length === 1 ? 'task' : 'tasks'} — interim list; the one-task card view
-        lands in Phase 4.
-      </p>
+    <div
+      style={{
+        maxWidth: 640,
+        margin: '0 auto',
+        padding: SP.xl,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: SP.lg,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          color: 'var(--shp-color-muted)',
+          fontSize: 14,
+        }}
+      >
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{clock}</span>
+        <span>{doneCount} done</span>
+      </div>
+
+      {current ? (
+        <div
+          style={{
+            background: cardColor,
+            color: onCard,
+            borderRadius: 'var(--shp-radius-xl)',
+            padding: '40px 28px',
+            minHeight: 200,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            boxShadow: ELEV[3],
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              marginBottom: 16,
+              opacity: 0.85,
+              fontSize: 12,
+              fontWeight: 600,
+              flexWrap: 'wrap',
+              letterSpacing: 0.3,
+            }}
+          >
+            <span>{gP(priorities, current.priority).label.toUpperCase()}</span>
+            {isTaskAged(current, priorities) && <span>· {ageLabel(current.createdAt)}</span>}
+            {current.parentTask && <span>· part of “{current.parentTask}”</span>}
+            {current.energy && (
+              <span>· {current.energy === 'high' ? '⚡ high energy' : '🌊 low energy'}</span>
+            )}
+          </div>
+          <div style={{ fontSize: 26, fontWeight: 600, lineHeight: 1.25 }}>{current.text}</div>
+        </div>
+      ) : (
+        <div
+          style={{
+            textAlign: 'center',
+            padding: '48px 28px',
+            border: '1px dashed var(--shp-color-divider)',
+            borderRadius: 'var(--shp-radius-xl)',
+          }}
+        >
+          <div style={{ fontSize: 40 }}>✓</div>
+          <div style={{ fontSize: 18, fontWeight: 600, marginTop: 8 }}>All clear</div>
+          <div style={{ color: 'var(--shp-color-muted)', marginTop: 4 }}>
+            Nothing waiting right now. Add something below.
+          </div>
+        </div>
+      )}
+
+      {current && (
+        <div style={{ display: 'flex', gap: SP.sm, justifyContent: 'center' }}>
+          <FilledButton onClick={() => completeTask(current.id)}>
+            <span>Done</span>
+          </FilledButton>
+          <OutlinedButton onClick={() => parkTask(current.id)}>
+            <span>Park till tomorrow</span>
+          </OutlinedButton>
+        </div>
+      )}
 
       <div
         style={{
-          marginTop: SP.lg,
-          border: '1px solid var(--shp-color-divider)',
-          borderRadius: 'var(--shp-radius-md)',
-          overflow: 'hidden',
+          display: 'flex',
+          gap: SP.md,
+          justifyContent: 'center',
+          flexWrap: 'wrap',
+          marginTop: SP.sm,
         }}
       >
-        <List
-          style={denseListVars({
-            primary: 'var(--shp-color-text)',
-            secondary: 'var(--shp-color-muted)',
-          })}
-        >
-          {open.map((t) => (
-            <ListItem key={t.id}>
+        {activePris.map((p) => {
+          const sel = selPri === p.id;
+          return (
+            <button
+              key={p.id}
+              onClick={() => setSelPri(sel ? null : p.id)}
+              title={`Add a ${p.label} task`}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 6,
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                font: 'inherit',
+              }}
+            >
               <span
-                slot="start"
                 style={{
-                  width: 10,
-                  height: 10,
+                  width: 44,
+                  height: 44,
                   borderRadius: '50%',
-                  background: PRI_COLOR[t.priority] ?? 'var(--shp-color-faint)',
-                  display: 'inline-block',
+                  background: p.color,
+                  boxShadow: sel ? `0 0 0 3px var(--shp-color-card), 0 0 0 6px ${p.color}` : 'none',
+                  transition: 'box-shadow .15s',
                 }}
               />
-              {t.text}
-              <span slot="supporting-text">
-                {ageLabel(t.createdAt)}
-                {t.blocked ? ' · blocked' : ''}
-                {t.energy ? ` · ${t.energy === 'high' ? '⚡ high' : '🌊 low'}` : ''}
+              <span
+                style={{
+                  fontSize: 12,
+                  color: sel ? 'var(--shp-color-text)' : 'var(--shp-color-muted)',
+                  fontWeight: sel ? 600 : 500,
+                }}
+              >
+                {p.label}
               </span>
-              <span slot="end">
-                <IconBtn
-                  icon="check_circle"
-                  iconSize={20}
-                  color="var(--shp-color-success)"
-                  title="Mark done"
-                  onClick={() => toggleDone(t.id)}
-                />
-              </span>
-            </ListItem>
-          ))}
-        </List>
+            </button>
+          );
+        })}
       </div>
+
+      {selPri && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: SP.sm,
+            padding: SP.md,
+            border: '1px solid var(--shp-color-divider)',
+            borderRadius: 'var(--shp-radius-lg)',
+            background: 'var(--shp-color-card)',
+          }}
+        >
+          <div style={{ display: 'flex', gap: SP.sm, alignItems: 'center' }}>
+            <OutlinedTextField
+              label={`New ${gP(priorities, selPri).label} task`}
+              value={text}
+              onInput={(e) => setText((e.target as HTMLInputElement).value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submit();
+              }}
+              style={{ flex: 1 }}
+            />
+            <FilledButton onClick={submit}>
+              <span>Add</span>
+            </FilledButton>
+          </div>
+          <div style={{ display: 'flex', gap: SP.xs }}>
+            <FilterChip
+              label="⚡ High energy"
+              selected={energy === 'high'}
+              onClick={() => setEnergy(energy === 'high' ? undefined : 'high')}
+            />
+            <FilterChip
+              label="🌊 Low energy"
+              selected={energy === 'low'}
+              onClick={() => setEnergy(energy === 'low' ? undefined : 'low')}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
