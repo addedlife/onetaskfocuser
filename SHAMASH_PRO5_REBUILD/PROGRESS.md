@@ -90,6 +90,7 @@
 - [ ] 3.2 AppSuiteChrome rail polish + SuitePanels wrappers on M3
 
 ## Phase 4 — Focus app
+- [~] 4.0 Focus SURFACE scaffolded early (`features/focus/FocusSurface.tsx`) — interim queue-style task list from the store (priority color dot, age, energy, done action) on `md-list`. One-card view = 4.1.
 - [ ] 4.1 Focus tab (card, badges, priority circles+voice, add box+energy, Done/Zen/Park, Shatter, hamburger)
 - [ ] 4.2 ZenMode + BrainDump + OverwhelmBanner  _(Just-Start & Body-Double timers DROPPED — do not build)_
 - [ ] 4.3 PostItStack (**Stack/Board modes + sort chips**) + BlockReflect + ShailaManager/MiniPill

@@ -3,6 +3,7 @@ import { useUi, type SuiteView } from '@/state/store';
 import { getScheme, globalCss, themeVarsCss, SCHEMES, FONT_STACK, SP, type Scheme } from '@/theme';
 import { FilledButton, TonalButton, OutlinedButton, FilterChip, ChipSet, List, ListItem } from '@/m3';
 import { ShailosSurface } from '@/features/shailos/ShailosSurface';
+import { FocusSurface } from '@/features/focus/FocusSurface';
 
 /**
  * The theme bridge in the DOM: `globalCss()` is the static token layer + reset (injected once);
@@ -116,7 +117,13 @@ export function App() {
       >
         <Switchboard />
         <main style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
-          {view === 'shailos' ? <ShailosSurface /> : <SurfacePlaceholder view={view} />}
+          {view === 'shailos' ? (
+            <ShailosSurface />
+          ) : view === 'focus' ? (
+            <FocusSurface />
+          ) : (
+            <SurfacePlaceholder view={view} />
+          )}
         </main>
       </div>
     </>
