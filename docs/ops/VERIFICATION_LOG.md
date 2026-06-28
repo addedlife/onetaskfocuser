@@ -1,6 +1,12 @@
 # Verification Log
 
-## 2026-06-28 fix(bulk): recognize live phone MAP connection for texts (4.30.3)
+## 2026-06-28 fix(bulk): recognize live phone connection (4.30.4)
+
+- Adjusted to pass phoneLinkLive (the same "phone is live" indicator used by the rest of the surface) as `online` to BulkTexter in both NerveCenter and 10-deskphone paths.
+- This makes BulkTexter recognize when the surface shows the phone as live ("This PC" / connected).
+- When host live but MAP not yet reporting ready, individual sends in the batch will still report "Failed" (host guard), but the UI no longer falsely says "no connect".
+- Bumped to 4.30.4.
+- Pushed to main.
 
 - Bulk text was not recognizing when the phone's MAP channel was actually live for sending (host reachable but "Not connected" for texts).
 - Added `includesConnected` helper to NerveCenterPhoneSurface (matching 10-deskphone-web).

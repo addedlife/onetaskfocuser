@@ -76,7 +76,7 @@ export default function BulkTexter({
   onClose,
   sendOne,             // async ({ to, body }) => boolean
   usingRelay = false,  // true when the active transport is the cloud relay (fallback)
-  online = true,       // host reachable AND the phone's MAP/texting channel is live (status.map)
+  online = true,       // is the phone host reachable / live connection (matches the surface "live" indicator)
   onBatchDone,         // optional: called once after a batch so the surface can refresh
 }) {
   const [numbersText, setNumbersText] = useState('');

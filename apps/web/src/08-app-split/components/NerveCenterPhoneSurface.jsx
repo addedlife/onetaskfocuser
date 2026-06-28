@@ -1142,7 +1142,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         open={bulkOpen}
         onClose={() => setBulkOpen(false)}
         usingRelay={usingRelay}
-        online={bulkReady}
+        online={phoneLinkLive}
         onBatchDone={() => refresh()}
         sendOne={async ({ to, body }) => {
           if (!to || !body) return false;
