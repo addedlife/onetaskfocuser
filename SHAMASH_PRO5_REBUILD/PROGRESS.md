@@ -95,7 +95,7 @@
 ## Phase 2 — Data + AI core
 - [~] 2.1 `services/storage` — **abstraction + MockStorage done** (`services/storage.ts`: `StorageBackend` interface, localStorage mock seeded from mock data, catastrophic-delete guard; wired into `state/data.ts` via async `hydrate()` + write-through). **GATED — pending:** real `FirestoreStorage` (Firebase bootstrap+reconnect, v5 per-task docs + legacy blob, cross-tab/device sync, transaction-freshness + self-healing listeners, weekly backups, shailos reconcile — behind `?live=1`).
 - [~] 2.2 `services/ai` — **dispatcher done** (`services/ai.ts`: `callAIProxy`/`runAIJob`/`callAI`, `setIdTokenProvider`, 30s abort, default provider **claude**) + self-contained jobs (first-step, answer-summary, parse-calendar-event + defaults). Remaining jobs (optimize/conversation/parse-shailos/braindump/detect-answers/gen-schemes/transcribe-audio) land with their features.
-- [~] 2.3 `lib/` — **done:** `ids`, `dates` (greeting/dayKey/fmtMs), `priorities` (gP), `aging`, `mrsW`, `optimize` (optTasks), `yeshivish` (YC+cleanYeshivish), `constants`; contrast already in `theme/contrast.ts`. **Remaining:** `shabbos` engine + Hebrew-date.
+- [x] 2.3 `lib/` — `ids`, `dates`, `priorities` (gP), `aging`, `mrsW`, `optimize` (optTasks), `yeshivish` (YC+cleanYeshivish), `constants`, `shabbos` (sunset + Shabbos window + geolocation); contrast in `theme/contrast.ts`. (Hebrew-date rendering lands with the rail clock, Phase 1.6.)
 
 ## Phase 3 — Auth + Switchboard
 - [ ] 3.1 Google sign-in (popup/redirect by device, remember email, stay-signed-in), AuthGate, LoginScreen
