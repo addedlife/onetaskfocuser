@@ -4,14 +4,16 @@
 > first unchecked `[ ]`, do it, then **check it off with a one-line note + date** and commit.
 > Keep commits small. Build-gate (`npm run build` in `app/`) before checking any build-affecting box.
 >
-> **▶ CURRENT POSITION:** **⚠ FIDELITY RESET.** Earlier surface rebuilds (Queue / Insights / NerveCenter) were
-> built from memory, NOT from Pro 4 source — they are superficial and MUST be redone to parity (read the source
-> first, per plan rule #4). **Task River is corrected** — now a faithful port of "The River" (unified AI-ranked
-> river, source colours, gradient bar, drag-reorder, honest AI-unavailable fallback). **Next, in order, each
-> source-first:** (1) read the Queue block in `App.jsx` + `06-shelf.jsx` + the badges in `04-components.jsx` →
-> rebuild Queue to parity; (2) same for Insights (`App.jsx` insights block); (3) same for NerveCenter
-> (`NerveCenterPanel.jsx`, 3771 lines). **Hard rule from here: NO surface ships without reading its source
-> first.** Firestore (2.1) + AI backend (11) + Google/phone integration stay gated.
+> **▶ CURRENT POSITION:** **⚠ FIDELITY RESET → AUDIT-FIRST (owner decision 2026-06-28).** Earlier rebuilds
+> (Focus card / Queue / Insights / NerveCenter) were built from memory and are SUPERFICIAL; **Task River is the
+> one corrected, faithful surface** (the template). **Governing approach now (owner):** for each surface, write
+> its Phase-0 `ANALYSIS/*.md` spec FROM SOURCE first, then rebuild to parity; build the full UI now and wire
+> AI/Google/phone later behind honest "needs backend" states (the Task River pattern). **In progress:**
+> `ANALYSIS/20-focus.md` — Focus tab specced from source + Shelf/SubtaskGroup; Queue render (App.jsx 4095–4380),
+> Insights (4380+), and the 04-components/05-modals components still to read. **Next:** finish 20-focus.md →
+> rebuild Focus card + Queue + Insights to that spec → then audit + rebuild NerveCenter (`NerveCenterPanel.jsx`,
+> 3771 ln). **Hard rule: no surface ships without its ANALYSIS spec.** Firestore (2.1) + AI backend (11) +
+> Google/phone integration stay gated.
 >
 > **⛔ DROPPED (owner, 2026-06-28 — do NOT build):** Body-Double timer · Just-Start/"Start" timer ·
 > NerveCenter "More actions" pane/drawer (each page uses its own inline action suite instead).
@@ -118,6 +120,13 @@
   "ranking"). Build green; verified: "The River · 4 items · AI unavailable", unified rows, gradient bar, legend,
   Retry. **TODO — redo the same way (read source FIRST): Queue + Insights (in `App.jsx`, 4823 lines) and
   NerveCenter (`NerveCenterPanel.jsx`, 3771 lines). No surface ships without reading its source first.**
+- **2026-06-28 (AUDIT-FIRST — owner direction + first Phase-0 spec):** Owner chose **audit-first** (spec each
+  surface from source before building) + **build-UI-now / wire-AI-later**. Read the real Focus card (App.jsx
+  3820–4069) and Shelf/SubtaskGroup (06-shelf.jsx); wrote `ANALYSIS/20-focus.md` — a faithful feature inventory
+  of the Focus app with explicit parity-gap lists for the current shallow `FocusSurface`/`QueueTab`/
+  `InsightsTab`, the missing `state/data.ts` actions, and the components still to read. **This is the governing
+  template — no surface ships without its ANALYSIS spec.** The shallow surfaces stay in place (they build + run)
+  only as scaffolding to be rebuilt to the spec; they are NOT parity-complete.
 
 ---
 
@@ -131,7 +140,7 @@
 - [ ] **0.3 Orchestrator** → `ANALYSIS/11-orchestrator.md` — `App.jsx` state inventory, lifecycle, handlers, derived state (map each to a Pro 5 store/hook/service)
 - [ ] **0.4 Auth + boot** → `ANALYSIS/12-auth-boot.md` — `00-auth.jsx`, `main.jsx`, `index.html`, `version.js`, `offline-support.js`, `diagnostics.jsx`
 - [ ] **0.5 Theme + M3 layer** → `ANALYSIS/13-theme-m3.md` — `ui-tokens.jsx`, `m3.jsx`, `02-icons.jsx`, 8 schemes in `01-core.js`, dev tools
-- [ ] **0.6 Focus app** → `ANALYSIS/20-focus.md` — focus/queue/insights blocks in `App.jsx`, `04-components.jsx`, `05-modals.jsx`, `06-shelf.jsx`
+- [~] **0.6 Focus app** → `ANALYSIS/20-focus.md` **STARTED** — Focus tab fully specced from source (App.jsx 3820–4069) + Shelf/SubtaskGroup (06-shelf.jsx), with parity-gap lists vs the current shallow surfaces + the new store actions needed. Queue render block (App.jsx 4095–4380), Insights (4380+), and the 04-components/05-modals component deep-dives still to read.
 - [ ] **0.7 NerveCenter** → `ANALYSIS/21-nervecenter.md` — `NerveCenterPanel.jsx` (incl. calendar timeline/agenda/columns/colors), `TaskRiverPanel.jsx`, `ConvCapture.jsx`
 - [ ] **0.8 DeskPhone** → `ANALYSIS/22-deskphone.md` — `10-deskphone-web.jsx` + `NerveCenterPhoneSurface.jsx` (note the overlap to unify) + `DeskPhoneMiniDock.jsx`; host endpoint contract
 - [ ] **0.9 Shailos** → `ANALYSIS/23-shailos.md` — `apps/shailos/src/App.tsx`, `services/geminiService.ts`, `utils/shailosQueue.js`
