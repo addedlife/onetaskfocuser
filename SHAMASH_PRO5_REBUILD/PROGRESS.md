@@ -4,12 +4,14 @@
 > first unchecked `[ ]`, do it, then **check it off with a one-line note + date** and commit.
 > Keep commits small. Build-gate (`npm run build` in `app/`) before checking any build-affecting box.
 >
-> **▶ CURRENT POSITION:** **Phase 1 foundation BUILDS CLEAN — task 1.7 GREEN.** `app/` installs (266 pkgs)
-> and `npm run build` passes (tsc strict + vite, 0 errors; dist ≈378 kB / 92 kB gz). The M3 theme bridge +
-> `@material/web` layer are proven by the passing build. **Next:** (1) optional `npm run dev` browser smoke
-> (rail switches surfaces; theme chips repaint M3) if not already done; (2) finish Phase 1 — 1.4 domain
-> store slices, 1.5 mock seed data, 1.6 clock + Hebrew date in rail, swap placeholder for real panels;
-> (3) then Phase 2 (data + AI core: `services/store` Firestore + `services/ai` gateway/jobs + `lib/`).
+> **▶ CURRENT POSITION:** **Phases 1–2 core in; Focus surface now has its real tab chrome.** Build green
+> (tsc strict + vite, 0 errors; 211 modules). The Focus surface hosts a genuine M3 `md-tabs` switch
+> (focus / queue / insights) wired to the UI store's `tab`/`setTab` slice — browser-verified (Segoe font,
+> `#C96442` accent indicator, no console errors). Focus tab = the live one-task card; Queue/Insights are
+> honest placeholders. **Next, in order:** (1) Phase 0.6 spec `ANALYSIS/20-focus.md` (Focus/Queue/Insights
+> from current `App.jsx`), then (2) build the **Queue tab** (4.5) on that spec; (3) finish Phase 4.1 remaining
+> (inline rename, Shatter, hamburger, Zen); (4) Phase 1.6 rail clock + Hebrew date. Real `services/store`
+> Firestore (2.1) stays gated.
 >
 > **⛔ DROPPED (owner, 2026-06-28 — do NOT build):** Body-Double timer · Just-Start/"Start" timer ·
 > NerveCenter "More actions" pane/drawer (each page uses its own inline action suite instead).
@@ -64,6 +66,15 @@
   console errors, and — the crown jewel — the M3 theme bridge repaints EVERY genuine @material/web component
   instantly on theme switch (Claude Cream ↔ Navy Gold). The "indistinguishable from pro app" bar is met at
   the foundation level.
+- **2026-06-28 (Focus tab bar — md-tabs):** Completed the half-finished `md-tabs` wrapper in `m3/`
+  (`Tabs`/`PrimaryTab`, with a `change`→`onChange` event map) — which also cleared a **red build** the prior
+  session left behind (two unused `MdTabs`/`MdPrimaryTab` imports tripping `noUnusedLocals`). Wired a genuine
+  M3 tab switch (focus / queue / insights) into `FocusSurface`, bound to the store's existing `tab`/`setTab`
+  slice: Focus tab = the live one-task card; Queue (Phase 4.5) + Insights (Phase 4.6) are honest placeholders
+  pending their specs. Build green (211 modules). Browser-verified: tablist renders, real clicks switch the
+  body, no console errors, and the bridge themes the tabs (Segoe UI font + `#C96442` accent indicator — not
+  M3 purple). _Harness note: `md-tabs` fires `change` async and ignores synthetic host `.click()`; verify tab
+  interaction with a composed click on the inner shadow button + a round-trip read._
 
 ---
 
@@ -87,7 +98,7 @@
 
 ## Phase 1 — Foundation (running shell)
 - [x] 1.1 Scaffold `app/` — Vite 6 + React 18 + TS, tsconfig(.app/.node), ESLint flat + Prettier, `5.0.0` in package.json _(needs `npm install`)_
-- [x] 1.2 `m3/` module — `src/m3/index.tsx`: all @material/web wrappers + `IconBtn`/`ActionBtn`/`denseListVars`; `@material/web` pinned **2.4.1**
+- [x] 1.2 `m3/` module — `src/m3/index.tsx`: all @material/web wrappers (incl. `Tabs`/`PrimaryTab`) + `IconBtn`/`ActionBtn`/`denseListVars`; `@material/web` pinned **2.4.1**
 - [x] 1.3 `theme/` — `tokens`, `accents.deriveAccents`, `contrast`, 8 `schemes` (full semantic roles), `bridge.globalCss()` + `themeVarsCss()`; applied via `<style>` in `App.tsx`
 - [~] 1.4 Zustand store — **UI + data slices done** (`state/store.ts` UI: suiteView/tab/sidebar/scheme + localStorage; `state/data.ts`: tasks+shailos seeded from mock, with `toggleDone`/`markGotBack`). Google/phone/health slices land with those features.
 - [~] 1.5 `mock/` seed data — **tasks/shailos/priorities/lists/settings done** (`mock/seed.ts`) + domain model (`lib/types.ts`, ✓ field fidelity verified vs `01-core.js`) + `lib/constants.ts`. Calendar/gmail/phone/health seeds added alongside those features.
@@ -111,7 +122,7 @@
 - [ ] 3.2 AppSuiteChrome rail polish + SuitePanels wrappers on M3
 
 ## Phase 4 — Focus app
-- [x] 4.0 Focus surface exists (`features/focus/FocusSurface.tsx`) — upgraded from interim list to the real card view (below).
+- [x] 4.0 Focus surface exists (`features/focus/FocusSurface.tsx`) — upgraded from interim list to the real card view (below). The surface now wraps a genuine M3 `md-tabs` switch (focus/queue/insights) bound to the store; the Focus tab is the live card, Queue/Insights are honest placeholders pending their specs.
 - [~] 4.1 Focus card — **core DONE**: smart-sorted current task on a priority-colored, contrast-safe hero card; badges (tier/age/energy/group); **Done** + **Park** actions; priority circles that reveal an inline add box with an M3 text field + energy chips; store actions addTask/completeTask/parkTask. **Remaining:** inline rename, Shatter, voice-add on circles, hamburger menu, Zen mode. _(Just-Start & Body-Double timers DROPPED.)_
 - [ ] 4.2 ZenMode + BrainDump + OverwhelmBanner  _(Just-Start & Body-Double timers DROPPED — do not build)_
 - [ ] 4.3 PostItStack (**Stack/Board modes + sort chips**) + BlockReflect + ShailaManager/MiniPill

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { FilledButton, OutlinedButton, OutlinedTextField, FilterChip } from '@/m3';
+import { FilledButton, OutlinedButton, OutlinedTextField, FilterChip, Tabs, PrimaryTab } from '@/m3';
 import { useData } from '@/state/data';
+import { useUi, type FocusTab } from '@/state/store';
 import { optTasks } from '@/lib/optimize';
 import { gP } from '@/lib/priorities';
 import { isTaskAged } from '@/lib/aging';
@@ -19,7 +20,7 @@ function ageLabel(createdAt: number): string {
  * on a priority-colored hero card with contrast-safe text, a Done + Park action pair, the priority
  * circles, and an inline add box with energy tags. (Zen, Shatter, hamburger, PostIt stack come later.)
  */
-export function FocusSurface() {
+function FocusCard() {
   const tasks = useData((s) => s.tasks);
   const priorities = useData((s) => s.priorities);
   const addTask = useData((s) => s.addTask);
@@ -60,9 +61,6 @@ export function FocusSurface() {
   return (
     <div
       style={{
-        maxWidth: 640,
-        margin: '0 auto',
-        padding: SP.xl,
         display: 'flex',
         flexDirection: 'column',
         gap: SP.lg,
@@ -234,6 +232,86 @@ export function FocusSurface() {
             />
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+const TAB_ORDER: FocusTab[] = ['focus', 'queue', 'insights'];
+
+/** Honest placeholder for a Focus sub-tab whose full feature lands in a later phase. */
+function ComingSoon({ title, blurb, phase }: { title: string; blurb: string; phase: string }) {
+  return (
+    <div
+      style={{
+        textAlign: 'center',
+        padding: '48px 28px',
+        border: '1px dashed var(--shp-color-divider)',
+        borderRadius: 'var(--shp-radius-xl)',
+        color: 'var(--shp-color-muted)',
+      }}
+    >
+      <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--shp-color-text)' }}>{title}</div>
+      <div style={{ marginTop: 6, maxWidth: 420, marginLeft: 'auto', marginRight: 'auto' }}>{blurb}</div>
+      <div style={{ marginTop: 12, fontSize: 12, letterSpacing: 0.4, textTransform: 'uppercase' }}>
+        {phase}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Focus surface shell — hosts the genuine M3 `md-tabs` switch (focus / queue / insights) wired to the
+ * UI store's `tab` slice. The Focus tab is the live one-task card; Queue and Insights are honest
+ * placeholders until their phases (4.5 / 4.6), which build on their own ANALYSIS specs.
+ */
+export function FocusSurface() {
+  const tab = useUi((s) => s.tab);
+  const setTab = useUi((s) => s.setTab);
+  return (
+    <div
+      style={{
+        maxWidth: 640,
+        margin: '0 auto',
+        padding: SP.xl,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: SP.lg,
+      }}
+    >
+      <Tabs
+        activeTabIndex={TAB_ORDER.indexOf(tab)}
+        onChange={(e: Event) => {
+          const idx = (e.target as unknown as { activeTabIndex: number }).activeTabIndex;
+          const next = TAB_ORDER[idx];
+          if (next) setTab(next);
+        }}
+      >
+        <PrimaryTab>
+          <span>Focus</span>
+        </PrimaryTab>
+        <PrimaryTab>
+          <span>Queue</span>
+        </PrimaryTab>
+        <PrimaryTab>
+          <span>Insights</span>
+        </PrimaryTab>
+      </Tabs>
+
+      {tab === 'focus' ? (
+        <FocusCard />
+      ) : tab === 'queue' ? (
+        <ComingSoon
+          title="Queue"
+          blurb="The full task list — search, quick-add, drag-reorder, subtask groups and the completed Shelf — lands here."
+          phase="Phase 4.5"
+        />
+      ) : (
+        <ComingSoon
+          title="Insights"
+          blurb="Completion charts, the AI insight, AI chat and your daily tip will live here."
+          phase="Phase 4.6"
+        />
       )}
     </div>
   );

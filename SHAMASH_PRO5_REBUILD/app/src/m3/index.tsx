@@ -37,6 +37,8 @@ import { MdCheckbox } from '@material/web/checkbox/checkbox.js';
 import { MdRadio } from '@material/web/radio/radio.js';
 import { MdOutlinedTextField } from '@material/web/textfield/outlined-text-field.js';
 import { MdFilledTextField } from '@material/web/textfield/filled-text-field.js';
+import { MdTabs } from '@material/web/tabs/tabs.js';
+import { MdPrimaryTab } from '@material/web/tabs/primary-tab.js';
 
 // ── Wrapped elements (one createComponent per element) ───────────────────────
 export const FilledButton = createComponent({ react: React, tagName: 'md-filled-button', elementClass: MdFilledButton });
@@ -65,6 +67,11 @@ export const Checkbox = createComponent({ react: React, tagName: 'md-checkbox', 
 export const Radio = createComponent({ react: React, tagName: 'md-radio', elementClass: MdRadio });
 export const OutlinedTextField = createComponent({ react: React, tagName: 'md-outlined-text-field', elementClass: MdOutlinedTextField });
 export const FilledTextField = createComponent({ react: React, tagName: 'md-filled-text-field', elementClass: MdFilledTextField });
+
+// md-tabs emits a custom `change` event (not React's onChange) when the active tab moves; the events
+// map surfaces it as an `onChange` prop. Read `activeTabIndex` off the target in the handler.
+export const Tabs = createComponent({ react: React, tagName: 'md-tabs', elementClass: MdTabs, events: { onChange: 'change' } });
+export const PrimaryTab = createComponent({ react: React, tagName: 'md-primary-tab', elementClass: MdPrimaryTab });
 
 // CSS-custom-property bag (TS won't allow arbitrary `--x` keys on CSSProperties directly).
 type CssVars = Record<string, string | number>;
