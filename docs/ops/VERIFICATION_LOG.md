@@ -1,5 +1,14 @@
 # Verification Log
 
+## 2026-06-28 fix(bulk): fix broken web phone screen + consistent offline warning (4.30.6)
+
+- Removed invalid // comments inside JSX <BulkTexter ... /> tag in 10-deskphone-web.jsx (this was causing syntax/parse issues breaking the web phone screen / standalone deskphone view).
+- Updated the !online warning banner inside BulkTexter to the generic host offline message (to match current meaning of the `online` prop = host reachable, not MAP-specific).
+- Cleaned outdated comment.
+- (Retains the phoneLinkLive alignment and 3000ms probe timeout from 4.30.5 for better direct connection recognition.)
+- Bumped to 4.30.6.
+- Pushed to main.
+
 ## 2026-06-28 fix(bulk): recognize live phone connection (4.30.5)
 
 - Aligned BulkTexter `online` prop to `phoneLinkLive` (the surface's own live/reachable signal) in NerveCenter and the host `online` in deskphone-web path. This makes bulk recognize the same "phone is live" state the rest of the UI shows ("This PC", connected indicators, etc.).

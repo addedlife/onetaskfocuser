@@ -2166,8 +2166,6 @@ function MessagesSlice({
         open={bulkOpen}
         onClose={() => setBulkOpen(false)}
         usingRelay={false}
-        // Use the same MAP/text channel check as the connection labels so bulk
-        // refuses to start when the phone isn't actually connected for texting.
         online={online}
         sendOne={onBulkSendOne}
       />

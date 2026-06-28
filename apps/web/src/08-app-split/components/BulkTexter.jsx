@@ -76,7 +76,7 @@ export default function BulkTexter({
   onClose,
   sendOne,             // async ({ to, body }) => boolean
   usingRelay = false,  // true when the active transport is the cloud relay (fallback)
-  online = true,       // is the phone host reachable / live connection (matches the surface "live" indicator)
+  online = true,       // phone host reachable (live connection from web to host app)
   onBatchDone,         // optional: called once after a batch so the surface can refresh
 }) {
   const [numbersText, setNumbersText] = useState('');
@@ -182,7 +182,7 @@ export default function BulkTexter({
         <p style={{ ...noteStyle, color: usingRelay ? GV_CLEAN.warning : GV_CLEAN.muted }}>{transportNote}</p>
         {!online && (
           <p style={{ ...noteStyle, color: GV_CLEAN.danger }}>
-            No live phone connection for texts (MAP not connected). Sends will fail.
+            Phone host looks offline — sends will be queued or may fail until it reconnects.
           </p>
         )}
 
