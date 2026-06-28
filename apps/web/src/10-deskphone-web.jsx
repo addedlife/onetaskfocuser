@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { deriveAccents, GV_CLEAN, NC_TYPE, RADIUS } from './08-app-split/ui-tokens.jsx';
+import BulkTexter from './08-app-split/components/BulkTexter.jsx';
 
 const DEFAULT_HOST = "http://127.0.0.1:8765";
 const RAIL_COLLAPSED_KEY = "deskphone_web_rail_collapsed";
@@ -1831,7 +1832,9 @@ function MessagesSlice({
   setCallHistoryWidth,
   draft,
   setDraft,
+  online,
   onCommand,
+  onBulkSendOne,
   onOpenNewMessage,
   onOpenFullCalls,
   onOpenContactEditor,
@@ -1845,6 +1848,7 @@ function MessagesSlice({
   const [imageRotation, setImageRotation] = useState(0);
   const [replyAttachments, setReplyAttachments] = useState([]);
   const [phoneView, setPhoneView] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [conversationRenderLimit, setConversationRenderLimit] = useState(CONVERSATION_RENDER_BATCH);
   const [threadRenderLimit, setThreadRenderLimit] = useState(THREAD_RENDER_BATCH);
   const messageScrollRef = useRef(null);
@@ -2158,6 +2162,13 @@ function MessagesSlice({
         "--dp-call-history-width": `${callHistoryWidth}px`,
       }}
     >
+      <BulkTexter
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        usingRelay={false}
+        online={online}
+        sendOne={onBulkSendOne}
+      />
       <section className="dp-conversation-pane" data-native-source="MainWindow.xaml:1050">
         <header className="dp-message-list-header" data-native-source="MainWindow.xaml:1061">
           <div className="dp-message-header-top">
@@ -2165,6 +2176,7 @@ function MessagesSlice({
             {status?.fullHistoryStatus ? <span className="dp-history-status">{status.fullHistoryStatus}</span> : null}
             <div className="dp-message-header-actions">
               <DeskPhoneIconButton iconName="add" label="New message" nativeSource="MainWindow.xaml:1078" nativeGlyph="E145" onClick={onOpenNewMessage} />
+              <DeskPhoneIconButton iconName="campaign" label="Bulk text — paste a list, send to many" nativeSource="bulk-texter" onClick={() => setBulkOpen(true)} />
               <DeskPhoneIconButton
                 iconName={unreadFirst ? "mark_email_unread" : "sort"}
                 label={unreadFirst ? "Sort: Unread first - click for Recent first" : "Sort: Recent first - click for Unread first"}
@@ -2905,6 +2917,7 @@ function SimpleTabContent({
   online,
   onRefresh,
   onCommand,
+  onBulkSendOne,
   onOpenNewMessage,
   onOpenFullCalls,
   onOpenContactEditor,
@@ -2938,7 +2951,9 @@ function SimpleTabContent({
         setCallHistoryWidth={setCallHistoryWidth}
         draft={draft}
         setDraft={setDraft}
+        online={online}
         onCommand={onCommand}
+        onBulkSendOne={onBulkSendOne}
         onOpenNewMessage={onOpenNewMessage}
         onOpenFullCalls={onOpenFullCalls}
         onOpenContactEditor={onOpenContactEditor}
@@ -6027,6 +6042,20 @@ export function DeskPhoneWebPanel({
     }
   }, [host, refresh]);
 
+  // Per-message send for the bulk texter. Returns a real success boolean and stays
+  // quiet (no busy spinner / error banner / refresh per send) so the batch can pace
+  // itself; the surface's own poll picks the sent messages up. DeskPhone is always
+  // the direct/loopback transport here, so this is the "live" path.
+  const sendBulkOne = useCallback(async ({ to, body }) => {
+    if (!to || !body) return false;
+    try {
+      const res = await postJson(host, `/send?to=${encodeURIComponent(to)}&body=${encodeURIComponent(body)}`);
+      return res?.result === "sent";
+    } catch {
+      return false;
+    }
+  }, [host]);
+
   const toggleRail = useCallback(() => {
     setRailCollapsed((current) => {
       const next = !current;
@@ -6265,6 +6294,7 @@ export function DeskPhoneWebPanel({
               online={online}
               onRefresh={refresh}
               onCommand={runCommand}
+              onBulkSendOne={sendBulkOne}
               onOpenNewMessage={openNewMessage}
               onOpenFullCalls={openFullCalls}
               onOpenContactEditor={openContactEditor}

@@ -16,6 +16,10 @@ import { MdSuggestionChip } from '@material/web/chips/suggestion-chip.js';
 import { MdChipSet } from '@material/web/chips/chip-set.js';
 import { MdDivider } from '@material/web/divider/divider.js';
 import { MdCircularProgress } from '@material/web/progress/circular-progress.js';
+import { MdLinearProgress } from '@material/web/progress/linear-progress.js';
+import { MdDialog } from '@material/web/dialog/dialog.js';
+import { MdOutlinedTextField } from '@material/web/textfield/outlined-text-field.js';
+import { MdSlider } from '@material/web/slider/slider.js';
 
 // ─── Shared @material/web button layer ───────────────────────────────────────
 // Single home for the real Google Material 3 button + icon-button components,
@@ -49,6 +53,20 @@ export const SuggestionChip  = createComponent({ react: React, tagName: 'md-sugg
 export const ChipSet         = createComponent({ react: React, tagName: 'md-chip-set',          elementClass: MdChipSet });
 export const Divider         = createComponent({ react: React, tagName: 'md-divider',           elementClass: MdDivider });
 export const CircularProgress = createComponent({ react: React, tagName: 'md-circular-progress', elementClass: MdCircularProgress });
+export const LinearProgress  = createComponent({ react: React, tagName: 'md-linear-progress',   elementClass: MdLinearProgress });
+
+// ─── Dialog, text field, slider ───────────────────────────────────────────────
+// Same single-home pattern. The dialog's native close paths (ESC, scrim click,
+// form submit) fire a `closed` CustomEvent that React can't see by default, so we
+// map it to an onClosed prop — controlled callers sync their open state from it.
+export const Dialog = createComponent({
+  react: React,
+  tagName: 'md-dialog',
+  elementClass: MdDialog,
+  events: { onOpened: 'opened', onClosed: 'closed', onCancel: 'cancel' },
+});
+export const OutlinedTextField = createComponent({ react: React, tagName: 'md-outlined-text-field', elementClass: MdOutlinedTextField });
+export const Slider             = createComponent({ react: React, tagName: 'md-slider',              elementClass: MdSlider });
 
 // DENSE_LIST_VARS — NerveCenter's tuned md-list-item density. M3's stock two-line
 // row is 72px; that's far too tall for a dashboard. These tokens crush it to a
