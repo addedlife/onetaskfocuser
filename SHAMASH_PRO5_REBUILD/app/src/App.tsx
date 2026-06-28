@@ -5,6 +5,7 @@ import { getScheme, globalCss, themeVarsCss, SCHEMES, FONT_STACK, SP, type Schem
 import { FilledButton, TonalButton, OutlinedButton, FilterChip, ChipSet, List, ListItem } from '@/m3';
 import { ShailosSurface } from '@/features/shailos/ShailosSurface';
 import { FocusSurface } from '@/features/focus/FocusSurface';
+import { NerveCenterSurface } from '@/features/nervecenter/NerveCenterSurface';
 import { useData } from '@/state/data';
 
 /**
@@ -127,6 +128,8 @@ export function App() {
             <ShailosSurface />
           ) : view === 'focus' ? (
             <FocusSurface />
+          ) : view === 'nervecenter' ? (
+            <NerveCenterSurface />
           ) : (
             <SurfacePlaceholder view={view} />
           )}

@@ -4,14 +4,13 @@
 > first unchecked `[ ]`, do it, then **check it off with a one-line note + date** and commit.
 > Keep commits small. Build-gate (`npm run build` in `app/`) before checking any build-affecting box.
 >
-> **▶ CURRENT POSITION:** **Focus app complete — all three tabs are real.** Build green (tsc strict + vite,
-> 0 errors; 213 modules). The `md-tabs` switch: **Focus** = the one-task card, **Queue** = the full task list
-> (smart-sort, search, quick-add, overwhelm, Shelf), **Insights** = completion stats + 7-day chart + daily tip
-> (AI insight/chat deferred to Phase 11). Tasks carry a `completedAt` timestamp; the rail shows a live clock +
-> Hebrew date; Shailos has filters + quick-add + copy + an answer-composer dialog. **Next, in order:**
-> (1) NerveCenter (Phase 6) — replace the placeholder with real Tasks + Shailos cards (Mail/Phone/Calendar
-> gated on Google/phone integration); (2) finish Phase 4.1 remaining (inline rename, Shatter, hamburger, Zen).
-> Real `services/store` Firestore (2.1) + AI backend (Phase 11, incl. Shailos record/transcribe/Research) gated.
+> **▶ CURRENT POSITION:** **Two full surfaces + a dashboard live — Focus, Shailos, NerveCenter.** Build green
+> (tsc strict + vite, 0 errors). Focus = 3 real tabs (card / queue / insights); Shailos = filters + quick-add +
+> copy + answer dialog; NerveCenter = dashboard with live Tasks + Shailos cards (Calendar/Mail/Phone/Health are
+> honest "needs integration" cards). Rail shows a live clock + Hebrew date; tasks carry `completedAt`. **Next,
+> in order:** (1) Task River surface (replace placeholder); (2) finish Phase 4.1 remaining (inline rename,
+> Shatter, hamburger, Zen); (3) Settings surface (theme + AI-provider, both real now). Firestore (2.1) + AI
+> backend (11) + Google/phone integration stay gated.
 >
 > **⛔ DROPPED (owner, 2026-06-28 — do NOT build):** Body-Double timer · Just-Start/"Start" timer ·
 > NerveCenter "More actions" pane/drawer (each page uses its own inline action suite instead).
@@ -99,6 +98,11 @@
   Record/transcribe/parse/Research/dedup remain AI-gated (Phase 11). _Dev note: editing `m3/index.tsx` triggers
   a benign HMR `customElements.define` collision ("md-divider already defined") — restart the dev server to
   clear it; fresh load + production build are clean._
+- **2026-06-28 (NerveCenter dashboard — Phase 6):** Built `features/nervecenter/NerveCenterSurface.tsx` — a
+  responsive card grid: **Tasks** (top-5 active on md-list, priority dots) and **Shailos** (open count, gold)
+  are live from the store with jump-to-surface arrows; **Calendar/Mail/Phone/Health** are faithful cards in
+  honest "needs integration" empty states (gated on Google/phone, Phases 6.3/7/8). Wired into `App.tsx`. Build
+  green. Browser-verified: 6 cards render, no console errors. Next for NC: layout/density switch + AI headlines.
 
 ---
 
@@ -161,8 +165,8 @@
 - [ ] 5.3 ShailaManager + MiniPill surfaces; shared `deriveAccents` parity
 
 ## Phase 6 — NerveCenter
-- [ ] 6.1 Layout switch (columns/cards/accordion + density)  _("More actions" drawer DROPPED — each card shows its own actions inline)_
-- [ ] 6.2 Cards: Mail, Phone, Tasks, Shailos
+- [~] 6.1 Layout — responsive card grid live (`NerveCenterSurface.tsx`); columns/accordion + density switch still to do _("More actions" drawer DROPPED — each card shows its own actions inline)_
+- [~] 6.2 Cards — **Tasks + Shailos live** (real store data on md-list, gold Shailos, jump-to-surface arrows). Mail/Phone/Calendar/Health are honest "needs integration" cards (gated on Google/phone).
 - [ ] 6.3 **Calendar** — `CalendarTimeline` (60px/hr, `assignCalendarColumns`, `GCAL_COLORS`, live now-line) + compact M3 agenda + multi-account picker + NOW/Tomorrow dividers + full-view split
 - [ ] 6.4 AI card headlines (Chief scan + caching) + Chief brief/learning profile
 - [ ] 6.5 TimelineFace clock, TaskRiver, ConvCapture, HealthCard
