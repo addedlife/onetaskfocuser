@@ -4,14 +4,12 @@
 > first unchecked `[ ]`, do it, then **check it off with a one-line note + date** and commit.
 > Keep commits small. Build-gate (`npm run build` in `app/`) before checking any build-affecting box.
 >
-> **▶ CURRENT POSITION:** **Phase 1 — foundation WRITTEN; needs INSTALL + BUILD VERIFY (task 1.7).**
-> The full foundation is on disk under `SHAMASH_PRO5_REBUILD/app/` (config, theme bridge, m3 layer, UI
-> store, Switchboard shell, demo App). (Pivoted ahead of Phase 0 deep-specs — owner said "go for full
-> execution"; per-subsystem `ANALYSIS/` specs are now written as each feature is built.)
-> **Immediate resume steps:** (1) `cd SHAMASH_PRO5_REBUILD/app`; (2) `npm install`; (3) `npm run build`,
-> fix any type/build errors (see "Known risk areas" under Phase 1); (4) `npm run dev` and confirm the rail
-> switches surfaces + the theme chips repaint all M3 components; (5) commit; then continue Phase 1 (1.4
-> domain store slices, 1.5 mock data, 1.6 clock/Hebrew-date + real panels) and on down PROGRESS.
+> **▶ CURRENT POSITION:** **Phase 1 foundation BUILDS CLEAN — task 1.7 GREEN.** `app/` installs (266 pkgs)
+> and `npm run build` passes (tsc strict + vite, 0 errors; dist ≈378 kB / 92 kB gz). The M3 theme bridge +
+> `@material/web` layer are proven by the passing build. **Next:** (1) optional `npm run dev` browser smoke
+> (rail switches surfaces; theme chips repaint M3) if not already done; (2) finish Phase 1 — 1.4 domain
+> store slices, 1.5 mock seed data, 1.6 clock + Hebrew date in rail, swap placeholder for real panels;
+> (3) then Phase 2 (data + AI core: `services/store` Firestore + `services/ai` gateway/jobs + `lib/`).
 >
 > **⛔ DROPPED (owner, 2026-06-28 — do NOT build):** Body-Double timer · Just-Start/"Start" timer ·
 > NerveCenter "More actions" pane/drawer (each page uses its own inline action suite instead).
@@ -38,6 +36,10 @@
   deriveAccents, contrast, 8 semantic schemes, globalCss + reactive themeVarsCss), the `@material/web`
   component layer (`m3/`), a zustand UI store, and a running Switchboard shell with a live 8-theme switcher.
   Committed. **Not yet `npm install`-ed/built** — that's task 1.7, the first thing the next session does.
+- **2026-06-28 (build verified):** Fixed the install (the background `--prefix` install had landed nowhere;
+  reinstalled directly in `app/` — 266 pkgs). **`npm run build` passes clean** (tsc strict + vite, 0 errors):
+  the whole foundation (theme bridge, m3 layer, store, shell) typechecks and bundles. Committed package-lock.
+  Phase 1 is ~done bar mock data + rail clock; next substantive work is Phase 2 (data + AI core).
 
 ---
 
@@ -66,7 +68,7 @@
 - [~] 1.4 Zustand store — **UI slice done** (`state/store.ts`: suiteView/tab/sidebar/scheme + localStorage). Domain slices (tasks/shailos/google/phone/health) land in Phase 2+
 - [ ] 1.5 `mock/` seed data (tasks, shailos, calendar, gmail, phone, health) — NOT started
 - [~] 1.6 Switchboard shell — **rail + surface routing done** (`features/switchboard/Switchboard.tsx`; `App.tsx` renders a per-surface placeholder with a live 8-theme switcher as the bridge smoke test). TODO: clock + Hebrew date in rail; swap placeholder for real surface panels as features land
-- [ ] 1.7 **VERIFY (do FIRST on resume):** `npm install` → `npm run build` (fix errors) → `npm run dev`, confirm rail switches surfaces + theme chips repaint M3 components → commit
+- [x] 1.7 **Build-gate GREEN** — `npm install` (266 pkgs) + `npm run build` (tsc strict + vite) pass, 0 errors; `dist` builds (~378 kB / 92 kB gz); package-lock committed. _Remaining quick check:_ `npm run dev` browser smoke (rail switches surfaces; theme chips repaint M3) — do on resume
 
 > **Known risk areas to check at first build** (TS strict + @lit/react + @material/web v2.4):
 > • `createComponent` prop typing — `onClick`/`disabled`/`selected`/`label`/`type` on wrapped elements may
