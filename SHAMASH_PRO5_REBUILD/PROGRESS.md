@@ -66,7 +66,7 @@
 - [x] 1.2 `m3/` module — `src/m3/index.tsx`: all @material/web wrappers + `IconBtn`/`ActionBtn`/`denseListVars`; `@material/web` pinned **2.4.1**
 - [x] 1.3 `theme/` — `tokens`, `accents.deriveAccents`, `contrast`, 8 `schemes` (full semantic roles), `bridge.globalCss()` + `themeVarsCss()`; applied via `<style>` in `App.tsx`
 - [~] 1.4 Zustand store — **UI slice done** (`state/store.ts`: suiteView/tab/sidebar/scheme + localStorage). Domain slices (tasks/shailos/google/phone/health) land in Phase 2+
-- [ ] 1.5 `mock/` seed data (tasks, shailos, calendar, gmail, phone, health) — NOT started
+- [~] 1.5 `mock/` seed data — **tasks/shailos/priorities/lists/settings done** (`mock/seed.ts`) + domain model (`lib/types.ts`, ⚠️ verify field fidelity vs `01-core.js` in Phase 0.2). Calendar/gmail/phone/health seeds added alongside those features.
 - [~] 1.6 Switchboard shell — **rail + surface routing done** (`features/switchboard/Switchboard.tsx`; `App.tsx` renders a per-surface placeholder with a live 8-theme switcher as the bridge smoke test). TODO: clock + Hebrew date in rail; swap placeholder for real surface panels as features land
 - [x] 1.7 **Build-gate GREEN** — `npm install` (266 pkgs) + `npm run build` (tsc strict + vite) pass, 0 errors; `dist` builds (~378 kB / 92 kB gz); package-lock committed. _Remaining quick check:_ `npm run dev` browser smoke (rail switches surfaces; theme chips repaint M3) — do on resume
 
