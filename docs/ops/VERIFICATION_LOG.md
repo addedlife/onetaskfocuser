@@ -1,5 +1,20 @@
 # Verification Log
 
+## 2026-06-28 Bulk text (BulkTexter) — paste a list, send to many (4.30.0)
+
+- **Scope:** New `BulkTexter.jsx` component wired into both phone surfaces. Paste a list of phone numbers (newline / comma / semicolon / pipe separated), type one message, optionally set a per-text delay (0–5 s, persisted in localStorage), then send in a paced batch. UX flow: compose → confirm → sending (with linear progress + per-recipient status) → done (retry-failed option). ESC / scrim close stops an in-flight batch gracefully without data loss.
+- **Files changed (5):**
+  - `apps/web/src/08-app-split/components/BulkTexter.jsx` — NEW. Transport-agnostic; caller supplies `sendOne(async ({ to, body }) => boolean)`. Uses M3 Dialog, OutlinedTextField, Slider, LinearProgress, List. Design tokens with literal fallbacks so it works inside both the main app and the standalone DeskPhone document.
+  - `apps/web/src/08-app-split/m3.jsx` — Registered `MdDialog`, `MdOutlinedTextField`, `MdSlider`, `MdLinearProgress` (same `createComponent` single-home pattern). Dialog maps `opened`/`closed`/`cancel` custom events to React props.
+  - `apps/web/src/08-app-split/components/NerveCenterPhoneSurface.jsx` — Added `bulkOpen` state; campaign icon button in phone toolbar; `BulkTexter` mounted above the call-status row. Extended `post()` with `opts.quiet` to suppress the surface-wide busy spinner / error banner / refresh per send (lets the batch pace itself; one refresh fires via `onBatchDone` when the batch finishes).
+  - `apps/web/src/10-deskphone-web.jsx` — Added `BulkTexter` import; `bulkOpen` state in `MessagesSlice`; campaign icon button in Messages header; `onBulkSendOne` prop threaded from `DeskPhoneWebPanel` → `SimpleTabContent` → `MessagesSlice`; `sendBulkOne` callback uses `/send` directly on the host (quiet, no spinner).
+  - `apps/web/src/version.js` — Bumped `4.29.105` → `4.30.0` (feat: minor), date `2026-06-23` → `2026-06-28`.
+- **Isolation method:** Feature was in working-tree on `pro5-rebuild` (19 unreleased Pro-5 commits above main). Files copied to scratch, stashed on pro5, checked out main, files applied directly (base was identical on both branches), built, committed, pushed. Pro5 stash restored after push.
+- **Gates:** `npm run build` (apps/web) → 0 errors, 220 modules, 3.76 s. Commit `eeccfc0` pushed to `origin/main`. GitHub Action deploy triggered automatically (Firebase hosting + functions via `.github/workflows/deploy.yml`).
+- **Smoke test (pre-push, on pro5 working tree):** Standalone DeskPhone loaded; Bulk text button present; M3 elements (`md-dialog`, `md-outlined-text-field`, `md-slider`) registered — confirmed by previous session (user-reported green).
+
+
+
 ## 2026-06-21 M3 Phase A (slice 1) — buttons: text/action/toolbar + small-file icons → @material/web (4.26.97)
 
 - Scope: M3 component migration **Phase A, slice 1**. Replaced hand-coded button lookalikes with real `@material/web` components: every `gvTextButton` (8 sites: Answer/Decline/Hang up, Cancel, Done, Delete, "More history", row got-back), `cleanToolbarButton` (3 sites: Add, Open ×2), and the ConvCapture close (1) + SuitePanels (3 icon + 1 "Position" action) buttons.
