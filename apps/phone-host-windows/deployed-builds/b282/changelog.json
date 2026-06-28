@@ -1,0 +1,1313 @@
+[
+    {
+        "timestamp":  "2026-06-04 18:14:55",
+        "version":  "b282",
+        "notes":  "The cloud relay now sends your phone data the instant it starts, so a phone opening the app sees your texts right away instead of waiting a few seconds for the first update.",
+        "devNotes":  "RelayService.PushLoopAsync now pushes first and waits after, instead of running Task.Delay(5s) before its first push. Previously the cloud relay mailbox sat empty/stale for the first ~5 seconds after the relay came up, so a remote phone that opened during that window saw nothing until the first heartbeat. The 5s heartbeat cadence and all other relay behavior are unchanged."
+    },
+    {
+        "timestamp":  "2026-06-04 14:59:11",
+        "version":  "b281",
+        "notes":  "Incoming texts now reach every signed-in device within a second or two, instead of lagging up to ten seconds or quietly going stale.",
+        "devNotes":  "RelayService gains PushNow() — a gated, coalescing immediate push (idle fires now; a burst collapses to one trailing push that always carries the latest state). It is fired from RebuildConversations (the single funnel for every inbound/sent/read-state change) and after each relayed command, so the cloud no longer waits on the 5s heartbeat. The web client (NerveCenterPhoneSurface) now subscribes to phone-relay/state via a self-healing Firestore onSnapshot listener that resubscribes on capped backoff (a listener is terminal after its error callback), replacing the 6.5s poll which stays only as a safety net. Cloud state blob trimmed 500 to 150 messages since onSnapshot resends the whole doc per change; the LAN path and full 5000-message local history are unchanged. New-text latency drops from ~11s to ~1-2s across all devices and dropped listeners self-heal."
+    },
+    {
+        "timestamp":  "2026-05-25 11:06:56",
+        "version":  "b280",
+        "notes":  "Stripped visible borders from cards, inputs, dropdowns, and buttons — surfaces now separate by shadow and tone, not outlines.",
+        "devNotes":  "Five targeted changes in Material.xaml: (1) Card style: removed BorderThickness=1 and BorderBrush — shadow alone defines the card edge. (2) TonalCard: removed redundant BorderBrush override. (3) TextBox template: BorderThickness 2→0, removed 2px blue focus ring; focus now shifts background to BgHover only. (4) ComboBox popup border: removed BorderBrush and BorderThickness=1, shadow already separates the menu from the surface. (5) OutlinedButton: BorderBrush→Transparent, BorderThickness→0, converting it to a ghost/text-button style. No layout or functional changes — pure visual chrome removal."
+    },
+    {
+        "timestamp":  "2026-05-25 11:00:19",
+        "version":  "b279",
+        "notes":  "Pane dividers are invisible by default and reveal as a wispy grey line on hover — no static chrome between panels.",
+        "devNotes":  "Updated MacSplitter (Material.xaml) and HorizontalMacSplitter (MainWindow.xaml) templates: Rectangle starts at Opacity=0 (invisible), animates to 0.45 on MouseEnter over 150ms via DoubleAnimation, fades back to 0 on MouseLeave over 200ms. Result: zero visible chrome between panes at rest; a soft grey line ghosts in when the cursor approaches the drag zone, matching the ghost-divider pattern used in Google Voice and other M3 apps."
+    },
+    {
+        "timestamp":  "2026-05-25 10:51:55",
+        "version":  "b278",
+        "notes":  "Pane dividers are now a single clean M3 line — no more double-line ghost next to each splitter.",
+        "devNotes":  "Root cause of double-line splitters: every panel adjacent to a GridSplitter also drew its own edge border (BorderThickness 0,0,1,0 or 1,0,0,0), so the panel line and the splitter Rectangle appeared as two parallel lines. Fix: removed BorderBrush and BorderThickness from all five affected panels (nav rail, conversation list, ConversationCallHistoryPane, RecentCallsPane, DialerPane). The GridSplitter Rectangle in each MacSplitter template is now the sole dividing line."
+    },
+    {
+        "timestamp":  "2026-05-25 10:06:56",
+        "version":  "b277",
+        "notes":  "Pane dividers now render as clean single-pixel M3 lines with no opacity reduction.",
+        "devNotes":  "HorizontalMacSplitter style in MainWindow.xaml had Opacity=\"0.72\" on its Rectangle, making horizontal splitters look fainter than the vertical MacSplitter defined in Themes/Skins/Material.xaml (which had no opacity). Removed the Opacity attribute from HorizontalMacSplitter so both axes now share the same full-strength 1px Border-colored line appearance, consistent with Material Design 3 divider guidelines."
+    },
+    {
+        "timestamp":  "2026-05-25 02:53:53",
+        "version":  "b276",
+        "notes":  "Message bubble text is now selectable — click and drag to highlight any text in a received or sent message.",
+        "devNotes":  "Root cause of non-selectable bubble text: MessageBodyFormatter.OnFormattedTextChanged was calling rtb.Focusable = false on every content update, which absolutely prevents text selection regardless of IsReadOnly or event handler logic. Fix: Focusable = true, IsTabStop = false (preserves tab-key navigation past bubbles), IsReadOnlyCaretVisible = true (caret shows on focus so the user knows they are in selection mode). The BubbleTap_Click RichTextBox bypass and SelectionBrush color changes from b275 remain and work correctly now that focus is allowed."
+    },
+    {
+        "timestamp":  "2026-05-25 02:47:20",
+        "version":  "b275",
+        "notes":  "Message text is now selectable; contact name and phone number in thread header can be selected and copied.",
+        "devNotes":  "BubbleTap_Click now skips ToggleBubbleActions when the click originates inside a RichTextBox, so drag-to-select works in message bodies without the action tray interfering. Both incoming (bodyIn) and outgoing RichTextBox body controls gain IsReadOnly=True and explicit SelectionBrush colors — AccentBlue at 0.25 opacity for incoming bubbles, White at 0.35 for outgoing — so the highlight is visible against each bubble background. Thread header DisplayName and FormattedPhone TextBlocks replaced with read-only transparent TextBoxes to support text selection of contact names and phone numbers."
+    },
+    {
+        "timestamp":  "2026-05-24 15:42:42",
+        "version":  "b274",
+        "notes":  "Material 3 visual refresh: DeskPhone now uses bundled Roboto typography and Material Symbols iconography.",
+        "devNotes":  "Updates the native WPF UI layer only: App.xaml now resolves the Material font resources to bundled Roboto and Material Symbols Rounded, DeskPhone.csproj includes the Roboto font assets, and the active style dictionaries plus MainWindow typography were normalized toward Material 3 font size and weight rules. Backend, Bluetooth, MAP, PBAP, relay, localhost API, ViewModel logic, launcher identity, and web bridge behavior are unchanged."
+    },
+    {
+        "timestamp":  "2026-05-21 10:30:07",
+        "version":  "b273",
+        "notes":  "Auto-reconnect after stale-session send failure; relay restored to Netlify Blobs.",
+        "devNotes":  "Two fixes: (1) SendMessageAsync in MainViewModel now calls ReconnectToMostRecentAsync() when the MAP send returns false or throws, covering the stale-OBEX-session case where RFCOMM stays open so MAP reports connected but the phone killed the OBEX session internally. Reconnect is dispatched via Dispatch() so UI-thread ops remain safe; _connectLock.WaitAsync(0) in ConnectAsync prevents double-reconnects. (2) phone-relay.js switched back from Firestore to Netlify Blobs with external_node_modules restored in netlify.toml — Firestore requires a Firebase Admin service-account key not configured in Netlify env vars, causing 503 on every relay request; Blobs works without credentials and was the verified-working original relay backend."
+    },
+    {
+        "timestamp":  "2026-05-20 22:16:56",
+        "version":  "b272",
+        "notes":  "Relay switched from Netlify Blobs to Firestore; relay panel now shows LAN IP for one-click direct switch.",
+        "devNotes":  "phone-relay.js rewritten to store state in Firestore collection phone-relay/singleton instead of Netlify Blobs, removing the external_node_modules hack and the $20/month Blobs quota risk. RelayService.cs now embeds the PC LAN IP (from ControlApiService.LanUrl) in every state push blob. NerveCenterPhoneSurface.jsx extracts lanUrl from relay state and shows a Use direct button in the cloud relay panel when on relay and LAN URL is known — one click sets the remote URL and exits relay mode for zero-latency LAN access. GetLanUrl callback wired in MainViewModel. netlify.toml cleaned of now-unnecessary external_node_modules blob annotation. b270 and b271 were failed deploy attempts due to missing changelog entries; this entry covers all three increments."
+    },
+    {
+        "timestamp":  "2026-05-20 20:45:00",
+        "version":  "b271",
+        "notes":  "Deploy attempt b271: failed due to missing changelog entry, no binary released.",
+        "devNotes":  "build.num auto-incremented from 271 to 272 during Release build before the changelog gate ran. No actual deploy occurred. The Firestore relay and LAN IP discovery code was already compiled but not released. This entry exists only to satisfy the changelog gate for the b271 increment."
+    },
+    {
+        "timestamp":  "2026-05-20 20:44:00",
+        "version":  "b270",
+        "notes":  "Deploy attempt b270: failed due to missing changelog entry, no binary released.",
+        "devNotes":  "build.num auto-incremented from 270 to 271 during Release build before the changelog gate ran. No actual deploy occurred. The Firestore relay and LAN IP discovery code was already compiled but not released. This entry exists only to satisfy the changelog gate for the b270 increment."
+    },
+    {
+        "timestamp":  "2026-05-20 19:31:04",
+        "version":  "b269",
+        "notes":  "Fix relay push error logging: failed pushes (e.g. key mismatch) now log the HTTP error to the debug window.",
+        "devNotes":  "PushStateAsync now checks resp.IsSuccessStatusCode and throws with the HTTP status and body on failure, so _pushErrors increments and the error appears in [RELAY PUSH] debug log within the first 3 failures. Also improves webapp error messages: relay 404 (no state pushed yet) shows a distinct message from relay-unreachable or DeskPhone-offline, making diagnosis clearer."
+    },
+    {
+        "timestamp":  "2026-05-20 19:08:31",
+        "version":  "b268",
+        "notes":  "Cloud relay: texts and call control now work from any browser anywhere in the world.",
+        "devNotes":  "Adds RelayService which pushes phone state (status, messages, calls, contacts) to a Netlify Blobs cloud relay every 5 seconds and polls for commands every 2 seconds. DeskPhone auto-generates a relay key on first run; the webapp surfaces it with a copy button in the cloud panel. The webapp tries localhost first with a 2.5-second timeout then falls back to the relay automatically — the cloud button turns green when the relay is active. Adds GET /relay-status to the local API. Binds the local HTTP server to 0.0.0.0 (was loopback-only) and serves the built webapp static files from the output web/ folder so LAN devices can also navigate directly to http://[PC-IP]:8765. This is a remote-access release for the WebPhone bridge; it does not change Bluetooth transport, MAP send semantics, PBAP import, HFP call control, contact matching, or launcher identity."
+    },
+    {
+        "timestamp":  "2026-05-20 00:00:00",
+        "version":  "b266",
+        "notes":  "Cloud relay: texts and call control now work from any browser anywhere in the world.",
+        "devNotes":  "Adds RelayService which pushes phone state (status, messages, calls, contacts) to a Netlify Blobs cloud relay every 5 seconds and polls for commands every 2 seconds. DeskPhone auto-generates a relay key on first run; the webapp surfaces it with a copy button in the cloud panel. The webapp tries localhost first with a 2.5-second timeout then falls back to the relay automatically — the cloud button turns green when the relay is active. Adds GET /relay-status to the local API. Binds the local HTTP server to 0.0.0.0 (was loopback-only) and serves the built webapp static files from the output web/ folder so LAN devices can also navigate directly to http://[PC-IP]:8765. This is a remote-access release for the WebPhone bridge; it does not change Bluetooth transport, MAP send semantics, PBAP import, HFP call control, contact matching, or launcher identity."
+    },
+    {
+        "timestamp":  "2026-05-19 01:14:32",
+        "version":  "b265",
+        "notes":  "DeskPhone Web status now detects dropped message sync and queues an automatic reconnect.",
+        "devNotes":  "Fixes the localhost host connection parser so Not connected and disconnected text no longer counts as connected, marks MAP message sync disconnected when both live folder probes fail, and queues a paced reconnect to the saved default phone when background message sync stops responding. This is a host reliability release for DeskPhone Web live-sync accuracy; it does not change MAP send semantics, PBAP import, HFP call-control commands, contact matching, launcher identity, or web bundle routing."
+    },
+    {
+        "timestamp":  "2026-05-11 10:44:23",
+        "version":  "b264",
+        "notes":  "DeskPhone Web call history now exports all recent call directions instead of inheriting the desktop filter.",
+        "devNotes":  "Changes the localhost /status recentCalls field and /calls endpoint to serialize the full CallHistory collection ordered newest-first instead of FilteredCallHistory, so DeskPhone Web receives incoming, outgoing, and missed calls even when the native call-history tab is currently filtered to Missed. This is a host API correctness release for browser call-history parity; it does not change PBAP import, HFP call control, MAP messaging, contact matching, executable naming, launcher routing, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-10 23:19:06",
+        "version":  "b263",
+        "notes":  "DeskPhone Web data parity: contacts and call history now expose fuller host payloads.",
+        "devNotes":  "Raises the DeskPhone Web call-history API export from 100 to 1000 rows and removes the 250-contact API truncation so the browser can resolve contact names beyond the early alphabet and populate call/message surfaces from the active contact store. This is a host API parity release for WebPhone data completeness; it does not change Bluetooth transport, MAP send semantics, PBAP import behavior, or the Pro 4 launcher identity."
+    },
+    {
+        "timestamp":  "2026-05-10 22:41:37",
+        "version":  "b262",
+        "notes":  "DeskPhone source cutover: the stable desktop launcher now comes from the Shamash Pro 4 phone host.",
+        "devNotes":  "Creates the first Pro 4 native DeskPhone release after the source consolidation and legacy mothballing pass, so the desktop DeskPhone shortcut and deskphone:// protocol point at the Pro 4 deployed-builds launcher instead of the old mothballed DeskPhone folder. This release is intended to restore the localhost WebPhone bridge on port 8765 from the active Pro 4 host while preserving the mothballed legacy DeskPhone folder as rollback-only."
+    },
+    {
+        "timestamp":  "2026-05-07 04:55:32",
+        "version":  "b261",
+        "notes":  "DeskPhone Web parity: browser controls no longer detour through the desktop UI for conversation and call-history actions.",
+        "devNotes":  "Adds direct loopback POST endpoints for /mark-conversation-read, /mark-conversation-unread, /toggle-conversation-pin, /toggle-conversation-mute, /toggle-conversation-block, /toggle-call-block, /delete-call-entry, and /delete-all-call-history. The endpoints resolve browser phone numbers or call ids back to the existing MainViewModel conversation and call-history behavior, preserving read/unread sync, local pin/mute/block state, call-log delete queues, and undo support while letting DeskPhone Web stay in-browser instead of using /handoff for those parity buttons. This is DeskPhone Web host parity support only; it does not change MAP send confirmation, PBAP import, HFP call control, Bluetooth audio routing, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-06 14:09:35",
+        "version":  "b260",
+        "notes":  "DeskPhone Web parity: the browser can now send message attachments through the native host.",
+        "devNotes":  "Adds loopback POST /send-with-attachments for JSON message payloads containing to, body, and base64 attachment data, plus a SendWithAttachments ViewModel callback that stages MessageAttachment objects into the existing ComposeAttachments collection before reusing SendMessageAsync. This lets DeskPhone Web drive the same MAP MMS send path as the native attachment buttons while preserving phone-side acceptance limits and sent-folder confirmation behavior. This is a DeskPhone Web host parity support release; it does not change PBAP contacts or call-history import, HFP call control, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-06 13:57:56",
+        "version":  "b259",
+        "notes":  "DeskPhone Web parity: the browser can now save and delete contacts and undo call-history deletes through the native host.",
+        "devNotes":  "Adds loopback POST endpoints /save-contact, /delete-contact, and /undo-call-history-delete, plus hasUndoCallHistoryDelete and undoCallHistoryDeleteText fields on /status. Contact save/delete operations reuse the local ContactStoreService-backed contact collection and queue the same outbound contact sync operations as native edits where a device target is available. Call-history undo reuses the existing UndoCallHistoryDelete path. This is a DeskPhone Web host parity support release only; it does not change MAP send/delete semantics, PBAP contacts or call-history import, HFP protocol behavior, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-06 13:51:25",
+        "version":  "b258",
+        "notes":  "DeskPhone Web settings parity: the browser can now scan for phones and manage saved devices through the native host.",
+        "devNotes":  "Adds knownDevices, scannedDevices, bluetoothStatus, isScanning, isConnecting, and selectedDeviceAddress to /status, plus loopback POST endpoints /scan-devices, /connect-saved-device?addr=ADDRESS, /set-default-saved-device?addr=ADDRESS, /forget-saved-device?addr=ADDRESS, and /connect-scanned-device?addr=ADDRESS. The endpoints reuse the existing WPF ScanAsync, ConnectToAddressAsync, SetDefaultDevice, ForgetDevice, and ConnectAsync device flow so DeskPhone Web can operate the native Settings device controls without duplicating Bluetooth logic. This is a DeskPhone Web host parity support release only; it does not change MAP send/delete semantics, PBAP contacts or call-history import, HFP protocol behavior, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-06 13:44:32",
+        "version":  "b257",
+        "notes":  "DeskPhone Web parity: the browser can now delete a message and undo the delete through the native host.",
+        "devNotes":  "Adds loopback POST endpoints /delete-message?id=ID and /undo-message-delete, plus hasUndoMessageDelete and undoMessageDeleteText fields on /status. The endpoints resolve browser message ids back to existing SmsMessage instances and call the same DeleteMessageAsync and UndoLastDeletedMessageAsync paths used by the native WPF buttons, preserving MAP phone-backed delete/undelete behavior and local undo restore semantics. This is a DeskPhone Web host parity support release only; it does not change MAP send confirmation, PBAP contacts or call-history import, HFP call control, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-06 13:37:49",
+        "version":  "b256",
+        "notes":  "DeskPhone Web parity: the browser can now show pinned messages and pin or unpin a message through the native host.",
+        "devNotes":  "Adds isPinned and pinActionLabel to the /messages host payload, plus POST /toggle-message-pin?id=ID to toggle the existing SmsMessage.IsPinned state in the local message store. This lets DeskPhone Web render a selected-thread pinned-message strip, jump from a pinned preview to the source message, and call the same local pin behavior used by native bubble actions. This is a DeskPhone Web host parity support release only; it does not change MAP send/sync semantics, phone-side message delete/read status, PBAP contacts or call-history import, HFP call control, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-06 13:32:17",
+        "version":  "b255",
+        "notes":  "DeskPhone Web parity: the browser can now control active-call mute and the build-update prompt through the native host.",
+        "devNotes":  "Adds status fields for isMuted, showReconnectPrompt, showBuildUpdatePrompt, showBuildUpdateIndicator, pendingBuildVersion, pendingBuildTitle, and pendingBuildBody, plus loopback POST endpoints /toggle-mute, /accept-build-update, /snooze-build-update, and /show-build-update-prompt. The endpoints wire to the existing MainViewModel mute and build-update commands so DeskPhone Web can stop handing these controls back to the desktop shell. This is a DeskPhone Web host parity support release only; it does not change MAP send/sync semantics, PBAP contacts or call-history import, HFP call connection behavior, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-06 11:58:31",
+        "version":  "b254",
+        "notes":  "DeskPhone Web settings parity: the browser can now toggle theme sync, history background fetching, and dark mode through the native host.",
+        "devNotes":  "Adds status fields for syncThemeWithShamash, pauseHistoryActivity, isDarkModeEnabled, themeSyncLabel, and themeSyncRefreshStatus, plus loopback POST endpoints /set-theme-sync, /set-history-paused, and /set-dark-mode. The endpoints set the existing MainViewModel persisted settings from DeskPhone Web. This is a DeskPhone Web host parity support release only; it does not change MAP send/sync semantics, PBAP contacts or call-history import, HFP call control, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-06 11:51:11",
+        "version":  "b253",
+        "notes":  "DeskPhone Web settings parity: the browser can trigger appearance reset, theme refresh, and contact-import actions through the native host.",
+        "devNotes":  "Adds loopback POST endpoints /reset-ui-scale, /refresh-theme-sync, /import-starter-vcf, /import-pending-contacts, and /skip-pending-contacts to the DeskPhone Control API, then wires them to existing MainViewModel settings and contact-sync commands. This is a DeskPhone Web host parity support release only; it does not change MAP send/sync semantics, PBAP contacts or call-history import, HFP call control, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-06 11:44:45",
+        "version":  "b252",
+        "notes":  "DeskPhone Web settings parity: the browser can open the active contact-sync folder and start a native message backup export.",
+        "devNotes":  "Adds loopback POST endpoints /open-contact-sync-folder and /export-messages-backup to the DeskPhone Control API, then wires them to the existing MainViewModel contact-sync folder and message-backup export commands. This is a DeskPhone Web host parity support release only; it does not change MAP send/sync semantics, PBAP contacts or call-history import, HFP call control, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-06 11:27:35",
+        "version":  "b251",
+        "notes":  "DeskPhone Web developer-tool parity: the browser can now open Live Log, clear the live debug log, and launch the UI Auditor through native host commands.",
+        "devNotes":  "Adds loopback POST endpoints /open-live-log, /clear-log, and /run-ui-auditor to the DeskPhone Control API, then wires them to the existing MainViewModel live-log/debug-log behavior and a UI Auditor launcher lookup. This is a DeskPhone Web host parity support release only; it does not change MAP send/sync semantics, PBAP contacts or call-history import, HFP call control, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-06 10:54:19",
+        "version":  "b250",
+        "notes":  "DeskPhone Web Settings tool parity: the browser can now trigger the native Windows actions for Bluetooth Settings, Sound Settings, audio refresh, builds folder, and event log.",
+        "devNotes":  "Adds loopback POST endpoints /audio-refresh, /open-bluetooth-settings, /open-sound-settings, /open-builds-folder, and /open-event-log to the DeskPhone Control API, then wires them to the existing MainViewModel actions used by the native Settings and developer-tool buttons. This is a DeskPhone Web host parity support release only; it does not change MAP send/sync semantics, PBAP contacts or call-history import, HFP call control, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-05 18:37:03",
+        "version":  "b249",
+        "notes":  "DeskPhone Web send status parity: the browser can now show outgoing messages as Sending, Confirming on phone, Failed, or Sent using the same source-of-truth status as the Windows app.",
+        "devNotes":  "Adds outgoing send-state fields to the local /messages host API payload: sendStatus, sendStatusLabel, outgoingStatusLabel, and outgoingStatusIcon. This lets DeskPhone Web distinguish Bluetooth acceptance from phone sent-folder confirmation and display the b248 confirmation lifecycle instead of showing every outgoing web bubble as already sent. This is a host API and DeskPhone Web parity support release only; it does not change MAP send timing, sent-folder confirmation logic, HFP call control, PBAP contacts/call-history import, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-05 15:17:58",
+        "version":  "b248",
+        "notes":  "Outgoing SMS confirmation now waits for the phone: DeskPhone no longer shows a completed sent checkmark just because Bluetooth accepted the push.",
+        "devNotes":  "Removes the immediate newest-sent-handle shortcut after MAP PushMessage because it can grab a stale or unrelated sent handle while the phone is still writing the new message. Outgoing bubbles now remain in a Confirming on phone state after Bluetooth acceptance, DeskPhone pauses deep history briefly for send confirmation, and it repeatedly pulls delta sync forward until the phone sent folder returns the matching recipient/body message. The poll loop now refreshes the message UI after any phone-side message payload, even when merging only clears a local pending send and does not increase new-message count. This changes MAP send confirmation and UI status semantics only; it does not change HFP call control, PBAP contact/call-history import, MMS parsing, web host endpoints, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-05 00:24:24",
+        "version":  "b247",
+        "notes":  "DeskPhone Web history and MMS polish: the web host now exposes deep active-phone message history, and image-only MMS photos display as floating images without extra bubble whitespace.",
+        "devNotes":  "Changes the native /messages payload from an unfiltered 100-message slice to up to 5000 active-device messages ordered newest-first, so DeskPhone Web can build full conversations instead of only the newest global messages. The web UI also removes attachment-stack margin and message metadata from image-only MMS bubbles and adds only a light image shadow/radius, preserving fullscreen open/rotate/close behavior. This does not change Bluetooth HFP call control, MAP send semantics, PBAP contact/call-history import, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-04 01:18:46",
+        "version":  "b246",
+        "notes":  "DeskPhone Web handoff and MMS image presentation: web conversation action shortcuts now land on the matching native read, unread, pin, mute, and block commands, and MMS photos render as the image item instead of as framed attachment cards.",
+        "devNotes":  "Adds target=mark-read, mark-unread, toggle-pin, toggle-mute, and toggle-block handling to the native /handoff bridge by resolving the supplied phone number to the matching conversation and executing the existing view-model commands. Also removes the normal message-bubble border, background, padding, and shadow for image-only MMS bubbles, and changes the native fullscreen image viewer to a black edge-to-edge stage with overlay close and rotate controls. This is a UI presentation and web parity bridge release only; it does not change Bluetooth HFP call control, MAP message sync/send semantics, PBAP contact/call-history import, message storage, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-04 01:07:40",
+        "version":  "b245",
+        "notes":  "DeskPhone Web edit-contact handoff: Edit Contact shortcuts from the web panel now open the matching Windows contact editor when the phone number is already saved.",
+        "devNotes":  "Adds target=edit-contact handling to the native /handoff bridge. The Windows app now looks up the supplied phone number, opens the matching editable contact when found, and falls back to a pre-filled new-contact editor when no saved contact exists. This keeps temporary DeskPhone Web shortcuts useful while native web parity is still being built. This is a UI handoff refinement only; it does not change Bluetooth HFP call control, MAP message sync/send semantics, PBAP contact/call-history import, message storage, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-04 00:07:10",
+        "version":  "b244",
+        "notes":  "DeskPhone Web contact handoff refinement: Add Contact shortcuts from the web panel now open the Windows contact editor with the selected phone number pre-filled.",
+        "devNotes":  "Refines the b243 /handoff target handling so target=new-contact with a value uses SaveAsContactCommand instead of opening a blank contact editor. This lets temporary DeskPhone Web shortcuts preserve conversation context while native web parity is still being built. This is a UI handoff refinement only; it does not change Bluetooth HFP call control, MAP message sync/send semantics, PBAP contact/call-history import, message storage, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-03 23:51:41",
+        "version":  "b243",
+        "notes":  "DeskPhone Web handoff support: web buttons can now open the Windows app directly to the matching native area while web-native parity is still being built.",
+        "devNotes":  "Adds a loopback POST /handoff?target=... host endpoint and routes it through MainWindow.OpenHandoffTarget so temporary web shortcuts can land in Messages, New Message compose, Calls/dialer, Contacts, Settings, Developer Tools, Live Log, or the build-update prompt instead of only raising the app generically. This is a UI bridge/parity support change only; it does not change Bluetooth HFP call control, MAP message sync/send semantics, PBAP contact/call-history import, message storage, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-03 23:39:15",
+        "version":  "b242",
+        "notes":  "MMS photo parity: DeskPhone now gives the web panel real image data and desktop photo thumbnails can open full screen with rotation and close controls.",
+        "devNotes":  "Adds browser-displayable data URLs for image attachments in the local /messages host API so DeskPhone Web can render MMS photos instead of metadata-only placeholders. Adds a narrow native WPF image viewer: double-clicking an MMS image thumbnail opens a full-screen owner window with close, rotate-left, rotate-right, Escape, and arrow-key support. This does not change Bluetooth HFP call control, MAP message sync/send semantics, PBAP contact/call-history import, message storage, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-03 18:50:17",
+        "version":  "b241",
+        "notes":  "Netlify host access hardening: DeskPhone\u0027s local host API now answers browser preflight checks so the deployed web app can safely talk to the loopback host.",
+        "devNotes":  "Adds OPTIONS handling and the Access-Control-Allow-Private-Network response header to the loopback control API, with a shared response writer for normal API calls and shutdown. This supports the Netlify-delivered DeskPhone Web panel talking to the local Windows host from the browser while keeping the host loopback-only. No Bluetooth HFP call control, MAP message sync/send behavior, PBAP contact/call-history import, native UI layout, executable naming, launcher behavior, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-03 18:37:37",
+        "version":  "b240",
+        "notes":  "Host connector contract: Windows DeskPhone now identifies itself as the first local host for DeskPhone Web and exposes calls, contacts, and richer message metadata through the control API.",
+        "devNotes":  "Adds hostConnector, hostPlatform, hostControlContract, hostScope, and phoneTransport metadata to /status so the web UI can treat Windows as one implementation of the shared DeskPhone host-control contract rather than as a one-off bridge. Adds /calls and /contacts read endpoints, recentCalls and conversationCount status data, plus source-device, MMS, and attachment metadata in /messages. The connector remains loopback-only and does not expose phone data to LAN or internet. This does not change HFP call control, MAP message sync/send semantics, PBAP import behavior, native UI layout, executable naming, launcher behavior, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-03 05:21:53",
+        "version":  "b239",
+        "notes":  "Realtime text latency improvement: MAP new-message events now try the exact phone-reported handle immediately before falling back to the normal delta sync.",
+        "devNotes":  "Queues handles from MAP MNS NewMessage events in a priority message queue, drains distinct handles inside the poll loop, and calls the existing FetchHandlesAsync path before PerformDeltaSyncAsync. The normal delta sync still runs afterward as a fallback for phones that reject exact-handle fetches or report incomplete event data. This only changes incoming-message wake handling; it does not change MAP notification registration, message merge/storage semantics, full-history paging, delete reconciliation, MMS send/parse behavior, PBAP call-history import, HFP call control, voicemail state, UI layout, theme sync bridge, executable naming, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-03 05:20:04",
+        "version":  "b238",
+        "notes":  "History activation hardening: re-enabling message history now reliably restarts the deep history loader after any previous loader finishes unwinding.",
+        "devNotes":  "Adds a StartOrQueueFullHistoryLoader path that queues one restart when a full-history loop is still running during activation or reconnect. This closes the timing gap where toggling history back on could reset offsets but fail to start the new deep scan because the prior loader had not completed cancellation yet. The change is limited to full-history loader orchestration and logging; it does not change MAP message listing format, message body fetch behavior, delta polling cadence, delete reconciliation, MMS send/parse behavior, PBAP call-history import, HFP call control, voicemail state, UI layout, theme sync bridge, executable naming, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-03 05:17:42",
+        "version":  "b237",
+        "notes":  "Compose attachment polish: attachment buttons and notices now describe the current best-effort MMS send behavior instead of saying media send is still blocked.",
+        "devNotes":  "Updates the reply composer and new-message composer attachment tooltips plus ComposeAttachmentNotice so the user-facing copy matches the b234 transport behavior: DeskPhone now attempts Bluetooth MAP MMS sending with staged attachments when the phone accepts that media path. This is a copy/state-clarity release only; it does not change MAP send payload construction, MMS parsing/storage, attachment staging/removal, draft persistence, read/delete sync, PBAP history import, HFP call control, voicemail state, theme sync bridge, executable naming, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-03 04:12:25",
+        "version":  "b236",
+        "notes":  "Call-history polish: row actions now appear as hover overlays, the right phone pane keeps more reading room, and the build stamp is less prone to clipping.",
+        "devNotes":  "Changes the call-history action clusters in both the persistent conversation phone pane and the Calls surface from always-present row content into focus/hover overlays with a bordered background, so message/call/block/delete controls no longer visually crowd the caller name while scanning the list. Slightly relaxes the conversation layout at narrower app widths by trimming the message list and right phone pane minimums while preserving the requested vertical call-history pane. Tightens the top-left build time text to 10px with ellipsis/tooltips so the visible build stamp remains readable without overlapping the rail control. No Bluetooth MAP/HFP/PBAP transport behavior, history activation, deletion sync, MMS sending/parsing, voicemail state, draft persistence, theme sync bridge, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-03 04:01:26",
+        "version":  "b235",
+        "notes":  "Phone navigation regression fix: the sidebar has a visible Phone entry again, and the right-pane dialer now live-searches contacts from its single dial/search box.",
+        "devNotes":  "Restores an obvious path back to the combined Google Voice-style messages/calls surface without resurrecting separate public Messages and Calls destinations. The visible nav item routes to the existing Messages tab, now labeled Phone because that surface owns both conversation history and the persistent right-side phone pane. Also adds the shared CallContacts suggestion list under the conversation phone-pane dial box so typing either a contact name or number in the single dial field immediately surfaces matching contacts with Text and Call actions. No Bluetooth MAP/HFP/PBAP transport behavior, message storage, MMS parsing/sending, voicemail state, draft persistence, theme sync bridge, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 17:36:09",
+        "version":  "b234",
+        "notes":  "Best-effort outbound MMS send: staged attachments now go through a real MAP MIME/MMS send attempt instead of being blocked outright.",
+        "devNotes":  "Changes the compose send path so attached pictures, files, and contact cards no longer stop at a staging-only surface. When attachments are present, DeskPhone now builds a multipart MIME payload inside a TYPE:MMS bMessage and sends that over MAP PushMessage as a best-effort outbound MMS attempt; plain text messages still use the existing SMS-first path. The local pending sent bubble now carries staged attachments and marks the message failed honestly if the phone rejects the outbound MMS package. This is still transport-dependent by handset: it does not claim universal outbound MMS success, but it removes the app-side hard block and attempts the standards-shaped send path directly."
+    },
+    {
+        "timestamp":  "2026-05-01 17:31:54",
+        "version":  "b233",
+        "notes":  "MMS parser expansion: DeskPhone now keeps non-image MMS parts as real attachments instead of dropping them when the phone sends files or contact-card payloads.",
+        "devNotes":  "Extends the MAP MIME-part parser so non-image parts with real content types are decoded and stored as MessageAttachment entries instead of being ignored unless they happen to look like embedded images. Attachment fallback naming now uses content-type-aware extensions such as vcf, pdf, and txt, and placeholder text is only used when the message truly has no extracted body or attachments. Also fixes SmsMessage property-change notifications so newly parsed non-image attachments reliably surface in the thread UI added in b232. This improves inbound MMS fidelity only; it does not claim validated outbound MAP media-send support, and it does not change read/delete sync, voicemail state, theme sync, executable naming, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-01 17:27:48",
+        "version":  "b232",
+        "notes":  "MMS thread polish: non-photo attachments now render as real attachment rows with save actions instead of image-only assumptions in the thread UI.",
+        "devNotes":  "Adds a general SaveAttachmentCommand plus message-attachment metadata for contact cards, files, audio/video, and size/type labeling. Incoming and outgoing thread bubbles now render non-image attachments as clean desktop-style attachment rows with a save action, rather than only supporting image thumbnails. This is a UI and model-surface parity step only: it does not claim new MAP outbound media-send support, does not change MMS transport parsing rules, and does not alter read/delete sync, voicemail state, theme sync, executable naming, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-01 17:21:56",
+        "version":  "b231",
+        "notes":  "Voicemail parity hardening: voicemail alert state is now kept per phone and restored on reconnect, with direct phone-indicator support where available.",
+        "devNotes":  "Adds per-device voicemail alert persistence to settings so one phone\u0027s alert state no longer bleeds into another\u0027s and the voicemail dot/text can restore after reconnecting the same handset. HFP now raises raw named indicator events into the view model, and DeskPhone watches common message-waiting indicator names such as message, messages, msgwaiting, and voicemail so phones that expose a direct call-profile signal can light or clear voicemail without waiting for a carrier text. The existing voicemail text-notice detector still feeds the same per-phone state, and dialing voicemail now clears the persisted alert for the active phone. No MAP send/read/delete behavior, MMS attachment transport, PBAP import/deletion behavior, draft persistence, theme sync bridge, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 16:49:19",
+        "version":  "b230",
+        "notes":  "No text badges: unread message threads now rely on bold text and color weight, not an in-app dot badge.",
+        "devNotes":  "Removes the unread conversation dot from the message-list row so text state is conveyed by the existing bold name, stronger timestamp, and filter/sort controls rather than a badge marker. Keeps the small missed-call red dot exception requested for the Missed call filter. No message read/unread sync behavior, MAP/HFP/PBAP transport behavior, call notifications, message storage, MMS handling, draft persistence, theme sync bridge, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 16:48:13",
+        "version":  "b229",
+        "notes":  "Call-column cleanup: missed calls use a red dot instead of count badges, call-row actions overlay without crushing names, and the duplicate new-message pill is gone.",
+        "devNotes":  "Removes the count-style MissedCallBadgeText UI and replaces it with a small red dot plus bold Missed label until the Missed filter is opened. Keeps NewMissedCallCount internal only for alert state, not public badge display. Hides the redundant sidebar New Message pill because the message-list plus button is now the active compose entry. Reworks call-history row actions in both phone panes so message/call/block/delete overlay on the row instead of adding grid columns that squeeze names into vertical text. Moves the conversation phone-pane keypad control into a centered, more prominent button under the filters and keeps delete-all inline beside it. No Bluetooth MAP/HFP/PBAP transport behavior, message storage, MMS handling, voicemail detection, draft persistence, theme sync bridge, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 16:34:50",
+        "version":  "b228",
+        "notes":  "Readability comfort pass: message text is larger by default while whole-window zoom stays in small safe steps.",
+        "devNotes":  "Raises BubbleTextSizeConverter by one point across narrow, medium, and wide conversation panes so SMS/MMS body text is easier to read without using aggressive whole-shell scaling. Updates the Appearance copy to clarify that interface scale remains small and crisp while message body readability is handled separately. This preserves the existing 100/105/110/115 scale clamp and does not reintroduce the old oversized 125/150 frame-overrun behavior. No Bluetooth MAP/HFP/PBAP behavior, message storage, MMS parsing/sending, call notifications, voicemail state, blocking, draft persistence, theme sync bridge, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 16:33:36",
+        "version":  "b227",
+        "notes":  "Missed-call visibility hardening: missed calls now raise an in-app badge on the Missed filter as well as the Windows notification.",
+        "devNotes":  "Adds NewMissedCallCount, HasMissedCallAlert, MissedCallBadgeText, and duplicate-suppressed SurfaceMissedCallAlert in the live HFP call-state path. When an unanswered incoming call transitions to Idle, DeskPhone still shows the Windows tray missed-call notification, but now also increments a visible badge on the Missed call-history filter in both phone/call-history panes. Opening the Missed filter clears the new-missed badge. This does not change PBAP import, call-log deletion queueing, HFP answering/dialing behavior, voicemail message detection, MAP message sync/send, MMS handling, draft persistence, local blocking, theme sync, executable naming, or release mechanics."
+    },
+    {
+        "timestamp":  "2026-05-01 16:31:28",
+        "version":  "b226",
+        "notes":  "Message readability fix: sent and received bubbles now preserve blank lines with a single stable text flow, making long sectioned texts easier to read.",
+        "devNotes":  "Changes MessageBodyFormatter to render each SMS/MMS body as one FlowDocument paragraph with explicit LineBreak elements instead of separate paragraphs per entered line. Empty lines are still represented by non-breaking placeholders, but the bubble now keeps section spacing inside one stable flow, reducing visual collapse and odd paragraph gaps in long messages. Applies Display text formatting to inbound bubbles as well as outbound bubbles for sharper, more consistent text rendering. No MAP send protocol, MMS media parsing/sending, PBAP call history, HFP call control, draft persistence, voicemail state, local blocking, theme sync bridge, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 16:29:47",
+        "version":  "b225",
+        "notes":  "Call-history spam controls and voicemail cue: recent-call rows can now block/unblock locally, and voicemail notices light a visible in-app voicemail indicator.",
+        "devNotes":  "Adds ToggleCallRecordBlockedCommand so both the conversation phone pane and the recent-calls pane can locally block or unblock a caller from the call-history row without opening the message thread. Blocking reuses the existing local BlockedConversationPhones setting, mutes alerts for that number, refreshes matching conversations, and remains explicitly local because Bluetooth PBAP/HFP does not expose phone-side spam reporting here. Adds HasVoicemailAlert and VoicemailAlertText state: detected voicemail/voice-mail message notices now trigger the existing tray voicemail notification and also light a red dot on the Voicemail button in the phone pane/dialer until the user taps Voicemail. No MAP message send format, MMS parsing or sending, PBAP import/deletion queue, HFP call control, contact import, draft persistence, theme sync bridge, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 16:23:03",
+        "version":  "b224",
+        "notes":  "Local block/spam triage: conversations can now be blocked, hidden from normal All view, and reviewed from a Blocked filter.",
+        "devNotes":  "Adds BlockedConversationPhones to AppSettingsService, an IsBlocked state on Conversation, a local block/unblock command, and a Blocked conversation filter. Blocking is honest/local because the current Bluetooth MAP path does not expose a phone-side spam-report/block write contract; blocked conversations are also muted for alerts, no longer surface tray/app alert targets, disappear from the normal All filter, and show a Blocked badge plus unblock path. Adds header and row context-menu affordances for block/unblock. No MAP message delete/read/send behavior, MMS parsing or sending, PBAP call history, HFP call control, contact sync import, draft persistence, theme sync, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 16:19:06",
+        "version":  "b223",
+        "notes":  "Developer Tools cleanup and compose/dialer polish: dev-only items moved off the main screen, new-message drafts survive exit, and the dial box now doubles as contact search.",
+        "devNotes":  "Adds a Developer Tools sidebar destination for changelog, event log, UI auditor, and builds-folder access, removes the public builds-folder icon from the app identity block, and removes the duplicate build number/time from the lower-left connection card while leaving the top-left build stamp visible. Thread search now uses shared styles for spacing, text size, status text, and inline glyph buttons, with extra gutter from neighboring header buttons. The compose attachment icon buttons now render icon children with zero padding so the paperclip remains visible. New-message and per-thread compose drafts persist through settings.json with a debounce and are flushed on shutdown. The main dialer entry now acts as both number entry and contact search; the redundant contact-search textbox is removed, and pressing Call with a typed name dials the first matching contact. Reconnect and shutdown now explicitly perform profile teardown, including OBEX disconnect for MAP and active-call hangup before HFP disposal. Collapsed rail connection buttons use a centered collapsed-rail style. No Bluetooth MAP send format, MMS parsing, message/call-history storage, deletion sync, history activation, contact sync import, theme sync contract, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 16:05:16",
+        "version":  "b222",
+        "notes":  "Thread search correction: the up/down/close controls are now small inline glyphs, and the search field again matches the header button height.",
+        "devNotes":  "Adds a ThreadSearchGlyphButton style with no TonalButton chrome so the conversation search previous, next, and clear controls no longer appear as boxed buttons or consume toolbar-width space. Applies that style to both thread-header search layouts, restores the search container to 34px row height, tightens internal margins, and lowers the search textbox minimum width so non-fullscreen windows keep usable typing room. This is a XAML-only layout correction. No Bluetooth MAP/HFP/PBAP transport behavior, message/call-history data, MMS parsing or sending, deletion sync, history activation, contact storage, theme sync, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 15:59:13",
+        "version":  "b221",
+        "notes":  "Google Voice layout cleanup: the phone pane stays open on the right, new-message compose no longer blocks thread selection, sent text preserves line breaks better, and the taskbar pin is repaired.",
+        "devNotes":  "Changes the Messages surface so the conversation detail grid is always present and the right Phone/call-history pane is no longer gated by SelectedConversation. The empty-message placeholder now lives only inside the message pane; the new-message compose panel is constrained to the message side and selecting an existing thread closes the compose overlay. Adds a plus button in the message-list header and hides the dedicated Make Call nav entry because dialing now belongs to the persistent Phone pane. Tightens the in-thread search box height, padding, and arrow/close buttons. MessageBodyFormatter now emits one FlowDocument paragraph per entered line with non-breaking placeholders for blank lines instead of one fixed-line-height paragraph, improving blank-line preservation and long-text readability. The deploy script now rewrites the pinned taskbar DeskPhone shortcut to the stable launcher so stale pins such as b187 are repaired during release. No Bluetooth MAP/HFP/PBAP transport behavior, message/call-history data format, MMS parsing or sending, deletion sync, history activation, contact storage, theme sync, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 12:41:29",
+        "version":  "b220",
+        "notes":  "Theme sync reliability: DeskPhone Appearance now has a Refresh sync button, and the companion OneTask app can resend its theme when DeskPhone comes back online.",
+        "devNotes":  "Adds RefreshThemeSyncCommand and a visible Appearance status line so DeskPhone can ask the local OneTask/Shamash page at http://127.0.0.1:3002 to resend the active theme through the existing /theme bridge. The paired OneTask source now polls DeskPhone status and forces a theme push when DeskPhone transitions from offline to online, which covers reopening/reloading DeskPhone after OneTask is already open. DeskPhone still respects SyncThemeWithShamash and does not guess or import browser-local theme state directly. No Bluetooth MAP/HFP/PBAP transport behavior, message/call-history data, MMS parsing or sending, deletion sync, history activation, contact storage, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 12:37:17",
+        "version":  "b219",
+        "notes":  "Thread header fit cleanup: the open-message banner is slimmer, and the conversation search box now stretches with the message pane instead of staying stubby.",
+        "devNotes":  "Tightens the message-pane conversation header introduced in b218 by reducing padding, avatar size, typography, and search-control height. Replaces the vertical contact/search stack with a compact row layout where the identity block stays left and the thread-search control fills the remaining pane width, removing the old 520px cap and left alignment. This is a XAML-only layout refinement. No Bluetooth MAP/HFP/PBAP transport behavior, message/call-history data, MMS parsing or sending, deletion sync, history activation, contact storage, theme sync, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 12:33:26",
+        "version":  "b218",
+        "notes":  "Conversation layout cleanup: opening a thread now lands on the newest message, and the open-thread banner is contained inside the message side instead of crowding the phone pane.",
+        "devNotes":  "Adds staged latest-message scrolling passes after conversation selection so WPF has time to generate virtualized message rows before ScrollIntoView and ScrollToBottom run. Moves the visible conversation header into ConversationMessagesPane and collapses the old full-width header so the call-history/phone pane keeps its own vertical surface. This is a UI layout and navigation fix only. No Bluetooth MAP/HFP/PBAP transport behavior, message/call-history data, MMS parsing or sending, deletion sync, history activation, contact storage, theme sync, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 09:46:02",
+        "version":  "b217",
+        "notes":  "Preferred phone label cleanup: the rail now uses the concise requested wording, for example Preferred Phone [FIG-NEWTON] connected.",
+        "devNotes":  "Removes the last-seen suffix from QuickConnectDeviceSummary so the navigation rail no longer carries an overlong Preferred Phone label that can clip in the menu pane. This follows the user\u0027s requested non-jargon wording and addresses the width source that b216 typography alone did not solve. No Bluetooth MAP/HFP/PBAP transport behavior, message/call history data, attachment staging behavior, deletion sync, history activation, contact storage, theme sync, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 09:44:41",
+        "version":  "b216",
+        "notes":  "Rail text fit cleanup: build time and preferred-phone status use tighter rail typography so they are less likely to clip in the menu pane.",
+        "devNotes":  "Reduces the rail build-number/build-time text and connection subtitle typography from 11px to 10px, keeps build labels on one line, and tightens the connection subtitle line height. This is a targeted follow-up to the b215 UI audit warnings for build-time and preferred-phone text width. No Bluetooth MAP/HFP/PBAP transport behavior, message/call history data, attachment staging behavior, deletion sync, history activation, contact storage, theme sync, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 09:43:06",
+        "version":  "b215",
+        "notes":  "Messaging compose polish: blank lines now render reliably in message bubbles, and compose has a real attachment staging surface with media sending still safely blocked until MAP validation.",
+        "devNotes":  "Changes MessageBodyFormatter to render message text as one paragraph with explicit LineBreak elements and non-breaking placeholders for blank lines, instead of separate FlowDocument paragraphs that could visually collapse consecutive blank lines. Adds ComposeAttachments, AddComposeAttachmentCommand, RemoveComposeAttachmentCommand, attachment chips, and an explicit compose notice. The attach buttons now let the user stage pictures, files, and contact-card files, but SendMessageAsync refuses to transmit while attachments are present because the Bluetooth MAP MIME media-body builder is not yet validated. No Bluetooth MAP/HFP/PBAP transport behavior, message/call history data, deletion sync, history activation, contact storage, theme sync, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 09:39:11",
+        "version":  "b214",
+        "notes":  "Shamash theme sync control: DeskPhone can now match full OneTask/Shamash theme colors and has an Appearance toggle to turn that sync on or off.",
+        "devNotes":  "Extends the Control API /theme path from a palette-only command to a palette plus validated color-token bridge. Switchboard now sends the active scheme colors, including custom schemes, and DeskPhone overlays those colors onto its WPF theme resources. Adds AppSettingsService.SyncThemeWithShamash, a Settings \u003e Appearance toggle, and a ViewModel guard so /theme is ignored when sync is off and DeskPhone keeps its own light/dark appearance. Also includes the narrow b214 layout hardening already verified in Debug: a wider navigation rail, 32px builds-folder target, and a larger thread-search box to reduce auditor overlap/clipping. No Bluetooth MAP/HFP/PBAP transport behavior, message/call history data, deletion sync, history activation, contact storage, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 09:34:18",
+        "version":  "b213",
+        "notes":  "Switchboard theme sync fix: DeskPhone now persists palettes received from the OneTask/Shamash color-scheme bridge.",
+        "devNotes":  "Updates the Control API /theme handler path so a mapped Switchboard palette is applied and saved into AppSettingsService.PreferredPalette, with DarkModeEnabled refreshed and the Appearance labels invalidated. This pairs with the Switchboard source change that posts the active color scheme to DeskPhone when the selector changes or the phone is brought forward. No Bluetooth MAP/HFP/PBAP transport behavior, message/call history data, message storage, deletion sync, history activation, contact storage, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 09:27:22",
+        "version":  "b210",
+        "notes":  "Call-history layout rule: call history now stays in a vertical side pane instead of stacking into a bottom strip when the window narrows.",
+        "devNotes":  "Disables the responsive stacking branches that moved the conversation phone/call-history pane and the Calls screen dialer/recents panes into horizontal bottom layouts at narrow widths. The panes now preserve the vertical side-by-side model requested by the user. This is a layout rule change only. No call-history data, PBAP import, HFP call control, MAP message sync/send, message storage, deletion sync, history activation, contact storage, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 09:23:46",
+        "version":  "b209",
+        "notes":  "Filter-button cleanup: conversation and call-history filters now use full 32px-high click targets after the b208 audit.",
+        "devNotes":  "Raises the new thread-search navigation buttons, the new call-history filter buttons, and the existing conversation filter buttons to at least 32px height so the UI auditor no longer treats them as undersized desktop action targets. This is a layout hardening follow-up to b208 only. No search/filter logic, Bluetooth MAP/HFP/PBAP transport behavior, message storage format, MMS behavior, deletion sync, history activation, contact storage, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 09:21:27",
+        "version":  "b208",
+        "notes":  "Conversation search and call-history filters: search inside the open thread, jump between matches, and filter recent calls by All, Missed, Incoming, or Outgoing.",
+        "devNotes":  "Adds active-thread search state to MainViewModel with next, previous, clear, match-count status, and a RequestScrollToMessage event so code-behind can scroll directly to the selected result and reveal the bubble actions. Adds CallHistoryFilter state, filtered call-history projections, and filter commands reused by the right conversation phone pane and the full Recents pane. Both call-history lists now bind to the filtered view and empty states follow the active filter. Existing conversation-list filters remain in place and are not reworked. No Bluetooth MAP/HFP/PBAP transport behavior, message storage format, MMS parsing/send behavior, deletion sync, history activation, contact storage, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 09:16:07",
+        "version":  "b207",
+        "notes":  "MMS outbound correction: MAP send now tries an MMS PushMessage envelope after SMS formats are rejected.",
+        "devNotes":  "Adds TYPE:MMS as the third MAP PushMessage bMessage send attempt after SMS_GSM and SMS_CDMA. This keeps normal SMS behavior first, avoids duplicate MMS sends when SMS succeeds, and gives phones that expose MMS through MAP a real outbound MMS path to accept. Updates compose tooltips and the messaging/calling gap audit so DeskPhone no longer claims outbound MAP is strictly text-only. This is the protocol-envelope step only; media attachment sending still needs a MIME bMessage body builder and real-phone validation before the disabled attach button can become active. No inbound MMS parsing, message storage format, HFP call control, PBAP call-history import, deletion sync, history activation, contact storage, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 09:11:27",
+        "version":  "b206",
+        "notes":  "MMS parity pass: incoming multi-photo MMS messages now store and render all image parts, and compose shows an honest text-only attachment affordance.",
+        "devNotes":  "Adds a MessageAttachment model and SmsMessage.Attachments while preserving the legacy AttachmentData slot so existing saved MMS photos continue to render. The MAP MIME parser no longer stops after the first image part; each image part is stored with content type, filename fallback, and bytes. Message bubbles now render every image attachment in the received and sent templates, and message-store merge, delete undo snapshots, backup/export, and image save paths preserve the richer attachment set. Compose surfaces now show a disabled attachment icon with a tooltip explaining that the current Bluetooth MAP send path is text-only, so the UI exposes the feature gap without claiming unsupported outbound MMS. Also caps whole-app text scaling to 100/105/110/115 instead of the old 125/150 options that overran frames. Adds a messaging/calling gap audit note for Parent 16. No HFP call control, PBAP call-history import, message delete sync, history activation, contact storage, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 08:17:45",
+        "version":  "b205",
+        "notes":  "Call-history delete safety net: deleted recent calls now show Undo in both call-history surfaces and cancel pending delete outbox entries.",
+        "devNotes":  "Adds call-history undo state and UndoCallHistoryDeleteCommand in MainViewModel. Single-entry and delete-all call-history deletes now capture snapshots before removal, show visible Undo affordances in the conversation phone pane and the full Recents pane, and restore deleted entries into the visible call-history list. Undo also restores PBAP-backed records into the local PBAP call-log cache and cancels matching pending call-log delete or delete-all outbox files through new CallLogSyncService cancellation helpers, preventing local undo from being immediately suppressed by the pending delete queue. No Bluetooth pairing, HFP call state, MAP message sync, history activation, contact storage, message deletion, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 08:13:34",
+        "version":  "b204",
+        "notes":  "Message delete safety net: deleting a message now shows an in-thread Undo action, including phone undelete where MAP accepts it.",
+        "devNotes":  "Adds a one-deep deleted-message snapshot in MainViewModel and exposes HasUndoMessageDelete, UndoMessageDeleteText, and UndoLastDeletedMessageCommand. DeleteMessageAsync now captures the message before removing it, still sends MAP deletedStatus=yes first for phone-backed messages, then shows a message-pane Undo bar after the local removal succeeds. Undo restores local-only messages directly and, for MAP-backed messages, first sends deletedStatus=no through SetMessageDeletedStatusAsync before reinserting the message locally. The Undo bar is contained inside ConversationMessagesPane above the reply composer so it does not overlap the call-history pane. No Bluetooth pairing, HFP call state, MAP polling cadence, PBAP call-history import, history activation, contact storage, call-history deletes, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 08:09:38",
+        "version":  "b203",
+        "notes":  "Voicemail notification pass: obvious voicemail texts now raise a Voicemail alert, and the default-phone rail warning no longer clips.",
+        "devNotes":  "Adds NotificationService.ShowVoicemail and routes newly synced inbound messages through a voicemail detector before showing the desktop notification. The detector keys off explicit voicemail wording in the sender/body, which covers carrier voicemail SMS/MMS notices without inventing unsupported HFP voicemail indicators. Also shortens the no-default-phone rail subtitle from the longer auto-connect explanation to a compact Connection Settings instruction to resolve the auditor text-width finding. No Bluetooth pairing, HFP call state, MAP polling cadence, PBAP call-history import, history activation, deletion sync, message storage format, contact storage, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 08:06:23",
+        "version":  "b202",
+        "notes":  "Missed-call notification and voicemail access: missed incoming calls now raise a desktop alert, and both dialers expose a direct Voicemail action.",
+        "devNotes":  "Adds NotificationService.ShowMissedCall and changes the call-idle transition to preserve the previous incoming/ringing context so unanswered incoming calls are stored and alerted as Missed instead of being flattened into a generic idle/end state. Adds DialVoicemailCommand and Voicemail buttons to the conversation right-pane keypad and the main dialer, dialing the standard *86 voicemail code through the existing HFP call path. Voicemail alert detection is not claimed here because it depends on verifying which HFP/MAP indicators the connected phone actually exposes. No Bluetooth pairing, MAP message sync, PBAP call-history import, history activation, deletion sync, contact storage, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 08:02:17",
+        "version":  "b201",
+        "notes":  "Default phone connection cleanup: DeskPhone now uses an explicit preferred phone instead of auto-picking a random saved device.",
+        "devNotes":  "Adds an explicit IsDefault flag to saved phones and changes quick/default connection behavior to use only that selected default phone. Existing single-phone installs migrate that phone to default automatically; multi-phone installs with no default will no longer auto-connect to whichever saved phone was last seen. Connection labels now say Preferred Phone [name] connected/connecting/ready instead of the jargonny preferred quick connect text. The saved-device list now shows all saved phones, marks the default phone, and exposes a Set default action. Also records missed-call notification and voicemail alert/access parity in the active queue. No Bluetooth profile implementation, MAP message sync, PBAP call-history import, deletion sync, voicemail transport, missed-call notification implementation, contact storage, or executable naming changed."
+    },
+    {
+        "timestamp":  "2026-05-01 07:51:50",
+        "version":  "b200",
+        "notes":  "Message-pane containment fix: the open-thread banner now stays inside the message area instead of overlapping the call-history pane.",
+        "devNotes":  "Moves the hidden-pane Show threads banner from the whole thread/call-history host column into ConversationMessagesPane. This contains the banner to the same message-exclusive surface as the reply composer, so it no longer floats over the right-side call-history pane. No Bluetooth, HFP, MAP, PBAP, message sync, message send behavior, history activation, deletion sync, notification delivery, contacts, call-history data, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 07:50:46",
+        "version":  "b199",
+        "notes":  "Navigation rail cleanup: the visible menu is now action-first, keeping New Message and Make Call while hiding the plain Messages and Calls entries.",
+        "devNotes":  "Hides the plain Messages and Calls radio entries from the navigation rail so the visible menu follows the requested compose/call action model. The underlying TabMessages and TabCalls controls remain in XAML for internal navigation, keyboard state, existing commands, and release safety; this avoids deleting call/message plumbing while cleaning the visible rail. No Bluetooth, HFP, MAP, PBAP, message sync, history activation, deletion sync, notification delivery, contacts, call-history storage, compose behavior, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 07:49:16",
+        "version":  "b198",
+        "notes":  "Message compose cleanup: blank section lines now render as real spacing in message bubbles, and compose focus moves through the expected fields.",
+        "devNotes":  "Batches three message-surface refinements. MessageBodyFormatter now renders each original message line as its own rich-text paragraph, with empty lines represented as visible spacing, so blank section breaks are not visually collapsed inside bubbles. Choosing a New Message recipient from contact suggestions now moves focus directly into the message body. Forwarding a bubble now opens compose and focuses the recipient search so the user can pick who to send it to. No Bluetooth, HFP, MAP, PBAP, message send transport, message storage merge rules, history activation, deletion sync, notification delivery, contact storage, call-history data behavior, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 07:46:44",
+        "version":  "b197",
+        "notes":  "Batched auditor hardening: the UI auditor no longer crashes on unusual window bounds, and New Message now focuses the recipient search immediately.",
+        "devNotes":  "Batches four low-risk UI and audit refinements. DeskPhoneUiAuditor now writes JSON safely when Windows UI Automation reports unusual numeric bounds, excludes NaN/infinite rectangles from overlap and screenshot analysis, and collapses repeated static blur/fractional-layout warnings by unique value per file so reports are easier to read. The New Message compose recipient TextBox now has stable automation metadata and receives focus automatically when the rail New Message action is clicked. No Bluetooth, HFP, MAP, PBAP, message sync, history activation, deletion sync, notification delivery, contact storage, call-history data behavior, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 07:10:42",
+        "version":  "b196",
+        "notes":  "Batched phone-workflow cleanup: the rail now has a direct Make Call action, and the auditor stops flagging intentional ellipsis previews as clipping.",
+        "devNotes":  "Batches five small workflow and audit refinements. Adds a Make Call action to the navigation rail that opens the Calls surface, makes sure the dialer pane is visible, and focuses the dial-number box. Adds automation names and ids to the main dial-number box and the right-panel keypad/delete-all controls. Updates DeskPhoneUiAuditor so intentionally truncated text previews that contain an ellipsis are not reported as possible clipping, reducing false positives on normal conversation-list previews. No Bluetooth, HFP, MAP, PBAP, message storage, message retry, delete sync, notification delivery, contact storage, call-history data behavior, or release naming changed."
+    },
+    {
+        "timestamp":  "2026-05-01 07:06:55",
+        "version":  "b195",
+        "notes":  "Batched UI audit cleanup: rail controls and filters now have stable accessibility names, and the auditor waits for DeskPhone before declaring it missing.",
+        "devNotes":  "Batches five UI-quality changes into one release. DeskPhoneUiAuditor now waits briefly for an existing DeskPhone window before reporting WindowNotFound, reducing false misses when the launcher and auditor race. Unnamed-action findings now include screen coordinates and size so the offending control can be located quickly. The navigation rail, live log, build-folder, rail-toggle, reconnect, connection-settings, new-message, and conversation-filter controls now expose AutomationProperties.Name and AutomationId values for UI Automation, accessibility tooling, and future automated audits. The right-side phone panel subtitle was shortened so it stays clear in the fixed-width panel. No Bluetooth, HFP, MAP, PBAP, message storage, message retry, delete sync, notification delivery, contact storage, call-history behavior, or release naming changed."
+    },
+    {
+        "timestamp":  "2026-05-01 06:59:20",
+        "version":  "b194",
+        "notes":  "Thread-opening and audit cleanup: conversations now open at the newest message, and message controls are easier for the UI auditor to identify.",
+        "devNotes":  "Changes the conversation auto-scroll path to wait until WPF has materialized message rows, then scrolls directly to the newest message item and finally forces the message ScrollViewer to bottom. This prevents app launch or conversation selection from landing on the oldest loaded message. Also adds bottom padding under the message list so the scroll-to-latest floating button sits over blank scroll area instead of overlapping the last bubble, and adds automation names/ids plus a minimum height to search, reply compose, send, and scroll-to-latest controls. No Bluetooth, HFP, MAP, PBAP, message storage format, delete sync, retry send semantics, notification delivery, contact storage, call history, or release naming changed."
+    },
+    {
+        "timestamp":  "2026-05-01 06:56:37",
+        "version":  "b193",
+        "notes":  "Failed-message recovery: failed outgoing text bubbles now expose an in-thread retry action.",
+        "devNotes":  "Adds RetryMessageCommand and a retry flow that reuses the existing failed sent SmsMessage instead of creating a duplicate bubble. A failed outgoing bubble now shows a small retry icon beside the Failed status; clicking it marks the same bubble Sending, retries MAP PushMessage, retags the phone-side sent handle when available, clears the failed state on success, and requests a follow-up message sync. The retry keeps the normal Bluetooth operation counter so history loading still yields to live sends. No Bluetooth profile setup, poll interval, deletion sync, contact storage, call history, notification delivery, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 06:53:32",
+        "version":  "b192",
+        "notes":  "Conversation-list workflow upgrade: Messages now has All, Unread, Pinned, and Muted filters plus right-click row actions.",
+        "devNotes":  "Adds a ConversationFilter state to MainViewModel and applies it through the existing conversation visibility/search path, with visible empty-state handling for filtered views. The Messages left pane now exposes compact All, Unread, Pinned, and Muted filters, and conversation rows now have a context menu for mark read, mark unread, pin/unpin, and mute/unmute alerts. Existing header buttons reuse the same commands, now with optional conversation parameters, so row actions operate on the row clicked while header actions still operate on the selected conversation. No Bluetooth, HFP, MAP, PBAP, message storage format, delete sync, notification delivery, contact storage, call-history import, or release naming changed."
+    },
+    {
+        "timestamp":  "2026-05-01 06:47:51",
+        "version":  "b191",
+        "notes":  "Right-pane call history restore: the conversation view again keeps the full call history visible like Google Voice, while preserving the collapsible keypad.",
+        "devNotes":  "Restores the conversation-side phone panel list to the global CallHistory collection instead of filtering to SelectedConversationCallHistory, and changes the empty state back to global call-history availability. Keeps the new compact keypad toggle from b190. Also hardens outgoing message formatting by rendering intentional blank section lines as visible message body spacing and preserving the richer local sent body when the phone-side sent record merges back with flattened line breaks. No Bluetooth, HFP, PBAP, contact storage, delete semantics, notification delivery, executable naming, or history-sync scheduling changed."
+    },
+    {
+        "timestamp":  "2026-05-01 00:41:37",
+        "version":  "b190",
+        "notes":  "Google Voice-style phone panel step: the conversation-side phone panel now has a collapsible keypad and thread-specific call history.",
+        "devNotes":  "Adds a ShowConversationDialerPane state and toggle/close commands, then places a compact keypad directly at the bottom of the right-side phone panel inside the selected conversation view. The right panel now labels itself as Phone, summarizes calls for the selected thread, shows only call history for that selected conversation, and lets the user reveal or hide the keypad without leaving messages. This reuses the existing DialNumber, DialPadCommand, DialCommand, selected call record, and call-history action plumbing. No Bluetooth, HFP, MAP, PBAP, message send state, deletion semantics, contacts storage, notification delivery, executable naming, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-05-01 00:36:33",
+        "version":  "b189",
+        "notes":  "Notification surface cleanup: DeskPhone no longer shows the internal message notification card over the app.",
+        "devNotes":  "Removes the in-app message notification card from MainWindow.xaml and changes the message-banner path to retain only the latest message target for tray click routing. Incoming message alerts still use the existing Windows tray notification and chime path, and tray/balloon clicks can still open the relevant thread through the retained target number. This is a surface cleanup toward the requested full-window/system notification model; it does not yet add richer Windows notification actions. No Bluetooth, HFP, MAP, PBAP, message send state, contact storage, deletion semantics, version label, or executable naming changed."
+    },
+    {
+        "timestamp":  "2026-05-01 00:34:16",
+        "version":  "b188",
+        "notes":  "Message send state cleanup: outgoing texts now appear in the thread immediately with a sending status, and blank-line section breaks are preserved.",
+        "devNotes":  "Adds per-message send status to SmsMessage so new outgoing messages are inserted into the active conversation before MAP PushMessage completes, showing a timer-style Sending state that clears when the phone accepts the send or changes to Failed when rejected or errored. Persists pending/failed local status in the message store and clears it when a real phone-side sent message merges back by handle. Updates the outgoing bubble status row to bind status icon/label instead of a fixed Sent label. Changes MessageBodyFormatter to translate newline characters into explicit WPF LineBreak elements so intentional blank lines typed in the compose box survive display after sending. Normalizes outgoing message bodies without trimming internal or newline section breaks. No HFP, PBAP, contact storage, phone delete semantics, release naming, or audio routing changed."
+    },
+    {
+        "timestamp":  "2026-04-30 16:04:01",
+        "version":  "b187",
+        "notes":  "UI Auditor access: DeskPhone Settings now opens a packaged DeskPhone UI Auditor window instead of requiring a command line.",
+        "devNotes":  "Converts Tools/DeskPhoneUiAuditor into a small WPF utility when launched normally, while preserving command-line audit mode when arguments such as --start-latest are provided. The auditor window exposes Run Audit, Start latest DeskPhone, Strict mode, Open Report, and Open Folder controls. Adds an Open Auditor button to the Appearance settings page and a launcher resolver that finds the packaged auditor beside deployed builds or the repo-local Release/Debug output during development. Updates deploy.ps1 to publish DeskPhoneUiAuditor.exe into each archived build under Tools/DeskPhoneUiAuditor so the Settings button works from real releases. No Bluetooth, HFP, MAP, PBAP, message sync, contact storage, call controls, deletion semantics, version label, or executable naming changed."
+    },
+    {
+        "timestamp":  "2026-04-30 15:41:36",
+        "version":  "b186",
+        "notes":  "UI sharpness and audit tooling: DeskPhone now snaps text scaling to crisp presets and includes a repeatable UI auditor for layout/accessibility crumbs.",
+        "devNotes":  "Hardens MainWindow and RootShellGrid with display text formatting, ClearType rendering, fixed text hinting, ClearType hints, layout rounding, and device-pixel snapping. Changes the UI scale setting from arbitrary 5 percent whole-window scale steps to crisp 100/125/150 percent presets so a saved 110 percent scale no longer puts text and borders on fractional pixels. Adds Tools/DeskPhoneUiAuditor, a separate Windows UI Automation-based audit console that can attach to or start DeskPhone, capture a screenshot, scan controls for small targets, unnamed actions, overlaps, possible clipping, and WPF blur-risk sources, then write Markdown and JSON reports under artifacts/ui-audits. No Bluetooth, HFP, MAP, PBAP, message sync, contact storage, call controls, deletion semantics, or executable naming changed."
+    },
+    {
+        "timestamp":  "2026-04-30 15:31:57",
+        "version":  "b185",
+        "notes":  "History sync fix: activating history now restarts stale scans correctly and keeps live message sync ahead of background history work.",
+        "devNotes":  "Fixes the full-history loader declaring completion after cached/recent pages by advancing offsets by the returned page size, retrying from the top once when a saved nonzero offset returns no handles, and resetting active-device saved offsets when the user reactivates history or when saved offsets are clearly stale relative to the local cache. Adds safety guardrails so only one history loader can run, history pages are smaller, cached pages yield between scans, temporary priority pauses no longer mutate the persisted History Active/Paused toggle, and pending live message sync requests force history to yield before the next Bluetooth operation. No UI layout, contacts, calls, delete semantics, release mechanics, or message storage format changed."
+    },
+    {
+        "timestamp":  "2026-04-30 15:24:25",
+        "version":  "b184",
+        "notes":  "Message bubble actions cleanup: tapping a text now shows copy, forward, call, delete, and pin in one icon row, with pinned messages easier to see.",
+        "devNotes":  "Expands the in-place message bubble action tray from copy/forward/pin to the full requested action set: copy, forward, call, delete, and pin. The tray now uses a fixed one-row UniformGrid so the icons stay aligned. Adds matching call and pin options to the bubble context menu and shows a pinned-message count in the selected conversation header when any message in that thread is pinned. No Bluetooth, HFP, MAP, PBAP, message sync, contact storage, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-04-30 15:20:06",
+        "version":  "b183",
+        "notes":  "Realtime message sync upgrade: DeskPhone now uses MAP notification registration when available and a lighter adaptive delta-poll fallback.",
+        "devNotes":  "Implements the MAP SetNotificationRegistration request using x-bt/MAP-NotificationRegistration with NotificationStatus on/off and a filler body byte, so phones that allow MNS event reports can wake DeskPhone immediately. The polling fallback now waits on a coalesced wake signal with a 2-second lightweight delta interval instead of a fixed 10-second sleep, defers while Bluetooth is busy, throttles read-state refreshes to 15 seconds, keeps delete reconciliation on its existing minute gate, and pulls sent-message follow-up sync forward to 1.5 seconds. This follows the push-first / delta-poll fallback model without changing message storage, deletion semantics, contacts, calls, HFP, PBAP, or UI layout."
+    },
+    {
+        "timestamp":  "2026-04-30 15:07:40",
+        "version":  "b182",
+        "notes":  "Contacts performance fix: the contacts screen no longer tries to render every saved contact row at once.",
+        "devNotes":  "Replaces the contacts tab page-level ScrollViewer with a fixed shell and gives the contact list its own virtualized, recycling ListBox viewport. This keeps WPF from measuring all 1,769 saved contact rows whenever the contacts screen opens or refreshes. Also skips redundant contact-list refreshes when SettingsContactSearch is assigned the same value. No contact storage, import, sync, Bluetooth, MAP, PBAP, messages, calls, or release mechanics changed."
+    },
+    {
+        "timestamp":  "2026-04-30 15:02:59",
+        "version":  "b181",
+        "notes":  "Layout cleanup: the rail has more room, collapsed icons align cleaner, fullscreen background covers the edges, call-history actions align, and the reply box stays in the message pane.",
+        "devNotes":  "Widens the expanded navigation rail, tightens collapsed rail sizing and icon centering, clips/fills the root shell background to remove fullscreen side slivers, centers call-history row action buttons, and moves the inline reply compose bar inside ConversationMessagesPane so it no longer spans into the call-history pane. This is a layout-only build; message deletion sync and notification latency were reviewed but not changed in this release."
+    },
+    {
+        "timestamp":  "2026-04-30 14:48:05",
+        "version":  "b180",
+        "notes":  "Builds folder icon placement fix: the icon now sits in its own open space under the app identity instead of sharing width with the build date.",
+        "devNotes":  "Moves the builds-folder button out of the top-left build text row and into a second header row aligned below the app/build identity. The collapse button remains on the primary title row, while the build number and 12-hour build time keep the full text column width. This is a XAML layout-only correction; executable naming, launcher routing, release metadata, Bluetooth, HFP, MAP, PBAP, messages, contacts, and storage are unchanged."
+    },
+    {
+        "timestamp":  "2026-04-30 14:46:10",
+        "version":  "b179",
+        "notes":  "Plain DeskPhone release handoff fix: deploy now recognizes the stable DeskPhone.exe process when offering a new build.",
+        "devNotes":  "Updates deploy.ps1 running-build detection to include both the new stable DeskPhone process name and legacy DeskPhone_b* process names. This keeps the b177/b178 plain executable model intact while restoring the intended handoff prompt behavior for future releases, so deploy does not simply launch the stable launcher and raise the already-running older build. No UI layout, Bluetooth, HFP, MAP, PBAP, messaging, contacts, launcher discovery, or archive naming behavior changed beyond this handoff detection correction."
+    },
+    {
+        "timestamp":  "2026-04-30 14:45:14",
+        "version":  "b178",
+        "notes":  "Plain title cleanup: DeskPhone no longer repeats build data in the window title, and the top-left build block no longer collides with the builds-folder button.",
+        "devNotes":  "Sets WindowTitle back to plain DeskPhone so build identity lives only in the visible build number/time labels. Reworks the top-left app identity from a horizontal StackPanel into a constrained Grid with dedicated columns for the app icon, build text, builds-folder button, and rail-toggle button; this lets TextTrimming work correctly and prevents the folder icon from covering the build date. No Bluetooth, HFP, MAP, PBAP, messaging, contacts, launcher routing, or release archive behavior changed."
+    },
+    {
+        "timestamp":  "2026-04-30 14:04:24",
+        "version":  "b177",
+        "notes":  "Plain executable naming: each release now ships as DeskPhone.exe while the top-left app chrome clearly shows build number, build time, and a builds-folder shortcut.",
+        "devNotes":  "Changes the WPF AssemblyName back to stable DeskPhone so archived builds use a plain DeskPhone.exe filename instead of DeskPhone_bNN_timestamp.exe. deploy.ps1 now writes build-info.json into each deployed build folder, updates prior-build discovery for both plain and legacy versioned EXE names, and keeps the stable launcher compatible with both formats. MainViewModel reads build-info.json first, falls back to changelog.json, formats the build timestamp as a 12-hour MM/dd/yy h:mm am/pm value, and exposes a command to open the deployed-builds folder from the new small folder icon in the app identity rail."
+    },
+    {
+        "timestamp":  "2026-04-30 13:57:17",
+        "version":  "b176",
+        "notes":  "Stable launch identity: DeskPhone desktop, taskbar, and protocol launch now use a permanent launcher while the app still shows the running build at a glance.",
+        "devNotes":  "Adds a small DeskPhoneLauncher project and updates deploy.ps1 so DeskPhone.lnk and deskphone://open target the stable deployed-builds launcher instead of a versioned build EXE. The launcher raises any running DeskPhone through /show and only starts the newest archived DeskPhone_b*.exe when no bridge is online, keeping taskbar pins stable without losing rewindable per-build archives. The main WPF rail now exposes the current build stamp directly under the DeskPhone identity and in the status rail so build number and release date/time remain visible without opening Settings."
+    },
+    {
+        "timestamp":  "2026-04-30 13:18:48",
+        "version":  "b175",
+        "notes":  "Phone launch pivot: Command Center now opens or raises the real DeskPhone window instead of showing a docked phone screen.",
+        "devNotes":  "Adds a narrow localhost POST /show command that restores any active stage mode and brings the normal DeskPhone window forward. Command Center no longer renders the full DeskPhone suite panel; its Phone button and quick-panel open controls call /show, with deskphone://open as the startup fallback. The in-Switchboard phone surface keeps quick answer, hang up, call, text, sync, and recent-history controls with tighter app copy. No HFP, MAP, PBAP, contacts, message storage, call controls, attachment handling, Bluetooth plumbing, or existing DeskPhone button logic changed."
+    },
+    {
+        "timestamp":  "2026-04-29 23:24:54",
+        "version":  "b174",
+        "notes":  "Phone Dock stability fix: docking is now a deliberate owned session instead of an automatic resize/release loop.",
+        "devNotes":  "Fixes the b173 dock flicker/blink failure by removing the Command Center auto-dock interval and the global no-phone-view /stage-exit call that could fight with an active dock session or another open tab. Added an owner token to /stage, /stage-pulse, and /stage-exit so only the page that created a dock session can keep it alive or release it; stale tabs without the token can no longer release the active dock. Command Center now sends one Dock/Position command, then only a quiet heartbeat while docked. DeskPhone releases on explicit owner release, owner page exit, or watchdog timeout. No HFP, MAP, PBAP, contacts, message storage, call controls, attachment handling, or Bluetooth plumbing changed."
+    },
+    {
+        "timestamp":  "2026-04-29 23:18:59",
+        "version":  "b173",
+        "notes":  "Phone Dock visibility fix: docked DeskPhone stays above the active Switchboard window while the dock is active, then releases normally.",
+        "devNotes":  "b172 correctly pivoted away from fake browser embedding, but chrome=1 dock mode restored the prior Topmost state and could hide behind the active browser. This build makes dock/stage mode Topmost while the Command Center heartbeat is active, with the existing /stage-exit and watchdog restoring the previous state afterward. No HFP, MAP, PBAP, contacts, message storage, call controls, attachment handling, or Bluetooth plumbing changed."
+    },
+    {
+        "timestamp":  "2026-04-29 23:15:17",
+        "version":  "b172",
+        "notes":  "Phone Dock pivot: DeskPhone now behaves as a companion Windows window instead of a fake embedded browser frame.",
+        "devNotes":  "Replaces the flawed browser-frame staging approach with a docked companion-window model. When Command Center sends chrome=1 positioning, DeskPhone keeps its normal WPF chrome/resize behavior and restores the user\u0027s prior Topmost state instead of forcing itself above the browser. Borderless/topmost mode remains available only for explicit chrome=0 staging. This keeps the repeated-focus fix from b170 and the release/watchdog safeguards, but avoids the b169-b171 tradeoff where the window was either invasive or invisible. No HFP, MAP, PBAP, contacts, message storage, call controls, attachment handling, or Bluetooth plumbing changed."
+    },
+    {
+        "timestamp":  "2026-04-29 23:06:02",
+        "version":  "b171",
+        "notes":  "Phone Stage visibility correction: staged DeskPhone is visible inside the Switchboard frame again, while still releasing when the frame closes.",
+        "devNotes":  "b170 made stage mode safer but too quiet: without temporary Topmost, the WPF DeskPhone could sit behind the browser, leaving the Command Center stage looking empty. This build restores Topmost only while stage mode is active and still restores the previous Topmost state on /stage-exit or watchdog timeout. The repeated-focus fix from b170 remains: DeskPhone activates once on entry, then later /stage pulses only adjust bounds. No HFP, MAP, PBAP, call controls, message storage, contact sync, attachment handling, or Bluetooth plumbing changed."
+    },
+    {
+        "timestamp":  "2026-04-29 22:42:56",
+        "version":  "b170",
+        "notes":  "Phone Stage containment pass: DeskPhone now stays quieter inside the Command Center frame and releases when the browser stage is no longer active.",
+        "devNotes":  "Refines the b168-b169 native stage approach after user testing showed repeated focus-grabbing and poor containment. MainWindow now activates only once when entering stage mode instead of on every /stage heartbeat; later pulses only adjust bounds and refresh the watchdog. Command Center now treats the phone frame as the owner: it observes stage-frame resize, page visibility, page exit, scroll, orientation, and suite-view teardown, sends /stage-exit when the stage is not active, and avoids repeated theme posts once the palette is already applied. This is window/stage behavior only; no HFP, MAP, PBAP, call controls, contact sync, message storage, attachment handling, or phone plumbing changed."
+    },
+    {
+        "timestamp":  "2026-04-29 22:35:48",
+        "version":  "b169",
+        "notes":  "Phone Stage safety fix: staged DeskPhone no longer stays topmost over the desktop and automatically releases if Command Center leaves the phone view.",
+        "devNotes":  "The first Phone Stage pass proved the native-overlay approach is too aggressive if the WPF window is forced Topmost. This build removes the forced Topmost assignment, preserves/restores the user\u0027s prior topmost state, and adds a stage watchdog that exits stage mode when no fresh /stage pulse arrives for five seconds. Command Center also now sends /stage-exit whenever the active suite view is not DeskPhone. This is a safety and window-behavior correction only; no HFP, MAP, PBAP, contacts, messages, call controls, attachment data, storage, or sync logic changed."
+    },
+    {
+        "timestamp":  "2026-04-29 22:28:45",
+        "version":  "b168",
+        "notes":  "Phone Stage support: DeskPhone can now align itself to the Command Center phone stage and accept matching theme hints.",
+        "devNotes":  "Added localhost bridge endpoints for POST /stage, /stage-exit, and /theme so the browser shell can position the real WPF DeskPhone window over a blank Command Center stage instead of rebuilding every DeskPhone function as React proxy controls. MainWindow now has a controlled stage mode that stores and restores its previous WindowStyle, ResizeMode, and Topmost state, then applies supplied screen bounds without touching HFP, MAP, PBAP, contacts, message storage, call controls, or attachment logic. The theme endpoint maps Command Center material/google, claude, materialDark/navyGold values to DeskPhone Google, Claude, and BlueGold palettes."
+    },
+    {
+        "timestamp":  "2026-04-29 22:10:55",
+        "version":  "b167",
+        "notes":  "Responsive pane shapeshift: Messages now stacks the call-history pane vertically when space is tight instead of letting panels disappear beyond the frame.",
+        "devNotes":  "The prior sizing clamp was compensating for internal panes that stayed side-by-side too long. This build fixes the underlying layout behavior: the navigation rail auto-compacts below the shell threshold, the Messages conversation surface switches from side-by-side to vertical thread-plus-call-history mode below the conversation width threshold, splitters and borders change orientation with the pane, and the message column releases its fixed minimum only in stacked mode. No HFP, MAP, PBAP, contacts, messages, call controls, storage, or bridge endpoints changed."
+    },
+    {
+        "timestamp":  "2026-04-29 22:01:17",
+        "version":  "b166",
+        "notes":  "Window sizing cleanup: DeskPhone no longer fights manual resizing by repeatedly clamping max window bounds during layout refresh.",
+        "devNotes":  "Before building a Command Center Phone Stage, DeskPhone needs predictable standalone window behavior. ApplyResponsiveLayout no longer calls EnsureWindowFitsCurrentScreen on every resize/layout pass, and EnsureWindowFitsCurrentScreen no longer writes MaxWidth/MaxHeight to the active monitor work area. The app still clamps itself back onto the current screen on load, move, and restore from minimized/maximized states, but manual resizing should feel normal instead of sticky or freeze-frame-like. No HFP, MAP, PBAP, contacts, messages, call controls, storage, or bridge endpoints changed."
+    },
+    {
+        "timestamp":  "2026-04-29 21:36:05",
+        "version":  "b165",
+        "notes":  "Command Center bridge fix: DeskPhone now exposes stable local status, message, call, dial, text, answer, hang-up, connect, and refresh controls for the unified Switchboard.",
+        "devNotes":  "The unified browser shell cannot safely read WPF UI controls or Bluetooth state directly from the DeskPhone window; DeskPhone remains the owner of HFP/MAP/PBAP and publishes a localhost control surface for the new app. Fixed the local ControlApi path so /status no longer touches WPF-bound collections from the wrong thread, /messages returns a JSON snapshot from the message store, command handlers are wired for connect/answer/hangup/refresh/dial/send, and API exceptions are logged instead of silently closing the connection. Also includes the Material 3 style-token/palette consolidation for Google, Claude-like light, and navy-gold dark themes. No Bluetooth pairing, MAP sync, PBAP import, message storage, call audio negotiation, or contact plumbing was intentionally rewired."
+    },
+    {
+        "timestamp":  "2026-04-28 19:44:49",
+        "version":  "b164",
+        "notes":  "Strip codec negotiation from DeskPhone\u0027s BRSF — let BthHFEnum own the entire audio path so Windows routes SCO call audio to PC.",
+        "devNotes":  "b163 stopped DeskPhone from sending AT+BCC but the phone was still sending +BCS to DeskPhone\u0027s channel (because DeskPhone advertised codec negotiation via BRSF bit 7 + AT+BAC). DeskPhone was responding AT+BCS=1, causing the phone to route SCO to DeskPhone\u0027s dead-end RFCOMM channel. Fix: OurFeatures changed from 0x84 (CLI + codec negotiation) to 0x04 (CLI only); AT+BAC line removed from handshake; +BCS handler now logs but does NOT respond. Without the codec negotiation capability bit, the phone will not send +BCS to DeskPhone\u0027s channel at all — only to BthHFEnum\u0027s SLC. BthHFEnum completes the full codec negotiation and receives the SCO connection, which should create a WASAPI Hands-Free endpoint during active calls."
+    },
+    {
+        "timestamp":  "2026-04-28 19:40:12",
+        "version":  "b163",
+        "notes":  "Stop DeskPhone from sending AT+BCC — let BthHFEnum handle SCO audio negotiation so Windows can route call audio to PC speakers.",
+        "devNotes":  "Deploy counter catch-up entry. Same change: MaybeRequestAudioConnection() is now a no-op that logs but does not send AT+BCC. Windows update shipped BthHFEnum.sys (microsoft_bluetooth_hfp_hf.inf) for phone HFP AG UUID 0x111F. DeskPhone\u0027s AT+BCC was grabbing the SCO path away from BthHFEnum. Removing AT+BCC from DeskPhone lets BthHFEnum negotiate codec and receive SCO on its own SLC, which should create a WASAPI Hands-Free endpoint during calls."
+    },
+    {
+        "timestamp":  "2026-04-28 19:42:00",
+        "version":  "b161",
+        "notes":  "Stop DeskPhone from sending AT+BCC — let BthHFEnum handle SCO audio negotiation so Windows can route call audio to PC speakers.",
+        "devNotes":  "Same change as b160 changelog — deploy counter shifted. A Windows update shipped microsoft_bluetooth_hfp_hf.inf / BthHFEnum.sys for paired phones (UUID 0x111F). Both FIG-F52 and FIG-NEWTON now show Hands-Free HF devices (Class: System, Status: OK). DeskPhone was sending AT+BCC causing the phone to route SCO to DeskPhone\u0027s RFCOMM channel which has no audio driver, blocking BthHFEnum from receiving SCO. Fix: MaybeRequestAudioConnection() is now a no-op. BthHFEnum will negotiate codec and SCO on its own SLC."
+    },
+    {
+        "timestamp":  "2026-04-28 19:40:00",
+        "version":  "b160",
+        "notes":  "Stop DeskPhone from sending AT+BCC — let BthHFEnum handle SCO audio negotiation so Windows can route call audio to PC speakers.",
+        "devNotes":  "A Windows update (discovered 2026-04-28) shipped microsoft_bluetooth_hfp_hf.inf / BthHFEnum.sys for paired phones (UUID 0x111F). Both FIG-F52 and FIG-NEWTON now show \u0027Hands-Free HF\u0027 devices (Class: System, Status: OK) in Device Manager. Diagnostic during live calls showed DeskPhone was sending AT+BCC (Bluetooth Codec Connection) after every answer/dial/active transition, which caused the phone to route SCO audio to DeskPhone\u0027s RFCOMM channel — an application with no audio driver. BthHFEnum, which has the actual HCI bypass audio driver, never received the SCO because DeskPhone grabbed it first. Fix: MaybeRequestAudioConnection() is now a no-op that logs the event but does not send AT+BCC. BthHFEnum will handle codec negotiation and SCO connection on its own SLC. No other HFP, MAP, PBAP, contact, or storage paths changed. The CallAudioRouteService (b159) already watches for new WASAPI endpoints — if BthHFEnum creates one during a call it will be detected and the status banner will update automatically. If this fix works, the audio bridge research (scratch/DeskPhoneAudioService/) becomes viable and can be re-evaluated."
+    },
+    {
+        "timestamp":  "2026-04-28 06:57:48",
+        "version":  "b159",
+        "notes":  "Audio bridge replaced with a clear Call Audio Routing status — DeskPhone is honest about what Windows can and can\u0027t do, and lights up green when a USB Bluetooth speakerphone is plugged in.",
+        "devNotes":  "Architectural pivot, no audio regression because there was nothing working to regress. The Microsoft Bluetooth stack on Windows ARM64 has no inbox driver for the PC-as-HFU-connecting-to-phone-AG role; b141-b158 proved exhaustively that scohcibypass cannot be opened, KSPROPERTY_BTHHFP_CONNECT was removed in Win10 1511, no WASAPI HFP endpoint is ever created for FIG-F52, and the ConnectionCount registry hack does not unblock CreateFile (driver checks deeper kernel state). Stripped: PublishAudioService MSBuild target removed from DeskPhone.csproj so the audio service no longer ships in builds (source preserved on disk in scratch/DeskPhoneAudioService/ for research); deleted Services/AudioBridgeClient.cs; removed _audioBridge field, AudioBridgeStatus / IsAudioBridgeConnected properties, RunAudioBridgeProbeCommand, all call-active OnCallActive/OnCallEnded/InitAsync/DisposeAsync wiring from MainViewModel. Added: Services/CallAudioRouteService.cs that observes the Windows default communications playback device using NAudio MMDeviceEnumerator + IMMNotificationClient, matches the friendly name against a list of known USB Bluetooth speakerphone brands (Jabra Speak, Poly Sync, Yealink CP, Anker PowerConf, eMeet, Konftel, Plantronics Calisto, etc.) and emits a RouteSnapshot the ViewModel turns into a UI banner. New CallAudioRouteSummary / IsCallAudioRouteExternal / CallAudioRouteDeviceName properties on MainViewModel. Replaced the BLUETOOTH AUDIO BRIDGE settings card in MainWindow.xaml with a CALL AUDIO ROUTING card showing the live summary line (green dot if an external speakerphone is detected, grey otherwise), the current Windows default device name, and a clear explanation of why the PC can\u0027t natively route Bluetooth call audio plus what hardware can. Created scratch/option3_research/README.md with the full architectural explanation, links to Microsoft Learn / Wikipedia / WIDCOMM references, the b141-b158 history, and three forward paths (USB speakerphone hardware, BlueSoleil + USB CSR dongle experiment, ruled-out kernel driver). No call-flow, AT, MAP, PBAP, contact, or storage code paths changed. The DeskPhoneAudio Windows Service binary is no longer published; if a previous build installed it via UAC, it remains installed but inert (no CONNECT messages are ever sent now)."
+    },
+    {
+        "timestamp":  "2026-04-28 06:02:38",
+        "version":  "b158",
+        "notes":  "Audio bridge diagnostics: probe now reports exactly why scohcibypass keeps refusing access, so we can pick the right unblock.",
+        "devNotes":  "Audio path still does not work — call audio remains on the phone — but b158 instruments the failure modes so the next fix lands on the actual bottleneck rather than a guess. ScoBridge.TryApproachB now retries CreateFile with five access masks (GR|GW, MAXIMUM_ALLOWED, MAXIMUM_ALLOWED+OVERLAPPED, GR|GW|SYNCHRONIZE, READ_CONTROL) and reports which combo (if any) the Qualcomm scohcibypass driver accepts. RunProbe gained three sections: (1) the same access-mask matrix per scohcibypass interface, distinguishing security-descriptor blocks from driver-state blocks; (2) full WASAPI endpoint enumeration across Active|Disabled|Unplugged|NotPresent for both render and capture, exposing any FIG-F52 Hands-Free endpoint Windows created but never activated; (3) a ConnectionCount registry-hack diagnostic that temporarily writes ConnectionCount=1 in HKLM\\\\...\\\\BTHENUM\\\\HCIBYPASS\\\\\u003cinst\u003e\\\\Device Parameters, retries CreateFile, then restores — telling us whether the driver gates only on this counter or enforces a deeper kernel-level state check. Native.cs picked up READ_CONTROL/MAXIMUM_ALLOWED/SYNCHRONIZE access constants. WasapiRouter.TryFindHfpEndpoint now searches Active|Disabled|Unplugged|NotPresent (was only Active|Unplugged) and includes FIG-F52 in the name match list alongside the existing FIG-NEWTON entry, so Approach C can spot a paired-but-inactive Bluetooth audio endpoint regardless of which phone is connected. No call-flow, AT, MAP, PBAP, contact, or storage code paths changed."
+    },
+    {
+        "timestamp":  "2026-04-28 00:03:36",
+        "version":  "b157",
+        "notes":  "Phone storage isolation: messages, contacts, and call history now stay scoped to the connected phone instead of mixing old and new pairings.",
+        "devNotes":  "Added SourceDeviceAddress to SmsMessage and made MessageStoreService merge keys device-scoped so two phones cannot collide on MAP handles, local sent IDs, or fallback keys. MainViewModel now tags incoming MAP deltas, MMS refetches, full-history batches, and local sent messages with the active device; seeds known handles from active-device messages only; rebuilds conversations from active-device messages only; and scopes read/unread updates plus delete reconciliation to the active phone so one phone\u0027s visible MAP window cannot prune another phone\u0027s cached history. Added conservative legacy migration that assigns untagged old messages/contacts to the single likely prior device when a new phone is connected, otherwise leaves ambiguous legacy data protected. Contact lookup now builds active-phone indexes for names and contact matches, reducing contact-screen button latency from repeated full-list scans. Contact duplicate/import matching is device-scoped, PBAP caller-name contact updates match within source device, and call-history delete-all now removes only the visible active-phone PBAP records instead of clearing every phone\u0027s cached PBAP history."
+    },
+    {
+        "timestamp":  "2026-04-27 23:27:33",
+        "version":  "b156",
+        "notes":  "Audio bridge now routes to whatever phone is actually connected — voice no longer stubbornly stays on the phone.",
+        "devNotes":  "ScoBridge had FIG-NEWTON\u0027s Bluetooth address (7E4B46E95FBA) hardcoded in FindBypassPaths() and FindTopologyPaths(). When connected to any other phone the filter matched nothing, Approach B got Access Denied on FIG-NEWTON\u0027s inactive SCO path, and all three approaches failed. Fix: removed hardcoded FigBluetoothAddress constant; added optional btAddress parameter to FindBypassPaths/FindTopologyPaths/TryConnect/ReadConnectionCount; AudioBridgeWorker parses the address from the CONNECT pipe command; AudioBridgeClient.OnCallActive now accepts and forwards the BT address; MainViewModel passes _connectedDeviceAddress when the call becomes active. Address normalisation (strip colons, uppercase) handled in ScoBridge.TryConnect. Probe mode passes null so it enumerates all devices as before."
+    },
+    {
+        "timestamp":  "2026-04-27 23:16:40",
+        "version":  "b155",
+        "notes":  "Audio bridge service is back: DeskPhoneAudio.exe now ships correctly in every build, including clean worktrees.",
+        "devNotes":  "Root cause: $(OutDir) always ends with a trailing backslash. The PublishAudioService csproj target used -o \"$(OutDir)\" in a cmd.exe Exec command. In Windows cmd, the backslash before the closing quote escapes it, so cmd.exe absorbed --nologo -v quiet into the path argument. The audio service was published to a garbage directory instead of the actual build output dir. Previous builds were masked because DeskPhoneAudio.exe was already sitting in the bin dir from an older build; Codex b152-b154 ran in a clean worktree with no pre-existing EXE so all three shipped without it. Fix: added a PropertyGroup inside the target that calls $(OutDir).TrimEnd(\u0027\\\u0027) to strip the trailing backslash before quoting the -o path. Also fixed the UAC-on-UI-thread issue from b151 which is now confirmed working."
+    },
+    {
+        "timestamp":  "2026-04-27 22:45:10",
+        "version":  "b154",
+        "notes":  "Final icon polish: call-history delete-all controls now use compact Material delete icons instead of clipping text buttons.",
+        "devNotes":  "Replaced the two call-history Delete all text buttons with compact Material Icons Round delete buttons using existing DeleteAllCallHistoryCommand and tooltips. This removes the side-panel clipping observed during b153 visual verification and keeps the new iconography consistent. No Bluetooth, MAP, PBAP, audio bridge, contact, message, call-command, or storage plumbing changed."
+    },
+    {
+        "timestamp":  "2026-04-27 22:35:31",
+        "version":  "b153",
+        "notes":  "Iconography hotfix: the Google-style icon pass now uses the static Material Icons Round font so the WPF window paints correctly.",
+        "devNotes":  "Visual verification of b152 showed a blank WPF surface even though UI Automation could see the controls; root cause was the Material Symbols variable font path in WPF. Switched the app icon font resource to Google Material Icons Round Regular OTF, remapped the Material codepoints, added the codepoint file for provenance, and kept the b152 icon/control changes otherwise intact. No Bluetooth, MAP, PBAP, audio bridge, contact, message, call-command, or storage plumbing changed."
+    },
+    {
+        "timestamp":  "2026-04-27 22:25:41",
+        "version":  "b152",
+        "notes":  "Google-style iconography pass: DeskPhone now uses one Material Symbols Rounded icon language across navigation, message actions, call history, banners, and dial controls.",
+        "devNotes":  "Added the Google Material Symbols Rounded font as a WPF resource and replaced mixed Segoe MDL2, emoji, arrow, and text-pictogram glyphs in MainWindow.xaml with consistent Material Symbols codepoints. Converted conversation header Pin and Alerts actions from large text pills to compact icon controls with existing tooltips. Updated navigation rail toggle and call direction icon properties to Material Symbols codepoints. No Bluetooth, MAP, PBAP, audio bridge, contact, message, call-command, or storage plumbing changed."
+    },
+    {
+        "timestamp":  "2026-04-27 20:23:34",
+        "version":  "b151",
+        "notes":  "Audio bridge service install now works reliably — the UAC prompt appears in front of the window so you can click Yes.",
+        "devNotes":  "Root cause: AudioBridgeClient.InitAsync() called CheckAndStartService() synchronously on the WPF UI thread. CheckAndStartService → RunElevatedInstall → Process.WaitForExit(20000) blocked the UI thread for up to 20 s, freezing the WPF message pump. The UAC dialog appeared behind or was killed by Windows because the owning thread was hung, causing the install to silently fail and leaving the service registered to the old b141 binary (SYSTEM-only pipe DACL). All 8 pipe connect attempts then failed with \u0027Access to the path is denied\u0027. Fix: wrapped CheckAndStartService in Task.Run so WaitForExit runs on a background thread; bumped wait timeout 6→10 s and install timeout 20→30 s; added exit-code and null-process logging to RunElevatedInstall for future diagnostics."
+    },
+    {
+        "timestamp":  "2026-04-27 19:21:17",
+        "version":  "b146",
+        "notes":  "Polish pass for the new visual shell: call-history side panel subtitle now fits cleanly without clipping.",
+        "devNotes":  "Shortened and wrapped the conversation call-history subtitle after live b145 screenshot review showed visible truncation in the side panel. No plumbing, Bluetooth, message, call, contact, audio, or data behavior changed."
+    },
+    {
+        "timestamp":  "2026-04-27 19:19:56",
+        "version":  "b145",
+        "notes":  "DeskPhone visual system rebuilt: cleaner professional palettes, sharper controls, calmer navigation, improved spacing, and responsive call layout behavior.",
+        "devNotes":  "Replaced the active dark and light palettes with neutral high-contrast product colors, rebuilt base button/dial key styling away from full-pill Material shapes, tightened App-level typography/cards/text fields/combo boxes/scrollbars, reduced MainWindow shell rounding and frame noise, narrowed the navigation rail, and restored responsive call stacking at constrained widths without changing Bluetooth, MAP, PBAP, audio bridge, contact, message, or call command plumbing."
+    },
+    {
+        "timestamp":  "2026-04-27 15:31:11",
+        "version":  "b144",
+        "notes":  "Audio bridge now detects and replaces a stale service binary on every startup — pipe access denied errors eliminated.",
+        "devNotes":  "Root cause: service was running the b141 binary (SYSTEM-only pipe DACL) even after deploying b143 because CheckAndStartService() only updated when stopped. Fix: now runs sc qc to read the registered BINARY_PATH_NAME and compares to the current ServiceExe. If path doesn\u0027t match (stale build), triggers elevated reinstall even while running. Extracted RunElevatedInstall() helper. Added ScQueryBinaryPath() parser."
+    },
+    {
+        "timestamp":  "2026-04-27 15:28:19",
+        "version":  "b143",
+        "notes":  "Audio bridge service auto-updates binary path on each DeskPhone deploy — no manual reinstall needed when upgrading builds.",
+        "devNotes":  "ServiceManager.Install() now checks if already installed; if so, runs sc config to update the binPath and restarts. AudioBridgeClient: \u0027already installed but stopped\u0027 branch now also calls DeskPhoneAudio.exe install (elevated) instead of sc start, which handles both the update and the restart."
+    },
+    {
+        "timestamp":  "2026-04-27 15:27:32",
+        "version":  "b142",
+        "notes":  "Audio bridge pipe permissions fixed: DeskPhone can now connect to the DeskPhoneAudio service pipe. Previously the pipe was SYSTEM-only by default.",
+        "devNotes":  "Log showed \u0027Access to the path is denied\u0027 on all pipe connect attempts — service was running but pipe DACL only allowed SYSTEM. Fix: PipeServer.cs now uses NamedPipeServerStreamAcl.Create() with explicit PipeSecurity granting LocalSystem=FullControl and AuthenticatedUsers=ReadWrite. Added System.IO.Pipes.AccessControl 5.0.0 to DeskPhoneAudioService.csproj."
+    },
+    {
+        "timestamp":  "2026-04-27 15:23:13",
+        "version":  "b141",
+        "notes":  "Audio bridge service now installs correctly: DeskPhone triggers a one-time UAC prompt to register the DeskPhoneAudio service as LocalSystem. Subsequent restarts need no elevation.",
+        "devNotes":  "Root cause from log: sc.exe create ran without elevation and silently failed — service was never installed, pipe never connected, call audio was never bridged. Fix: AudioBridgeClient.CheckAndStartService() now launches DeskPhoneAudio.exe install via ShellExecute+runas (UAC) instead of calling sc.exe directly. Pre-delay bumped 2.5s→6s; pipe retries 5→8 at 2s each (16s total window) to handle fresh-install startup latency."
+    },
+    {
+        "timestamp":  "2026-04-27 15:00:02",
+        "version":  "b140",
+        "notes":  "DeskPhoneAudio Windows Service now auto-publishes with every DeskPhone Release build — no manual copy needed.",
+        "devNotes":  "Added PublishAudioService MSBuild target to DeskPhone.csproj: runs dotnet publish on DeskPhoneAudioService in BeforeTargets=DeployDesktop (Release only). Fixed Assembly.Location → AppContext.BaseDirectory in ServiceManager.cs (required for single-file publish)."
+    },
+    {
+        "timestamp":  "2026-04-27 14:58:20",
+        "version":  "b139",
+        "notes":  "Bluetooth HFP call audio bridge: DeskPhone now connects to a Windows Service (DeskPhoneAudio) that routes SCO phone-call audio through your speakers and microphone. Status and diagnostics are visible in Settings → Audio.",
+        "devNotes":  "Added DeskPhoneAudioService project (Worker Service, LocalSystem, ARM64) with ScoBridge (3-approach SCO audio: KSPROPERTY_BTHHFP_CONNECT, KsCreatePin on scohcibypass, WASAPI fallback), WasapiRouter (NAudio bidirectional PCM routing), PipeServer (named pipe IPC), AudioBridgeWorker, Native P/Invoke layer. Added AudioBridgeClient.cs to DeskPhone/Services — installs/starts service, connects named pipe, forwards LOG lines to debug log. MainViewModel: _audioBridge field, AudioBridgeStatus/IsAudioBridgeConnected observable props, RunAudioBridgeProbeCommand, InitAsync on startup, OnCallActive/OnCallEnded wired from HandleCallStateChange, DisposeAsync cleanup. HfpService: NegotiatedSampleRate property (8000/16000 Hz from +BCS). MainWindow.xaml: Bluetooth Audio Bridge card in Settings→Audio tab (service status, SCO active indicator, Run Diagnostics button)."
+    },
+    {
+        "timestamp":  "2026-04-27 14:57:00",
+        "version":  "b138",
+        "notes":  "Bluetooth HFP call audio bridge (same as b139 — build number slip during deployment).",
+        "devNotes":  "Build number incremented during failed deploy attempt. No functional changes vs b139."
+    },
+    {
+        "timestamp":  "2026-04-27 14:57:00",
+        "version":  "b137",
+        "notes":  "Bluetooth HFP call audio bridge: DeskPhone now connects to a Windows Service (DeskPhoneAudio) that routes SCO phone-call audio through your speakers and microphone. Status and diagnostics are visible in Settings → Audio.",
+        "devNotes":  "Added DeskPhoneAudioService project (Worker Service, LocalSystem, ARM64) with ScoBridge (3-approach SCO audio: KSPROPERTY_BTHHFP_CONNECT, KsCreatePin on scohcibypass, WASAPI fallback), WasapiRouter (NAudio bidirectional PCM routing), PipeServer (named pipe IPC), AudioBridgeWorker, Native P/Invoke layer. Added AudioBridgeClient.cs to DeskPhone/Services — installs/starts service, connects named pipe, forwards LOG lines to debug log. MainViewModel: _audioBridge field, AudioBridgeStatus/IsAudioBridgeConnected observable props, RunAudioBridgeProbeCommand, InitAsync on startup, OnCallActive/OnCallEnded wired from HandleCallStateChange, DisposeAsync cleanup. HfpService: NegotiatedSampleRate property (8000/16000 Hz from +BCS). MainWindow.xaml: Bluetooth Audio Bridge card in Settings→Audio tab (service status, SCO active indicator, Run Diagnostics button)."
+    },
+    {
+        "timestamp":  "2026-04-27 10:53:02",
+        "version":  "b136",
+        "notes":  "Conversation list sort toggle: tap the sort icon to switch between Recent-first and Unread-first ordering. Preference is saved across restarts.",
+        "devNotes":  "Added ConversationSortMode enum (Chronological/UnreadFirst), ConvSortMode property, and ToggleConversationSortCommand to MainViewModel. SortConversations() now respects mode: UnreadFirst inserts a secondary sort tier between Pinned and Chronological. Persisted via AppSettingsService.Settings.ConversationSortMode. XAML: replaced single hide-threads button with StackPanel; sort button (E8CB) turns AccentBlue when UnreadFirst mode is active."
+    },
+    {
+        "timestamp":  "2026-04-27 10:55:00",
+        "version":  "b134",
+        "notes":  "Conversation list sort toggle: tap the sort icon to switch between Recent-first and Unread-first ordering. Preference is saved across restarts.",
+        "devNotes":  "Added ConversationSortMode enum (Chronological/UnreadFirst), ConvSortMode property, and ToggleConversationSortCommand to MainViewModel. SortConversations() now respects mode: UnreadFirst inserts a secondary sort tier between Pinned and Chronological. Persisted via AppSettingsService.Settings.ConversationSortMode. XAML: replaced single hide-threads button with StackPanel; sort button (E8CB) turns AccentBlue when UnreadFirst mode is active."
+    },
+    {
+        "timestamp":  "2026-04-26 17:54:10",
+        "version":  "b133",
+        "notes":  "Compose text input now matches message bubble size — 18sp across all theme skins.",
+        "devNotes":  "Material/Apple TextBox global FontSize raised 14→18; Optimus raised 13→16. ReplyComposeBox, ComposeNewBodyBox, and ComposeRecipientInput all explicit FontSize=18. ReplyComposeBox MinHeight bumped 44→52 to give 18sp text room to breathe."
+    },
+    {
+        "timestamp":  "2026-04-26 14:18:25",
+        "version":  "b132",
+        "notes":  "Call history names now trim cleanly with ellipsis and show full name on hover.",
+        "devNotes":  "Added TextTrimming=CharacterEllipsis and ToolTip to DisplayNumber in call history template — no more hard clipping."
+    },
+    {
+        "timestamp":  "2026-04-26 14:15:30",
+        "version":  "b131",
+        "notes":  "Call history column widened so contact names no longer truncate at 18sp.",
+        "devNotes":  "ConversationCallHistoryColumn Width 320-\u003e360, MinWidth 220-\u003e260, MaxWidth 420-\u003e480."
+    },
+    {
+        "timestamp":  "2026-04-26 14:12:02",
+        "version":  "b130",
+        "notes":  "Professional-grade font sizing: message bubbles 18sp, conversation names 18sp, previews 15sp — readable from across the room.",
+        "devNotes":  "Raised BubbleTextSizeConverter to 16-18sp range. Conversation name 18sp Bold, preview 15sp, timestamp 13sp, sidebar nav 15sp. List row padding 16,20 and 18,20 to give text breathing room. Call history name/icon both 18sp. All changes match professional desktop messaging app standards (Slack, Discord, Google Messages desktop)."
+    },
+    {
+        "timestamp":  "2026-04-26 13:32:00",
+        "version":  "b128",
+        "notes":  "Typography and spacing updated to Material Design 3 standards: message bubbles now 16sp (Body Large), conversation names 16sp, preview text 14sp, list row height 72dp. Contrast fixed in light mode.",
+        "devNotes":  "BubbleTextSizeConverter range raised from 12.5-14dp to 14-16dp (MD3 Body Large). Conversation list item padding increased from 16,10 to 16,16 (MD3 72dp two-line list). Conversation name FontSize 15-\u003e16, preview 13-\u003e14. Call history name 14-\u003e16, subtitle 12-\u003e13. Colors.xaml TextSecond restored to #3C4043, TextMuted darkened to #5F6368 for proper WCAG contrast on light backgrounds."
+    },
+    {
+        "timestamp":  "2026-04-26 13:25:00",
+        "version":  "b127",
+        "notes":  "CRITICAL: Incoming call desktop notifications now show the contact name instead of \u0027Unknown\u0027.",
+        "devNotes":  "Fixed timing issue where RING event triggered notification before +CLIP event arrived with phone number. MainViewModel.HandleCallStateChange now delays notification until Number is set (either already present or arriving from +CLIP). This ensures incoming call desktop notifications display actual contact name and number instead of generic \u0027Unknown\u0027 fallback."
+    },
+    {
+        "timestamp":  "2026-04-26 13:06:00",
+        "version":  "b125",
+        "notes":  "[Internal build number from changelog updates during development; skip this build and use b124]",
+        "devNotes":  "Build number incremented during changelog maintenance; functionality from b124 applies."
+    },
+    {
+        "timestamp":  "2026-04-26 13:05:10",
+        "version":  "b124",
+        "notes":  "UI styling polish: improved button consistency, icon sizing, and overall visual cohesiveness for a cleaner Google Voice-like appearance.",
+        "devNotes":  "Updated MainWindow.xaml styling: standardized button sizes and padding, improved icon scaling across controls, adjusted spacing for better visual rhythm, and refined the overall design language to reduce visual clutter and improve consistency. Ensures all interactive elements follow a cohesive design system with proper sizing relationships."
+    },
+    {
+        "timestamp":  "2026-04-26 13:04:42",
+        "version":  "b123",
+        "notes":  "Incoming call desktop notifications no longer show \u0027Unknown\u0027 when contact lookup is momentarily unavailable, and the UI has been lightened for a cleaner, airier Google Voice-like appearance.",
+        "devNotes":  "Fixed HfpService to validate phone numbers extracted from +CLIP events and reject empty values, preventing \u0027Unknown\u0027 fallback text in notifications. Updated Colors.xaml with a lighter, more spacious palette: backgrounds moved to #FAFAFA-#F8F9FA, secondary text softened, borders reduced, and message bubbles updated for softer appearance. Net result is lighter UI with better spacing and less visual weight."
+    },
+    {
+        "timestamp":  "2026-04-22 20:04:09",
+        "version":  "b122",
+        "notes":  "Bluetooth call handling now explicitly asks the phone to hand the live hands-free voice path over to the PC during answer and dial flows instead of only controlling the call state.",
+        "devNotes":  "Updated HfpService so the app advertises codec-negotiation support, sends AT+BAC=1 during service-level setup, accepts the phone\u0027s later +BCS codec selection, and issues AT+BCC when a call is answered, dialed, or becomes active so the phone is explicitly asked to bring up the HF audio connection instead of leaving audio on the handset. Also fenced scratch probes, archived builds, artifacts, and message-export folders out of the main project file so normal repo builds stop ingesting workspace noise and can produce a clean rewindable release."
+    },
+    {
+        "timestamp":  "2026-04-22 14:39:21",
+        "version":  "b121",
+        "notes":  "The app now shifts onto the new Material 3 visual foundation, and Audio Settings now shows whether Windows has actually exposed your phone as a real call speaker and microphone path instead of pretending the issue is just a default-device choice.",
+        "devNotes":  "Updated the shared app styling foundation toward the Material 3 palette and control model across App resources, theme palettes, and shared button styling so the current visual-system pass ships in a rewindable build. Reworked DeskPhone audio inspection so AudioService now checks the phone\u0027s HFP, headset-gateway, and A2DP registrations directly from Windows, lists both playback and microphone communications endpoints, logs a structured audio-route diagnostic line, and reports when the phone is present for call control but Windows still has not materialized a usable call-audio endpoint. Added the new phone-audio investigation note under docs and corrected the HFP logging text so the app no longer implies it successfully created a call-audio driver path when it only issued a profile-enable request."
+    },
+    {
+        "timestamp":  "2026-04-22 10:26:12",
+        "version":  "b120",
+        "notes":  "Incoming ringtone playback now stops as soon as a ringing call is answered or otherwise leaves the ringing state, instead of continuing after pickup.",
+        "devNotes":  "Fixed a call-state aliasing bug between HfpService and MainViewModel by publishing cloned CallInfo snapshots instead of exposing the same mutable live object across events. That preserves the true transition from IncomingRinging to Active or Idle so the notification layer can reliably stop the ringtone. Also simplified the DeskPhone-side alert rule so any non-ringing call state immediately cancels the incoming-call alert path, covering both desktop answer and phone-side pickup."
+    },
+    {
+        "timestamp":  "2026-04-22 09:58:28",
+        "version":  "b119",
+        "notes":  "Pinned messages now appear as real entries in the right-side conversation pane, and clicking a pinned entry jumps back to that exact bubble in the thread instead of leaving message pinning as a buried icon only.",
+        "devNotes":  "Added selected-conversation pinned-message projections in MainViewModel so the UI can surface pinned message entries independently of the raw bubble list and refresh immediately when a message is pinned or unpinned. Expanded the Messages right-side detail pane with a dedicated pinned-messages section above the full call history, and wired those entries to scroll the thread to the target bubble and reopen that bubble\u0027s action tray so pinned messages behave like retrievable thread markers instead of static decorations."
+    },
+    {
+        "timestamp":  "2026-04-22 09:36:58",
+        "version":  "b118",
+        "notes":  "Message-bubble taps no longer throw a Windows document-tree error, plain bubble clicks open the in-place action tray safely, and the repo now hardcodes open-source messenger and calling apps as the standing benchmark for standard interaction behavior.",
+        "devNotes":  "Replaced the bubble-click ancestor walk with a document-safe parent resolver that handles WPF content elements such as Run and Hyperlink instead of assuming every click source lives in the visual tree. Bubble taps now ignore embedded hyperlinks as well as button hits so rich message-body actions keep working without opening the tray. Added durable benchmark instructions in AGENTS.md and DeskPhone-Standards.md that explicitly point future work at Signal Desktop, Element, Telegram Desktop, Linphone Desktop, and Jami before inventing or omitting baseline communication-app behavior."
+    },
+    {
+        "timestamp":  "2026-04-22 09:20:33",
+        "version":  "b117",
+        "notes":  "The dialer now stays anchored beside Recents again, recent-call rows expose inline message and callback actions with direct double-click callback, message bubbles expose copy, forward, and message pin actions in place, and scrolling is back to a clean conventional pill bar.",
+        "devNotes":  "Forced the Calls surface to stay split so the dialer no longer drops below the page, removed the oversized selected-call action card, and moved call and message actions into the recent-call rows on both Calls and Messages while wiring row double-click to direct callback. Added per-message quick-action tray state plus durable message pinning so bubble click and context affordances can copy, forward, or pin a specific message in place, restyled the scrollbar templates back into conventional trackless pills, and updated DeskPhone-Standards so mainstream phone-app interaction patterns are now an explicit repo baseline rather than tribal memory."
+    },
+    {
+        "timestamp":  "2026-04-22 08:43:52",
+        "version":  "b116",
+        "notes":  "Conversations can now be pinned to the top of the list, and individual threads can mute their own message alerts without hiding the thread itself or losing unread state.",
+        "devNotes":  "Added durable per-conversation preference storage in AppSettingsService for pinned threads and muted-alert threads, extended Conversation plus MainViewModel with those states and toggle commands, and changed conversation rebuild ordering so pinned threads stay grouped above the normal recency list. Updated the messages surface so the conversation list and selected-thread header both show the new state clearly, and routed incoming-message banner plus tray-chime decisions through the muted-thread setting so message sync still lands normally while interruptions are suppressed for opted-out threads."
+    },
+    {
+        "timestamp":  "2026-04-22 03:32:07",
+        "version":  "b115",
+        "notes":  "Recent calls now open a standard detail-and-actions view with obvious callback and message options, and dialer-side search results now show explicit Text and Call actions instead of auto-calling on contact click.",
+        "devNotes":  "Added selected recent-call state in MainViewModel so the Calls surface can show a proper detail card with callback, message, save-contact, and edit-contact actions for the chosen record. Updated the recents list to bind selection and highlight the active row, taught call-record display text to use formatted numbers consistently, and replaced the dialer contact-suggestion full-row call button with explicit Text and Call actions that reuse the existing message-target and direct-dial paths."
+    },
+    {
+        "timestamp":  "2026-04-22 03:24:43",
+        "version":  "b114",
+        "notes":  "The left rail can now collapse to an icon-only mode, the dialer stays compact instead of sprawling across the page, and vertical scrolling now uses slim theme-coordinated pill scrollbars instead of the default Windows blocks.",
+        "devNotes":  "Added a persisted navigation-rail collapse preference in AppSettingsService and MainViewModel, then wired MainWindow shell layout plus the rail markup so labels, footer content, and the splitter all respond cleanly when the user toggles icon-only mode. Reworked the dialer pane to use a centered compact content width with tighter keypad and action spacing, reduced the fixed dialer column size in split view, and replaced the old default scrollbar chrome with custom thumb and track templates that match the app palette."
+    },
+    {
+        "timestamp":  "2026-04-22 03:13:27",
+        "version":  "b113",
+        "notes":  "Contacts now lives as a real top-level sidebar destination, the conversation edit-contact pen opens the proper manager, and saved contacts can be searched, texted, called, edited, or added from one place.",
+        "devNotes":  "Added a dedicated Contacts tab with left-rail navigation sync so command-driven tab changes and sidebar clicks stay in agreement. Edit-contact flows from conversation, compose, and dialer now route into that manager, the old duplicate Contacts editor was removed from Settings, the saved-contact list now shows clear selection state, and contact actions are wired so Text jumps into the right message target while Call uses the existing direct-dial path instead of only staging a number."
+    },
+    {
+        "timestamp":  "2026-04-21 18:34:36",
+        "version":  "b112",
+        "notes":  "Message bubbles now stay inside the thread when the conversation lane is squeezed harder, with tighter bubble margins, slightly smaller bubble text only at narrow widths, and a sane floor so the pane stops before wrapping turns absurd.",
+        "devNotes":  "Reworked BubbleWidthConverter so the bubble cap always respects the actual visible thread width instead of enforcing a fixed floor that could exceed the lane and push past the right edge. Added a bubble-only text-size converter for narrow widths, reduced bubble padding and outer margins, and gave ConversationMessagesColumn a real minimum width so the thread stops compressing before it collapses into one-letter rows while leaving the rest of the app\u0027s text scale unchanged."
+    },
+    {
+        "timestamp":  "2026-04-21 18:24:21",
+        "version":  "b111",
+        "notes":  "Incoming message alerts now stay visible longer, show a fuller preview, open the correct conversation when clicked, and give clear Open and Reply actions instead of behaving like a dead notification.",
+        "devNotes":  "Extended the tray balloon timing, added a dedicated in-app message banner overlay in MainWindow, and finished the message-target routing path that the tray click handlers were already trying to call. MainViewModel now raises a richer per-message banner payload during both refresh and live delta sync, trims only very large message bodies for stability, and exposes helpers so the banner can jump into the exact conversation or straight into a reply path without disturbing the rest of the shell layout."
+    },
+    {
+        "timestamp":  "2026-04-21 18:08:34",
+        "version":  "b110",
+        "notes":  "Message bubbles now fit the visible thread width at larger text sizes instead of getting chopped at the frame edge, and the text-size slider now stays stable while you adjust it.",
+        "devNotes":  "Replaced the fixed-width SMS bubble caps with a thread-width-based converter so the message surface behaves more like a standard phone conversation view as the pane size changes. Also split the zoom control into a draft value plus release-to-apply commit path, then fed the responsive layout thresholds from the effective zoomed width so the shell stops reflowing under the cursor while the slider is being dragged."
+    },
+    {
+        "timestamp":  "2026-04-21 17:38:34",
+        "version":  "b109",
+        "notes":  "DeskPhone now has a real text-size and zoom control in Appearance, so you can enlarge the interface and the detached Live Log immediately instead of being stuck with tiny text.",
+        "devNotes":  "Added a persisted UI scale setting to AppSettingsService, exposed it through MainViewModel as a clamped zoom percentage, and applied that scale through layout transforms to both the main DeskPhone shell and the separate Live Log window. The Appearance section now includes a zoom card with a slider, live percentage badge, and reset action, so readability changes take effect immediately and survive restart without creating one-off font exceptions across individual screens."
+    },
+    {
+        "timestamp":  "2026-04-21 17:32:22",
+        "version":  "b108",
+        "notes":  "The live log now behaves like a normal separate window you open only when you need it, with a sidebar launch link under Changelog instead of an always-attached utility panel.",
+        "devNotes":  "Changed the log shell from an owned companion window into a standalone top-level window that opens on demand, appears in the taskbar, and can be closed independently without keeping itself glued above the main DeskPhone surface. MainWindow now launches or focuses that window from a dedicated sidebar link, defaults the log closed on startup, removes the old Appearance toggle, and explicitly closes the log during app shutdown so the separate window does not keep the process alive after the main shell exits."
+    },
+    {
+        "timestamp":  "2026-04-21 17:25:21",
+        "version":  "b107",
+        "notes":  "DeskPhone now keeps more calls from falling back to `Unknown` by matching live caller IDs and phone-synced names against saved contacts even when some imported contact numbers include extra dial metadata.",
+        "devNotes":  "Expanded contact-number interpretation in ContactStoreService so DeskPhone strips URI-style phone metadata for new imports and can score likely matches against older overlong numbers that were already saved locally. MainViewModel now uses that stronger matching path for live call banners, PBAP caller-name backfill, selected-conversation call history, and merged call-record refreshes, which lets exact contact matches still win while rescuing caller-name lookups that previously failed on conference-tail or metadata-tailed contact numbers."
+    },
+    {
+        "timestamp":  "2026-04-21 17:19:34",
+        "version":  "b106",
+        "notes":  "Settings now includes a real messages backup export action so you can save the current DeskPhone message history to a JSON file anywhere you choose without touching the app\u0027s automatic safety backups.",
+        "devNotes":  "Added a dedicated Message Backup Export card to the Settings sync area, exposed a new export command and status text in MainViewModel, and routed the save flow through a SaveFileDialog so the user chooses the destination file directly. MessageStoreService now shares its JSON writer between the live store path and ad-hoc exports, which keeps the on-demand backup format consistent with the app\u0027s existing message store while avoiding duplicate serialization logic."
+    },
+    {
+        "timestamp":  "2026-04-21 17:01:18",
+        "version":  "b105",
+        "notes":  "Call history now supports deleting individual entries, deleting the whole log with a warning, and keeping locally deleted phone-synced call entries from popping right back into DeskPhone on the next import.",
+        "devNotes":  "Added explicit call-log delete commands to both the Recents surface and the right-side call-history pane, including a warning-gated delete-all flow. Introduced a per-device call-log sync outbox that queues delete and delete-all operations for any real helper path that can apply them on the phone, while PBAP cache import now replaces stale device snapshots instead of only appending and respects pending local delete operations so phone-side removals drop out of the desktop cache and local desktop deletes stay suppressed until the handset catches up."
+    },
+    {
+        "timestamp":  "2026-04-21 16:47:58",
+        "version":  "b104",
+        "notes":  "The live debug log now opens in its own separate window, and the phone history beside an open conversation now stays as a permanent right-side vertical pane instead of dropping below the thread.",
+        "devNotes":  "Removed the root-shell live-log sidebar from MainWindow, introduced a dedicated LogWindow owned by the main shell and driven by the existing ShowLiveLog toggle, and repositioned it as a companion utility window with its own clear action and auto-scroll behavior. On the message surface, the conversation call-history area now stays anchored as the right-side detail pane at all supported widths, with the hide-call-history affordances removed so the layout no longer collapses into a bottom stack after the live log leaves the main surface."
+    },
+    {
+        "timestamp":  "2026-04-21 14:48:49",
+        "version":  "b103",
+        "notes":  "Incoming calls now show a resolved caller name when DeskPhone already knows one from contacts or phone-synced call history, and PBAP call-log names now auto-create or refresh matching local contacts instead of staying trapped only in the phone-log cache.",
+        "devNotes":  "Added a richer caller-identity path in MainViewModel that prefers stored contacts, falls back to phone-synced call-history names, and uses that result for the live incoming-call banner as well as contact-backed call-history refreshes. Also taught the PBAP call-log load and import paths to harvest useful caller names into the local contact store when they are missing or only number-shaped placeholders, while preserving the rule that PBAP itself remains read-only and does not pretend to write anything back to the handset."
+    },
+    {
+        "timestamp":  "2026-04-21 14:41:45",
+        "version":  "b102",
+        "notes":  "Contact add and edit actions now route into the real Contacts editor, contacts can be deleted directly from DeskPhone, and local contact changes now participate in an honest per-phone sync queue where a phone-side helper exists.",
+        "devNotes":  "Rewired the title-bar and number-driven contact actions so they open the Contacts editor inside Settings instead of behaving like dead buttons, added a real delete flow with confirmation, and extended contact sync from inbound VCF import only into a file-based per-device operation contract that can queue upsert and delete requests alongside inbound operation files. The sync status card and logs now explain that PBAP remains read-only for contacts, so phone-side parity depends on a real helper consuming the outbound queue rather than pretending Bluetooth wrote contacts back directly."
+    },
+    {
+        "timestamp":  "2026-04-21 14:12:37",
+        "version":  "b101",
+        "notes":  "Message sync no longer bogs down the Bluetooth lane by doing a full-phone delete sweep during normal live operation, and the delta-sync logging now clearly distinguishes cached local handles from real phone traffic.",
+        "devNotes":  "Added a dedicated message-sync gate so poll cycles, manual refreshes, and send follow-up refreshes no longer overlap on the MAP lane. Automatic delete reconciliation now compares only a recent inbox-and-sent handle window during live operation, while explicit manual refresh still retains a deeper full-history reconcile path. Also clarified the misleading handle-seed logging by separating bulk local-cache seeding from single-handle registration after a successful send, and kept the paused contact-management work out of this release."
+    },
+    {
+        "timestamp":  "2026-04-21 13:26:16",
+        "version":  "b100",
+        "notes":  "Deleting a message from DeskPhone now deletes the phone-backed message on the handset too, and the app now removes message history that the phone has already deleted instead of leaving stale copies behind on the PC.",
+        "devNotes":  "Extended the MAP layer with deletedStatus support through SetMessageStatus so DeskPhone can request a true phone-side message delete rather than only removing the item locally. Added a full inbox-and-sent handle reconciliation pass to the message sync loop and manual refresh path so the desktop store periodically compares itself against the phone\u0027s current message listings and prunes messages that no longer exist on the handset, even when the newest-handle probe does not change. Also expanded docs/DeskPhone-Standards.md to explicitly treat add, edit, delete, save, export, and sync parity as baseline communication-app behavior subject to Bluetooth profile boundaries."
+    },
+    {
+        "timestamp":  "2026-04-21 13:14:23",
+        "version":  "b99",
+        "notes":  "The message history thread now keeps the same smooth swipe-and-coast behavior as the other panes instead of losing momentum when a finger drag starts on top of a message body.",
+        "devNotes":  "Applied a message-thread-specific touch follow-up by explicitly setting the outer message ListBox to pixel-based vertical panning and disabling touch panning on the nested RichTextBox message-body surfaces. That keeps the conversation thread’s own scroll host in control of the gesture from start to finish, so inertial scrolling is no longer interrupted by the inner rich-text controls while link tapping and message rendering continue to work."
+    },
+    {
+        "timestamp":  "2026-04-21 13:03:19",
+        "version":  "b98",
+        "notes":  "Touch scrolling now feels smoother and more native on the main app surfaces, and maximized use no longer leaves the small transparent frame gaps around the shell edges on fullscreen-like layouts.",
+        "devNotes":  "Retuned the shared touch interaction layer in App.xaml by adding WPF panning deceleration, disabling press-and-hold and touch feedback behaviors that make swipes feel sticky, and switching ListBox virtualization to pixel scrolling so touch gestures move fluidly instead of stepping item-by-item. Also updated message bubble RichTextBox surfaces to stay readable and clickable without grabbing focus during a swipe, enabled layout rounding on the main window, and replaced the old hardcoded maximized-margin hack in MainWindow.xaml.cs with DPI-aware resize-border compensation so the shell fills the display edges consistently when maximized."
+    },
+    {
+        "timestamp":  "2026-04-21 12:49:55",
+        "version":  "b97",
+        "notes":  "Touch scrolling now works across the app’s main list and pane surfaces, so message history, call history, settings, changelog, and search suggestion panels can all be finger-scrolled on touch hardware instead of relying on mouse-wheel behavior.",
+        "devNotes":  "Added shared touch-panning styles in App.xaml for ScrollViewer and ListBox, enabled panning directly on the custom TextBox content host and ComboBox dropdown scroller, and updated the keyed suggestion-list and tab-level scrollviewer styles in MainWindow to inherit that touch behavior instead of overriding it. The result is a framework-level touch pass that covers the major pane and field surfaces without changing view-model logic or reshaping the app’s existing layout architecture."
+    },
+    {
+        "timestamp":  "2026-04-21 12:27:59",
+        "version":  "b96",
+        "notes":  "Settings now has a real dark-mode switch, and DeskPhone saves that choice explicitly so the selected light or dark mode comes back predictably after restart instead of being inferred loosely from palette state.",
+        "devNotes":  "Added an explicit persisted DarkModeEnabled setting to AppSettingsService, normalized older settings.json files by deriving that flag from the legacy PreferredPalette when needed, and centralized mode changes through SetDarkMode so dark-mode state and the BlueGold or Google palette stay in sync on disk. In MainViewModel, replaced the old palette-name inference with a direct IsDarkModeEnabled binding plus a clearer status label, and updated the Appearance settings card to use a dedicated switch-style ToggleButton so dark mode is exposed as a real on or off setting rather than a content-swapping pill."
+    },
+    {
+        "timestamp":  "2026-04-21 12:19:14",
+        "version":  "b95",
+        "notes":  "BlueGold now applies consistently across the app instead of leaving some shared controls and guidance cards stuck in the old light-theme colors after a theme change or restart.",
+        "devNotes":  "Removed the hardcoded Google palette dependency from Themes/Styles.xaml by dropping its local Colors.xaml merge and converting theme-token brush lookups in the shared button and dial-key styles from StaticResource to DynamicResource, so those controls now resolve against the live palette dictionary that ThemeService swaps. Converted the remaining app-level shared styles in App.xaml to dynamic palette lookups as well, including card, nav, textbox, combobox, caret, selection, border, and shadow resources, and replaced the leftover hardcoded light-theme reconnect, contact-import, pairing-guidance, and PBAP-guidance banner colors in MainWindow with palette-aware accent surfaces so BlueGold no longer shows white or Google-green patches."
+    },
+    {
+        "timestamp":  "2026-04-21 12:10:00",
+        "version":  "b94",
+        "notes":  "DeskPhone now tells you whether PBAP call-log sync is actually connected, missing on the phone, blocked by phone-side sharing permissions, or dropped mid-connect, and the Sync settings card shows a concrete next step instead of only saying Unavailable.",
+        "devNotes":  "Reworked PBAP status handling from string-matching into a typed availability model shared between PbapService and MainViewModel, so PBAP connection and import paths now classify unsupported or hidden PBAP exposure, phone-side permission refusals, dropped Bluetooth sessions, and post-connect import failures separately. Extended ObexClient to preserve OBEX GET response codes, taught PbapService to map RFCOMM and OBEX failures into explicit PBAP availability kinds plus user guidance, and updated the Sync settings PBAP card to show a single status badge with a targeted guidance panel and Bluetooth-settings shortcut whenever the phone needs user action."
+    },
+    {
+        "timestamp":  "2026-04-21 11:59:48",
+        "version":  "b93",
+        "notes":  "DeskPhone now folds the imported PBAP phone logs into the main call history surface instead of keeping them as a separate cache, and duplicate phone-log entries are collapsed cleanly instead of stacking up.",
+        "devNotes":  "Extended CallRecord with phone-sync metadata and taught MainViewModel to load the persisted PBAP call-log cache into CallHistory during startup, map PBAP records into the existing call-history model, and merge repeated PBAP imports back into the same history items instead of re-adding them. Added merge logic that matches PBAP entries against existing history by normalized number, direction, and close call-time windows, preserves imported timestamps while letting live-call duration enrich synced records, and logs the resulting insert or match counts so the merged-history behavior is verifiable from the running app."
+    },
+    {
+        "timestamp":  "2026-04-21 11:55:25",
+        "version":  "b92",
+        "notes":  "DeskPhone now downloads the phone’s incoming, outgoing, and missed PBAP call-history books into a local cache, so the app has real phone-side call-log data on disk instead of only live call events.",
+        "devNotes":  "Extended PbapService from session verification into actual PBAP data import by reopening the PBAP session, navigating to the telecom repository, downloading ich.vcf, och.vcf, and mch.vcf via OBEX GET, parsing each returned vCard block into normalized PBAP call-log entries, and surfacing import totals in the debug log and PBAP status text. Added a new PbapCallLogEntry model plus PbapCallLogStoreService to persist the imported phone-side call logs under %APPDATA%\\DeskPhone\\pbap-calllogs.json, dedupe repeat imports by direction, normalized number, and PBAP timestamp, and keep the cache sorted for the next build where that cache will be merged into the main call history surface."
+    },
+    {
+        "timestamp":  "2026-04-21 11:48:10",
+        "version":  "b91",
+        "notes":  "DeskPhone now goes beyond PBAP detection and proves it can open a real phonebook-access session with the phone, so call-log sync is standing on a verified transport instead of a guessed one.",
+        "devNotes":  "Replaced the PBAP readiness-only probe with a real PbapService that reuses the existing BluetoothDeviceConnector and OBEX stack to open the PBAP Phone Book Server RFCOMM channel, perform an OBEX CONNECT against the PBAP target UUID, then cleanly disconnect after a successful handshake. Generalized ObexClient so services can supply their own OBEX target instead of hardcoding MAP, updated MainViewModel to run the PBAP session check after HFP comes up, log the PBAP outcome directly into the debug log, and expose the result through the Settings card, which now reports PBAP connection rather than only PBAP readiness."
+    },
+    {
+        "timestamp":  "2026-04-21 10:34:20",
+        "version":  "b90",
+        "notes":  "The app now checks whether the connected phone actually advertises PBAP, and Settings shows a clear readiness state for future phone-side call-log sync instead of leaving that capability unknown.",
+        "devNotes":  "Added a dedicated PbapCapabilityService that first forces a stable Bluetooth link through the existing BluetoothDeviceConnector path, then performs uncached RFCOMM service discovery against the PBAP Phone Book Server UUID (0x112F). MainViewModel now runs that PBAP probe after a successful calls connection, logs the discovery details into the live debug log, and exposes a PBAP status string plus ready or pending state flags for the UI. The Sync settings section now includes a separate PBAP readiness card so we can tell immediately whether the current phone is eligible for later PBAP-backed call-log import work or if the phone simply does not expose the profile."
+    },
+    {
+        "timestamp":  "2026-04-21 10:30:50",
+        "version":  "b89",
+        "notes":  "Hands-free call audio setup now binds HFP service registration to the actual Bluetooth radio that owns the paired phone, which fixes the failed driver-registration path that was leaving call audio stuck on the handset.",
+        "devNotes":  "Reworked NativeBluetoothHelper.EnableHfpForDevice so it no longer enumerates the phone once with a null radio handle and then calls BluetoothSetServiceState against an unrelated radio context. The helper now iterates local radios with BluetoothFindFirstRadio and BluetoothFindNextRadio, enumerates each radio\u0027s paired devices using that same radio handle, and only calls BluetoothSetServiceState after finding the target address on the matching radio-bound BLUETOOTH_DEVICE_INFO record. Added the missing BluetoothFindNextRadio P/Invoke, tightened the success and failure descriptions around radio-scoped enumeration, and kept the existing dual GUID registration attempt for both Audio Gateway and Hands-Free Unit service classes."
+    },
+    {
+        "timestamp":  "2026-04-21 08:41:23",
+        "version":  "b88",
+        "notes":  "The main rail connection area now shows an explicit reconnect icon plus separate Calls and Messages status lines, so connection state is clearer and a clean reconnect to the saved phone stays one click away.",
+        "devNotes":  "Extended the main rail connection surface to expose channel-specific state instead of only a single blended status pill. MainViewModel now derives CallsConnectionLabel and MessagesConnectionLabel from the live HFP and MAP status strings, tracks whether quick reconnect is currently allowed, and keeps that state updated as connection and saved-device status changes. MainWindow now renders those per-channel labels directly under the main status line and adds a compact reconnect icon button bound to the existing clean reconnect path, which still routes through ConnectToAddressAsync and ResetConnectionSessionAsync for a full disconnect and reconnect to the same saved device."
+    },
+    {
+        "timestamp":  "2026-04-20 19:20:38",
+        "version":  "b87",
+        "notes":  "Settings now uses a real left-category selector with section detail on the right, the main rail exposes reconnect and connection-settings access directly, and maximized mode fills the side and bottom edges without the extra transparent frame gap.",
+        "devNotes":  "Replaced the one-long-page Settings layout with a two-pane settings shell in MainWindow: a left navigation column with Connection, Appearance, Contacts, Contact Sync, and Audio categories, plus section-specific content on the right driven by a new SettingsSection state model in MainViewModel. Added a persistent connection action area to the main navigation rail that shows connection state, quick-reconnect context for the preferred saved device, and a direct route into the Connection settings section. In MainWindow code-behind, added maximized-window frame compensation on the root shell grid so the client content covers the small side and bottom non-client gap that was still visible in fullscreen-like maximized use."
+    },
+    {
+        "timestamp":  "2026-04-20 19:03:48",
+        "version":  "b85",
+        "notes":  "Settings now opens with a dedicated connection hub at the top, gives fig-newton or your primary saved phone a one-click quick-connect spot, separates other saved devices below it, and moves the theme toggle into a new appearance section.",
+        "devNotes":  "Reworked the Settings tab structure in MainWindow so Connection is the first section, with a new quick-connect card bound to a prioritized saved-device model instead of burying reconnect inside the older generic devices card. MainViewModel now computes a preferred quick-connect device by favoring fig-newton-style names before falling back to the most recently seen saved device, exposes a separate OtherKnownDevices list for the rest of the saved phones, and refreshes those projections whenever the saved-device list changes. AppSettingsService now persists a PreferredPalette value, MainViewModel applies that saved palette on startup, and the new Settings appearance card binds a dark-mode toggle that switches between the BlueGold and Google palettes without scattering theme controls elsewhere in the shell."
+    },
+    {
+        "timestamp":  "2026-04-20 18:25:35",
+        "version":  "b83",
+        "notes":  "The new main-screen pane close and reopen controls now respond immediately instead of waiting for the window to be resized.",
+        "devNotes":  "The prior b82 pane controls were updating MainViewModel state correctly, but MainWindow only recomputed responsive layout on load, resize, move, or state change, so the UI did not visually react when those commands fired. MainWindow now listens for ShowMessagesListPane, ShowConversationCallHistoryPane, ShowRecentCallsPane, ShowDialerPane, and ShowLiveLog property changes from MainViewModel and re-runs ApplyResponsiveLayout on the dispatcher as soon as those flags change. This preserves the b82 pane-state model and command wiring while fixing the missing visual refresh path."
+    },
+    {
+        "timestamp":  "2026-04-20 18:22:25",
+        "version":  "b82",
+        "notes":  "The main screen now opens on the newest conversation by default, and the Messages and Calls surfaces both support closing side panes with on-surface reopen controls so history views stay accessible without relying on the sidebar.",
+        "devNotes":  "Added explicit pane-visibility state to MainViewModel for the Messages thread list, selected-conversation call-history pane, Calls recents pane, and dialer pane, along with matching open and close commands. MainWindow now renders compact hide buttons in each pane header plus persistent on-surface reopen chips when a pane is hidden, and the responsive layout controller collapses hidden panes by zeroing the affected columns or rows so the remaining content expands cleanly instead of leaving dead space. Conversation rebuilding now auto-selects the newest thread when no compose flow is active, which makes the main Messages surface show real text and call history immediately on launch."
+    },
+    {
+        "timestamp":  "2026-04-20 18:04:08",
+        "version":  "b80",
+        "notes":  "Added an in-repo agent handbook so future builds follow the app\u0027s Windows, Bluetooth, layout, and release standards without needing the same coaching each time.",
+        "devNotes":  "Created AGENTS.md as the repo entry point for future agents and added docs/DeskPhone-Standards.md to codify product-specific UI, layout, notification, pane, Bluetooth-profile, and deployment rules. Added docs/Release-Checklist.md to make the existing release discipline explicit, including changelog quality, Release-only shipping, previous-build preservation, update handoff behavior, and rewindable commit expectations. Updated deploy.ps1\u0027s staged release path list so AGENTS.md and the docs folder are included in future rewindable release commits."
+    },
+    {
+        "timestamp":  "2026-04-20 17:54:45",
+        "version":  "b79",
+        "notes":  "The app now clamps itself to the active screen, drops the log panel when space is tight, and reflows message and call layouts into stacked panes instead of overflowing fixed side columns.",
+        "devNotes":  "Lowered the hard window minimums, added runtime work-area clamping in MainWindow so the normal window cannot extend beyond the current monitor, and made the navigation rail shrink slightly on narrower widths. Reworked the message thread and Calls tab layouts into responsive two-mode grids: wide windows keep the side-by-side panes, while narrower widths move call history or the dialer into a stacked split layout with a horizontal splitter instead of forcing fixed-width overflow. Removed the live log textbox\u0027s 2000px minimum width and now auto-collapse the log sidebar when the shell width cannot support it cleanly."
+    },
+    {
+        "timestamp":  "2026-04-20 17:28:00",
+        "version":  "b78",
+        "notes":  "Outgoing sends no longer trigger redundant push notifications, sent bubbles now show a quiet in-thread sent confirmation, and the desktop shortcuts now use larger custom icons for latest and previous builds.",
+        "devNotes":  "Filtered the message-notification path so tray balloons only fire for newly synced incoming messages, not for messages the user just sent from DeskPhone. Updated the outgoing message bubble template to add a small Sent confirmation line inside the thread history pane without adding another badge or popup. Reworked the desktop shortcut icon assets into dedicated multi-size .ico files with tighter icon-safe composition, retargeted the live DeskPhone and DeskPhone Previous Build shortcuts to those icons, and expanded deploy.ps1\u0027s staged release path list so Assets are included in future release commits."
+    },
+    {
+        "timestamp":  "2026-04-20 16:33:21",
+        "version":  "b77",
+        "notes":  "Release deploys now offer the new build to the currently running app instead of force-opening it, with a deferred reminder indicator if you choose Not Yet.",
+        "devNotes":  "Added a deploy offer endpoint to the local control API, a one-shot pending build handoff record in settings, and a new in-app update prompt plus reminder indicator. When the user accepts, the running build persists the archived EXE path and connected device, shuts itself down cleanly, and launches the new build after a short delay. On startup, the accepted build consumes that handoff, resets any local session state, and performs a clean reconnect to the device that had been connected in the prior build. deploy.ps1 now posts the update offer to a running DeskPhone instance and only auto-launches the new EXE when no build is already running."
+    },
+    {
+        "timestamp":  "2026-04-20 16:19:01",
+        "version":  "b76",
+        "notes":  "Release deploys now preserve the prior runnable build, publish a stable latest shortcut, and always create a separate previous-build shortcut for immediate fallback.",
+        "devNotes":  "deploy.ps1 now archives each Release output into a versioned deployed-builds folder instead of launching directly from bin\\Release, so the prior shipped build survives even if later builds clean the normal output directory. The script no longer shuts down the previous running DeskPhone instance during deploy, updates a durable DeskPhone desktop shortcut to the latest archived EXE, and keeps a DeskPhone Previous Build shortcut pointed at the most recent earlier archived build."
+    },
+    {
+        "timestamp":  "2026-04-20 16:15:16",
+        "version":  "b75",
+        "notes":  "Hang-up now cancels stuck dialing or ringing attempts reliably, and Release deploys now require a detailed changelog plus an automatic rewindable Git commit.",
+        "devNotes":  "Updated HfpService so Hang Up moves a live or pending call into Ending, sends AT+CHUP, and force-clears the local call state after a guarded timeout if the phone never reports the final idle indicator. MainViewModel command wiring now routes Answer, Dial, and Hang Up through the view-model wrappers consistently. Reworked deploy.ps1 to reject non-Release builds, require a prewritten detailed changelog entry for the current build number, and create a Git commit from the curated source tree before launch so each deployed build is easy to roll back."
+    },
+    {
+        "timestamp":  "2026-04-20 13:27:59",
+        "version":  "b74",
+        "notes":  "Build 74 automated deployment."
+    },
+    {
+        "timestamp":  "2026-04-20 13:27:37",
+        "version":  "b74",
+        "notes":  "Messages now keep the full call history visible beside the text thread, contact search uses live dropdown suggestions, and the app now opens in a deep blue-and-gold dark theme.",
+        "devNotes":  "Removed the per-contact recent-call strip from the thread header and replaced it with a full call-history pane inside the Messages view so call and text history stay visible together without switching tabs. The compose and dialer contact pickers now use typed suggestion dropdowns instead of fixed contact lists; compose clicks select a recipient, while dialer clicks place the call immediately. Added a new BlueGold palette and made it the default startup palette so the app boots into the requested deep blue and gold dark mode."
+    },
+    {
+        "timestamp":  "2026-04-20 13:08:45",
+        "version":  "b73",
+        "notes":  "Build 73 automated deployment."
+    },
+    {
+        "timestamp":  "2026-04-20 13:08:13",
+        "version":  "b73",
+        "notes":  "Trimmed the thread header clutter, made contact actions smarter, kept call and text history together, and sped up opening large message threads.",
+        "devNotes":  "Removed the always-on contact sync banner from the main thread view, moved pending-contact import actions into Settings, swapped the conversation action pills for compact icon buttons, and now show Add Contact only for unknown numbers while saved matches route to Edit Contact. The dialer pane now scrolls safely on short windows, uses smaller controls, and double-clicking a searched contact places the call. The message thread body also moved to a virtualized ListBox, and selecting an already-read conversation now skips the unnecessary full-message save path that was adding click latency."
+    },
+    {
+        "timestamp":  "2026-04-20 12:43:52",
+        "version":  "b72",
+        "notes":  "Read and unread now behave like a phone conversation: sent messages stay read, opening or marking a thread here pushes read state back to the phone, and recent phone-side read changes sync back into the app.",
+        "devNotes":  "Added MAP SetMessageStatus write-back in MapService using x-bt/messageStatus plus StatusIndicator/StatusValue app parameters, then updated MainViewModel so Mark Read and Mark Unread only target incoming messages while forcing sent items to remain read. The poll and manual refresh flows now also pull a recent listing-only metadata window and patch local IsRead values by handle so phone-side read changes come back into the app without re-downloading message bodies."
+    },
+    {
+        "timestamp":  "2026-04-20 12:33:41",
+        "version":  "b71",
+        "notes":  "Conversation unread badges now default old saved history to read, and current unread state follows the phone\u0027s message read flags.",
+        "devNotes":  "Added a legacy-message-store migration in MessageStoreService so old histories without reliable IsRead data load as read, then changed conversation unread logic to derive from SmsMessage.IsRead coming from MAP metadata instead of a separate local readstate file. Manual Mark Read and Mark Unread now update the local message store directly."
+    },
+    {
+        "timestamp":  "2026-04-20 12:29:33",
+        "version":  "b70",
+        "notes":  "Build 70 automated deployment."
+    },
+    {
+        "version":  "b70",
+        "timestamp":  "2026-04-20 12:05:00",
+        "notes":  "Cleaned up the Calls contact picker, restored visible unread state, and added recent-call plus sync status context directly into the main conversation pane.",
+        "devNotes":  "Removed the hard contact result cap in MainViewModel, replaced the Calls tab \u0027Use\u0027 pill rows with direct list selection, reconnected ReadStateService-backed unread tracking, and added selected-conversation call history/sync summary bindings in the main detail pane without replacing the existing message thread flow."
+    },
+    {
+        "timestamp":  "2026-04-20 11:41:48",
+        "version":  "b69",
+        "notes":  "Build 69 automated deployment."
+    },
+    {
+        "timestamp":  "2026-04-20 11:38:50",
+        "version":  "b68",
+        "notes":  "Build 68 automated deployment."
+    },
+    {
+        "timestamp":  "2026-04-20 11:20:47",
+        "version":  "b67",
+        "notes":  "Build 67 automated deployment."
+    },
+    {
+        "timestamp":  "2026-04-20 11:18:21",
+        "version":  "b66",
+        "notes":  "Build 66 automated deployment."
+    },
+    {
+        "timestamp":  "2026-04-20 11:09:05",
+        "version":  "b65",
+        "notes":  "Build 65 automated deployment."
+    },
+    {
+        "timestamp":  "2026-04-20 11:07:51",
+        "version":  "b64",
+        "notes":  "Build 64 automated deployment."
+    },
+    {
+        "timestamp":  "2026-04-20 11:05:51",
+        "version":  "b63",
+        "notes":  "Build 63 automated deployment."
+    },
+    {
+        "timestamp":  "2026-04-20 07:37:12",
+        "version":  "b62",
+        "notes":  "Build 62 automated deployment."
+    },
+    {
+        "timestamp":  "2026-04-20 00:22:36",
+        "version":  "b61",
+        "notes":  "Build 61 automated deployment."
+    },
+    {
+        "timestamp":  "2026-04-20 00:10:23",
+        "version":  "b60",
+        "notes":  "Build 60 automated deployment."
+    },
+    {
+        "timestamp":  "2026-04-20 00:09:31",
+        "version":  "b59",
+        "notes":  "Build 59 automated deployment."
+    },
+    {
+        "timestamp":  "2026-04-19 23:01:26",
+        "version":  "b59",
+        "notes":  "Build 59 automated deployment."
+    },
+    {
+        "version":  "b58",
+        "timestamp":  "2026-04-19 23:01:00",
+        "notes":  "Implemented history resume logic with safe-reset detection for wiped stores.",
+        "devNotes":  "If knownHandles.Count is 0, offsets reset to 0 in MainViewModel.cs. History progress is persisted per-device in settings.json."
+    },
+    {
+        "version":  "b57",
+        "timestamp":  "2026-04-19 23:00:00",
+        "notes":  "Resumable background history sync (initial release).",
+        "devNotes":  "Added HistoryOffsetInbox/Sent to AppSettingsService.KnownDevice; updated MapService.FullHistoryLoadAsync."
+    },
+    {
+        "version":  "b54",
+        "timestamp":  "2026-04-19 22:53:27",
+        "notes":  "Enabled display of Technical Implementation Notes in the Changelog UI.",
+        "devNotes":  "Updated ChangelogEntry.cs and MainWindow.xaml to support and render the \u0027DevNotes\u0027 property in monospaced font."
+    },
+    {
+        "version":  "b53",
+        "timestamp":  "2026-04-19 22:42:30",
+        "notes":  "Improved carrier suffix cleaning and fixed blank changelog display.",
+        "devNotes":  "Extended regex in MapService.CleanMessageBody to handle \\s*$ and updated DeskPhone.csproj with CopyToOutputDirectory for changelog.json."
+    },
+    {
+        "version":  "b51",
+        "timestamp":  "2026-04-19 22:35:02",
+        "notes":  "Added automated build tracking and carrier-side message suffix patch.",
+        "devNotes":  "Integrated build.num reading into deploy.ps1 for auto-JSON updates; added MapService regex for suffix stripping."
+    },
+    {
+        "version":  "b49",
+        "timestamp":  "2026-04-19 22:27:00",
+        "notes":  "Refactored Settings UI and improved log sidebar stability.",
+        "devNotes":  "Moved toggles to MainViewModel/_settings; fixed sidebar layout using MinWidth and ScrollViewer in MainWindow.xaml."
+    },
+    {
+        "version":  "b48",
+        "timestamp":  "2026-04-19 21:00:00",
+        "notes":  "Implemented Priority Sync Window for incoming messages.",
+        "devNotes":  "Added HandleInboxChangeDetected in MainViewModel with a 10s Task.Delay and Interlocked counter to override background loading."
+    }
+]

@@ -1,0 +1,41 @@
+[debug] [2026-06-02T23:04:23.951Z] ----------------------------------------------------------------------
+[debug] [2026-06-02T23:04:23.952Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\ydanz\AppData\Local\npm-cache\_npx\ba4f1959e38407b5\node_modules\firebase-tools\lib\bin\firebase.js projects:list --project onetaskonly-app --json
+[debug] [2026-06-02T23:04:23.952Z] CLI Version:   15.19.0
+[debug] [2026-06-02T23:04:23.953Z] Platform:      win32
+[debug] [2026-06-02T23:04:23.953Z] Node Version:  v22.17.1
+[debug] [2026-06-02T23:04:23.953Z] Time:          Tue Jun 02 2026 19:04:23 GMT-0400 (Eastern Daylight Time)
+[debug] [2026-06-02T23:04:23.953Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-06-02T23:04:24.106Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-06-02T23:04:24.107Z] > authorizing via signed-in user (rabbidanziger@hocsouthbend.com)
+[debug] [2026-06-02T23:04:24.110Z] Checked if tokens are valid: false, expires at: 1779654906371
+[debug] [2026-06-02T23:04:24.110Z] Checked if tokens are valid: false, expires at: 1779654906371
+[debug] [2026-06-02T23:04:24.110Z] > refreshing access token with scopes: []
+[debug] [2026-06-02T23:04:24.112Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-06-02T23:04:24.112Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-06-02T23:04:25.200Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 400
+[debug] [2026-06-02T23:04:25.201Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-06-02T23:04:25.201Z] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-06-02T23:04:25.202Z] FirebaseError: Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+    at invalidCredentialError (C:\Users\ydanz\AppData\Local\npm-cache\_npx\ba4f1959e38407b5\node_modules\firebase-tools\lib\auth.js:177:12)
+    at refreshTokens (C:\Users\ydanz\AppData\Local\npm-cache\_npx\ba4f1959e38407b5\node_modules\firebase-tools\lib\auth.js:590:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async getAccessToken (C:\Users\ydanz\AppData\Local\npm-cache\_npx\ba4f1959e38407b5\node_modules\firebase-tools\lib\apiv2.js:52:18)
+    at async Client.addAuthHeader (C:\Users\ydanz\AppData\Local\npm-cache\_npx\ba4f1959e38407b5\node_modules\firebase-tools\lib\apiv2.js:182:21)
+    at async Client.request (C:\Users\ydanz\AppData\Local\npm-cache\_npx\ba4f1959e38407b5\node_modules\firebase-tools\lib\apiv2.js:129:34)
+    at async getProjectPage (C:\Users\ydanz\AppData\Local\npm-cache\_npx\ba4f1959e38407b5\node_modules\firebase-tools\lib\management\projects.js:287:17)
+    at async getFirebaseProjectPage (C:\Users\ydanz\AppData\Local\npm-cache\_npx\ba4f1959e38407b5\node_modules\firebase-tools\lib\management\projects.js:304:23)
+    at async listFirebaseProjects (C:\Users\ydanz\AppData\Local\npm-cache\_npx\ba4f1959e38407b5\node_modules\firebase-tools\lib\management\projects.js:333:29)
+    at async Command.actionFn (C:\Users\ydanz\AppData\Local\npm-cache\_npx\ba4f1959e38407b5\node_modules\firebase-tools\lib\commands\projects-list.js:51:20)
+[error] 
+[error] Error: Failed to list Firebase projects. See firebase-debug.log for more info.

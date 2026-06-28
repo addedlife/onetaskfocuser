@@ -1,0 +1,97 @@
+functionsDirectory = "C:\\Users\\ydanz\\OneDrive\\Documents\\Shamash Pro 4 App\\apps\\web\\backend\\functions"
+functionsDirectoryOrigin = "config-v1"
+headersOrigin = "config"
+redirectsOrigin = "config"
+plugins = []
+
+[functions]
+
+[functions.gemini-proxy]
+timeout = 300.0
+
+[functions.ai-proxy]
+timeout = 300.0
+
+[functions.mcp]
+timeout = 60.0
+
+[functions.phone-relay]
+timeout = 10.0
+
+[functions.google-workspace]
+timeout = 60.0
+
+[functions."*"]
+node_bundler = "esbuild"
+
+[build]
+publish = "C:\\Users\\ydanz\\OneDrive\\Documents\\Shamash Pro 4 App\\apps\\web\\dist"
+publishOrigin = "config"
+commandOrigin = "config"
+base = "C:\\Users\\ydanz\\OneDrive\\Documents\\Shamash Pro 4 App\\apps\\web"
+command = "npm run build && node scripts/copy-shailos-to-dist.cjs"
+functions = "C:\\Users\\ydanz\\OneDrive\\Documents\\Shamash Pro 4 App\\apps\\web\\backend\\functions"
+
+[build.environment]
+NODE_VERSION = "20"
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]
+
+[[headers]]
+for = "/assets/*"
+
+[headers.values]
+Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+for = "/index.html"
+
+[headers.values]
+Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+for = "/sw.js"
+
+[headers.values]
+Cache-Control = "no-cache, must-revalidate"
+Service-Worker-Allowed = "/"
+
+[[headers]]
+for = "/manifest.webmanifest"
+
+[headers.values]
+Cache-Control = "no-cache, must-revalidate"
+
+[[redirects]]
+from = "/mcp"
+to = "/.netlify/functions/mcp"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/shailos/*"
+to = "/shailos/index.html"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]

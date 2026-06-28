@@ -1,0 +1,1 @@
+!function(){"use strict";var e={};e.g=function(){if("object"==typeof globalThis)return globalThis;try{return this||new Function("return this")()}catch(e){if("object"==typeof window)return window}}();var r;(r=(e.g.browser||(e.g.browser=chrome),e.g.browser).runtime).connect(),window.addEventListener("message",e=>{e.source==window&&r.sendMessage(e.data)},!1)}();

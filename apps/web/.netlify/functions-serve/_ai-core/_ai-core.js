@@ -1,0 +1,1 @@
+module.exports = require('./backend/functions/_ai-core.js')

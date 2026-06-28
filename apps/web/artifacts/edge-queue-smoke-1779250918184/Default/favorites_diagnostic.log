@@ -1,0 +1,23 @@
+2026-05-20 04:21:58.374: [INFO] VisibilityChanged: 0
+2026-05-20 04:21:58.385: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-05-20 04:21:58.385: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-05-20 04:21:58.386: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-05-20 04:21:58.386: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-05-20 04:21:58.386: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-05-20 04:21:58.386: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-05-20 04:21:58.387: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-05-20 04:21:58.387: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-05-20 04:21:58.387: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-05-20 04:21:58.388: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-05-20 04:21:58.388: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-05-20 04:21:58.388: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-05-20 04:21:58.397: [INFO] BookmarkModelLoaded, ids_reassigned: 0
+2026-05-20 04:21:58.397: [INFO] OnDoneLoading sync enabled: 0
+2026-05-20 04:21:58.429: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-05-20 04:21:58.805: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 0
+2026-05-20 04:21:58.807: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 3
+2026-05-20 04:21:58.808: [INFO] Primary account changed.
+2026-05-20 04:21:58.808: [INFO] OnPrimaryAccountChanged PrimaryAccountChangeEvent::Type::kSet
+2026-05-20 04:21:58.811: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 3
+2026-05-20 04:21:58.817: [INFO] RecordSyncInitDuration has_sync_been_enabled: 0 state: 3
+2026-05-20 04:21:59.741: [INFO] Sync initialization duration: 878ms

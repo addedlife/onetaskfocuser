@@ -1,0 +1,5 @@
+2026/05/20-00:23:38.437 5a64 Creating DB C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App\apps\web\artifacts\edge-queue-smoke-1779251015932\Default\EdgeCoupons/coupons_data.db since it was missing.
+2026/05/20-00:23:38.445 5a64 Reusing MANIFEST C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App\apps\web\artifacts\edge-queue-smoke-1779251015932\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/05/20-00:23:38.677 f18 Level-0 table #5: started
+2026/05/20-00:23:38.680 f18 Level-0 table #5: 682468 bytes OK
+2026/05/20-00:23:38.681 f18 Delete type=0 #3

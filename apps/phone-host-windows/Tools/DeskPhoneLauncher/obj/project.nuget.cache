@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "rZdF8LjO8No=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\ydanz\\OneDrive\\Documents\\Shamash Pro 4 App\\apps\\phone-host-windows\\Tools\\DeskPhoneLauncher\\DeskPhoneLauncher.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\ydanz\\.nuget\\packages\\microsoft.windows.sdk.net.ref\\10.0.19041.56\\microsoft.windows.sdk.net.ref.10.0.19041.56.nupkg.sha512"
+  ],
+  "logs": []
+}

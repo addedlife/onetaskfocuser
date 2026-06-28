@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(firebase projects:list)",
+      "Bash(rm -f ../web/shailos/assets/*)",
+      "Bash(cp dist/assets/* ../web/shailos/assets/)",
+      "Bash(cp dist/index.html ../web/shailos/index.html)"
+    ]
+  }
+}

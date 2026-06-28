@@ -1,0 +1,496 @@
+{
+  "GeneratedAt": "2026-06-11T13:17:44.5926881-04:00",
+  "MachineName": "USERSURFACE",
+  "RepoRoot": "C:\\Users\\ydanz\\OneDrive\\Documents\\Shamash Pro 4 App\\apps\\phone-host-windows",
+  "ProcessName": "DeskPhone",
+  "ProcessId": 31304,
+  "WindowTitle": "DeskPhone Live Log",
+  "Dpi": {
+    "Dpi": 96,
+    "ScalePercent": 100
+  },
+  "ScreenshotPath": "C:\\Users\\ydanz\\OneDrive\\Documents\\Shamash Pro 4 App\\apps\\phone-host-windows\\artifacts\\ui-audits\\20260611-131744\\deskphone.png",
+  "ElementCount": 16,
+  "Findings": [
+    {
+      "Severity": "Medium",
+      "Code": "InvalidActionBounds",
+      "Message": "Actionable Button has no usable screen bounds.",
+      "ElementId": "PageDown",
+      "ProcessId": 31304
+    },
+    {
+      "Severity": "Medium",
+      "Code": "SmallClickTarget",
+      "Message": "Button \u0022Clear\u0022 is 60x30; desktop action targets should stay at least 32x32.",
+      "ElementId": "",
+      "ProcessId": 31304
+    },
+    {
+      "Severity": "Medium",
+      "Code": "SmallClickTarget",
+      "Message": "Button \u0022Minimize\u0022 is 47x30; desktop action targets should stay at least 32x32.",
+      "ElementId": "Minimize",
+      "ProcessId": 31304
+    },
+    {
+      "Severity": "Medium",
+      "Code": "SmallClickTarget",
+      "Message": "Button \u0022Maximize\u0022 is 46x30; desktop action targets should stay at least 32x32.",
+      "ElementId": "Maximize",
+      "ProcessId": 31304
+    },
+    {
+      "Severity": "Medium",
+      "Code": "SmallClickTarget",
+      "Message": "Button \u0022Close\u0022 is 47x30; desktop action targets should stay at least 32x32.",
+      "ElementId": "Close",
+      "ProcessId": 31304
+    },
+    {
+      "Severity": "Medium",
+      "Code": "SmallClickTarget",
+      "Message": "MenuItem \u0022System\u0022 is 22x22; desktop action targets should stay at least 32x32.",
+      "ElementId": "Item 1",
+      "ProcessId": 31304
+    },
+    {
+      "Severity": "Medium",
+      "Code": "SmallClickTarget",
+      "Message": "Button \u0022PageUp\u0022 is 10x2; desktop action targets should stay at least 32x32.",
+      "ElementId": "PageUp",
+      "ProcessId": 31304
+    },
+    {
+      "Severity": "Low",
+      "Code": "PossibleBlurSource",
+      "Message": "MainWindow.xaml contains LayoutTransform; transforms/effects can soften text and icons.",
+      "ElementId": "MainWindow.xaml",
+      "ProcessId": null
+    },
+    {
+      "Severity": "Low",
+      "Code": "PossibleBlurSource",
+      "Message": "MainWindow.xaml contains ScaleTransform; transforms/effects can soften text and icons.",
+      "ElementId": "MainWindow.xaml",
+      "ProcessId": null
+    },
+    {
+      "Severity": "Low",
+      "Code": "PossibleBlurSource",
+      "Message": "MainWindow.xaml contains DropShadowEffect; transforms/effects can soften text and icons.",
+      "ElementId": "MainWindow.xaml",
+      "ProcessId": null
+    },
+    {
+      "Severity": "Low",
+      "Code": "PossibleBlurSource",
+      "Message": "App.xaml contains DropShadowEffect; transforms/effects can soften text and icons.",
+      "ElementId": "App.xaml",
+      "ProcessId": null
+    },
+    {
+      "Severity": "Low",
+      "Code": "PossibleBlurSource",
+      "Message": "Styles.xaml contains RenderTransform; transforms/effects can soften text and icons.",
+      "ElementId": "Styles.xaml",
+      "ProcessId": null
+    },
+    {
+      "Severity": "Low",
+      "Code": "PossibleBlurSource",
+      "Message": "Styles.xaml contains ScaleTransform; transforms/effects can soften text and icons.",
+      "ElementId": "Styles.xaml",
+      "ProcessId": null
+    }
+  ],
+  "Elements": [
+    {
+      "ControlType": "Window",
+      "Name": "DeskPhone Live Log",
+      "AutomationId": "",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1240,
+        "Y": 130,
+        "Width": 680,
+        "Height": 760,
+        "HasArea": true,
+        "Right": 1920,
+        "Bottom": 890,
+        "Area": 516800
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": false,
+      "Depth": 0,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "TitleBar",
+      "Name": "DeskPhone Live Log",
+      "AutomationId": "TitleBar",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1248,
+        "Y": 138,
+        "Width": 664,
+        "Height": 23,
+        "HasArea": true,
+        "Right": 1912,
+        "Bottom": 161,
+        "Area": 15272
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": false,
+      "Depth": 1,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "Text",
+      "Name": "Live Log",
+      "AutomationId": "",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1283,
+        "Y": 194,
+        "Width": 522,
+        "Height": 27,
+        "HasArea": true,
+        "Right": 1805,
+        "Bottom": 221,
+        "Area": 14094
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": false,
+      "Depth": 1,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "Text",
+      "Name": "Open this when you need connection detail or release diagnostics. Closing it leaves the main DeskPhone window alone.",
+      "AutomationId": "",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1283,
+        "Y": 225,
+        "Width": 522,
+        "Height": 32,
+        "HasArea": true,
+        "Right": 1805,
+        "Bottom": 257,
+        "Area": 16704
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": false,
+      "Depth": 1,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "Button",
+      "Name": "Clear",
+      "AutomationId": "",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1817,
+        "Y": 210,
+        "Width": 60,
+        "Height": 30,
+        "HasArea": true,
+        "Right": 1877,
+        "Bottom": 240,
+        "Area": 1800
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": true,
+      "Depth": 1,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "Edit",
+      "Name": "",
+      "AutomationId": "DebugTextBox",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1265,
+        "Y": 287,
+        "Width": 630,
+        "Height": 578,
+        "HasArea": true,
+        "Right": 1895,
+        "Bottom": 865,
+        "Area": 364140
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": true,
+      "Depth": 1,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "MenuBar",
+      "Name": "System Menu Bar",
+      "AutomationId": "SystemMenuBar",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1248,
+        "Y": 138,
+        "Width": 22,
+        "Height": 22,
+        "HasArea": true,
+        "Right": 1270,
+        "Bottom": 160,
+        "Area": 484
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": false,
+      "Depth": 2,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "Button",
+      "Name": "Minimize",
+      "AutomationId": "Minimize",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1773,
+        "Y": 131,
+        "Width": 47,
+        "Height": 30,
+        "HasArea": true,
+        "Right": 1820,
+        "Bottom": 161,
+        "Area": 1410
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": true,
+      "Depth": 2,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "Button",
+      "Name": "Maximize",
+      "AutomationId": "Maximize",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1820,
+        "Y": 131,
+        "Width": 46,
+        "Height": 30,
+        "HasArea": true,
+        "Right": 1866,
+        "Bottom": 161,
+        "Area": 1380
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": true,
+      "Depth": 2,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "Button",
+      "Name": "Close",
+      "AutomationId": "Close",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1866,
+        "Y": 131,
+        "Width": 47,
+        "Height": 30,
+        "HasArea": true,
+        "Right": 1913,
+        "Bottom": 161,
+        "Area": 1410
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": true,
+      "Depth": 2,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "Text",
+      "Name": "Clear",
+      "AutomationId": "",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1831,
+        "Y": 216,
+        "Width": 32,
+        "Height": 19,
+        "HasArea": true,
+        "Right": 1863,
+        "Bottom": 235,
+        "Area": 608
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": false,
+      "Depth": 2,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "ScrollBar",
+      "Name": "",
+      "AutomationId": "VerticalScrollBar",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1871,
+        "Y": 571,
+        "Width": 10,
+        "Height": 10,
+        "HasArea": true,
+        "Right": 1881,
+        "Bottom": 581,
+        "Area": 100
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": false,
+      "Depth": 2,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "MenuItem",
+      "Name": "System",
+      "AutomationId": "Item 1",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1248,
+        "Y": 138,
+        "Width": 22,
+        "Height": 22,
+        "HasArea": true,
+        "Right": 1270,
+        "Bottom": 160,
+        "Area": 484
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": true,
+      "Depth": 3,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "Button",
+      "Name": "",
+      "AutomationId": "PageUp",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1871,
+        "Y": 571,
+        "Width": 10,
+        "Height": 2,
+        "HasArea": true,
+        "Right": 1881,
+        "Bottom": 573,
+        "Area": 20
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": true,
+      "Depth": 3,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "Thumb",
+      "Name": "",
+      "AutomationId": "",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": 1871,
+        "Y": 573,
+        "Width": 10,
+        "Height": 10,
+        "HasArea": true,
+        "Right": 1881,
+        "Bottom": 583,
+        "Area": 100
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": false,
+      "Depth": 3,
+      "HasValidBounds": true
+    },
+    {
+      "ControlType": "Button",
+      "Name": "",
+      "AutomationId": "PageDown",
+      "ProcessId": 31304,
+      "Bounds": {
+        "X": "Infinity",
+        "Y": "Infinity",
+        "Width": "-Infinity",
+        "Height": "-Infinity",
+        "HasArea": false,
+        "Right": "NaN",
+        "Bottom": "NaN",
+        "Area": 0
+      },
+      "IsEnabled": true,
+      "IsOffscreen": false,
+      "IsActionable": true,
+      "Depth": 3,
+      "HasValidBounds": false
+    }
+  ],
+  "StaticAudit": {
+    "ScannedFiles": [
+      "MainWindow.xaml",
+      "App.xaml",
+      "Styles.xaml"
+    ],
+    "Findings": [
+      {
+        "Severity": "Low",
+        "Code": "PossibleBlurSource",
+        "Message": "MainWindow.xaml contains LayoutTransform; transforms/effects can soften text and icons.",
+        "ElementId": "MainWindow.xaml",
+        "ProcessId": null
+      },
+      {
+        "Severity": "Low",
+        "Code": "PossibleBlurSource",
+        "Message": "MainWindow.xaml contains ScaleTransform; transforms/effects can soften text and icons.",
+        "ElementId": "MainWindow.xaml",
+        "ProcessId": null
+      },
+      {
+        "Severity": "Low",
+        "Code": "PossibleBlurSource",
+        "Message": "MainWindow.xaml contains DropShadowEffect; transforms/effects can soften text and icons.",
+        "ElementId": "MainWindow.xaml",
+        "ProcessId": null
+      },
+      {
+        "Severity": "Low",
+        "Code": "PossibleBlurSource",
+        "Message": "App.xaml contains DropShadowEffect; transforms/effects can soften text and icons.",
+        "ElementId": "App.xaml",
+        "ProcessId": null
+      },
+      {
+        "Severity": "Low",
+        "Code": "PossibleBlurSource",
+        "Message": "Styles.xaml contains RenderTransform; transforms/effects can soften text and icons.",
+        "ElementId": "Styles.xaml",
+        "ProcessId": null
+      },
+      {
+        "Severity": "Low",
+        "Code": "PossibleBlurSource",
+        "Message": "Styles.xaml contains ScaleTransform; transforms/effects can soften text and icons.",
+        "ElementId": "Styles.xaml",
+        "ProcessId": null
+      }
+    ]
+  }
+}

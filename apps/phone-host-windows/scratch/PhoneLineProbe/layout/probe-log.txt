@@ -1,0 +1,15 @@
+00:32:19.268  === probe v4 ===
+00:32:19.310  Package: DeskPhone.PhoneLineProbe_1.0.0.0_arm64__qbszw7yg3eh94
+00:32:19.349     [before] AudioRender: Speakers (Qualcomm(R) Aqstic(TM) Audio Adapter Device)  enabled=True
+00:32:19.361     [before] AudioCapture: Microphone Array (Qualcomm(R) Aqstic(TM) ACX Static Endpoints Audio Device)  enabled=True
+00:32:19.361     [before] AudioCapture: Microphone (Camo)  enabled=True
+00:32:20.468  Phone=FIG-NEWTON status=Connected sdp=Success/1
+00:32:20.514  access=Allowed
+00:32:20.542  RegisterApp OK
+00:32:21.188  Connect#1=False
+00:32:24.209  Connect#2=False
+00:32:27.244  store threw 8007139F 
+00:32:31.268     [after] AudioRender: Speakers (Qualcomm(R) Aqstic(TM) Audio Adapter Device)  enabled=True
+00:32:31.276     [after] AudioCapture: Microphone Array (Qualcomm(R) Aqstic(TM) ACX Static Endpoints Audio Device)  enabled=True
+00:32:31.277     [after] AudioCapture: Microphone (Camo)  enabled=True
+00:32:31.288  === done ===

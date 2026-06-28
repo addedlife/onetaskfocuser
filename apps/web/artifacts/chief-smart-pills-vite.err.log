@@ -1,0 +1,8 @@
+Error: The following dependencies are imported but could not be resolved:
+
+  [36m@emotion/is-prop-valid[39m [37m[2m(imported by C:/Users/ydanz/OneDrive/Documents/Shamash Pro 4 App/apps/web/shailos/assets/index-DLMDgD5x.js)[22m[39m
+
+Are they installed?
+    at file:///C:/Users/ydanz/OneDrive/Documents/Shamash%20Pro%204%20App/apps/web/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:14849:15
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async file:///C:/Users/ydanz/OneDrive/Documents/Shamash%20Pro%204%20App/apps/web/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:47014:28

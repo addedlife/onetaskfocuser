@@ -1,0 +1,6 @@
+C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App\apps\phone-host-windows\deployed-builds\b300\Tools\DeskPhoneUiAuditor\DeskPhoneUiAuditor.exe
+C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App\apps\phone-host-windows\deployed-builds\b300\Tools\DeskPhoneUiAuditor\DeskPhoneUiAuditor.dll
+C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App\apps\phone-host-windows\deployed-builds\b300\Tools\DeskPhoneUiAuditor\DeskPhoneUiAuditor.deps.json
+C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App\apps\phone-host-windows\deployed-builds\b300\Tools\DeskPhoneUiAuditor\DeskPhoneUiAuditor.runtimeconfig.json
+C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App\apps\phone-host-windows\deployed-builds\b300\Tools\DeskPhoneUiAuditor\Microsoft.Windows.SDK.NET.dll
+C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App\apps\phone-host-windows\deployed-builds\b300\Tools\DeskPhoneUiAuditor\WinRT.Runtime.dll

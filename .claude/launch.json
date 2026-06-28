@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "shamash-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5177"],
+      "port": 5177
+    },
+    {
+      "name": "shamash-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "apps/web", "run", "dev", "--", "--port", "5178"],
+      "port": 5178
+    },
+    {
+      "name": "pro5",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "SHAMASH_PRO5_REBUILD/app", "run", "dev", "--", "--port", "5500"],
+      "port": 5500
+    }
+  ]
+}
