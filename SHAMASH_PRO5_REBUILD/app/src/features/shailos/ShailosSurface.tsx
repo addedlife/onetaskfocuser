@@ -6,7 +6,7 @@ import type { ShailaStatus } from '@/lib/types';
 const STATUS_LABEL: Record<ShailaStatus, string> = {
   pending: 'Pending answer',
   answered: 'Answered — reply owed',
-  gotback: 'Got back',
+  got_back: 'Got back',
 };
 
 /**
@@ -43,13 +43,13 @@ export function ShailosSurface() {
         >
           {shailos.map((q) => (
             <ListItem key={q.id}>
-              {q.synopsis}
+              {q.synopsis || q.content || 'Shaila'}
               <span slot="supporting-text">
-                {q.answerer ? `${q.answerer} · ` : ''}
+                {q.answererName ? `${q.answererName} · ` : ''}
                 {STATUS_LABEL[q.status]}
               </span>
               <span slot="end">
-                {q.status !== 'gotback' ? (
+                {q.status !== 'got_back' ? (
                   <ActionBtn
                     variant="tonal"
                     height={32}

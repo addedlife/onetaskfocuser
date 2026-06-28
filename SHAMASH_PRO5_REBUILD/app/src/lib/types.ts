@@ -1,103 +1,104 @@
 /**
- * Domain model — the core data shapes the whole app revolves around.
+ * Domain model — the core data shapes, with field names VERIFIED against the real Pro 4
+ * `apps/web/src/01-core.js` (see ANALYSIS/10-data-ai-core.md). Persistence is "v5" = one Firestore
+ * document per task, reconstructed into an in-memory `lists[].tasks[]` blob.
  *
- * ⚠️ FIDELITY TODO (Phase 0.2): these are derived from APP_FEATURE_MAP.md + APP_ATLAS.md. Before the
- * Store/persistence layer is built (Phase 2), verify every field name and shape against the REAL Pro 4
- * data in `apps/web/src/01-core.js` (the `Store` object, `_flattenTasks`/`_saveV5`/`_extractSettings`)
- * and `apps/web/src/08-app-split/App.jsx` task/shaila handlers, then reconcile here. The persistence
- * model is "v5" = one Firestore document per task.
+ * Still-open fidelity checks (Phase 0.3/0.6 — confirm in App.jsx / 04-components):
+ *   `energy`, `contextTags`, `color`, `firstStep` are referenced by the Feature Map but not set in
+ *   01-core; verify their exact field names before relying on them.
  */
 
 export type EnergyLevel = 'high' | 'low';
 
-/** A blocked task: hidden/deprioritized until `until`, with an optional reflected reason. */
-export interface BlockInfo {
-  until: number; // epoch ms
-  reason?: string;
-}
-
-/** A single task. */
+/** A single task. (Pro 4 field names: text/priority/completed — NOT title/priorityId/completedAt.) */
 export interface Task {
   id: string;
-  title: string;
-  listId: string;
+  text: string;
+  priority: string; // priority tier id
+  completed?: boolean;
+  createdAt: number; // epoch ms
+  listId?: string; // which list (V5 per-task field; in-memory nested under its list)
 
-  /** Priority tier id (see Priority). Color is usually inherited from the tier or a random accent. */
-  priorityId: string;
-  color?: string;
+  // lifecycle
+  blocked?: boolean; // truthy → sinks to bottom of the queue
+  blockedUntil?: number; // when the block lifts (set by BlockedModal — verify in 05-modals)
+  snoozedUntil?: number; // "park til tomorrow"
+  pinned?: boolean;
 
-  /** Energy match (⚡ high / 🌊 low) so the queue can match tasks to the user's current energy. */
+  // grouping ("shattered into crystals") — Pro 4 groups by the PARENT'S TEXT
+  parentTask?: string;
+  stepIndex?: number;
+
+  // priority aging
+  prioritySetAt?: number;
+  autoAged?: boolean;
+  agedFromPriId?: string;
+  agedFromLabel?: string;
+
+  mrsW?: boolean;
+  shailaId?: string; // links a shaila-priority task to its shaila doc
+
+  // Feature-Map fields — exact names TBD (see header)
   energy?: EnergyLevel;
-
-  createdAt: number; // epoch ms — drives aging ("3 days waiting") + Mrs. W windows
-  updatedAt?: number;
-  completedAt?: number | null; // null/undefined = open; set = done
-  goodEnough?: boolean; // completed via "good enough"
-
-  /** Context tags like @home / @phone. */
   contextTags?: string[];
+  color?: string;
+  firstStep?: string;
 
-  blocked?: BlockInfo | null;
-  parkedUntil?: number | null; // "park til tomorrow"
-  pinned?: boolean; // pinned / moved-to-top
-
-  /** Subtask grouping ("shattered into crystals"). */
-  groupId?: string | null;
-  parentId?: string | null;
-  order?: number; // manual drag order within a list/group
-
-  mrsW?: boolean; // belongs to the recurring "Mrs. W" priority window
-  firstStep?: string; // AI-suggested first step
+  // persistence internals
+  _sortIndex?: number;
+  _lastModified?: number;
 }
 
-/** A user-defined priority tier (Shaila / Now / Today / Eventually / custom…). */
+/** A priority tier. Pro 4 orders by `weight` (higher = more important), not `order`. */
 export interface Priority {
   id: string;
   label: string;
   color: string;
-  order: number;
-  builtin?: boolean;
+  weight: number;
+  isShaila?: boolean;
+  deleted?: boolean; // soft-delete (retired tier, e.g. Before Shavuos)
+  superPinned?: boolean;
 }
 
-/** A named task list. */
+/** A named task list. Tasks are nested under it at runtime; the store normalizes by id. */
 export interface TaskList {
   id: string;
   name: string;
   order?: number;
 }
 
-export type ShailaStatus = 'pending' | 'answered' | 'gotback';
+export type ShailaStatus = 'pending' | 'answered' | 'got_back';
 
-/** Research output attached to a shaila (web + Sefaria sources). */
+/** Research output attached to a shaila (web + Sefaria). Exact fields confirmed in Phase 0.9. */
 export interface ShailaResearch {
   report: string;
   sources?: { title: string; url?: string; summary?: string }[];
   generatedAt?: number;
 }
 
-/**
- * A shaila — a halachic question being tracked (the highest-priority surface).
- * Lifecycle: asked → (answered by someone) → got back to the asker.
- */
+/** A shaila — the highest-priority surface. (Doc fields verified against 01-core.js.) */
 export interface Shaila {
   id: string;
-  synopsis: string; // AI-generated, editable; regen/dictate supported
-  question: string; // the full question
-  asker?: string; // who asked you
-  answerer?: string; // who you asked / who answered
-  answer?: string; // empty until filled ("[waiting for answer]")
+  content?: string; // the full question
+  synopsis?: string; // short, AI-generated, editable
   status: ShailaStatus;
-  gotBack?: boolean; // you relayed the answer back to the asker
+  date?: string; // "YYYY-MM-DD HH:MM"
+  askerName?: string;
+  answer?: string;
+  answererName?: string;
+  parsedShaila?: string;
+  userId?: string;
+  _taskAppSource?: boolean; // created from a shaila-priority task
   research?: ShailaResearch | null;
-  linkedTaskId?: string | null;
-  createdAt: number;
+  linkedTaskId?: string;
+  createdAt?: number;
   updatedAt?: number;
 }
 
-/** AI provider selection (default: Claude, per owner preference). */
+/** AI provider selection (Pro 5 default: Claude). */
 export type AiProvider = 'claude' | 'gemini';
 
-/** Top-level persisted settings (theme, AI, lists, priorities…). */
+/** Persisted settings = the "AS" blob minus `lists`/`_lsModified`. */
 export interface AppSettings {
   schemeId: string;
   aiProvider: AiProvider;

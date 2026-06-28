@@ -1,13 +1,13 @@
 import { List, ListItem, denseListVars, IconBtn } from '@/m3';
 import { useData } from '@/state/data';
-import { MOCK_PRIORITIES } from '@/mock/seed';
+import { DEFAULT_PRIORITIES } from '@/lib/constants';
 import { SP } from '@/theme';
 
 const PRI_COLOR: Record<string, string> = Object.fromEntries(
-  MOCK_PRIORITIES.map((p) => [p.id, p.color]),
+  DEFAULT_PRIORITIES.map((p) => [p.id, p.color]),
 );
-const PRI_ORDER: Record<string, number> = Object.fromEntries(
-  MOCK_PRIORITIES.map((p) => [p.id, p.order]),
+const PRI_WEIGHT: Record<string, number> = Object.fromEntries(
+  DEFAULT_PRIORITIES.map((p) => [p.id, p.weight]),
 );
 
 function ageLabel(createdAt: number): string {
@@ -19,18 +19,18 @@ function ageLabel(createdAt: number): string {
 
 /**
  * Focus — interim queue-style task list (the one-task-at-a-time card view is Phase 4). Second real
- * surface: live tasks from the store on genuine md-list, sorted by priority then age, with a priority
- * color dot and a working "done" action.
+ * surface: live tasks from the store on genuine md-list, sorted by priority weight then age, with a
+ * priority color dot and a working "done" action.
  */
 export function FocusSurface() {
   const tasks = useData((s) => s.tasks);
   const toggleDone = useData((s) => s.toggleDone);
 
   const open = tasks
-    .filter((t) => !t.completedAt)
+    .filter((t) => !t.completed)
     .sort(
       (a, b) =>
-        (PRI_ORDER[a.priorityId] ?? 9) - (PRI_ORDER[b.priorityId] ?? 9) || a.createdAt - b.createdAt,
+        (PRI_WEIGHT[b.priority] ?? 0) - (PRI_WEIGHT[a.priority] ?? 0) || a.createdAt - b.createdAt,
     );
 
   return (
@@ -63,11 +63,11 @@ export function FocusSurface() {
                   width: 10,
                   height: 10,
                   borderRadius: '50%',
-                  background: PRI_COLOR[t.priorityId] ?? 'var(--shp-color-faint)',
+                  background: PRI_COLOR[t.priority] ?? 'var(--shp-color-faint)',
                   display: 'inline-block',
                 }}
               />
-              {t.title}
+              {t.text}
               <span slot="supporting-text">
                 {ageLabel(t.createdAt)}
                 {t.blocked ? ' · blocked' : ''}

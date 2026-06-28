@@ -43,6 +43,11 @@
 - **2026-06-28 (first real surface):** Added `state/data.ts` (tasks+shailos store) and rendered the **Shailos
   surface for real** on genuine `md-list` (status + Got-back action, gold identity), wired into `App.tsx`.
   Build green (174 modules, 0 errors). Proves the data→store→M3 pipeline. Other surfaces still placeholder.
+- **2026-06-28 (Phase 0.2 + fidelity fix):** Read the real `01-core.js` (2008 lines), wrote
+  `ANALYSIS/10-data-ai-core.md`. **Corrected the domain model to real Pro 4 field names** (text/completed/
+  priority, parentTask/stepIndex, snoozedUntil, shailaId; shaila content/synopsis/askerName/answererName,
+  status `got_back`; priority weight/isShaila) across `lib/types.ts` + new `lib/constants.ts` + mock + data
+  + both surfaces. Build green (176). Next: `services/ai` (job dispatcher + typed jobs) + `lib/` utils.
 
 ---
 
@@ -52,7 +57,7 @@
 > Mark a Pro 4 line "superseded" wherever `00-delta` says so.
 
 - [x] **0.1 Delta capture** — `ANALYSIS/00-delta-since-atlas.md` (done 2026-06-28)
-- [ ] **0.2 Data + AI core** → `ANALYSIS/10-data-ai-core.md` — `01-core.js` (Store, AI gateway+jobs, contrast, aging) + `shabbos.js`
+- [x] **0.2 Data + AI core** → `ANALYSIS/10-data-ai-core.md` written (Store v5, AI job dispatcher + 11 job IDs, optTasks scoring, aging/MrsW, real Task/Shaila/Priority field names). `shabbos.js` still to spec. **Fixed the domain model** (`lib/types.ts`) to real field names + added `lib/constants.ts` (DEF_PRI/thresholds/palette).
 - [ ] **0.3 Orchestrator** → `ANALYSIS/11-orchestrator.md` — `App.jsx` state inventory, lifecycle, handlers, derived state (map each to a Pro 5 store/hook/service)
 - [ ] **0.4 Auth + boot** → `ANALYSIS/12-auth-boot.md` — `00-auth.jsx`, `main.jsx`, `index.html`, `version.js`, `offline-support.js`, `diagnostics.jsx`
 - [ ] **0.5 Theme + M3 layer** → `ANALYSIS/13-theme-m3.md` — `ui-tokens.jsx`, `m3.jsx`, `02-icons.jsx`, 8 schemes in `01-core.js`, dev tools
@@ -69,7 +74,7 @@
 - [x] 1.2 `m3/` module — `src/m3/index.tsx`: all @material/web wrappers + `IconBtn`/`ActionBtn`/`denseListVars`; `@material/web` pinned **2.4.1**
 - [x] 1.3 `theme/` — `tokens`, `accents.deriveAccents`, `contrast`, 8 `schemes` (full semantic roles), `bridge.globalCss()` + `themeVarsCss()`; applied via `<style>` in `App.tsx`
 - [~] 1.4 Zustand store — **UI + data slices done** (`state/store.ts` UI: suiteView/tab/sidebar/scheme + localStorage; `state/data.ts`: tasks+shailos seeded from mock, with `toggleDone`/`markGotBack`). Google/phone/health slices land with those features.
-- [~] 1.5 `mock/` seed data — **tasks/shailos/priorities/lists/settings done** (`mock/seed.ts`) + domain model (`lib/types.ts`, ⚠️ verify field fidelity vs `01-core.js` in Phase 0.2). Calendar/gmail/phone/health seeds added alongside those features.
+- [~] 1.5 `mock/` seed data — **tasks/shailos/priorities/lists/settings done** (`mock/seed.ts`) + domain model (`lib/types.ts`, ✓ field fidelity verified vs `01-core.js`) + `lib/constants.ts`. Calendar/gmail/phone/health seeds added alongside those features.
 - [~] 1.6 Switchboard shell — **rail + surface routing done** (`features/switchboard/Switchboard.tsx`; `App.tsx` renders a per-surface placeholder with a live 8-theme switcher as the bridge smoke test). TODO: clock + Hebrew date in rail; swap placeholder for real surface panels as features land
 - [x] 1.7 **Build-gate GREEN** — `npm install` (266 pkgs) + `npm run build` (tsc strict + vite) pass, 0 errors; `dist` builds (~378 kB / 92 kB gz); package-lock committed. _Remaining quick check:_ `npm run dev` browser smoke (rail switches surfaces; theme chips repaint M3) — do on resume
 
