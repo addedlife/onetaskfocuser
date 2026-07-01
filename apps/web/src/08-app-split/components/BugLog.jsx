@@ -406,19 +406,31 @@ export function BugLog({ T, railVisible = true }) {
                 {bugs.length === 0 ? 'No entries yet — jot your first one above.' : 'Nothing matches this filter.'}
               </div>
             ) : (
-              <List style={{ '--md-list-container-color': 'transparent', maxHeight: '42vh', overflowY: 'auto' }}>
+              <List style={{
+                '--md-list-container-color': 'transparent', maxHeight: '48vh', overflowY: 'auto',
+                // M3 dense-list density (same approach Gmail/Keep use for compact rows):
+                // shrink the container height + typescale tokens rather than hand-rolled
+                // CSS, so rows stay real M3 list items, just at a tighter density step.
+                '--md-list-item-top-space': '6px',
+                '--md-list-item-bottom-space': '6px',
+                '--md-list-item-two-line-container-height': '44px',
+                '--md-list-item-label-text-size': '13px',
+                '--md-list-item-label-text-line-height': '17px',
+                '--md-list-item-supporting-text-size': '11px',
+                '--md-list-item-supporting-text-line-height': '14px',
+              }}>
                 {visible.map(b => {
                   const t = TYPE_BY[b.type]   || TYPE_BY.bug;
                   const s = STATUS_BY[b.status] || STATUS_BY.unresolved;
                   return (
-                    <ListItem key={b.id} style={{ '--md-list-item-leading-space': '12px', '--md-list-item-trailing-space': '4px' }}>
+                    <ListItem key={b.id} style={{ '--md-list-item-leading-space': '10px', '--md-list-item-trailing-space': '4px' }}>
                       <div slot="start" title={t.label} style={{ display: 'flex', alignItems: 'center' }}>
-                        {sym(t.icon, 18, t.color)}
+                        {sym(t.icon, 15, t.color)}
                       </div>
                       <div slot="headline" style={{ whiteSpace: 'normal', fontFamily: NC_FONT_STACK }}>{b.text}</div>
                       <div slot="supporting-text" style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: NC_FONT_STACK }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: s.color }}>
-                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, display: 'inline-block' }} />
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, display: 'inline-block' }} />
                           {s.label}
                         </span>
                         <span style={{ color: C.faint }}>· {formatRel(b.createdAtMs)}</span>
