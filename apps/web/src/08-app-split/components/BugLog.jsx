@@ -103,6 +103,11 @@ export function BugLog({ T, railVisible = true }) {
   const panelDrag = React.useRef(null);
   const panelRef = React.useRef(null);
 
+  // Panel size — null = default (PANEL_W wide, content-driven height up to
+  // 80vh). Sticky for the session once the user drags the resize handle.
+  const [panelSize, setPanelSize] = React.useState(null);
+  const resizeDrag = React.useRef(null);
+
   // ── Live subscription: same Firestore pipe as the rest of the app ──────────
   React.useEffect(() => {
     let unsub = null, timer = null;
@@ -168,8 +173,10 @@ export function BugLog({ T, railVisible = true }) {
   }
 
   // ── Panel: draggable by its header ───────────────────────────────────────
+  // The close button is a real M3 <md-icon-button> — a custom element, not a
+  // native <button> tag — so it stops propagation itself (see its own
+  // onPointerDown below) rather than relying on a tag-name check here.
   function onPanelHeaderPointerDown(e) {
-    if (e.target.closest('button')) return; // let the close button work untouched
     const rect = panelRef.current?.getBoundingClientRect();
     if (!rect) return;
     panelDrag.current = {
@@ -188,6 +195,26 @@ export function BugLog({ T, railVisible = true }) {
   function onPanelHeaderPointerUp(e) {
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
     panelDrag.current = null;
+  }
+
+  // ── Panel: resize via bottom-right corner handle ─────────────────────────
+  function onResizeHandlePointerDown(e) {
+    e.stopPropagation();
+    const rect = panelRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    resizeDrag.current = { sx: e.clientX, sy: e.clientY, w: rect.width, h: rect.height };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+  }
+  function onResizeHandlePointerMove(e) {
+    const d = resizeDrag.current; if (!d) return;
+    setPanelSize({
+      w: clamp(d.w + (e.clientX - d.sx), 300, Math.min(900, window.innerWidth - 24)),
+      h: clamp(d.h + (e.clientY - d.sy), 280, Math.min(900, window.innerHeight - 24)),
+    });
+  }
+  function onResizeHandlePointerUp(e) {
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
+    resizeDrag.current = null;
   }
 
   // ── Actions ──────────────────────────────────────────────────────────────
@@ -246,9 +273,13 @@ export function BugLog({ T, railVisible = true }) {
     '--md-fab-hover-state-layer-color': C.accent,
   };
 
-  const panelStyle = panelPos
-    ? { left: panelPos.x, top: panelPos.y }
-    : { left: PANEL_ANCHOR.left, top: PANEL_ANCHOR.top };
+  const panelStyle = {
+    ...(panelPos ? { left: panelPos.x, top: panelPos.y } : { left: PANEL_ANCHOR.left, top: PANEL_ANCHOR.top }),
+    width: panelSize ? panelSize.w : PANEL_W,
+    maxWidth: '92vw',
+    height: panelSize ? panelSize.h : undefined,
+    maxHeight: panelSize ? panelSize.h : '80vh',
+  };
 
   return (
     <>
@@ -300,7 +331,6 @@ export function BugLog({ T, railVisible = true }) {
           ref={panelRef}
           style={{
             position: 'fixed', ...panelStyle, zIndex: Z.modal,
-            width: PANEL_W, maxWidth: '92vw', maxHeight: '80vh',
             display: 'flex', flexDirection: 'column',
             background: C.bg, border: `1px solid ${C.divider}`,
             borderRadius: RADIUS.md, boxShadow: ELEV[3], overflow: 'hidden',
@@ -324,13 +354,17 @@ export function BugLog({ T, railVisible = true }) {
             <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, whiteSpace: 'nowrap', flexShrink: 0 }}>
               {unresolvedCount} open
             </span>
-            <IconButton aria-label="Close bug log" onClick={() => { setOpen(false); setMenuId(null); }}>
+            <IconButton
+              aria-label="Close bug log"
+              onPointerDown={e => e.stopPropagation()}
+              onClick={() => { setOpen(false); setMenuId(null); }}
+            >
               {sym('close', 20, C.muted)}
             </IconButton>
           </div>
 
           {/* Body — scrolls internally so nothing overflows the rounded card */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SP.md, padding: SP.md, overflowY: 'auto', minHeight: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SP.md, padding: SP.md, overflowY: 'auto', minHeight: 0, flex: '1 1 auto' }}>
             {/* Quick add */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: SP.sm }}>
               <OutlinedTextField
@@ -431,6 +465,20 @@ export function BugLog({ T, railVisible = true }) {
               <span>{copied ? 'Copied!' : `Copy for coding team${unresolvedCount ? ` (${unresolvedCount})` : ''}`}</span>
             </TextButton>
           </div>
+
+          {/* Resize handle — bottom-right corner grip. No M3 component covers
+              panel resizing, so this is hand-coded per the fallback rule. */}
+          <div
+            onPointerDown={onResizeHandlePointerDown}
+            onPointerMove={onResizeHandlePointerMove}
+            onPointerUp={onResizeHandlePointerUp}
+            title="Resize"
+            style={{
+              position: 'absolute', right: 2, bottom: 2, width: 18, height: 18,
+              cursor: 'nwse-resize', touchAction: 'none', borderRadius: 2, opacity: 0.55,
+              backgroundImage: `repeating-linear-gradient(135deg, ${C.faint} 0px, ${C.faint} 1.5px, transparent 1.5px, transparent 4px)`,
+            }}
+          />
         </div>
       )}
     </>
