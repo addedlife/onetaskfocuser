@@ -3100,8 +3100,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       <style>{themeVarsCss(T)}</style>
 
       {/* Overlays */}
-      {/* Floating bug-log launcher — present on every screen, self-positioning. */}
-      <BugLog T={T} />
+      {/* Bug log — draggable panel on every screen; floating left-side launcher only
+          when the nav rail (which then carries its own Bug Log item) is hidden. */}
+      <BugLog T={T} railVisible={!shellHidden} />
       {zen && curT && <ZenMode task={curT} pris={pris} T={T} onExit={exitZen} onDone={(isl)=>isl?legacyCompTask(curT.id):compTask(curT.id)}
         justStartId={justStartId} curTaskId={curT?.id} onDoneJustStart={()=>setJustStartId(null)} jsMinimized={jsMinimized} onRestoreJs={()=>setJsMinimized(false)}
         showBodyDouble={showBodyDouble} bdMinimized={bdMinimized} onRestoreBd={()=>setBdMinimized(false)} onCloseBd={()=>{setShowBodyDouble(false);setBdMinimized(false);}}

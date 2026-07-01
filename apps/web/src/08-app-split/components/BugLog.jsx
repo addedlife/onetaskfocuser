@@ -1,7 +1,6 @@
 import React from 'react';
 import { createComponent } from '@lit/react';
 import { MdFab } from '@material/web/fab/fab.js';
-import { MdDialog } from '@material/web/dialog/dialog.js';
 import { MdOutlinedTextField } from '@material/web/textfield/outlined-text-field.js';
 import { MdOutlinedSelect } from '@material/web/select/outlined-select.js';
 import { MdSelectOption } from '@material/web/select/select-option.js';
@@ -19,10 +18,7 @@ import { Store, textOnColor } from '../../01-core.js';
 import { cleanTheme, GOLD, CAT_MAIL, NC_FONT_STACK, NC_TYPE, RADIUS, SP, ELEV, TRANSITION, Z } from '../ui-tokens.jsx';
 
 // Real M3 web components — same createComponent bridge as AppSuiteChrome.jsx.
-// `events` maps a React prop to the custom element's DOM event so we can react
-// to closes / value changes the React way.
 const Fab               = createComponent({ react: React, tagName: 'md-fab',                elementClass: MdFab });
-const Dialog            = createComponent({ react: React, tagName: 'md-dialog',             elementClass: MdDialog,            events: { onClosed: 'closed' } });
 const OutlinedTextField = createComponent({ react: React, tagName: 'md-outlined-text-field', elementClass: MdOutlinedTextField, events: { onInput: 'input' } });
 const OutlinedSelect    = createComponent({ react: React, tagName: 'md-outlined-select',    elementClass: MdOutlinedSelect,    events: { onChange: 'change' } });
 const SelectOption      = createComponent({ react: React, tagName: 'md-select-option',      elementClass: MdSelectOption });
@@ -37,17 +33,24 @@ const Menu              = createComponent({ react: React, tagName: 'md-menu',   
 const MenuItem          = createComponent({ react: React, tagName: 'md-menu-item',          elementClass: MdMenuItem });
 const Divider           = createComponent({ react: React, tagName: 'md-divider',            elementClass: MdDivider });
 
+// Cross-component signaling with the rail's Bug Log item (AppSuiteChrome.jsx) —
+// keeps this widget self-contained without prop-drilling through App.jsx.
+const BUGLOG_OPEN_EVENT = 'shamash-buglog:open';
+const BUGLOG_COUNT_EVENT = 'shamash-buglog:count';
+
 const sym = (name, size, color) => (
   <span className="material-symbols-rounded" style={{ fontSize: size, color, lineHeight: 1 }}>{name}</span>
 );
 
-const FAB_SIZE = 40;     // md-fab size="small"
-const MARGIN   = 18;     // safe gap from the viewport edge
-const POS_KEY  = 'shamash_buglog_fab_pos';
+const FAB_SIZE    = 40;   // md-fab size="small"
+const MARGIN      = 18;   // safe gap from the viewport edge
+const POS_KEY     = 'shamash_buglog_fab_pos';
+const PANEL_W     = 380;
+const PANEL_ANCHOR = { left: 88, top: 84 }; // default panel spot — clear of the rail
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-export function BugLog({ T }) {
+export function BugLog({ T, railVisible = true }) {
   const C = cleanTheme(T);
   const onAccent = textOnColor(C.accent);
 
@@ -84,14 +87,21 @@ export function BugLog({ T }) {
   const [copied, setCopied] = React.useState(false);
   const [hot, setHot]       = React.useState(false);   // FAB hover/focus → full opacity
 
-  // FAB position: null = anchored to the bottom-right corner via CSS (robust —
-  // no JS pixel math, can't drift). Once the user drags it, we switch to an
-  // explicit, remembered left/top pixel position.
-  const [pos, setPos] = React.useState(() => {
+  // FAB position: null = anchored to a screen edge via CSS (robust — no JS pixel
+  // math, can't drift). Once the user drags it, we switch to an explicit,
+  // remembered left/top pixel position.
+  const [fabPos, setFabPos] = React.useState(() => {
     try { const s = JSON.parse(localStorage.getItem(POS_KEY)); if (s && typeof s.x === 'number') return s; } catch (_) {}
     return null;
   });
-  const drag = React.useRef(null);
+  const fabDrag = React.useRef(null);
+
+  // Panel position — draggable so the user can see whatever it's covering.
+  // Resets to the default anchor each time the panel opens (not persisted;
+  // a session-only drag, so it never looks "randomly placed" on a new device).
+  const [panelPos, setPanelPos] = React.useState(null);
+  const panelDrag = React.useRef(null);
+  const panelRef = React.useRef(null);
 
   // ── Live subscription: same Firestore pipe as the rest of the app ──────────
   React.useEffect(() => {
@@ -104,46 +114,80 @@ export function BugLog({ T }) {
     return () => { if (unsub) unsub(); if (timer) clearTimeout(timer); };
   }, []);
 
-  // Keep a dragged position on-screen if the window is resized smaller.
+  const unresolvedCount = bugs.filter(b => b.status === 'unresolved').length;
+
+  // Broadcast the live count for the rail's badge, and listen for the rail's
+  // open request — keeps this component decoupled from AppSuiteChrome.jsx.
   React.useEffect(() => {
-    if (!pos) return undefined;
-    const onResize = () => setPos(p => p ? {
+    window.dispatchEvent(new CustomEvent(BUGLOG_COUNT_EVENT, { detail: { unresolved: unresolvedCount } }));
+  }, [unresolvedCount]);
+  React.useEffect(() => {
+    const onOpenReq = () => { setPanelPos(null); setOpen(true); };
+    window.addEventListener(BUGLOG_OPEN_EVENT, onOpenReq);
+    return () => window.removeEventListener(BUGLOG_OPEN_EVENT, onOpenReq);
+  }, []);
+
+  // Keep a dragged FAB position on-screen if the window is resized smaller.
+  React.useEffect(() => {
+    if (!fabPos) return undefined;
+    const onResize = () => setFabPos(p => p ? {
       x: clamp(p.x, MARGIN, window.innerWidth  - FAB_SIZE - MARGIN),
       y: clamp(p.y, MARGIN, window.innerHeight - FAB_SIZE - MARGIN),
     } : p);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [pos]);
+  }, [fabPos]);
 
-  // ── Drag vs tap ────────────────────────────────────────────────────────────
-  function onPointerDown(e) {
-    // Read the wrapper's actual on-screen rect — correct whether it's still
-    // CSS-anchored (right/bottom) or already at an explicit left/top.
+  // ── FAB: drag vs tap ─────────────────────────────────────────────────────
+  function onFabPointerDown(e) {
     const wrapperRect = e.currentTarget.closest('[data-buglog-fab]')?.getBoundingClientRect();
     const p = wrapperRect ? { x: wrapperRect.left, y: wrapperRect.top } : { x: e.clientX, y: e.clientY };
-    drag.current = { sx: e.clientX, sy: e.clientY, ox: e.clientX - p.x, oy: e.clientY - p.y, moved: false };
+    fabDrag.current = { sx: e.clientX, sy: e.clientY, ox: e.clientX - p.x, oy: e.clientY - p.y, moved: false };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
   }
-  function onPointerMove(e) {
-    const d = drag.current; if (!d) return;
+  function onFabPointerMove(e) {
+    const d = fabDrag.current; if (!d) return;
     if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 5) d.moved = true;
     if (d.moved) {
-      setPos({
+      setFabPos({
         x: clamp(e.clientX - d.ox, MARGIN, window.innerWidth  - FAB_SIZE - MARGIN),
         y: clamp(e.clientY - d.oy, MARGIN, window.innerHeight - FAB_SIZE - MARGIN),
       });
     }
   }
-  function onPointerUp(e) {
-    const d = drag.current;
+  function onFabPointerUp(e) {
+    const d = fabDrag.current;
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
-    if (d && d.moved) { try { localStorage.setItem(POS_KEY, JSON.stringify(pos)); } catch (_) {} }
-    // leave drag.current.moved for the click handler that fires next
+    if (d && d.moved) { try { localStorage.setItem(POS_KEY, JSON.stringify(fabPos)); } catch (_) {} }
   }
   function onFabClick() {
-    if (drag.current && drag.current.moved) { drag.current = null; return; } // was a drag, not a tap
-    drag.current = null;
+    if (fabDrag.current && fabDrag.current.moved) { fabDrag.current = null; return; } // was a drag, not a tap
+    fabDrag.current = null;
+    setPanelPos(null);
     setOpen(true);
+  }
+
+  // ── Panel: draggable by its header ───────────────────────────────────────
+  function onPanelHeaderPointerDown(e) {
+    if (e.target.closest('button')) return; // let the close button work untouched
+    const rect = panelRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    panelDrag.current = {
+      ox: e.clientX - rect.left, oy: e.clientY - rect.top,
+      w: rect.width, h: rect.height,
+    };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+  }
+  function onPanelHeaderPointerMove(e) {
+    const d = panelDrag.current; if (!d) return;
+    setPanelPos({
+      x: clamp(e.clientX - d.ox, 4, window.innerWidth  - d.w - 4),
+      y: clamp(e.clientY - d.oy, 4, window.innerHeight - d.h - 4),
+    });
+  }
+  function onPanelHeaderPointerUp(e) {
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
+    panelDrag.current = null;
   }
 
   // ── Actions ──────────────────────────────────────────────────────────────
@@ -190,7 +234,10 @@ export function BugLog({ T }) {
     filter === 'idea' ? b.type === 'idea' :
     b.status === filter;
   const visible = bugs.filter(matches);
-  const unresolvedCount = bugs.filter(b => b.status === 'unresolved').length;
+
+  // Anchored by default (left/bottom — immune to any viewport pixel-math drift);
+  // switches to an explicit left/top once the user has actually dragged it.
+  const fabPosStyle = fabPos ? { left: fabPos.x, top: fabPos.y } : { left: MARGIN, bottom: MARGIN };
 
   // M3 bridge tokens for the FAB (shadow DOM can't see app CSS) — same as AppSuiteChrome.
   const fabVars = {
@@ -198,160 +245,194 @@ export function BugLog({ T }) {
     '--md-fab-icon-color': onAccent,
     '--md-fab-hover-state-layer-color': C.accent,
   };
-  // Anchored by default (right/bottom — immune to any viewport pixel-math drift);
-  // switches to an explicit left/top once the user has actually dragged it.
-  const posStyle = pos
-    ? { left: pos.x, top: pos.y }
-    : { right: MARGIN, bottom: MARGIN };
+
+  const panelStyle = panelPos
+    ? { left: panelPos.x, top: panelPos.y }
+    : { left: PANEL_ANCHOR.left, top: PANEL_ANCHOR.top };
 
   return (
     <>
-      {/* Floating launcher — small, draggable, fades to low opacity at rest. */}
-      <div
-        data-buglog-fab="true"
-        style={{
-          position: 'fixed', ...posStyle, zIndex: Z.docked,
-          opacity: open ? 0 : (hot ? 1 : 0.45),
-          pointerEvents: open ? 'none' : 'auto',
-          transition: TRANSITION, touchAction: 'none', ...fabVars,
-        }}
-        onMouseEnter={() => setHot(true)}
-        onMouseLeave={() => setHot(false)}
-      >
-        <Fab
-          size="small"
-          aria-label="Open bug log"
-          title="Bug log"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onClick={onFabClick}
-          onFocus={() => setHot(true)}
-          onBlur={() => setHot(false)}
+      {/* Floating launcher — only when the nav rail isn't around to carry the
+          Bug Log item itself. Small, draggable, fades to low opacity at rest. */}
+      {!railVisible && (
+        <div
+          data-buglog-fab="true"
+          style={{
+            position: 'fixed', ...fabPosStyle, zIndex: Z.docked,
+            opacity: open ? 0 : (hot ? 1 : 0.45),
+            pointerEvents: open ? 'none' : 'auto',
+            transition: TRANSITION, touchAction: 'none', ...fabVars,
+          }}
+          onMouseEnter={() => setHot(true)}
+          onMouseLeave={() => setHot(false)}
         >
-          <span slot="icon" className="material-symbols-rounded">feedback</span>
-        </Fab>
-        {unresolvedCount > 0 && (
-          <span style={{
-            position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, padding: '0 4px',
-            borderRadius: RADIUS.pill, background: C.danger, color: '#fff',
-            fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: NC_FONT_STACK, pointerEvents: 'none',
-          }}>{unresolvedCount}</span>
-        )}
-      </div>
-
-      <Dialog open={open} onClosed={() => { setOpen(false); setMenuId(null); }} style={{ maxWidth: 'min(560px, 94vw)' }}>
-        <div slot="headline" style={{ display: 'flex', alignItems: 'center', gap: SP.sm, width: '100%' }}>
-          {sym('bug_report', 22, C.accent)}
-          <span style={{ flex: 1, fontFamily: NC_FONT_STACK }}>Bug Log</span>
-          <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>
-            {bugs.length} total · {unresolvedCount} open
-          </span>
-        </div>
-
-        <div slot="content" style={{ display: 'flex', flexDirection: 'column', gap: SP.md }}>
-          {/* Quick add */}
-          <div style={{ display: 'flex', gap: SP.sm, alignItems: 'center' }}>
-            <OutlinedTextField
-              label="Jot a bug or idea…"
-              value={draft}
-              onInput={e => setDraft(e.target.value)}
-              onKeyDown={onDraftKey}
-              style={{ flex: 1 }}
-            />
-            <OutlinedSelect label="Type" value={draftType} onChange={e => setDraftType(e.target.value)} style={{ width: 150 }}>
-              {TYPES.map(t => (
-                <SelectOption key={t.id} value={t.id}>
-                  <div slot="headline">{t.label}</div>
-                </SelectOption>
-              ))}
-            </OutlinedSelect>
-            <FilledButton onClick={addDraft}><span>Add</span></FilledButton>
-          </div>
-
-          {/* Filters */}
-          <ChipSet>
-            {FILTERS.map(f => (
-              <FilterChip
-                key={f.id}
-                label={f.label}
-                selected={filter === f.id}
-                onClick={() => setFilter(prev => (prev === f.id ? 'all' : f.id))}
-              />
-            ))}
-          </ChipSet>
-
-          {/* List */}
-          {visible.length === 0 ? (
-            <div style={{
-              padding: '28px 12px', textAlign: 'center', color: C.faint,
-              fontSize: NC_TYPE.body, fontFamily: NC_FONT_STACK,
-            }}>
-              {bugs.length === 0 ? 'No entries yet — jot your first one above.' : 'Nothing matches this filter.'}
-            </div>
-          ) : (
-            <List style={{ '--md-list-container-color': 'transparent', maxHeight: '46vh', overflowY: 'auto' }}>
-              {visible.map(b => {
-                const t = TYPE_BY[b.type]   || TYPE_BY.bug;
-                const s = STATUS_BY[b.status] || STATUS_BY.unresolved;
-                return (
-                  <ListItem key={b.id} style={{ '--md-list-item-leading-space': '12px', '--md-list-item-trailing-space': '4px' }}>
-                    <div slot="start" title={t.label} style={{ display: 'flex', alignItems: 'center' }}>
-                      {sym(t.icon, 18, t.color)}
-                    </div>
-                    <div slot="headline" style={{ whiteSpace: 'normal', fontFamily: NC_FONT_STACK }}>{b.text}</div>
-                    <div slot="supporting-text" style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: NC_FONT_STACK }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: s.color }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, display: 'inline-block' }} />
-                        {s.label}
-                      </span>
-                      <span style={{ color: C.faint }}>· {formatRel(b.createdAtMs)}</span>
-                    </div>
-                    <div slot="end" style={{ position: 'relative' }}>
-                      <IconButton id={`bugmenu-${b.id}`} aria-label="Change status" onClick={() => setMenuId(m => (m === b.id ? null : b.id))}>
-                        {sym('more_vert', 20, C.muted)}
-                      </IconButton>
-                      <Menu
-                        anchor={`bugmenu-${b.id}`}
-                        open={menuId === b.id}
-                        onClosed={() => setMenuId(m => (m === b.id ? null : m))}
-                        positioning="popover"
-                      >
-                        {STATUSES.map(st => (
-                          <MenuItem key={st.id} onClick={() => { Store.updateBug(b.id, { status: st.id }); setMenuId(null); }}>
-                            <span slot="start" className="material-symbols-rounded" style={{ color: st.color }}>{st.icon}</span>
-                            <div slot="headline">{st.label}</div>
-                          </MenuItem>
-                        ))}
-                        <Divider />
-                        <MenuItem onClick={() => { Store.updateBug(b.id, { type: b.type === 'bug' ? 'idea' : 'bug' }); setMenuId(null); }}>
-                          <span slot="start" className="material-symbols-rounded" style={{ color: C.muted }}>swap_horiz</span>
-                          <div slot="headline">Make {b.type === 'bug' ? 'an idea' : 'a bug'}</div>
-                        </MenuItem>
-                        <Divider />
-                        <MenuItem onClick={() => { Store.deleteBug(b.id); setMenuId(null); }}>
-                          <span slot="start" className="material-symbols-rounded" style={{ color: C.danger }}>delete</span>
-                          <div slot="headline" style={{ color: C.danger }}>Delete</div>
-                        </MenuItem>
-                      </Menu>
-                    </div>
-                  </ListItem>
-                );
-              })}
-            </List>
+          <Fab
+            size="small"
+            aria-label="Open bug log"
+            title="Bug log"
+            onPointerDown={onFabPointerDown}
+            onPointerMove={onFabPointerMove}
+            onPointerUp={onFabPointerUp}
+            onClick={onFabClick}
+            onFocus={() => setHot(true)}
+            onBlur={() => setHot(false)}
+          >
+            <span slot="icon" className="material-symbols-rounded">bug_report</span>
+          </Fab>
+          {unresolvedCount > 0 && (
+            <span style={{
+              position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, padding: '0 4px',
+              borderRadius: RADIUS.pill, background: C.danger, color: '#fff',
+              fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: NC_FONT_STACK, pointerEvents: 'none',
+            }}>{unresolvedCount}</span>
           )}
         </div>
+      )}
 
-        <div slot="actions" style={{ display: 'flex', alignItems: 'center', gap: SP.sm, width: '100%' }}>
-          <TextButton onClick={copyForTeam} disabled={unresolvedCount === 0}>
-            <span slot="icon" className="material-symbols-rounded">content_copy</span>
-            <span>{copied ? 'Copied!' : `Copy for coding team${unresolvedCount ? ` (${unresolvedCount})` : ''}`}</span>
-          </TextButton>
-          <span style={{ flex: 1 }} />
-          <TextButton onClick={() => setOpen(false)}><span>Close</span></TextButton>
+      {/* Draggable, non-modal panel — deliberately NOT a modal md-dialog: this is a
+          quick-capture tool used *while looking at whatever it's about*, so it must
+          never block or hide the screen behind it. No M3 component covers a
+          draggable, non-modal utility panel, so this is hand-coded from
+          ui-tokens.jsx per the fallback rule. */}
+      {open && (
+        <div
+          ref={panelRef}
+          style={{
+            position: 'fixed', ...panelStyle, zIndex: Z.modal,
+            width: PANEL_W, maxWidth: '92vw', maxHeight: '80vh',
+            display: 'flex', flexDirection: 'column',
+            background: C.bg, border: `1px solid ${C.divider}`,
+            borderRadius: RADIUS.md, boxShadow: ELEV[3], overflow: 'hidden',
+          }}
+        >
+          {/* Header — the drag handle */}
+          <div
+            onPointerDown={onPanelHeaderPointerDown}
+            onPointerMove={onPanelHeaderPointerMove}
+            onPointerUp={onPanelHeaderPointerUp}
+            style={{
+              display: 'flex', alignItems: 'center', gap: SP.sm, padding: '10px 8px 10px 14px',
+              borderBottom: `1px solid ${C.divider}`, cursor: 'grab', touchAction: 'none', flexShrink: 0,
+            }}
+          >
+            {sym('bug_report', 20, C.accent)}
+            <span style={{
+              flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.title, fontWeight: 600, color: C.text,
+            }}>Bug Log</span>
+            <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {unresolvedCount} open
+            </span>
+            <IconButton aria-label="Close bug log" onClick={() => { setOpen(false); setMenuId(null); }}>
+              {sym('close', 20, C.muted)}
+            </IconButton>
+          </div>
+
+          {/* Body — scrolls internally so nothing overflows the rounded card */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SP.md, padding: SP.md, overflowY: 'auto', minHeight: 0 }}>
+            {/* Quick add */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SP.sm }}>
+              <OutlinedTextField
+                label="Jot a bug or idea…"
+                value={draft}
+                onInput={e => setDraft(e.target.value)}
+                onKeyDown={onDraftKey}
+              />
+              <div style={{ display: 'flex', gap: SP.sm }}>
+                <OutlinedSelect label="Type" value={draftType} onChange={e => setDraftType(e.target.value)} style={{ flex: 1, minWidth: 0 }}>
+                  {TYPES.map(t => (
+                    <SelectOption key={t.id} value={t.id}>
+                      <div slot="headline">{t.label}</div>
+                    </SelectOption>
+                  ))}
+                </OutlinedSelect>
+                <FilledButton onClick={addDraft}><span>Add</span></FilledButton>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <ChipSet>
+              {FILTERS.map(f => (
+                <FilterChip
+                  key={f.id}
+                  label={f.label}
+                  selected={filter === f.id}
+                  onClick={() => setFilter(prev => (prev === f.id ? 'all' : f.id))}
+                />
+              ))}
+            </ChipSet>
+
+            {/* List */}
+            {visible.length === 0 ? (
+              <div style={{
+                padding: '24px 12px', textAlign: 'center', color: C.faint,
+                fontSize: NC_TYPE.body, fontFamily: NC_FONT_STACK,
+              }}>
+                {bugs.length === 0 ? 'No entries yet — jot your first one above.' : 'Nothing matches this filter.'}
+              </div>
+            ) : (
+              <List style={{ '--md-list-container-color': 'transparent', maxHeight: '42vh', overflowY: 'auto' }}>
+                {visible.map(b => {
+                  const t = TYPE_BY[b.type]   || TYPE_BY.bug;
+                  const s = STATUS_BY[b.status] || STATUS_BY.unresolved;
+                  return (
+                    <ListItem key={b.id} style={{ '--md-list-item-leading-space': '12px', '--md-list-item-trailing-space': '4px' }}>
+                      <div slot="start" title={t.label} style={{ display: 'flex', alignItems: 'center' }}>
+                        {sym(t.icon, 18, t.color)}
+                      </div>
+                      <div slot="headline" style={{ whiteSpace: 'normal', fontFamily: NC_FONT_STACK }}>{b.text}</div>
+                      <div slot="supporting-text" style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: NC_FONT_STACK }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: s.color }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, display: 'inline-block' }} />
+                          {s.label}
+                        </span>
+                        <span style={{ color: C.faint }}>· {formatRel(b.createdAtMs)}</span>
+                      </div>
+                      <div slot="end" style={{ position: 'relative' }}>
+                        <IconButton id={`bugmenu-${b.id}`} aria-label="Change status" onClick={() => setMenuId(m => (m === b.id ? null : b.id))}>
+                          {sym('more_vert', 20, C.muted)}
+                        </IconButton>
+                        <Menu
+                          anchor={`bugmenu-${b.id}`}
+                          open={menuId === b.id}
+                          onClosed={() => setMenuId(m => (m === b.id ? null : m))}
+                          positioning="popover"
+                        >
+                          {STATUSES.map(st => (
+                            <MenuItem key={st.id} onClick={() => { Store.updateBug(b.id, { status: st.id }); setMenuId(null); }}>
+                              <span slot="start" className="material-symbols-rounded" style={{ color: st.color }}>{st.icon}</span>
+                              <div slot="headline">{st.label}</div>
+                            </MenuItem>
+                          ))}
+                          <Divider />
+                          <MenuItem onClick={() => { Store.updateBug(b.id, { type: b.type === 'bug' ? 'idea' : 'bug' }); setMenuId(null); }}>
+                            <span slot="start" className="material-symbols-rounded" style={{ color: C.muted }}>swap_horiz</span>
+                            <div slot="headline">Make {b.type === 'bug' ? 'an idea' : 'a bug'}</div>
+                          </MenuItem>
+                          <Divider />
+                          <MenuItem onClick={() => { Store.deleteBug(b.id); setMenuId(null); }}>
+                            <span slot="start" className="material-symbols-rounded" style={{ color: C.danger }}>delete</span>
+                            <div slot="headline" style={{ color: C.danger }}>Delete</div>
+                          </MenuItem>
+                        </Menu>
+                      </div>
+                    </ListItem>
+                  );
+                })}
+              </List>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, padding: '8px 12px', borderTop: `1px solid ${C.divider}`, flexShrink: 0 }}>
+            <TextButton onClick={copyForTeam} disabled={unresolvedCount === 0}>
+              <span slot="icon" className="material-symbols-rounded">content_copy</span>
+              <span>{copied ? 'Copied!' : `Copy for coding team${unresolvedCount ? ` (${unresolvedCount})` : ''}`}</span>
+            </TextButton>
+          </div>
         </div>
-      </Dialog>
+      )}
     </>
   );
 }

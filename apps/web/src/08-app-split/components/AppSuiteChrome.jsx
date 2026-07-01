@@ -16,7 +16,21 @@ const OutlinedIconButton = createComponent({ react: React, tagName: 'md-outlined
 const Divider = createComponent({ react: React, tagName: 'md-divider', elementClass: MdDivider });
 const Ripple = createComponent({ react: React, tagName: 'md-ripple', elementClass: MdRipple });
 
+// Cross-component signaling for the Bug Log rail item, without prop-drilling
+// through App.jsx (which already owns a large prop surface). BugLog.jsx
+// broadcasts its live unresolved count on this event; this rail button
+// dispatches the open request back the same way.
+const BUGLOG_OPEN_EVENT = 'shamash-buglog:open';
+const BUGLOG_COUNT_EVENT = 'shamash-buglog:count';
+
 function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreActions, topOffset = 0, forceCompact = false, clockTime = null, onSettings, features = {} }) {
+  const [bugLogCount, setBugLogCount] = React.useState(0);
+  React.useEffect(() => {
+    const onCount = (e) => setBugLogCount(e.detail?.unresolved || 0);
+    window.addEventListener(BUGLOG_COUNT_EVENT, onCount);
+    return () => window.removeEventListener(BUGLOG_COUNT_EVENT, onCount);
+  }, []);
+
   const mainApps = [
     { id: "focus",      label: "Tasks",      icon: "rule"          },
     { id: "shailos",    label: "Shailos",    icon: "question_mark" },
@@ -190,6 +204,22 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         <Ripple />
         {suiteIcon("apps", ic(24))}
         {displayOpen && "More Actions"}
+      </button>
+
+      {/* Bug Log — utility item; badge mirrors BugLog's live unresolved count */}
+      <button onClick={() => window.dispatchEvent(new CustomEvent(BUGLOG_OPEN_EVENT))} title="Bug Log" aria-label="Bug Log" style={navBtn(false)}>
+        <Ripple />
+        <span style={{ position: "relative", display: "inline-flex" }}>
+          {suiteIcon("bug_report", ic(24))}
+          {bugLogCount > 0 && (
+            <span style={{
+              position: "absolute", top: -4, right: -6, minWidth: 14, height: 14, padding: "0 3px",
+              borderRadius: RADIUS.pill, background: C.danger, color: "#fff",
+              fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
+            }}>{bugLogCount}</span>
+          )}
+        </span>
+        {displayOpen && "Bug Log"}
       </button>
 
       {/* Reload — always-reachable refresh for PWA (no browser address bar in standalone mode).
