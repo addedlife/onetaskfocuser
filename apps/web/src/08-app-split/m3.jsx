@@ -16,6 +16,8 @@ import { MdSuggestionChip } from '@material/web/chips/suggestion-chip.js';
 import { MdChipSet } from '@material/web/chips/chip-set.js';
 import { MdDivider } from '@material/web/divider/divider.js';
 import { MdCircularProgress } from '@material/web/progress/circular-progress.js';
+import { MdOutlinedTextField } from '@material/web/textfield/outlined-text-field.js';
+import { MdSwitch } from '@material/web/switch/switch.js';
 
 // ─── Shared @material/web button layer ───────────────────────────────────────
 // Single home for the real Google Material 3 button + icon-button components,
@@ -49,6 +51,21 @@ export const SuggestionChip  = createComponent({ react: React, tagName: 'md-sugg
 export const ChipSet         = createComponent({ react: React, tagName: 'md-chip-set',          elementClass: MdChipSet });
 export const Divider         = createComponent({ react: React, tagName: 'md-divider',           elementClass: MdDivider });
 export const CircularProgress = createComponent({ react: React, tagName: 'md-circular-progress', elementClass: MdCircularProgress });
+
+// Text field + switch — the two form controls the new UI composers need. Events
+// are mapped so React `onInput`/`onChange` fire from the shadow-DOM elements.
+export const TextField = createComponent({
+  react: React,
+  tagName: 'md-outlined-text-field',
+  elementClass: MdOutlinedTextField,
+  events: { onInput: 'input', onChange: 'change', onKeyDown: 'keydown' },
+});
+export const Switch = createComponent({
+  react: React,
+  tagName: 'md-switch',
+  elementClass: MdSwitch,
+  events: { onChange: 'change' },
+});
 
 // DENSE_LIST_VARS — NerveCenter's tuned md-list-item density. M3's stock two-line
 // row is 72px; that's far too tall for a dashboard. These tokens crush it to a

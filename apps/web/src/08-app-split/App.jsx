@@ -18,6 +18,15 @@ import { compactNerveSummary, nerveSummarySource, NerveCenterPanel } from './com
 import { TaskRiverPanel } from './components/TaskRiverPanel.jsx';
 import { ConvCapture } from './components/ConvCapture.jsx';
 import { BugLog } from './components/BugLog.jsx';
+import NerveCenterNext from '../09-next/surfaces/NerveCenterNext.jsx';
+
+// Opt-in flag for the from-scratch Material 3 UI rebuild (09-next). Read once at
+// module load. `?ui=next` swaps the reimagined NerveCenter in; everything else
+// stays on the legacy surfaces, so production is untouched until we flip default.
+const UI_NEXT = (() => {
+  try { return new URLSearchParams(window.location.search).get('ui') === 'next'; }
+  catch { return false; }
+})();
 import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack } from './utils/shailosQueue.js';
 import { createComponent } from '@lit/react';
 import { MdIconButton } from '@material/web/iconbutton/icon-button.js';
@@ -3654,8 +3663,13 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         />
       )}
 
-      {!shellHidden && (suiteView === "nervecenter" || suiteView === "chief" || suiteView === "health") && (
-        <NerveCenterPanel
+      {!shellHidden && (suiteView === "nervecenter" || suiteView === "chief" || suiteView === "health") && (() => {
+        // ?ui=next swaps in the reimagined M3 NerveCenter for the nervecenter view
+        // only; chief/health full pages stay on the legacy surface for now. Same
+        // props either way — pure view-layer swap, backend wiring untouched.
+        const NerveSurface = (UI_NEXT && suiteView === "nervecenter") ? NerveCenterNext : NerveCenterPanel;
+        return (
+        <NerveSurface
           T={T}
           user={user}
           sections={switchboardSections}
@@ -3731,7 +3745,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           onSaveHealthData={saveHealthDataToFirebase}
           onSyncHealth={syncHealthNow}
         />
-      )}
+        );
+      })()}
 
       {!shellHidden && (
         <TaskRiverPanel
