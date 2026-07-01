@@ -79,11 +79,14 @@ export function Card({
   return (
     <section
       style={{
+        // Google-style surface: borderless, no shadow. Elevation is read purely
+        // from the tonal contrast between the card (C.bg) and the page (C.bgSoft)
+        // — sharp against the background but soft, no hard edge or drop shadow.
         display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0,
         background: C.bg,
-        border: `1px solid ${C.divider}`,
+        border: 'none',
         borderRadius: NEXT_RADIUS.card,
-        boxShadow: ELEV[1],
+        boxShadow: 'none',
         transition: TRANSITION,
         overflow: 'hidden',
         ...style,

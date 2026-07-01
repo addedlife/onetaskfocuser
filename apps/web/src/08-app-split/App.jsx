@@ -18,7 +18,7 @@ import { compactNerveSummary, nerveSummarySource, NerveCenterPanel } from './com
 import { TaskRiverPanel } from './components/TaskRiverPanel.jsx';
 import { ConvCapture } from './components/ConvCapture.jsx';
 import { BugLog } from './components/BugLog.jsx';
-import NerveCenterNext from '../09-next/surfaces/NerveCenterNext.jsx';
+import { NerveCenterPanel as NerveCenterNext } from './components/NerveCenterNext.jsx';
 
 // Opt-in flag for the from-scratch Material 3 UI rebuild (09-next). Read once at
 // module load. `?ui=next` swaps the reimagined NerveCenter in; everything else
