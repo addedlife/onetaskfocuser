@@ -1,47 +1,20 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { cleanTheme, SP, RADIUS, ICON, suiteIcon, NC_FONT_STACK } from '../../08-app-split/ui-tokens.jsx';
+import React, { useEffect, useMemo, useState } from 'react';
+import { cleanTheme, SP, RADIUS, suiteIcon, NC_FONT_STACK, useViewportWidth } from '../../08-app-split/ui-tokens.jsx';
 import { ActionBtn, IconBtn, List, ListItem, FilterChip, ChipSet, TextField, denseListVars } from '../../08-app-split/m3.jsx';
 import { buildNerveShailaRows } from '../../08-app-split/utils/shailosQueue.js';
-import { Card, CountPill, EmptyState, QuickBar, IconPuck, tonal, FONT, NEXT_RADIUS } from '../system/kit.jsx';
+import { Card, EmptyState, QuickBar, IconPuck, tonal, FONT, NEXT_RADIUS } from '../system/kit.jsx';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // NerveCenterNext — the from-scratch Material 3 (Expressive) NerveCenter.
 //
-// This is PURE PRESENTATION. It takes the exact same props contract App already
-// hands the legacy NerveCenterPanel (data + every on* handler) and rebuilds the
-// UI from nothing on the 09-next design kit. Every button is wired to the real
-// backend handler that App passes in — no backend/data logic lives here. App
-// swaps in this surface only when ?ui=next is set, so production is untouched.
+// Design intent (owner): everything-at-a-glance. All sources live on ONE screen
+// with NO page scroll — a fixed-height dashboard grid that fills the viewport;
+// only a long list scrolls inside its own card. Pure presentation: it takes the
+// same props App hands the legacy NerveCenterPanel and wires every button to the
+// real backend handler. App swaps it in only under ?ui=next.
 // ═════════════════════════════════════════════════════════════════════════════
 
 const displayText = (t) => String(t?.ncSummary || t?.text || '').trim() || 'Untitled';
-
-function greeting(h) {
-  if (h < 5) return 'Late night';
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  if (h < 22) return 'Good evening';
-  return 'Good night';
-}
-
-// StatPill — a labelled figure for the hero at-a-glance strip.
-function StatPill({ icon, label, value, color, C, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: SP.sm,
-        padding: `7px 13px 7px 10px`, border: 'none', cursor: onClick ? 'pointer' : 'default',
-        borderRadius: RADIUS.pill, background: tonal(color || C.muted, 0.12), fontFamily: FONT,
-      }}
-      title={label}
-    >
-      <span style={{ color: color || C.muted, display: 'inline-flex' }}>{suiteIcon(icon, 16)}</span>
-      <span style={{ fontSize: 15, fontWeight: 700, color: C.text, lineHeight: 1 }}>{value}</span>
-      <span style={{ fontSize: 12, color: C.muted, lineHeight: 1 }}>{label}</span>
-    </button>
-  );
-}
 
 export default function NerveCenterNext(props) {
   const {
@@ -57,6 +30,9 @@ export default function NerveCenterNext(props) {
   } = props;
 
   const C = useMemo(() => cleanTheme(T), [T]);
+  const viewportW = useViewportWidth();
+  const avail = viewportW - sidebarW;
+  const cols = avail >= 1080 ? 3 : avail >= 760 ? 2 : 1;
 
   // ── Live clock (self-contained, zero cloud cost) ──────────────────────────
   const [now, setNow] = useState(() => new Date());
@@ -104,9 +80,10 @@ export default function NerveCenterNext(props) {
   const [editId, setEditId] = useState(null);
   const [editText, setEditText] = useState('');
   const commitEdit = (t) => {
+    if (editId !== t.id) return;
     const v = editText.trim();
-    if (v && v !== t.text) onEditTask?.(t.id, v);
     setEditId(null);
+    if (v && v !== t.text) onEditTask?.(t.id, v);
   };
 
   // ── Phone reachability (same loopback pipe main.jsx uses) ──────────────────
@@ -126,28 +103,43 @@ export default function NerveCenterNext(props) {
 
   // ── Google derived ────────────────────────────────────────────────────────
   const googleConnected = !!googleToken;
-  const upcomingEvents = useMemo(() => {
-    const list = Array.isArray(calendarEvents) ? calendarEvents : [];
-    return list.slice(0, 4);
-  }, [calendarEvents]);
-  const unreadEmails = useMemo(() => {
-    const list = Array.isArray(gmailMessages) ? gmailMessages : [];
-    return list.slice(0, 4);
-  }, [gmailMessages]);
+  const upcomingEvents = useMemo(() => (Array.isArray(calendarEvents) ? calendarEvents : []).slice(0, 5), [calendarEvents]);
+  const unreadEmails = useMemo(() => (Array.isArray(gmailMessages) ? gmailMessages : []).slice(0, 4), [gmailMessages]);
 
-  // ── At-a-glance figures ───────────────────────────────────────────────────
-  const nowCount = primaryTasks.filter((t) => t.priority === 'now').length;
-  const todayCount = primaryTasks.filter((t) => t.priority === 'today').length;
   const openShailos = shailaRows.length;
-
   const clock = {
     time: now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-    date: now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }),
+    date: now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }),
   };
+  const denseVars = denseListVars({ dense: true, primary: C.text, secondary: C.muted, hover: tonal(C.accent, 0.08) });
+  const gold = priById.get('shaila')?.color || '#C8A84C';
 
-  const denseVars = denseListVars({ primary: C.text, secondary: C.muted, hover: tonal(C.accent, 0.08) });
+  // ── Responsive dashboard layout (explicit breakpoints — no overrun) ───────
+  let gridStyle = null;
+  let place = {};
+  if (cols === 3) {
+    gridStyle = { gridTemplateColumns: '1.6fr 1fr 1fr', gridTemplateRows: '1fr 1fr' };
+    place = {
+      tasks: { gridColumn: '1', gridRow: '1 / 3' },
+      shailos: { gridColumn: '2', gridRow: '1' },
+      calendar: { gridColumn: '3', gridRow: '1' },
+      phone: { gridColumn: '2', gridRow: '2' },
+      command: { gridColumn: '3', gridRow: '2' },
+    };
+  } else if (cols === 2) {
+    gridStyle = { gridTemplateColumns: '1.5fr 1fr', gridTemplateRows: '1.25fr 1fr auto' };
+    place = {
+      tasks: { gridColumn: '1', gridRow: '1 / 3' },
+      shailos: { gridColumn: '2', gridRow: '1' },
+      calendar: { gridColumn: '2', gridRow: '2' },
+      phone: { gridColumn: '1', gridRow: '3' },
+      command: { gridColumn: '2', gridRow: '3' },
+    };
+  }
+  const cardStyle = (key, minH) => (cols === 1 ? { minHeight: minH } : { ...place[key], height: '100%', minHeight: 0 });
+  const scrollPane = { flex: 1, minHeight: 0, overflow: 'auto', overscrollBehavior: 'contain' };
 
-  // ── Task row renderer ─────────────────────────────────────────────────────
+  // ── Row renderers ─────────────────────────────────────────────────────────
   const renderTaskRow = (t) => {
     const pri = priById.get(t.priority);
     const color = pri?.color || C.accent;
@@ -156,7 +148,6 @@ export default function NerveCenterNext(props) {
         <div key={t.id} style={{ padding: `2px ${SP.sm}` }}>
           <TextField
             value={editText}
-            autoFocus
             style={{ width: '100%', '--md-outlined-text-field-container-shape': RADIUS.sm }}
             onInput={(e) => setEditText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(t); if (e.key === 'Escape') setEditId(null); }}
@@ -172,30 +163,28 @@ export default function NerveCenterNext(props) {
         onClick={() => { setEditId(t.id); setEditText(t.text || ''); }}
         style={{ borderRadius: RADIUS.sm, '--md-list-item-leading-space': SP.sm }}
       >
-        <span slot="start" style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 0 3px ${tonal(color, 0.16)}` }} />
-        <span style={{ fontSize: 13.5, color: C.text, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayText(t)}</span>
-        <span slot="supporting-text" style={{ color, fontSize: 11, fontWeight: 600 }}>
+        <span slot="start" style={{ width: 9, height: 9, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 0 3px ${tonal(color, 0.16)}` }} />
+        <span style={{ fontSize: 13, color: C.text, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayText(t)}</span>
+        <span slot="supporting-text" style={{ color, fontSize: 10.5, fontWeight: 600 }}>
           {pri?.label || 'Task'}{t.mrsW ? ' · Mrs. W' : ''}
         </span>
-        <span slot="end" style={{ display: 'inline-flex', gap: 2 }}>
-          <IconBtn icon="check_circle" iconSize={18} size={34} color={C.success} title="Complete"
+        <span slot="end" style={{ display: 'inline-flex', gap: 0 }}>
+          <IconBtn icon="check_circle" iconSize={17} size={30} color={C.success} title="Complete"
             onClick={(e) => { e.stopPropagation(); onCompleteTask?.(t.id); }} />
-          <IconBtn icon="delete_outline" iconSize={17} size={34} color={C.faint} title="Delete"
+          <IconBtn icon="delete_outline" iconSize={16} size={30} color={C.faint} title="Delete"
             onClick={(e) => { e.stopPropagation(); onDeleteTask?.(t.id); }} />
         </span>
       </ListItem>
     );
   };
 
-  // ── Shaila row renderer ───────────────────────────────────────────────────
   const renderShailaRow = (s) => {
-    const gold = priById.get('shaila')?.color || '#C8A84C';
     const isGetBack = s.status === 'get_back';
     return (
       <ListItem key={s.id} type="button" onClick={onOpenShailos} style={{ borderRadius: RADIUS.sm, '--md-list-item-leading-space': SP.sm }}>
-        <span slot="start"><IconPuck icon={isGetBack ? 'reply' : 'help'} color={gold} size={30} iconSize={16} /></span>
-        <span style={{ fontSize: 13.5, color: C.text, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayText(s)}</span>
-        <span slot="supporting-text" style={{ color: isGetBack ? C.warning : gold, fontSize: 11, fontWeight: 600 }}>
+        <span slot="start"><IconPuck icon={isGetBack ? 'reply' : 'help'} color={gold} size={26} iconSize={15} /></span>
+        <span style={{ fontSize: 13, color: C.text, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayText(s)}</span>
+        <span slot="supporting-text" style={{ color: isGetBack ? C.warning : gold, fontSize: 10.5, fontWeight: 600 }}>
           {isGetBack ? 'Get back to asker' : 'Researching'}
         </span>
         <span slot="end" style={{ color: C.faint, display: 'inline-flex' }}>{suiteIcon('chevron_right', 18)}</span>
@@ -203,210 +192,208 @@ export default function NerveCenterNext(props) {
     );
   };
 
-  // ── Card grid ─────────────────────────────────────────────────────────────
-  return (
-    <div
-      style={{
-        position: 'fixed', top: topOffset, left: sidebarW, right: 0, bottom: 0,
-        zIndex: 7600, background: C.bgSoft, overflow: 'auto', overscrollBehavior: 'contain',
-        borderLeft: `1px solid ${C.divider}`, fontFamily: NC_FONT_STACK,
-        WebkitFontSmoothing: 'antialiased',
-      }}
+  // ═══ Cards ════════════════════════════════════════════════════════════════
+  const tasksCard = (
+    <Card
+      key="tasks" icon="checklist" title="Tasks" count={primaryTasks.length} C={C}
+      style={cardStyle('tasks', 360)}
+      actions={<>
+        <IconBtn icon="bolt" iconSize={17} size={32} color={C.muted} title="Zen focus" onClick={onOpenZen} />
+        <IconBtn icon="open_in_full" iconSize={16} size={32} color={C.muted} title="Open task list" onClick={onOpenTasks} />
+      </>}
     >
-      <div style={{ maxWidth: 1440, margin: '0 auto', padding: `${SP.xl} ${SP.xl} 64px`, display: 'flex', flexDirection: 'column', gap: SP.xl }}>
-
-        {/* ── Hero header ──────────────────────────────────────────────── */}
-        <header style={{ display: 'flex', alignItems: 'flex-end', flexWrap: 'wrap', gap: SP.lg, justifyContent: 'space-between' }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 13, color: C.muted, fontWeight: 600, letterSpacing: '0.02em' }}>{greeting(now.getHours())}</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: SP.md, flexWrap: 'wrap' }}>
-              <h1 style={{ margin: 0, fontSize: 40, fontWeight: 700, letterSpacing: '-0.02em', color: C.text, fontVariantNumeric: 'tabular-nums' }}>{clock.time}</h1>
-              <span style={{ fontSize: 15, color: C.muted }}>{clock.date}</span>
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, flexWrap: 'wrap' }}>
-            <StatPill icon="bolt" label="Now" value={nowCount} color={priById.get('now')?.color} C={C} onClick={onOpenTasks} />
-            <StatPill icon="today" label="Today" value={todayCount} color={priById.get('today')?.color} C={C} onClick={onOpenTasks} />
-            <StatPill icon="help" label="Shailos" value={openShailos} color={priById.get('shaila')?.color} C={C} onClick={onOpenShailos} />
-            <StatPill icon={phoneOnline ? 'smartphone' : 'mobile_off'} label={phoneOnline ? 'Online' : 'Offline'} value="" color={phoneOnline ? C.success : C.faint} C={C} onClick={onOpenPhone} />
-            {onPolishNerveItems && (
-              <ActionBtn variant="tonal" icon="auto_awesome" onClick={onPolishNerveItems} title="Polish items with AI">Polish</ActionBtn>
-            )}
-          </div>
-        </header>
-
-        {/* ── Responsive card grid ─────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: SP.lg, alignItems: 'start' }}>
-
-          {/* Tasks — the hero card (spans wide) */}
-          <div style={{ gridColumn: 'span 2', minWidth: 0 }}>
-            <Card
-              icon="checklist" title="Tasks" count={primaryTasks.length} C={C}
-              actions={<>
-                <IconBtn icon="bolt" iconSize={18} size={36} color={C.muted} title="Zen focus" onClick={onOpenZen} />
-                <IconBtn icon="open_in_full" iconSize={17} size={36} color={C.muted} title="Open task list" onClick={onOpenTasks} />
-              </>}
-            >
-              {/* Priority filter chips */}
-              <div style={{ padding: `0 ${SP.xs} ${SP.sm}` }}>
-                <ChipSet>
-                  <FilterChip label={`All ${primaryTasks.length}`} selected={priFilter === 'all'} onClick={() => setPriFilter('all')} />
-                  {workPriorities.map((p) => (
-                    <FilterChip
-                      key={p.id}
-                      label={`${p.label} ${countByPri[p.id] || 0}`}
-                      selected={priFilter === p.id}
-                      onClick={() => setPriFilter(p.id)}
-                      style={{ '--md-filter-chip-selected-container-color': tonal(p.color, 0.2) }}
-                    />
-                  ))}
-                </ChipSet>
-              </div>
-
-              {/* Task list */}
-              <div style={{ maxHeight: 420, overflow: 'auto', overscrollBehavior: 'contain' }}>
-                {filteredTasks.length === 0
-                  ? <EmptyState icon="task_alt" text={priFilter === 'all' ? 'No open tasks — you are clear.' : 'Nothing in this lane.'} C={C} />
-                  : <List style={denseVars}>{filteredTasks.map(renderTaskRow)}</List>}
-              </div>
-
-              {/* Composer */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SP.sm, paddingTop: SP.md, marginTop: 'auto' }}>
-                <div style={{ display: 'flex', gap: SP.sm, alignItems: 'center' }}>
-                  <TextField
-                    value={draft}
-                    placeholder="Add a task…"
-                    style={{ flex: 1, '--md-outlined-text-field-container-shape': RADIUS.pill }}
-                    onInput={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') submitTask(); }}
-                  />
-                  <IconBtn icon="add" variant="filled" iconSize={20} size={44} color={C.accent}
-                    containerColor={tonal(C.accent, draft.trim() ? 1 : 0.14)} title="Add task" onClick={submitTask} />
-                </div>
-                <div style={{ display: 'flex', gap: SP.sm, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <ChipSet>
-                    {workPriorities.map((p) => (
-                      <FilterChip key={p.id} label={p.label} selected={composerPri === p.id} onClick={() => setComposerPri(p.id)}
-                        style={{ '--md-filter-chip-selected-container-color': tonal(p.color, 0.2) }} />
-                    ))}
-                  </ChipSet>
-                  <FilterChip label="Mrs. W" selected={mrsW} onClick={() => setMrsW((v) => !v)} style={{ marginLeft: 'auto' }} />
-                </div>
-              </div>
-
-              <QuickBar>
-                <ActionBtn variant="text" icon="playlist_add" onClick={onOpenBulkAdd} title="Bulk add">Bulk</ActionBtn>
-                <ActionBtn variant="text" icon="psychology" onClick={onOpenBrainDump} title="Brain dump">Brain dump</ActionBtn>
-                <ActionBtn variant="text" icon="grain" onClick={onOpenShatter} title="Shatter a big task">Shatter</ActionBtn>
-                <ActionBtn variant="text" icon="list_alt" onClick={onOpenQueue} title="Open queue">Queue</ActionBtn>
-              </QuickBar>
-            </Card>
-          </div>
-
-          {/* Shailos */}
-          <Card
-            icon="help" title="Shailos" count={openShailos} accent={priById.get('shaila')?.color} C={C}
-            actions={<IconBtn icon="add" iconSize={18} size={36} color={C.muted} title="Add shaila" onClick={onOpenShailaAdd} />}
-          >
-            <div style={{ maxHeight: 340, overflow: 'auto', overscrollBehavior: 'contain' }}>
-              {shailaRows.length === 0
-                ? <EmptyState icon="task_alt" text="No open shailos." C={C} />
-                : <List style={denseVars}>{shailaRows.map(renderShailaRow)}</List>}
-            </div>
-            <QuickBar>
-              <ActionBtn variant="text" icon="mic" onClick={onRecordShaila} title="Record a shaila">Record</ActionBtn>
-              <ActionBtn variant="text" icon="event_repeat" onClick={onOpenShailaFollowup} title="Follow-ups">Follow-up</ActionBtn>
-              <ActionBtn variant="text" icon="open_in_full" onClick={onOpenShailos} title="Open shailos">Open</ActionBtn>
-            </QuickBar>
-          </Card>
-
-          {/* Phone */}
-          <Card
-            icon="smartphone" title="Phone" accent={phoneOnline ? C.success : C.faint} C={C}
-            headerRight={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: phoneOnline ? C.success : C.faint, fontWeight: 600 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: phoneOnline ? C.success : C.faint }} />
-              {phoneOnline ? 'This PC' : 'Offline'}
-            </span>}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: SP.sm, padding: `${SP.sm} ${SP.xs}` }}>
-              <ActionBtn variant="tonal" icon="dialpad" onClick={onOpenPhone} title="Open phone">Open DeskPhone</ActionBtn>
-              <div style={{ display: 'flex', gap: SP.sm }}>
-                <ActionBtn variant="outlined" icon="call" onClick={onRecordCall} title="Record a call" style={{ flex: 1 }}>Record call</ActionBtn>
-                <ActionBtn variant="outlined" icon="graphic_eq" onClick={onRecordConversation} title="Record a conversation" style={{ flex: 1 }}>Conversation</ActionBtn>
-              </div>
-            </div>
-          </Card>
-
-          {/* Google */}
-          <Card
-            icon="calendar_month" title="Calendar & Mail" accent="#3D6CB5" C={C}
-            actions={googleConnected ? <>
-              <IconBtn icon="refresh" iconSize={18} size={36} color={C.muted} title="Refresh" onClick={onRefreshCalendar} />
-              <IconBtn icon="settings" iconSize={17} size={36} color={C.muted} title="Google settings" onClick={onOpenGoogleSettings} />
-            </> : null}
-          >
-            {!googleConnected ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SP.md, padding: SP.md, alignItems: 'flex-start' }}>
-                <span style={{ fontSize: 13, color: C.muted }}>
-                  {googleWasConnected ? 'Google session expired — reconnect to see your day.' : 'Connect Google to see calendar and mail.'}
-                </span>
-                <ActionBtn variant="filled" icon="link" onClick={onConnectGoogle} title="Connect Google">Connect Google</ActionBtn>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SP.sm, maxHeight: 300, overflow: 'auto' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.04em', padding: `0 ${SP.sm}` }}>Next up</div>
-                {upcomingEvents.length === 0
-                  ? <span style={{ fontSize: 12.5, color: C.faint, padding: `0 ${SP.sm} ${SP.sm}` }}>{googleLoading ? 'Loading…' : 'Nothing on the calendar.'}</span>
-                  : upcomingEvents.map((ev, i) => {
-                      const start = ev?.start?.dateTime || ev?.start?.date || ev?.start;
-                      const label = start ? new Date(start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
-                      return (
-                        <div key={ev?.id || i} style={{ display: 'flex', alignItems: 'center', gap: SP.sm, padding: `4px ${SP.sm}` }}>
-                          <span style={{ width: 3, alignSelf: 'stretch', minHeight: 20, borderRadius: 2, background: '#3D6CB5' }} />
-                          <span style={{ flex: 1, fontSize: 13, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev?.summary || '(no title)'}</span>
-                          <span style={{ fontSize: 11.5, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{label}</span>
-                        </div>
-                      );
-                    })}
-                {unreadEmails.length > 0 && (
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.04em', padding: `${SP.sm} ${SP.sm} 0` }}>Inbox</div>
-                )}
-                {unreadEmails.map((m, i) => (
-                  <div key={m?.id || i} style={{ display: 'flex', alignItems: 'center', gap: SP.sm, padding: `2px ${SP.sm}` }}>
-                    <span style={{ color: C.faint, display: 'inline-flex' }}>{suiteIcon('mail', 15)}</span>
-                    <span style={{ flex: 1, fontSize: 12.5, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m?.subject || m?.snippet || '(no subject)'}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-
-          {/* Chief + Health */}
-          <Card icon="hub" title="Command" C={C}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: SP.sm, padding: `${SP.sm} ${SP.xs}` }}>
-              <button onClick={onOpenChiefPage} style={tileStyle(C)} title="Open Chief of Staff">
-                <IconPuck icon="smart_toy" color={C.accent} />
-                <span style={{ flex: 1, textAlign: 'left' }}>
-                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 650, color: C.text }}>Chief of Staff</span>
-                  <span style={{ display: 'block', fontSize: 11.5, color: C.muted }}>{chiefProfile ? 'Profile ready' : 'AI planning & profile'}</span>
-                </span>
-                <span style={{ color: C.faint, display: 'inline-flex' }}>{suiteIcon('chevron_right', 18)}</span>
-              </button>
-              <button onClick={onOpenHealth} style={tileStyle(C)} title="Open Health">
-                <IconPuck icon="favorite" color={C.danger} />
-                <span style={{ flex: 1, textAlign: 'left' }}>
-                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 650, color: C.text }}>Health</span>
-                  <span style={{ display: 'block', fontSize: 11.5, color: C.muted }}>{healthData ? 'Synced' : 'Steps, sleep & vitals'}</span>
-                </span>
-                {onSyncHealth && <IconBtn icon="sync" iconSize={16} size={32} color={C.muted} title="Sync now" onClick={(e) => { e.stopPropagation(); onSyncHealth(); }} />}
-              </button>
-            </div>
-          </Card>
-
+      <div style={{ padding: `0 ${SP.xs} ${SP.sm}`, flexShrink: 0 }}>
+        <ChipSet>
+          <FilterChip label={`All ${primaryTasks.length}`} selected={priFilter === 'all'} onClick={() => setPriFilter('all')} />
+          {workPriorities.map((p) => (
+            <FilterChip key={p.id} label={`${p.label} ${countByPri[p.id] || 0}`} selected={priFilter === p.id}
+              onClick={() => setPriFilter(p.id)} style={{ '--md-filter-chip-selected-container-color': tonal(p.color, 0.2) }} />
+          ))}
+        </ChipSet>
+      </div>
+      <div style={scrollPane}>
+        {filteredTasks.length === 0
+          ? <EmptyState icon="task_alt" text={priFilter === 'all' ? 'No open tasks — you are clear.' : 'Nothing in this lane.'} C={C} />
+          : <List style={denseVars}>{filteredTasks.map(renderTaskRow)}</List>}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SP.sm, paddingTop: SP.sm, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: SP.sm, alignItems: 'center' }}>
+          <TextField value={draft} placeholder="Add a task…"
+            style={{ flex: 1, '--md-outlined-text-field-container-shape': RADIUS.pill }}
+            onInput={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submitTask(); }} />
+          <IconBtn icon="add" variant="filled" iconSize={20} size={42} color={C.accent}
+            containerColor={tonal(C.accent, draft.trim() ? 1 : 0.14)} title="Add task" onClick={submitTask} />
+        </div>
+        <div style={{ display: 'flex', gap: SP.sm, alignItems: 'center', flexWrap: 'wrap' }}>
+          <ChipSet>
+            {workPriorities.map((p) => (
+              <FilterChip key={p.id} label={p.label} selected={composerPri === p.id} onClick={() => setComposerPri(p.id)}
+                style={{ '--md-filter-chip-selected-container-color': tonal(p.color, 0.2) }} />
+            ))}
+          </ChipSet>
+          <FilterChip label="Mrs. W" selected={mrsW} onClick={() => setMrsW((v) => !v)} style={{ marginLeft: 'auto' }} />
         </div>
       </div>
+      <QuickBar>
+        <ActionBtn variant="text" icon="playlist_add" onClick={onOpenBulkAdd} title="Bulk add">Bulk</ActionBtn>
+        <ActionBtn variant="text" icon="psychology" onClick={onOpenBrainDump} title="Brain dump">Dump</ActionBtn>
+        <ActionBtn variant="text" icon="grain" onClick={onOpenShatter} title="Shatter a big task">Shatter</ActionBtn>
+        <ActionBtn variant="text" icon="list_alt" onClick={onOpenQueue} title="Open queue">Queue</ActionBtn>
+      </QuickBar>
+    </Card>
+  );
+
+  const shailosCard = (
+    <Card key="shailos" icon="help" title="Shailos" count={openShailos} accent={gold} C={C}
+      style={cardStyle('shailos', 220)}
+      actions={<IconBtn icon="add" iconSize={17} size={32} color={C.muted} title="Add shaila" onClick={onOpenShailaAdd} />}>
+      <div style={scrollPane}>
+        {shailaRows.length === 0
+          ? <EmptyState icon="task_alt" text="No open shailos." C={C} />
+          : <List style={denseVars}>{shailaRows.map(renderShailaRow)}</List>}
+      </div>
+      <QuickBar>
+        <ActionBtn variant="text" icon="mic" onClick={onRecordShaila} title="Record a shaila">Record</ActionBtn>
+        <ActionBtn variant="text" icon="event_repeat" onClick={onOpenShailaFollowup} title="Follow-ups">Follow-up</ActionBtn>
+        <ActionBtn variant="text" icon="open_in_full" onClick={onOpenShailos} title="Open shailos">Open</ActionBtn>
+      </QuickBar>
+    </Card>
+  );
+
+  const phoneCard = (
+    <Card key="phone" icon="smartphone" title="Phone" accent={phoneOnline ? C.success : C.faint} C={C}
+      style={cardStyle('phone', 150)}
+      headerRight={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: phoneOnline ? C.success : C.faint, fontWeight: 600 }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: phoneOnline ? C.success : C.faint }} />
+        {phoneOnline ? 'This PC' : 'Offline'}
+      </span>}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SP.sm, padding: `${SP.xs} ${SP.xs}` }}>
+        <ActionBtn variant="tonal" icon="dialpad" onClick={onOpenPhone} title="Open phone">Open DeskPhone</ActionBtn>
+        <div style={{ display: 'flex', gap: SP.sm }}>
+          <ActionBtn variant="outlined" icon="call" onClick={onRecordCall} title="Record a call" style={{ flex: 1 }}>Call</ActionBtn>
+          <ActionBtn variant="outlined" icon="graphic_eq" onClick={onRecordConversation} title="Record a conversation" style={{ flex: 1 }}>Convo</ActionBtn>
+        </div>
+      </div>
+    </Card>
+  );
+
+  const calendarCard = (
+    <Card key="calendar" icon="calendar_month" title="Calendar & Mail" accent="#3D6CB5" C={C}
+      style={cardStyle('calendar', 220)}
+      actions={googleConnected ? <>
+        <IconBtn icon="refresh" iconSize={17} size={32} color={C.muted} title="Refresh" onClick={onRefreshCalendar} />
+        <IconBtn icon="settings" iconSize={16} size={32} color={C.muted} title="Google settings" onClick={onOpenGoogleSettings} />
+      </> : null}>
+      {!googleConnected ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SP.md, padding: SP.md, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: 12.5, color: C.muted }}>
+            {googleWasConnected ? 'Google session expired — reconnect.' : 'Connect Google to see calendar and mail.'}
+          </span>
+          <ActionBtn variant="filled" icon="link" onClick={onConnectGoogle} title="Connect Google">Connect Google</ActionBtn>
+        </div>
+      ) : (
+        <div style={{ ...scrollPane, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={sectionLabel(C)}>Next up</div>
+          {upcomingEvents.length === 0
+            ? <span style={{ fontSize: 12, color: C.faint, padding: `0 ${SP.sm} ${SP.sm}` }}>{googleLoading ? 'Loading…' : 'Nothing scheduled.'}</span>
+            : upcomingEvents.map((ev, i) => {
+                const start = ev?.start?.dateTime || ev?.start?.date || ev?.start;
+                const label = start ? new Date(start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+                return (
+                  <div key={ev?.id || i} style={{ display: 'flex', alignItems: 'center', gap: SP.sm, padding: `3px ${SP.sm}` }}>
+                    <span style={{ width: 3, alignSelf: 'stretch', minHeight: 18, borderRadius: 2, background: '#3D6CB5' }} />
+                    <span style={{ flex: 1, fontSize: 12.5, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev?.summary || '(no title)'}</span>
+                    <span style={{ fontSize: 11, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{label}</span>
+                  </div>
+                );
+              })}
+          {unreadEmails.length > 0 && <div style={sectionLabel(C)}>Inbox</div>}
+          {unreadEmails.map((m, i) => (
+            <div key={m?.id || i} style={{ display: 'flex', alignItems: 'center', gap: SP.sm, padding: `2px ${SP.sm}` }}>
+              <span style={{ color: C.faint, display: 'inline-flex' }}>{suiteIcon('mail', 14)}</span>
+              <span style={{ flex: 1, fontSize: 12, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m?.subject || m?.snippet || '(no subject)'}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+
+  const commandCard = (
+    <Card key="command" icon="hub" title="Command" C={C} style={cardStyle('command', 150)}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SP.xs, padding: `${SP.xs} ${SP.xs}` }}>
+        <button onClick={onOpenChiefPage} style={tileStyle(C)} title="Open Chief of Staff">
+          <IconPuck icon="smart_toy" color={C.accent} size={28} iconSize={16} />
+          <span style={{ flex: 1, textAlign: 'left' }}>
+            <span style={{ display: 'block', fontSize: 13, fontWeight: 650, color: C.text }}>Chief of Staff</span>
+            <span style={{ display: 'block', fontSize: 11, color: C.muted }}>{chiefProfile ? 'Profile ready' : 'AI planning & profile'}</span>
+          </span>
+          <span style={{ color: C.faint, display: 'inline-flex' }}>{suiteIcon('chevron_right', 18)}</span>
+        </button>
+        <button onClick={onOpenHealth} style={tileStyle(C)} title="Open Health">
+          <IconPuck icon="favorite" color={C.danger} size={28} iconSize={16} />
+          <span style={{ flex: 1, textAlign: 'left' }}>
+            <span style={{ display: 'block', fontSize: 13, fontWeight: 650, color: C.text }}>Health</span>
+            <span style={{ display: 'block', fontSize: 11, color: C.muted }}>{healthData ? 'Synced' : 'Steps, sleep & vitals'}</span>
+          </span>
+          {onSyncHealth && <IconBtn icon="sync" iconSize={15} size={30} color={C.muted} title="Sync now" onClick={(e) => { e.stopPropagation(); onSyncHealth(); }} />}
+        </button>
+      </div>
+    </Card>
+  );
+
+  const cards = [tasksCard, shailosCard, calendarCard, phoneCard, commandCard];
+
+  // ═══ Shell ════════════════════════════════════════════════════════════════
+  return (
+    <div style={{
+      position: 'fixed', top: topOffset, left: sidebarW, right: 0, bottom: 0, zIndex: 7600,
+      background: C.bgSoft, borderLeft: `1px solid ${C.divider}`, fontFamily: NC_FONT_STACK,
+      display: 'flex', flexDirection: 'column', overflow: 'hidden', WebkitFontSmoothing: 'antialiased',
+    }}>
+      {/* Thin header bar — clock left, subtle readouts + Polish right */}
+      <header style={{ display: 'flex', alignItems: 'center', gap: SP.md, padding: `${SP.sm} ${SP.lg}`, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: SP.sm, minWidth: 0 }}>
+          <span style={{ fontSize: 19, fontWeight: 700, color: C.text, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' }}>{clock.time}</span>
+          <span style={{ fontSize: 12.5, color: C.muted, whiteSpace: 'nowrap' }}>{clock.date}</span>
+        </div>
+        <span style={{ flex: 1 }} />
+        <span style={miniStat(C, gold)} title={`${openShailos} open shailos`}>
+          {suiteIcon('help', 14)}<b style={{ fontVariantNumeric: 'tabular-nums' }}>{openShailos}</b>
+        </span>
+        <span style={miniStat(C, phoneOnline ? C.success : C.faint)} title={phoneOnline ? 'Phone online' : 'Phone offline'}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: phoneOnline ? C.success : C.faint }} />
+          {phoneOnline ? 'Phone' : 'Offline'}
+        </span>
+        {onPolishNerveItems && (
+          <IconBtn icon="auto_awesome" iconSize={16} size={30} color={C.faint} title="Polish items with AI" onClick={onPolishNerveItems} />
+        )}
+      </header>
+
+      {/* Dashboard — grid (no page scroll) on wide, graceful column-scroll when narrow */}
+      {cols === 1 ? (
+        <div style={{ flex: 1, overflow: 'auto', overscrollBehavior: 'contain', display: 'flex', flexDirection: 'column', gap: SP.md, padding: `0 ${SP.lg} ${SP.lg}` }}>
+          {cards}
+        </div>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, display: 'grid', ...gridStyle, gap: SP.md, padding: `0 ${SP.lg} ${SP.lg}` }}>
+          {cards}
+        </div>
+      )}
     </div>
   );
+}
+
+function sectionLabel(C) {
+  return { fontSize: 10.5, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.04em', padding: `${SP.xs} ${SP.sm} 0` };
+}
+
+function miniStat(C, color) {
+  return {
+    display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: FONT,
+    fontSize: 12, fontWeight: 600, color: color || C.muted, whiteSpace: 'nowrap',
+  };
 }
 
 function tileStyle(C) {

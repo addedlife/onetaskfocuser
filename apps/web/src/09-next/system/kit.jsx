@@ -92,15 +92,15 @@ export function Card({
       {(title || actions || headerRight) && (
         <header
           style={{
-            display: 'flex', alignItems: 'center', gap: SP.md,
-            padding: `${SP.lg} ${SP.lg} ${SP.md}`,
+            display: 'flex', alignItems: 'center', gap: SP.sm,
+            padding: `${SP.md} ${SP.md} ${SP.sm}`, flexShrink: 0,
           }}
         >
-          {icon && <IconPuck icon={icon} color={a} />}
+          {icon && <IconPuck icon={icon} color={a} size={28} iconSize={17} />}
           <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, minWidth: 0, flex: 1 }}>
             {title && (
               <h2 style={{
-                margin: 0, fontFamily: FONT, fontSize: 16.5, fontWeight: 650,
+                margin: 0, fontFamily: FONT, fontSize: 15, fontWeight: 650,
                 letterSpacing: '-0.01em', color: C.text,
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>{title}</h2>
