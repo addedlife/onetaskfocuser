@@ -84,7 +84,9 @@ export function BugLog({ T }) {
   const [copied, setCopied] = React.useState(false);
   const [hot, setHot]       = React.useState(false);   // FAB hover/focus → full opacity
 
-  // FAB position (draggable, remembered). null until first paint → bottom-right default.
+  // FAB position: null = anchored to the bottom-right corner via CSS (robust —
+  // no JS pixel math, can't drift). Once the user drags it, we switch to an
+  // explicit, remembered left/top pixel position.
   const [pos, setPos] = React.useState(() => {
     try { const s = JSON.parse(localStorage.getItem(POS_KEY)); if (s && typeof s.x === 'number') return s; } catch (_) {}
     return null;
@@ -102,29 +104,23 @@ export function BugLog({ T }) {
     return () => { if (unsub) unsub(); if (timer) clearTimeout(timer); };
   }, []);
 
-  // Default the FAB to the bottom-right corner once we know the viewport size.
+  // Keep a dragged position on-screen if the window is resized smaller.
   React.useEffect(() => {
-    if (pos) return;
-    const place = () => setPos({
-      x: window.innerWidth  - FAB_SIZE - MARGIN,
-      y: window.innerHeight - FAB_SIZE - MARGIN,
-    });
-    place();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Keep the FAB on-screen if the window is resized smaller.
-  React.useEffect(() => {
+    if (!pos) return undefined;
     const onResize = () => setPos(p => p ? {
       x: clamp(p.x, MARGIN, window.innerWidth  - FAB_SIZE - MARGIN),
       y: clamp(p.y, MARGIN, window.innerHeight - FAB_SIZE - MARGIN),
     } : p);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, []);
+  }, [pos]);
 
   // ── Drag vs tap ────────────────────────────────────────────────────────────
   function onPointerDown(e) {
-    const p = pos || { x: window.innerWidth - FAB_SIZE - MARGIN, y: window.innerHeight - FAB_SIZE - MARGIN };
+    // Read the wrapper's actual on-screen rect — correct whether it's still
+    // CSS-anchored (right/bottom) or already at an explicit left/top.
+    const wrapperRect = e.currentTarget.closest('[data-buglog-fab]')?.getBoundingClientRect();
+    const p = wrapperRect ? { x: wrapperRect.left, y: wrapperRect.top } : { x: e.clientX, y: e.clientY };
     drag.current = { sx: e.clientX, sy: e.clientY, ox: e.clientX - p.x, oy: e.clientY - p.y, moved: false };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
   }
@@ -196,21 +192,25 @@ export function BugLog({ T }) {
   const visible = bugs.filter(matches);
   const unresolvedCount = bugs.filter(b => b.status === 'unresolved').length;
 
-  const fabPos = pos || { x: -9999, y: -9999 }; // off-screen for the first frame before placement
-
   // M3 bridge tokens for the FAB (shadow DOM can't see app CSS) — same as AppSuiteChrome.
   const fabVars = {
     '--md-fab-container-color': C.accent,
     '--md-fab-icon-color': onAccent,
     '--md-fab-hover-state-layer-color': C.accent,
   };
+  // Anchored by default (right/bottom — immune to any viewport pixel-math drift);
+  // switches to an explicit left/top once the user has actually dragged it.
+  const posStyle = pos
+    ? { left: pos.x, top: pos.y }
+    : { right: MARGIN, bottom: MARGIN };
 
   return (
     <>
       {/* Floating launcher — small, draggable, fades to low opacity at rest. */}
       <div
+        data-buglog-fab="true"
         style={{
-          position: 'fixed', left: fabPos.x, top: fabPos.y, zIndex: Z.docked,
+          position: 'fixed', ...posStyle, zIndex: Z.docked,
           opacity: open ? 0 : (hot ? 1 : 0.45),
           pointerEvents: open ? 'none' : 'auto',
           transition: TRANSITION, touchAction: 'none', ...fabVars,
@@ -229,7 +229,7 @@ export function BugLog({ T }) {
           onFocus={() => setHot(true)}
           onBlur={() => setHot(false)}
         >
-          <span slot="icon" className="material-symbols-rounded">bug_report</span>
+          <span slot="icon" className="material-symbols-rounded">feedback</span>
         </Fab>
         {unresolvedCount > 0 && (
           <span style={{
