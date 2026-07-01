@@ -17,6 +17,7 @@ import { DeskPhoneMiniDock } from './components/DeskPhoneMiniDock.jsx';
 import { compactNerveSummary, nerveSummarySource, NerveCenterPanel } from './components/NerveCenterPanel.jsx';
 import { TaskRiverPanel } from './components/TaskRiverPanel.jsx';
 import { ConvCapture } from './components/ConvCapture.jsx';
+import { BugLog } from './components/BugLog.jsx';
 import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack } from './utils/shailosQueue.js';
 import { createComponent } from '@lit/react';
 import { MdIconButton } from '@material/web/iconbutton/icon-button.js';
@@ -3090,6 +3091,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       <style>{themeVarsCss(T)}</style>
 
       {/* Overlays */}
+      {/* Floating bug-log launcher — present on every screen, self-positioning. */}
+      <BugLog T={T} />
       {zen && curT && <ZenMode task={curT} pris={pris} T={T} onExit={exitZen} onDone={(isl)=>isl?legacyCompTask(curT.id):compTask(curT.id)}
         justStartId={justStartId} curTaskId={curT?.id} onDoneJustStart={()=>setJustStartId(null)} jsMinimized={jsMinimized} onRestoreJs={()=>setJsMinimized(false)}
         showBodyDouble={showBodyDouble} bdMinimized={bdMinimized} onRestoreBd={()=>setBdMinimized(false)} onCloseBd={()=>{setShowBodyDouble(false);setBdMinimized(false);}}

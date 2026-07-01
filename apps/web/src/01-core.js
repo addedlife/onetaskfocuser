@@ -726,6 +726,90 @@ const Store = {
     }
   },
 
+  // ── Bug Log ───────────────────────────────────────────────────────────────
+  // The floating bug-log widget rides the same per-user Firestore pipe as
+  // everything else: users/{uid}/bugs. `type` is "bug" | "idea"; `status` is
+  // "unresolved" | "paused" | "resolved" | "future". createdAt is the
+  // authoritative server timestamp; createdAtMs is a client stamp written at
+  // the same moment so the list has a stable, always-present sort key (the
+  // server timestamp is null on a pending doc until the round-trip resolves).
+  bugsCol() { return db && this.uid ? db.collection("users").doc(this.uid).collection("bugs") : null; },
+
+  async addBug({ text, type = "bug", status = "unresolved" } = {}) {
+    const col = this.bugsCol();
+    if (!col || !text || !text.trim()) return null;
+    try {
+      const ref = col.doc();
+      await ref.set(this._clean({
+        text: text.trim(),
+        type,
+        status,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdAtMs: Date.now(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        userId: firebase.auth().currentUser?.uid || this.uid,
+      }));
+      console.log("[Store] Added bug:", ref.id);
+      return ref.id;
+    } catch (e) {
+      console.warn("[Store] addBug failed:", e);
+      return null;
+    }
+  },
+
+  // Patch any subset of fields (e.g. {status} or {type}); always re-stamps updatedAt.
+  async updateBug(id, patch = {}) {
+    const col = this.bugsCol();
+    if (!col || !id) return;
+    try {
+      await col.doc(id).update({
+        ...this._clean(patch),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log("[Store] Updated bug:", id, patch);
+    } catch (e) {
+      console.warn("[Store] updateBug failed:", e);
+    }
+  },
+
+  async deleteBug(id) {
+    const col = this.bugsCol();
+    if (!col || !id) return;
+    try {
+      await col.doc(id).delete();
+      console.log("[Store] Deleted bug:", id);
+    } catch (e) {
+      console.warn("[Store] deleteBug failed:", e);
+    }
+  },
+
+  // Live listener over the whole bugs collection, newest first. Self-healing
+  // with exponential backoff, matching _listenV5: a Firestore onSnapshot stream
+  // is terminal after its error callback, so we resubscribe on transport drops.
+  // Returns an unsubscribe function.
+  subscribeBugs(onUpdate) {
+    const col = this.bugsCol();
+    if (!col) return () => {};
+    let stopped = false, unsub = null, attempt = 0, retry = null;
+    const start = () => {
+      if (stopped) return;
+      unsub = col.orderBy("createdAtMs", "desc").onSnapshot(snap => {
+        attempt = 0; // healthy stream resets backoff
+        onUpdate(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      }, err => {
+        console.warn("[Store] bug listener error — resubscribing:", err);
+        try { unsub && unsub(); } catch (_) {}
+        unsub = null;
+        if (stopped) return;
+        const delay = Math.min(30000, 1000 * Math.pow(2, attempt));
+        attempt += 1;
+        retry = setTimeout(start, delay);
+      });
+    };
+    start();
+    return () => { stopped = true; try { unsub && unsub(); } catch (_) {} if (retry) clearTimeout(retry); };
+  },
+
   // ── Manual full backup: tasks + shailos → user-chosen JSON file ──
   async fullBackup(appState) {
     try {
