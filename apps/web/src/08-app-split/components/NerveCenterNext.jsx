@@ -1047,13 +1047,16 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     shailos: Math.max(0.55, Number(paneWeights?.shailos || 1)),
     phone: Math.max(0.55, Number(paneWeights?.phone || 1)),
   };
-  const gridColumns = isStacked ? "1fr" : isTablet ? "repeat(2,minmax(0,1fr))" : `minmax(240px,${paneW.tasks}fr) 6px minmax(240px,${paneW.shailos}fr) 6px minmax(240px,${paneW.phone}fr)`;
+  // ui=next: 16px gutters between panes (M3 grid rhythm). The gutter column IS
+  // the invisible col-resize handle, so spacing and the grab target are one.
+  const gridColumns = isStacked ? "1fr" : isTablet ? "repeat(2,minmax(0,1fr))" : `minmax(240px,${paneW.tasks}fr) 16px minmax(240px,${paneW.shailos}fr) 16px minmax(240px,${paneW.phone}fr)`;
   const googleH = Math.max(150, Math.min(420, Number(googlePaneHeight || 244)));
-  // tintedPanel: no outline; accent-tinted background like the boxes cards — visual grouping
-  // through colour, not chrome. Each section passes its own accent colour.
-  // ui=next re-skin: Google-style borderless card — the card surface (C.bg) sits
-  // on the softer page (C.bgSoft below), so elevation reads from tonal contrast,
-  // not shadow or outline. A whisper of the section accent keeps category identity.
+  // ui=next re-skin: Google-style borderless card. The page (pageBg) is a
+  // distinctly deeper tonal surface than the card (C.bg) so the borderless card
+  // reads as sharp against the background but stays soft — no shadow, no outline.
+  // Depth from tone, exactly like google.com's filled cards. The single-theme
+  // failure mode (page ≈ card white) is fixed by mixing bgSoft ~12% toward text.
+  const pageBg = `color-mix(in srgb, ${C.bgSoft} 88%, ${C.text} 12%)`;
   const tintedPanel = (accent = C.accent) => {
     const tint = hexToRgba(accent, 0.05);
     return { background: `linear-gradient(${tint},${tint}), ${C.bg}`, borderRadius: 20, display: "flex", flexDirection: "column", minHeight: isTablet && !isStacked ? 420 : 0, overflow: "hidden", boxShadow: "none" };
@@ -1723,7 +1726,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   };
   const paneResizeHandle = (leftKey, rightKey) => (
     <button type="button" aria-label="Resize panes" title="Drag to resize panes. Double-click to equalize." onPointerDown={e => startPaneResize(leftKey, rightKey, e)} onDoubleClick={() => onPaneWeightsChange?.({ tasks: 1, shailos: 1, phone: 1 })}
-      style={{ display: touchLayout ? "none" : "flex", alignItems: "center", justifyContent: "center", minWidth: 6, width: 6, border: "none", padding: 0, cursor: "col-resize", background: "transparent", touchAction: "none" }}>
+      style={{ display: touchLayout ? "none" : "flex", alignItems: "center", justifyContent: "center", minWidth: 16, width: 16, border: "none", padding: 0, cursor: "col-resize", background: "transparent", touchAction: "none" }}>
       <span style={{ width: 1, height: 48, borderRadius: 2, background: C.divider }} />
     </button>
   );
@@ -2867,8 +2870,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   }
 
   return (
-    <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: C.bgSoft, overflow: isStacked ? "hidden" : touchLayout ? "auto" : "hidden", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}` }}>
-      <div style={isStacked ? { height: "100%", display: "flex", flexDirection: "column", boxSizing: "border-box" } : { minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: touchLayout ? "clamp(16px,2.4vw,28px)" : "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: touchLayout ? 14 : 10 }}>
+    <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: pageBg, overflow: isStacked ? "hidden" : touchLayout ? "auto" : "hidden", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}` }}>
+      <div style={isStacked ? { height: "100%", display: "flex", flexDirection: "column", boxSizing: "border-box" } : { minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: touchLayout ? "clamp(16px,2.4vw,28px)" : "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: touchLayout ? 14 : 16 }}>
 
         {/* ── Layout + view mode toggles — top right of the whole panel, above all panes ── */}
         {!isStacked && (
@@ -3190,7 +3193,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           const lowerGridStyle = {
             display: "grid",
             gridTemplateColumns: "minmax(0,1fr) 172px minmax(0,1fr)",
-            gap: 8,
+            gap: 16,
             flex: `0 0 ${googleH}px`,
             minHeight: 0,
           };
