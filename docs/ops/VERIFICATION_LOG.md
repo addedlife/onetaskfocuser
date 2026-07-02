@@ -1,5 +1,20 @@
 # Verification Log
 
+## 2026-07-02 Bug-log ticket batch — phone status/reconnect/texting + tasks (4.33.113)
+
+- Scope: 11 of the 13 open bug-log tickets (7/1/26), all web-side. Commit `45ad492`.
+- Phone status: `hostDeviceName` (10-deskphone-web.jsx) now skips raw BT addresses ("7E4B46E95FBA") via `looksLikeBtAddress`; the rail's duplicated two-block status ("Connected to X" + channel row repeating it) merged into ONE plain line; `.dp-channel-*` (which had NO CSS) removed; `.dp-rail-status-text` wraps + left-aligns. Same MAC filter on the NerveCenter phone surface's "Live · connected" line.
+- Reconnect: the rail sync arrow now POSTs `/connect` (real phone-link reset) instead of a status re-read; the NerveCenter phonescreen header refresh (previously `onClick={refresh}` — passed the click event where `forceProbe===true` was required AND never touched the host) is now the ONE reconnect button: `/connect` direct, `/refresh` over the relay (relay whitelist has no `/connect`), then `refresh(true)` re-probe.
+- New phonescreen button (desktop only): POST `${api}/show` opens/confirms DeskPhone on the PC; silence = not running (loopback-only endpoint, answered by the app itself).
+- Text bubbles: retry affordance on Failed sends and on sends stuck in Sending/Confirming >60s — both NerveCenterPhoneSurface (ActionBtn "Retry" resends via `/send`) and DeskPhone web (`.dp-message-retry` in bubble meta → `sendComposeMessage` resend).
+- Copy message: `copyTextToClipboard` helper — navigator.clipboard with hidden-textarea `execCommand("copy")` fallback (WebView2 permission-blocks the async API).
+- NerveCenter reply: expanded-conversation compose box moved BELOW the newest message (was above the whole thread).
+- Priorities: built-in labels Now/Today/Eventually → "1"/"2"/"3" (1=highest; ids/weights unchanged). defS + on-load migration in App.jsx (only converts stock labels, preserves custom renames); NC_LABEL pill maps in NerveCenterPanel/NerveCenterNext.
+- Stale-task nudge ("waiting N days" popup) removed entirely (state, trigger effect, JSX) per ticket.
+- Miscategorization: conversation.extract.v1 gained a shaila-vs-task CLASSIFICATION GUARD — patched in BOTH `apps/web/functions/_ai-core.cjs` (Firebase, deployed) and `apps/web/backend/functions/_ai-core.cjs`. Note: NO code path auto-tags Mrs W — only the green add-dot next to the priority dots; likely fat-finger, watch recurrence.
+- NOT fixed (native host, needs a DeskPhone C# build session): ticket 6 (fickle BT sends / stale BT requests) and ticket 10 (notification quick-reply not sending). Ticket 11 ("text return not working") had no reproducible web bug; the inline-compose + retry + ack-error surfacing should expose the real failure if it recurs.
+- Gates: `npm run build` (apps/web) → 0 errors. RUNTIME-VERIFIED in dev preview: suite loads (v4.33.113 in rail), zero console errors; `?standalone=deskphone` renders ONE status line ("Phone service is off — open DeskPhone on this PC"), reconnect button present, old channel row gone. Deploy Action `28610352535` green; production bundle `index-CbGuQ332.js` contains 4.33.113.
+
 ## 2026-06-21 M3 Phase A (slice 1) — buttons: text/action/toolbar + small-file icons → @material/web (4.26.97)
 
 - Scope: M3 component migration **Phase A, slice 1**. Replaced hand-coded button lookalikes with real `@material/web` components: every `gvTextButton` (8 sites: Answer/Decline/Hang up, Cancel, Done, Delete, "More history", row got-back), `cleanToolbarButton` (3 sites: Add, Open ×2), and the ConvCapture close (1) + SuitePanels (3 icon + 1 "Position" action) buttons.
