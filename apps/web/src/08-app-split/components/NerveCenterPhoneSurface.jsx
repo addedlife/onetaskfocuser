@@ -736,6 +736,29 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     finally { setBusy(""); }
   };
 
+  // The ONE reconnect control (owner ticket): ask DeskPhone to re-establish the
+  // Bluetooth link (/connect only exists on the loopback API; the relay whitelist
+  // maps /refresh to a full re-sync + push), then force the transport re-probe.
+  const reconnectPhone = async () => {
+    await post(usingRelayRef.current ? "/refresh" : "/connect", "reconnect");
+    await refresh(true);
+  };
+
+  // Owner ticket: a button that opens/confirms DeskPhone on the PC side. /show is
+  // loopback-only and answered by the app itself, so a reply BOTH raises the window
+  // and proves it's running; silence means it isn't open on this machine.
+  const openDeskPhoneOnPc = async () => {
+    setBusy("show");
+    try {
+      const res = await fetch(`${api}/show`, { method: "POST" });
+      if (!res.ok) throw new Error(String(res.status));
+      setError("");
+      await refresh(true);
+    } catch {
+      setError("DeskPhone isn't running on this PC — start it from the desktop and it will connect on its own.");
+    } finally { setBusy(""); }
+  };
+
   const dialNum = async (n) => { if (n?.trim()) await post(`/dial?n=${encodeURIComponent(n.trim())}`, "dial"); };
   const dial = () => dialNum(number);
   const sendSms = async () => {
@@ -760,7 +783,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const relayAgeMs = relayReceivedAt > 0 ? Math.max(0, nowTick - relayReceivedAt) : 0;
   const relayStale = usingRelay && relayReceivedAt > 0 && relayAgeMs >= RELAY_LIVE_WINDOW_MS;
   const phoneLinkLive = usingRelay ? (statusOnline && relayReceivedAt > 0 && !relayStale) : statusOnline;
-  const deviceName = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
+  // A raw Bluetooth address ("7E4B46E95FBA") is plumbing, not a phone name — never show it.
+  const deviceNameRaw = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
+  const deviceName = /^[0-9a-f]{12}$/i.test(String(deviceNameRaw).trim().replace(/[:\-]/g, "")) ? "" : deviceNameRaw;
   const idleLabel = deviceName ? `Connected · ${deviceName}` : "Connected";
   const statusText = !statusOnline
     ? "DeskPhone offline"
@@ -1155,7 +1180,12 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             onClick={() => post("/hangup", "hangup")} disabled={!!busy} title="Hang up">Hang up</ActionBtn>
         ) : null}
         <div style={{ flex: 1 }} />
-        <button onClick={refresh} disabled={!!busy} title="Refresh phone" style={phoneIconButton(false)}>{suiteIcon("refresh", 15)}</button>
+        <button onClick={reconnectPhone} disabled={!!busy} title="Reconnect phone" aria-label="Reconnect phone" style={phoneIconButton(false)}>{suiteIcon("refresh", 15)}</button>
+        {!isMobile && (
+          <button onClick={openDeskPhoneOnPc} disabled={!!busy} title="Open DeskPhone on this PC" aria-label="Open DeskPhone on this PC" style={phoneIconButton(false)}>
+            {suiteIcon("desktop_windows", 15)}
+          </button>
+        )}
         {/* Record general */}
         <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
           style={phoneIconButton(false)}>
@@ -1328,11 +1358,6 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                             </button>
                           </div>
                         </div>
-                        {composeOpen && composeAnchorId === actionId && !composeIsNew && (
-                          <div style={{ margin: "0 0 8px" }}>
-                            {renderComposeBox({ boxShadow: "none" })}
-                          </div>
-                        )}
                         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                           {thread._messages.map((msg, msgIdx) => {
                             const outgoing = isOutgoingMessage(msg);
@@ -1343,6 +1368,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                             // so a failed send is visible remotely, not only on the PC.
                             const sendStatus = String(msg.sendStatus || msg.SendStatus || "").trim();
                             const sendFailed = /fail/i.test(sendStatus);
+                            // In-flight for over a minute = treat as failed (owner ticket):
+                            // offer the same retry instead of a bubble stuck on "Sending".
+                            const sendStuck = !sendFailed && /send|confirm|queue/i.test(sendStatus) && (Date.now() - messageTimeMs(msg)) > 60000;
                             return (
                               <div key={`${thread._who}-${messageTimeMs(msg)}-${msgIdx}`} style={{ alignSelf: outgoing ? "flex-end" : "flex-start", maxWidth: "92%", minWidth: 0 }}>
                                 <div style={{ borderRadius: RADIUS.sm, border: `1px solid ${outgoing ? (sendFailed ? C.danger : "transparent") : C.divider}`, background: outgoing ? C.hover : C.bgSoft, color: C.text, padding: "7px 9px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
@@ -1353,18 +1381,32 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                                   {!msgText && !(msg.attachments || []).some(a => a.isImage) && "(no text)"}
                                 </div>
                                 {(msgTime || (outgoing && sendStatus)) && (
-                                  <div style={{ fontSize: NC_TYPE.small, color: C.faint, marginTop: 2, textAlign: outgoing ? "right" : "left" }}>
+                                  <div style={{ fontSize: NC_TYPE.small, color: C.faint, marginTop: 2, textAlign: outgoing ? "right" : "left", display: "flex", alignItems: "center", gap: 4, justifyContent: outgoing ? "flex-end" : "flex-start" }}>
                                     {outgoing && sendStatus && (
-                                      <span style={{ color: sendFailed ? C.danger : C.faint, fontWeight: sendFailed ? 600 : 400 }}>
-                                        {msg.sendStatusLabel || msg.SendStatusLabel || sendStatus}{msgTime ? " · " : ""}
+                                      <span style={{ color: (sendFailed || sendStuck) ? C.danger : C.faint, fontWeight: (sendFailed || sendStuck) ? 600 : 400 }}>
+                                        {sendStuck ? "Not confirmed" : (msg.sendStatusLabel || msg.SendStatusLabel || sendStatus)}{msgTime ? " · " : ""}
                                       </span>
                                     )}
                                     {msgTime}
+                                    {outgoing && (sendFailed || sendStuck) && (
+                                      <ActionBtn variant="text" icon="refresh" iconSize={12} height={24} labelSize={NC_TYPE.small} labelColor={C.danger}
+                                        title="Retry send" disabled={!!busy}
+                                        onClick={e => { e.stopPropagation(); if (msgText) post(`/send?to=${encodeURIComponent(thread._who)}&body=${encodeURIComponent(msgText)}`, "retry send"); }}>
+                                        Retry
+                                      </ActionBtn>
+                                    )}
                                   </div>
                                 )}
                               </div>
                             );
                           })}
+                          {/* Reply composes INLINE below the newest text (owner ticket) —
+                              not at the top of the conversation. */}
+                          {composeOpen && composeAnchorId === actionId && !composeIsNew && (
+                            <div style={{ margin: "2px 0 0" }}>
+                              {renderComposeBox({ boxShadow: "none" })}
+                            </div>
+                          )}
                           <div
                             role="group"
                             aria-label="Conversation actions"

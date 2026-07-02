@@ -594,21 +594,28 @@ function pairedPhoneName(status) {
   return String(bySelected?.name || bySelected?.Name || byDefault?.name || byDefault?.Name || "").trim();
 }
 
+// A raw Bluetooth address ("7E4B46E95FBA", "7E:4B:46:E9:5F:BA") is plumbing,
+// not a phone name — skip it so the owner never reads a MAC in the UI.
+function looksLikeBtAddress(value) {
+  const s = String(value || "").trim();
+  return !!s && /^[0-9a-f]{12}$/i.test(s.replace(/[:\-\s]/g, ""));
+}
+
 function hostDeviceName(status) {
   const remote = remotePhoneStatus(status);
   // NOTE: never fall back to hostConnector — that's the PC service's label
   // ("DeskPhone Windows Host"), and showing it as the "phone" reads absurd.
-  return (
-    remote.preferredName ||
-    status?.phoneName ||
-    status?.PhoneName ||
-    status?.deviceName ||
-    status?.DeviceName ||
-    status?.connectedDeviceName ||
-    status?.ConnectedDeviceName ||
-    pairedPhoneName(status) ||
-    "your phone"
-  );
+  const candidates = [
+    remote.preferredName,
+    status?.phoneName,
+    status?.PhoneName,
+    status?.deviceName,
+    status?.DeviceName,
+    status?.connectedDeviceName,
+    status?.ConnectedDeviceName,
+    pairedPhoneName(status),
+  ];
+  return candidates.find((name) => name && !looksLikeBtAddress(name)) || "your phone";
 }
 
 function quickConnectSummary(status, online) {
@@ -790,6 +797,30 @@ function renderLinkedMessageText(text) {
   });
   if (last < raw.length) parts.push(raw.slice(last));
   return parts;
+}
+
+// navigator.clipboard is permission-gated and fails inside WebView2 / non-focused
+// frames ("copy blocked by browser"). Fall back to the classic hidden-textarea
+// execCommand path, which works in every embedded context.
+async function copyTextToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {}
+  try {
+    const scratch = document.createElement("textarea");
+    scratch.value = text;
+    scratch.setAttribute("readonly", "");
+    scratch.style.position = "fixed";
+    scratch.style.opacity = "0";
+    document.body.appendChild(scratch);
+    scratch.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(scratch);
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 function normalizeSendStatus(raw) {
@@ -1121,12 +1152,12 @@ function ConnectionRail({
   online,
   status,
   connectionStatus,
-  callsConnectionLabel,
-  messagesConnectionLabel,
-  onRefreshStatus,
+  onReconnect,
   onSettings,
 }) {
-  const refreshLabel = "Check now";
+  // The revolving arrow IS the main reset (owner ticket): it asks DeskPhone to
+  // re-establish the phone link, not just re-read status.
+  const reconnectLabel = "Reconnect phone";
   const settingsLabel = "Connection";
   const collapsedCode = online ? "ON" : "OFF";
   if (collapsed) {
@@ -1138,11 +1169,11 @@ function ConnectionRail({
         </div>
         <button
           className="dp-collapsed-icon-button"
-          aria-label={refreshLabel}
-          title={refreshLabel}
+          aria-label={reconnectLabel}
+          title={reconnectLabel}
           data-native-source="MainWindow.xaml:737"
           data-native-glyph="E627"
-          onClick={onRefreshStatus}
+          onClick={onReconnect}
         >
           {icon("sync", 20)}
         </button>
@@ -1173,17 +1204,15 @@ function ConnectionRail({
           </div>
           <button
             className="dp-compact-icon-button"
-            aria-label={refreshLabel}
-            title={refreshLabel}
+            aria-label={reconnectLabel}
+            title={reconnectLabel}
             data-native-source="MainWindow.xaml:665"
             data-native-glyph="E627"
-            onClick={onRefreshStatus}
+            onClick={onReconnect}
           >
             {icon("sync", 20)}
           </button>
         </div>
-        {callsConnectionLabel ? <div className="dp-rail-channel">{callsConnectionLabel}</div> : null}
-        {messagesConnectionLabel ? <div className="dp-rail-channel">{messagesConnectionLabel}</div> : null}
       </div>
       <ShellButton
         className="dp-tonal dp-rail-wide-button"
@@ -1506,6 +1535,7 @@ function MessageBubble({
   onDelete,
   onNotice,
   onOpenImage,
+  onRetry,
 }) {
   const currentDivider = formatDateDivider(message.timestamp);
   const previousDivider = previousMessage ? formatDateDivider(previousMessage.timestamp) : "";
@@ -1515,6 +1545,12 @@ function MessageBubble({
   const isMediaOnly = hasVisibleImage && !hasNonImageAttachment && !message.body;
   const statusLabel = outgoingStatusLabel(message);
   const hasPendingSendStatus = !!message.sendStatus;
+  // Failed sends — or sends stuck in "Sending"/"Confirming" for over a minute —
+  // get a retry affordance right on the bubble (owner ticket).
+  const sendStatusLower = String(message.sendStatus || "").toLowerCase();
+  const sendNeedsRetry =
+    sendStatusLower.includes("fail") ||
+    (/send|confirm|queue/.test(sendStatusLower) && message.timestampMs > 0 && Date.now() - message.timestampMs > 60000);
   const bubbleClass = [
     "dp-message-bubble",
     message.isSent ? "is-outgoing" : "is-incoming",
@@ -1562,6 +1598,18 @@ function MessageBubble({
             </span>
           ) : null}
           <span>{formatBubbleTime(message.timestamp)}</span>
+          {message.isSent && sendNeedsRetry ? (
+            <button
+              type="button"
+              className="dp-message-retry"
+              title="Retry send"
+              aria-label="Retry send"
+              onClick={(event) => { event.stopPropagation(); onRetry?.(message); }}
+            >
+              {icon("refresh", 13)}
+              <span>Retry</span>
+            </button>
+          ) : null}
         </div>
         {open ? (
           <div className="dp-bubble-actions" data-native-source={message.isSent ? "MainWindow.xaml:2248" : "MainWindow.xaml:2032"}>
@@ -1996,12 +2044,8 @@ function MessagesSlice({
 
   const copyMessage = useCallback(async (message) => {
     const text = message.body || message.preview || "";
-    try {
-      await navigator.clipboard.writeText(text);
-      onNotice("Copied message text.");
-    } catch {
-      onNotice("Copy is blocked by this browser session.");
-    }
+    const ok = await copyTextToClipboard(text);
+    onNotice(ok ? "Copied message text." : "Copy is blocked by this browser session.");
   }, [onNotice]);
 
   const forwardMessage = useCallback((message) => {
@@ -2009,6 +2053,17 @@ function MessagesSlice({
     onOpenNewMessage();
     onNotice("Forward draft ready. Choose a recipient.");
   }, [onNotice, onOpenNewMessage, setDraft]);
+
+  // Owner ticket: failed (or minute-stuck) bubbles get a retry — resend the same
+  // text to the same number; DeskPhone stamps the new attempt's own status.
+  const retryMessage = useCallback(async (message) => {
+    const body = message.body || message.preview || "";
+    if (!message.number || !body) {
+      onNotice("This message has nothing to resend.");
+      return;
+    }
+    await sendComposeMessage({ onCommand, to: message.number, body, attachments: [], label: "retry send" });
+  }, [onCommand, onNotice]);
 
   const sendMessage = useCallback(async () => {
     const sent = await sendComposeMessage({
@@ -2423,6 +2478,7 @@ function MessagesSlice({
                       onDelete={deleteMessage}
                       onNotice={onNotice}
                       onOpenImage={openImageViewer}
+                      onRetry={retryMessage}
                     />
                   ))}
                 </div>
@@ -3538,12 +3594,12 @@ const css = `
 .dp-rail-status-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: start;
   gap: 8px;
 }
 .dp-rail-status-left {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   min-width: 0;
 }
 .dp-status-dot {
@@ -3554,30 +3610,25 @@ const css = `
   flex: 0 0 auto;
   margin-right: 8px;
 }
+.dp-rail-status-left .dp-status-dot {
+  margin-top: 5px; /* centers the dot on the first text line when the line wraps */
+}
 .dp-status-dot.is-online {
   background: var(--dp-green);
 }
 .dp-rail-status-text {
   font-size: 13px;
   font-weight: 500;
+  line-height: 18px;
   color: var(--dp-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 .dp-rail-subtitle {
   margin: 7px 0 0 16px;
   font-size: 12px;
   line-height: 18px;
   color: var(--dp-muted);
-}
-.dp-rail-channel {
-  margin: 9px 0 0 16px;
-  font-size: 12px;
-  color: var(--dp-muted);
-}
-.dp-rail-channel + .dp-rail-channel {
-  margin-top: 3px;
 }
 .dp-rail-wide-button {
   width: 100%;
@@ -4521,6 +4572,22 @@ const css = `
 .dp-message-status.is-failed {
   color: var(--dp-message-failed-text);
   font-weight: 600;
+}
+.dp-message-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: none;
+  background: transparent;
+  padding: 1px 4px;
+  border-radius: 10px;
+  color: var(--dp-message-failed-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dp-message-retry:hover {
+  background: color-mix(in srgb, var(--dp-message-failed-text) 14%, transparent);
 }
 .dp-attachment-stack {
   display: grid;
@@ -5961,54 +6028,25 @@ export function DeskPhoneWebPanel({
   useEffect(() => saveNumber(MESSAGE_LIST_WIDTH_KEY, messageListWidth), [messageListWidth]);
   useEffect(() => saveNumber(CALL_HISTORY_WIDTH_KEY, callHistoryWidth), [callHistoryWidth]);
 
-  const connectionStatus = useMemo(
-    () => connectionStatusFromStatus(status),
-    [status]
-  );
-  // ONE human connection line. Nobody needs the two-hop plumbing (browser→host,
-  // host→phone) spelled out — the only question is: is my phone on this screen?
-  const callsConnectionLabel = useMemo(() => {
+  // ONE human status line (owner ticket): no two-hop plumbing, no second line
+  // repeating the device, no raw Bluetooth address — just "is my phone live here?".
+  const connectionStatus = useMemo(() => {
     const name = hostDeviceName(status);
+    const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
     const callsOk = includesConnected(status?.hfp || status?.Hfp || "");
     const textsOk = includesConnected(status?.map || status?.Map || "");
     const phoneConnected = !!(status?.connected || status?.Connected) || callsOk || textsOk;
     const connecting = !!(status?.isConnecting || status?.IsConnecting);
-
-    let dotClass = "";
-    let text;
-    let guide;
-    if (!online) {
-      text = "Phone service is off on this PC";
-      guide = "Open the DeskPhone app on this computer.";
-    } else if (phoneConnected) {
-      dotClass = "is-online";
-      text = `Connected to ${name}`;
-      guide = callsOk && textsOk
-        ? "Calls and texts are live."
-        : callsOk
-          ? "Calls are live — texts are still connecting."
-          : textsOk
-            ? "Texts are live — calls are still connecting."
-            : "Link is up.";
-    } else if (connecting) {
-      text = `Connecting to ${name}…`;
-      guide = "This finishes by itself — nothing to do.";
-    } else {
-      text = `${name} is out of range`;
-      guide = "Reconnects automatically when your phone is near this PC.";
+    if (!online) return "Phone service is off — open DeskPhone on this PC";
+    if (phoneConnected) {
+      if (callsOk && textsOk) return cap(`${name} — calls & texts live`);
+      if (callsOk) return cap(`${name} — calls live, texts connecting…`);
+      if (textsOk) return cap(`${name} — texts live, calls connecting…`);
+      return cap(`${name} is connected`);
     }
-
-    return (
-      <div className="dp-channel-row">
-        <div className="dp-channel-status">
-          <span className={`dp-status-dot ${dotClass}`} />
-          <strong>{text}</strong>
-        </div>
-        <div className="dp-channel-guide">{guide}</div>
-      </div>
-    );
+    if (connecting) return cap(`connecting to ${name}…`);
+    return cap(`${name} is out of range — reconnects when nearby`);
   }, [online, status]);
-  const messagesConnectionLabel = null;
   const showReconnectPrompt = !reconnectDismissed && !!(status?.showReconnectPrompt || status?.ShowReconnectPrompt || !online);
   const effectiveBuildPrompt = !!(status?.showBuildUpdatePrompt || status?.ShowBuildUpdatePrompt || showBuildPrompt);
   const effectiveBuildIndicator = !!(status?.showBuildUpdateIndicator || status?.ShowBuildUpdateIndicator || showBuildIndicator);
@@ -6149,9 +6187,7 @@ export function DeskPhoneWebPanel({
             online={online}
             status={status}
             connectionStatus={connectionStatus}
-            callsConnectionLabel={callsConnectionLabel}
-            messagesConnectionLabel={messagesConnectionLabel}
-            onRefreshStatus={refresh}
+            onReconnect={() => runCommand("/connect", "reconnect phone")}
             onSettings={() => setActiveTab("settings")}
           />
 

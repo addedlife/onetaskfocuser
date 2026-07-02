@@ -226,7 +226,6 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const [focusModeActive, setFocusModeActive] = useState(false);
   const [mrsWPriLive, setMrsWPriLive] = useState(null); // live Mrs. W priority
   const [blockedResume, setBlockedResume] = useState(null); // task id to show nudge for
-  const [staleNudge, setStaleNudge] = useState(null);       // task object that's been waiting 7+ days
   // Google Calendar + Gmail integration
   const [googleToken, setGoogleToken] = useState(() => {
     try {
@@ -359,9 +358,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     activeListId: "default",
     priorities: [
       {...BEFORE_SHAVUOS_PRIORITY},
-      {id:"now",        label:"Now",        color:GV_CLEAN.accent, weight:3},
-      {id:"today",      label:"Today",      color:GV_CLEAN.warning, weight:2},
-      {id:"eventually", label:"Eventually", color:GV_CLEAN.muted, weight:1},
+      {id:"now",        label:"1", color:GV_CLEAN.accent, weight:3},
+      {id:"today",      label:"2", color:GV_CLEAN.warning, weight:2},
+      {id:"eventually", label:"3", color:GV_CLEAN.muted, weight:1},
     ],
     colorScheme: "claude",
     zenEnabled: false,
@@ -430,6 +429,13 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         if (!s.nerveCenterPaneWeights) s.nerveCenterPaneWeights = { tasks: 1, shailos: 1, phone: 1 };
         if (!s.nerveCenterGooglePaneHeight) s.nerveCenterGooglePaneHeight = 244;
         if (!s.features) s.features = { moveUpPopup: false, chief: false, health: false };
+        // Owner ticket (7/1/26): built-in tiers renamed Now/Today/Eventually → 1/2/3
+        // (1 = highest). Converts only the stock labels, so any custom rename survives.
+        const PRIORITY_RELABEL = { now: ["Now", "1"], today: ["Today", "2"], eventually: ["Eventually", "3"] };
+        s.priorities = (s.priorities || []).map(p => {
+          const m = PRIORITY_RELABEL[p.id];
+          return m && p.label === m[0] ? { ...p, label: m[1] } : p;
+        });
         // Permanent: strip "home" custom priority on every load AND directly patch Firestore settings doc.
         // Direct patch bypasses the debounced save (which gets skipped when _listenV5 sets adoptedRemote=true),
         // so the Firestore settings doc is fixed immediately and future snapshots arrive clean.
@@ -1734,24 +1740,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     });
   }, [actT]);
 
-  // ─── Stale task nudge — fires once per session, 3s after load ───────────
-  useEffect(() => {
-    if (!loaded || !pris.length) return;
-    const now = Date.now();
-    const WEEK   = 7  * 86400000;
-    const RESNOOZE = 3 * 86400000; // don't re-nudge same task for 3 days after "Later"
-    const candidate = actT
-      .filter(t =>
-        !t.completed && !t.blocked && !t.parentTask &&
-        (now - (t.createdAt || 0)) > WEEK &&
-        (!t.staleNudgedAt || (now - t.staleNudgedAt) > RESNOOZE)
-      )
-      .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))[0]; // oldest first
-    if (candidate) {
-      const tmr = setTimeout(() => setStaleNudge(candidate), 3000);
-      return () => clearTimeout(tmr);
-    }
-  }, [loaded]); // eslint-disable-line
+  // Stale-task nudge ("waiting N days — Make it Now / Break it down") removed
+  // per owner ticket 7/1/26: it never usefully accelerated anything.
 
   // Auto-optimize interval removed — AI prioritizes every 5 events instead
 
@@ -3538,32 +3528,6 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         </div>
       )}
 
-      {/* Stale task nudge — fires 3s after load for tasks waiting 7+ days */}
-      {staleNudge && actT.find(t => t.id === staleNudge.id) && (
-        <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",background:C.bg,border:`1.5px solid ${C.divider}`,borderRadius:RADIUS.md,padding:"14px 16px",boxShadow:ELEV[3],zIndex:Z.nudge,maxWidth:360,width:"90%",animation:"ot-fade 0.3s"}}>
-          <p style={{fontSize:13,fontWeight:500,color:C.faint,fontFamily:NC_FONT_STACK,margin:"0 0 3px",textTransform:"uppercase",letterSpacing:0}}>
-            ⏳ Waiting {Math.floor((Date.now()-(staleNudge.createdAt||Date.now()))/86400000)} days
-          </p>
-          <p style={{fontSize:13,color:C.text,margin:"0 0 10px",fontFamily:"Georgia,serif",lineHeight:1.4}}>{staleNudge.text}</p>
-          <p style={{fontSize:13,color:C.faint,fontFamily:NC_FONT_STACK,margin:"0 0 10px"}}>Prioritize it now, or break it into smaller steps?</p>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            <button onClick={()=>{
-              uT(ts => ts.map(t => t.id===staleNudge.id ? {...t, staleNudgedAt:Date.now()} : t));
-              setStaleNudge(null);
-            }} style={{flex:1,padding:"7px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:"none",cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:C.muted,minWidth:60}}>Later</button>
-            <button onClick={()=>{
-              const topPri = [...pris].filter(p=>!p.deleted).sort((a,b)=>b.weight-a.weight)[0];
-              if (topPri) chgPriority(staleNudge.id, topPri.id, 'one');
-              setStaleNudge(null);
-            }} style={{flex:1,padding:"7px",borderRadius:RADIUS.sm,border:"none",background:C.accent,color:"#fff",cursor:"pointer",fontSize:13,fontWeight:500,fontFamily:NC_FONT_STACK,minWidth:80}}>Make it Now</button>
-            <button onClick={()=>{
-              setShowBD(staleNudge);
-              setStaleNudge(null);
-            }} style={{flex:1,padding:"7px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:C.text,minWidth:90}}>Break it down</button>
-          </div>
-        </div>
-      )}
-
       {/* Priority change picker */}
       {chgPri && (
         <div style={{position:"fixed",inset:0,zIndex:Z.overlay,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>{setChgPri(null);setChgPriScope('one');}}>
@@ -4325,7 +4289,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                                   {aged && <AgeBadge task={task} pris={pris} thresholds={AS.ageThresholds} T={T}/>}
                                   {task.autoAged && (
                                     <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,fontFamily:NC_FONT_STACK,padding:"1px 6px 1px 5px",borderRadius:6,background:`${C.accent}18`,border:`1px solid ${C.accent}60`,color:C.accent,fontWeight:600,lineHeight:1.4}}>
-                                      ↑ {task.agedFromLabel||"Eventually"}
+                                      ↑ {task.agedFromLabel||"3"}
                                       <button onClick={e=>{e.stopPropagation();undoAging(task.id);}} title="Undo nudge" style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:`${C.accent}80`,padding:0,lineHeight:1,marginLeft:1,display:"flex",alignItems:"center"}}>{suiteIcon("close",10)}</button>
                                     </span>
                                   )}

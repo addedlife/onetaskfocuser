@@ -1772,7 +1772,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     window.addEventListener("pointerup", up);
   };
 
-  const NC_LABEL = { now: "Now", today: "Soon", eventually: "Long" };
+  const NC_LABEL = { now: "1", today: "2", eventually: "3" };
   const ncCorePills = [BEFORE_SHAVUOS_PRIORITY_ID, "now", "today", "eventually"]
     .map(id => { const p = priorities.find(x => x.id === id && !x.deleted); return p ? { ...p, ncLabel: NC_LABEL[id] || p.label } : null; })
     .filter(Boolean);
