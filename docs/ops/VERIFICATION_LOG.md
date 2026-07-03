@@ -1,5 +1,15 @@
 # Verification Log
 
+## 2026-07-02 DeskPhone b324/b325 — relay command channel was DEAD since b322; restored + hardened (4.33.114)
+
+- ROOT CAUSE FOUND for "no confirmation from DeskPhone", "nervecenter text return not working", fickle web sends, dead reconnect buttons: b322 (6/17) replaced the relay's 2s command poll with a Firestore REST `documents:listen` stream — which CANNOT work: the server treats the transcoded bidi call as complete when the request body ends and closes with "[]" (verified via curl: bare-object body → 400 "Invalid value (Object)"; array body + database param → 200 + instant close, zero events). **No relayed command was delivered for 15 days.** First drain on b324 found mailbox commands up to 8.6 DAYS old.
+- b324 (`cb86e7d`): RelayService listener → `DrainCommandsLoopAsync` adaptive poll (2s for 3min after a command, 6s idle ≈ 14k reads/day ≈ $0.25/mo Blaze); clear-before-dispatch so slow sends can't re-execute. Relay whitelist gains `/connect` + `/show` (45s TTL for /show), wired to the existing `_api` handlers. Toast quick-replies (ticket: "weren't sending anything") rerouted from raw `_map.SendMessageAsync` — which DISCARDED replies whenever MAP was mid-reconnect — through the full `SendMessageAsync` pipeline (bubble + Failed/Retry + auto-reconnect). Bundles web dist 4.33.114.
+- b325 (`c4c0107`): fail-safe — commands with no parseable `queuedAt` are refused as expired (b324's first drain executed unstamped legacy entries; harmless only because they lacked recipients). Live function always stamps queuedAt (`phone-relay.js:153`).
+- Web 4.33.114 (`cc6826f`): priority relabel 1/2/3 moved to shared `relabelBuiltinPriorities()` (01-core.js) applied at ALL state entry points — the 4.33.113 load-only migration was reverted by every Firestore snapshot (owner: "still labeled now/today"). Open-DeskPhone button un-gated (was `!isMobile` + hidden behind the desktop iframe = invisible everywhere) and routed through `post("/show")` so it works over the relay against b324+.
+- VERIFIED END-TO-END: test command written to the `phone-relay/commands` mailbox (proper id+queuedAt) → host log `[RELAY DRAIN] command mailbox reachable` + `[RELAY CMD] /refresh` executed within seconds. Web deploy Action green.
+- Gates: `npm run build` (apps/web) → 0 errors; `dotnet build -c Release -p:Platform=ARM64` → 0 errors ×2; deploy.ps1 OK ×2 (b324, b325 archived; shortcuts + handoff offers issued).
+- KNOWN REMAINING (this session's findings): host stamps PBAP call times AND log lines ~+4h in the future (UTC treated as local-04:00 — double-stamp bug; makes "Jul 2 11:49 PM" calls at 4:30 PM); NerveCenter visual polish tickets (off-center pill buttons, queue-bar sizing, add-dot styling) and bug-log edit/auto-pull features not yet started.
+
 ## 2026-07-02 Bug-log ticket batch — phone status/reconnect/texting + tasks (4.33.113)
 
 - Scope: 11 of the 13 open bug-log tickets (7/1/26), all web-side. Commit `45ad492`.
