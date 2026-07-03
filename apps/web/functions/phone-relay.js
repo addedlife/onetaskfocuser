@@ -21,6 +21,9 @@ const CORS = {
 const { FIREBASE_PROJECT_ID, FIREBASE_WEB_API_KEY } = require("./_config.cjs");
 const FS_BASE = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/phone-relay`;
 const FS_MEDIA_BASE = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/phone-media`;
+// Command mailbox lives in the Realtime Database (not Firestore) so DeskPhone can
+// hold a true SSE push stream on it — zero idle reads, sub-second command delivery.
+const RTDB_COMMANDS_URL = `https://${FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com/phone-relay/commands.json`;
 
 function sendOk(res, body) {
   return res.status(200).set({ ...CORS, "Content-Type": "application/json" }).json(body);
@@ -67,6 +70,25 @@ async function fsSetMedia(docId, dataUrl) {
     const text = await r.text();
     throw new Error(`Firestore PATCH media ${docId} → HTTP ${r.status}: ${text}`);
   }
+}
+
+async function rtdbGetCommands() {
+  const r = await fetch(RTDB_COMMANDS_URL);
+  if (!r.ok) throw new Error(`RTDB GET commands → HTTP ${r.status}`);
+  const parsed = await r.json();
+  if (Array.isArray(parsed)) return parsed;
+  // RTDB returns an object map when array keys go sparse — normalize back.
+  if (parsed && typeof parsed === "object") return Object.values(parsed);
+  return [];
+}
+
+async function rtdbSetCommands(arr) {
+  const r = await fetch(RTDB_COMMANDS_URL, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(arr.length ? arr : null),
+  });
+  if (!r.ok) throw new Error(`RTDB PUT commands → HTTP ${r.status}`);
 }
 
 function extractIdToken(req) {
@@ -117,9 +139,9 @@ module.exports = async (req, res) => {
     catch (e) { return sendErr(res, 500, "Failed to write state: " + e.message); }
     let commands = [];
     try {
-      const pending = JSON.parse((await fsGet("commands")) || "[]");
+      const pending = await rtdbGetCommands();
       if (pending.length > 0) {
-        await fsSet("commands", JSON.stringify([]));
+        await rtdbSetCommands([]);
         commands = pending;
       }
     } catch (_) { commands = []; }
@@ -153,9 +175,9 @@ module.exports = async (req, res) => {
     cmd.id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     cmd.queuedAt = Date.now();
     try {
-      const existing = JSON.parse((await fsGet("commands")) || "[]");
+      const existing = await rtdbGetCommands();
       existing.push(cmd);
-      await fsSet("commands", JSON.stringify(existing.slice(-50)));
+      await rtdbSetCommands(existing.slice(-50));
       return sendOk(res, { ok: true, id: cmd.id });
     } catch (e) {
       return sendErr(res, 500, "Failed to queue command: " + e.message);
@@ -166,8 +188,8 @@ module.exports = async (req, res) => {
   if (action === "drain" && method === "GET") {
     if (!secret || incoming !== secret) return sendErr(res, 401, "unauthorized");
     try {
-      const commands = JSON.parse((await fsGet("commands")) || "[]");
-      if (commands.length > 0) await fsSet("commands", JSON.stringify([]));
+      const commands = await rtdbGetCommands();
+      if (commands.length > 0) await rtdbSetCommands([]);
       return sendOk(res, commands);
     } catch (e) {
       return sendErr(res, 500, "Failed to drain commands: " + e.message);

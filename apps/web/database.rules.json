@@ -1,0 +1,12 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "phone-relay": {
+      "commands": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}
