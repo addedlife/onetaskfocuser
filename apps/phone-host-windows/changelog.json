@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-07-03 01:20:36",
+        "version":  "b326",
+        "notes":  "Remote commands now arrive by true push instead of polling: DeskPhone holds one live stream on the new Realtime Database command mailbox, so texts, dials, and reconnects sent from any browser land in under a second — with zero idle Firestore reads (the old 2-second poll burned ~43k reads/day for nothing). The b324 poll stays as an automatic safety net if the stream drops.",
+        "devNotes":  "RelayService.cs: new StreamRtdbCommandsAsync holds an SSE stream (Accept: text/event-stream) on onetaskonly-app-default-rtdb /phone-relay/commands.json; put/patch events with non-null data trigger DrainMailboxOnceAsync (GET, PUT null to clear BEFORE dispatch, NormalizeRtdbArray handles RTDB object-map arrays). DrainCommandsLoopAsync now polls the RTDB node as the safety net: 120s while the stream is healthy, 2s/6s adaptive while it is down; plus a 60s DrainLegacyFirestoreOnceAsync transition sweep of the old Firestore commands doc (remove in a later build). phone-relay.js command/push/drain paths write and drain the RTDB node (rtdbGetCommands/rtdbSetCommands). RTDB instance provisioned 2026-07-02 with rules open only on phone-relay/commands (matches the prior Firestore posture; queuing still gated by Firebase auth in the function)."
+    },
+    {
         "timestamp":  "2026-07-03 01:02:58",
         "version":  "b325",
         "notes":  "Safety patch on top of b324: relayed commands that carry no queue timestamp are now refused instead of executed. When b324 drained the mailbox for the first time it found commands up to 8 days old; stamped ones expired correctly, but old-format entries without a timestamp bypassed the expiry check and ran. None did harm (they lacked recipients/numbers), but an unverifiable stale dial or text must never execute.",

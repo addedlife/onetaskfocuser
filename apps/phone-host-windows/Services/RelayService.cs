@@ -111,6 +111,7 @@ public class RelayService : IDisposable
         if (!IsEnabled) return;
         _cts = new CancellationTokenSource();
         _ = Task.Run(() => PushLoopAsync(_cts.Token));
+        _ = Task.Run(() => StreamRtdbCommandsAsync(_cts.Token));
         _ = Task.Run(() => DrainCommandsLoopAsync(_cts.Token));
         LogLine?.Invoke($"[RELAY] Started — writing directly to Firestore ({FB_PROJECT})");
     }
@@ -188,63 +189,160 @@ public class RelayService : IDisposable
         finally { _pushGate.Release(); }
     }
 
-    // ── Command drain: cloud mailbox → host ─────────────────────────────────────
-    // NOT a streaming listener. Firestore's REST documents:listen endpoint cannot
-    // hold a live stream: the server treats the transcoded bidi call as complete
-    // the instant the request body ends and answers "[]" (verified 2026-07-02 with
-    // curl — array-wrapped body + database param gets HTTP 200 and an immediate
-    // close, no events, ever). b322 shipped with that listener, so NO relayed
-    // command was ever delivered; every remote send/dial/reconnect expired unseen.
+    // ── Command mailbox: Realtime Database, true push ───────────────────────────
+    // The commands mailbox lives in the Realtime Database (b326+), whose REST API
+    // supports genuine SSE streaming — one idle HTTP connection instead of thousands
+    // of idle Firestore reads per day, and commands land in under a second.
     //
-    // Adaptive poll instead: 2 s while commands are flowing (someone is actively
-    // driving the phone from a browser), 6 s idle. Idle cost ≈ 14k reads/day ≈
-    // $0.25/month on Blaze — the price of the feature actually working.
-    private const int DrainIdleMs   = 6_000;
-    private const int DrainActiveMs = 2_000;
+    // Firestore's REST documents:listen can NEVER replace this: the server treats
+    // the transcoded bidi call as complete the instant the request body ends and
+    // closes with "[]" (verified 2026-07-02 with curl). b322 shipped exactly that
+    // listener, so no relayed command was delivered for 15 days. Do not go back.
+    //
+    // The poll loop below stays as the safety net: fast while the stream is down,
+    // nearly silent while it's healthy (RTDB GETs are free — bandwidth only).
+    private const string RtdbCommandsUrl = "https://" + FB_PROJECT + "-default-rtdb.firebaseio.com/phone-relay/commands.json";
+    private readonly HttpClient _streamHttp = new() { Timeout = Timeout.InfiniteTimeSpan };
+    private volatile bool _rtdbStreamHealthy;
+
+    private const int DrainStreamHealthyMs = 120_000; // safety sweep behind a live stream
+    private const int DrainIdleMs          = 6_000;   // stream down, no recent commands
+    private const int DrainActiveMs        = 2_000;   // stream down, commands flowing
     private static readonly TimeSpan DrainActiveWindow = TimeSpan.FromMinutes(3);
+    private static readonly TimeSpan LegacySweepEvery  = TimeSpan.FromSeconds(60);
     private DateTime _lastCommandSeenUtc = DateTime.MinValue;
+    private DateTime _lastLegacySweepUtc = DateTime.MinValue;
+
+    private async Task StreamRtdbCommandsAsync(CancellationToken ct)
+    {
+        int attempt = 0;
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, RtdbCommandsUrl);
+                req.Headers.Accept.ParseAdd("text/event-stream");
+                using var resp = await _streamHttp.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    LogLine?.Invoke($"[RELAY STREAM] HTTP {(int)resp.StatusCode}");
+                }
+                else
+                {
+                    attempt = 0;
+                    _rtdbStreamHealthy = true;
+                    LogLine?.Invoke("[RELAY STREAM] live — commands arrive by push");
+
+                    await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+                    using var reader = new StreamReader(stream);
+                    string? eventName = null;
+                    while (!ct.IsCancellationRequested)
+                    {
+                        var line = await reader.ReadLineAsync(ct);
+                        if (line == null) break; // stream closed
+                        if (line.StartsWith("event:")) { eventName = line[6..].Trim(); continue; }
+                        if (!line.StartsWith("data:")) continue;
+                        if (eventName is not ("put" or "patch")) continue;
+                        var payload = line[5..].Trim();
+                        if (payload.Length == 0 || payload == "null") continue;
+                        try
+                        {
+                            using var evt = JsonDocument.Parse(payload);
+                            if (evt.RootElement.TryGetProperty("data", out var data) &&
+                                data.ValueKind != JsonValueKind.Null)
+                            {
+                                await DrainMailboxOnceAsync(ct);
+                            }
+                        }
+                        catch { /* malformed chunk — skip */ }
+                    }
+                    if (!ct.IsCancellationRequested)
+                        LogLine?.Invoke("[RELAY STREAM] ended — reconnecting");
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch (Exception ex)
+            {
+                LogLine?.Invoke($"[RELAY STREAM] {ex.GetType().Name}: {ex.Message}");
+            }
+
+            _rtdbStreamHealthy = false;
+            attempt = Math.Min(attempt + 1, 5);
+            try { await Task.Delay(Math.Min(30_000, 1_000 << attempt), ct); }
+            catch (OperationCanceledException) { break; }
+        }
+        _rtdbStreamHealthy = false;
+    }
+
+    // Fetch + clear + dispatch the RTDB mailbox. Shared by the SSE trigger and the
+    // safety-net poll. Clears BEFORE dispatch so a slow command (e.g. a send over a
+    // reconnecting link) can't be re-read and re-executed.
+    private async Task<bool> DrainMailboxOnceAsync(CancellationToken ct)
+    {
+        using var resp = await _http.GetAsync(RtdbCommandsUrl, ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            LogLine?.Invoke($"[RELAY DRAIN] RTDB HTTP {(int)resp.StatusCode}");
+            return false;
+        }
+        var body = (await resp.Content.ReadAsStringAsync(ct)).Trim();
+        if (body.Length <= 2 || body == "null") return false;
+
+        using (var clearReq = new HttpRequestMessage(HttpMethod.Put, RtdbCommandsUrl)
+        { Content = new StringContent("null", Encoding.UTF8, "application/json") })
+        {
+            await _http.SendAsync(clearReq, ct);
+        }
+
+        var commandsJson = NormalizeRtdbArray(body);
+        if (commandsJson.Length <= 2) return false;
+        _lastCommandSeenUtc = DateTime.UtcNow;
+        DispatchCommandsFromString(commandsJson);
+        return true;
+    }
+
+    // RTDB stores arrays as objects ({"0":{...},"1":{...}}) when keys go sparse —
+    // normalize either shape back to the JSON array DispatchCommandsFromString expects.
+    private static string NormalizeRtdbArray(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind == JsonValueKind.Array) return body;
+            if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                var items = doc.RootElement.EnumerateObject()
+                    .OrderBy(p => int.TryParse(p.Name, out var i) ? i : int.MaxValue)
+                    .Select(p => p.Value.GetRawText());
+                return "[" + string.Join(",", items) + "]";
+            }
+        }
+        catch { }
+        return "[]";
+    }
 
     private async Task DrainCommandsLoopAsync(CancellationToken ct)
     {
-        var url = $"{FS_BASE}/phone-relay/commands?key={FB_API_KEY}";
         var loggedFirstPoll = false;
         var consecutiveErrors = 0;
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                using var resp = await _http.GetAsync(url, ct);
-                if (resp.IsSuccessStatusCode)
+                await DrainMailboxOnceAsync(ct);
+                if (!loggedFirstPoll)
                 {
-                    if (!loggedFirstPoll)
-                    {
-                        loggedFirstPoll = true;
-                        LogLine?.Invoke("[RELAY DRAIN] command mailbox reachable — remote commands will run");
-                    }
-                    consecutiveErrors = 0;
-                    var body = await resp.Content.ReadAsStringAsync(ct);
-                    using var doc = JsonDocument.Parse(body);
-                    if (doc.RootElement.TryGetProperty("fields", out var fields) &&
-                        fields.TryGetProperty("data", out var data) &&
-                        data.TryGetProperty("stringValue", out var sv))
-                    {
-                        var commandsJson = sv.GetString() ?? "[]";
-                        if (commandsJson.Length > 2)
-                        {
-                            _lastCommandSeenUtc = DateTime.UtcNow;
-                            // Clear BEFORE dispatch so a slow command (e.g. a send over a
-                            // reconnecting link) can't be re-read and re-executed by the
-                            // next poll round. Commands already parsed live in memory.
-                            await ClearCommandsAsync();
-                            DispatchCommandsFromString(commandsJson);
-                        }
-                    }
+                    loggedFirstPoll = true;
+                    LogLine?.Invoke("[RELAY DRAIN] command mailbox reachable — remote commands will run");
                 }
-                else if ((int)resp.StatusCode != 404)   // 404 = mailbox doc not created yet
+                consecutiveErrors = 0;
+
+                // Transition sweep (remove in a later build): commands queued by the
+                // pre-RTDB relay function still land in the old Firestore doc.
+                if (DateTime.UtcNow - _lastLegacySweepUtc >= LegacySweepEvery)
                 {
-                    consecutiveErrors++;
-                    if (consecutiveErrors <= 3)
-                        LogLine?.Invoke($"[RELAY DRAIN] HTTP {(int)resp.StatusCode}");
+                    _lastLegacySweepUtc = DateTime.UtcNow;
+                    await DrainLegacyFirestoreOnceAsync(ct);
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
@@ -255,11 +353,40 @@ public class RelayService : IDisposable
                     LogLine?.Invoke($"[RELAY DRAIN] {ex.GetType().Name}: {ex.Message}");
             }
 
-            var interval = DateTime.UtcNow - _lastCommandSeenUtc < DrainActiveWindow
-                ? DrainActiveMs
-                : DrainIdleMs;
+            var interval = _rtdbStreamHealthy
+                ? DrainStreamHealthyMs
+                : (DateTime.UtcNow - _lastCommandSeenUtc < DrainActiveWindow ? DrainActiveMs : DrainIdleMs);
             try { await Task.Delay(interval, ct); }
             catch (OperationCanceledException) { break; }
+        }
+    }
+
+    private async Task DrainLegacyFirestoreOnceAsync(CancellationToken ct)
+    {
+        try
+        {
+            var url = $"{FS_BASE}/phone-relay/commands?key={FB_API_KEY}";
+            using var resp = await _http.GetAsync(url, ct);
+            if (!resp.IsSuccessStatusCode) return;   // 404 = doc gone — nothing legacy left
+            var body = await resp.Content.ReadAsStringAsync(ct);
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("fields", out var fields) &&
+                fields.TryGetProperty("data", out var data) &&
+                data.TryGetProperty("stringValue", out var sv))
+            {
+                var commandsJson = sv.GetString() ?? "[]";
+                if (commandsJson.Length > 2)
+                {
+                    _lastCommandSeenUtc = DateTime.UtcNow;
+                    await ClearCommandsAsync();
+                    DispatchCommandsFromString(commandsJson);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            LogLine?.Invoke($"[RELAY LEGACY] {ex.GetType().Name}: {ex.Message}");
         }
     }
 
@@ -489,6 +616,7 @@ public class RelayService : IDisposable
     {
         Stop();
         _http.Dispose();
+        _streamHttp.Dispose();
         _pushGate.Dispose();
     }
 }
