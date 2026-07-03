@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-07-03 00:58:22",
+        "version":  "b324",
+        "notes":  "Texting and remote control from the web app work again: the cloud command channel was silently broken since b322, so texts, dials, and reconnects sent from any browser never reached DeskPhone. Notification quick-replies now go through the full send pipeline (visible bubble, Failed + Retry instead of vanishing), and the web app can now reconnect the phone and raise the DeskPhone window remotely. Ships the latest web UI (plain-language phone status, retry buttons on failed texts, working copy button).",
+        "devNotes":  "RelayService.cs: Firestore REST documents:listen cannot hold a stream (server answers [] and closes when the request body ends - verified with curl 2026-07-02), so b322\u0027s listener never delivered a single command. Replaced with DrainCommandsLoopAsync: adaptive GET poll on phone-relay/commands (2s for 3min after a command, 6s idle, ~14k reads/day idle), clear-before-dispatch so slow commands cannot re-execute. Added Connect + ShowApp delegates and /connect + /show whitelist cases (/show in the 45s TTL bucket); removed dead _streamHttp/BackoffAsync/OnListenEvent. MainViewModel.cs: _relay.Connect/_relay.ShowApp wired to the _api handlers; SendMessageFromNotificationAsync rewritten to route toast replies through SendMessageAsync (compose-field pipeline) instead of raw _map.SendMessageAsync which discarded replies whenever MAP was mid-reconnect. Bundles web dist 4.33.114."
+    },
+    {
         "timestamp":  "2026-06-17 17:11:02",
         "version":  "b322",
         "notes":  "Buttons and relay now target the live Firebase host after the Netlify-to-Firebase migration: Open Web UI opens onetaskonly-app.firebaseapp.com and the cloud phone-relay default endpoint is /api/phone-relay. The old onetaskfocuser.netlify.app URLs were dead.",

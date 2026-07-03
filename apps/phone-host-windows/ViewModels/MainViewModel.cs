@@ -1449,26 +1449,22 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private async Task SendMessageFromNotificationAsync(string phone, string body)
     {
-        if (_map == null || !_map.IsConnected)
-        {
-            AppendDebug("[NOTIF REPLY] MAP not connected — reply discarded");
-            return;
-        }
+        // Owner ticket: quick-replies "weren't sending anything". The old path called
+        // _map.SendMessageAsync directly and DISCARDED the reply whenever MAP was
+        // mid-reconnect — no bubble, no Failed record, no trace. Route through the
+        // same full pipeline as UI/LAN/relay sends (SendMessageAsync): the reply
+        // appears as a bubble immediately, a dead link records it as Failed with a
+        // Retry, and a stale OBEX session triggers the automatic reconnect.
         try
         {
-            var ok = await _map.SendMessageAsync(phone, body, ct: _sessionCts.Token);
+            ComposeToNumber = phone;
+            ComposeRecipientInput = phone;
+            ComposeBody = body;
+            ClearComposeAttachments();
+            var ok = await SendMessageAsync();
             AppendDebug(ok
                 ? $"[NOTIF REPLY] Sent to {phone}: {body}"
-                : $"[NOTIF REPLY] Send failed for {phone}");
-            if (ok)
-            {
-                // Refresh so the sent bubble appears in the conversation list
-                _ = Task.Run(async () =>
-                {
-                    await Task.Delay(1500, _sessionCts.Token);
-                    await RefreshMessagesAsync();
-                }, _sessionCts.Token);
-            }
+                : $"[NOTIF REPLY] Send did not confirm for {phone} — kept as Failed for retry");
         }
         catch (Exception ex)
         {
@@ -3083,6 +3079,10 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _relay.Refresh     = _api.Refresh;
         _relay.MarkRead    = _api.MarkConversationRead;
         _relay.MarkUnread  = _api.MarkConversationUnread;
+        // Remote reconnect + raise-window (owner tickets): same handlers the
+        // loopback API uses, so the web buttons work away from the PC too.
+        _relay.Connect     = _api.Connect;
+        _relay.ShowApp     = _api.ShowApp;
         _relay.LogLine     = s => AppendDebugThreadSafe(s);
         _relay.GetLanUrl   = () => _api.LanUrl ?? "";
         _relay.GetRelayMedia = BuildRelayMedia;

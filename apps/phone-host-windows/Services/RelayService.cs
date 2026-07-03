@@ -44,6 +44,8 @@ public class RelayService : IDisposable
     public Func<Task>?                             Refresh     { get; set; }
     public Func<string, Task>?                     MarkRead    { get; set; }
     public Func<string, Task>?                     MarkUnread  { get; set; }
+    public Func<Task>?                             Connect     { get; set; }
+    public Func<Task<bool>>?                       ShowApp     { get; set; }
     public Action<string>?                         LogLine     { get; set; }
     public Func<string>?                           GetLanUrl   { get; set; }
     // Returns (mediaId, dataUrl) for resized picture-text previews to upload out-of-band.
@@ -56,7 +58,6 @@ public class RelayService : IDisposable
     // ── State ─────────────────────────────────────────────────────────────────
     private CancellationTokenSource _cts      = new();
     private readonly HttpClient     _http       = new() { Timeout = TimeSpan.FromMilliseconds(HttpTimeoutMs) };
-    private readonly HttpClient     _streamHttp = new() { Timeout = Timeout.InfiniteTimeSpan }; // for the Firestore streaming listen connection
     private DateTime                _lastPush = DateTime.MinValue;
     private int                     _pushErrors;
 
@@ -92,7 +93,9 @@ public class RelayService : IDisposable
     // of a surprise delivery or a silent drop.
     private static TimeSpan CommandTtl(string path) => path switch
     {
-        "/dial" or "/answer" or "/hangup" or "/toggle-mute" => TimeSpan.FromSeconds(45),
+        // /show joins the short bucket: raising the PC window hours after the tap
+        // would be a poltergeist, not a feature.
+        "/dial" or "/answer" or "/hangup" or "/toggle-mute" or "/show" => TimeSpan.FromSeconds(45),
         _ => TimeSpan.FromMinutes(10),
     };
 
@@ -108,7 +111,7 @@ public class RelayService : IDisposable
         if (!IsEnabled) return;
         _cts = new CancellationTokenSource();
         _ = Task.Run(() => PushLoopAsync(_cts.Token));
-        _ = Task.Run(() => ListenCommandsAsync(_cts.Token));
+        _ = Task.Run(() => DrainCommandsLoopAsync(_cts.Token));
         LogLine?.Invoke($"[RELAY] Started — writing directly to Firestore ({FB_PROJECT})");
     }
 
@@ -185,83 +188,79 @@ public class RelayService : IDisposable
         finally { _pushGate.Release(); }
     }
 
-    // ── Firestore streaming listener: commands → host ──────────────────────────
-    // Keeps a long-lived HTTP connection to Firestore's Listen API.
-    // When a browser writes a command to phone-relay/commands, Firestore pushes the
-    // documentChange event here within milliseconds — zero polling, zero idle reads.
-    private async Task ListenCommandsAsync(CancellationToken ct)
-    {
-        var listenUrl = $"https://firestore.googleapis.com/v1/projects/{FB_PROJECT}/databases/(default)/documents:listen?key={FB_API_KEY}";
-        var docPath   = $"projects/{FB_PROJECT}/databases/(default)/documents/phone-relay/commands";
-        var addTarget = $"{{\"addTarget\":{{\"documents\":{{\"documents\":[\"{docPath}\"]}},\"targetId\":1}}}}";
+    // ── Command drain: cloud mailbox → host ─────────────────────────────────────
+    // NOT a streaming listener. Firestore's REST documents:listen endpoint cannot
+    // hold a live stream: the server treats the transcoded bidi call as complete
+    // the instant the request body ends and answers "[]" (verified 2026-07-02 with
+    // curl — array-wrapped body + database param gets HTTP 200 and an immediate
+    // close, no events, ever). b322 shipped with that listener, so NO relayed
+    // command was ever delivered; every remote send/dial/reconnect expired unseen.
+    //
+    // Adaptive poll instead: 2 s while commands are flowing (someone is actively
+    // driving the phone from a browser), 6 s idle. Idle cost ≈ 14k reads/day ≈
+    // $0.25/month on Blaze — the price of the feature actually working.
+    private const int DrainIdleMs   = 6_000;
+    private const int DrainActiveMs = 2_000;
+    private static readonly TimeSpan DrainActiveWindow = TimeSpan.FromMinutes(3);
+    private DateTime _lastCommandSeenUtc = DateTime.MinValue;
 
-        int attempt = 0;
+    private async Task DrainCommandsLoopAsync(CancellationToken ct)
+    {
+        var url = $"{FS_BASE}/phone-relay/commands?key={FB_API_KEY}";
+        var loggedFirstPoll = false;
+        var consecutiveErrors = 0;
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                using var req = new HttpRequestMessage(HttpMethod.Post, listenUrl)
+                using var resp = await _http.GetAsync(url, ct);
+                if (resp.IsSuccessStatusCode)
                 {
-                    Content = new StringContent(addTarget, Encoding.UTF8, "application/json")
-                };
-                using var resp = await _streamHttp.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
-
-                if (!resp.IsSuccessStatusCode)
-                {
-                    LogLine?.Invoke($"[RELAY LISTEN] HTTP {(int)resp.StatusCode}");
-                    attempt = await BackoffAsync(attempt, ct);
-                    continue;
-                }
-
-                attempt = 0;
-                LogLine?.Invoke("[RELAY LISTEN] command listener connected");
-
-                await using var stream = await resp.Content.ReadAsStreamAsync(ct);
-                using var reader = new StreamReader(stream);
-
-                while (!ct.IsCancellationRequested)
-                {
-                    var line = await reader.ReadLineAsync(ct);
-                    if (line == null) break; // stream closed
-
-                    // Firestore streams as a JSON array: "[", then "{...}", then ",{...}" — never closes "]".
-                    var trimmed = line.TrimStart(' ', ',', '[').Trim();
-                    if (trimmed.Length < 2 || trimmed[0] != '{') continue;
-
-                    try
+                    if (!loggedFirstPoll)
                     {
-                        using var evt = JsonDocument.Parse(trimmed);
-                        OnListenEvent(evt.RootElement);
+                        loggedFirstPoll = true;
+                        LogLine?.Invoke("[RELAY DRAIN] command mailbox reachable — remote commands will run");
                     }
-                    catch { /* malformed chunk — skip */ }
+                    consecutiveErrors = 0;
+                    var body = await resp.Content.ReadAsStringAsync(ct);
+                    using var doc = JsonDocument.Parse(body);
+                    if (doc.RootElement.TryGetProperty("fields", out var fields) &&
+                        fields.TryGetProperty("data", out var data) &&
+                        data.TryGetProperty("stringValue", out var sv))
+                    {
+                        var commandsJson = sv.GetString() ?? "[]";
+                        if (commandsJson.Length > 2)
+                        {
+                            _lastCommandSeenUtc = DateTime.UtcNow;
+                            // Clear BEFORE dispatch so a slow command (e.g. a send over a
+                            // reconnecting link) can't be re-read and re-executed by the
+                            // next poll round. Commands already parsed live in memory.
+                            await ClearCommandsAsync();
+                            DispatchCommandsFromString(commandsJson);
+                        }
+                    }
                 }
-
-                if (!ct.IsCancellationRequested)
-                    LogLine?.Invoke("[RELAY LISTEN] stream ended — reconnecting");
+                else if ((int)resp.StatusCode != 404)   // 404 = mailbox doc not created yet
+                {
+                    consecutiveErrors++;
+                    if (consecutiveErrors <= 3)
+                        LogLine?.Invoke($"[RELAY DRAIN] HTTP {(int)resp.StatusCode}");
+                }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
             catch (Exception ex)
             {
-                LogLine?.Invoke($"[RELAY LISTEN] {ex.GetType().Name}: {ex.Message}");
+                consecutiveErrors++;
+                if (consecutiveErrors <= 3)
+                    LogLine?.Invoke($"[RELAY DRAIN] {ex.GetType().Name}: {ex.Message}");
             }
 
-            attempt = await BackoffAsync(attempt, ct);
+            var interval = DateTime.UtcNow - _lastCommandSeenUtc < DrainActiveWindow
+                ? DrainActiveMs
+                : DrainIdleMs;
+            try { await Task.Delay(interval, ct); }
+            catch (OperationCanceledException) { break; }
         }
-    }
-
-    private void OnListenEvent(JsonElement root)
-    {
-        if (!root.TryGetProperty("documentChange", out var docChange)) return;
-        if (!docChange.TryGetProperty("document", out var document)) return;
-        if (!document.TryGetProperty("fields", out var fields)) return;
-        if (!fields.TryGetProperty("data", out var data)) return;
-        if (!data.TryGetProperty("stringValue", out var sv)) return;
-
-        var commandsJson = sv.GetString() ?? "[]";
-        if (commandsJson.Length <= 2) return; // empty array "[]"
-
-        DispatchCommandsFromString(commandsJson);
-        _ = ClearCommandsAsync();
     }
 
     private async Task ClearCommandsAsync()
@@ -278,14 +277,6 @@ public class RelayService : IDisposable
         {
             LogLine?.Invoke($"[RELAY CLEAR] {ex.GetType().Name}: {ex.Message}");
         }
-    }
-
-    private static async Task<int> BackoffAsync(int attempt, CancellationToken ct)
-    {
-        var delay = Math.Min(30_000, 1_000 << Math.Min(attempt, 5));
-        try { await Task.Delay(delay, ct); }
-        catch (OperationCanceledException) { }
-        return Math.Min(attempt + 1, 5);
     }
 
     // Upload resized picture-text previews to phone-media/{id} directly in Firestore,
@@ -444,6 +435,18 @@ public class RelayService : IDisposable
                     if (string.IsNullOrWhiteSpace(uPhone) || MarkUnread is null) { ok = false; error = "missing phone"; }
                     else await MarkUnread(uPhone);
                     break;
+                case "/connect":
+                    if (Connect is null) { ok = false; error = "unavailable"; }
+                    else await Connect();
+                    break;
+                case "/show":
+                    if (ShowApp is null) { ok = false; error = "unavailable"; }
+                    else
+                    {
+                        ok = await ShowApp();
+                        if (!ok) error = "DeskPhone window could not be raised";
+                    }
+                    break;
                 default:
                     LogLine?.Invoke($"[RELAY CMD] unhandled: {path}");
                     ok = false; error = $"unknown command {path}";
@@ -475,7 +478,6 @@ public class RelayService : IDisposable
     {
         Stop();
         _http.Dispose();
-        _streamHttp.Dispose();
         _pushGate.Dispose();
     }
 }
