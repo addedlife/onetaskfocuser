@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, BEFORE_SHAVUOS_PRIORITY, BEFORE_SHAVUOS_PRIORITY_ID, ensureBeforeShavuosPriority, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, runAIJob, suggestFirstStep, aiParseBrainDump, aiParseCalendarEvent, aiParseConversation, aiSummarizeAnswer, withCalendarEventDefaults, gG, fmtMs, db, _lum, priText, textOnPastel, ensureSchemeContrast } from '../01-core.js';
+import { Store, canonicalUid, gP, DEF_PRI, DEF_AGE_THRESHOLDS, BEFORE_SHAVUOS_PRIORITY, BEFORE_SHAVUOS_PRIORITY_ID, ensureBeforeShavuosPriority, relabelBuiltinPriorities, SCHEMES, TIPS, PROMPTS, PALETTE, dayKey, tipOfDay, textOnColor, pBg, uid, getMrsWPriority, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, isTaskAged, getTaskAgeHours, runAIJob, suggestFirstStep, aiParseBrainDump, aiParseCalendarEvent, aiParseConversation, aiSummarizeAnswer, withCalendarEventDefaults, gG, fmtMs, db, _lum, priText, textOnPastel, ensureSchemeContrast } from '../01-core.js';
 import { IC } from '../02-icons.jsx';
 import { VoiceInput } from '../03-voice.jsx';
 import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from '../04-components.jsx';
@@ -430,12 +430,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         if (!s.nerveCenterGooglePaneHeight) s.nerveCenterGooglePaneHeight = 244;
         if (!s.features) s.features = { moveUpPopup: false, chief: false, health: false };
         // Owner ticket (7/1/26): built-in tiers renamed Now/Today/Eventually → 1/2/3
-        // (1 = highest). Converts only the stock labels, so any custom rename survives.
-        const PRIORITY_RELABEL = { now: ["Now", "1"], today: ["Today", "2"], eventually: ["Eventually", "3"] };
-        s.priorities = (s.priorities || []).map(p => {
-          const m = PRIORITY_RELABEL[p.id];
-          return m && p.label === m[0] ? { ...p, label: m[1] } : p;
-        });
+        // (1 = highest). Shared with the Firestore listeners below — remote snapshots
+        // carry the old stored labels and would otherwise revert the rename on every sync.
+        s.priorities = relabelBuiltinPriorities(s.priorities);
         // Permanent: strip "home" custom priority on every load AND directly patch Firestore settings doc.
         // Direct patch bypasses the debounced save (which gets skipped when _listenV5 sets adoptedRemote=true),
         // so the Firestore settings doc is fixed immediately and future snapshots arrive clean.
@@ -1377,7 +1374,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         }
         // Retire Before Shavuos priority arriving from Firestore (holiday has passed)
         if (newState.priorities) {
-          newState = { ...newState, priorities: ensureBeforeShavuosPriority(newState.priorities) };
+          newState = { ...newState, priorities: relabelBuiltinPriorities(ensureBeforeShavuosPriority(newState.priorities)) };
         }
         adoptedRemote.current = true;
         lastSavedModified.current = newState._lsModified || Date.now();
@@ -1395,7 +1392,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       if (!fbState) return;
       const fbTs = fbState._lsModified || 0;
       if (fbTs > lastSavedModified.current) {
-        if (fbState.priorities) fbState = { ...fbState, priorities: ensureBeforeShavuosPriority(fbState.priorities) };
+        if (fbState.priorities) fbState = { ...fbState, priorities: relabelBuiltinPriorities(ensureBeforeShavuosPriority(fbState.priorities)) };
         adoptedRemote.current = true;
         lastSavedModified.current = fbTs;
         Store._fbLoadedTs = fbTs;
@@ -1425,10 +1422,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       try {
         const snap = await ref.get({ source: "server" });
         if (!snap.exists) return;
-        const fbState = snap.data()?.state;
+        let fbState = snap.data()?.state;
         if (!fbState) return;
         const fbTs = fbState._lsModified || 0;
         if (fbTs > lastSavedModified.current) {
+          if (fbState.priorities) fbState = { ...fbState, priorities: relabelBuiltinPriorities(ensureBeforeShavuosPriority(fbState.priorities)) };
           adoptedRemote.current = true;
           lastSavedModified.current = fbTs;
           Store._fbLoadedTs = fbTs;

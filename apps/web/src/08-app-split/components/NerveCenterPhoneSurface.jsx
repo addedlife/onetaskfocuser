@@ -745,18 +745,14 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   };
 
   // Owner ticket: a button that opens/confirms DeskPhone on the PC side. /show is
-  // loopback-only and answered by the app itself, so a reply BOTH raises the window
-  // and proves it's running; silence means it isn't open on this machine.
+  // answered by the app itself, so a reply BOTH raises the window and proves it's
+  // running. Routed through post() so it works from anywhere: loopback on this PC,
+  // or the cloud relay from a phone (needs DeskPhone build ≥ b324 to drain it).
   const openDeskPhoneOnPc = async () => {
-    setBusy("show");
-    try {
-      const res = await fetch(`${api}/show`, { method: "POST" });
-      if (!res.ok) throw new Error(String(res.status));
-      setError("");
-      await refresh(true);
-    } catch {
+    const ok = await post("/show", "show");
+    if (!ok && !usingRelayRef.current) {
       setError("DeskPhone isn't running on this PC — start it from the desktop and it will connect on its own.");
-    } finally { setBusy(""); }
+    }
   };
 
   const dialNum = async (n) => { if (n?.trim()) await post(`/dial?n=${encodeURIComponent(n.trim())}`, "dial"); };
@@ -1181,11 +1177,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         ) : null}
         <div style={{ flex: 1 }} />
         <button onClick={reconnectPhone} disabled={!!busy} title="Reconnect phone" aria-label="Reconnect phone" style={phoneIconButton(false)}>{suiteIcon("refresh", 15)}</button>
-        {!isMobile && (
-          <button onClick={openDeskPhoneOnPc} disabled={!!busy} title="Open DeskPhone on this PC" aria-label="Open DeskPhone on this PC" style={phoneIconButton(false)}>
-            {suiteIcon("desktop_windows", 15)}
-          </button>
-        )}
+        <button onClick={openDeskPhoneOnPc} disabled={!!busy} title="Open DeskPhone on the PC" aria-label="Open DeskPhone on the PC" style={phoneIconButton(false)}>
+          {suiteIcon("desktop_windows", 15)}
+        </button>
         {/* Record general */}
         <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
           style={phoneIconButton(false)}>

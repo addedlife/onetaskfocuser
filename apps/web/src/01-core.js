@@ -1318,11 +1318,24 @@ function ensureBeforeShavuosPriority(priorities = []) {
 
 function beforeShavuosFirst(tasks = []) { return tasks; }
 
+// Owner ticket (7/1/26): built-in tiers renamed Now/Today/Eventually → 1/2/3
+// (1 = highest priority). Must run on EVERY state source — initial load AND the
+// Firestore listeners — because remote snapshots carry the old stored labels and
+// would silently revert the rename. Only stock labels convert; custom renames survive.
+const PRIORITY_RELABEL = { now: ["Now", "1"], today: ["Today", "2"], eventually: ["Eventually", "3"] };
+function relabelBuiltinPriorities(priorities = []) {
+  const list = Array.isArray(priorities) ? priorities.filter(Boolean) : [];
+  return list.map(p => {
+    const m = PRIORITY_RELABEL[p.id];
+    return m && p.label === m[0] ? { ...p, label: m[1] } : p;
+  });
+}
+
 const DEF_PRI = [
   {id:"shaila", label:"Shaila", color:"#C8A84C", weight:5, isShaila:true},
-  {id:"now",    label:"Now",    color:"#E09AB8", weight:3},
-  {id:"today",  label:"Today",  color:"#E0B472", weight:2},
-  {id:"eventually", label:"Eventually", color:"#7EB0DE", weight:1}
+  {id:"now",    label:"1",    color:"#E09AB8", weight:3},
+  {id:"today",  label:"2",  color:"#E0B472", weight:2},
+  {id:"eventually", label:"3", color:"#7EB0DE", weight:1}
 ];
 
 const DEF_AGE_THRESHOLDS = {shaila: 24, now: 48, today: 120, eventually: 336};
@@ -2089,4 +2102,4 @@ async function aiSummarizeAnswer(answerText, aiOpts) {
   return job?.text?.trim().replace(/^["'`]+|["'`]+$/g, "") || "";
 }
 
-export { firebaseConfig, db, Store, DEF_PRI, DEF_AGE_THRESHOLDS, BEFORE_SHAVUOS_PRIORITY_ID, BEFORE_SHAVUOS_PRIORITY, ensureBeforeShavuosPriority, SCHEMES, PALETTE, PROMPTS, TIPS, YC, cleanYT, uid, canonicalUid, gG, gP, pBg, _lum, textOnColor, ensureSchemeContrast, _priTextMap, priText, textOnPastel, dayKey, tipOfDay, fmtMs, getMrsWPriority, getTaskAgeHours, isTaskAged, callAI, runAIJob, callGemini, callGeminiAudio, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, suggestFirstStep, aiParseShailos, aiGenSchemes, aiDetectShailaAnswers, aiParseBrainDump, aiParseCalendarEvent, withCalendarEventDefaults, DEFAULT_CALENDAR_TIME_ZONE, aiParseConversation, aiSummarizeAnswer };
+export { firebaseConfig, db, Store, DEF_PRI, DEF_AGE_THRESHOLDS, BEFORE_SHAVUOS_PRIORITY_ID, BEFORE_SHAVUOS_PRIORITY, ensureBeforeShavuosPriority, relabelBuiltinPriorities, SCHEMES, PALETTE, PROMPTS, TIPS, YC, cleanYT, uid, canonicalUid, gG, gP, pBg, _lum, textOnColor, ensureSchemeContrast, _priTextMap, priText, textOnPastel, dayKey, tipOfDay, fmtMs, getMrsWPriority, getTaskAgeHours, isTaskAged, callAI, runAIJob, callGemini, callGeminiAudio, optTasks, aiOptTasks, aiOptTasksWithAnalysis, applyTaskAging, suggestFirstStep, aiParseShailos, aiGenSchemes, aiDetectShailaAnswers, aiParseBrainDump, aiParseCalendarEvent, withCalendarEventDefaults, DEFAULT_CALENDAR_TIME_ZONE, aiParseConversation, aiSummarizeAnswer };
