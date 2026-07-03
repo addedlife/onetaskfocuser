@@ -372,9 +372,20 @@ public class RelayService : IDisposable
         {
             LogLine?.Invoke($"[RELAY CMD] {path}");
 
-            var ageMs = queuedAtMs > 0
-                ? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - queuedAtMs
-                : 0;
+            // Fail-safe: a command with no parseable queuedAt cannot prove freshness.
+            // The mailbox holds entries queued while the PC was offline — for DAYS when
+            // the drain was broken (b322) — and executing an unverifiable /dial or /send
+            // is how a stale command rings someone in the middle of the night. The live
+            // relay function always stamps queuedAt, so only legacy junk is refused.
+            if (queuedAtMs <= 0)
+            {
+                LogLine?.Invoke($"[RELAY CMD] {path} has no queue timestamp — treated as expired");
+                RecordCommandResult(commandId, path, ok: false, error: "no queue timestamp — treated as expired");
+                PushNow();
+                return;
+            }
+
+            var ageMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - queuedAtMs;
             if (ageMs > CommandTtl(path).TotalMilliseconds)
             {
                 LogLine?.Invoke($"[RELAY CMD] {path} expired ({ageMs / 1000}s in queue) — not executed");

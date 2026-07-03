@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-07-03 01:02:58",
+        "version":  "b325",
+        "notes":  "Safety patch on top of b324: relayed commands that carry no queue timestamp are now refused instead of executed. When b324 drained the mailbox for the first time it found commands up to 8 days old; stamped ones expired correctly, but old-format entries without a timestamp bypassed the expiry check and ran. None did harm (they lacked recipients/numbers), but an unverifiable stale dial or text must never execute.",
+        "devNotes":  "RelayService.cs ExecuteCommandAsync: queuedAtMs \u003c= 0 (missing or unparseable queuedAt) is now treated as expired - logs \u0027[RELAY CMD] path has no queue timestamp\u0027 and acks ok:false instead of falling through with ageMs=0. The live phone-relay function always stamps queuedAt + id (phone-relay.js:153-154), so only legacy/malformed mailbox entries are affected. Verified against the b324 first-drain log where unstamped /send//dial//hangup entries executed (harmlessly) after 4-8 days in queue."
+    },
+    {
         "timestamp":  "2026-07-03 00:58:22",
         "version":  "b324",
         "notes":  "Texting and remote control from the web app work again: the cloud command channel was silently broken since b322, so texts, dials, and reconnects sent from any browser never reached DeskPhone. Notification quick-replies now go through the full send pipeline (visible bubble, Failed + Retry instead of vanishing), and the web app can now reconnect the phone and raise the DeskPhone window remotely. Ships the latest web UI (plain-language phone status, retry buttons on failed texts, working copy button).",
