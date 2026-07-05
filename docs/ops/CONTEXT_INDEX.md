@@ -68,8 +68,9 @@ Goal: minimize cached and uncached tokens while preserving accuracy. Start from 
 ### Phone Host Dongle (universal hardware host — spec stage)
 
 - Primary file: `docs/ops/PHONEHOST_DONGLE_SPEC.md`
-- Key facts: original ESP32 only (S3/C3/C6 are BLE-only — no BT Classic); prototype lane is Pi Zero 2 W + BlueZ obexd; protocol reference to port is `apps/phone-host-android` `bt/*.kt`
-- Gate: bench validation 1 (ESP32 OBEX CONNECT accepted by the source phone) before further investment
+- v1 pivot: no onboard content storage — pure BT-to-Firestore bridge, porting `apps/phone-host-windows` `Services/RelayService.cs` (same `phone-relay/state` doc, same RTDB command stream) to ESP32, not the local-store/local-API model
+- Key facts: original ESP32 only (S3/C3/C6 are BLE-only — no BT Classic); prototype lane is Pi Zero 2 W + BlueZ obexd; BT protocol reference to port is `apps/phone-host-android` `bt/*.kt`
+- Gate: bench validation 1 (ESP32 OBEX CONNECT accepted by the source phone) + validation 4 (Firestore HTTPS PATCH from ESP32) before further investment
 
 ### iPad Phone Bridge (LAN host proxy + BT probe gate)
 
