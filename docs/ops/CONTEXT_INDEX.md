@@ -65,6 +65,12 @@ Goal: minimize cached and uncached tokens while preserving accuracy. Start from 
 - Contract: same `/status /messages /calls /contacts` shapes as the Windows host (port of `MainViewModel` JSON builders)
 - Gate: `gradle :app:assembleDebug` in `apps/phone-host-android` (needs Android SDK 34 in `local.properties`)
 
+### Phone Host Dongle (universal hardware host — spec stage)
+
+- Primary file: `docs/ops/PHONEHOST_DONGLE_SPEC.md`
+- Key facts: original ESP32 only (S3/C3/C6 are BLE-only — no BT Classic); prototype lane is Pi Zero 2 W + BlueZ obexd; protocol reference to port is `apps/phone-host-android` `bt/*.kt`
+- Gate: bench validation 1 (ESP32 OBEX CONNECT accepted by the source phone) before further investment
+
 ### iPad Phone Bridge (LAN host proxy + BT probe gate)
 
 - Primary folder: `apps/ipad-phone-bridge`
