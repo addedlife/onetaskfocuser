@@ -58,6 +58,20 @@ Goal: minimize cached and uncached tokens while preserving accuracy. Start from 
 - Search terms: `/status`, `/messages`, `/calls`, `/contacts`, `build.num`, `deployed-builds`
 - Gate: `dotnet build` in `apps/phone-host-windows`; check `http://127.0.0.1:8765/status`
 
+### Android Phone Host (local BT host on tablet)
+
+- Primary folder: `apps/phone-host-android`
+- Search terms: `MapClient`, `HfpClient`, `PbapClient`, `MnsServer`, `HostService`, `handoff-release`, `_shamash-phonehost._tcp`
+- Contract: same `/status /messages /calls /contacts` shapes as the Windows host (port of `MainViewModel` JSON builders)
+- Gate: `gradle :app:assembleDebug` in `apps/phone-host-android` (needs Android SDK 34 in `local.properties`)
+
+### iPad Phone Bridge (LAN host proxy + BT probe gate)
+
+- Primary folder: `apps/ipad-phone-bridge`
+- Search terms: `LanHostClient`, `lan-host`, `BluetoothProbeService`, `localOnlyPrefixes`
+- Verdict: direct BT host on iPadOS is blocked by public API (Classic RFCOMM profiles ≠ GATT); live lane is the Bonjour LAN proxy of the active host
+- Gate: build in Xcode on a Mac; smoke `http://127.0.0.1:8765/status` on the iPad (check the `lanHost` block)
+
 ### Git / Release Docs
 
 - Primary files: `BRIEF.txt`, `AGENTS.md`, `README.md`, `docs/ops/VERIFICATION_LOG.md`, `docs/ops/MIGRATION_MANIFEST.md`, `docs/ops/ROLLBACK_AND_DEPRECATION.md`

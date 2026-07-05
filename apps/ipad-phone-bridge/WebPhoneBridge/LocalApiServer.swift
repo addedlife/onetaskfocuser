@@ -4,12 +4,17 @@ import Network
 final class LocalApiServer {
     private let port: UInt16
     private let controller: BridgeController
+    private let lanHost: LanHostClient?
     private var listener: NWListener?
     private let queue = DispatchQueue(label: "webphone.ipad.bridge.api")
 
-    init(port: UInt16, controller: BridgeController) {
+    /// Paths that always stay local, even when a LAN host is reachable.
+    private static let localOnlyPrefixes = ["/probe", "/health", "/devices", "/events", "/lan-host"]
+
+    init(port: UInt16, controller: BridgeController, lanHost: LanHostClient? = nil) {
         self.port = port
         self.controller = controller
+        self.lanHost = lanHost
     }
 
     func start() throws {
@@ -28,6 +33,19 @@ final class LocalApiServer {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] data, _, _, _ in
             guard let self else { return }
             let request = HTTPRequest(data: data ?? Data())
+
+            // LAN host proxy: when another host (PC / Android tablet) holds the
+            // phone's Bluetooth link, forward host-contract requests to it raw.
+            // Probe endpoints stay local; anything the LAN host can't serve
+            // falls back to the local controller.
+            let route = request.path.components(separatedBy: "?").first ?? "/"
+            let isLocalOnly = Self.localOnlyPrefixes.contains { route == $0 || route.hasPrefix($0 + "/") }
+            if !isLocalOnly, request.method != "OPTIONS",
+               let proxied = self.lanHost?.forward(method: request.method, path: request.path, body: request.rawBody) {
+                self.sendRaw(proxied.0, proxied.1, on: connection)
+                return
+            }
+
             let result = self.controller.handle(method: request.method, path: request.path, body: request.jsonBody)
             self.send(result.0, result.1, on: connection)
         }
@@ -35,6 +53,10 @@ final class LocalApiServer {
 
     private func send(_ status: Int, _ payload: [String: Any], on connection: NWConnection) {
         let body = (try? JSONSerialization.data(withJSONObject: payload, options: [])) ?? Data("{}".utf8)
+        sendRaw(status, body, on: connection)
+    }
+
+    private func sendRaw(_ status: Int, _ body: Data, on connection: NWConnection) {
         let reason = Self.reason(status)
         let headers = """
         HTTP/1.1 \(status) \(reason)\r
@@ -73,6 +95,7 @@ private struct HTTPRequest {
     let method: String
     let path: String
     let jsonBody: [String: Any]
+    let rawBody: Data?
 
     init(data: Data) {
         let text = String(data: data, encoding: .utf8) ?? ""
@@ -83,6 +106,7 @@ private struct HTTPRequest {
         let tokens = requestLine.components(separatedBy: " ")
         self.method = tokens.indices.contains(0) ? tokens[0].uppercased() : "GET"
         self.path = tokens.indices.contains(1) ? tokens[1] : "/"
+        self.rawBody = body.isEmpty ? nil : body.data(using: .utf8)
         if let bodyData = body.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] {
             self.jsonBody = json

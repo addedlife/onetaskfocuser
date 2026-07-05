@@ -3,9 +3,11 @@ import UIKit
 
 final class BridgeController {
     private let probe: BluetoothProbeService
+    private let lanHost: LanHostClient?
 
-    init(probe: BluetoothProbeService) {
+    init(probe: BluetoothProbeService, lanHost: LanHostClient? = nil) {
         self.probe = probe
+        self.lanHost = lanHost
     }
 
     func handle(method: String, path: String, body: [String: Any]) -> (Int, [String: Any]) {
@@ -48,6 +50,14 @@ final class BridgeController {
             }
             DispatchQueue.main.async { self.probe.probeDevice(id: id) }
             return ok(["result": "connect-started", "deviceId": id.uuidString, "probe": probe.snapshot()])
+        case ("GET", "/lan-host"):
+            return ok(["lanHost": lanHost?.snapshot() ?? NSNull()])
+        case ("POST", "/lan-host"):
+            guard let host = string(payload["host"]) else {
+                return (400, ["ok": false, "status": 400, "error": "Missing host. POST /lan-host with {\"host\":\"192.168.1.20\"} (port defaults to 8765)."])
+            }
+            lanHost?.manualHost = host.isEmpty ? nil : host
+            return ok(["result": "manual LAN host updated", "lanHost": lanHost?.snapshot() ?? NSNull()])
         case ("GET", "/contacts"):
             return reserved("PBAP contact export is reserved until the iPad probe opens the phone's PBAP server.")
         case ("GET", "/calls"):
@@ -81,7 +91,8 @@ final class BridgeController {
                 "model": UIDevice.current.model
             ],
             "probe": probeSnapshot,
-            "nextMilestone": "Find Android phone, surface MAP/PBAP/HFP services, then replace reserved endpoints with real phone data."
+            "lanHost": lanHost?.snapshot() ?? NSNull(),
+            "nextMilestone": "Direct Bluetooth is gated on the probe; live path is the LAN proxy to whichever host holds the phone link."
         ])
     }
 

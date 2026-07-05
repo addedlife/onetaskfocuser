@@ -45,6 +45,16 @@ struct ContentView: View {
             row("Server", model.isRunning ? "Running" : "Stopped", model.isRunning ? .green : .red)
             row("Bluetooth", model.probe.bluetoothState, model.probe.bluetoothState == "poweredOn" ? .green : .orange)
             row("Mode", model.probe.isScanning ? "Scanning" : "Idle", model.probe.isScanning ? .blue : .secondary)
+            row(
+                "LAN host",
+                model.lanHost.activeHost ?? "searching…",
+                model.lanHost.activeHost != nil ? .green : .orange
+            )
+            if model.lanHost.activeHost != nil {
+                Text("Proxying phone data from the host that holds the phone's Bluetooth link — no cloud relay.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -153,13 +163,15 @@ struct ContentView: View {
 final class BridgeModel: ObservableObject {
     @Published var isRunning = false
     let probe = BluetoothProbeService()
+    let lanHost = LanHostClient()
     private var server: LocalApiServer?
 
     func start() {
         probe.activate()
+        lanHost.start()
         if server != nil { return }
-        let controller = BridgeController(probe: probe)
-        let next = LocalApiServer(port: 8765, controller: controller)
+        let controller = BridgeController(probe: probe, lanHost: lanHost)
+        let next = LocalApiServer(port: 8765, controller: controller, lanHost: lanHost)
         do {
             try next.start()
             server = next
