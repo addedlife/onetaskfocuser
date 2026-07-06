@@ -68,9 +68,10 @@ Goal: minimize cached and uncached tokens while preserving accuracy. Start from 
 ### Phone Host Dongle (universal hardware host — spec stage)
 
 - Primary file: `docs/ops/PHONEHOST_DONGLE_SPEC.md`
-- v1 pivot: no onboard content storage — pure BT-to-Firestore bridge, porting `apps/phone-host-windows` `Services/RelayService.cs` (same `phone-relay/state` doc, same RTDB command stream) to ESP32, not the local-store/local-API model
+- v2 (current): dongle is BT-Classic-to-phone + local `:8765` HTTP only — same contract as `apps/phone-host-android`/`apps/phone-host-windows`, discoverable by `apps/ipad-phone-bridge`'s `LanHostClient` via mDNS. Zero Firebase code/credentials on the dongle; whatever device talks to Firebase (PC's `RelayService.cs`, cloud relay reads) keeps doing so completely unchanged. Storage is RAM-only working set, nothing durable, nothing in flash beyond Wi-Fi/BT pairing.
+- v1 (superseded): dongle pushed straight to Firestore — rejected for putting a relay secret on losable $8 hardware and requiring embedded TLS/Firestore, the riskiest unproven part of that design.
 - Key facts: original ESP32 only (S3/C3/C6 are BLE-only — no BT Classic); prototype lane is Pi Zero 2 W + BlueZ obexd; BT protocol reference to port is `apps/phone-host-android` `bt/*.kt`
-- Gate: bench validation 1 (ESP32 OBEX CONNECT accepted by the source phone) + validation 4 (Firestore HTTPS PATCH from ESP32) before further investment
+- Gate: bench validation 1 (ESP32 OBEX CONNECT accepted by the source phone) before further investment; open question flagged in the spec — RAM-only cache vs. truly zero caching (affects `/messages` responsiveness)
 
 ### iPad Phone Bridge (LAN host proxy + BT probe gate)
 
