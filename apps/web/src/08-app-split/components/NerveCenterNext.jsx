@@ -566,6 +566,14 @@ const GCAL_COLORS = {
   "9": "#3F51B5", "10": "#0B8043", "11": "#D50000",
 };
 
+// Ink color that stays legible on a solid GCal event color (yellow/light hues need dark text).
+function onEvtColor(hex) {
+  const n = parseInt(String(hex).slice(1), 16);
+  if (Number.isNaN(n)) return "#fff";
+  const lum = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+  return lum > 160 ? "#1F2933" : "#fff";
+}
+
 // Assigns non-overlapping column slots to overlapping timed calendar events.
 // Returns rows with .col (0-based column index) and .colCount (total columns in the group).
 function assignCalendarColumns(rows) {
@@ -608,7 +616,7 @@ function CalendarTimeline({ calendarRows, nowDate, C, scrollRef, nowLineRef }) {
       {allDayRows.length > 0 && (
         <div style={{ padding: `3px 4px 3px ${LABEL_W + 4}px`, borderBottom: `1px solid ${C.divider}`, flexShrink: 0, display: "flex", flexWrap: "wrap", gap: 3 }}>
           {allDayRows.map(row => (
-            <span key={row.evt.id || row.index} style={{ fontSize: NC_TYPE.small, fontWeight: 500, color: row.past ? C.faint : C.text, background: row.past ? C.hover : softBg(evtAccent(row.evt), 0.22), borderRadius: RADIUS.xs, padding: "1px 6px", opacity: row.past ? 0.7 : 1 }}>
+            <span key={row.evt.id || row.index} style={{ fontSize: NC_TYPE.small, fontWeight: 600, color: row.past ? C.faint : onEvtColor(evtAccent(row.evt)), background: row.past ? C.hover : evtAccent(row.evt), borderRadius: RADIUS.sm, padding: "1px 8px", opacity: row.past ? 0.7 : 1 }}>
               {row.evt.summary || "(no title)"}
             </span>
           ))}
@@ -626,9 +634,13 @@ function CalendarTimeline({ calendarRows, nowDate, C, scrollRef, nowLineRef }) {
               const eDate = row.evt.end?.dateTime ? new Date(row.evt.end.dateTime) : s;
               const startMin = s.getHours() * 60 + s.getMinutes();
               const endMin = Math.max(startMin + 15, eDate.getHours() * 60 + eDate.getMinutes());
+              // GM3 / Google Calendar mobile block: solid event-color fill, fully rounded
+              // corners, 2px breathing gap on every side; past events fall back to a faded
+              // tonal chip so the current/upcoming blocks carry the visual weight.
               const top = startMin * PX_MIN;
               const height = Math.max(22, (endMin - startMin) * PX_MIN);
               const color = evtAccent(row.evt);
+              const ink = row.past ? C.faint : onEvtColor(color);
               return (
                 <div key={row.evt.id || row.index}
                   title={`${row.evt.summary || "(no title)"}\n${row.label}`}
@@ -637,20 +649,21 @@ function CalendarTimeline({ calendarRows, nowDate, C, scrollRef, nowLineRef }) {
                   onClick={row.evt.htmlLink ? () => window.open(row.evt.htmlLink, "_blank") : undefined}
                   onKeyDown={row.evt.htmlLink ? e => { if (e.key === "Enter") window.open(row.evt.htmlLink, "_blank"); } : undefined}
                   style={{
-                    position: "absolute", top, height,
-                    left: `${(row.col / row.colCount) * 100}%`,
-                    width: `calc(${100 / row.colCount}% - 2px)`,
-                    background: softBg(color, row.past ? 0.28 : row.now ? 0.72 : 0.52),
-                    borderLeft: `2px solid ${softBorder(color, row.past ? 0.3 : 0.8)}`,
-                    borderRadius: `0 ${RADIUS.xs}px ${RADIUS.xs}px 0`,
+                    position: "absolute", top: top + 1, height: Math.max(20, height - 2),
+                    left: `calc(${(row.col / row.colCount) * 100}% + 1px)`,
+                    width: `calc(${100 / row.colCount}% - 4px)`,
+                    background: row.past ? softBg(color, 0.22) : color,
+                    border: row.now ? `2px solid ${C.bg}` : "none",
+                    boxShadow: row.now ? `0 0 0 2px ${color}` : "none",
+                    borderRadius: RADIUS.sm,
                     overflow: "hidden", cursor: row.evt.htmlLink ? "pointer" : "default",
-                    padding: "2px 4px", boxSizing: "border-box", opacity: row.past ? 0.55 : 1,
+                    padding: height >= 34 ? "4px 8px" : "2px 8px", boxSizing: "border-box", opacity: row.past ? 0.6 : 1,
                   }}>
-                  <div style={{ fontSize: 10, fontWeight: row.now ? 700 : 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.2, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                  <div style={{ fontSize: 11, fontWeight: row.now ? 700 : 600, color: ink, fontFamily: NC_FONT_STACK, lineHeight: 1.25, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                     {row.evt.summary || "(no title)"}
                   </div>
                   {height >= 34 && (
-                    <div style={{ fontSize: 9, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.2, marginTop: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: 10, color: ink, opacity: 0.8, fontFamily: NC_FONT_STACK, lineHeight: 1.25, marginTop: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                       {row.label}
                     </div>
                   )}
@@ -2401,7 +2414,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <ListItem key={msg.id||i} type="button" onClick={()=>toggleRow(rk)} style={{ borderRadius: RADIUS.sm }}>
                   <span slot="headline" style={{ color:C.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{from}</span>
                   {exp && subj && subj !== snip && <span slot="overline" style={{ color:C.text, fontWeight:600 }}>{subj}</span>}
-                  <span slot="supporting-text" style={{ color:C.muted, ...(exp ? { whiteSpace:"normal", wordBreak:"break-word" } : { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }) }}>{snip}</span>
+                  <span slot="supporting-text" style={{ color:C.muted, whiteSpace:"normal", wordBreak:"break-word", ...(exp ? {} : { display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }) }}>{snip}</span>
                   <span slot="trailing-supporting-text" style={{ color:C.faint, whiteSpace:"nowrap" }}>{date}</span>
                   <span slot="end"><IconBtn icon="open_in_new" size={28} iconSize={14} color={C.faint} title="Open in Gmail" href={`https://mail.google.com/mail/u/0/#inbox/${msg.id}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} /></span>
                 </ListItem>
@@ -2528,8 +2541,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     );
                     const mkItem = (row) => {
                       const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+                      const barColor = GCAL_COLORS[row.evt?.colorId] || C.warning;
                       const item = (
                         <>
+                          {/* GM3 vertical accent bar — event's calendar color */}
+                          <span slot="start" style={{ width:4, height:24, borderRadius:RADIUS.pill, background:barColor, opacity:row.past?0.4:1 }} />
                           <span slot="headline" style={{ color:row.now?C.text:row.past?C.faint:C.muted, fontWeight:row.now?600:500, wordBreak:"break-word" }}>{row.evt?.summary||"(no title)"}</span>
                           <span slot="trailing-supporting-text" style={{ color:row.now?C.accent:C.faint, fontWeight:row.now?700:500, whiteSpace:"nowrap" }}>{row.now?"Now":timeLabel}</span>
                         </>
@@ -2790,7 +2806,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 return (
                   <ListItem key={msg.id||i} type="link" href={url} target="_blank" style={{ borderRadius: RADIUS.sm }}>
                     <span slot="headline" style={{ color:C.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{from}</span>
-                    <span slot="supporting-text" style={{ color:C.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
+                    <span slot="supporting-text" style={{ color:C.muted, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden", whiteSpace:"normal", wordBreak:"break-word" }}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
                     <span slot="trailing-supporting-text" style={{ color:C.faint, whiteSpace:"nowrap" }}>{date}</span>
                   </ListItem>
                 );
@@ -3343,8 +3359,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                           const agendaListVars = { ...denseListVars({ dense: true, primary: C.text, secondary: C.muted, hover: C.text }), padding: 0, background: "transparent" };
                           const mkAgendaItem = (row) => {
                             const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+                            const barColor = GCAL_COLORS[row.evt?.colorId] || C.warning;
                             const content = (
                               <>
+                                {/* GM3 vertical accent bar — event's calendar color */}
+                                <span slot="start" style={{ width: 4, height: 24, borderRadius: RADIUS.pill, background: barColor, opacity: row.past ? 0.4 : 1 }} />
                                 <span slot="headline" style={{ color: row.now ? C.text : row.past ? C.faint : C.muted, fontWeight: row.now ? 600 : 400, opacity: row.past ? 0.65 : 1 }}>{row.evt?.summary || "(no title)"}</span>
                                 <span slot="trailing-supporting-text" style={{ color: row.now ? nowLineColor : C.faint, fontWeight: row.now ? 700 : 400, whiteSpace: "nowrap" }}>{row.now ? "Now" : timeLabel}</span>
                               </>
@@ -3650,7 +3669,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         >
                           {selected && <div slot="container" style={{ background: C.bgSoft, borderRadius: RADIUS.sm }} />}
                           <span slot="headline" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: C.text, fontWeight: 600 }}>{from}</span>
-                          <span slot="supporting-text" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: C.muted }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
+                          <span slot="supporting-text" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", whiteSpace: "normal", wordBreak: "break-word", color: C.muted }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
                           <span slot="trailing-supporting-text" style={{ color: C.faint, whiteSpace: "nowrap" }}>{date}</span>
                         </ListItem>
                         {selected && selectedEmailSource && (

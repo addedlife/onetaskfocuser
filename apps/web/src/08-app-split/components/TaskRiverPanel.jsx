@@ -288,7 +288,9 @@ export function TaskRiverPanel({
       display: visible ? 'flex' : 'none', flexDirection: 'column', borderLeft: `1px solid ${C.divider}`,
       overflow: 'hidden', ...waterBg,
     }}>
-      <div style={{ flexShrink: 0, padding: '14px clamp(14px,3vw,32px) 8px', display: 'flex', alignItems: 'baseline', gap: SP.sm, flexWrap: 'wrap' }}>
+      {/* Content column is capped at a readable width and centered — on wide monitors the
+          full-bleed layout pushed the trailing meta miles from the leading text. */}
+      <div style={{ flexShrink: 0, padding: '14px clamp(14px,3vw,32px) 8px', display: 'flex', alignItems: 'baseline', gap: SP.sm, flexWrap: 'wrap', maxWidth: 880, width: '100%', marginInline: 'auto', boxSizing: 'border-box' }}>
         <span style={{ fontSize: 23, fontWeight: 300, letterSpacing: -0.5, color: C.text, fontFamily: NC_FONT_STACK }}>The River</span>
         <span style={{ fontSize: NC_TYPE.meta, color: (retryIn !== null || aiState === 'error') ? (C.warning || '#C8A84C') : C.muted, fontFamily: NC_FONT_STACK }}>{view.length} items · {statusText}</span>
         <button onClick={reprioritize}
@@ -307,7 +309,7 @@ export function TaskRiverPanel({
         {view.length === 0 ? (
           <div style={{ padding: '50px 20px', textAlign: 'center', color: C.faint, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.title }}>The river is still. Nothing waiting.</div>
         ) : (
-          <div style={{ position: 'relative', paddingLeft: 14 }}>
+          <div style={{ position: 'relative', paddingLeft: 14, maxWidth: 880, marginInline: 'auto' }}>
             <div aria-hidden style={{ position: 'absolute', left: 0, top: 4, bottom: 4, width: 7, borderRadius: RADIUS.xs, background: riverGradient, boxShadow: `0 0 0 1px ${rgba('#000', 0.04)}` }} />
             {view.map((it) => {
               const isDrag = dragId === it.id;
