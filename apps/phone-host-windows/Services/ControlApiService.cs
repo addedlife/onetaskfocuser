@@ -41,6 +41,15 @@ public class ControlApiService : IDisposable
     private TcpListener? _server;
     private CancellationTokenSource _cts = new();
 
+    /// <summary>Google-account pairing gate for LAN callers (loopback is exempt —
+    /// the embedded web shell is served from 127.0.0.1). See HostAuthService.</summary>
+    public HostAuthService Auth { get; }
+
+    public ControlApiService()
+    {
+        Auth = new HostAuthService(s => LogLine?.Invoke(s));
+    }
+
     /// <summary>Live call-audio bridge: captures a chosen Windows input device and
     /// streams 16 kHz mono PCM to browser subscribers. See CallAudioBridgeService.</summary>
     public readonly CallAudioBridgeService CallAudio = new();
@@ -207,6 +216,29 @@ public class ControlApiService : IDisposable
             if (method == "OPTIONS")
             {
                 await WriteHttpResponseAsync(stream, "", 204);
+                return;
+            }
+
+            // ── Auth gate (before everything else). Loopback is exempt: the
+            //    embedded web shell and the same-PC browser ride 127.0.0.1.
+            //    LAN callers need X-Host-Token once an owner has paired;
+            //    /pair swaps a Firebase ID token for one; /health stays open. ──
+            var remoteIsLoopback =
+                client.Client.RemoteEndPoint is System.Net.IPEndPoint ep && IPAddress.IsLoopback(ep.Address);
+            if (method == "POST" && path == "/pair")
+            {
+                var bearer = headers.TryGetValue("Authorization", out var authHdr) &&
+                             authHdr.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                    ? authHdr[7..].Trim() : ParseStr(qs, "idToken");
+                var (pairStatus, pairBody) = Auth.Pair(bearer);
+                await WriteHttpResponseAsync(stream, pairBody, pairStatus);
+                return;
+            }
+            if (!remoteIsLoopback && Auth.IsEnforced && path != "/health" &&
+                !Auth.IsValidHostToken(headers.TryGetValue("X-Host-Token", out var ht) ? ht : null))
+            {
+                await WriteHttpResponseAsync(stream,
+                    JsonError("unauthorized — sign into Shamash with the owner's Google account to pair"), 401);
                 return;
             }
 
@@ -806,7 +838,7 @@ public class ControlApiService : IDisposable
             "Content-Type: application/json\r\n" +
             "Access-Control-Allow-Origin: *\r\n" +
             "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
-            "Access-Control-Allow-Headers: Content-Type\r\n" +
+            "Access-Control-Allow-Headers: Content-Type, Authorization, X-Host-Token\r\n" +
             "Access-Control-Allow-Private-Network: true\r\n" +
             $"Content-Length: {bodyBytes.Length}\r\n" +
             "Connection: close\r\n" +
@@ -822,6 +854,8 @@ public class ControlApiService : IDisposable
     {
         204 => "No Content",
         400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
         404 => "Not Found",
         500 => "Internal Server Error",
         _ => "OK"

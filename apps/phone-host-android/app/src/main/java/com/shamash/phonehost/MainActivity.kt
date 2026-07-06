@@ -142,6 +142,18 @@ class MainActivity : Activity() {
         }
         advancedInfo = TextView(this).apply { textSize = 12f; alpha = 0.7f }
         advancedBox.addView(advancedInfo)
+        // Pairing recovery: if the owner switches Google accounts, other devices
+        // get "paired to a different account" until this is tapped. Physical
+        // access to the tablet is the permission model.
+        advancedBox.addView(Button(this).apply {
+            isAllCaps = false
+            textSize = 13f
+            text = "Reset app pairing (allow a different Google account)"
+            setOnClickListener {
+                HostService.instance?.hostAuth?.resetPairing()
+                refresh()
+            }
+        })
         logView = TextView(this).apply {
             textSize = 11f
             typeface = Typeface.MONOSPACE
@@ -258,6 +270,12 @@ class MainActivity : Activity() {
                 append("Build ${HostService.BUILD_STAMP}\n")
                 append("Local API: http://127.0.0.1:8765\n")
                 service?.lanUrl()?.let { append("Network API: $it\n") }
+                append(
+                    if (service?.hostAuth?.isEnforced() == true)
+                        "Security: paired to your Google account — only your devices can connect\n"
+                    else
+                        "Security: open until first pairing (pair by opening Shamash signed in)\n"
+                )
                 if (service?.defaultDeviceAddress?.isNotBlank() == true) {
                     append("Phone Bluetooth address: ${service.defaultDeviceAddress}")
                 }

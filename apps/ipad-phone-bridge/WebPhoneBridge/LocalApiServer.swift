@@ -46,7 +46,7 @@ final class LocalApiServer {
                 let route = request.path.components(separatedBy: "?").first ?? "/"
                 let isLocalOnly = Self.localOnlyPrefixes.contains { route == $0 || route.hasPrefix($0 + "/") }
                 if !isLocalOnly, request.method != "OPTIONS",
-                   let proxied = self.lanHost?.forward(method: request.method, path: request.path, body: request.rawBody) {
+                   let proxied = self.lanHost?.forward(method: request.method, path: request.path, body: request.rawBody, headers: request.authHeaders) {
                     self.sendRaw(proxied.0, proxied.1, on: connection)
                     return
                 }
@@ -70,7 +70,7 @@ final class LocalApiServer {
         Content-Length: \(body.count)\r
         Access-Control-Allow-Origin: *\r
         Access-Control-Allow-Methods: GET, POST, OPTIONS\r
-        Access-Control-Allow-Headers: Content-Type\r
+        Access-Control-Allow-Headers: Content-Type, Authorization, X-Host-Token\r
         Access-Control-Allow-Private-Network: true\r
         Connection: close\r
         \r
@@ -102,16 +102,31 @@ private struct HTTPRequest {
     let path: String
     let jsonBody: [String: Any]
     let rawBody: Data?
+    /// Auth headers forwarded verbatim to the LAN host — its Google-account
+    /// pairing gate (X-Host-Token / Authorization) must survive the proxy hop.
+    let authHeaders: [String: String]
 
     init(data: Data) {
         let text = String(data: data, encoding: .utf8) ?? ""
         let parts = text.components(separatedBy: "\r\n\r\n")
         let head = parts.first ?? ""
         let body = parts.dropFirst().joined(separator: "\r\n\r\n")
-        let requestLine = head.components(separatedBy: "\r\n").first ?? "GET / HTTP/1.1"
+        let headLines = head.components(separatedBy: "\r\n")
+        let requestLine = headLines.first ?? "GET / HTTP/1.1"
         let tokens = requestLine.components(separatedBy: " ")
         self.method = tokens.indices.contains(0) ? tokens[0].uppercased() : "GET"
         self.path = tokens.indices.contains(1) ? tokens[1] : "/"
+        var auth: [String: String] = [:]
+        for line in headLines.dropFirst() {
+            guard let colon = line.firstIndex(of: ":") else { continue }
+            let name = line[..<colon].trimmingCharacters(in: .whitespaces)
+            let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            if name.caseInsensitiveCompare("Authorization") == .orderedSame ||
+               name.caseInsensitiveCompare("X-Host-Token") == .orderedSame {
+                auth[name] = value
+            }
+        }
+        self.authHeaders = auth
         self.rawBody = body.isEmpty ? nil : body.data(using: .utf8)
         if let bodyData = body.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] {

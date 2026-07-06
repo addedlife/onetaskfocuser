@@ -15,6 +15,7 @@ import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.os.IBinder
 import com.shamash.phonehost.api.ApiJson
+import com.shamash.phonehost.api.HostAuth
 import com.shamash.phonehost.api.LocalApiServer
 import com.shamash.phonehost.bt.HfpClient
 import com.shamash.phonehost.bt.MapClient
@@ -48,7 +49,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class HostService : Service() {
 
     companion object {
-        const val BUILD_STAMP = "android-b1"
+        const val BUILD_STAMP = "android-b2"
         private const val CHANNEL_ID = "phonehost"
         private const val NOTIFICATION_ID = 1
 
@@ -80,6 +81,7 @@ class HostService : Service() {
     private var nsdListener: NsdManager.RegistrationListener? = null
 
     private val prefs by lazy { getSharedPreferences("phonehost", Context.MODE_PRIVATE) }
+    val hostAuth by lazy { HostAuth(prefs) { HostLog.add(it) } }
 
     private val adapter: BluetoothAdapter?
         get() = (getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
@@ -361,10 +363,24 @@ class HostService : Service() {
     private fun wireApi() {
         api.handler = { req ->
             val r: LocalApiServer.Response? = when {
+                // ── Auth (before everything else) ──────────────────────────
+                // /health stays open (liveness probe carries no data);
+                // /pair exchanges the caller's Firebase ID token for a host
+                // token; every other route requires X-Host-Token once an
+                // owner account has claimed this host.
+                req.path == "/health" ->
+                    ok(JSONObject().put("ok", true).put("build", BUILD_STAMP)
+                        .put("authRequired", hostAuth.isEnforced()).toString())
+                req.method == "POST" && req.path == "/pair" -> {
+                    val (status, body) = hostAuth.pair(req.bearerToken ?: req.qs("idToken"))
+                    LocalApiServer.Response(status, body)
+                }
+                hostAuth.isEnforced() && !hostAuth.isValidHostToken(req.hostToken) ->
+                    LocalApiServer.Response(401, ApiJson.error(
+                        "unauthorized — sign into Shamash with the owner's Google account to pair"))
+
                 req.path == "" || req.path == "/" || req.path == "/status" ->
                     ok(statusJson())
-                req.path == "/health" ->
-                    ok(JSONObject().put("ok", true).put("build", BUILD_STAMP).toString())
                 req.path == "/log" ->
                     ok(HostLog.tail(req.qsInt("n", 100)).joinToString("\n"))
                 req.path == "/messages" -> {

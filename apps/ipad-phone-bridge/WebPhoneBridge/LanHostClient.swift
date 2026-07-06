@@ -100,11 +100,12 @@ final class LanHostClient: ObservableObject {
 
     /// Forward a host-contract request as-is; returns nil when no LAN host is
     /// reachable so the caller can fall back to local probe handling.
-    func forward(method: String, path: String, body: Data?) -> (Int, Data)? {
+    func forward(method: String, path: String, body: Data?, headers: [String: String] = [:]) -> (Int, Data)? {
         guard let host = activeHost, let url = URL(string: "http://\(host)\(path)") else { return nil }
 
         var request = URLRequest(url: url)
         request.httpMethod = method
+        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         if let body, !body.isEmpty {
             request.httpBody = body
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")

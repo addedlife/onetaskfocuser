@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cleanTheme, DUR, EASE, ELEV, gvIconButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { ActionBtn, IconBtn, ListItem, denseListVars } from '../m3.jsx';
 import { db } from '../../01-core.js';
+import { hostFetch, hostAuthHeaders, pairWithHost } from '../host-auth.js';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 const PHONE_FETCH_TIMEOUT_MS = 4500;
@@ -166,9 +167,18 @@ function linkedMessageParts(text, linkStyle = {}) {
 async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS, extraHeaders = {}) {
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
+  // Hosts gate their API behind Google-account pairing (host-auth.js): attach the
+  // stored host token, and on a 401 pair silently with the signed-in account and retry.
+  const base = (url.match(/^https?:\/\/[^/]+/) || [""])[0];
+  const path = base ? url.slice(base.length) : url;
   try {
-    const response = await fetch(url, { cache: "no-store", signal: controller?.signal, headers: extraHeaders });
-    if (!response.ok) throw new Error(`${url} returned ${response.status}`);
+    const run = () => fetch(url, {
+      cache: "no-store", signal: controller?.signal,
+      headers: { ...extraHeaders, ...(base ? hostAuthHeaders(base) : {}) },
+    });
+    let response = await run();
+    if (response.status === 401 && base && await pairWithHost(base)) response = await run();
+    if (!response.ok) throw new Error(`${path || url} returned ${response.status}`);
     return await response.json();
   } finally {
     if (timer) window.clearTimeout(timer);
@@ -708,7 +718,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         setError("");
         await new Promise(r => setTimeout(r, 2500));
       } else {
-        const res = await fetch(`${api}${path}`, { method: "POST" });
+        const res = await hostFetch(api, path, { method: "POST" });
         if (!res.ok) {
           let msg = `DeskPhone error (${res.status})`;
           try { const d = await res.json(); if (d?.error || d?.message) msg = d.error || d.message; } catch {}

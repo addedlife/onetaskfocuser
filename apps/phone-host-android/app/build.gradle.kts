@@ -11,8 +11,8 @@ android {
         applicationId = "com.shamash.phonehost"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "b1"
+        versionCode = 2
+        versionName = "b2"
     }
 
     buildTypes {

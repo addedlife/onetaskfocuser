@@ -25,9 +25,19 @@ class LocalApiServer(
         val path: String,
         val query: Map<String, String>,
         val body: String,
+        val headers: Map<String, String> = emptyMap(),
     ) {
         fun qs(name: String, default: String = ""): String = query[name] ?: default
         fun qsInt(name: String, default: Int): Int = query[name]?.toIntOrNull() ?: default
+
+        /** X-Host-Token header — the paired-device credential. */
+        val hostToken: String? get() = headers["x-host-token"]
+
+        /** Authorization: Bearer <Firebase ID token> — used only by /pair. */
+        val bearerToken: String?
+            get() = headers["authorization"]
+                ?.takeIf { it.startsWith("Bearer ", ignoreCase = true) }
+                ?.substring(7)?.trim()
     }
 
     class Response(val status: Int, val body: String)
@@ -125,7 +135,7 @@ class LocalApiServer(
                 }
 
                 val response = try {
-                    handler?.invoke(Request(method, path, query, body))
+                    handler?.invoke(Request(method, path, query, body, headers))
                 } catch (ex: Exception) {
                     log("[API ERROR] $path: ${ex.javaClass.simpleName}: ${ex.message}")
                     Response(500, ApiJson.error(ex.message ?: "internal error"))
@@ -158,13 +168,14 @@ class LocalApiServer(
         val bodyBytes = body.toByteArray(Charsets.UTF_8)
         val reason = when (status) {
             200 -> "OK"; 204 -> "No Content"; 400 -> "Bad Request"
+            401 -> "Unauthorized"; 403 -> "Forbidden"
             404 -> "Not Found"; 500 -> "Internal Server Error"; else -> "OK"
         }
         val head = "HTTP/1.1 $status $reason\r\n" +
             "Content-Type: application/json\r\n" +
             "Access-Control-Allow-Origin: *\r\n" +
             "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
-            "Access-Control-Allow-Headers: Content-Type\r\n" +
+            "Access-Control-Allow-Headers: Content-Type, Authorization, X-Host-Token\r\n" +
             "Access-Control-Allow-Private-Network: true\r\n" +
             "Content-Length: ${bodyBytes.size}\r\n" +
             "Connection: close\r\n" +
