@@ -14,7 +14,7 @@ import { MdFilterChip } from '@material/web/chips/filter-chip.js';
 import { MdMenu } from '@material/web/menu/menu.js';
 import { MdMenuItem } from '@material/web/menu/menu-item.js';
 import { MdDivider } from '@material/web/divider/divider.js';
-import { Store, textOnColor } from '../../01-core.js';
+import { Store, textOnColor, runAIJob } from '../../01-core.js';
 import { cleanTheme, GOLD, CAT_MAIL, NC_FONT_STACK, NC_TYPE, RADIUS, SP, ELEV, TRANSITION, Z } from '../ui-tokens.jsx';
 
 // Real M3 web components — same createComponent bridge as AppSuiteChrome.jsx.
@@ -50,6 +50,15 @@ const PANEL_ANCHOR = { left: 88, top: 84 }; // default panel spot — clear of t
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
+// Display fallback while (or if) no AI summary exists: first sentence, capped.
+// The stored original text is NEVER touched — summaries are display-only.
+const truncSummary = (text = '') => {
+  const t = text.trim().replace(/\s+/g, ' ');
+  if (t.length <= 80) return t;
+  const stop = t.slice(0, 80).lastIndexOf('. ');
+  return (stop > 30 ? t.slice(0, stop + 1) : t.slice(0, 77) + '…');
+};
+
 export function BugLog({ T, railVisible = true }) {
   const C = cleanTheme(T);
   const onAccent = textOnColor(C.accent);
@@ -84,6 +93,7 @@ export function BugLog({ T, railVisible = true }) {
   const [draftType, setDraftType] = React.useState('bug');
   const [filter, setFilter] = React.useState('all');
   const [menuId, setMenuId] = React.useState(null);
+  const [expandedId, setExpandedId] = React.useState(null); // row opened to full text + history
   const [copied, setCopied] = React.useState(false);
   const [hot, setHot]       = React.useState(false);   // FAB hover/focus → full opacity
 
@@ -118,6 +128,33 @@ export function BugLog({ T, railVisible = true }) {
     tryStart();
     return () => { if (unsub) unsub(); if (timer) clearTimeout(timer); };
   }, []);
+
+  // ── Auto-summary: long entries get a short AI display summary, stored once on the
+  // bug doc. Display-only — the original text stays authoritative (the reader tool and
+  // "Copy for coding team" always use b.text). Reuses the deployed polish job; on AI
+  // failure the UI just keeps showing a deterministic truncation, so nothing blocks.
+  const summarizedRef = React.useRef(new Set()); // ids attempted this session — no retry loops
+  React.useEffect(() => {
+    const pending = bugs.filter(b =>
+      b.id && !b.summary && (b.text || '').trim().length > 90 && !summarizedRef.current.has(b.id)
+    ).slice(0, 12);
+    if (pending.length === 0) return;
+    pending.forEach(b => summarizedRef.current.add(b.id));
+    (async () => {
+      try {
+        const items = pending.map(b => ({ id: b.id, kind: b.type === 'idea' ? 'upgrade idea' : 'bug report', source: b.text }));
+        const job = await runAIJob('dashboard.polish_items.v1', { items });
+        const out = Array.isArray(job?.output) ? job.output : [];
+        for (const item of out) {
+          if (item?.id && item?.summary && pending.some(b => b.id === item.id)) {
+            Store.updateBug(item.id, { summary: item.summary });
+          }
+        }
+      } catch (e) {
+        console.warn('[BugLog] auto-summary failed (display falls back to truncation):', e);
+      }
+    })();
+  }, [bugs]);
 
   const unresolvedCount = bugs.filter(b => b.status === 'unresolved').length;
 
@@ -422,20 +459,44 @@ export function BugLog({ T, railVisible = true }) {
                 {visible.map(b => {
                   const t = TYPE_BY[b.type]   || TYPE_BY.bug;
                   const s = STATUS_BY[b.status] || STATUS_BY.unresolved;
+                  const expanded = expandedId === b.id;
+                  const display = expanded ? b.text : (b.summary || truncSummary(b.text));
+                  const notes = Array.isArray(b.notes) ? b.notes : [];
                   return (
-                    <ListItem key={b.id} style={{ '--md-list-item-leading-space': '10px', '--md-list-item-trailing-space': '4px' }}>
+                    <ListItem key={b.id} type="button" title={expanded ? undefined : b.text}
+                      onClick={() => setExpandedId(prev => (prev === b.id ? null : b.id))}
+                      style={{ '--md-list-item-leading-space': '10px', '--md-list-item-trailing-space': '4px' }}>
                       <div slot="start" title={t.label} style={{ display: 'flex', alignItems: 'center' }}>
                         {sym(t.icon, 15, t.color)}
                       </div>
-                      <div slot="headline" style={{ whiteSpace: 'normal', fontFamily: NC_FONT_STACK }}>{b.text}</div>
-                      <div slot="supporting-text" style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: NC_FONT_STACK }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: s.color }}>
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, display: 'inline-block' }} />
-                          {s.label}
+                      <div slot="headline" style={{ whiteSpace: 'normal', fontFamily: NC_FONT_STACK }}>{display}</div>
+                      <div slot="supporting-text" style={{ fontFamily: NC_FONT_STACK }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: s.color }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, display: 'inline-block' }} />
+                            {s.label}
+                          </span>
+                          <span style={{ color: C.faint }}>· {formatRel(b.createdAtMs)}</span>
+                          {!expanded && notes.length > 0 && (
+                            <span style={{ color: C.faint }}>· {notes.length} note{notes.length === 1 ? '' : 's'}</span>
+                          )}
                         </span>
-                        <span style={{ color: C.faint }}>· {formatRel(b.createdAtMs)}</span>
+                        {/* Resolution / work history — the notes the resolving coder left,
+                            visible on any expanded entry (incl. resolved ones). */}
+                        {expanded && notes.length > 0 && (
+                          <span style={{ display: 'block', marginTop: 4, paddingLeft: 2 }}>
+                            {notes.map((n, i) => (
+                              <span key={i} style={{ display: 'block', whiteSpace: 'normal', wordBreak: 'break-word', color: C.muted, padding: '2px 0', borderLeft: `2px solid ${C.divider}`, paddingLeft: 8, marginBottom: 2 }}>
+                                {n.text}{n.atMs ? <span style={{ color: C.faint }}> — {formatRel(n.atMs)}</span> : null}
+                              </span>
+                            ))}
+                          </span>
+                        )}
+                        {expanded && notes.length === 0 && (
+                          <span style={{ display: 'block', marginTop: 4, color: C.faint }}>No work notes yet.</span>
+                        )}
                       </div>
-                      <div slot="end" style={{ position: 'relative' }}>
+                      <div slot="end" style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
                         <IconButton id={`bugmenu-${b.id}`} aria-label="Change status" onClick={() => setMenuId(m => (m === b.id ? null : b.id))}>
                           {sym('more_vert', 20, C.muted)}
                         </IconButton>

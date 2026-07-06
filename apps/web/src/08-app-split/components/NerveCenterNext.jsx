@@ -676,6 +676,21 @@ function CalendarTimeline({ calendarRows, nowDate, C, scrollRef, nowLineRef }) {
   );
 }
 
+// Callback ref for the agenda "Now" bar: scrolls the nearest [data-agenda-scroll]
+// container so "now" lands in the top third of the viewport (same convention as the
+// live timeline). Guarded to run once per container mount so it never fights the
+// user's own scrolling on later re-renders.
+const agendaNowBarRef = el => {
+  if (!el) return;
+  const sc = el.closest("[data-agenda-scroll]");
+  if (!sc || sc.dataset.autoScrolled === "1") return;
+  sc.dataset.autoScrolled = "1";
+  requestAnimationFrame(() => {
+    const top = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
+    sc.scrollTop = Math.max(0, top - sc.clientHeight / 3);
+  });
+};
+
 // Mobile "nerve center" accordion section. Hoisted to module scope (NOT defined inside
 // NerveCenterPanel) so its component identity stays stable across renders — otherwise the
 // per-second clock re-render recreated the function, remounting every section and dropping
@@ -931,14 +946,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // Google-Calendar-style live-time day grid, same as the full-panel card). Persisted.
   const [calCardView, setCalCardView] = useState(() => { try { return localStorage.getItem("nc_cal_card_view") || "timeline"; } catch { return "timeline"; } });
   const toggleCalCardView = () => setCalCardView(prev => { const next = prev === "timeline" ? "agenda" : "timeline"; try { localStorage.setItem("nc_cal_card_view", next); } catch {} return next; });
-  // Mobile nerve-center display mode: "boxes" (the fixed 5-card grid, everything visible at
-  // once, each card scrolls internally) or "accordion" (one expandable section open at a time,
-  // the whole page scrolls). Persisted so the choice sticks.
-  const [mobileLayout, setMobileLayout] = useState(() => { try { return localStorage.getItem("nc_mobile_layout") || "boxes"; } catch { return "boxes"; } });
-  const toggleMobileLayout = () => setMobileLayout(prev => { const next = prev === "accordion" ? "boxes" : "accordion"; try { localStorage.setItem("nc_mobile_layout", next); } catch {} return next; });
-  // Desktop layout mode: "full" (the normal 3-column panel layout), "boxes" (same 5-card
-  // grid as mobile, scales to fill the desktop width), or "accordion". Persisted.
-  const [desktopLayout, setDesktopLayout] = useState(() => { try { return localStorage.getItem("nc_desktop_layout") || "full"; } catch { return "full"; } });
+  // Accordion mode is retired (owner: unused, extra). Mobile always gets the 5-card
+  // grid; desktop is "full" (3-column) or "boxes". A persisted "accordion" pref from
+  // an older build coerces to the nearest surviving layout.
+  const [desktopLayout, setDesktopLayout] = useState(() => { try { const v = localStorage.getItem("nc_desktop_layout") || "full"; return v === "accordion" ? "full" : v; } catch { return "full"; } });
   const setDesktopLayoutPersist = val => { setDesktopLayout(val); try { localStorage.setItem("nc_desktop_layout", val); } catch {} };
   // Row density for the mobile lists: "comfortable" (default) or "compact" (tighter padding,
   // more rows on screen — Gmail-style). Persisted.
@@ -1057,10 +1068,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // Depth from tone, exactly like google.com's filled cards. The single-theme
   // failure mode (page ≈ card white) is fixed by mixing bgSoft ~12% toward text.
   const pageBg = `color-mix(in srgb, ${C.bgSoft} 88%, ${C.text} 12%)`;
-  const tintedPanel = (accent = C.accent) => {
-    const tint = hexToRgba(accent, 0.05);
-    return { background: `linear-gradient(${tint},${tint}), ${C.bg}`, borderRadius: 20, display: "flex", flexDirection: "column", minHeight: isTablet && !isStacked ? 420 : 0, overflow: "hidden", boxShadow: "none" };
-  };
+  // GM3 (July 2026): filled cards share ONE neutral surface — the section's accent
+  // lives only in its icon puck. The accent parameter is kept so call sites stay
+  // stable, but it no longer tints the card background.
+  const tintedPanel = (_accent = C.accent) => (
+    { background: C.bg, borderRadius: 20, display: "flex", flexDirection: "column", minHeight: isTablet && !isStacked ? 420 : 0, overflow: "hidden", boxShadow: "none" }
+  );
   const ncPanel = tintedPanel(C.accent); // default; overridden per-section below
   const ncScrollPane = { overflow: "auto", flex: "1 1 auto", minHeight: 0, overscrollBehavior: "contain", scrollbarGutter: "stable", ...(isStacked ? { touchAction: "pan-y" } : {}) };
   const ncTaskBody = { flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", overscrollBehavior: "contain" };
@@ -1137,11 +1150,16 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const todayStr    = `${nowD.getFullYear()}-${pad(nowD.getMonth()+1)}-${pad(nowD.getDate())}`;
     const tomorrowD   = new Date(nowD.getFullYear(), nowD.getMonth(), nowD.getDate() + 1);
     const tomorrowStr = `${tomorrowD.getFullYear()}-${pad(tomorrowD.getMonth()+1)}-${pad(tomorrowD.getDate())}`;
+    const startOfTodayMs = new Date(nowD.getFullYear(), nowD.getMonth(), nowD.getDate()).getTime();
     return (calendarEvents || [])
       // Drop events cancelled in Google Calendar — the API can still return them as
       // status:"cancelled" (e.g. a deleted instance of a recurring series), and stale
       // caches can hold a one-off after it's deleted. Either way it must not show.
       .filter(evt => evt && evt.status !== "cancelled")
+      // Drop anything that finished before today — stale yesterday items were cluttering
+      // the card. Multi-day / overnight events still running today survive the cut.
+      // (all-day end dates are exclusive, so "ends at 00:00 today" = a yesterday event)
+      .filter(evt => calendarEndMs(evt) > startOfTodayMs || calendarStartMs(evt) >= startOfTodayMs)
       .map((evt, index) => {
         const evtDateStr = (evt?.start?.dateTime || evt?.start?.date || "").slice(0, 10);
         const tomorrow = evtDateStr === tomorrowStr;
@@ -1181,7 +1199,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       if (!el) return;
       const n = new Date();
       const topPx = (n.getHours() * 60 + n.getMinutes()) * (TIMELINE_PX_HR / 60);
-      el.scrollTo({ top: Math.max(0, topPx - el.clientHeight / 2), behavior: "smooth" });
+      // "Now" sits in the top third (calendar-app convention): the past gets one third,
+      // the rest of the viewport shows what's coming.
+      el.scrollTo({ top: Math.max(0, topPx - el.clientHeight / 3), behavior: "smooth" });
     });
     return () => cancelAnimationFrame(frame);
   }, [calendarEvents, calCardView]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2281,7 +2301,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // enough to skip the width-based accordion and fall through to the desktop layout,
   // which overran. This catches BOTH orientations. Boxes: Mail · Phone · Tasks ·
   // Shailos · Calendar, each scrolling internally so nothing overflows the screen.
-  if ((isMobileDevice ? mobileLayout !== "accordion" : desktopLayout === "boxes") && !healthPage && !chiefPage) {
+  if ((isMobileDevice || desktopLayout === "boxes") && !healthPage && !chiefPage) {
     const menuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
     const menuClose  = () => setMobileMenuOpen(null);
     // >= 1500 px: 5 vertical columns side by side (each card full height, 1/5 width).
@@ -2341,26 +2361,20 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     return (
       <div style={{ position:"fixed", top:topOffset, left:sidebarW, right:0, bottom:0, zIndex:7600, background:C.bg, display:"flex", flexDirection:"column", overflow:"hidden", borderLeft:`1px solid ${C.divider}`, boxSizing:"border-box", padding:"5px 8px calc(8px + env(safe-area-inset-bottom,0px))" }}>
 
-        {/* ── Layout selector — always top-right, before all content ── */}
-        <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", gap:2, flexShrink:0, marginBottom:2 }}>
+        {/* ── One-row chrome: clock left, one-touch display controls right — reclaims the
+            old dedicated selector row while keeping every control a single tap ── */}
+        <div style={{ display:"flex", alignItems:"center", gap:8, padding:"0 2px 2px", flexShrink:0, minWidth:0 }}>
+          <span style={{ fontSize:19, fontWeight:400, color:C.text, fontFamily:NC_MONO_STACK, fontVariantNumeric:"tabular-nums", letterSpacing:0 }}>{clockParts.timeMain}</span>
+          <span style={{ fontSize:11, color:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>{nowDate.toLocaleDateString([], { weekday:"short", month:"short", day:"numeric" })}</span>
+          <span style={{ flex:1, minWidth:0 }} />
           <IconBtn icon={dense ? "density_medium" : "density_small"} size={28} iconSize={16} color={C.muted} onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density" />
-          {isMobileDevice ? (
-            <IconBtn icon="view_agenda" size={28} iconSize={16} color={C.muted} onClick={toggleMobileLayout} title="Accordion view" aria-label="Switch to accordion view" />
-          ) : (
-            [{ id:"accordion", icon:"view_agenda", label:"Accordion" }, { id:"full", icon:"view_column", label:"Full panels" }].map(({ id, icon, label }) => (
-              <IconBtn key={id} icon={icon} size={28} iconSize={16} color={desktopLayout === id ? C.text : C.muted} active={desktopLayout === id} activeBg={C.hover} onClick={() => setDesktopLayoutPersist(id)} title={label} aria-label={label} />
-            ))
+          {!isMobileDevice && (
+            <IconBtn icon="view_column" size={28} iconSize={16} color={C.muted} onClick={() => setDesktopLayoutPersist("full")} title="Full panels" aria-label="Full panels" />
           )}
           <IconBtn icon="apps" size={28} iconSize={16} color={C.muted} onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" aria-label="More actions" />
         </div>
 
         {nextActionBar}
-
-        {/* slim time bar (layout buttons moved to top) */}
-        <div style={{ display:"flex", alignItems:"baseline", gap:8, padding:"0 2px 4px", flexShrink:0, minWidth:0 }}>
-          <span style={{ fontSize:19, fontWeight:400, color:C.text, fontFamily:NC_MONO_STACK, fontVariantNumeric:"tabular-nums", letterSpacing:0 }}>{clockParts.timeMain}</span>
-          <span style={{ fontSize:11, color:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>{nowDate.toLocaleDateString([], { weekday:"short", month:"short", day:"numeric" })}</span>
-        </div>
 
         {/* >= 1000 px: 5 columns side by side, each full height.
             <  1000 px: 5 rows stacked, each 1/5 height — all cards always visible. */}
@@ -2489,7 +2503,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               ) : calCardView === "timeline" ? (
                 <CalendarTimeline calendarRows={calendarRows} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
               ) : (
-                <div style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden" }}>
+                <div data-agenda-scroll="true" style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden" }}>
                   {calendarRows.filter(r => !r.tomorrow).length === 0 && calendarRows.filter(r => r.tomorrow).length === 0 ? emptyMsg("No events today.") : (() => {
                     const cardListStyle = { ...denseListVars({ dense: true, primary: C.text, secondary: C.muted, hover: C.text }), padding: 0, background: "transparent" };
                     const pastRows     = calendarRows.filter(r => r.past && !r.tomorrow);
@@ -2497,7 +2511,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     const tomorrowRows = calendarRows.filter(r => r.tomorrow);
                     const nlc = C.success || C.accent || "#1A9E78";
                     const NowBar = (
-                      <div style={{ display:"grid", gridTemplateColumns:"44px minmax(0,1fr)", gap:8, alignItems:"center", padding:"4px 0", margin:"0 2px" }}>
+                      <div ref={agendaNowBarRef} style={{ display:"grid", gridTemplateColumns:"44px minmax(0,1fr)", gap:8, alignItems:"center", padding:"4px 0", margin:"0 2px" }}>
                         <span style={{ color:nlc, fontSize:NC_TYPE.small, fontWeight:700, textAlign:"right", fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>Now</span>
                         <span style={{ height:2, borderRadius:2, background:nlc, boxShadow:`0 0 0 1px ${softBorder(nlc,0.18)}` }} />
                       </div>
@@ -2573,7 +2587,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   }
 
   // ── Mobile "nerve center" — all sections on one screen ──────────────────────
-  if ((isStacked || (isMobileDevice ? mobileLayout === "accordion" : desktopLayout === "accordion")) && !healthPage && !chiefPage) {
+  if (isStacked && !healthPage && !chiefPage) {
     const mobileMenuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
     const mobileMenuClose  = () => setMobileMenuOpen(null);
     const mobileExpandToggle = id => setMobileExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -2588,9 +2602,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // Both orientations show all 5 sections simultaneously — always expanded, always fullHeight.
     // 1500 px = 5 cols × 300 px minimum comfortable reading width per column.
     const accWide = availableW >= 1500;
-    // True accordion = collapsible sections that show only their summary line until tapped.
-    // (Plain narrow-stacked, without the accordion layout chosen, stays always-expanded.)
-    const isAccordion = isMobileDevice ? mobileLayout === "accordion" : desktopLayout === "accordion";
+    // Accordion mode is retired — narrow-stacked sections are always expanded.
+    const isAccordion = false;
     const sectionCtx = { C, expandedIds: mobileExpanded, menuId: mobileMenuOpen, onExpand: mobileExpandToggle, onMenuToggle: mobileMenuToggle, onMenuClose: mobileMenuClose, expandable: isAccordion, fullHeight: !isAccordion };
 
     const signalNote = nerveSignalNote;
@@ -2617,28 +2630,22 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         {/* ── Chrome: layout selector, summary, clock — never scrolls ── */}
         <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 5, padding: "5px 10px 0" }}>
 
-          {/* Layout selector */}
-          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 2 }}>
-            {isMobileDevice ? (
-              <IconBtn icon="grid_view" size={28} iconSize={16} color={C.muted} onClick={toggleMobileLayout} title="Box view" aria-label="Switch to box view" />
-            ) : (
-              [{ id:"boxes", icon:"grid_view", label:"Card grid" }, { id:"full", icon:"view_agenda", label:"Full panel" }].map(({ id, icon, label }) => (
-                <IconBtn key={id} icon={icon} size={28} iconSize={16} color={desktopLayout === id ? C.text : C.muted} active={desktopLayout === id} activeBg={C.hover} onClick={() => setDesktopLayoutPersist(id)} title={label} aria-label={label} />
-              ))
-            )}
-            <IconBtn icon={dense ? "density_small" : "density_medium"} size={28} iconSize={16} color={C.muted} onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density" />
-            <IconBtn icon="apps" size={28} iconSize={16} color={C.muted} onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" aria-label="More actions" />
-          </div>
-
           {nextActionBar}
 
-          {/* Time strip — tap to reveal the timeline */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 2px 2px" }}>
+          {/* One-row chrome: time strip (tap for timeline) + one-touch display controls */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "0 2px 2px" }}>
             <button onClick={() => setMobileTimelineOpen(o => !o)} style={{ all: "unset", display: "flex", alignItems: "baseline", gap: 10, minWidth: 0, cursor: "pointer" }} aria-expanded={mobileTimelineOpen} title="Show timeline">
               <span style={{ fontSize: 22, fontWeight: 400, color: C.text, fontFamily: NC_MONO_STACK, fontVariantNumeric: "tabular-nums", letterSpacing: 0 }}>{clockParts.timeMain}</span>
               <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK }}>{nowDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
               <span style={{ alignSelf: "center", color: C.faint, display: "flex", transform: mobileTimelineOpen ? "rotate(90deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("chevron_right", 14)}</span>
             </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+              {!isMobileDevice && [{ id:"boxes", icon:"grid_view", label:"Card grid" }, { id:"full", icon:"view_column", label:"Full panel" }].map(({ id, icon, label }) => (
+                <IconBtn key={id} icon={icon} size={28} iconSize={16} color={desktopLayout === id ? C.text : C.muted} active={desktopLayout === id} activeBg={C.hover} onClick={() => setDesktopLayoutPersist(id)} title={label} aria-label={label} />
+              ))}
+              <IconBtn icon={dense ? "density_small" : "density_medium"} size={28} iconSize={16} color={C.muted} onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density" />
+              <IconBtn icon="apps" size={28} iconSize={16} color={C.muted} onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" aria-label="More actions" />
+            </div>
           </div>
           {mobileTimelineOpen && (
             <div style={{ padding: "10px 12px 5px", background: C.bg, border: `1px solid ${C.divider}`, borderRadius: 8 }}>
@@ -2881,9 +2888,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             {/* Layout: Boxes / Accordion / Full (desktop-only alternatives to the 3-column view) */}
             <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
               {[
-                { id: "boxes",     icon: "grid_view",   title: "Card grid view" },
-                { id: "accordion", icon: "view_agenda", title: "Accordion view" },
-                { id: "full",      icon: "view_column", title: "Full panel view" },
+                { id: "boxes", icon: "grid_view",   title: "Card grid view" },
+                { id: "full",  icon: "view_column", title: "Full panel view" },
               ].map(({ id, icon, title }) => (
                 <IconBtn key={id} icon={icon} size={28} iconSize={15} onClick={() => setDesktopLayoutPersist(id)} title={title} aria-label={title}
                   color={desktopLayout === id ? C.muted : C.faint} active={desktopLayout === id} activeBg={softBorder(C.divider, 0.55)} />
@@ -3161,12 +3167,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
           // Each card: header (fixed) + content (scrollable)
           // isFocus: focus mode softens further for a cleaner at-a-glance read.
-          // No outline — visual grouping via tinted background, matching the boxes style.
+          // No outline — visual grouping via one shared neutral surface (GM3: accent
+          // stays in the icon puck, never the card background).
           const isFocus = ncViewMode === "focus";
-          const tintedCard = (accent) => {
-            const tint = hexToRgba(accent, isFocus ? 0.02 : 0.04);
-            return { background: tint ? `linear-gradient(${tint},${tint}), ${C.bgSoft}` : C.bgSoft, borderRadius: isFocus ? RADIUS.xs : RADIUS.md, flex: isStacked ? "1 1 0" : 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" };
-          };
+          const tintedCard = (_accent) => (
+            { background: C.bgSoft, borderRadius: isFocus ? RADIUS.xs : RADIUS.md, flex: isStacked ? "1 1 0" : 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }
+          );
           const cardWrap = tintedCard(CAT_MAIL); // overridden per-card inline
           // Unified card header — same language as the Tasks/Shailos/Phone panels
           // (ncSectionIcon + ncTitle) with genuine M3 icon-button actions, replacing the
@@ -3322,8 +3328,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                         <div style={{ flex: "2 1 0", minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                           <CalendarTimeline calendarRows={calendarRows} nowDate={nowDate} C={C} scrollRef={calendarNowRef} nowLineRef={calendarNowLineRef} />
                         </div>
-                        <div style={{ width: 1, flexShrink: 0, alignSelf: "stretch", background: C.divider }} />
-                        {/* ── Compact agenda — at-a-glance daily list with M3 NOW pointer ── */}
+                        {/* ── Compact agenda — its own inset tonal panel so it reads as a
+                             distinct surface from the live timeline, not a continuation ── */}
                         {(() => {
                           const pastRows     = calendarRows.filter(r => r.past && !r.tomorrow);
                           const upcomingRows = calendarRows.filter(r => !r.past && !r.tomorrow);
@@ -3342,7 +3348,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                               : <ListItem key={row.evt?.id || row.index} type="text" style={{ borderRadius: RADIUS.xs, opacity: row.past ? 0.7 : 1 }}>{content}</ListItem>;
                           };
                           const NowBar = (
-                            <div style={{ display: "grid", gridTemplateColumns: "44px minmax(0,1fr)", gap: 8, alignItems: "center", padding: "4px 0", margin: "0 2px" }}>
+                            <div ref={agendaNowBarRef} style={{ display: "grid", gridTemplateColumns: "44px minmax(0,1fr)", gap: 8, alignItems: "center", padding: "4px 0", margin: "0 2px" }}>
                               <span style={{ color: nowLineColor, fontSize: NC_TYPE.small, fontWeight: 700, textAlign: "right", fontFamily: NC_FONT_STACK, whiteSpace: "nowrap" }}>Now</span>
                               <span style={{ height: 2, borderRadius: 2, background: nowLineColor, boxShadow: `0 0 0 1px ${softBorder(nowLineColor, 0.18)}` }} />
                             </div>
@@ -3355,17 +3361,20 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                           );
                           const todayRows = [...pastRows, ...upcomingRows];
                           return (
-                            <div style={{ flex: "1 1 0", minWidth: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
-                              {todayRows.length === 0 && tomorrowRows.length === 0 ? (
-                                <div style={{ padding: "8px 12px", fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, textAlign: "center" }}>No events today</div>
-                              ) : (
-                                <>
-                                  {pastRows.length > 0 && <List style={agendaListVars}>{pastRows.map(mkAgendaItem)}</List>}
-                                  {NowBar}
-                                  {upcomingRows.length > 0 && <List style={agendaListVars}>{upcomingRows.map(mkAgendaItem)}</List>}
-                                  {tomorrowRows.length > 0 && <>{TomorrowBar}<List style={agendaListVars}>{tomorrowRows.map(mkAgendaItem)}</List></>}
-                                </>
-                              )}
+                            <div style={{ flex: "1 1 0", minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", margin: "6px 8px 8px 8px", borderRadius: RADIUS.md, background: C.bg, overflow: "hidden" }}>
+                              <div style={{ flexShrink: 0, padding: "6px 12px 2px", fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK }}>Agenda</div>
+                              <div data-agenda-scroll="true" style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
+                                {todayRows.length === 0 && tomorrowRows.length === 0 ? (
+                                  <div style={{ padding: "8px 12px", fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, textAlign: "center" }}>No events today</div>
+                                ) : (
+                                  <>
+                                    {pastRows.length > 0 && <List style={agendaListVars}>{pastRows.map(mkAgendaItem)}</List>}
+                                    {NowBar}
+                                    {upcomingRows.length > 0 && <List style={agendaListVars}>{upcomingRows.map(mkAgendaItem)}</List>}
+                                    {tomorrowRows.length > 0 && <>{TomorrowBar}<List style={agendaListVars}>{tomorrowRows.map(mkAgendaItem)}</List></>}
+                                  </>
+                                )}
+                              </div>
                             </div>
                           );
                         })()}

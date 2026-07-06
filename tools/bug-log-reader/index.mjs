@@ -34,16 +34,19 @@ const uid = OWNER_EMAIL.split('@')[0].toLowerCase();
 const col = getFirestore().collection('users').doc(uid).collection('bugs');
 
 // Usage:
-//   node index.mjs                          list unresolved (default)
-//   node index.mjs list [status|all]        list by status
-//   node index.mjs note <docId> <text>      append a work note (stays unresolved)
-//   node index.mjs status <docId> <status>  set status (unresolved|inprogress|resolved|wontfix)
+//   node index.mjs                           list unresolved (default)
+//   node index.mjs list [status|all]         list by status (unresolved|paused|resolved|future)
+//   node index.mjs note <docId> <text>       append a work note (status unchanged)
+//   node index.mjs status <docId> <status>   set status (unresolved|paused|resolved|future)
+//   node index.mjs resolve <docId> <note>    append the resolution note AND mark resolved —
+//                                            the required way to close a ticket, so every
+//                                            resolution carries the coder's process notes.
 const [cmd = 'list', ...rest] = process.argv.slice(2);
 
-if (cmd === 'note' || cmd === 'status') {
+if (cmd === 'note' || cmd === 'status' || cmd === 'resolve') {
   const [docId, ...words] = rest;
   const value = words.join(' ').trim();
-  if (!docId || !value) fail(`usage: node index.mjs ${cmd} <docId> <${cmd === 'note' ? 'text' : 'status'}>`);
+  if (!docId || !value) fail(`usage: node index.mjs ${cmd} <docId> <${cmd === 'status' ? 'status' : 'text'}>`);
   const ref = col.doc(docId);
   const doc = await ref.get();
   if (!doc.exists) fail(`no bug with id ${docId}`);
@@ -51,6 +54,14 @@ if (cmd === 'note' || cmd === 'status') {
     const prior = doc.data().notes || [];
     await ref.update({ notes: [...prior, { text: value, atMs: Date.now() }], updatedAtMs: Date.now() });
     console.log(`Noted on ${docId}: ${value}`);
+  } else if (cmd === 'resolve') {
+    const prior = doc.data().notes || [];
+    await ref.update({
+      notes: [...prior, { text: value, atMs: Date.now() }],
+      status: 'resolved',
+      updatedAtMs: Date.now(),
+    });
+    console.log(`${docId} → resolved, with note: ${value}`);
   } else {
     await ref.update({ status: value, updatedAtMs: Date.now() });
     console.log(`${docId} → ${value}`);

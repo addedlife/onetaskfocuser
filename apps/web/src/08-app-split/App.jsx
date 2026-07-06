@@ -1043,9 +1043,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     if (needsAI.length === 0) return;
     try {
       const emails = needsAI.map(m => {
-        const subj = m?.payload?.headers?.find(h => h.name === "Subject")?.value || "";
+        const hdr = name => m?.payload?.headers?.find(h => h.name === name)?.value || "";
         const snip = (m.snippet || "").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim().slice(0, 350);
-        return { subject: subj, body: snip };
+        // from/date travel with the snippet so the model can attribute the words to the
+        // real sender instead of guessing — misattribution was a logged accuracy bug.
+        return { subject: hdr("Subject"), from: hdr("From"), date: hdr("Date"), body: snip };
       });
       const job = await runAIJob("dashboard.email_summaries.v1", { emails }, aiOpts || {});
       const summaries = Array.isArray(job?.output) ? job.output : null;

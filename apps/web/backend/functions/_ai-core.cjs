@@ -493,6 +493,8 @@ function normalizeEmailInputs(emails = []) {
   return ensureArray(emails, "emails").slice(0, 20).map((email, index) => ({
     index: index + 1,
     subject: cleanString(email.subject, 180),
+    from: cleanString(email.from, 140),
+    date: cleanString(email.date, 80),
     body: cleanString(email.body || email.snippet, 380),
   }));
 }
@@ -937,6 +939,7 @@ const AI_JOB_REGISTRY = {
         "Pick 'nextAction': the single most useful concrete move across all sources. Write 'why' with clear reasoning — explain why this is the right next step.",
         "Write 'signals': one entry per area that has active data (Calendar, Mail, Tasks, Shailos, Phone). Each note is the area's status — what is there, not advice.",
         "Write every 'note' in Apple's notification-summary style: a terse, telegraphic condensation of the key facts. Drop articles, filler, and weak verbs where the meaning survives; lead with the most concrete fact; pack multiple items with commas or semicolons; sentence case; no preamble like 'You have' or 'There are'. Examples: 'Dentist 3pm; lunch with David 1pm'; 'From Chase: overdraft transfer made, split purchases with Pay in 4'; 'David, Mom, unknown'.",
+        "Email accuracy: attribute an email ONLY to its 'from' field — never guess who wrote, initiated, or replied to a thread. Summarize only what the subject/summary text literally says; if it is too thin to be sure, state the subject plainly rather than paraphrasing into something it does not say.",
         "Do NOT restate the area's own name or a bare count of that area in its note — the UI already labels each line with its area. Say 'Pending: kashrus of the pot' not '2 shailos: kashrus of the pot'; say 'David, Mom' not '3 missed calls: David, Mom'.",
         "Use profile notes as durable preferences. If a note says avoid a reminder class, skip it unless clearly consequential.",
         "Do not invent facts, do not claim actions were taken, and do not give halachic rulings. If data is thin, say what is visible.",
@@ -1162,7 +1165,10 @@ const AI_JOB_REGISTRY = {
     buildPrompt(input = {}) {
       return compactLines([
         "Summarize each email in 1–2 punchy sentences written as if you are the sender speaking directly.",
-        "Use the sender's voice and tone. Include specifics: names, amounts, deadlines, links.",
+        "ACCURACY IS THE FIRST RULE. Use ONLY facts literally present in the subject, from, and body fields. Never invent, infer, or embellish facts, times, dates, or rulings that are not stated.",
+        "Attribution: the 'from' field is the ONLY person whose voice you may use. Never guess who wrote, initiated, or replied. If the body quotes or forwards someone else, do not present their words as the sender's.",
+        "If the body/snippet is too thin to summarize confidently, fall back to a plain factual line built from the subject (e.g. 'Re: <subject> — from <sender name>'). A boring accurate line always beats a fluent guess.",
+        "Use the sender's voice and tone. Include specifics: names, amounts, deadlines, links — but only ones that appear in the input.",
         "Never begin with 'This email', 'The sender', 'I wanted to', or any phrase that describes the email rather than delivering it.",
         "Examples of the right style: 'Your invoice for $840 is due Friday.' | 'Tickets available: $18/$36/$72 — book at adireit.com.' | 'Can we reschedule Thursday's call to 3pm?'",
         `Emails:\n${jsonBlock(normalizeEmailInputs(input.emails || []))}`,
