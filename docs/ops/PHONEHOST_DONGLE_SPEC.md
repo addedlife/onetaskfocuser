@@ -46,33 +46,25 @@ contract) already knows how to find and use it with zero changes.
   it either exists on the local network as another `:8765` host, or it
   doesn't; Firebase-side behavior is identical either way.
 
-## Storage — RAM-only working set, nothing durable
+## Storage — owner-confirmed rule (2026-07-05)
 
-"Bridge only, no onsite storage" is implemented as: **no flash-based content
-cache, ever.** The dongle never writes a message body, contact, or call
-record to its own persistent storage. If it loses power, none of your data
-was ever at rest on the device to begin with.
+The one hard constraint is: **the dongle never communicates with Firebase.**
+No Firestore writes, no Firebase credentials, no cloud SDK — whichever
+device consumes the dongle keeps talking to Firebase exactly as it does
+today, and the dongle stays ignorant of it.
 
-It does keep a small **volatile, RAM-only** working set while powered —
-recent message/call listings and the delta-sync bookkeeping (which handles
-it has already forwarded) — purely so `/messages` and `/calls` answer
-quickly instead of re-walking the phone's Bluetooth listing on every single
-request. This is the same reason the PC and tablet hosts keep a local
-cache; the difference here is durability: reboot the dongle and that RAM
-state is gone, nothing was ever saved to flash, and a fresh sync from the
-phone rebuilds it in seconds.
-
-**Open decision, flagged rather than assumed:** if truly zero memory of
-anything (not even in RAM — always ask the phone live, every request) is
-required instead, say so; it is buildable, but message-list responsiveness
-will be visibly slower, because MAP listing/fetch is a real multi-round-trip
-Bluetooth protocol, not instant. Default assumption below is RAM-only
-caching, reset on every reboot, nothing durable.
-
-Flash on the device is used only for:
+Basic **connection data may persist across power loss** (owner-approved):
 - Wi-Fi credentials (station mode) + SoftAP fallback for provisioning
 - The Bluetooth pairing/bond with the phone
-- Nothing else. No relay secret, no Firebase config, no content.
+- The local API access token
+- Delta-sync bookkeeping (which message handles were already seen) — so a
+  power cycle resumes with a quick delta instead of a full re-walk
+
+Message bodies, call history, and contacts stay a **RAM-only working set**:
+cached while powered so `/messages` and `/calls` answer instantly, gone on
+power loss, rebuilt from the phone in seconds on reconnect. The phone
+remains the source of truth for its own history; losing the dongle never
+loses data.
 
 ## Hardware (unchanged)
 

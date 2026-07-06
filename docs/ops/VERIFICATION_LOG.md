@@ -1,5 +1,14 @@
 # Verification Log
 
+## 2026-07-05 (3) Tablet Google sign-in loop fixed (4.34.115) + dongle storage rule finalized
+
+- Reported: on the Android tablet, "Sign in with Google" never shows the account picker and cycles to an error, no matter what.
+- Root cause (code-level, `00-auth.jsx`): `_signInWithGoogle` set ONLY `login_hint` = last-used account — Google then re-selects that account silently with no UI. When that account is one Firestore denies (this tablet's documented bad-profile history, HANDOFF §1), the sequence is: silent sign-in → App loads → Firestore denies → `handleSessionLostAccess` auto-signs-out with an error → next tap silently picks the same broken account again. An invisible loop with no way to choose a different account — exactly the reported symptom. Compounding it, mobile used `signInWithRedirect`, the fragile flow on modern mobile browsers (sessionStorage loss across the redirect → `auth/missing-initial-state`).
+- Fix (4.34.115): (1) `prompt: "select_account"` on the login button — Google's account picker ALWAYS appears, with the last account pre-highlighted via `login_hint`; the picker is the loop-breaker. (2) Popup-first on every device; automatic `signInWithRedirect` fallback only on `auth/popup-blocked` / `operation-not-supported` / `web-storage-unsupported`. Desktop behavior unchanged (was already popup). (3) Friendly message for `auth/missing-initial-state`.
+- Gates: `npm run build` (apps/web) → 0 errors. NOT runtime-verified on the tablet — needs one on-device test (expect: picker appears; choosing the correct account signs in). On the branch `claude/phonehost-bluetooth-local-aby9rp`, not pushed to main per this session's branch mandate.
+- Dongle spec: storage rule finalized per owner — connection data (Wi-Fi, BT bond, API token, sync bookkeeping) MAY persist across power loss; message/call/contact content stays RAM-only; the sole hard constraint is the dongle NEVER talks to Firebase (consuming devices keep their existing Firebase paths unchanged).
+- Also reported, NOT in this repo: "rabbimetrics" Google sign-in fails on mobile with a blocked/misdirect error for every account — that error text matches OAuth `redirect_uri_mismatch`/origin-not-authorized, a Google Cloud OAuth-client configuration issue (the URL mobile lands on isn't in the client's Authorized JavaScript origins / redirect URIs), not an account or code problem. Candidate GCP projects from the 2026-07-03 audit: `rabbis-metrics` / `rabbi-s-metrics`. Fix lives in that project's Cloud Console → APIs & Services → Credentials → OAuth client → add the exact mobile URL.
+
 ## 2026-07-05 (2) Phone-host refinement pass — reliability fixes + consumer-grade setup screens
 
 - Owner directive: ruthlessly refine for simplicity and reliability; all UI consumer-level, non-techie, industry standard. Same branch (`claude/phonehost-bluetooth-local-aby9rp`).
