@@ -60,24 +60,48 @@ async function _setAuthPersistence(staySignedIn = true) {
   await firebase.auth().setPersistence(_getAuthPersistence(staySignedIn));
 }
 
-// Sign in with Google. Mobile uses the redirect flow (result captured in AuthGate boot());
-// desktop uses a popup. Returns the user on the popup path, null on the redirect path
-// (the page reloads). Shared by the login button and the recovery flow.
+// Sign in with Google. Popup-first on every device, redirect as automatic fallback
+// (result captured in AuthGate boot()). Returns the user on the popup path, null on
+// the redirect path (the page reloads).
+//
+// Two deliberate choices, from the tablet sign-in-loop incident (2026-07-05):
+// 1. ALWAYS show Google's account picker (prompt=select_account). The old login_hint-only
+//    flow silently re-selected the last account with no UI at all — when that account was
+//    one Firestore denies, the app signed in, got denied, auto-signed-out, and every retry
+//    invisibly picked the same broken account again. The picker (with the last account
+//    pre-highlighted via login_hint) is the loop-breaker: the owner can choose a different
+//    account.
+// 2. Popup first even on mobile. signInWithRedirect is the fragile path on modern mobile
+//    browsers (storage partitioning, sessionStorage loss across the redirect → the classic
+//    auth/missing-initial-state cycle). A popup opened from a user gesture works on Android
+//    Chrome and current iOS Safari; where a browser still blocks it we fall back to redirect.
 async function _signInWithGoogle(staySignedIn = true) {
   await _setAuthPersistence(staySignedIn);
   try { localStorage.setItem(_AUTH_STAY_SIGNED_IN_KEY, staySignedIn ? "1" : "0"); } catch (_) {}
 
   const provider = new firebase.auth.GoogleAuthProvider();
-  // Pre-select the last working Google account so cold start / recovery is one tap.
   const lastEmail = _readLastGoogleEmail();
-  if (lastEmail) provider.setCustomParameters({ login_hint: lastEmail });
+  provider.setCustomParameters({
+    prompt: "select_account",
+    ...(lastEmail ? { login_hint: lastEmail } : {}),
+  });
 
-  if (_isMobileOrTablet()) {
-    await firebase.auth().signInWithRedirect(provider);
-    return null; // page reloads after the redirect
+  let cred;
+  try {
+    cred = await firebase.auth().signInWithPopup(provider);
+  } catch (e) {
+    const code = e?.code || "";
+    const popupUnusable =
+      code === "auth/popup-blocked" ||
+      code === "auth/operation-not-supported-in-this-environment" ||
+      code === "auth/web-storage-unsupported";
+    if (popupUnusable) {
+      await firebase.auth().signInWithRedirect(provider);
+      return null; // page reloads after the redirect
+    }
+    throw e;
   }
 
-  const cred = await firebase.auth().signInWithPopup(provider);
   const u = cred.user;
   const emailPrefix = (u.email || "").split("@")[0].toLowerCase();
   if (emailPrefix && (!u.displayName || u.displayName !== emailPrefix)) {
@@ -98,6 +122,8 @@ function _googleErrorMessage(e) {
     return "This domain isn't authorized for Google sign-in. Add it under Firebase → Authentication → Settings → Authorized domains, then try again.";
   if (code === "auth/web-storage-unsupported" || code === "auth/operation-not-supported-in-this-environment")
     return "Your browser is blocking the storage Google sign-in needs (common in private mode or strict tracking prevention). Allow site data for this app, then try again.";
+  if (code === "auth/missing-initial-state")
+    return "Sign-in lost its place while switching to Google and back (the browser cleared session data mid-redirect). Try again — the picker should appear this time.";
   return `Google sign-in didn't complete${code ? ` [${code}]` : ""}. Please try again.`;
 }
 

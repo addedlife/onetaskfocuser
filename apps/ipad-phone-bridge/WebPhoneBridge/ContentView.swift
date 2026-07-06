@@ -1,124 +1,138 @@
 import SwiftUI
 
+/// Consumer-first status screen: one plain-language card that says whether
+/// calls and texts are flowing, and everything technical (Bluetooth probe,
+/// device scans, event log) folded into a collapsed Advanced section.
 struct ContentView: View {
     @ObservedObject var model: BridgeModel
+    // Nested ObservableObjects don't propagate through `model` — observe them
+    // directly or the status card never refreshes when the LAN host appears.
+    @ObservedObject private var probe: BluetoothProbeService
+    @ObservedObject private var lanHost: LanHostClient
+
+    init(model: BridgeModel) {
+        _model = ObservedObject(wrappedValue: model)
+        _probe = ObservedObject(wrappedValue: model.probe)
+        _lanHost = ObservedObject(wrappedValue: model.lanHost)
+    }
+
+    private var isLinked: Bool { lanHost.activeHost != nil }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    header
-                    statusPanel
-                    profilePanel
-                    devicePanel
-                    eventPanel
+                    statusCard
+                    advancedSection
                 }
                 .padding(24)
             }
-            .navigationTitle("Phone Bridge Probe")
-            .toolbar {
-                Button(model.probe.isScanning ? "Stop" : "Scan") {
-                    if model.probe.isScanning {
-                        model.probe.stopScan()
-                    } else {
-                        model.probe.startScan()
-                    }
-                }
+            .navigationTitle("Phone Link")
+        }
+    }
+
+    // ── Status card ─────────────────────────────────────────────────────
+    private var statusCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(isLinked ? Color.green : Color.orange)
+                    .frame(width: 12, height: 12)
+                Text(isLinked ? "Connected" : "Searching…")
+                    .font(.title2.weight(.semibold))
+            }
+            Text(isLinked
+                ? "Calls and texts from your phone are available on this iPad."
+                : "Looking for your phone's connection. Make sure the device linked to your phone — your computer or tablet — is turned on and using the same Wi-Fi as this iPad.")
+                .foregroundStyle(.secondary)
+            if !model.isRunning {
+                Label("The link service could not start. Close and reopen this app.", systemImage: "exclamationmark.triangle")
+                    .font(.subheadline)
+                    .foregroundStyle(.red)
             }
         }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Android phone to Shamash")
-                .font(.title.weight(.semibold))
-            Text("This iPad app probes whether iPadOS exposes the source phone's MAP, PBAP, and HFP Bluetooth services, then serves Shamash on localhost if the probe succeeds.")
-                .foregroundStyle(.secondary)
-            Text("http://127.0.0.1:8765")
-                .font(.system(.title3, design: .monospaced))
-                .padding(.top, 4)
-        }
-    }
+    // ── Advanced (collapsed diagnostics) ────────────────────────────────
+    private var advancedSection: some View {
+        DisclosureGroup("Advanced") {
+            VStack(alignment: .leading, spacing: 20) {
+                panel("Connection details") {
+                    row("Local server", model.isRunning ? "Running" : "Stopped", model.isRunning ? .green : .red)
+                    row("Phone host on network", lanHost.activeHost ?? "not found yet", isLinked ? .green : .orange)
+                    if let error = lanHost.lastError {
+                        Text(error).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text("http://127.0.0.1:8765")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
 
-    private var statusPanel: some View {
-        panel("Local API") {
-            row("Server", model.isRunning ? "Running" : "Stopped", model.isRunning ? .green : .red)
-            row("Bluetooth", model.probe.bluetoothState, model.probe.bluetoothState == "poweredOn" ? .green : .orange)
-            row("Mode", model.probe.isScanning ? "Scanning" : "Idle", model.probe.isScanning ? .blue : .secondary)
+                panel("Bluetooth probe") {
+                    Text("Tests whether this iPad could ever talk to the phone over Bluetooth directly. Expected to fail on current iPadOS — the network link above is the working path.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    row("Bluetooth", probe.bluetoothState, probe.bluetoothState == "poweredOn" ? .green : .orange)
+                    Button(probe.isScanning ? "Stop scan" : "Start scan") {
+                        if probe.isScanning { probe.stopScan() } else { probe.startScan() }
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                profilePanel
+                devicePanel
+                eventPanel
+            }
+            .padding(.top, 12)
         }
+        .padding(20)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var profilePanel: some View {
-        panel("Target Profiles") {
-            ForEach(model.probe.profileStatuses, id: \.key) { profile in
+        panel("Target profiles") {
+            ForEach(probe.profileStatuses, id: \.key) { profile in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text(profile.name)
-                            .font(.headline)
+                            .font(.subheadline.weight(.semibold))
                         Spacer()
                         Text(profile.uuid)
                             .font(.system(.caption, design: .monospaced))
                             .foregroundStyle(.secondary)
                     }
-                    Text(profile.purpose)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
                     Text(profile.detail)
                         .font(.caption)
                         .foregroundStyle(profile.discovered ? .green : .orange)
                 }
-                .padding(.vertical, 6)
-                Divider()
+                .padding(.vertical, 4)
             }
         }
     }
 
     private var devicePanel: some View {
-        panel("Nearby Devices") {
-            if model.probe.devices.isEmpty {
-                Text("No devices discovered yet. Start scan, make the Android phone discoverable if possible, and keep both devices close.")
+        panel("Nearby devices") {
+            if probe.devices.isEmpty {
+                Text("No devices discovered yet.")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(model.probe.devices) { device in
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(device.name)
-                                    .font(.headline)
-                                Text(device.id.uuidString)
-                                    .font(.system(.caption2, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button("Probe") {
-                                model.probe.probeDevice(id: device.id)
-                            }
-                            .buttonStyle(.borderedProminent)
+                ForEach(probe.devices) { device in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(device.name).font(.subheadline)
+                            Text("RSSI \(device.rssi)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
-                        Text("RSSI \(device.rssi)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 8)
-                    Divider()
-                }
-            }
-        }
-    }
-
-    private var eventPanel: some View {
-        panel("Event Log") {
-            if model.probe.events.isEmpty {
-                Text("No probe events yet.")
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(model.probe.events) { event in
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(event.message)
-                            .font(.subheadline)
-                        Text(event.date.formatted(date: .omitted, time: .standard))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Probe") { probe.probeDevice(id: device.id) }
+                            .buttonStyle(.bordered)
                     }
                     .padding(.vertical, 4)
                 }
@@ -126,25 +140,38 @@ struct ContentView: View {
         }
     }
 
+    private var eventPanel: some View {
+        panel("Event log") {
+            if probe.events.isEmpty {
+                Text("No events yet.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(probe.events.prefix(40)) { event in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(event.message).font(.caption)
+                        Text(event.date.formatted(date: .omitted, time: .standard))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+    }
+
     private func panel<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.headline)
             content()
         }
-        .padding(16)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func row(_ label: String, _ value: String, _ color: Color) -> some View {
         HStack {
-            Text(label)
-                .foregroundStyle(.secondary)
+            Text(label).foregroundStyle(.secondary)
             Spacer()
-            Text(value)
-                .foregroundStyle(color)
-                .fontWeight(.semibold)
+            Text(value).foregroundStyle(color).fontWeight(.semibold)
         }
         .font(.subheadline)
     }
@@ -153,13 +180,15 @@ struct ContentView: View {
 final class BridgeModel: ObservableObject {
     @Published var isRunning = false
     let probe = BluetoothProbeService()
+    let lanHost = LanHostClient()
     private var server: LocalApiServer?
 
     func start() {
         probe.activate()
+        lanHost.start()
         if server != nil { return }
-        let controller = BridgeController(probe: probe)
-        let next = LocalApiServer(port: 8765, controller: controller)
+        let controller = BridgeController(probe: probe, lanHost: lanHost)
+        let next = LocalApiServer(port: 8765, controller: controller, lanHost: lanHost)
         do {
             try next.start()
             server = next

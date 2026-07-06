@@ -58,6 +58,28 @@ Goal: minimize cached and uncached tokens while preserving accuracy. Start from 
 - Search terms: `/status`, `/messages`, `/calls`, `/contacts`, `build.num`, `deployed-builds`
 - Gate: `dotnet build` in `apps/phone-host-windows`; check `http://127.0.0.1:8765/status`
 
+### Android Phone Host (local BT host on tablet)
+
+- Primary folder: `apps/phone-host-android`
+- Search terms: `MapClient`, `HfpClient`, `PbapClient`, `MnsServer`, `HostService`, `handoff-release`, `_shamash-phonehost._tcp`
+- Contract: same `/status /messages /calls /contacts` shapes as the Windows host (port of `MainViewModel` JSON builders)
+- Gate: `gradle :app:assembleDebug` in `apps/phone-host-android` (needs Android SDK 34 in `local.properties`)
+
+### Phone Host Dongle (universal hardware host — spec stage)
+
+- Primary file: `docs/ops/PHONEHOST_DONGLE_SPEC.md`
+- v2 (current): dongle is BT-Classic-to-phone + local `:8765` HTTP only — same contract as `apps/phone-host-android`/`apps/phone-host-windows`, discoverable by `apps/ipad-phone-bridge`'s `LanHostClient` via mDNS. Zero Firebase code/credentials on the dongle; whatever device talks to Firebase (PC's `RelayService.cs`, cloud relay reads) keeps doing so completely unchanged. Storage is RAM-only working set, nothing durable, nothing in flash beyond Wi-Fi/BT pairing.
+- v1 (superseded): dongle pushed straight to Firestore — rejected for putting a relay secret on losable $8 hardware and requiring embedded TLS/Firestore, the riskiest unproven part of that design.
+- Key facts: original ESP32 only (S3/C3/C6 are BLE-only — no BT Classic); prototype lane is Pi Zero 2 W + BlueZ obexd; BT protocol reference to port is `apps/phone-host-android` `bt/*.kt`
+- Gate: bench validation 1 (ESP32 OBEX CONNECT accepted by the source phone) before further investment; open question flagged in the spec — RAM-only cache vs. truly zero caching (affects `/messages` responsiveness)
+
+### iPad Phone Bridge (LAN host proxy + BT probe gate)
+
+- Primary folder: `apps/ipad-phone-bridge`
+- Search terms: `LanHostClient`, `lan-host`, `BluetoothProbeService`, `localOnlyPrefixes`
+- Verdict: direct BT host on iPadOS is blocked by public API (Classic RFCOMM profiles ≠ GATT); live lane is the Bonjour LAN proxy of the active host
+- Gate: build in Xcode on a Mac; smoke `http://127.0.0.1:8765/status` on the iPad (check the `lanHost` block)
+
 ### Git / Release Docs
 
 - Primary files: `BRIEF.txt`, `AGENTS.md`, `README.md`, `docs/ops/VERIFICATION_LOG.md`, `docs/ops/MIGRATION_MANIFEST.md`, `docs/ops/ROLLBACK_AND_DEPRECATION.md`

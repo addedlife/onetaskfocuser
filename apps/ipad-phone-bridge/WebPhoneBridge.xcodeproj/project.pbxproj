@@ -12,6 +12,7 @@
 		81A000050000000000000001 /* BridgeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A000060000000000000001 /* BridgeController.swift */; };
 		81A000070000000000000001 /* LocalApiServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A000080000000000000001 /* LocalApiServer.swift */; };
 		81A000180000000000000001 /* BluetoothProbeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A000190000000000000001 /* BluetoothProbeService.swift */; };
+		81A0001A0000000000000001 /* LanHostClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A0001B0000000000000001 /* LanHostClient.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -20,6 +21,7 @@
 		81A000060000000000000001 /* BridgeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeController.swift; sourceTree = "<group>"; };
 		81A000080000000000000001 /* LocalApiServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalApiServer.swift; sourceTree = "<group>"; };
 		81A000190000000000000001 /* BluetoothProbeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothProbeService.swift; sourceTree = "<group>"; };
+		81A0001B0000000000000001 /* LanHostClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanHostClient.swift; sourceTree = "<group>"; };
 		81A000090000000000000001 /* WebPhoneBridge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WebPhoneBridge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -49,6 +51,7 @@
 				81A000040000000000000001 /* ContentView.swift */,
 				81A000060000000000000001 /* BridgeController.swift */,
 				81A000190000000000000001 /* BluetoothProbeService.swift */,
+				81A0001B0000000000000001 /* LanHostClient.swift */,
 				81A000080000000000000001 /* LocalApiServer.swift */,
 			);
 			path = WebPhoneBridge;
@@ -134,6 +137,7 @@
 				81A000030000000000000001 /* ContentView.swift in Sources */,
 				81A000050000000000000001 /* BridgeController.swift in Sources */,
 				81A000180000000000000001 /* BluetoothProbeService.swift in Sources */,
+				81A0001A0000000000000001 /* LanHostClient.swift in Sources */,
 				81A000070000000000000001 /* LocalApiServer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -258,11 +262,12 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "WebPhone Bridge";
+				INFOPLIST_FILE = WebPhoneBridge/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Shamash Phone Link";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "WebPhone Bridge probes whether this iPad can connect to the Android source phone's MAP, PBAP, and HFP Bluetooth services.";
 				INFOPLIST_KEY_NSContactsUsageDescription = "Reserved for a later local fallback. The active probe targets source-phone contacts through PBAP.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WebPhone Bridge exposes a local-only API for WebPhone on this iPad.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WebPhone Bridge serves WebPhone on this iPad and finds the Shamash phone host (PC or Android tablet) on your network so calls and texts work without the cloud relay.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -289,11 +294,12 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "WebPhone Bridge";
+				INFOPLIST_FILE = WebPhoneBridge/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Shamash Phone Link";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "WebPhone Bridge probes whether this iPad can connect to the Android source phone's MAP, PBAP, and HFP Bluetooth services.";
 				INFOPLIST_KEY_NSContactsUsageDescription = "Reserved for a later local fallback. The active probe targets source-phone contacts through PBAP.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WebPhone Bridge exposes a local-only API for WebPhone on this iPad.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "WebPhone Bridge serves WebPhone on this iPad and finds the Shamash phone host (PC or Android tablet) on your network so calls and texts work without the cloud relay.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
