@@ -1,0 +1,13 @@
+{
+  "name": "shamash-bug-log-reader",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Standalone script — reads unresolved Bug Log entries via the Firebase Admin SDK. Never bundled into apps/web; run manually or via a session-start instruction in CLAUDE.md.",
+  "scripts": {
+    "read": "node index.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.1.0"
+  }
+}

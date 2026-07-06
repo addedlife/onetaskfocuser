@@ -36,6 +36,7 @@ import { MdFilledButton } from '@material/web/button/filled-button.js';
 import { MdOutlinedButton } from '@material/web/button/outlined-button.js';
 import { MdList } from '@material/web/list/list.js';
 import { MdListItem } from '@material/web/list/list-item.js';
+import { MdAssistChip } from '@material/web/chips/assist-chip.js';
 const IconButton         = createComponent({ react: React, tagName: 'md-icon-button',          elementClass: MdIconButton });
 const OutlinedIconButton = createComponent({ react: React, tagName: 'md-outlined-icon-button', elementClass: MdOutlinedIconButton });
 const FilledIconButton   = createComponent({ react: React, tagName: 'md-filled-icon-button',   elementClass: MdFilledIconButton });
@@ -43,6 +44,7 @@ const FilledButton       = createComponent({ react: React, tagName: 'md-filled-b
 const OutlinedButton     = createComponent({ react: React, tagName: 'md-outlined-button',      elementClass: MdOutlinedButton });
 const List               = createComponent({ react: React, tagName: 'md-list',                 elementClass: MdList });
 const ListItem           = createComponent({ react: React, tagName: 'md-list-item',            elementClass: MdListItem });
+const AssistChip         = createComponent({ react: React, tagName: 'md-assist-chip',          elementClass: MdAssistChip });
 
 const GOOGLE_SERVER_TOKEN = "__server_google_workspace__";
 const GOOGLE_TOKEN_EXPIRY_SKEW_MS = 60 * 1000;
@@ -3968,11 +3970,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               </div>
 
               {/* Queue shortcut — direct access from tasks */}
-              <List style={{borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,"--md-list-item-label-text-color":C.faint,"--md-list-item-label-text-font":"var(--md-ref-typeface-plain)"}}>
-                <ListItem type="button" onClick={()=>switchTab("queue")}>
-                  <span slot="headline">Queue · {effectiveCount}</span>
-                </ListItem>
-              </List>
+              <div style={{display:"flex",justifyContent:"center"}}>
+                <AssistChip label={`Queue · ${effectiveCount}`} onClick={()=>switchTab("queue")}/>
+              </div>
 
 
             </div>{/* end spine */}
@@ -4163,7 +4163,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
             {/* Queue: all tasks in one continuous card — groups inline, no gaps */}
             {queueTFiltered.length > 0 ? (
-              <div style={{background:C.bg,borderRadius:RADIUS.pill,border:`1px solid ${C.divider}`,overflow:"hidden",boxShadow:T.shadow,width:"100%",maxWidth:"100%",minWidth:0,boxSizing:"border-box"}}>
+              <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,overflow:"hidden",boxShadow:T.shadow,width:"100%",maxWidth:"100%",minWidth:0,boxSizing:"border-box"}}>
                 {(() => {
                   let pos = 0;
                   return queueTFiltered.map((task, idx) => {
@@ -4317,7 +4317,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 })()}
               </div>
             ) : (
-              <div style={{background:C.bg,borderRadius:RADIUS.pill,padding:"40px 20px",border:`1px solid ${C.divider}`,textAlign:"center",boxShadow:T.shadow}}><p style={{color:C.faint,fontSize:14,margin:0}}>{searchQ.trim()?"No tasks match your search":"No tasks in queue"}</p></div>
+              <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"40px 20px",border:`1px solid ${C.divider}`,textAlign:"center",boxShadow:T.shadow}}><p style={{color:C.faint,fontSize:14,margin:0}}>{searchQ.trim()?"No tasks match your search":"No tasks in queue"}</p></div>
             )}
 
             {/* Snoozed tasks — faded at bottom of queue */}
@@ -4740,7 +4740,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       <div><p style={{fontSize:12,fontWeight:600,margin:0,color:C.success,fontFamily:NC_FONT_STACK}}>{metrics.goodEnoughCount} "good enough" completions</p><p style={{fontSize:11,color:C.success,margin:0,fontFamily:NC_FONT_STACK}}>That's pragmatic productivity at its finest.</p></div>
                     </div>
                   )}
-                  <div style={{background:C.bg,borderRadius:RADIUS.pill,border:`1px solid ${C.divider}`,padding:16,marginBottom:14}}>
+                  <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,padding:16,marginBottom:14}}>
                     <h3 style={{fontSize:10,fontWeight:700,color:C.faint,margin:"0 0 12px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>By Priority</h3>
                     {metrics.pS.map(p => (
                       <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:`1px solid ${C.divider}`}}>
@@ -4753,12 +4753,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   </div>
                   {/* Pattern insights (rule-based) */}
                   {advice.length > 0 && (
-                    <div style={{background:C.bg,borderRadius:RADIUS.pill,border:`1px solid ${C.divider}`,padding:16,marginBottom:14}}>
+                    <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,padding:16,marginBottom:14}}>
                       <h3 style={{fontSize:10,fontWeight:700,color:C.faint,margin:"0 0 12px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>Patterns</h3>
                       {advice.map((a,i) => <p key={i} style={{fontSize:13,lineHeight:1.6,margin:i<advice.length-1?"0 0 10px":0,padding:"9px 11px",background:C.bgSoft,borderRadius:RADIUS.sm,fontFamily:NC_FONT_STACK}}>{a}</p>)}
                     </div>
                   )}
-                  <div style={{background:C.bg,borderRadius:RADIUS.pill,border:`1px solid ${C.divider}`,overflow:"hidden",marginBottom:32}}>
+                  <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,overflow:"hidden",marginBottom:32}}>
                     <h3 style={{fontSize:10,fontWeight:700,color:C.faint,margin:0,padding:"12px 14px 8px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>Completion Log</h3>
                     <div style={{maxHeight:280,overflowY:"auto"}}>
                       {metrics.cL.map(t => {
@@ -4783,7 +4783,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 </div>
               </details>
             ) : (
-              <div style={{background:C.bg,borderRadius:RADIUS.pill,padding:"24px 20px",border:`1px solid ${C.divider}`,textAlign:"center",marginBottom:32}}><p style={{color:C.faint,fontSize:14,margin:0}}>Complete tasks to see your stats</p></div>
+              <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"24px 20px",border:`1px solid ${C.divider}`,textAlign:"center",marginBottom:32}}><p style={{color:C.faint,fontSize:14,margin:0}}>Complete tasks to see your stats</p></div>
             )}
           </div>
         )}

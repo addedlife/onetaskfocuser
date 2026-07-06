@@ -1778,19 +1778,21 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     .filter(Boolean);
   const activePri = gP(priorities, taskPriority);
   const activePriColor = activePri?.color || C.accent || "#7EB0DE";
+  // Owner-requested (bug log): add buttons are bare colored checkmarks — no pill
+  // container. Active (composer open for that priority) gets a soft tint ring.
   const compactAddDot = (color, active = false) => ({
     width: 24,
     height: 24,
     flexShrink: 0,
     borderRadius: RADIUS.pill,
-    border: active ? `1px solid ${color}` : `1px solid ${softBorder(color, 0.34)}`,
-    background: softBg(color, active ? 0.22 : 0.13),
+    border: "none",
+    background: active ? softBg(color, 0.2) : "transparent",
     color,
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    opacity: active ? 1 : 0.86,
+    opacity: active ? 1 : 0.9,
   });
 
   const bySection = Object.fromEntries(sections.map(s => [s.id, s]));
@@ -2942,14 +2944,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       <button key={p.id} onClick={() => openTaskComposer(p.id)}
                         title={`Add ${p.ncLabel} task`} aria-label={`Add ${p.ncLabel} task`} aria-expanded={taskComposerOpen && active && !taskComposerMrsW}
                         style={compactAddDot(p.color, active && taskComposerOpen && !taskComposerMrsW)}>
-                        {suiteIcon("add", 12)}
+                        {suiteIcon("check", 16)}
                       </button>
                     );
                   })}
                   {onAddMrsWTask && (
                     <button onClick={() => openTaskComposer(taskPriority, { mrsW: true })} title="Add Mrs W task" aria-label="Add Mrs W task" aria-expanded={taskComposerOpen && taskComposerMrsW}
                       style={compactAddDot("#4F9B6B", taskComposerOpen && taskComposerMrsW)}>
-                      {suiteIcon("add", 12)}
+                      {suiteIcon("check", 16)}
                     </button>
                   )}
                   <span style={{ width: 1, height: 13, background: C.divider, margin: "0 3px", flexShrink: 0 }} />

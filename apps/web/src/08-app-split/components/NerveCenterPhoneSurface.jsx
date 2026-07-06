@@ -910,11 +910,6 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const timeMs = val => {
     return eventTimeMs(val);
   };
-  const activityItems = [
-    ...threads.map((thread, idx) => ({ kind: "message", item: thread, idx, at: thread._latestAt })),
-    ...recentCalls.map((c, idx) => ({ kind: "call", item: c, idx, at: timeMs(c.timestamp || c.date || c.time || c.startTime || c.StartTime) })),
-  ].sort((a, b) => b.at - a.at).slice(0, compact ? 12 : 20);
-
   const callDirIcon = c => {
     // Numeric type codes: 1=incoming, 2=outgoing/dialed, 3=missed, 4=unknown
     const typeNum = typeof (c.type || c.callType || c.Type || c.CallType) === "number"
@@ -975,6 +970,22 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     );
   }, [calls, messages, resolvedMissed]);
   const actionableMissedCalls = recentCalls.filter(c => callKindLabel(c) === "missed" && !isMissedCallResolved(c));
+
+  // Unresolved missed calls are pinned to the top of the feed — the timestamp
+  // sort plus the compact 12-item cap could otherwise crowd them out entirely
+  // (owner bug report: "missed calls gone from NerveCenter").
+  const activityItems = (() => {
+    const pinned = [];
+    const rest = [];
+    recentCalls.forEach((c, idx) => {
+      const entry = { kind: "call", item: c, idx, at: callAtMs(c) || 0 };
+      (callKindLabel(c) === "missed" && !isMissedCallResolved(c) ? pinned : rest).push(entry);
+    });
+    threads.forEach((thread, idx) => rest.push({ kind: "message", item: thread, idx, at: thread._latestAt }));
+    pinned.sort((a, b) => b.at - a.at);
+    rest.sort((a, b) => b.at - a.at);
+    return [...pinned, ...rest].slice(0, Math.max(compact ? 12 : 20, pinned.length));
+  })();
 
   const phoneActivitySnapshot = useMemo(() => ({
     online: phoneLinkLive,
