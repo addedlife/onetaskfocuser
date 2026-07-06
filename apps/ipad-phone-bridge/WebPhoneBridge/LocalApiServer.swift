@@ -34,20 +34,26 @@ final class LocalApiServer {
             guard let self else { return }
             let request = HTTPRequest(data: data ?? Data())
 
-            // LAN host proxy: when another host (PC / Android tablet) holds the
-            // phone's Bluetooth link, forward host-contract requests to it raw.
-            // Probe endpoints stay local; anything the LAN host can't serve
-            // falls back to the local controller.
-            let route = request.path.components(separatedBy: "?").first ?? "/"
-            let isLocalOnly = Self.localOnlyPrefixes.contains { route == $0 || route.hasPrefix($0 + "/") }
-            if !isLocalOnly, request.method != "OPTIONS",
-               let proxied = self.lanHost?.forward(method: request.method, path: request.path, body: request.rawBody) {
-                self.sendRaw(proxied.0, proxied.1, on: connection)
-                return
-            }
+            // Proxying blocks on network I/O, so it must leave the listener's
+            // serial queue: the web app fires /status /messages /calls /contacts
+            // in parallel with short timeouts, and serializing them here would
+            // time three of them out. NWConnection is safe to send from any queue.
+            DispatchQueue.global(qos: .userInitiated).async {
+                // LAN host proxy: when another host (PC / Android tablet) holds the
+                // phone's Bluetooth link, forward host-contract requests to it raw.
+                // Probe endpoints stay local; anything the LAN host can't serve
+                // falls back to the local controller.
+                let route = request.path.components(separatedBy: "?").first ?? "/"
+                let isLocalOnly = Self.localOnlyPrefixes.contains { route == $0 || route.hasPrefix($0 + "/") }
+                if !isLocalOnly, request.method != "OPTIONS",
+                   let proxied = self.lanHost?.forward(method: request.method, path: request.path, body: request.rawBody) {
+                    self.sendRaw(proxied.0, proxied.1, on: connection)
+                    return
+                }
 
-            let result = self.controller.handle(method: request.method, path: request.path, body: request.jsonBody)
-            self.send(result.0, result.1, on: connection)
+                let result = self.controller.handle(method: request.method, path: request.path, body: request.jsonBody)
+                self.send(result.0, result.1, on: connection)
+            }
         }
     }
 

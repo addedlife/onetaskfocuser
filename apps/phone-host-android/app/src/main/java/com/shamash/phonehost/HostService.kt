@@ -96,48 +96,65 @@ class HostService : Service() {
         callLogStore = CallLogStore(this)
         contactStore = ContactStore(this)
 
-        startForeground(NOTIFICATION_ID, buildNotification("Starting…"))
+        // On Android 12+ a connectedDevice foreground service may only start when
+        // Bluetooth permission is granted; without it startForeground throws and
+        // the service would crash-loop. Callers guard too — this is the backstop.
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification("Starting…"))
+        } catch (ex: Exception) {
+            HostLog.add("[HOST] Cannot start: Bluetooth permission missing (${ex.message})")
+            stopSelf()
+            return
+        }
 
+        map.onStatus = { statusMap = it }
         wireHfp()
-        wireMns()
         wireApi()
         api.start()
         registerNsd()
 
+        // NOTE: every periodic body is wrapped in runCatching — a single thrown
+        // exception permanently cancels a scheduled task, which would silently
+        // kill the watchdog/sync forever.
+
         // Store flusher (debounced saves)
         executor.scheduleWithFixedDelay({
-            messageStore.flushIfDirty()
-            callLogStore.flushIfDirty()
-            contactStore.flushIfDirty()
+            runCatching {
+                messageStore.flushIfDirty()
+                callLogStore.flushIfDirty()
+                contactStore.flushIfDirty()
+            }
         }, 5, 5, TimeUnit.SECONDS)
 
         // Delta-sync poll (MNS push is primary; this is the safety net)
         executor.scheduleWithFixedDelay({
-            if (map.isConnected && !realOpActive) {
-                try {
+            runCatching {
+                if (map.isConnected && !realOpActive) {
                     val newMsgs = map.performDeltaSync()
                     if (newMsgs.isNotEmpty()) {
                         val added = messageStore.merge(newMsgs)
                         if (added > 0) HostLog.add("[SYNC] +$added messages")
                     }
-                } catch (ex: Exception) {
-                    HostLog.add("[SYNC] delta failed: ${ex.message}")
                 }
-            }
+            }.onFailure { HostLog.add("[SYNC] delta failed: ${it.message}") }
         }, 20, 30, TimeUnit.SECONDS)
 
         // Reconnect watchdog
         executor.scheduleWithFixedDelay({
-            if (!released && !isFullyConnected() && !connecting.get() && defaultDeviceAddress.isNotBlank()) {
-                HostLog.add("[WATCHDOG] link down — auto-reconnect")
-                connectToDefault()
+            runCatching {
+                if (!released && !isFullyConnected() && !connecting.get() && defaultDeviceAddress.isNotBlank()) {
+                    HostLog.add("[WATCHDOG] link down — auto-reconnect")
+                    connectToDefault()
+                }
             }
         }, 30, 30, TimeUnit.SECONDS)
 
         // PBAP refresh: hourly call-log/contact import while connected
         executor.scheduleWithFixedDelay({
-            if (isFullyConnected() && System.currentTimeMillis() - lastPbapImportAt > 60 * 60_000) {
-                runPbapImport()
+            runCatching {
+                if (isFullyConnected() && System.currentTimeMillis() - lastPbapImportAt > 60 * 60_000) {
+                    runPbapImport()
+                }
             }
         }, 5, 10, TimeUnit.MINUTES)
 
@@ -155,9 +172,12 @@ class HostService : Service() {
         unregisterNsd()
         api.stop()
         mns?.stop()
-        try { map.registerForNotifications(false) } catch (_: Exception) {}
-        map.disconnect()
-        hfp.disconnect()
+        // Bluetooth teardown does blocking socket I/O — never on the main thread
+        // (OBEX round-trips under the sync lock can stall long enough to ANR).
+        Thread {
+            runCatching { map.disconnect() }
+            runCatching { hfp.disconnect() }
+        }.apply { isDaemon = true }.start()
         executor.shutdownNow()
         messageStore.flushIfDirty()
         callLogStore.flushIfDirty()
@@ -167,6 +187,17 @@ class HostService : Service() {
 
     // ── Connection orchestration ──────────────────────────────────────────
     fun isFullyConnected(): Boolean = map.isConnected && hfp.isConnected
+
+    fun isBusyConnecting(): Boolean = connecting.get()
+
+    fun isPaused(): Boolean = released
+
+    /** Human name for a paired device, for consumer-facing UI. */
+    fun deviceName(address: String): String? = try {
+        adapter?.bondedDevices?.firstOrNull { it.address == address }?.name
+    } catch (_: Exception) { null }
+
+    private fun defaultDeviceLabel(): String = deviceName(defaultDeviceAddress) ?: "your phone"
 
     fun connectToDefault() {
         val address = defaultDeviceAddress
@@ -181,7 +212,8 @@ class HostService : Service() {
             try {
                 val device = adapter?.getRemoteDevice(address)
                     ?: throw IllegalStateException("Bluetooth adapter unavailable")
-                updateNotification("Connecting to ${device.name ?: address}…")
+                val label = device.name ?: "your phone"
+                updateNotification("Connecting to $label…")
 
                 // HFP first (fast), then MAP (retry ladder), then MNS + seed + sync.
                 try {
@@ -194,6 +226,9 @@ class HostService : Service() {
                 if (!map.isConnected) {
                     map.connect(device)
                     map.seedKnownHandles(messageStore.knownHandles())
+                    // MNS is created lazily: at service start Bluetooth may still be
+                    // off, and a null adapter then must not cost us live push forever.
+                    if (mns == null) wireMns()
                     mns?.start()
                     map.registerForNotifications(true)
                     val newMsgs = map.performDeltaSync()
@@ -205,10 +240,13 @@ class HostService : Service() {
                 if (System.currentTimeMillis() - lastPbapImportAt > 10 * 60_000) runPbapImport()
 
                 defaultDeviceAddress = address
-                updateNotification(if (isFullyConnected()) "Connected — calls + messages live" else "Partially connected")
+                updateNotification(
+                    if (isFullyConnected()) "Connected to $label"
+                    else "Connected to $label (messages only)",
+                )
             } catch (ex: Exception) {
                 HostLog.add("[HOST] Connect failed: ${ex.message}")
-                updateNotification("Connect failed — will retry")
+                updateNotification("Can't reach your phone — will keep trying")
             } finally {
                 connecting.set(false)
             }
@@ -224,7 +262,7 @@ class HostService : Service() {
             map.disconnect()
             hfp.disconnect()
             mns?.stop()
-            updateNotification("Released — another host holds the phone link")
+            updateNotification("Disconnected — another device is handling your phone")
         }
     }
 
@@ -284,12 +322,15 @@ class HostService : Service() {
                 }
             }
             lastCallStatus = call.status
+            val who = contactStore.nameFor(call.number)
+                ?: ApiJson.formatPhoneDisplay(call.number).ifBlank { "unknown number" }
             updateNotification(
                 when (call.status) {
-                    CallStatus.IncomingRinging -> "Incoming call ${call.number}"
-                    CallStatus.Dialing -> "Dialing ${call.number}"
-                    CallStatus.Active -> "On a call ${call.number}"
-                    else -> if (isFullyConnected()) "Connected — calls + messages live" else "Partially connected"
+                    CallStatus.IncomingRinging -> "Incoming call from $who"
+                    CallStatus.Dialing -> "Calling $who…"
+                    CallStatus.Active -> "On a call with $who"
+                    else -> if (isFullyConnected()) "Connected to ${defaultDeviceLabel()}"
+                            else "Reconnecting to ${defaultDeviceLabel()}…"
                 },
             )
         }
@@ -568,7 +609,7 @@ class HostService : Service() {
         try { nsdListener?.let { nsdManager?.unregisterService(it) } } catch (_: Exception) {}
     }
 
-    private fun lanUrl(): String? = try {
+    fun lanUrl(): String? = try {
         java.net.NetworkInterface.getNetworkInterfaces().toList()
             .flatMap { it.inetAddresses.toList() }
             .firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }

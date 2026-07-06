@@ -263,7 +263,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WebPhoneBridge/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "WebPhone Bridge";
+				INFOPLIST_KEY_CFBundleDisplayName = "Shamash Phone Link";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "WebPhone Bridge probes whether this iPad can connect to the Android source phone's MAP, PBAP, and HFP Bluetooth services.";
 				INFOPLIST_KEY_NSContactsUsageDescription = "Reserved for a later local fallback. The active probe targets source-phone contacts through PBAP.";
@@ -295,7 +295,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WebPhoneBridge/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "WebPhone Bridge";
+				INFOPLIST_KEY_CFBundleDisplayName = "Shamash Phone Link";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "WebPhone Bridge probes whether this iPad can connect to the Android source phone's MAP, PBAP, and HFP Bluetooth services.";
 				INFOPLIST_KEY_NSContactsUsageDescription = "Reserved for a later local fallback. The active probe targets source-phone contacts through PBAP.";

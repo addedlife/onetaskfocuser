@@ -59,12 +59,19 @@ class HfpClient(private val log: (String) -> Unit = { HostLog.add(it) }) {
         onStatus?.invoke("Connecting HFP…")
         stopping = false
         val s = device.createRfcommSocketToServiceRecord(HFP_AG_UUID)
-        s.connect()
-        socket = s
-        reader = BufferedReader(InputStreamReader(s.inputStream, Charsets.US_ASCII))
-        writer = OutputStreamWriter(s.outputStream, Charsets.US_ASCII)
-
-        runHandshake()
+        try {
+            s.connect()
+            socket = s
+            reader = BufferedReader(InputStreamReader(s.inputStream, Charsets.US_ASCII))
+            writer = OutputStreamWriter(s.outputStream, Charsets.US_ASCII)
+            runHandshake()
+        } catch (ex: Exception) {
+            // Failed mid-connect/handshake: close the socket or it leaks and can
+            // hold the RFCOMM channel hostage against the next attempt.
+            try { s.close() } catch (_: Exception) {}
+            socket = null
+            throw ex
+        }
 
         isConnected = true
         lastTrafficAt = System.currentTimeMillis()

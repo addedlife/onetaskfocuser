@@ -30,8 +30,19 @@ abstract class JsonStore(context: Context, fileName: String) {
         if (!dirty) return
         dirty = false
         try {
-            synchronized(this) { file.writeText(serialize()) }
+            // Atomic save: write a temp file, then rename over the original.
+            // A direct writeText interrupted by power loss leaves truncated JSON
+            // and the whole store fails to load on next boot.
+            synchronized(this) {
+                val tmp = File(file.parentFile, file.name + ".tmp")
+                tmp.writeText(serialize())
+                if (!tmp.renameTo(file)) {
+                    file.delete()
+                    if (!tmp.renameTo(file)) throw java.io.IOException("rename failed")
+                }
+            }
         } catch (ex: Exception) {
+            dirty = true // retry on the next flush tick
             HostLog.add("[STORE] save ${file.name} failed: ${ex.message}")
         }
     }
@@ -66,14 +77,24 @@ class MessageStore(context: Context) : JsonStore(context, "messages.json") {
     fun merge(incoming: List<SmsMessage>): Int {
         var added = 0
         for (msg in incoming) {
-            val existing = messages.firstOrNull {
+            var existing = messages.firstOrNull {
                 (msg.handle.isNotBlank() && it.handle == msg.handle) ||
                     (msg.localId != null && it.localId == msg.localId)
+            }
+            // A sent message arriving from the phone may be the copy of a local
+            // echo that never got its handle stamped (the send raced the sync).
+            // Adopt the echo instead of adding a duplicate bubble.
+            if (existing == null && msg.isSent && msg.handle.isNotBlank()) {
+                existing = messages.firstOrNull {
+                    it.isSent && it.handle.isBlank() && it.localId != null &&
+                        it.body == msg.body && it.normalizedPhone == msg.normalizedPhone
+                }
             }
             if (existing != null) {
                 existing.isRead = msg.isRead
                 if (msg.body.isNotBlank()) existing.body = msg.body
                 if (msg.handle.isNotBlank()) existing.handle = msg.handle
+                if (existing.sendStatus == "sending") existing.sendStatus = "sent"
             } else {
                 messages.add(msg)
                 added++

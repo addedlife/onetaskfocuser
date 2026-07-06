@@ -122,7 +122,7 @@ class MapClient(private val log: (String) -> Unit = { HostLog.add(it) }) {
 
     // ── Delta sync ────────────────────────────────────────────────────────
     fun performDeltaSync(): List<SmsMessage> {
-        val o = obex ?: throw IllegalStateException("Not connected")
+        obex ?: throw IllegalStateException("Not connected")
 
         if (isInitialSync) {
             isInitialSync = false
