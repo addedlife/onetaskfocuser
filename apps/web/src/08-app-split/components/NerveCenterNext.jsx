@@ -709,7 +709,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
     ? { flex: "1 1 0", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }
     : { maxHeight: "min(52vh, 460px)", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" };
   return (
-    <div style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, overflow: "hidden",
+    <div style={{ background: C.bg, borderRadius: 16, overflow: "hidden",
       ...(fullHeight ? { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 } : {}) }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px 4px 10px", minHeight: 28 }}>
         <button
@@ -800,7 +800,9 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
   // so the scroll-away behavior is suspended.
   const headerCollapsed = !stickyHeader && scrolled && !expanded && !collapsed;
   return (
-    <div style={{ position: "relative", background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
+    // GM3 filled card: borderless plain surface on the deeper tonal page — depth
+    // from tone, no outline, matching the full-panel view's card language.
+    <div style={{ position: "relative", background: C.bg, borderRadius: 16, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
       {stickyHeader ? (
         // Sticky header: never collapses. Shows icon chip + title label + summary on separate line.
         <button onClick={onOpen} title={title} aria-label={title}
@@ -832,8 +834,8 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
         style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", ...(collapsed ? { display: "none" } : {}) }}>
         {children}
       </div>
-      {fade && !collapsed && <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 22, pointerEvents: "none", background: `linear-gradient(to bottom, transparent, ${C.bgSoft})` }} />}
-      {statusDot && <span style={{ position: "absolute", top: 7, right: onToggleExpand ? 36 : 7, width: 8, height: 8, borderRadius: RADIUS.pill, background: statusDot, boxShadow: `0 0 0 2px ${C.bgSoft}`, pointerEvents: "none" }} />}
+      {fade && !collapsed && <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 22, pointerEvents: "none", background: `linear-gradient(to bottom, transparent, ${C.bg})` }} />}
+      {statusDot && <span style={{ position: "absolute", top: 7, right: onToggleExpand ? 36 : 7, width: 8, height: 8, borderRadius: RADIUS.pill, background: statusDot, boxShadow: `0 0 0 2px ${C.bg}`, pointerEvents: "none" }} />}
     </div>
   );
 }
@@ -2359,7 +2361,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const cardSummary = area => signalNote(area);
 
     return (
-      <div style={{ position:"fixed", top:topOffset, left:sidebarW, right:0, bottom:0, zIndex:7600, background:C.bg, display:"flex", flexDirection:"column", overflow:"hidden", borderLeft:`1px solid ${C.divider}`, boxSizing:"border-box", padding:"5px 8px calc(8px + env(safe-area-inset-bottom,0px))" }}>
+      <div style={{ position:"fixed", top:topOffset, left:sidebarW, right:0, height:`calc(100dvh - ${topOffset}px)`, zIndex:7600, background:pageBg, display:"flex", flexDirection:"column", overflow:"hidden", borderLeft:`1px solid ${C.divider}`, boxSizing:"border-box", padding:"6px 10px calc(10px + env(safe-area-inset-bottom,0px))" }}>
 
         {/* ── One-row chrome: clock left, one-touch display controls right — reclaims the
             old dedicated selector row while keeping every control a single tap ── */}
@@ -2378,7 +2380,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
         {/* >= 1000 px: 5 columns side by side, each full height.
             <  1000 px: 5 rows stacked, each 1/5 height — all cards always visible. */}
-        <div style={{ flex:1, minHeight:0, gap: dense?3:5, display:"grid", overflow:"hidden",
+        {/* GM3 grid rhythm: real gutters between cards (tighter when dense, but still
+            breathing) — tone + space do the separation, matching the full-panel view. */}
+        <div style={{ flex:1, minHeight:0, gap: dense?8:14, display:"grid", overflow:"hidden",
           ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }),
           gridTemplateColumns: boxesFiveCol ? "repeat(5, minmax(0,1fr))" : "1fr",
           gridTemplateRows:    boxesFiveCol ? "1fr" : boxRows }}>
@@ -2625,7 +2629,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
     return (
       // Fixed panel: flex-column so chrome stays pinned and sections fill the rest.
-      <div style={{ position: "fixed", top: topOffset, left: sidebarW, right: 0, height: `calc(100dvh - ${topOffset}px)`, zIndex: 7600, background: C.bg, overflow: "hidden", display: "flex", flexDirection: "column", borderLeft: `1px solid ${C.divider}` }}>
+      <div style={{ position: "fixed", top: topOffset, left: sidebarW, right: 0, height: `calc(100dvh - ${topOffset}px)`, zIndex: 7600, background: pageBg, overflow: "hidden", display: "flex", flexDirection: "column", borderLeft: `1px solid ${C.divider}` }}>
 
         {/* ── Chrome: layout selector, summary, clock — never scrolls ── */}
         <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 5, padding: "5px 10px 0" }}>
@@ -2657,11 +2661,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         {/* ── Sections ── accordion: a scrollable column of collapsible summary lines.
              Non-accordion stacked: 5 columns when wide, 5 rows when narrow, all expanded. ── */}
         <div style={{ ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }), ...(isAccordion
-          ? { flex: 1, minHeight: 0, gap: 5, display: "flex", flexDirection: "column",
+          ? { flex: 1, minHeight: 0, gap: dense ? 8 : 12, display: "flex", flexDirection: "column",
               overflowY: "auto", overflowX: "hidden",
-              padding: "5px 10px calc(8px + env(safe-area-inset-bottom, 0px))" }
-          : { flex: 1, minHeight: 0, gap: 5, display: "grid", overflow: "hidden",
-              padding: "5px 10px calc(8px + env(safe-area-inset-bottom, 0px))",
+              padding: "6px 10px calc(10px + env(safe-area-inset-bottom, 0px))" }
+          : { flex: 1, minHeight: 0, gap: dense ? 8 : 12, display: "grid", overflow: "hidden",
+              padding: "6px 10px calc(10px + env(safe-area-inset-bottom, 0px))",
               gridTemplateColumns: accWide ? "repeat(5, minmax(0,1fr))" : "1fr",
               gridTemplateRows:    accWide ? "1fr" : "repeat(5, minmax(0,1fr))" }) }}>
 
@@ -2880,11 +2884,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
   return (
     <div style={{ position: "fixed", inset: `${topOffset}px 0 0 ${sidebarW}px`, zIndex: 7600, background: pageBg, overflow: isStacked ? "hidden" : touchLayout ? "auto" : "hidden", overscrollBehavior: "contain", borderLeft: `1px solid ${C.divider}` }}>
-      <div style={isStacked ? { height: "100%", display: "flex", flexDirection: "column", boxSizing: "border-box" } : { minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: touchLayout ? "clamp(16px,2.4vw,28px)" : "clamp(20px,2.4vw,32px)", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: touchLayout ? 14 : 16 }}>
+      <div style={isStacked ? { height: "100%", display: "flex", flexDirection: "column", boxSizing: "border-box" } : { minHeight: "100%", height: touchLayout ? "auto" : "100%", maxWidth: 1520, margin: "0 auto", padding: touchLayout ? "clamp(16px,2.4vw,28px)" : "clamp(20px,2.4vw,32px)", paddingTop: 38, boxSizing: "border-box", display: "flex", flexDirection: "column", gap: touchLayout ? 14 : 16 }}>
 
-        {/* ── Layout + view mode toggles — top right of the whole panel, above all panes ── */}
+        {/* ── Layout + view mode toggles — floated into the page's top-right margin
+             (absolute against the fixed root) so they stay one-touch without costing
+             a content row; the inner container's paddingTop reserves their lane. ── */}
         {!isStacked && (
-          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, padding: "0 2px 2px", flexShrink: 0 }}>
+          <div style={{ position: "absolute", top: 5, right: 14, zIndex: 5, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6 }}>
             {/* Layout: Boxes / Accordion / Full (desktop-only alternatives to the 3-column view) */}
             <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
               {[

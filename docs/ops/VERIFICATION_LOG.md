@@ -1,5 +1,13 @@
 # Verification Log
 
+## 2026-07-06 GM3 follow-up — card-grid tonal spacing, column-view header reclaim, mobile bottom-cut fix (4.34.117)
+
+- Owner feedback on 4.34.116, three items, all in NerveCenterNext:
+- **Card-grid ("compact display") GM3 spacing**: `MobileBox`/`MobileSection` cards are now borderless plain-surface (C.bg, radius 16, no 1px outline) on the deeper tonal page (`pageBg`) — the same tone-and-space language as the column view; grid gutters widened 3/5px → 8 (dense) / 14 (comfortable); stacked view gets the same page/card/gutter treatment. Scroll-fade + status-dot ring colors updated to match the new card surface.
+- **Column-view header reclaim** (the row the owner actually meant): the Boxes/Full + density + Full/Focus control row is lifted out of the layout flow — absolutely positioned in the page's top-right margin (fixed root as containing block), inner container `paddingTop: 38` reserves its lane. Net ~30–40px returned to the panes; controls remain one-touch.
+- **Bottom cards cut off on small screens**: the card-grid root was pinned `bottom: 0`, which mobile browsers hide behind the collapsing URL bar. Now sized `height: calc(100dvh - topOffset)` (dynamic viewport units, same as the stacked view) + slightly larger safe-area bottom padding.
+- Gates: `npm run build` (apps/web) → 0 errors. BUILD-VERIFIED, pushed live.
+
 ## 2026-07-06 Bug-log batch — GM3 unification, calendar accuracy, buglog summaries, email attribution (4.34.116)
 
 - Scope: all 6 open bug-log tickets (7/6/26), web-side, one pass.
