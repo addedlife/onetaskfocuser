@@ -1130,7 +1130,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         const moreH = primaryTaskQueue.length > MIN_COLLAPSED_TASKS ? (taskMoreButtonRef.current?.getBoundingClientRect().height || 24) : 0;
         const rows = Array.from(taskListRef.current?.querySelectorAll("[data-nc-task-row='true']") || []);
         const measuredRows = rows.map(row => row.getBoundingClientRect().height).filter(h => h > 0);
-        const avgRowH = Math.max(56, measuredRows.length ? measuredRows.reduce((sum, h) => sum + h, 0) / measuredRows.length : 56);
+        // Trust the real measured row height (dense rows run ~28 px) — clamping it
+        // up to 56 halved the fill and left "+N more" floating over dead whitespace.
+        const avgRowH = measuredRows.length
+          ? Math.max(24, measuredRows.reduce((sum, h) => sum + h, 0) / measuredRows.length)
+          : 56;
         const nextLimit = Math.max(
           MIN_COLLAPSED_TASKS,
           Math.floor(Math.max(0, gridH - headerH - moreH) / avgRowH)
@@ -2374,7 +2378,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const cardSummary = area => signalNote(area);
 
     return (
-      <div style={{ position:"fixed", top:topOffset, left:sidebarW, right:0, height:`calc(100dvh - ${topOffset}px)`, zIndex:7600, background:pageBg, display:"flex", flexDirection:"column", overflow:"hidden", borderLeft:`1px solid ${C.divider}`, boxSizing:"border-box", padding:"6px 10px calc(10px + env(safe-area-inset-bottom,0px))" }}>
+      // bottom:0 anchoring (not a 100dvh height calc) — the calc drifted past the
+      // real viewport bottom on the tablet, cutting the last card at the taskbar.
+      <div style={{ position:"fixed", top:topOffset, left:sidebarW, right:0, bottom:0, zIndex:7600, background:pageBg, display:"flex", flexDirection:"column", overflow:"hidden", borderLeft:`1px solid ${C.divider}`, boxSizing:"border-box", padding:"6px 10px calc(10px + env(safe-area-inset-bottom,0px))" }}>
 
         {/* ── One-row chrome: clock left, one-touch display controls right — reclaims the
             old dedicated selector row while keeping every control a single tap ── */}
@@ -2384,7 +2390,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           <span style={{ flex:1, minWidth:0 }} />
           <IconBtn icon={dense ? "density_medium" : "density_small"} size={28} iconSize={16} color={C.muted} onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density" />
           {!isMobileDevice && (
-            <IconBtn icon="view_column" size={28} iconSize={16} color={C.muted} onClick={() => setDesktopLayoutPersist("full")} title="Full panels" aria-label="Full panels" />
+            <IconBtn icon="grid_view" size={28} iconSize={16} color={C.muted} onClick={() => setDesktopLayoutPersist("full")} title="Full panels" aria-label="Full panels" />
           )}
           <IconBtn icon="apps" size={28} iconSize={16} color={C.muted} onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" aria-label="More actions" />
         </div>
@@ -2395,7 +2401,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             <  1000 px: 5 rows stacked, each 1/5 height — all cards always visible. */}
         {/* GM3 grid rhythm: real gutters between cards (tighter when dense, but still
             breathing) — tone + space do the separation, matching the full-panel view. */}
-        <div style={{ flex:1, minHeight:0, gap: dense?8:14, display:"grid", overflow:"hidden",
+        <div style={{ flex:1, minHeight:0, gap: dense?8:14, marginTop:10, display:"grid", overflow:"hidden",
           ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }),
           gridTemplateColumns: boxesFiveCol ? "repeat(5, minmax(0,1fr))" : "1fr",
           gridTemplateRows:    boxesFiveCol ? "1fr" : boxRows }}>
@@ -2412,9 +2418,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               const exp = expandedRows.has(rk);
               return (
                 <ListItem key={msg.id||i} type="button" onClick={()=>toggleRow(rk)} style={{ borderRadius: RADIUS.sm }}>
-                  <span slot="headline" style={{ color:C.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{from}</span>
-                  {exp && subj && subj !== snip && <span slot="overline" style={{ color:C.text, fontWeight:600 }}>{subj}</span>}
-                  <span slot="supporting-text" style={{ color:C.muted, whiteSpace:"normal", wordBreak:"break-word", ...(exp ? {} : { display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }) }}>{snip}</span>
+                  {/* Body summary is the read target (full headline size); sender rides the
+                      smaller supporting line — buglog "need a magnifier" ticket. */}
+                  <span slot="headline" style={{ color:C.text, fontWeight:450, whiteSpace:"normal", wordBreak:"break-word", ...(exp ? {} : { display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }) }}>{snip}</span>
+                  <span slot="supporting-text" style={{ color:C.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{exp && subj && subj !== snip ? `${from} — ${subj}` : from}</span>
                   <span slot="trailing-supporting-text" style={{ color:C.faint, whiteSpace:"nowrap" }}>{date}</span>
                   <span slot="end"><IconBtn icon="open_in_new" size={28} iconSize={14} color={C.faint} title="Open in Gmail" href={`https://mail.google.com/mail/u/0/#inbox/${msg.id}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} /></span>
                 </ListItem>
@@ -2660,7 +2667,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               <span style={{ alignSelf: "center", color: C.faint, display: "flex", transform: mobileTimelineOpen ? "rotate(90deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("chevron_right", 14)}</span>
             </button>
             <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
-              {!isMobileDevice && [{ id:"boxes", icon:"grid_view", label:"Card grid" }, { id:"full", icon:"view_column", label:"Full panel" }].map(({ id, icon, label }) => (
+              {/* Card-grid icon tracks its real orientation: columns wide, rows narrow. */}
+              {!isMobileDevice && [{ id:"boxes", icon: availableW >= 1500 ? "view_column" : "table_rows", label:"Card grid" }, { id:"full", icon:"grid_view", label:"Full panel" }].map(({ id, icon, label }) => (
                 <IconBtn key={id} icon={icon} size={28} iconSize={16} color={desktopLayout === id ? C.text : C.muted} active={desktopLayout === id} activeBg={C.hover} onClick={() => setDesktopLayoutPersist(id)} title={label} aria-label={label} />
               ))}
               <IconBtn icon={dense ? "density_small" : "density_medium"} size={28} iconSize={16} color={C.muted} onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density" />
@@ -2805,8 +2813,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const url  = `https://mail.google.com/mail/u/0/#inbox/${msg.id}`;
                 return (
                   <ListItem key={msg.id||i} type="link" href={url} target="_blank" style={{ borderRadius: RADIUS.sm }}>
-                    <span slot="headline" style={{ color:C.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{from}</span>
-                    <span slot="supporting-text" style={{ color:C.muted, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden", whiteSpace:"normal", wordBreak:"break-word" }}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
+                    {/* Body summary headlines; sender rides the smaller supporting line. */}
+                    <span slot="headline" style={{ color:C.text, fontWeight:450, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden", whiteSpace:"normal", wordBreak:"break-word" }}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
+                    <span slot="supporting-text" style={{ color:C.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{from}</span>
                     <span slot="trailing-supporting-text" style={{ color:C.faint, whiteSpace:"nowrap" }}>{date}</span>
                   </ListItem>
                 );
@@ -2910,8 +2919,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             {/* Layout: Boxes / Accordion / Full (desktop-only alternatives to the 3-column view) */}
             <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
               {[
-                { id: "boxes", icon: "grid_view",   title: "Card grid view" },
-                { id: "full",  icon: "view_column", title: "Full panel view" },
+                // Card-grid icon tracks its real orientation (columns ≥1500 px, rows below);
+                // the two icons were reversed relative to what each layout actually renders.
+                { id: "boxes", icon: availableW >= 1500 ? "view_column" : "table_rows", title: "Card grid view" },
+                { id: "full",  icon: "grid_view", title: "Full panel view" },
               ].map(({ id, icon, title }) => (
                 <IconBtn key={id} icon={icon} size={28} iconSize={15} onClick={() => setDesktopLayoutPersist(id)} title={title} aria-label={title}
                   color={desktopLayout === id ? C.muted : C.faint} active={desktopLayout === id} activeBg={softBorder(C.divider, 0.55)} />

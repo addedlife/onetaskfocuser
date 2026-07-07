@@ -842,17 +842,6 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     await refresh(true);
   };
 
-  // Owner ticket: a button that opens/confirms DeskPhone on the PC side. /show is
-  // answered by the app itself, so a reply BOTH raises the window and proves it's
-  // running. Routed through post() so it works from anywhere: loopback on this PC,
-  // or the cloud relay from a phone (needs DeskPhone build ≥ b324 to drain it).
-  const openDeskPhoneOnPc = async () => {
-    const ok = await post("/show", "show");
-    if (!ok && !usingRelayRef.current) {
-      setError("DeskPhone isn't running on this PC — start it from the desktop and it will connect on its own.");
-    }
-  };
-
   const dialNum = async (n) => { if (n?.trim()) await post(`/dial?n=${encodeURIComponent(n.trim())}`, "dial"); };
   const dial = () => dialNum(number);
   const sendSms = async () => {
@@ -882,6 +871,8 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const deviceNameRaw = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
   const deviceName = /^[0-9a-f]{12}$/i.test(String(deviceNameRaw).trim().replace(/[:\-]/g, "")) ? "" : deviceNameRaw;
   const idleLabel = deviceName ? `Connected · ${deviceName}` : "Connected";
+  // Which machine is hosting the phone link on the direct path — drives the pill.
+  const directHostLabel = status?.hostPlatform === "android" ? "Tablet" : "PC";
   const statusText = !statusOnline
     ? "DeskPhone offline"
     : relayStale
@@ -1083,7 +1074,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     threads.forEach((thread, idx) => rest.push({ kind: "message", item: thread, idx, at: thread._latestAt }));
     pinned.sort((a, b) => b.at - a.at);
     rest.sort((a, b) => b.at - a.at);
-    return [...pinned, ...rest].slice(0, Math.max(compact ? 12 : 20, pinned.length));
+    // Generous caps — the card is a fixed-height scroll area, so more items FILL
+    // tall screens instead of ending the list mid-card over dead whitespace
+    // (buglog: "autopopulate to fill the available screen").
+    return [...pinned, ...rest].slice(0, Math.max(compact ? 30 : 40, pinned.length));
   })();
 
   const phoneActivitySnapshot = useMemo(() => ({
@@ -1292,10 +1286,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             onClick={() => post("/hangup", "hangup")} disabled={!!busy} title="Hang up">Hang up</ActionBtn>
         ) : null}
         <div style={{ flex: 1 }} />
-        <button onClick={reconnectPhone} disabled={!!busy} title="Reconnect phone" aria-label="Reconnect phone" style={phoneIconButton(false)}>{suiteIcon("refresh", 15)}</button>
-        <button onClick={openDeskPhoneOnPc} disabled={!!busy} title="Open DeskPhone on the PC" aria-label="Open DeskPhone on the PC" style={phoneIconButton(false)}>
-          {suiteIcon("desktop_windows", 15)}
-        </button>
+        {/* ONE recovery control (buglog: controls were confusing) — the old
+            "open DeskPhone on the PC" button is gone; reconnect covers it. */}
+        <button onClick={reconnectPhone} disabled={!!busy} title="Reconnect — asks the phone host to re-link Bluetooth to your phone and refresh" aria-label="Reconnect phone" style={phoneIconButton(false)}>{suiteIcon("refresh", 15)}</button>
         {/* Record general */}
         <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
           style={phoneIconButton(false)}>
@@ -1326,24 +1319,24 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             title={
               (usingRelay
                 ? (phoneLinkLive ? "Connected through the cloud relay"
-                  : relayStale ? `PC offline — last update ${relayAgeLabel(relayAgeMs)} ago`
-                    : "Waiting for your PC via the cloud relay")
-                : (phoneLinkLive ? "Connected directly to DeskPhone on this PC" : "Looking for DeskPhone…"))
+                  : relayStale ? `Host offline — last update ${relayAgeLabel(relayAgeMs)} ago`
+                    : "Waiting for a phone host via the cloud relay")
+                : (phoneLinkLive ? `Connected to the phone host on ${directHostLabel === "Tablet" ? "the tablet" : "this PC"}` : "Looking for a phone host…"))
               + (transportMode === "auto" ? " · automatic" : " · pinned — click to change")
             }
             style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700,
               border: "none", background: "transparent", cursor: "pointer",
               color: phoneLinkLive ? C.success : relayStale ? C.warning : C.faint, padding: "0 4px" }}>
-            {suiteIcon(usingRelay ? (phoneLinkLive ? "cloud" : "cloud_off") : "computer", 15)}
-            <span>{phoneLinkLive ? (usingRelay ? "Live · cloud" : "This PC") : relayStale ? relayAgeLabel(relayAgeMs) : "…"}</span>
+            {suiteIcon(usingRelay ? (phoneLinkLive ? "cloud" : "cloud_off") : (directHostLabel === "Tablet" ? "tablet_android" : "computer"), 15)}
+            <span>{phoneLinkLive ? (usingRelay ? "Live · cloud" : directHostLabel) : relayStale ? relayAgeLabel(relayAgeMs) : "…"}</span>
           </button>
           {showTransportMenu && (
             <div style={{ position: "absolute", right: 0, bottom: "calc(100% + 6px)", zIndex: 60, minWidth: 200,
               background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm,
               boxShadow: ELEV[3], padding: SP.xs }}>
-              {[["auto", "Auto (recommended)", "Direct when this browser can reach your PC, cloud relay otherwise"],
-                ["direct", "This PC only", "Always talk to DeskPhone on this machine"],
-                ["relay", "Cloud relay only", "Always go through the cloud"]].map(([val, label, hint]) => (
+              {[["auto", "Automatic (recommended)", "Finds whichever host has your phone — PC, tablet, or the cloud relay"],
+                ["direct", "Local host only", "Only talk to a phone host on this network — never the cloud"],
+                ["relay", "Cloud relay only", "Always go through the cloud (for use away from home)"]].map(([val, label, hint]) => (
                 <button key={val} title={hint}
                   onClick={() => { setTransportMode(val); setShowTransportMenu(false); refresh(true); }}
                   style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
@@ -1419,8 +1412,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                   return (
                     <ListItem key={`${thread._key || thread._who}-${idx}`} type="button" onClick={() => setExpandedPhoneMessageId(actionId)} style={{ borderRadius: RADIUS.sm }}>
                       <span slot="start" style={phoneLeadIconStyle(isUnread ? C.accent : msgColor, isUnread ? C.hover : "transparent")}>{suiteIcon(msgIcon, 14)}</span>
-                      <span slot="headline" style={{ fontWeight: isUnread ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread._name}</span>
-                      {preview && <span slot="supporting-text" style={{ color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preview}</span>}
+                      {/* Message BODY is the read target (full headline size); sender drops
+                          to the smaller supporting line — buglog "need a magnifier" ticket. */}
+                      <span slot="headline" style={{ fontWeight: isUnread ? 600 : 450, color: C.text, whiteSpace: "normal", wordBreak: "break-word", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{preview || thread._name}</span>
+                      {preview && <span slot="supporting-text" style={{ color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread._name}</span>}
                       {time && <span slot="trailing-supporting-text" style={{ color: C.muted }}>{time}</span>}
                       <span slot="end"><IconBtn icon="more_horiz" size={32} iconSize={17} color={C.muted} title="Show actions" aria-label="Show actions" onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionId); }} /></span>
                     </ListItem>
@@ -1430,11 +1425,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                   <div key={`${thread._key || thread._who}-${idx}`} className="nc-action-row" style={{ ...phoneRowStyle, background: expanded ? C.hover : "transparent" }}>
                     <span style={phoneLeadIconStyle(isUnread ? C.accent : msgColor, isUnread ? C.hover : "transparent")}>{suiteIcon(msgIcon, 14)}</span>
                     <button onClick={() => setExpandedPhoneMessageId(expanded ? null : actionId)} style={{ minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0, color: C.text }}>
+                      {/* Collapsed: body reads at full size, sender on the small line under it.
+                          Expanded: the name headlines the open conversation as before. */}
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, minWidth: 0 }}>
-                        <span style={{ flex: 1, fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, fontWeight: isUnread ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread._name}</span>
+                        <span style={{ flex: 1, fontSize: NC_TYPE.control, lineHeight: NC_TYPE.line, fontWeight: isUnread ? 600 : (expanded ? 500 : 450), color: C.text, ...(expanded ? { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } : { whiteSpace: compact ? "nowrap" : "normal", overflow: compact ? "hidden" : undefined, textOverflow: compact ? "ellipsis" : undefined, wordBreak: compact ? "normal" : "break-word" }) }}>{expanded ? thread._name : (preview || thread._name)}</span>
                         {time && <span style={{ fontSize: NC_TYPE.meta, color: C.muted, flexShrink: 0, fontWeight: 400 }}>{time}</span>}
                       </div>
-                      {preview && !expanded && <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted, marginTop: 0, whiteSpace: compact ? "nowrap" : "normal", overflow: compact ? "hidden" : undefined, textOverflow: compact ? "ellipsis" : undefined, wordBreak: compact ? "normal" : "break-word", lineHeight: NC_TYPE.line }}>{preview}</span>}
+                      {preview && !expanded && <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted, marginTop: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: NC_TYPE.line }}>{thread._name}</span>}
                     </button>
                     {!expanded && (
                       <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
@@ -1656,10 +1653,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       {compact && !error && !(statusOnline && (hasMessages || hasCalls)) && (
         <div style={{ display: "flex", alignItems: "center", gap: SP.xs, padding: `${SP.xs} ${SP.xs}`, fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0 }}>
           <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, flexShrink: 0, background: phoneLinkLive ? C.success : relayStale ? C.warning : C.faint }} />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{phoneLinkLive ? "Connected · no recent calls or texts" : relayStale ? `PC offline · ${relayAgeLabel(relayAgeMs)}` : "DeskPhone offline"}</span>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{phoneLinkLive ? "Connected · no recent calls or texts" : relayStale ? `Host offline · ${relayAgeLabel(relayAgeMs)}` : "Phone host offline"}</span>
         </div>
       )}
-      {!statusOnline && !error && !compact && <div style={{ fontSize: NC_TYPE.meta, color: C.muted, padding: `${SP.xs} 2px` }}>Open DeskPhone to connect calls and texts.</div>}
+      {!statusOnline && !error && !compact && <div style={{ fontSize: NC_TYPE.meta, color: C.muted, padding: `${SP.xs} 2px` }}>Start a phone host (DeskPhone on the PC or the Shamash host on the tablet) to connect calls and texts.</div>}
       {error && <div style={{ fontSize: NC_TYPE.meta, color: C.danger, background: C.bgSoft, borderRadius: RADIUS.sm, padding: `${SP.sm} ${SP.sm}`, marginTop: 2 }}>{error}</div>}
     </div>
   );
