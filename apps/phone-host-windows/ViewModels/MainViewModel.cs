@@ -364,6 +364,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             _isFullyConnected = value;
             OnPropertyChanged();
             _relay.PushNow(); // phone just connected or disconnected — push state immediately
+            _relay.OnConnectionChanged(); // flip the owner-doc heartbeat's connected flag right away
         }
     }
 
@@ -3328,8 +3329,18 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         var recent = _settings.DefaultDevice;
         if (recent != null)
         {
-            AppendDebug($"[STARTUP] Auto-connecting to {recent.Name} ({recent.Address})…");
-            await ReconnectToMostRecentAsync();
+            // Arbitration: don't grab the phone if the tablet is the live primary.
+            // One owner-doc read first, so the very first auto-connect already knows.
+            await _relay.EvaluateShouldHoldAsync();
+            if (_relay.ShouldHoldPhone)
+            {
+                AppendDebug($"[STARTUP] Auto-connecting to {recent.Name} ({recent.Address})…");
+                await ReconnectToMostRecentAsync();
+            }
+            else
+            {
+                AppendDebug("[STARTUP] Tablet is the live phone host (owner doc) — standing by; will take over only if it goes offline or you switch the toggle.");
+            }
         }
 
         // ── Persistent connection watchdog ────────────────────────────────
@@ -6167,7 +6178,10 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 try { await Task.Delay(TimeSpan.FromSeconds(30), ct); }
                 catch (OperationCanceledException) { break; }
 
-                if (!IsFullyConnected && !IsConnecting)
+                // Only reconnect if arbitration says THIS host should hold the phone.
+                // While the tablet is the live primary, the PC stays parked — this is
+                // what stops the two hosts fighting over the Bluetooth link.
+                if (!IsFullyConnected && !IsConnecting && _relay.ShouldHoldPhone)
                     QueueAutoReconnect("watchdog: not fully connected");
             }
             AppendDebugThreadSafe("[WATCHDOG] Connection watchdog stopped");

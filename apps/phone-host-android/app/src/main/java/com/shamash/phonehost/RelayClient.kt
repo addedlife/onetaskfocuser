@@ -47,6 +47,16 @@ class RelayClient(private val host: HostService) {
         private const val RTDB_COMMANDS_URL =
             "https://$FB_PROJECT-default-rtdb.firebaseio.com/phone-relay/commands.json"
 
+        // Host arbitration (owner doc) — see phone-host-control.js / RelayService.cs.
+        private const val OWNER_DOC =
+            "projects/$FB_PROJECT/databases/(default)/documents/phone-relay/owner"
+        private const val OWNER_GET_URL =
+            "https://firestore.googleapis.com/v1/projects/$FB_PROJECT/databases/(default)/documents/phone-relay/owner?key=$FB_API_KEY"
+        private const val HOST_ID = "android"
+        private const val OWNER_HEARTBEAT_MS = 15_000L      // renew cadence while holding
+        private const val OWNER_STALE_MS = 90_000L          // preferred host silent this long ⇒ dead
+        private const val OWNER_TAKEOVER_GRACE_MS = 90_000L // brief yield after a switch before takeover
+
         private const val MESSAGE_RELAY_LIMIT = 150   // whole doc re-sent to every device on change
         private const val CALL_RELAY_LIMIT = 100
         private const val HEARTBEAT_MS = 300_000L     // backup push when nothing changed
@@ -72,12 +82,20 @@ class RelayClient(private val host: HostService) {
     @Volatile private var lastPushedConnected = false
     @Volatile private var pushNowRequested = false
     @Volatile private var pushErrors = 0
+    @Volatile private var shouldHold = true   // default true = legacy "always try to hold"
+
+    /** Whether THIS host should currently hold the phone (owner-doc arbitration).
+     *  HostService's watchdog + startup connect gate on this so the tablet and the
+     *  PC never fight over the phone's Bluetooth link. */
+    fun shouldHoldPhone(): Boolean = shouldHold
 
     fun start() {
         executor.scheduleWithFixedDelay({ runCatching { pushTick() }.onFailure { logPushError(it) } },
             2, TICK_MS / 1000, TimeUnit.SECONDS)
         executor.scheduleWithFixedDelay({ runCatching { drainTick() } },
             5, DRAIN_MS / 1000, TimeUnit.SECONDS)
+        executor.scheduleWithFixedDelay({ runCatching { arbitrationTick() } },
+            3, OWNER_HEARTBEAT_MS / 1000, TimeUnit.SECONDS)
         HostLog.add("[RELAY] Client started — feeds the cloud while this host holds the phone link")
     }
 
@@ -245,6 +263,57 @@ class RelayClient(private val host: HostService) {
 
     private fun getReq(path: String, vararg query: Pair<String, String>) =
         LocalApiServer.Request("GET", path, query.toMap(), "")
+
+    // ── Host arbitration (owner doc: phone-relay/owner) ───────────────────────
+    /** Read the owner doc, decide whether this host should hold the phone, and —
+     *  while holding — renew the heartbeat. Additive & safe: a non-preferred host
+     *  never grabs (the watchdog gates on shouldHoldPhone()); nothing is torn down. */
+    fun evaluateShouldHold() = arbitrationTick()
+
+    private fun arbitrationTick() {
+        var preferred = "tablet"; var ownerHost = ""; var ownerT = 0L; var preferredAt = 0L; var ownerConnected = false
+        val raw = httpGet(OWNER_GET_URL)
+        if (raw != null && raw.trim().startsWith("{")) {
+            try {
+                JSONObject(raw).optJSONObject("fields")?.let { f ->
+                    preferred = f.optJSONObject("preferred")?.optString("stringValue") ?: "tablet"
+                    ownerHost = f.optJSONObject("host")?.optString("stringValue") ?: ""
+                    ownerT = f.optJSONObject("t")?.optString("integerValue")?.toLongOrNull() ?: 0L
+                    preferredAt = f.optJSONObject("preferredAtMs")?.optString("integerValue")?.toLongOrNull() ?: 0L
+                    ownerConnected = f.optJSONObject("connected")?.optBoolean("booleanValue") ?: false
+                }
+            } catch (_: Exception) {}
+        }
+        val now = System.currentTimeMillis()
+        // preferred "pc" ⇒ the Windows host should hold; "tablet" ⇒ this Android host.
+        val preferredId = if (preferred == "pc") "windows" else "android"
+        val amPreferred = preferredId == HOST_ID
+        val preferredFresh = ownerHost == preferredId && (now - ownerT) < OWNER_STALE_MS && ownerConnected
+        shouldHold = when {
+            amPreferred    -> true                                     // I'm the chosen host — always try
+            preferredFresh -> false                                    // preferred host alive & holding — stay parked
+            else           -> (now - preferredAt) >= OWNER_TAKEOVER_GRACE_MS  // brief yield after a switch, else take over
+        }
+        // Only the intended holder writes — a parked host writing host=android would
+        // clobber the PC's ownership. While holding, renew the heartbeat.
+        if (shouldHold) writeOwnerHeartbeat(now, host.isFullyConnected())
+    }
+
+    private fun writeOwnerHeartbeat(nowMs: Long, connected: Boolean) {
+        val body = JSONObject()
+            .put("writes", JSONArray().put(JSONObject()
+                .put("update", JSONObject()
+                    .put("name", OWNER_DOC)
+                    .put("fields", JSONObject()
+                        .put("host", JSONObject().put("stringValue", HOST_ID))
+                        .put("t", JSONObject().put("integerValue", nowMs.toString()))
+                        .put("connected", JSONObject().put("booleanValue", connected))))
+                .put("updateMask", JSONObject()
+                    .put("fieldPaths", JSONArray().put("host").put("t").put("connected")))))
+            .toString()
+        val code = httpSend("POST", FS_COMMIT_URL, body)
+        if (code !in 200..299) HostLog.add("[ARBITRATION] owner heartbeat HTTP $code")
+    }
 
     // ── Tiny HTTP helpers (framework-only, matching the project's no-deps rule) ──
 

@@ -58,6 +58,23 @@ public class RelayService : IDisposable
     public Func<bool>? IsPhoneConnected { get; set; }
     private bool _lastPushedConnected = true;   // true → the farewell push always fires once
 
+    // ── Host arbitration (owner doc: phone-relay/owner) ─────────────────────────
+    // One tiny shared doc decides which host holds the phone, so the PC and the
+    // tablet never fight over the phone's Bluetooth link — that tug-of-war was the
+    // connect/disconnect/forget/remove swamp. The rule is additive and safe: only
+    // the host that SHOULD hold ever initiates a connection; a non-preferred host
+    // simply never grabs (no disconnect, no teardown). The web toggle writes
+    // `preferred`; the active holder renews `host`/`t`/`connected` as a heartbeat.
+    // (Web side: apps/web/src/08-app-split/phone-host-control.js.)
+    public string HostId { get; set; } = "windows";       // this host's id in the owner doc
+    private const int  OwnerHeartbeatMs     = 15_000;     // renew cadence while holding
+    private const int  OwnerStaleMs         = 90_000;     // preferred host silent this long ⇒ treat as dead
+    private const int  OwnerTakeoverGraceMs = 90_000;     // brief yield after a fresh switch before taking over
+    private volatile bool _shouldHoldPhone  = true;       // default true = legacy "always try to hold"
+    /// <summary>Whether THIS host should currently hold the phone. MainViewModel's
+    /// startup auto-connect and watchdog consult this before initiating a connection.</summary>
+    public bool ShouldHoldPhone => _shouldHoldPhone;
+
     // ── Config ────────────────────────────────────────────────────────────────
     private string _relayKey = "";
     public  bool   IsEnabled => !string.IsNullOrWhiteSpace(_relayKey);
@@ -120,6 +137,7 @@ public class RelayService : IDisposable
         _ = Task.Run(() => PushLoopAsync(_cts.Token));
         _ = Task.Run(() => StreamRtdbCommandsAsync(_cts.Token));
         _ = Task.Run(() => DrainCommandsLoopAsync(_cts.Token));
+        _ = Task.Run(() => ArbitrationLoopAsync(_cts.Token));
         LogLine?.Invoke($"[RELAY] Started — writing directly to Firestore ({FB_PROJECT})");
     }
 
@@ -630,6 +648,113 @@ public class RelayService : IDisposable
         var m = System.Text.RegularExpressions.Regex.Match(qs, $@"(?:^|&){key}=([^&]*)");
         return m.Success ? Uri.UnescapeDataString(m.Groups[1].Value.Replace("+", " ")) : "";
     }
+
+    // ── Host arbitration loop: read owner doc, decide, heartbeat ─────────────────
+    private async Task ArbitrationLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try { await EvaluateShouldHoldAsync(ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch (Exception ex) { LogLine?.Invoke($"[ARBITRATION] {ex.GetType().Name}: {ex.Message}"); }
+            try { await Task.Delay(OwnerHeartbeatMs, ct); }
+            catch (OperationCanceledException) { break; }
+        }
+    }
+
+    /// <summary>
+    /// Read phone-relay/owner, recompute whether this host should hold the phone,
+    /// and — while holding — renew the heartbeat (host/t/connected). Also callable
+    /// once at startup so the first auto-connect decision already knows whether the
+    /// tablet is the live primary. When the relay isn't configured, arbitration is
+    /// skipped and ShouldHoldPhone stays true (legacy behavior).
+    /// </summary>
+    public async Task EvaluateShouldHoldAsync(CancellationToken ct = default)
+    {
+        if (!IsEnabled) { _shouldHoldPhone = true; return; }
+
+        var preferred = "tablet"; var ownerHost = ""; long ownerT = 0, preferredAt = 0; var ownerConnected = false;
+        try
+        {
+            using var resp = await _http.GetAsync($"{FS_BASE}/phone-relay/owner?key={FB_API_KEY}", ct);
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync(ct);
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("fields", out var f))
+                {
+                    preferred      = ReadStr(f, "preferred", "tablet");
+                    ownerHost      = ReadStr(f, "host", "");
+                    ownerT         = ReadLong(f, "t", 0);
+                    preferredAt    = ReadLong(f, "preferredAtMs", 0);
+                    ownerConnected = ReadBool(f, "connected", false);
+                }
+            }
+            // 404 = no owner doc yet ⇒ leave defaults ⇒ shouldHold stays true (legacy).
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        // preferred "pc" ⇒ the PC (this host) should hold; "tablet" ⇒ the Android host.
+        var preferredId    = preferred == "pc" ? "windows" : "android";
+        var amPreferred    = preferredId == HostId;
+        var preferredFresh = ownerHost == preferredId && (now - ownerT) < OwnerStaleMs && ownerConnected;
+
+        bool shouldHold;
+        if (amPreferred)         shouldHold = true;                                  // I'm the chosen host — always try
+        else if (preferredFresh) shouldHold = false;                                // preferred host is alive & holding — stay parked
+        else                     shouldHold = (now - preferredAt) >= OwnerTakeoverGraceMs; // brief yield after a switch, else take over so the phone isn't orphaned
+        _shouldHoldPhone = shouldHold;
+
+        // Only the intended holder writes the heartbeat — a parked host writing
+        // host=windows would clobber the tablet's ownership. While holding, renew.
+        if (shouldHold)
+            await WriteOwnerHeartbeatAsync(now, IsPhoneConnected?.Invoke() ?? false, ct);
+    }
+
+    /// <summary>Fire a heartbeat immediately on a connect/disconnect edge so remote
+    /// surfaces and the other host see the change within ~1 s, not after the stale
+    /// window. No-op unless this host is the intended holder (never clobbers the peer).</summary>
+    public void OnConnectionChanged()
+    {
+        if (!IsEnabled || !_shouldHoldPhone) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                await WriteOwnerHeartbeatAsync(now, IsPhoneConnected?.Invoke() ?? false, default);
+            }
+            catch (Exception ex) { LogLine?.Invoke($"[ARBITRATION] onchange {ex.Message}"); }
+        });
+    }
+
+    private async Task WriteOwnerHeartbeatAsync(long nowMs, bool connected, CancellationToken ct)
+    {
+        var fsBody = $"{{\"fields\":{{\"host\":{{\"stringValue\":\"{HostId}\"}},\"t\":{{\"integerValue\":\"{nowMs}\"}},\"connected\":{{\"booleanValue\":{(connected ? "true" : "false")}}}}}}}";
+        var url = $"{FS_BASE}/phone-relay/owner?key={FB_API_KEY}" +
+                  "&updateMask.fieldPaths=host&updateMask.fieldPaths=t&updateMask.fieldPaths=connected";
+        using var content = new StringContent(fsBody, Encoding.UTF8, "application/json");
+        using var req = new HttpRequestMessage(HttpMethod.Patch, url) { Content = content };
+        using var resp = await _http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode)
+            LogLine?.Invoke($"[ARBITRATION] owner heartbeat HTTP {(int)resp.StatusCode}");
+    }
+
+    // Tiny Firestore-REST field readers (values are typed: stringValue/integerValue/…).
+    private static string ReadStr(JsonElement fields, string name, string dflt)
+        => fields.TryGetProperty(name, out var e) && e.TryGetProperty("stringValue", out var v) ? (v.GetString() ?? dflt) : dflt;
+    private static long ReadLong(JsonElement fields, string name, long dflt)
+    {
+        if (fields.TryGetProperty(name, out var e))
+        {
+            if (e.TryGetProperty("integerValue", out var iv) && long.TryParse(iv.GetString(), out var l)) return l;
+            if (e.TryGetProperty("doubleValue", out var dv) && dv.TryGetDouble(out var d)) return (long)d;
+        }
+        return dflt;
+    }
+    private static bool ReadBool(JsonElement fields, string name, bool dflt)
+        => fields.TryGetProperty(name, out var e) && e.TryGetProperty("booleanValue", out var v) ? v.GetBoolean() : dflt;
 
     public void Dispose()
     {

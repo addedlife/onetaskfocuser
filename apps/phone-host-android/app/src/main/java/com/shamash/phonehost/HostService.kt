@@ -146,7 +146,9 @@ class HostService : Service() {
         // Reconnect watchdog
         executor.scheduleWithFixedDelay({
             runCatching {
-                if (!released && !isFullyConnected() && !connecting.get() && defaultDeviceAddress.isNotBlank()) {
+                // Gate on arbitration: while the PC is the chosen/live host, this
+                // tablet stays parked instead of yanking the phone back (no swamp).
+                if (!released && !isFullyConnected() && !connecting.get() && defaultDeviceAddress.isNotBlank() && relay.shouldHoldPhone()) {
                     HostLog.add("[WATCHDOG] link down — auto-reconnect")
                     connectToDefault()
                 }
@@ -164,7 +166,16 @@ class HostService : Service() {
 
         HostLog.add("[HOST] Service created — API ${api.startupResult}")
 
-        if (defaultDeviceAddress.isNotBlank()) connectToDefault()
+        if (defaultDeviceAddress.isNotBlank()) {
+            // Arbitration: learn (off the main thread) whether the PC is the chosen
+            // host before grabbing, so a tablet reboot while the PC holds doesn't start
+            // a tug-of-war. Default is tablet-primary, so this normally connects.
+            executor.execute {
+                runCatching { relay.evaluateShouldHold() }
+                if (relay.shouldHoldPhone()) connectToDefault()
+                else HostLog.add("[HOST] PC is the chosen phone host (owner doc) — standing by")
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY

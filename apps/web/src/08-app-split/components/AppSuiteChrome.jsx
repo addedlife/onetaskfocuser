@@ -7,6 +7,8 @@ import { MdRipple } from '@material/web/ripple/ripple.js';
 import { cleanTheme, DUR, EASE, NC_FONT_STACK, NC_TYPE, RADIUS, suiteIcon } from '../ui-tokens.jsx';
 import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
 import { textOnColor } from '../../01-core.js';
+import { Switch } from '../m3.jsx';
+import { subscribeOwner, setPreferredHost } from '../phone-host-control.js';
 
 // Real M3 web components — Google's official implementations, not hand-coded lookalikes.
 // md-navigation-rail is not yet in @material/web v2.4; nav items stay hand-coded with
@@ -30,6 +32,17 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
     window.addEventListener(BUGLOG_COUNT_EVENT, onCount);
     return () => window.removeEventListener(BUGLOG_COUNT_EVENT, onCount);
   }, []);
+
+  // Phone-host control: which machine the owner wants holding the phone. Default
+  // is the tablet (primary); flipping this hands primacy to the PC (e.g. for call
+  // audio) and the tablet steps aside — the native hosts honor `preferred`.
+  const [phoneHost, setPhoneHost] = React.useState({ preferred: 'tablet', host: '', connected: false, present: false });
+  React.useEffect(() => {
+    const unsub = subscribeOwner(setPhoneHost);
+    return () => { try { unsub && unsub(); } catch (_) {} };
+  }, []);
+  const preferPc = phoneHost.preferred === 'pc';
+  const flipHost = () => setPreferredHost(preferPc ? 'tablet' : 'pc');
 
   const mainApps = [
     { id: "focus",      label: "Tasks",      icon: "rule"          },
@@ -221,6 +234,26 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         </span>
         {displayOpen && "Bug Log"}
       </button>
+
+      {/* Phone host — menu-rail toggle to hand the phone from the tablet (default
+          primary) to the PC, e.g. to route call audio through the computer. The
+          tablet steps aside when the PC takes over. Real M3 md-switch when the rail
+          is open; a tap-to-flip icon when collapsed. */}
+      {displayOpen ? (
+        <div title={`Phone hosted by ${preferPc ? 'the PC' : 'the tablet'} — switch to hand it to the ${preferPc ? 'tablet' : 'PC'}`}
+          style={navBtn(false, { cursor: 'default' })}>
+          {suiteIcon(preferPc ? 'computer' : 'smartphone', ic(24))}
+          <span style={{ flex: 1 }}>{`Phone: ${preferPc ? 'PC' : 'Tablet'}`}</span>
+          <Switch selected={preferPc} onChange={flipHost} aria-label="Hand phone hosting to the PC"
+            style={{ '--md-switch-selected-track-color': C.accent, '--md-switch-selected-hover-track-color': C.accent, '--md-switch-selected-focus-track-color': C.accent, '--md-switch-selected-pressed-track-color': C.accent }} />
+        </div>
+      ) : (
+        <button onClick={flipHost} title={`Phone host: ${preferPc ? 'PC' : 'Tablet'} — tap to switch`} aria-label="Switch phone host"
+          style={navBtn(false)}>
+          <Ripple />
+          {suiteIcon(preferPc ? 'computer' : 'smartphone', ic(24))}
+        </button>
+      )}
 
       {/* Reload — always-reachable refresh for PWA (no browser address bar in standalone mode).
           index.html is served no-cache so a plain reload fetches the latest hashed bundle. */}

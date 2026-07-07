@@ -1,15 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cleanTheme, DUR, EASE, ELEV, gvIconButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
-import { ActionBtn, IconBtn, ListItem, denseListVars } from '../m3.jsx';
+import { ActionBtn, AssistChip, IconBtn, ListItem, denseListVars } from '../m3.jsx';
 import { db } from '../../01-core.js';
 import { hostFetch, hostAuthHeaders, pairWithHost } from '../host-auth.js';
+import { subscribeOwner, HOST_LABEL, OWNER_LIVE_WINDOW_MS } from '../phone-host-control.js';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 const PHONE_FETCH_TIMEOUT_MS = 4500;
-// How fresh the relayed phone state must be for the phone link to count as live.
-// Hosts heartbeat to the relay every few seconds, so a gap beyond this means
-// no current host is feeding new texts/calls.
-const RELAY_LIVE_WINDOW_MS = 30000;
+// Fallback staleness window, used ONLY until the rebuilt hosts write the owner
+// heartbeat doc (phone-host-control.js). The legacy path refreshes the state doc
+// on change or every 5 min, so a tight window there reads a healthy-but-quiet
+// link as constant flapping — the exact iPad "connected/unconnected" bug. The
+// owner-doc path renews every ~20 s and uses the tight OWNER_LIVE_WINDOW_MS.
+const RELAY_STATE_FALLBACK_WINDOW_MS = 360000;
 
 // Compact "27s" / "4m" / "2h" age label for the relay's last-connected time.
 function relayAgeLabel(ms) {
@@ -331,6 +334,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // Server-stamped time the relay last received a push from a live phone host.
   // Drives the live/stale connection indicator on relay devices.
   const [relayReceivedAt, setRelayReceivedAt] = useState(0);
+  // Owner control doc — the preferred host plus the ACTIVE host's heartbeat.
+  // `present` is false until a rebuilt host first writes it, so liveness cleanly
+  // falls back to the state-doc stamp during rollout.
+  const [owner, setOwner] = useState({ preferred: 'tablet', host: '', t: 0, connected: false, present: false });
   // Ticks so staleness re-evaluates over time even when no new data arrives.
   const [nowTick, setNowTick] = useState(() => Date.now());
   const refreshInFlightRef = useRef(false);
@@ -620,6 +627,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     return () => clearInterval(id);
   }, [usingRelay]);
 
+  // Owner control doc — one small doc, one listener. Feeds the plain-language
+  // status line (Connected/Connecting/Offline) and the tablet-vs-PC label.
+  useEffect(() => {
+    const unsub = subscribeOwner(setOwner);
+    return () => { try { unsub && unsub(); } catch (_) {} };
+  }, []);
+
   // ── Real-time relay: when we're on the cloud relay,
   // subscribe to the phone-relay/state doc directly instead of relying only on the
   // 6.5 s poll. The active host pushes the instant a text arrives, so this lands the
@@ -777,21 +791,41 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // Relay liveness: on relay, the green light means an active host is currently
   // pushing. A stale stamp means incoming texts/calls are not reaching this device live. On the LAN path
   // there's no relay; liveness is simply whether the just-completed /status fetch worked.
-  const relayAgeMs = relayReceivedAt > 0 ? Math.max(0, nowTick - relayReceivedAt) : 0;
-  const relayStale = usingRelay && relayReceivedAt > 0 && relayAgeMs >= RELAY_LIVE_WINDOW_MS;
+  // Relay liveness comes from the owner heartbeat doc when present (renewed every
+  // ~20 s), else from the state-doc stamp with the wide fallback window. Content
+  // still comes from the state doc; only the "is a host alive right now" signal is
+  // decoupled onto the cheap heartbeat — that decoupling is what kills the flapping.
+  const heartbeatMs = owner.present ? owner.t : relayReceivedAt;
+  const liveWindowMs = owner.present ? OWNER_LIVE_WINDOW_MS : RELAY_STATE_FALLBACK_WINDOW_MS;
+  const ownerSaysConnected = owner.present ? owner.connected : true;
+  const relayAgeMs = heartbeatMs > 0 ? Math.max(0, nowTick - heartbeatMs) : 0;
+  const relayStale = usingRelay && heartbeatMs > 0 && (relayAgeMs >= liveWindowMs || !ownerSaysConnected);
   relayStaleRef.current = relayStale;   // lets resolveTransport re-probe LAN hosts aggressively while the relay is dead
-  const phoneLinkLive = usingRelay ? (statusOnline && relayReceivedAt > 0 && !relayStale) : statusOnline;
+  const phoneLinkLive = usingRelay ? (statusOnline && heartbeatMs > 0 && !relayStale) : statusOnline;
   // A raw Bluetooth address ("7E4B46E95FBA") is plumbing, not a phone name — never show it.
   const deviceNameRaw = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
   const deviceName = /^[0-9a-f]{12}$/i.test(String(deviceNameRaw).trim().replace(/[:\-]/g, "")) ? "" : deviceNameRaw;
   const idleLabel = deviceName ? `Connected · ${deviceName}` : "Connected";
-  // Which machine is hosting the phone link on the direct path — drives the pill.
-  const activeHostLabel = status?.hostPlatform === "android" ? "Tablet" : "PC";
+  // Which machine holds the phone right now — the owner doc is authoritative when
+  // present (it's who's actually connected); else infer from the state blob.
+  const activeHostLabel = (owner.present && owner.host ? HOST_LABEL[owner.host] : null)
+    || (status?.hostPlatform === "android" ? "Tablet" : "PC");
   const statusText = !statusOnline
     ? "Phone link offline"
     : relayStale
       ? `Phone link offline · last seen ${relayAgeLabel(relayAgeMs)} ago`
       : (isIncoming ? "Incoming call" : isOnCall ? "On call" : callState ? "Call status changed" : idleLabel);
+
+  // Plain-language phone-link status for the always-visible indicator (owner
+  // ticket: "there's no status indicator that says what it's doing"). One dot +
+  // one clear line, no jargon; Reconnect appears only when it's actually offline.
+  const linkDotColor = phoneLinkLive ? C.success : relayStale ? C.warning : C.faint;
+  const linkStatusLabel = phoneLinkLive
+    ? `Connected · ${activeHostLabel}${deviceName ? ` · ${deviceName}` : ""}`
+    : relayStale
+      ? `Offline — last seen ${relayAgeLabel(relayAgeMs)} ago`
+      : (usingRelay ? "Connecting…" : "Looking for phone host…");
+  const linkOffline = !phoneLinkLive && (relayStale || !statusOnline);
 
   // Report true liveness to the NerveCenter (not just "we have a blob"), and flip it to
   // offline as soon as the relay goes stale, so the dashboard tile can't claim "connected"
@@ -1159,22 +1193,22 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         </div>
       )}
 
-      {/* ── Phone-link status banner (any relay browser) — tells you whether a host is
-            actually connected right now, so you know live texts/calls are arriving. On the
-            compact nerve-center card this is suppressed (the card's summary line already
-            states online/offline); it only shows in the full phone view. ── */}
-      {usingRelay && !compact && (
-        relayStale ? (
-          <div style={{ display: "flex", alignItems: "flex-start", gap: SP.sm, fontSize: NC_TYPE.meta, lineHeight: 1.4, color: C.warning, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, padding: `${SP.sm} ${SP.sm}` }}>
-            <span style={{ marginTop: 1, flexShrink: 0, color: C.warning }}>{suiteIcon("smartphone", 16)}</span>
-            <span>Phone link offline — last update {relayAgeLabel(relayAgeMs)} ago. New texts &amp; calls resume when the tablet host reconnects.</span>
-          </div>
-        ) : phoneLinkLive ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: C.success, padding: "0 2px" }}>
-            <span style={{ width: 7, height: 7, borderRadius: RADIUS.pill, flexShrink: 0, background: C.success }} />
-            <span>Live · phone link{deviceName ? ` · ${deviceName}` : ""}</span>
-          </div>
-        ) : null
+      {/* ── Always-visible phone-link status (owner ticket: "there's no status
+            indicator that says what it's doing"). One dot + one plain-English line;
+            the Reconnect chip appears only when it's actually offline. Suppressed on
+            the compact card, which carries its own status dot lower down. ── */}
+      {!compact && (
+        <div style={{ display: "flex", alignItems: "center", gap: SP.sm, minHeight: 30, padding: "0 2px" }}>
+          <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, flexShrink: 0, background: linkDotColor }} />
+          <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.control, fontWeight: 600, color: phoneLinkLive ? C.success : relayStale ? C.warning : C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {linkStatusLabel}
+          </span>
+          {linkOffline && (
+            <AssistChip label="Reconnect" title="Reconnect the phone link" onClick={reconnectPhone} disabled={!!busy}>
+              <span slot="icon" className="material-symbols-rounded">refresh</span>
+            </AssistChip>
+          )}
+        </div>
       )}
 
       {composeOpen && !composeAnchorId && renderComposeBox()}
@@ -1197,9 +1231,8 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             onClick={() => post("/hangup", "hangup")} disabled={!!busy} title="Hang up">Hang up</ActionBtn>
         ) : null}
         <div style={{ flex: 1 }} />
-        {/* ONE recovery control (buglog: controls were confusing) — the old
-            old host-management buttons are gone; reconnect covers recovery. */}
-        <button onClick={reconnectPhone} disabled={!!busy} title="Reconnect phone link" aria-label="Reconnect phone" style={phoneIconButton(false)}>{suiteIcon("refresh", 15)}</button>
+        {/* Reconnect now lives in the always-visible status line above (offline-only
+            Reconnect chip) — no more unlabeled "reverse circle" here. */}
         {/* Record general */}
         <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
           style={phoneIconButton(false)}>
@@ -1222,22 +1255,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           style={phoneIconButton(showDialer)}>
           {suiteIcon("dialpad", 15)}
         </button>
-        {/* Status pill — read-only, no menu (buglog: the mode menu was confusing).
-            Green = live. Shows WHERE the data comes from; clicking just re-checks. */}
-        <button onClick={() => refresh(true)}
-          title={
-            usingRelay
-              ? (phoneLinkLive ? "Live phone link. Click to re-check."
-                : relayStale ? `Offline — no host has pushed for ${relayAgeLabel(relayAgeMs)}. Check the tablet host. Click to re-check.`
-                  : "Waiting for a phone host to come online… Click to re-check.")
-              : (phoneLinkLive ? `Live — the phone host is on this ${activeHostLabel === "Tablet" ? "tablet" : "PC"}. Click to re-check.` : "Looking for a phone host… Click to re-check.")
-          }
-          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, flexShrink: 0,
-            border: "none", background: "transparent", cursor: "pointer",
-            color: phoneLinkLive ? C.success : relayStale ? C.warning : C.faint, padding: "0 4px" }}>
-          {suiteIcon(activeHostLabel === "Tablet" ? "smartphone" : "phone_in_talk", 15)}
-          <span>{phoneLinkLive ? "Live" : relayStale ? `Offline · ${relayAgeLabel(relayAgeMs)}` : "…"}</span>
-        </button>
+        {/* (Status now lives in the always-visible plain-language line above.) */}
       </div>
       )}
 

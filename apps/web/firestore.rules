@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+    function isAdmin() {
+      return isAuthenticated() &&
+        request.auth.token.email == "rabbidanziger@hocsouthbend.com" &&
+        request.auth.token.email_verified == true;
+    }
+    function isValidShaila(data) {
+      return data.keys().hasAll(['content', 'status', 'createdAt', 'userId']) &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 100000 &&
+             data.status in ['pending', 'answered', 'got_back'] &&
+             data.userId is string;
+    }
+
+    // Main app data — keyed by email prefix (e.g. "rabbidanziger")
+    // The app derives this key from the email, not auth.uid, so we
+    // gate by verified email identity rather than raw Firebase UID.
+    match /users/{userId}/{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    match /shailos/{shailaId} {
+      allow read: if isAuthenticated() && (isDocOwner() || isAdmin());
+      allow create: if isAdmin() && isValidShaila(request.resource.data);
+      allow update: if isAdmin() && isValidShaila(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /phone-relay/state {
+      allow read: if request.auth != null;
+      allow write: if true;
+    }
+    match /phone-relay/commands {
+      allow read, write: if true;
+    }
+    // Host arbitration doc (phone-host-control.js / RelayService.cs / RelayClient.kt).
+    // Non-sensitive coordination state (which host is preferred + a liveness
+    // heartbeat). Read/write open like /commands: the native hosts touch it with
+    // only the public API key (no auth token), and it carries nothing private.
+    match /phone-relay/owner {
+      allow read, write: if true;
+    }
+    match /phone-media/{imageId} {
+      allow read: if request.auth != null;
+      allow write: if true;
+    }
+  }
+}
