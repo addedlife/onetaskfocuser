@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
@@ -169,6 +170,54 @@ public class ControlApiService : IDisposable
         try { CallAudio.Dispose(); } catch { }
     }
 
+    // ── LAN-host proxy plumbing ───────────────────────────────────────────
+    private static readonly HttpClient _forwardHttp = new() { Timeout = TimeSpan.FromSeconds(10) };
+
+    /// <summary>Accepts only http://<private-LAN-IP>:port targets — the proxy must
+    /// never be steerable at loopback (loop), public internet (SSRF), or HTTPS.</summary>
+    private static bool TryParseForwardTarget(string raw, out Uri baseUri)
+    {
+        baseUri = null!;
+        if (!Uri.TryCreate(raw?.Trim(), UriKind.Absolute, out var uri)) return false;
+        if (uri.Scheme != "http") return false;
+        if (!IPAddress.TryParse(uri.Host, out var ip)) return false;
+        if (IPAddress.IsLoopback(ip)) return false;
+        var b = ip.GetAddressBytes();
+        var isPrivate = b.Length == 4 && (
+            b[0] == 10 ||
+            (b[0] == 172 && b[1] >= 16 && b[1] <= 31) ||
+            (b[0] == 192 && b[1] == 168) ||
+            (b[0] == 169 && b[1] == 254));
+        if (!isPrivate) return false;
+        baseUri = uri;
+        return true;
+    }
+
+    private async Task<(int status, string body)> ForwardToLanHostAsync(
+        Uri baseUri, string method, string rawPath, string requestBody, Dictionary<string, string> headers)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(new HttpMethod(method), new Uri(baseUri, rawPath));
+            // Pass the pairing credentials through verbatim; everything else
+            // (including X-Forward-Host itself) stays behind.
+            if (headers.TryGetValue("Authorization", out var auth))
+                req.Headers.TryAddWithoutValidation("Authorization", auth);
+            if (headers.TryGetValue("X-Host-Token", out var hostToken))
+                req.Headers.TryAddWithoutValidation("X-Host-Token", hostToken);
+            if (!string.IsNullOrEmpty(requestBody) && method is "POST" or "PUT")
+                req.Content = new StringContent(requestBody, Encoding.UTF8, "application/json");
+            using var res = await _forwardHttp.SendAsync(req);
+            var body = await res.Content.ReadAsStringAsync();
+            return ((int)res.StatusCode, body);
+        }
+        catch (Exception ex)
+        {
+            LogLine?.Invoke($"[API] LAN proxy to {baseUri} failed: {ex.GetType().Name}: {ex.Message}");
+            return (502, JsonError($"LAN host {baseUri.Host} unreachable from this PC"));
+        }
+    }
+
     // ── Accept loop ───────────────────────────────────────────────────────
     private async Task AcceptLoopAsync(CancellationToken ct)
     {
@@ -225,6 +274,26 @@ public class ControlApiService : IDisposable
             //    /pair swaps a Firebase ID token for one; /health stays open. ──
             var remoteIsLoopback =
                 client.Client.RemoteEndPoint is System.Net.IPEndPoint ep && IPAddress.IsLoopback(ep.Address);
+
+            // ── LAN-host proxy (before /pair so pairing THROUGH the proxy reaches
+            //    the target host, not this PC's own pairing handler) ────────────
+            //    A browser page served over HTTPS cannot fetch http://192.168.x.x
+            //    (mixed-content blocking — loopback is the sole exemption), so the
+            //    web app sends the request HERE with X-Forward-Host naming the LAN
+            //    host that actually holds the phone (e.g. the Android tablet), and
+            //    we relay it. Loopback callers only, private-network targets only,
+            //    and the header is never propagated onward — no loops, no SSRF.
+            //    Auth rides through untouched: the target host still enforces its
+            //    own Google-account pairing on the forwarded X-Host-Token.
+            if (remoteIsLoopback &&
+                headers.TryGetValue("X-Forward-Host", out var forwardHost) &&
+                TryParseForwardTarget(forwardHost, out var forwardBase))
+            {
+                var (fwdStatus, fwdBody) = await ForwardToLanHostAsync(forwardBase, method, rawPath, requestBody, headers);
+                await WriteHttpResponseAsync(stream, fwdBody, fwdStatus);
+                return;
+            }
+
             if (method == "POST" && path == "/pair")
             {
                 var bearer = headers.TryGetValue("Authorization", out var authHdr) &&

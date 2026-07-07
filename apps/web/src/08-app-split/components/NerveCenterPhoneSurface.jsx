@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cleanTheme, DUR, EASE, ELEV, gvIconButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { ActionBtn, IconBtn, ListItem, denseListVars } from '../m3.jsx';
 import { db } from '../../01-core.js';
-import { hostFetch, hostAuthHeaders, pairWithHost } from '../host-auth.js';
+import { hostFetch, hostAuthHeaders, pairWithHost, loadKnownHosts, publishKnownHost } from '../host-auth.js';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 const PHONE_FETCH_TIMEOUT_MS = 4500;
@@ -164,21 +164,21 @@ function linkedMessageParts(text, linkStyle = {}) {
   return parts;
 }
 
-async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS, extraHeaders = {}) {
+// `host` is a host descriptor from host-auth.js ({ base, forward? }); pass it for
+// direct host calls so pairing auth (X-Host-Token / silent /pair on 401) targets
+// the right machine. Relay calls omit it — they authenticate with the Firebase
+// bearer token in extraHeaders instead.
+async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS, extraHeaders = {}, host = null) {
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
-  // Hosts gate their API behind Google-account pairing (host-auth.js): attach the
-  // stored host token, and on a 401 pair silently with the signed-in account and retry.
-  const base = (url.match(/^https?:\/\/[^/]+/) || [""])[0];
-  const path = base ? url.slice(base.length) : url;
   try {
     const run = () => fetch(url, {
       cache: "no-store", signal: controller?.signal,
-      headers: { ...extraHeaders, ...(base ? hostAuthHeaders(base) : {}) },
+      headers: { ...extraHeaders, ...(host ? hostAuthHeaders(host) : {}) },
     });
     let response = await run();
-    if (response.status === 401 && base && await pairWithHost(base)) response = await run();
-    if (!response.ok) throw new Error(`${path || url} returned ${response.status}`);
+    if (response.status === 401 && host && await pairWithHost(host)) response = await run();
+    if (!response.ok) throw new Error(`${url} returned ${response.status}`);
     return await response.json();
   } finally {
     if (timer) window.clearTimeout(timer);
@@ -225,17 +225,21 @@ function PhoneMmsImage({ attachment, C }) {
 }
 
 function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, dense = false, onRecordConversation, onRecordCall, onMoreHistory }) {
-  // Two transports reach the phone: DIRECT (DeskPhone's HTTP API — loopback or
-  // same-origin when this page is served by DeskPhone itself) and RELAY (the
-  // cloud blob, reachable from anywhere). The default "auto" mode probes direct
-  // and falls back to relay BY REACHABILITY, not device type — so a desktop
-  // browser away from home rides the relay, and sitting back down at the PC
-  // flips back to direct automatically. isMobile only skips the pointless
-  // probe (a phone can never reach the PC's loopback).
+  // Two transports reach the phone: DIRECT (a host's HTTP API — this machine's
+  // loopback, a LAN host published in the Firestore registry, or a LAN host
+  // proxied through the local DeskPhone) and RELAY (the cloud blob, reachable
+  // from anywhere). The default "auto" mode probes ALL known hosts and prefers
+  // whichever one actually holds the phone's Bluetooth link — so when the
+  // tablet takes over from the PC, every surface follows it instead of staring
+  // at the phone-less PC. isMobile only skips the pointless probe (a phone
+  // away from home can never reach any of these).
   const isMobile = useMemo(() => isMobilePhoneDevice(), []);
-  const api = (typeof window !== "undefined" && window.location.port === "8765")
+  const localApi = (typeof window !== "undefined" && window.location.port === "8765")
     ? window.location.origin
     : "http://127.0.0.1:8765";
+  // HTTPS pages can't fetch http://192.168.x.x (mixed-content blocking; loopback
+  // is the sole exemption) — those hosts must ride the DeskPhone loopback proxy.
+  const isHttpsPage = typeof window !== "undefined" && window.location.protocol === "https:";
 
   const viewportW = useViewportWidth();
   const touchActions = viewportW < 980;
@@ -361,22 +365,84 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     lastProbeAtRef.current = 0;
   }, []);
 
-  // Loopback is exempt from mixed-content blocking, so this probe is safe even
-  // from the HTTPS production app.
-  const probeDirect = useCallback(async () => {
-    try { return !!(await fetchPhoneJson(`${api}/status`, 1500)); }
-    catch { return false; }
-  }, [api]);
+  // ── Direct-host discovery ──────────────────────────────────────────────────
+  // hostRef holds the resolved host descriptor ({ base, forward? } — see
+  // host-auth.js). knownHostsRef mirrors the Firestore registry of LAN hosts
+  // other surfaces have published (e.g. the tablet publishing itself).
+  const hostRef = useRef(null);
+  const knownHostsRef = useRef([]);
+  const relayStaleRef = useRef(false);
+  const lastPublishAtRef = useRef(0);
+  const failStreakRef = useRef(0);
+
+  useEffect(() => {
+    if (!db || !user?.uid || isMobile) return undefined;
+    let stopped = false;
+    const load = async () => {
+      const hosts = await loadKnownHosts(db, user.uid);
+      if (!stopped) knownHostsRef.current = hosts;
+    };
+    load();
+    const id = setInterval(load, 5 * 60 * 1000);
+    return () => { stopped = true; clearInterval(id); };
+  }, [user?.uid, isMobile]);
+
+  const probeHost = useCallback(async host => {
+    try {
+      const status = await fetchPhoneJson(`${host.base}/status`, 2500, {}, host);
+      return status ? { host, status } : null;
+    } catch { return null; }
+  }, []);
+
+  // Probe loopback + every registry host in parallel; prefer the one whose
+  // Bluetooth phone link is actually up, then fall back to any that answered.
+  const discoverHost = useCallback(async () => {
+    const candidates = [{ base: localApi }];
+    for (const known of knownHostsRef.current) {
+      if (!known?.url || known.url === localApi) continue;
+      candidates.push(isHttpsPage ? { base: localApi, forward: known.url } : { base: known.url });
+    }
+    const results = (await Promise.all(candidates.map(probeHost))).filter(Boolean);
+    if (!results.length) return null;
+    const withPhone = results.find(r => r.status?.connected === true);
+    return (withPhone || results[0]).host;
+  }, [localApi, isHttpsPage, probeHost]);
+
+  // Keep the Firestore registry fresh: after a successful direct fetch, record
+  // the host's LAN URL + link state (throttled) so OTHER surfaces can find it.
+  const publishSeenHost = useCallback(async (host, statusRes) => {
+    if (!db || !user?.uid || !statusRes) return;
+    const now = Date.now();
+    if (now - lastPublishAtRef.current < 60000) return;
+    lastPublishAtRef.current = now;
+    try {
+      const url = host.forward
+        || statusRes.lanUrl
+        || (await fetchPhoneJson(`${host.base}/lan-url`, 2500, {}, host).catch(() => null))?.lanUrl;
+      if (url) publishKnownHost(db, user.uid, {
+        url,
+        connected: statusRes.connected === true,
+        platform: statusRes.hostPlatform || "",
+        name: statusRes.hostConnector || "",
+      });
+    } catch {}
+  }, [user?.uid]);
 
   const resolveTransport = useCallback(async (force = false) => {
     if (transportMode === "direct" || transportMode === "relay") return transportMode;
     if (isMobile) return "relay";
     const now = Date.now();
-    if (!force && transportRef.current === "direct") return "direct";
-    if (!force && transportRef.current === "relay" && now - lastProbeAtRef.current < 25000) return "relay";
+    if (!force && transportRef.current === "direct" && hostRef.current) return "direct";
+    // Sitting on the relay we normally re-probe every 25 s — but when the relay
+    // blob is STALE (the PC stopped pushing) a LAN host is the only live path,
+    // so probe every cycle instead of camping on dead data.
+    const reprobeMs = relayStaleRef.current ? 0 : 25000;
+    if (!force && transportRef.current === "relay" && now - lastProbeAtRef.current < reprobeMs) return "relay";
     lastProbeAtRef.current = now;
-    return (await probeDirect()) ? "direct" : "relay";
-  }, [transportMode, isMobile, probeDirect]);
+    const found = await discoverHost();
+    hostRef.current = found;
+    return found ? "direct" : "relay";
+  }, [transportMode, isMobile, discoverHost]);
 
   // ── Relay command acknowledgements ─────────────────────────────────────────
   // DeskPhone acknowledges every relayed command by id inside the state blob it
@@ -469,60 +535,82 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       }
     };
 
-    const fetchDirect = async () => {
+    // The Android host serves /messages?limit=5000 noticeably slower than the
+    // PC — timeouts sized so a slow-but-healthy host doesn't read as "down"
+    // (that misread is what caused the tablet's direct↔relay flapping).
+    const fetchDirect = async (host) => {
       const [statusRes, messagesRes, callsRes, contactsRes] = await Promise.all([
-        fetchPhoneJson(`${api}/status`, 2500),
-        fetchPhoneJson(`${api}/messages?limit=5000`, 2500),
-        fetchPhoneJson(`${api}/calls`, 2500).catch(() => null),
-        fetchPhoneJson(`${api}/contacts`, 2500).catch(() => null),
+        fetchPhoneJson(`${host.base}/status`, 7000, {}, host),
+        fetchPhoneJson(`${host.base}/messages?limit=5000`, 7000, {}, host),
+        fetchPhoneJson(`${host.base}/calls`, 7000, {}, host).catch(() => null),
+        fetchPhoneJson(`${host.base}/contacts`, 7000, {}, host).catch(() => null),
       ]);
       return { statusRes, messagesRes, callsRes, contactsRes, receivedAt: 0 };
     };
 
     try {
-      setError("");
       let transport = await resolveTransport(forceProbe === true);
-      let payload;
+      let payload = null;
       if (transport === "direct") {
+        let host = hostRef.current || { base: localApi };
         try {
-          payload = await fetchDirect();
+          payload = await fetchDirect(host);
         } catch (directErr) {
           if (transportMode !== "auto") throw directErr;
-          // Auto failover: the PC vanished mid-session (left home, DeskPhone
-          // closed) — fall through to the relay within the same cycle.
-          transport = "relay";
-          lastProbeAtRef.current = Date.now();
-          payload = await fetchViaRelay();
+          // The working host hiccupped. Before conceding to the cloud relay
+          // (whose blob may be a stale snapshot from a phone-less PC),
+          // re-discover — another host may hold the phone now — and retry once.
+          const rediscovered = await discoverHost();
+          if (rediscovered) {
+            hostRef.current = host = rediscovered;
+            payload = await fetchDirect(rediscovered).catch(() => null);
+          }
+          if (!payload) {
+            transport = "relay";
+            hostRef.current = null;
+            lastProbeAtRef.current = Date.now();
+            payload = await fetchViaRelay();
+          }
         }
+        if (transport === "direct") publishSeenHost(host, payload.statusRes);
       } else {
         payload = await fetchViaRelay();
       }
+      failStreakRef.current = 0;
+      setError("");
       transportRef.current = transport;
       usingRelayRef.current = transport === "relay";
       setUsingRelay(transport === "relay");
       applyPhoneState(payload.statusRes, payload.messagesRes, payload.callsRes, payload.contactsRes, payload.receivedAt);
     } catch (e) {
-      setStatus(null); setMessages([]); setCalls([]); setRelayReceivedAt(0);
-      messagesSigRef.current = ""; callsSigRef.current = ""; contactsSigRef.current = "";
       transportRef.current = null;   // both paths failed — re-resolve from scratch next cycle
       const msg = String(e?.message || "");
+      // One bad cycle keeps the last-known data on screen with a soft note;
+      // only a sustained outage (3 consecutive cycles ≈ 20 s) blanks the
+      // surface. This kills the every-few-seconds error/recover thrash.
+      failStreakRef.current += 1;
+      const hardFail = failStreakRef.current >= 3 || !messagesSigRef.current;
+      if (hardFail) {
+        setStatus(null); setMessages([]); setCalls([]); setRelayReceivedAt(0);
+        messagesSigRef.current = ""; callsSigRef.current = ""; contactsSigRef.current = "";
+        usingRelayRef.current = false;
+        setUsingRelay(false);
+        onOnlineChange?.(false);
+      }
       setError(
         msg === "relay:no_state"
-          ? "Waiting for your PC — open DeskPhone so it can relay your texts."
+          ? "Waiting for a phone host — open DeskPhone on the PC or the Shamash host on the tablet."
           : msg === "relay:no_auth"
             ? "Sign in to see your phone here."
             : msg === "relay:denied"
               ? "Phone relay blocked by security rules."
-              : msg.startsWith("relay:fail")
-                ? "Cloud relay unreachable — try again in a moment."
-                : "Can't reach DeskPhone — make sure it's running on your PC.");
-      usingRelayRef.current = false;
-      setUsingRelay(false);
-      onOnlineChange?.(false);
+              : hardFail
+                ? "Can't reach a phone host — check DeskPhone on the PC or the tablet host."
+                : "Phone host briefly unreachable — reconnecting…");
     } finally {
       refreshInFlightRef.current = false;
     }
-  }, [api, transportMode, resolveTransport, onOnlineChange, user, applyPhoneState, processCommandResults]);
+  }, [localApi, transportMode, resolveTransport, discoverHost, publishSeenHost, onOnlineChange, user, applyPhoneState, processCommandResults]);
 
   // Build phone-number → name map from contacts, covering many possible field names from the DeskPhone API
   const contactMap = useMemo(() => {
@@ -718,7 +806,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         setError("");
         await new Promise(r => setTimeout(r, 2500));
       } else {
-        const res = await hostFetch(api, path, { method: "POST" });
+        const res = await hostFetch(hostRef.current || { base: localApi }, path, { method: "POST" });
         if (!res.ok) {
           let msg = `DeskPhone error (${res.status})`;
           try { const d = await res.json(); if (d?.error || d?.message) msg = d.error || d.message; } catch {}
@@ -788,6 +876,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // there's no relay; liveness is simply whether the just-completed /status fetch worked.
   const relayAgeMs = relayReceivedAt > 0 ? Math.max(0, nowTick - relayReceivedAt) : 0;
   const relayStale = usingRelay && relayReceivedAt > 0 && relayAgeMs >= RELAY_LIVE_WINDOW_MS;
+  relayStaleRef.current = relayStale;   // lets resolveTransport re-probe LAN hosts aggressively while the relay is dead
   const phoneLinkLive = usingRelay ? (statusOnline && relayReceivedAt > 0 && !relayStale) : statusOnline;
   // A raw Bluetooth address ("7E4B46E95FBA") is plumbing, not a phone name — never show it.
   const deviceNameRaw = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
@@ -1133,12 +1222,18 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // transparently. Compact/dense NerveCenter cards always keep the summary UI.
   // Chromium-only by design: a browser that blocks HTTP-loopback iframes from
   // an HTTPS page also fails the direct probe, so it never reaches this branch.
-  if (!compact && !dense && !isMobile && !usingRelay && status) {
+  // Only when the resolved host is the LOCAL Windows DeskPhone: the Android
+  // tablet host is API-only (no embedded UI), and a proxied LAN host can't
+  // serve an iframe — those cases stay on the summary surface below.
+  const embedsDeskPhoneUi = !usingRelay && status && hostRef.current &&
+    !hostRef.current.forward && hostRef.current.base === localApi &&
+    (status.hostPlatform || "windows") === "windows";
+  if (!compact && !dense && !isMobile && embedsDeskPhoneUi) {
     return (
       <div style={{ flex: "1 1 auto", minHeight: 0, minWidth: 0, display: "flex",
         animation: `nc-phone-surface-fade ${DUR.base} ${EASE.standard}` }}>
         <iframe
-          src={`${api}/?standalone=deskphone`}
+          src={`${localApi}/?standalone=deskphone`}
           style={{ width: "100%", height: "100%", border: "none", borderRadius: 0, display: "block" }}
           title="DeskPhone"
           sandbox="allow-scripts allow-same-origin allow-forms"

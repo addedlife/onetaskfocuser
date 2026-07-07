@@ -49,7 +49,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class HostService : Service() {
 
     companion object {
-        const val BUILD_STAMP = "android-b2"
+        const val BUILD_STAMP = "android-b3"
         private const val CHANNEL_ID = "phonehost"
         private const val NOTIFICATION_ID = 1
 
@@ -368,6 +368,11 @@ class HostService : Service() {
                 // /pair exchanges the caller's Firebase ID token for a host
                 // token; every other route requires X-Host-Token once an
                 // owner account has claimed this host.
+                // Only the Windows DeskPhone implements LAN forwarding; answering a
+                // forwarded request as ourselves would let this host masquerade as
+                // the proxy target in the web app's host probe.
+                req.headers.containsKey("x-forward-host") ->
+                    LocalApiServer.Response(501, ApiJson.error("this host does not proxy to other hosts"))
                 req.path == "/health" ->
                     ok(JSONObject().put("ok", true).put("build", BUILD_STAMP)
                         .put("authRequired", hostAuth.isEnforced()).toString())
