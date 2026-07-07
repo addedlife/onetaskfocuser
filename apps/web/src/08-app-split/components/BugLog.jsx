@@ -94,6 +94,8 @@ export function BugLog({ T, railVisible = true }) {
   const [filter, setFilter] = React.useState('all');
   const [menuId, setMenuId] = React.useState(null);
   const [expandedId, setExpandedId] = React.useState(null); // row opened to full text + history
+  const [editId, setEditId] = React.useState(null);   // row in inline-edit mode
+  const [editText, setEditText] = React.useState('');  // working copy of that row's text
   const [copied, setCopied] = React.useState(false);
   const [hot, setHot]       = React.useState(false);   // FAB hover/focus → full opacity
 
@@ -263,6 +265,23 @@ export function BugLog({ T, railVisible = true }) {
   }
   function onDraftKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addDraft(); }
+  }
+  // ── Inline edit of an entry's text — the authoritative b.text is rewritten and
+  // any stale AI summary is cleared so it re-summarizes from the new wording.
+  function startEdit(b) {
+    setEditId(b.id);
+    setEditText(b.text || '');
+    setExpandedId(b.id);   // show full context while editing
+    setMenuId(null);
+  }
+  function cancelEdit() { setEditId(null); setEditText(''); }
+  function saveEdit(id) {
+    const text = editText.trim();
+    if (!text) return;
+    Store.updateBug(id, { text, summary: null });
+    setEditId(null);
+    setEditText('');
+    summarizedRef.current.delete(id);   // allow a fresh auto-summary of the new text
   }
   function copyForTeam() {
     const openTickets = bugs.filter(b => b.status === 'unresolved');
@@ -460,8 +479,36 @@ export function BugLog({ T, railVisible = true }) {
                   const t = TYPE_BY[b.type]   || TYPE_BY.bug;
                   const s = STATUS_BY[b.status] || STATUS_BY.unresolved;
                   const expanded = expandedId === b.id;
+                  const editing = editId === b.id;
                   const display = expanded ? b.text : (b.summary || truncSummary(b.text));
                   const notes = Array.isArray(b.notes) ? b.notes : [];
+                  if (editing) {
+                    return (
+                      <ListItem key={b.id} style={{ '--md-list-item-leading-space': '10px', '--md-list-item-trailing-space': '10px' }}>
+                        <div slot="start" title={t.label} style={{ display: 'flex', alignItems: 'center' }}>
+                          {sym(t.icon, 15, t.color)}
+                        </div>
+                        <div slot="headline" style={{ display: 'flex', flexDirection: 'column', gap: SP.sm, padding: '4px 0' }}>
+                          <OutlinedTextField
+                            type="textarea"
+                            rows={3}
+                            label="Edit entry"
+                            value={editText}
+                            onInput={e => setEditText(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+                              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(b.id); }
+                            }}
+                            style={{ width: '100%' }}
+                          />
+                          <div style={{ display: 'flex', gap: SP.sm, justifyContent: 'flex-end' }}>
+                            <TextButton onClick={cancelEdit}><span>Cancel</span></TextButton>
+                            <FilledButton onClick={() => saveEdit(b.id)}><span>Save</span></FilledButton>
+                          </div>
+                        </div>
+                      </ListItem>
+                    );
+                  }
                   return (
                     <ListItem key={b.id} type="button" title={expanded ? undefined : b.text}
                       onClick={() => setExpandedId(prev => (prev === b.id ? null : b.id))}
@@ -513,6 +560,10 @@ export function BugLog({ T, railVisible = true }) {
                             </MenuItem>
                           ))}
                           <Divider />
+                          <MenuItem onClick={() => startEdit(b)}>
+                            <span slot="start" className="material-symbols-rounded" style={{ color: C.muted }}>edit</span>
+                            <div slot="headline">Edit text</div>
+                          </MenuItem>
                           <MenuItem onClick={() => { Store.updateBug(b.id, { type: b.type === 'bug' ? 'idea' : 'bug' }); setMenuId(null); }}>
                             <span slot="start" className="material-symbols-rounded" style={{ color: C.muted }}>swap_horiz</span>
                             <div slot="headline">Make {b.type === 'bug' ? 'an idea' : 'a bug'}</div>
