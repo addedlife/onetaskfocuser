@@ -1,5 +1,13 @@
 # Verification Log
 
+## 2026-07-07 Phone Link UI simplification after tablet relay bridge (4.35.122)
+
+- Scope: web-facing cleanup after the tablet bridge/relay simplification already landed in `4880191c` (`4.35.121`, Android b4 relay client, DeskPhone b327 parked fallback).
+- Product line: Shamash Phone Link on the tablet is the normal phone host; the web/iPad/PC surfaces read the cloud-fed phone state; DeskPhone remains preserved as a PC fallback but is no longer presented as the normal recovery path inside NerveCenter.
+- UI cleanup (`NerveCenterPhoneSurface.jsx`): removed visible PC/cloud/tablet transport wording and cloud/offline icons from the main status controls; status now reads as one phone link with one reconnect action. Offline copy now points to Shamash Phone Link on the tablet, with a low-key note that DeskPhone can still be opened on the PC as fallback.
+- Buglog check: `node index.mjs list unresolved` in `tools/bug-log-reader` showed only the protected auth-flow ticket; no unresolved phone-lane buglog item remained.
+- Gates: `npm run build` in `apps/web` -> 0 errors; `gradle :app:assembleDebug` in `apps/phone-host-android` via cached Gradle 8.14.3 -> BUILD SUCCESSFUL; `git diff --check` -> no whitespace errors.
+
 ## 2026-07-06 GM3 follow-up — card-grid tonal spacing, column-view header reclaim, mobile bottom-cut fix (4.34.117)
 
 - Owner feedback on 4.34.116, three items, all in NerveCenterNext:

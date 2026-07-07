@@ -6,9 +6,9 @@ import { hostFetch, hostAuthHeaders, pairWithHost } from '../host-auth.js';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 const PHONE_FETCH_TIMEOUT_MS = 4500;
-// How fresh the relayed phone state must be for the PC to count as "currently connected".
-// DeskPhone heartbeats to the relay every ~5s, so a gap beyond this (≈6 missed beats)
-// means the PC/DeskPhone is offline and new texts/calls are NOT arriving live.
+// How fresh the relayed phone state must be for the phone link to count as live.
+// Hosts heartbeat to the relay every few seconds, so a gap beyond this means
+// no current host is feeding new texts/calls.
 const RELAY_LIVE_WINDOW_MS = 30000;
 
 // Compact "27s" / "4m" / "2h" age label for the relay's last-connected time.
@@ -22,7 +22,8 @@ function relayAgeLabel(ms) {
 
 // True on a real phone/tablet (Android, iPhone, iPad) — by user-agent and touch,
 // NOT by window width, so a narrow desktop window is still treated as desktop.
-// Mobile devices can't reach the PC's localhost, so they use the cloud relay only.
+// Mobile devices use the cloud relay; loopback is only useful when the host
+// runs on this same browser device.
 export function isMobilePhoneDevice() {
   if (typeof navigator === "undefined") return false;
   const ua = `${navigator.userAgent || ""} ${navigator.platform || ""}`.toLowerCase();
@@ -227,10 +228,9 @@ function PhoneMmsImage({ attachment, C }) {
 function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, dense = false, onRecordConversation, onRecordCall, onMoreHistory }) {
   // ONE simple rule (no LAN discovery, no proxies — that experiment was dizzying):
   // if a phone host is running on THIS device (loopback answers), talk to it
-  // directly; otherwise read the cloud relay, which is fed by WHICHEVER host
-  // holds the phone's Bluetooth link (DeskPhone on the PC, or the tablet host
-  // b4+). So the PC/iPad/anywhere just uses the cloud and it works — DeskPhone
-  // does not need to be open when the tablet has the phone.
+  // directly; otherwise read the cloud relay, which is fed by whichever host
+  // holds the phone's Bluetooth link. DeskPhone stays available as a fallback,
+  // but the daily product path is the tablet phone link.
   const isMobile = useMemo(() => isMobilePhoneDevice(), []);
   const localApi = (typeof window !== "undefined" && window.location.port === "8765")
     ? window.location.origin
@@ -328,10 +328,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const [expandedPhoneMessageId, setExpandedPhoneMessageId] = useState(null);
   const usingRelayRef = useRef(false);
   const [usingRelay, setUsingRelay] = useState(false);
-  // Server-stamped time the relay last received a push from the PC (relayReceivedAt in
-  // the state blob). Drives the live/stale connection indicator on mobile.
+  // Server-stamped time the relay last received a push from a live phone host.
+  // Drives the live/stale connection indicator on relay devices.
   const [relayReceivedAt, setRelayReceivedAt] = useState(0);
-  // Ticks so staleness re-evaluates over time even when no new data arrives (PC went away).
+  // Ticks so staleness re-evaluates over time even when no new data arrives.
   const [nowTick, setNowTick] = useState(() => Date.now());
   const refreshInFlightRef = useRef(false);
   const expandedConversationEndRef = useRef(null);
@@ -423,7 +423,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       contactsSigRef.current = contactsSig;
       setContacts(nextContacts);
     }
-    // Record when the relay last heard from the PC. On the LAN path there's no relay
+    // Record when the relay last heard from the active host. On the local path there's no relay
     // stamp (receivedAt=0) — that path's liveness is the just-completed fetch itself.
     if (receivedAt) setRelayReceivedAt(receivedAt);
   }, []);
@@ -433,7 +433,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     if (refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
 
-    // Reads the single state blob DeskPhone pushed to the cloud. Private to the
+    // Reads the single state blob the active phone host pushed to the cloud. Private to the
     // signed-in user — gated by a Firebase ID token.
     const fetchViaRelay = async () => {
       let relayIdToken = null;
@@ -514,20 +514,20 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       }
       setError(
         msg === "relay:no_state"
-          ? "Waiting for a phone host — open DeskPhone on the PC or the Shamash host on the tablet."
+          ? "Waiting for Shamash Phone Link on the tablet."
           : msg === "relay:no_auth"
             ? "Sign in to see your phone here."
             : msg === "relay:denied"
               ? "Phone relay blocked by security rules."
               : hardFail
-                ? "Can't reach a phone host — check DeskPhone on the PC or the tablet host."
+                ? "Can't reach the phone link — check the tablet host."
                 : "Phone host briefly unreachable — reconnecting…");
     } finally {
       refreshInFlightRef.current = false;
     }
   }, [localHost, resolveTransport, onOnlineChange, user, applyPhoneState, processCommandResults]);
 
-  // Build phone-number → name map from contacts, covering many possible field names from the DeskPhone API
+  // Build phone-number → name map from contacts, covering many possible field names from the phone host API
   const contactMap = useMemo(() => {
     const map = new Map();
     contacts.forEach(c => {
@@ -601,7 +601,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   }, [refresh, usingRelay]);
 
   // Waking the tab (or unlocking the laptop) re-resolves the best path right
-  // away — back at the PC means direct, on the road means relay, no clicks.
+  // away — local host means direct, otherwise relay, no clicks.
   useEffect(() => {
     const onWake = () => { if (document.visibilityState !== "hidden") refresh(true); };
     window.addEventListener("focus", onWake);
@@ -613,16 +613,16 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   }, [refresh]);
 
   // Re-evaluate relay freshness on a clock even when no new data arrives, so the
-  // "Live" indicator flips to "PC offline" once the PC stops heartbeating.
+  // "Live" indicator flips offline once the active host stops heartbeating.
   useEffect(() => {
     if (!usingRelay) return undefined;
     const id = setInterval(() => setNowTick(Date.now()), 5000);
     return () => clearInterval(id);
   }, [usingRelay]);
 
-  // ── Real-time relay: when we're on the cloud relay (away from the PC's LAN),
+  // ── Real-time relay: when we're on the cloud relay,
   // subscribe to the phone-relay/state doc directly instead of relying only on the
-  // 6.5 s poll. DeskPhone PushNow()'s the instant a text arrives, so this lands the
+  // 6.5 s poll. The active host pushes the instant a text arrives, so this lands the
   // update on every signed-in device in ~1 s. The poll above stays as a safety net.
   //
   // A Firestore onSnapshot listener is TERMINAL after its error callback fires (it
@@ -672,7 +672,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     };
   }, [usingRelay, user, applyPhoneState, processCommandResults]);
 
-  // Returns true only when DeskPhone confirmed the command ran (or, on the LAN path,
+  // Returns true only when the active phone host confirmed the command ran (or, on the LAN path,
   // when its HTTP response said so). Callers use this to decide whether user input
   // (e.g. a typed message) is safe to discard. NOTE: refresh() clears the error
   // banner, so failure paths refresh FIRST and set their error after.
@@ -680,7 +680,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     setBusy(label);
     try {
       if (usingRelayRef.current) {
-        // Route command through the cloud relay — DeskPhone drains it within 2 s.
+        // Route command through the cloud relay — the active host drains it.
         // Include Firebase ID token so the function can gate on auth.
         let cmdAuthHeaders = {};
         try {
@@ -702,16 +702,16 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         }
         const queued = await res.json().catch(() => ({}));
         if (queued?.id) {
-          // Await DeskPhone's acknowledgement — it rides the state pushes we already
-          // receive (~3 s round trip). No ack within 25 s means the PC is offline.
+          // Await the host acknowledgement — it rides the state pushes we already
+          // receive. No ack within 25 s means no live host accepted the command.
           const ack = await waitForAck(queued.id, 25000);
           await refresh();
           if (ack && !ack.ok) {
-            setError(ack.error || "DeskPhone could not run the command.");
+            setError(ack.error || "The phone host could not run the command.");
             return false;
           }
           if (!ack) {
-            setError("No confirmation from DeskPhone — your PC looks offline. The command runs if it reconnects within 10 minutes, then expires.");
+            setError("No confirmation from the phone host. The command will expire if the phone link stays offline.");
             return false;
           }
           setError("");
@@ -723,7 +723,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       } else {
         const res = await hostFetch(localHost, path, { method: "POST" });
         if (!res.ok) {
-          let msg = `DeskPhone error (${res.status})`;
+          let msg = `Phone host error (${res.status})`;
           try { const d = await res.json(); if (d?.error || d?.message) msg = d.error || d.message; } catch {}
           await refresh();
           setError(msg);
@@ -732,7 +732,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         const data = await res.json().catch(() => ({}));
         if (data?.success === false || data?.ok === false || data?.result === "failed") {
           await refresh();
-          setError(data?.error || data?.message || data?.reason || "DeskPhone reported failure.");
+          setError(data?.error || data?.message || data?.reason || "The phone host reported failure.");
           return false;
         }
         setError("");
@@ -741,7 +741,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       return true;
     }
     catch {
-      setError("DeskPhone did not answer.");
+      setError("The phone host did not answer.");
       transportRef.current = null;   // direct path died mid-command — re-resolve next cycle
       onOnlineChange?.(false);
       return false;
@@ -749,7 +749,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     finally { setBusy(""); }
   };
 
-  // The ONE reconnect control (owner ticket): ask DeskPhone to re-establish the
+  // The ONE reconnect control: ask the active phone host to re-establish the
   // Bluetooth link (/connect only exists on the loopback API; the relay whitelist
   // maps /refresh to a full re-sync + push), then force the transport re-probe.
   const reconnectPhone = async () => {
@@ -774,9 +774,8 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const isIncoming = /ring|incoming/i.test(callState);
   const isOnCall = !!callState && !isIncoming && /^(active|dialing|oncall|callactive)$/i.test(callState.replace(/\s+/g, ""));
   const statusOnline = !!status;
-  // Relay liveness: on mobile the green light means the PC is *currently* pushing — i.e.
-  // the relay heard from it within RELAY_LIVE_WINDOW_MS. A stale stamp = PC/DeskPhone
-  // closed, so incoming texts/calls are NOT reaching this device live. On the LAN path
+  // Relay liveness: on relay, the green light means an active host is currently
+  // pushing. A stale stamp means incoming texts/calls are not reaching this device live. On the LAN path
   // there's no relay; liveness is simply whether the just-completed /status fetch worked.
   const relayAgeMs = relayReceivedAt > 0 ? Math.max(0, nowTick - relayReceivedAt) : 0;
   const relayStale = usingRelay && relayReceivedAt > 0 && relayAgeMs >= RELAY_LIVE_WINDOW_MS;
@@ -787,16 +786,16 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const deviceName = /^[0-9a-f]{12}$/i.test(String(deviceNameRaw).trim().replace(/[:\-]/g, "")) ? "" : deviceNameRaw;
   const idleLabel = deviceName ? `Connected · ${deviceName}` : "Connected";
   // Which machine is hosting the phone link on the direct path — drives the pill.
-  const directHostLabel = status?.hostPlatform === "android" ? "Tablet" : "PC";
+  const activeHostLabel = status?.hostPlatform === "android" ? "Tablet" : "PC";
   const statusText = !statusOnline
-    ? "DeskPhone offline"
+    ? "Phone link offline"
     : relayStale
-      ? `PC offline · last seen ${relayAgeLabel(relayAgeMs)} ago`
+      ? `Phone link offline · last seen ${relayAgeLabel(relayAgeMs)} ago`
       : (isIncoming ? "Incoming call" : isOnCall ? "On call" : callState ? "Call status changed" : idleLabel);
 
   // Report true liveness to the NerveCenter (not just "we have a blob"), and flip it to
   // offline as soon as the relay goes stale, so the dashboard tile can't claim "connected"
-  // over data from a PC that closed an hour ago.
+  // over data from a host that closed an hour ago.
   useEffect(() => {
     onOnlineChange?.(phoneLinkLive);
   }, [onOnlineChange, phoneLinkLive]);
@@ -1160,20 +1159,20 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         </div>
       )}
 
-      {/* ── PC-link status banner (any relay browser) — tells you whether your PC is
+      {/* ── Phone-link status banner (any relay browser) — tells you whether a host is
             actually connected right now, so you know live texts/calls are arriving. On the
             compact nerve-center card this is suppressed (the card's summary line already
             states online/offline); it only shows in the full phone view. ── */}
       {usingRelay && !compact && (
         relayStale ? (
           <div style={{ display: "flex", alignItems: "flex-start", gap: SP.sm, fontSize: NC_TYPE.meta, lineHeight: 1.4, color: C.warning, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, padding: `${SP.sm} ${SP.sm}` }}>
-            <span style={{ marginTop: 1, flexShrink: 0, color: C.warning }}>{suiteIcon("cloud_off", 16)}</span>
-            <span>Your PC looks offline — last update {relayAgeLabel(relayAgeMs)} ago. New texts &amp; calls won't arrive here until DeskPhone reconnects on your PC.</span>
+            <span style={{ marginTop: 1, flexShrink: 0, color: C.warning }}>{suiteIcon("smartphone", 16)}</span>
+            <span>Phone link offline — last update {relayAgeLabel(relayAgeMs)} ago. New texts &amp; calls resume when the tablet host reconnects.</span>
           </div>
         ) : phoneLinkLive ? (
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: C.success, padding: "0 2px" }}>
             <span style={{ width: 7, height: 7, borderRadius: RADIUS.pill, flexShrink: 0, background: C.success }} />
-            <span>Live · connected to your PC{deviceName ? ` · ${deviceName}` : ""}</span>
+            <span>Live · phone link{deviceName ? ` · ${deviceName}` : ""}</span>
           </div>
         ) : null
       )}
@@ -1199,8 +1198,8 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         ) : null}
         <div style={{ flex: 1 }} />
         {/* ONE recovery control (buglog: controls were confusing) — the old
-            "open DeskPhone on the PC" button is gone; reconnect covers it. */}
-        <button onClick={reconnectPhone} disabled={!!busy} title="Reconnect — asks the phone host to re-link Bluetooth to your phone and refresh" aria-label="Reconnect phone" style={phoneIconButton(false)}>{suiteIcon("refresh", 15)}</button>
+            old host-management buttons are gone; reconnect covers recovery. */}
+        <button onClick={reconnectPhone} disabled={!!busy} title="Reconnect phone link" aria-label="Reconnect phone" style={phoneIconButton(false)}>{suiteIcon("refresh", 15)}</button>
         {/* Record general */}
         <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
           style={phoneIconButton(false)}>
@@ -1228,15 +1227,15 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         <button onClick={() => refresh(true)}
           title={
             usingRelay
-              ? (phoneLinkLive ? "Live — reading the cloud, fed by the host that has your phone. Click to re-check."
-                : relayStale ? `Offline — no host has pushed for ${relayAgeLabel(relayAgeMs)}. Start DeskPhone or the tablet host. Click to re-check.`
+              ? (phoneLinkLive ? "Live phone link. Click to re-check."
+                : relayStale ? `Offline — no host has pushed for ${relayAgeLabel(relayAgeMs)}. Check the tablet host. Click to re-check.`
                   : "Waiting for a phone host to come online… Click to re-check.")
-              : (phoneLinkLive ? `Live — the phone host is on this ${directHostLabel === "Tablet" ? "tablet" : "PC"}. Click to re-check.` : "Looking for a phone host… Click to re-check.")
+              : (phoneLinkLive ? `Live — the phone host is on this ${activeHostLabel === "Tablet" ? "tablet" : "PC"}. Click to re-check.` : "Looking for a phone host… Click to re-check.")
           }
           style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, flexShrink: 0,
             border: "none", background: "transparent", cursor: "pointer",
             color: phoneLinkLive ? C.success : relayStale ? C.warning : C.faint, padding: "0 4px" }}>
-          {suiteIcon(usingRelay ? (phoneLinkLive ? "cloud" : "cloud_off") : (directHostLabel === "Tablet" ? "tablet_android" : "computer"), 15)}
+          {suiteIcon(activeHostLabel === "Tablet" ? "smartphone" : "phone_in_talk", 15)}
           <span>{phoneLinkLive ? "Live" : relayStale ? `Offline · ${relayAgeLabel(relayAgeMs)}` : "…"}</span>
         </button>
       </div>
@@ -1544,7 +1543,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{phoneLinkLive ? "Connected · no recent calls or texts" : relayStale ? `Host offline · ${relayAgeLabel(relayAgeMs)}` : "Phone host offline"}</span>
         </div>
       )}
-      {!statusOnline && !error && !compact && <div style={{ fontSize: NC_TYPE.meta, color: C.muted, padding: `${SP.xs} 2px` }}>Start a phone host (DeskPhone on the PC or the Shamash host on the tablet) to connect calls and texts.</div>}
+      {!statusOnline && !error && !compact && <div style={{ fontSize: NC_TYPE.meta, color: C.muted, padding: `${SP.xs} 2px` }}>Start Shamash Phone Link on the tablet to connect calls and texts. DeskPhone can still be opened on the PC as a fallback.</div>}
       {error && <div style={{ fontSize: NC_TYPE.meta, color: C.danger, background: C.bgSoft, borderRadius: RADIUS.sm, padding: `${SP.sm} ${SP.sm}`, marginTop: 2 }}>{error}</div>}
     </div>
   );
