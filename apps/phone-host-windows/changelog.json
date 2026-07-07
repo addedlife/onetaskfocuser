@@ -1,8 +1,14 @@
 [
     {
+        "timestamp":  "2026-07-06 21:04:29",
+        "version":  "b327",
+        "notes":  "DeskPhone now shares the cloud politely with the tablet host: whichever device actually holds the phone\u0027s Bluetooth link feeds the cloud and runs remote commands, and the other one goes quiet. No more tug-of-war where a phone-less DeskPhone overwrote the tablet\u0027s live texts and calls with a stale \u0027disconnected\u0027 snapshot. Also new: Google-account pairing security on the network API, so only your signed-in devices can talk to DeskPhone over the LAN.",
+        "devNotes":  "RelayService.cs: new IsPhoneConnected callback (wired to MainViewModel.IsFullyConnected) gates PushStateAsync, DrainMailboxOnceAsync and DrainLegacyFirestoreOnceAsync — a disconnected host sends exactly one farewell push (_lastPushedConnected edge) then stays silent, matching RelayClient.kt on Android b4 so the two hosts arbitrate the phone-relay/state doc and RTDB command mailbox by connection state alone. ControlApiService.cs: HostAuthService pairing gate (trust-on-first-use Firebase ID-token verify, X-Host-Token thereafter, loopback exempt) plus an X-Forward-Host LAN proxy (loopback callers, private-IP targets only; currently unused by the web app after the discovery rollback)."
+    },
+    {
         "timestamp":  "2026-07-03 01:20:36",
         "version":  "b326",
-        "notes":  "Remote commands now arrive by true push instead of polling: DeskPhone holds one live stream on the new Realtime Database command mailbox, so texts, dials, and reconnects sent from any browser land in under a second � with zero idle Firestore reads (the old 2-second poll burned ~43k reads/day for nothing). The b324 poll stays as an automatic safety net if the stream drops.",
+        "notes":  "Remote commands now arrive by true push instead of polling: DeskPhone holds one live stream on the new Realtime Database command mailbox, so texts, dials, and reconnects sent from any browser land in under a second — with zero idle Firestore reads (the old 2-second poll burned ~43k reads/day for nothing). The b324 poll stays as an automatic safety net if the stream drops.",
         "devNotes":  "RelayService.cs: new StreamRtdbCommandsAsync holds an SSE stream (Accept: text/event-stream) on onetaskonly-app-default-rtdb /phone-relay/commands.json; put/patch events with non-null data trigger DrainMailboxOnceAsync (GET, PUT null to clear BEFORE dispatch, NormalizeRtdbArray handles RTDB object-map arrays). DrainCommandsLoopAsync now polls the RTDB node as the safety net: 120s while the stream is healthy, 2s/6s adaptive while it is down; plus a 60s DrainLegacyFirestoreOnceAsync transition sweep of the old Firestore commands doc (remove in a later build). phone-relay.js command/push/drain paths write and drain the RTDB node (rtdbGetCommands/rtdbSetCommands). RTDB instance provisioned 2026-07-02 with rules open only on phone-relay/commands (matches the prior Firestore posture; queuing still gated by Firebase auth in the function)."
     },
     {

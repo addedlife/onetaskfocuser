@@ -50,6 +50,13 @@ public class RelayService : IDisposable
     public Func<string>?                           GetLanUrl   { get; set; }
     // Returns (mediaId, dataUrl) for resized picture-text previews to upload out-of-band.
     public Func<List<(string id, string dataUrl)>>? GetRelayMedia { get; set; }
+    /// <summary>Whether THIS host currently holds the phone's Bluetooth link.
+    /// Relay arbitration rule (shared with the Android tablet host, b4+): only the
+    /// connected host pushes state and drains commands; a parked host goes silent
+    /// after one farewell push, so two hosts never fight over the cloud doc and a
+    /// remote command never executes twice.</summary>
+    public Func<bool>? IsPhoneConnected { get; set; }
+    private bool _lastPushedConnected = true;   // true → the farewell push always fires once
 
     // ── Config ────────────────────────────────────────────────────────────────
     private string _relayKey = "";
@@ -152,6 +159,13 @@ public class RelayService : IDisposable
     {
         if (GetStatus is null) return;
 
+        // Arbitration: while another host (the tablet) holds the phone, our pushes
+        // would overwrite its live cloud data with our disconnected snapshot. One
+        // farewell push flips the cloud to "disconnected", then we stay silent
+        // until the link comes back to us.
+        var connected = IsPhoneConnected?.Invoke() ?? true;
+        if (!connected && !_lastPushedConnected) return;
+
         // Serialize every push (heartbeat loop + PushNow) so two writes never race
         // the same Firestore doc. The gate is released in finally.
         await _pushGate.WaitAsync();
@@ -185,6 +199,7 @@ public class RelayService : IDisposable
                 throw new Exception($"Firestore state PATCH HTTP {(int)stateResp.StatusCode} — {body[..Math.Min(200, body.Length)]}");
             }
             _lastPush = DateTime.UtcNow;
+            _lastPushedConnected = connected;
         }
         finally { _pushGate.Release(); }
     }
@@ -279,6 +294,9 @@ public class RelayService : IDisposable
     // reconnecting link) can't be re-read and re-executed.
     private async Task<bool> DrainMailboxOnceAsync(CancellationToken ct)
     {
+        // Parked host: the command mailbox belongs to whichever host holds the
+        // phone — draining here would execute commands on a phone-less PC.
+        if (IsPhoneConnected?.Invoke() == false) return false;
         using var resp = await _http.GetAsync(RtdbCommandsUrl, ct);
         if (!resp.IsSuccessStatusCode)
         {
@@ -363,6 +381,7 @@ public class RelayService : IDisposable
 
     private async Task DrainLegacyFirestoreOnceAsync(CancellationToken ct)
     {
+        if (IsPhoneConnected?.Invoke() == false) return;
         try
         {
             var url = $"{FS_BASE}/phone-relay/commands?key={FB_API_KEY}";

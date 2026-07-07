@@ -3086,6 +3086,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _relay.LogLine     = s => AppendDebugThreadSafe(s);
         _relay.GetLanUrl   = () => _api.LanUrl ?? "";
         _relay.GetRelayMedia = BuildRelayMedia;
+        _relay.IsPhoneConnected = () => IsFullyConnected;
         _relay.Configure(_settings.Current.RelayKey, _settings.Current.RelayUrl);
         _api.GetRelayStatus = () =>
         {
