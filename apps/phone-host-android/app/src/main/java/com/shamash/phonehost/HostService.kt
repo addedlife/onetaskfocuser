@@ -49,7 +49,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class HostService : Service() {
 
     companion object {
-        const val BUILD_STAMP = "android-b3"
+        const val BUILD_STAMP = "android-b4"
         private const val CHANNEL_ID = "phonehost"
         private const val NOTIFICATION_ID = 1
 
@@ -82,6 +82,7 @@ class HostService : Service() {
 
     private val prefs by lazy { getSharedPreferences("phonehost", Context.MODE_PRIVATE) }
     val hostAuth by lazy { HostAuth(prefs) { HostLog.add(it) } }
+    private val relay = RelayClient(this)
 
     private val adapter: BluetoothAdapter?
         get() = (getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
@@ -114,6 +115,7 @@ class HostService : Service() {
         wireApi()
         api.start()
         registerNsd()
+        relay.start()
 
         // NOTE: every periodic body is wrapped in runCatching — a single thrown
         // exception permanently cancels a scheduled task, which would silently
@@ -172,6 +174,7 @@ class HostService : Service() {
     override fun onDestroy() {
         instance = null
         unregisterNsd()
+        relay.stop()
         api.stop()
         mns?.stop()
         // Bluetooth teardown does blocking socket I/O — never on the main thread
@@ -362,7 +365,7 @@ class HostService : Service() {
     // ── API routes ────────────────────────────────────────────────────────
     private fun wireApi() {
         api.handler = { req ->
-            val r: LocalApiServer.Response? = when {
+            when {
                 // ── Auth (before everything else) ──────────────────────────
                 // /health stays open (liveness probe carries no data);
                 // /pair exchanges the caller's Firebase ID token for a host
@@ -384,6 +387,16 @@ class HostService : Service() {
                     LocalApiServer.Response(401, ApiJson.error(
                         "unauthorized — sign into Shamash with the owner's Google account to pair"))
 
+                else -> routeRequest(req)
+            }
+        }
+    }
+
+    /** The host contract routes, past the auth gate. Shared by the LAN API and the
+     *  cloud-relay command drain (RelayClient) so remote commands can never drift
+     *  from what the local API does. */
+    internal fun routeRequest(req: LocalApiServer.Request): LocalApiServer.Response? {
+        val r: LocalApiServer.Response? = when {
                 req.path == "" || req.path == "/" || req.path == "/status" ->
                     ok(statusJson())
                 req.path == "/log" ->
@@ -400,7 +413,8 @@ class HostService : Service() {
                 }
                 req.path == "/calls" -> {
                     val arr = JSONArray()
-                    callLogStore.all().take(1000).forEach { arr.put(ApiJson.call(it, contactStore::nameFor)) }
+                    callLogStore.all().take(req.qsInt("limit", 1000).coerceIn(10, 1000))
+                        .forEach { arr.put(ApiJson.call(it, contactStore::nameFor)) }
                     ok(arr.toString())
                 }
                 req.path == "/contacts" -> {
@@ -496,9 +510,8 @@ class HostService : Service() {
                 req.path == "/lan-url" ->
                     ok(JSONObject().put("lanUrl", lanUrl() ?: JSONObject.NULL).toString())
                 else -> null
-            }
-            r
         }
+        return r
     }
 
     private fun ok(body: String) = LocalApiServer.Response(200, body)
