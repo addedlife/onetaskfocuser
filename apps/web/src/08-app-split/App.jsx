@@ -20,12 +20,13 @@ import { ConvCapture } from './components/ConvCapture.jsx';
 import { BugLog } from './components/BugLog.jsx';
 import { NerveCenterPanel as NerveCenterNext } from './components/NerveCenterNext.jsx';
 
-// Opt-in flag for the from-scratch Material 3 UI rebuild (09-next). Read once at
-// module load. `?ui=next` swaps the reimagined NerveCenter in; everything else
-// stays on the legacy surfaces, so production is untouched until we flip default.
+// The reimagined Material 3 NerveCenter (NerveCenterNext) is now the DEFAULT
+// surface. The old NerveCenterPanel is retained only as an escape hatch behind
+// `?ui=legacy` in case a regression needs a fast fallback while it's fixed.
+// Read once at module load.
 const UI_NEXT = (() => {
-  try { return new URLSearchParams(window.location.search).get('ui') === 'next'; }
-  catch { return false; }
+  try { return new URLSearchParams(window.location.search).get('ui') !== 'legacy'; }
+  catch { return true; }
 })();
 import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack } from './utils/shailosQueue.js';
 import { createComponent } from '@lit/react';

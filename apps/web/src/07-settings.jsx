@@ -458,6 +458,15 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             {onSignOut && (
               <>
                 <div style={{height:1,background:T.brdS,margin:"0 0 16px"}}/>
+                {/* Switch account: signs out, so the next Google sign-in shows the
+                    account picker (prompt=select_account) — the graceful way to
+                    move between the rabbi and secondary Google accounts. */}
+                <button onClick={()=>{onClose();onSignOut();}} style={{width:"100%",minHeight:44,padding:"10px 14px",marginBottom:10,borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:"none",color:T.text,fontSize:settingsType.control,fontWeight:600,cursor:"pointer",fontFamily:"system-ui"}}>
+                  Switch Google account…
+                </button>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 16px",lineHeight:settingsType.line}}>
+                  Signs out here and returns to the sign-in screen, where you can pick a different Google account.
+                </p>
                 <button onClick={()=>{onClose();onSignOut();}} style={{width:"100%",minHeight:44,padding:"10px 14px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:"none",color:T.tSoft,fontSize:settingsType.control,fontWeight:500,cursor:"pointer",fontFamily:"system-ui"}}>
                   Sign out
                 </button>

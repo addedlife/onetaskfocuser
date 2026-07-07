@@ -1,7 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import firebase from 'firebase/compat/app';
 import { deriveAccents, GV_CLEAN, NC_TYPE, RADIUS } from './08-app-split/ui-tokens.jsx';
+import { hostAuthHeaders, pairWithHost } from './08-app-split/host-auth.js';
 
 const DEFAULT_HOST = "http://127.0.0.1:8765";
+// Cloud fallback: when no host answers on loopback, the panel reads the same
+// relay state blob the NerveCenter card uses (fed by whichever host holds the
+// phone — PC DeskPhone or Android tablet) and sends commands through the cloud
+// mailbox. Not used when the page IS the DeskPhone shell (port 8765): there,
+// loopback is the host by definition and the relative /api path wouldn't exist.
+const RELAY_BASE = "/api/phone-relay";
+const RELAY_LIVE_WINDOW_MS = 45000;   // ~9 missed 5s host heartbeats = host offline
+const CLOUD_ALLOWED_COMMANDS = new Set([
+  "/dial", "/answer", "/hangup", "/toggle-mute", "/send", "/refresh", "/connect",
+  "/mark-conversation-read", "/mark-conversation-unread",
+  "/delete-message", "/toggle-message-pin", "/save-contact", "/delete-contact",
+]);
+const canUseCloud = () => {
+  try { return window.location.port !== "8765"; } catch { return false; }
+};
 const RAIL_COLLAPSED_KEY = "deskphone_web_rail_collapsed";
 const RAIL_WIDTH_KEY = "deskphone_web_rail_width";
 const MESSAGE_LIST_WIDTH_KEY = "deskphone_web_message_list_width";
@@ -338,10 +355,15 @@ async function readJson(host, path, { timeoutMs = HOST_FETCH_TIMEOUT_MS } = {}) 
     : null;
   let response;
   try {
-    response = await fetch(`${host}${path}`, {
+    // Hosts gate their API behind Google-account pairing (host-auth.js): attach
+    // the stored host token; on a 401 pair silently once and retry.
+    const run = () => fetch(`${host}${path}`, {
       cache: "no-store",
       signal: controller?.signal,
+      headers: hostAuthHeaders({ base: host }),
     });
+    response = await run();
+    if (response.status === 401 && await pairWithHost({ base: host })) response = await run();
   } catch (error) {
     if (error?.name === "AbortError") {
       throw new Error(`${path} timed out`);
@@ -394,7 +416,13 @@ async function postJson(host, path, payload, { timeoutMs = HOST_FETCH_TIMEOUT_MS
     : null;
   let response;
   try {
-    response = await fetch(`${host}${path}`, { ...options, signal: controller?.signal });
+    const run = () => fetch(`${host}${path}`, {
+      ...options,
+      signal: controller?.signal,
+      headers: { ...(options.headers || {}), ...hostAuthHeaders({ base: host }) },
+    });
+    response = await run();
+    if (response.status === 401 && await pairWithHost({ base: host })) response = await run();
   } catch (error) {
     if (error?.name === "AbortError") throw new Error(`${path} timed out`);
     throw error;
@@ -5937,6 +5965,29 @@ export function DeskPhoneWebPanel({
   const callsSigRef = useRef("");
   const refreshInFlightRef = useRef(false);
   const refreshQueuedRef = useRef(false);
+  // Cloud fallback state: viaCloud = data is coming from the relay blob (no host
+  // on this device's loopback); relayStamp = when the feeding host last pushed.
+  const [viaCloud, setViaCloud] = useState(false);
+  const viaCloudRef = useRef(false);
+  const [relayStamp, setRelayStamp] = useState(0);
+
+  // Reads the relay state blob (same doc the NerveCenter card reads) — fed by
+  // whichever host currently holds the phone: PC DeskPhone or Android tablet.
+  const fetchCloudState = useCallback(async () => {
+    const authUser = firebase.auth?.().currentUser;
+    if (!authUser) throw new Error("Sign in to see your phone here.");
+    const token = await authUser.getIdToken();
+    const res = await fetch(`${RELAY_BASE}?action=state`, {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      throw new Error(res.status === 404
+        ? "Waiting for a phone host — start DeskPhone on the PC or the Shamash host on the tablet."
+        : `Cloud relay error (${res.status})`);
+    }
+    return res.json();
+  }, []);
 
   const showNotice = useCallback((message) => {
     setNotice(message);
@@ -5964,9 +6015,24 @@ export function DeskPhoneWebPanel({
         mediaMessagesRef.current = getApiList(nextMediaMessages.data);
         lastMediaRefreshRef.current = Date.now();
       }
-      const anyOnline = nextStatus.ok || nextMessages.ok || nextCalls.ok || nextContacts.ok;
+      let anyOnline = nextStatus.ok || nextMessages.ok || nextCalls.ok || nextContacts.ok;
+      let cloud = false;
+      if (!anyOnline && canUseCloud()) {
+        // No host on this device — fall back to the cloud relay blob so the full
+        // phone screen works anywhere, fed by whichever host holds the phone.
+        const blob = await fetchCloudState();
+        cloud = true;
+        setRelayStamp(Number(blob?.relayReceivedAt) || 0);
+        Object.assign(nextStatus,   { ok: !!blob?.status, data: blob?.status || null });
+        Object.assign(nextMessages, { ok: true, data: blob?.messages || [] });
+        Object.assign(nextCalls,    { ok: true, data: blob?.calls || [] });
+        Object.assign(nextContacts, { ok: true, data: blob?.contacts || [] });
+        anyOnline = nextStatus.ok || nextMessages.ok;
+      }
+      viaCloudRef.current = cloud;
+      setViaCloud(cloud);
       if (!anyOnline) {
-        throw nextStatus.error || nextMessages.error || nextCalls.error || nextContacts.error || new Error("DeskPhone host was not reached.");
+        throw nextStatus.error || nextMessages.error || nextCalls.error || nextContacts.error || new Error("No phone host was reached.");
       }
       if (nextStatus.ok) setStatus(nextStatus.data);
       if (nextMessages.ok) {
@@ -5995,7 +6061,7 @@ export function DeskPhoneWebPanel({
         }
       }
       setOnline(true);
-      const failed = [nextStatus, nextMessages, nextCalls, nextContacts].filter((item) => !item.ok);
+      const failed = cloud ? [] : [nextStatus, nextMessages, nextCalls, nextContacts].filter((item) => !item.ok);
       setError(failed.length ? failed.map((item) => item.error?.message || `${item.path} failed`).join(" | ") : "");
       onOnlineChange?.(true);
     } catch (err) {
@@ -6007,7 +6073,7 @@ export function DeskPhoneWebPanel({
       callsSigRef.current = "";
       contactsSigRef.current = "";
       setOnline(false);
-      setError(err?.message || "DeskPhone host was not reached.");
+      setError(err?.message || "No phone host was reached.");
       onOnlineChange?.(false);
     } finally {
       refreshInFlightRef.current = false;
@@ -6016,7 +6082,7 @@ export function DeskPhoneWebPanel({
         window.setTimeout(refresh, 0);
       }
     }
-  }, [host, onOnlineChange]);
+  }, [host, onOnlineChange, fetchCloudState]);
 
   useEffect(() => {
     refresh();
@@ -6028,6 +6094,11 @@ export function DeskPhoneWebPanel({
   useEffect(() => saveNumber(MESSAGE_LIST_WIDTH_KEY, messageListWidth), [messageListWidth]);
   useEffect(() => saveNumber(CALL_HISTORY_WIDTH_KEY, callHistoryWidth), [callHistoryWidth]);
 
+  // Cloud liveness: the feeding host stamps relayReceivedAt each push; a stale
+  // stamp means that host stopped pushing (closed / lost the phone).
+  const relayStale = viaCloud && relayStamp > 0 && (Date.now() - relayStamp) >= RELAY_LIVE_WINDOW_MS;
+  const hostLabel = (status?.hostPlatform === "android" || status?.HostPlatform === "android") ? "the tablet" : "your PC";
+
   // ONE human status line (owner ticket): no two-hop plumbing, no second line
   // repeating the device, no raw Bluetooth address — just "is my phone live here?".
   const connectionStatus = useMemo(() => {
@@ -6037,33 +6108,70 @@ export function DeskPhoneWebPanel({
     const textsOk = includesConnected(status?.map || status?.Map || "");
     const phoneConnected = !!(status?.connected || status?.Connected) || callsOk || textsOk;
     const connecting = !!(status?.isConnecting || status?.IsConnecting);
-    if (!online) return "Phone service is off — open DeskPhone on this PC";
+    if (!online) return "No phone host running — start DeskPhone on the PC or the Shamash host on the tablet";
+    if (viaCloud && relayStale) return `${hostLabel} went offline — its last update was a while ago`;
     if (phoneConnected) {
-      if (callsOk && textsOk) return cap(`${name} — calls & texts live`);
+      const via = viaCloud ? ` (via ${hostLabel})` : "";
+      if (callsOk && textsOk) return cap(`${name} — calls & texts live${via}`);
       if (callsOk) return cap(`${name} — calls live, texts connecting…`);
       if (textsOk) return cap(`${name} — texts live, calls connecting…`);
-      return cap(`${name} is connected`);
+      return cap(`${name} is connected${via}`);
     }
     if (connecting) return cap(`connecting to ${name}…`);
     return cap(`${name} is out of range — reconnects when nearby`);
-  }, [online, status]);
-  const showReconnectPrompt = !reconnectDismissed && !!(status?.showReconnectPrompt || status?.ShowReconnectPrompt || !online);
+  }, [online, status, viaCloud, relayStale, hostLabel]);
+  // Reconnect prompt only makes sense on the direct path — over the cloud the
+  // user can't "start" the host from here, so don't nag with it.
+  const showReconnectPrompt = !reconnectDismissed && !viaCloud && !!(status?.showReconnectPrompt || status?.ShowReconnectPrompt || !online);
   const effectiveBuildPrompt = !!(status?.showBuildUpdatePrompt || status?.ShowBuildUpdatePrompt || showBuildPrompt);
   const effectiveBuildIndicator = !!(status?.showBuildUpdateIndicator || status?.ShowBuildUpdateIndicator || showBuildIndicator);
   const effectiveMuted = !!(status?.isMuted ?? status?.IsMuted ?? muted);
 
+  // Cloud command: queue it in the relay mailbox for whichever host holds the
+  // phone to drain (≤3 s). Payload fields become query params so /send etc. carry
+  // their data in the single command string the host contract expects.
+  const runCloudCommand = useCallback(async (path, payload) => {
+    if (!CLOUD_ALLOWED_COMMANDS.has(path.split("?")[0])) {
+      throw new Error("That control only works with the phone host open on this device.");
+    }
+    let fullPath = path;
+    if (payload && typeof payload === "object") {
+      const qs = Object.entries(payload)
+        .filter(([, v]) => v !== undefined && v !== null)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(typeof v === "object" ? JSON.stringify(v) : v)}`)
+        .join("&");
+      if (qs) fullPath += (fullPath.includes("?") ? "&" : "?") + qs;
+    }
+    const authUser = firebase.auth?.().currentUser;
+    if (!authUser) throw new Error("Sign in to control your phone here.");
+    const token = await authUser.getIdToken();
+    const res = await fetch(`${RELAY_BASE}?action=command`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ path: fullPath }),
+    });
+    if (!res.ok) throw new Error(`Relay rejected the command (${res.status})`);
+  }, []);
+
   const runCommand = useCallback(async (path, label, payload) => {
     setBusy(label);
     try {
-      await postJson(host, path, payload);
-      await refresh();
+      if (viaCloudRef.current) {
+        await runCloudCommand(path, payload);
+        // Give the host a moment to drain + push, then re-read the cloud blob.
+        await new Promise((r) => setTimeout(r, 1500));
+        await refresh();
+      } else {
+        await postJson(host, path, payload);
+        await refresh();
+      }
       setError("");
     } catch (err) {
-      setError(err?.message || "DeskPhone did not accept the command.");
+      setError(err?.message || "The phone host did not accept the command.");
     } finally {
       setBusy("");
     }
-  }, [host, refresh]);
+  }, [host, refresh, runCloudCommand]);
 
   const toggleRail = useCallback(() => {
     setRailCollapsed((current) => {
