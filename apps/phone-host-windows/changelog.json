@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-07-07 14:24:35",
+        "version":  "b328",
+        "notes":  "Phone hosting is now polite. While the tablet holds your phone, DeskPhone stays out of its way instead of yanking the Bluetooth link back every 30 seconds — that tug-of-war was the connect/disconnect/forget/remove churn. DeskPhone auto-takes-over only if the tablet goes offline, or when you flip the new menu-rail toggle in the web app to hand it the phone (for example to route call audio through the PC), at which point the tablet steps aside. It also feeds a fast liveness heartbeat so remote screens stop falsely flickering \u0027offline\u0027 on a quiet but healthy link.",
+        "devNotes":  "RelayService.cs: owner-doc arbitration (phone-relay/owner). ArbitrationLoopAsync reads preferred/host/t/connected every 15s and computes ShouldHoldPhone = amPreferred || (!preferredFresh \u0026\u0026 now-preferredAtMs\u003e=90s grace), where preferredFresh = owner.host==preferredId \u0026\u0026 age\u003c90s \u0026\u0026 connected; while holding it renews host/t/connected via a field-masked Firestore PATCH (~20s heartbeat that the web reads with a 60s liveness window). OnConnectionChanged() flips the connected flag on the Bluetooth edge. MainViewModel.cs: startup auto-connect and the 30s watchdog now gate on _relay.ShouldHoldPhone so a non-preferred host never initiates a connect (purely additive — no BT teardown), and the IsFullyConnected setter fires _relay.OnConnectionChanged(). Pairs with web 4.36.124 (md-switch takeover toggle + plain-language status line) and the twin Android RelayClient.kt; requires the new /phone-relay/owner Firestore rule."
+    },
+    {
         "timestamp":  "2026-07-06 21:04:29",
         "version":  "b327",
         "notes":  "DeskPhone now shares the cloud politely with the tablet host: whichever device actually holds the phone\u0027s Bluetooth link feeds the cloud and runs remote commands, and the other one goes quiet. No more tug-of-war where a phone-less DeskPhone overwrote the tablet\u0027s live texts and calls with a stale \u0027disconnected\u0027 snapshot. Also new: Google-account pairing security on the network API, so only your signed-in devices can talk to DeskPhone over the LAN.",
