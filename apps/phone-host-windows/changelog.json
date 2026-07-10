@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-07-10 12:04:22",
+        "version":  "b329",
+        "notes":  "Send bubbles now carry the web composer\u0027s message id end-to-end, so a text sent from any browser reconciles exactly with the phone\u0027s sent copy - no more heuristic matching and no more duplicate bubbles. Also widens the local-bubble-to-phone-copy reconcile window to 15 minutes while a send is in flight (clock skew between the phone and PC could leave \u0027Confirming\u0027 doubles on screen forever) and keeps a bubble\u0027s identity when it is adopted by the phone\u0027s own sent copy.",
+        "devNotes":  "ControlApiService.cs: /send and /send-with-attachments accept the new cid (client message id) field from the web composer and thread it into the send pipeline. RelayService.cs: relay /send passes cid through unchanged so cloud-relayed sends carry the same id as LAN sends. MainViewModel.cs: _pendingClientMessageId flows into the locally-created bubble\u0027s LocalId so the web can reconcile its optimistic bubble by exact id. MessageStoreService.cs: reconcile window between a local send bubble and the phone\u0027s MAP sent copy widened to 15 min while a send is pending (matches the Windows clock-skew fix from the 4.36.125 web batch), and LocalId is preserved across phone-copy adoption so identity survives. Pairs with web 4.37.125 (phone-link.js state machine + pending-sms.js cid reconcile) and Android host Stores.kt/HostService.kt cid support."
+    },
+    {
         "timestamp":  "2026-07-07 14:24:35",
         "version":  "b328",
         "notes":  "Phone hosting is now polite. While the tablet holds your phone, DeskPhone stays out of its way instead of yanking the Bluetooth link back every 30 seconds — that tug-of-war was the connect/disconnect/forget/remove churn. DeskPhone auto-takes-over only if the tablet goes offline, or when you flip the new menu-rail toggle in the web app to hand it the phone (for example to route call audio through the PC), at which point the tablet steps aside. It also feeds a fast liveness heartbeat so remote screens stop falsely flickering \u0027offline\u0027 on a quiet but healthy link.",
