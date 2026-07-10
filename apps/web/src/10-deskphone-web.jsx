@@ -2,6 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import firebase from 'firebase/compat/app';
 import { deriveAccents, GV_CLEAN, NC_TYPE, RADIUS } from './08-app-split/ui-tokens.jsx';
 import { hostAuthHeaders, pairWithHost } from './08-app-split/host-auth.js';
+import {
+  addPendingSms, updatePendingSms, getPendingSms, subscribePendingSms,
+  reconcilePendingSms, unmatchedPendingSms, collapseHostDoubles, smsBodyKey, smsPhoneKey,
+} from './08-app-split/utils/pending-sms.js';
 
 const DEFAULT_HOST = "http://127.0.0.1:8765";
 // Cloud fallback: when no host answers on loopback, the panel reads the same
@@ -507,16 +511,39 @@ async function composeAttachmentUpload(attachment) {
   };
 }
 
-async function sendComposeMessage({ onCommand, to, body, attachments, label }) {
+// Optimistic send (owner ticket: "why can't that happen immediately in all sms
+// sending fields"). The echo bubble appears in the thread the moment this is
+// called and the composer may clear right away — the actual command runs in the
+// background and flips the echo to Failed (with Retry) if it doesn't go through.
+// Requires an onCommand that THROWS on failure when passed { background: true }.
+// `echoId` reuses an existing echo bubble for retries instead of adding another.
+function sendComposeMessage({ onCommand, to, body, attachments, label, echoId = null }) {
   const phone = String(to || "").trim();
   const text = String(body || "").trim();
   if (!phone || (!text && !attachments.length)) return false;
-  if (attachments.length) {
-    const uploads = await Promise.all(attachments.map(composeAttachmentUpload));
-    await onCommand("/send-with-attachments", label, { to: phone, body: text, attachments: uploads });
+  let id = echoId;
+  if (id) {
+    updatePendingSms(id, { status: "sending", error: "", at: Date.now() });
   } else {
-    await onCommand(`/send?to=${encodeURIComponent(phone)}&body=${encodeURIComponent(text)}`, label);
+    id = addPendingSms({
+      to: phone,
+      body: text,
+      attachments: attachments.map(a => ({ fileName: a.fileName, contentType: a.contentType })),
+    }).id;
   }
+  (async () => {
+    try {
+      if (attachments.length) {
+        const uploads = await Promise.all(attachments.map(composeAttachmentUpload));
+        await onCommand("/send-with-attachments", label, { to: phone, body: text, attachments: uploads }, { background: true });
+      } else {
+        await onCommand(`/send?to=${encodeURIComponent(phone)}&body=${encodeURIComponent(text)}`, label, undefined, { background: true });
+      }
+      updatePendingSms(id, { status: "sent" });
+    } catch (err) {
+      updatePendingSms(id, { status: "failed", error: err?.message || "Failed" });
+    }
+  })();
   return true;
 }
 
@@ -918,6 +945,7 @@ function normalizeMessage(raw, index) {
     sendStatusLabel: raw?.sendStatusLabel || raw?.SendStatusLabel || "",
     outgoingStatusLabel: raw?.outgoingStatusLabel || raw?.OutgoingStatusLabel || "",
     outgoingStatusIcon: raw?.outgoingStatusIcon || raw?.OutgoingStatusIcon || "",
+    echoId: raw?.echoId || "",
     isMms: !!raw?.isMms,
     sourceDeviceAddress: raw?.sourceDeviceAddress || "",
     attachments,
@@ -1036,8 +1064,19 @@ function buildConversations(messages, contacts = []) {
   });
 
   return Array.from(grouped.values()).map((conversation) => {
-    const chronological = [...conversation.messages].sort((a, b) => a.timestampMs - b.timestampMs);
-    const latest = conversation.latest;
+    // Collapse the hosts' stuck send-doubles: a bubble frozen on
+    // "Sending/Confirming" disappears once a confirmed copy of the same text
+    // exists in this thread (owner ticket: "it doubles, one says sent the
+    // other forever on confirming on phone").
+    const deduped = collapseHostDoubles(conversation.messages, {
+      groupKey: (m) => m.key,
+      bodyKey: (m) => smsBodyKey(m.body || m.preview),
+      timeMs: (m) => m.timestampMs,
+      isOutgoing: (m) => m.isSent,
+      isPending: (m) => /send|confirm|queue/i.test(String(m.sendStatus || "")),
+    });
+    const chronological = [...deduped].sort((a, b) => a.timestampMs - b.timestampMs);
+    const latest = chronological[chronological.length - 1] || conversation.latest;
     return {
       ...conversation,
       messages: chronological,
@@ -2090,11 +2129,13 @@ function MessagesSlice({
       onNotice("This message has nothing to resend.");
       return;
     }
-    await sendComposeMessage({ onCommand, to: message.number, body, attachments: [], label: "retry send" });
+    sendComposeMessage({ onCommand, to: message.number, body, attachments: [], label: "retry send", echoId: message.echoId || null });
   }, [onCommand, onNotice]);
 
-  const sendMessage = useCallback(async () => {
-    const sent = await sendComposeMessage({
+  const sendMessage = useCallback(() => {
+    // Optimistic: the echo bubble is already in the thread when this returns,
+    // so the compose box clears instantly instead of freezing until confirm.
+    const sent = sendComposeMessage({
       onCommand,
       to: selectedConversation?.number,
       body: draft,
@@ -2871,8 +2912,8 @@ function NewMessageComposer({ contacts, initialTo = "", initialBody = "", onComm
     setBody(initialBody || "");
   }, [initialBody]);
 
-  const send = useCallback(async () => {
-    const sent = await sendComposeMessage({
+  const send = useCallback(() => {
+    const sent = sendComposeMessage({
       onCommand,
       to: selectedPhone,
       body,
@@ -2882,7 +2923,7 @@ function NewMessageComposer({ contacts, initialTo = "", initialBody = "", onComm
     if (!sent) return;
     setBody("");
     setAttachments([]);
-    onNotice("Message sent to DeskPhone.");
+    onNotice("Sending — the thread shows delivery status.");
   }, [attachments, body, onCommand, onNotice, selectedPhone]);
 
   return (
@@ -5971,6 +6012,45 @@ export function DeskPhoneWebPanel({
   const viaCloudRef = useRef(false);
   const [relayStamp, setRelayStamp] = useState(0);
 
+  // Optimistic outgoing echoes — the same shared store the NerveCenter phone
+  // surface uses, so a text fired from either surface shows everywhere at once.
+  const [pendingEchoes, setPendingEchoes] = useState(() => getPendingSms());
+  useEffect(() => subscribePendingSms((list) => setPendingEchoes(list)), []);
+  const hostOutgoing = useMemo(() => (
+    getApiList(messages)
+      .filter((raw) => !!raw?.isSent)
+      .map((raw) => ({
+        key: smsPhoneKey(raw?.number || raw?.to || raw?.from || ""),
+        bodyKey: smsBodyKey(raw?.body || raw?.preview || ""),
+        timeMs: parseDate(raw?.timestamp || raw?.datetime || raw?.date || raw?.time || "")?.getTime() || 0,
+      }))
+  ), [messages]);
+  useEffect(() => { reconcilePendingSms(hostOutgoing); }, [hostOutgoing]);
+  // Raw-shaped echo entries appended to the host feed; normalizeMessage in the
+  // conversation builder treats them like any other outgoing message.
+  const messagesWithEchoes = useMemo(() => {
+    const echoes = unmatchedPendingSms(pendingEchoes, hostOutgoing);
+    if (!echoes.length) return messages;
+    return [
+      ...getApiList(messages),
+      ...echoes.map((e) => ({
+        id: `echo-${e.id}`,
+        echoId: e.id,
+        number: e.to,
+        to: e.to,
+        from: `Me > ${e.to}`,
+        body: e.body,
+        timestamp: new Date(e.at).toISOString(),
+        isSent: true,
+        isRead: true,
+        sendStatus: e.status === "failed" ? "Failed" : e.status === "sent" ? "" : "Sending",
+        sendStatusLabel: e.status === "failed" ? "Failed" : e.status === "sent" ? "" : "Sending",
+        outgoingStatusLabel: e.status === "failed" ? (e.error || "Failed") : e.status === "sent" ? "Sent" : "Sending…",
+        attachments: e.attachments,
+      })),
+    ];
+  }, [messages, pendingEchoes, hostOutgoing]);
+
   // Reads the relay state blob (same doc the NerveCenter card reads) — fed by
   // whichever host currently holds the phone: PC DeskPhone or Android tablet.
   const fetchCloudState = useCallback(async () => {
@@ -6153,12 +6233,26 @@ export function DeskPhoneWebPanel({
     if (!res.ok) throw new Error(`Relay rejected the command (${res.status})`);
   }, []);
 
-  const runCommand = useCallback(async (path, label, payload) => {
+  const runCommand = useCallback(async (path, label, payload, opts = {}) => {
+    // Background mode (sends): no busy overlay, no global error banner — the
+    // echo bubble in the thread reports the outcome. Rethrows on failure so
+    // sendComposeMessage can flip its echo to Failed.
+    if (opts.background) {
+      if (viaCloudRef.current) {
+        await runCloudCommand(path, payload);
+        // Give the host a moment to drain + push, then re-read the cloud blob.
+        await new Promise((r) => setTimeout(r, 1500));
+        await refresh();
+      } else {
+        await postJson(host, path, payload);
+        await refresh();
+      }
+      return;
+    }
     setBusy(label);
     try {
       if (viaCloudRef.current) {
         await runCloudCommand(path, payload);
-        // Give the host a moment to drain + push, then re-read the cloud blob.
         await new Promise((r) => setTimeout(r, 1500));
         await refresh();
       } else {
@@ -6384,7 +6478,7 @@ export function DeskPhoneWebPanel({
             <SimpleTabContent
               activeTab={activeTab}
               status={status}
-              messages={messages}
+              messages={messagesWithEchoes}
               calls={calls}
               contacts={contacts}
               callDialerSignal={callDialerSignal}

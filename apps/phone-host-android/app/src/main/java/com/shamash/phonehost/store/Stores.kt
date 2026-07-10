@@ -83,18 +83,25 @@ class MessageStore(context: Context) : JsonStore(context, "messages.json") {
             }
             // A sent message arriving from the phone may be the copy of a local
             // echo that never got its handle stamped (the send raced the sync).
-            // Adopt the echo instead of adding a duplicate bubble.
+            // Adopt the echo instead of adding a duplicate bubble. Body compare
+            // is whitespace/line-ending tolerant — the phone's sent-folder copy
+            // often differs from what we pushed (\r\n vs \n, trimmed spaces),
+            // and an exact != left the echo stuck as a doubled bubble.
             if (existing == null && msg.isSent && msg.handle.isNotBlank()) {
+                val msgBodyKey = bodyKeyForMatch(msg.body)
                 existing = messages.firstOrNull {
                     it.isSent && it.handle.isBlank() && it.localId != null &&
-                        it.body == msg.body && it.normalizedPhone == msg.normalizedPhone
+                        it.normalizedPhone == msg.normalizedPhone &&
+                        bodyKeyForMatch(it.body) == msgBodyKey
                 }
             }
             if (existing != null) {
                 existing.isRead = msg.isRead
                 if (msg.body.isNotBlank()) existing.body = msg.body
                 if (msg.handle.isNotBlank()) existing.handle = msg.handle
-                if (existing.sendStatus == "sending") existing.sendStatus = "sent"
+                // Any in-flight status resolves once the phone's own copy is in
+                // hand — the phone storing it IS the confirmation.
+                if (existing.sendStatus == "sending" || existing.sendStatus == "confirming") existing.sendStatus = "sent"
             } else {
                 messages.add(msg)
                 added++
@@ -103,6 +110,12 @@ class MessageStore(context: Context) : JsonStore(context, "messages.json") {
         if (incoming.isNotEmpty()) markDirty()
         return added
     }
+
+    private fun bodyKeyForMatch(body: String): String =
+        body.replace("\r\n", "\n").replace('\r', '\n')
+            .replace(Regex("[ \\t]+"), " ")
+            .replace(Regex("\n+"), "\n")
+            .trim()
 
     /** Local echo for an outgoing message before the phone assigns a handle. */
     @Synchronized

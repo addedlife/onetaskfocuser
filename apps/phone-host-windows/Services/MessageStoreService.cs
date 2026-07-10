@@ -104,7 +104,7 @@ public class MessageStoreService
                         local.IsSent &&
                         SameDevice(local.SourceDeviceAddress, m.SourceDeviceAddress) &&
                         local.NormalizedPhone == m.NormalizedPhone &&
-                        Math.Abs((local.Timestamp - m.Timestamp).TotalSeconds) < 90 &&
+                        Math.Abs((local.Timestamp - m.Timestamp).TotalSeconds) < ReconcileWindowSeconds(local) &&
                         SameMessageBody(local.Body, m.Body));
 
                     if (matched != null)
@@ -149,6 +149,18 @@ public class MessageStoreService
 
         return (merged, newCount);
     }
+
+    // How far apart the local bubble's PC-clock timestamp and the phone-side
+    // copy's phone-clock timestamp may be and still count as the SAME send.
+    // 90 s was too tight: a couple minutes of PC↔phone clock skew (common)
+    // beat it, the local "Confirming" bubble never adopted the phone's sent
+    // copy, and the thread showed the message TWICE — one "Sent", one stuck
+    // on "Confirming on phone" forever (owner ticket 7/9). While the local
+    // bubble still carries an in-flight status it can only be our own recent
+    // send, so a 15-minute window is safe; already-confirmed locals keep the
+    // tight window.
+    private static double ReconcileWindowSeconds(SmsMessage local) =>
+        string.IsNullOrWhiteSpace(local.SendStatus) ? 90 : 900;
 
     private static string BuildStoreKey(string? deviceAddress, string rawKey) =>
         $"{NormalizeDeviceAddress(deviceAddress)}|{rawKey}";

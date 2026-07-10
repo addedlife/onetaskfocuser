@@ -8,7 +8,7 @@ import { cleanTheme, DUR, EASE, NC_FONT_STACK, NC_TYPE, RADIUS, suiteIcon } from
 import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
 import { textOnColor } from '../../01-core.js';
 import { Switch } from '../m3.jsx';
-import { subscribeOwner, setPreferredHost } from '../phone-host-control.js';
+import { subscribeOwner, setPreferredHost, ownerIsLive, HOST_LABEL } from '../phone-host-control.js';
 
 // Real M3 web components — Google's official implementations, not hand-coded lookalikes.
 // md-navigation-rail is not yet in @material/web v2.4; nav items stay hand-coded with
@@ -43,6 +43,20 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
   }, []);
   const preferPc = phoneHost.preferred === 'pc';
   const flipHost = () => setPreferredHost(preferPc ? 'tablet' : 'pc');
+  // Honest toggle feedback (owner ticket: "toggle seems to do nothing" / "it
+  // just stays hooked up to pc"): the label shows which host ACTUALLY holds the
+  // phone right now, and while the owner's choice hasn't landed yet it reads
+  // "Handing to …" so the flip visibly did something. Falls back to the
+  // preference alone until a rebuilt host writes the heartbeat doc.
+  const preferredLabel = preferPc ? 'PC' : 'Tablet';
+  const actualHostLabel = phoneHost.present && ownerIsLive(phoneHost) ? (HOST_LABEL[phoneHost.host] || '') : '';
+  const hostSwitchPending = !!actualHostLabel && actualHostLabel !== preferredLabel;
+  const phoneHostLabel = hostSwitchPending
+    ? `Handing to ${preferredLabel}…`
+    : `Phone: ${actualHostLabel || preferredLabel}`;
+  const phoneHostTitle = hostSwitchPending
+    ? `Waiting for the ${preferredLabel} to pick up the phone — the ${actualHostLabel} still holds it`
+    : `Phone hosted by ${actualHostLabel || preferredLabel} — switch to hand it to the ${preferPc ? 'Tablet' : 'PC'}`;
 
   const mainApps = [
     { id: "focus",      label: "Tasks",      icon: "rule"          },
@@ -238,17 +252,37 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
       {/* Phone host — menu-rail toggle to hand the phone from the tablet (default
           primary) to the PC, e.g. to route call audio through the computer. The
           tablet steps aside when the PC takes over. Real M3 md-switch when the rail
-          is open; a tap-to-flip icon when collapsed. */}
+          is open — sized down to rail density via the official md-switch tokens
+          (owner ticket: the stock 52×32 switch read huge and squished in the rail);
+          a tap-to-flip icon when collapsed. Label reflects the ACTUAL holder and
+          shows "Handing to …" until the handoff lands. */}
       {displayOpen ? (
-        <div title={`Phone hosted by ${preferPc ? 'the PC' : 'the tablet'} — switch to hand it to the ${preferPc ? 'tablet' : 'PC'}`}
-          style={navBtn(false, { cursor: 'default' })}>
-          {suiteIcon(preferPc ? 'computer' : 'smartphone', ic(24))}
-          <span style={{ flex: 1 }}>{`Phone: ${preferPc ? 'PC' : 'Tablet'}`}</span>
+        <div title={phoneHostTitle} style={navBtn(false, { cursor: 'default', gap: 8 })}>
+          <span style={{ flexShrink: 0, display: 'inline-flex' }}>{suiteIcon(preferPc ? 'computer' : 'smartphone', ic(24))}</span>
+          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', fontStyle: hostSwitchPending ? 'italic' : 'normal' }}>{phoneHostLabel}</span>
           <Switch selected={preferPc} onChange={flipHost} aria-label="Hand phone hosting to the PC"
-            style={{ '--md-switch-selected-track-color': C.accent, '--md-switch-selected-hover-track-color': C.accent, '--md-switch-selected-focus-track-color': C.accent, '--md-switch-selected-pressed-track-color': C.accent }} />
+            style={{
+              flexShrink: 0,
+              '--md-switch-track-width': '40px',
+              '--md-switch-track-height': '22px',
+              '--md-switch-handle-width': '12px',
+              '--md-switch-handle-height': '12px',
+              '--md-switch-selected-handle-width': '16px',
+              '--md-switch-selected-handle-height': '16px',
+              '--md-switch-touch-target-size': '30px',
+              '--md-switch-pressed-handle-width': '18px',
+              '--md-switch-pressed-handle-height': '18px',
+              '--md-switch-state-layer-size': '30px',
+              '--md-switch-selected-track-color': C.accent,
+              '--md-switch-selected-hover-track-color': C.accent,
+              '--md-switch-selected-focus-track-color': C.accent,
+              '--md-switch-selected-pressed-track-color': C.accent,
+              '--md-switch-track-outline-color': C.divider,
+              '--md-switch-track-color': C.bgSoft,
+            }} />
         </div>
       ) : (
-        <button onClick={flipHost} title={`Phone host: ${preferPc ? 'PC' : 'Tablet'} — tap to switch`} aria-label="Switch phone host"
+        <button onClick={flipHost} title={phoneHostTitle} aria-label="Switch phone host"
           style={navBtn(false)}>
           <Ripple />
           {suiteIcon(preferPc ? 'computer' : 'smartphone', ic(24))}

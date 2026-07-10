@@ -4,6 +4,10 @@ import { ActionBtn, AssistChip, IconBtn, ListItem, denseListVars } from '../m3.j
 import { db } from '../../01-core.js';
 import { hostFetch, hostAuthHeaders, pairWithHost } from '../host-auth.js';
 import { subscribeOwner, HOST_LABEL, OWNER_LIVE_WINDOW_MS } from '../phone-host-control.js';
+import {
+  addPendingSms, updatePendingSms, getPendingSms, subscribePendingSms,
+  reconcilePendingSms, unmatchedPendingSms, collapseHostDoubles, smsBodyKey, smsPhoneKey,
+} from '../utils/pending-sms.js';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 const PHONE_FETCH_TIMEOUT_MS = 4500;
@@ -315,6 +319,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     });
   }, [phoneStateDocRef]);
   const [contacts, setContacts] = useState([]);
+  // Optimistic outgoing texts (shared module state) — render instantly as
+  // "Sending…" bubbles and vanish once the host reports its own copy.
+  const [pendingEchoes, setPendingEchoes] = useState(() => getPendingSms());
+  useEffect(() => subscribePendingSms(list => setPendingEchoes(list)), []);
   const [number, setNumber] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState("");
@@ -519,16 +527,14 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         setUsingRelay(false);
         onOnlineChange?.(false);
       }
-      setError(
-        msg === "relay:no_state"
-          ? "Waiting for Shamash Phone Link on the tablet."
-          : msg === "relay:no_auth"
-            ? "Sign in to see your phone here."
-            : msg === "relay:denied"
-              ? "Phone relay blocked by security rules."
-              : hardFail
-                ? "Can't reach the phone link — check the tablet host."
-                : "Phone host briefly unreachable — reconnecting…");
+      if (msg === "relay:no_state") setError("Waiting for Shamash Phone Link on the tablet.");
+      else if (msg === "relay:no_auth") setError("Sign in to see your phone here.");
+      else if (msg === "relay:denied") setError("Phone relay blocked by security rules.");
+      else if (hardFail) setError("Can't reach the phone link — check the tablet host.");
+      // A single bad cycle with data still on screen stays QUIET — the status
+      // line already reads Connecting/Offline. Flashing a red "can't connect"
+      // banner over a visible call/text feed was the owner's "one big mess"
+      // confusion (ticket 7/9): two contradictory truths at once.
     } finally {
       refreshInFlightRef.current = false;
     }
@@ -690,8 +696,14 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // when its HTTP response said so). Callers use this to decide whether user input
   // (e.g. a typed message) is safe to discard. NOTE: refresh() clears the error
   // banner, so failure paths refresh FIRST and set their error after.
-  const post = async (path, label) => {
-    setBusy(label);
+  //
+  // opts.background: don't hold the whole surface busy and don't write the
+  // global error banner — report failures through opts.onError instead. Sends
+  // use this so the compose UI never freezes while a command round-trips
+  // (owner ticket: "the text just freezes for 5 seconds").
+  const post = async (path, label, opts = {}) => {
+    const fail = msg => { if (opts.background) opts.onError?.(msg); else setError(msg); };
+    if (!opts.background) setBusy(label);
     try {
       if (usingRelayRef.current) {
         // Route command through the cloud relay — the active host drains it.
@@ -711,7 +723,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         if (!res.ok) {
           let msg = `Relay rejected the command (${res.status})`;
           try { const d = await res.json(); if (d?.error) msg = d.error; } catch {}
-          setError(msg);
+          fail(msg);
           return false;
         }
         const queued = await res.json().catch(() => ({}));
@@ -721,18 +733,18 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           const ack = await waitForAck(queued.id, 25000);
           await refresh();
           if (ack && !ack.ok) {
-            setError(ack.error || "The phone host could not run the command.");
+            fail(ack.error || "The phone host could not run the command.");
             return false;
           }
           if (!ack) {
-            setError("No confirmation from the phone host. The command will expire if the phone link stays offline.");
+            fail("No confirmation from the phone host. The command will expire if the phone link stays offline.");
             return false;
           }
-          setError("");
+          if (!opts.background) setError("");
           return true;
         }
         // Relay without command ids (older function) — keep the legacy blind wait.
-        setError("");
+        if (!opts.background) setError("");
         await new Promise(r => setTimeout(r, 2500));
       } else {
         const res = await hostFetch(localHost, path, { method: "POST" });
@@ -740,27 +752,27 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           let msg = `Phone host error (${res.status})`;
           try { const d = await res.json(); if (d?.error || d?.message) msg = d.error || d.message; } catch {}
           await refresh();
-          setError(msg);
+          fail(msg);
           return false;
         }
         const data = await res.json().catch(() => ({}));
         if (data?.success === false || data?.ok === false || data?.result === "failed") {
           await refresh();
-          setError(data?.error || data?.message || data?.reason || "The phone host reported failure.");
+          fail(data?.error || data?.message || data?.reason || "The phone host reported failure.");
           return false;
         }
-        setError("");
+        if (!opts.background) setError("");
       }
       await refresh();
       return true;
     }
     catch {
-      setError("The phone host did not answer.");
+      fail("The phone host did not answer.");
       transportRef.current = null;   // direct path died mid-command — re-resolve next cycle
       onOnlineChange?.(false);
       return false;
     }
-    finally { setBusy(""); }
+    finally { if (!opts.background) setBusy(""); }
   };
 
   // The ONE reconnect control: ask the active phone host to re-establish the
@@ -773,13 +785,29 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
 
   const dialNum = async (n) => { if (n?.trim()) await post(`/dial?n=${encodeURIComponent(n.trim())}`, "dial"); };
   const dial = () => dialNum(number);
-  const sendSms = async () => {
-    const to = selected?.number || number;
-    if (!to?.trim() || !body.trim()) return;
-    const ok = await post(`/send?to=${encodeURIComponent(to.trim())}&body=${encodeURIComponent(body.trim())}`, "send");
-    // Only discard the draft once DeskPhone confirmed the send — on failure the
-    // text stays in the compose box so nothing the user typed is ever lost.
-    if (ok) { setBody(""); closeCompose(); }
+
+  // Fire-and-track send: the echo bubble carries the outcome ("Sending…" →
+  // sent, or "Failed" + Retry), so the composer never blocks and nothing the
+  // user typed is ever lost — a failed text lives on in the thread, retryable.
+  const sendSmsInBackground = (to, text, existingEchoId = null) => {
+    let echoId = existingEchoId;
+    if (echoId) updatePendingSms(echoId, { status: "sending", error: "", at: Date.now() });
+    else echoId = addPendingSms({ to, body: text }).id;
+    post(`/send?to=${encodeURIComponent(to)}&body=${encodeURIComponent(text)}`, "send", {
+      background: true,
+      onError: msg => updatePendingSms(echoId, { status: "failed", error: msg || "Failed" }),
+    }).then(ok => { if (ok) updatePendingSms(echoId, { status: "sent" }); });
+  };
+
+  const sendSms = () => {
+    const to = (selected?.number || number).trim();
+    const text = body.trim();
+    if (!to || !text) return;
+    // Owner ticket: the sent text and its sending status appear in the thread
+    // IMMEDIATELY — no frozen compose box while the relay round-trips.
+    setBody("");
+    closeCompose();
+    sendSmsInBackground(to, text);
   };
 
   // Normalize callState so "Idle", "None", "Available" etc. all collapse to "" (shows "Connected · device")
@@ -820,10 +848,20 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // ticket: "there's no status indicator that says what it's doing"). One dot +
   // one clear line, no jargon; Reconnect appears only when it's actually offline.
   const linkDotColor = phoneLinkLive ? C.success : relayStale ? C.warning : C.faint;
+  // When the link is down but old data is still on screen, SAY SO in one line —
+  // "can't connect" next to a feed of calls with no age label was the owner's
+  // "shows recent calls from 4 hours ago" confusion.
+  const hasFeedData = (Array.isArray(messages) && messages.length > 0) || (Array.isArray(calls) && calls.length > 0);
+  // The owner flipped the rail toggle but the handoff hasn't landed yet —
+  // surface that in-between state instead of looking like the toggle is dead.
+  const preferredHostLabel = owner.preferred === 'pc' ? HOST_LABEL.windows : HOST_LABEL.android;
+  const hostSwitchPending = owner.present && !!owner.host && HOST_LABEL[owner.host] !== preferredHostLabel;
   const linkStatusLabel = phoneLinkLive
-    ? `Connected · ${activeHostLabel}${deviceName ? ` · ${deviceName}` : ""}`
+    ? `Connected · ${activeHostLabel}${deviceName ? ` · ${deviceName}` : ""}${hostSwitchPending ? ` · handing to ${preferredHostLabel}…` : ""}`
     : relayStale
-      ? `Offline — last seen ${relayAgeLabel(relayAgeMs)} ago`
+      ? (hasFeedData
+        ? `Offline — showing texts & calls from ${relayAgeLabel(relayAgeMs)} ago`
+        : `Offline — last seen ${relayAgeLabel(relayAgeMs)} ago`)
       : (usingRelay ? "Connecting…" : "Looking for phone host…");
   const linkOffline = !phoneLinkLive && (relayStale || !statusOnline);
 
@@ -838,9 +876,43 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const callerDisplay = callerName || (callerNumber ? (lookupName(callerNumber) || callerNumber) : "");
   const vmCount = parseInt(status?.voicemailCount || status?.VoicemailCount || status?.voicemail?.count || 0, 10) || 0;
 
+  // Host-reported outgoing messages in match shape — used to drop echoes the
+  // host now covers (its own bubble or the phone's sent-folder copy).
+  const hostOutgoing = useMemo(() => (
+    (Array.isArray(messages) ? messages : [])
+      .filter(isOutgoingMessage)
+      .map(m => ({ key: smsPhoneKey(messagePeerNumber(m)), bodyKey: smsBodyKey(messageBody(m)), timeMs: messageTimeMs(m) }))
+  ), [messages]);
+  useEffect(() => { reconcilePendingSms(hostOutgoing); }, [hostOutgoing]);
+
+  // Feed for the thread builder: host messages, with the hosts' own stuck
+  // "Confirming" doubles collapsed, plus any not-yet-covered echo bubbles.
+  const messagesForThreads = useMemo(() => {
+    const base = collapseHostDoubles(Array.isArray(messages) ? messages : [], {
+      groupKey: m => smsPhoneKey(messagePeerNumber(m)),
+      bodyKey: m => smsBodyKey(messageBody(m)),
+      timeMs: m => messageTimeMs(m),
+      isOutgoing: isOutgoingMessage,
+      isPending: m => /send|confirm|queue/i.test(String(m?.sendStatus || m?.SendStatus || "")),
+    });
+    const echoMessages = unmatchedPendingSms(pendingEchoes, hostOutgoing).map(e => ({
+      id: `echo-${e.id}`,
+      _echoId: e.id,
+      to: e.to,
+      normalizedPhone: e.key,
+      direction: "sent",
+      isSent: true,
+      body: e.body,
+      timestamp: e.at,
+      sendStatus: e.status === "failed" ? "Failed" : e.status === "sent" ? "" : "Sending",
+      sendStatusLabel: e.status === "failed" ? (e.error || "Failed") : e.status === "sent" ? "" : "Sending…",
+    }));
+    return echoMessages.length ? [...base, ...echoMessages] : base;
+  }, [messages, pendingEchoes, hostOutgoing]);
+
   const threads = useMemo(() => {
     const threadMap = new Map();
-    (Array.isArray(messages) ? messages : []).forEach(m => {
+    (Array.isArray(messagesForThreads) ? messagesForThreads : []).forEach(m => {
       const who = messagePeerNumber(m);
       const threadKey = phoneThreadKey(who) || String(who || "Unknown").trim().toLowerCase();
       const directName = m.name || m.displayName || m.contactName || m.fromName || m.senderName || m.contact ||
@@ -873,7 +945,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       }))
       .sort((a, b) => b._latestAt - a._latestAt)
       .slice(0, 20);
-  }, [messages, lookupName]);
+  }, [messagesForThreads, lookupName]);
   const recentCalls = (Array.isArray(calls) ? calls : []).slice(0, 20);
   const hasMessages = threads.length > 0;
   const hasCalls = recentCalls.length > 0;
@@ -1403,7 +1475,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                                     {outgoing && (sendFailed || sendStuck) && (
                                       <ActionBtn variant="text" icon="refresh" iconSize={12} height={24} labelSize={NC_TYPE.small} labelColor={C.danger}
                                         title="Retry send" disabled={!!busy}
-                                        onClick={e => { e.stopPropagation(); if (msgText) post(`/send?to=${encodeURIComponent(thread._who)}&body=${encodeURIComponent(msgText)}`, "retry send"); }}>
+                                        onClick={e => { e.stopPropagation(); if (msgText) sendSmsInBackground(thread._who, msgText, msg._echoId || null); }}>
                                         Retry
                                       </ActionBtn>
                                     )}
