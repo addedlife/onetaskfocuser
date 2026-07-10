@@ -56,6 +56,8 @@ class RelayClient(private val host: HostService) {
         private const val OWNER_HEARTBEAT_MS = 15_000L      // renew cadence while holding
         private const val OWNER_STALE_MS = 90_000L          // preferred host silent this long ⇒ dead
         private const val OWNER_TAKEOVER_GRACE_MS = 90_000L // brief yield after a switch before takeover
+        private const val OWNER_SWITCH_POLL_MS = 5_000L     // faster poll while a handoff is in flight
+        private const val OWNER_SWITCH_WINDOW_MS = 90_000L  // how long after a preference flip we poll fast
 
         private const val MESSAGE_RELAY_LIMIT = 150   // whole doc re-sent to every device on change
         private const val CALL_RELAY_LIMIT = 100
@@ -270,7 +272,10 @@ class RelayClient(private val host: HostService) {
      *  never grabs (the watchdog gates on shouldHoldPhone()); nothing is torn down. */
     fun evaluateShouldHold() = arbitrationTick()
 
+    @Volatile private var fastTickQueued = false
+
     private fun arbitrationTick() {
+        fastTickQueued = false
         var preferred = "tablet"; var ownerHost = ""; var ownerT = 0L; var preferredAt = 0L; var ownerConnected = false
         val raw = httpGet(OWNER_GET_URL)
         if (raw != null && raw.trim().startsWith("{")) {
@@ -289,14 +294,50 @@ class RelayClient(private val host: HostService) {
         val preferredId = if (preferred == "pc") "windows" else "android"
         val amPreferred = preferredId == HOST_ID
         val preferredFresh = ownerHost == preferredId && (now - ownerT) < OWNER_STALE_MS && ownerConnected
+        val wasHolding = shouldHold
         shouldHold = when {
             amPreferred    -> true                                     // I'm the chosen host — always try
             preferredFresh -> false                                    // preferred host alive & holding — stay parked
             else           -> (now - preferredAt) >= OWNER_TAKEOVER_GRACE_MS  // brief yield after a switch, else take over
         }
-        // Only the intended holder writes — a parked host writing host=android would
-        // clobber the PC's ownership. While holding, renew the heartbeat.
-        if (shouldHold) writeOwnerHeartbeat(now, host.isFullyConnected())
+        val withinSwitchWindow = (now - preferredAt) in 0 until OWNER_SWITCH_WINDOW_MS
+        val connected = host.isFullyConnected()
+
+        if (shouldHold) {
+            // Only the intended holder writes — a parked host writing host=android would
+            // clobber the PC's ownership. While holding, renew the heartbeat.
+            writeOwnerHeartbeat(now, connected)
+            // Acquire: we hold (or just won) the phone but aren't connected. During the
+            // switch window this retries each fast tick — early attempts lose the race
+            // with the PC's release, and the phone needs seconds to free the profiles.
+            // connectToDefault() clears the `released` parking flag and has its own
+            // `connecting` in-flight guard, so repeats are safe.
+            if ((!wasHolding || withinSwitchWindow) && !connected && !host.isBusyConnecting()) {
+                HostLog.add("[ARBITRATION] this host is now preferred — connecting to the phone")
+                host.connectToDefault()
+            }
+        } else if (connected && withinSwitchWindow) {
+            // Resign-then-acquire: the phone serves HFP/MAP to ONE host at a time, so
+            // the PC can only take over if we actively drop the link. Only a FRESH
+            // explicit preference flip triggers this (a stale doc never yanks a working
+            // connection), and never mid-call — we re-check every fast tick until idle.
+            if (host.isCallActive()) {
+                HostLog.add("[ARBITRATION] release requested but a call is live — deferring until idle")
+            } else {
+                HostLog.add("[ARBITRATION] preferred host changed — releasing the phone's Bluetooth link")
+                host.handoffRelease()
+                // Farewell: we were the recorded holder — flip connected=false so the
+                // web and the winning host see the link drop within one fast tick.
+                if (ownerHost == HOST_ID) writeOwnerHeartbeat(System.currentTimeMillis(), false)
+            }
+        }
+
+        // A handoff in flight polls fast so both hosts converge in seconds. One-shot
+        // reschedule (guarded) on top of the fixed 15s cadence.
+        if (withinSwitchWindow && !fastTickQueued) {
+            fastTickQueued = true
+            executor.schedule({ runCatching { arbitrationTick() } }, OWNER_SWITCH_POLL_MS, TimeUnit.MILLISECONDS)
+        }
     }
 
     private fun writeOwnerHeartbeat(nowMs: Long, connected: Boolean) {

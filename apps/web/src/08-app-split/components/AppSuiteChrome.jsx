@@ -4,10 +4,11 @@ import { MdFab } from '@material/web/fab/fab.js';
 import { MdOutlinedIconButton } from '@material/web/iconbutton/outlined-icon-button.js';
 import { MdDivider } from '@material/web/divider/divider.js';
 import { MdRipple } from '@material/web/ripple/ripple.js';
+import { MdOutlinedSegmentedButton } from '@material/web/labs/segmentedbutton/outlined-segmented-button.js';
+import { MdOutlinedSegmentedButtonSet } from '@material/web/labs/segmentedbuttonset/outlined-segmented-button-set.js';
 import { cleanTheme, DUR, EASE, NC_FONT_STACK, NC_TYPE, RADIUS, suiteIcon } from '../ui-tokens.jsx';
 import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
 import { textOnColor } from '../../01-core.js';
-import { Switch } from '../m3.jsx';
 import { subscribeOwner, setPreferredHost, ownerIsLive, HOST_LABEL } from '../phone-host-control.js';
 
 // Real M3 web components — Google's official implementations, not hand-coded lookalikes.
@@ -17,6 +18,14 @@ const Fab = createComponent({ react: React, tagName: 'md-fab', elementClass: MdF
 const OutlinedIconButton = createComponent({ react: React, tagName: 'md-outlined-icon-button', elementClass: MdOutlinedIconButton });
 const Divider = createComponent({ react: React, tagName: 'md-divider', elementClass: MdDivider });
 const Ripple = createComponent({ react: React, tagName: 'md-ripple', elementClass: MdRipple });
+// Segmented button (labs, single-select): M3's control for 2–5 mutually exclusive
+// choices — the right semantics for picking WHICH host holds the phone, where the
+// old md-switch wrongly read as an on/off state.
+const SegmentedButtonSet = createComponent({
+  react: React, tagName: 'md-outlined-segmented-button-set', elementClass: MdOutlinedSegmentedButtonSet,
+  events: { onSelection: 'segmented-button-set-selection' },
+});
+const SegmentedButton = createComponent({ react: React, tagName: 'md-outlined-segmented-button', elementClass: MdOutlinedSegmentedButton });
 
 // Cross-component signaling for the Bug Log rail item, without prop-drilling
 // through App.jsx (which already owns a large prop surface). BugLog.jsx
@@ -249,37 +258,41 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         {displayOpen && "Bug Log"}
       </button>
 
-      {/* Phone host — menu-rail toggle to hand the phone from the tablet (default
-          primary) to the PC, e.g. to route call audio through the computer. The
-          tablet steps aside when the PC takes over. Real M3 md-switch when the rail
-          is open — sized down to rail density via the official md-switch tokens
-          (owner ticket: the stock 52×32 switch read huge and squished in the rail);
-          a tap-to-flip icon when collapsed. Label reflects the ACTUAL holder and
-          shows "Handing to …" until the handoff lands. */}
+      {/* Phone host — which machine holds the phone's Bluetooth link (tablet is
+          the daily primary; PC e.g. for call audio). A CHOICE between two hosts,
+          so this is M3's segmented button (single-select), not a switch — a
+          switch reads as on/off state, which is exactly what confused the owner.
+          Real labs md-outlined-segmented-button-set when the rail is open, sized
+          to rail density via the official tokens; a tap-to-flip icon when
+          collapsed. The caption above still reflects the ACTUAL holder and shows
+          "Handing to …" until the native hosts complete the Bluetooth handoff. */}
       {displayOpen ? (
-        <div title={phoneHostTitle} style={navBtn(false, { cursor: 'default', gap: 8 })}>
-          <span style={{ flexShrink: 0, display: 'inline-flex' }}>{suiteIcon(preferPc ? 'computer' : 'smartphone', ic(24))}</span>
-          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', fontStyle: hostSwitchPending ? 'italic' : 'normal' }}>{phoneHostLabel}</span>
-          <Switch selected={preferPc} onChange={flipHost} aria-label="Hand phone hosting to the PC"
+        <div title={phoneHostTitle} style={{ width: '100%', padding: `${GAP}px 2px`, boxSizing: 'border-box', flexShrink: 0 }}>
+          <div style={{
+            fontSize: Math.max(10, px(11)), color: C.muted, fontFamily: NC_FONT_STACK,
+            padding: '0 2px 3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            fontStyle: hostSwitchPending ? 'italic' : 'normal',
+          }}>{phoneHostLabel}</div>
+          <SegmentedButtonSet
+            onSelection={(e) => {
+              const idx = e?.detail?.index;
+              if (idx === 0 || idx === 1) setPreferredHost(idx === 1 ? 'pc' : 'tablet');
+            }}
+            aria-label="Which device hosts the phone"
             style={{
-              flexShrink: 0,
-              '--md-switch-track-width': '40px',
-              '--md-switch-track-height': '22px',
-              '--md-switch-handle-width': '12px',
-              '--md-switch-handle-height': '12px',
-              '--md-switch-selected-handle-width': '16px',
-              '--md-switch-selected-handle-height': '16px',
-              '--md-switch-touch-target-size': '30px',
-              '--md-switch-pressed-handle-width': '18px',
-              '--md-switch-pressed-handle-height': '18px',
-              '--md-switch-state-layer-size': '30px',
-              '--md-switch-selected-track-color': C.accent,
-              '--md-switch-selected-hover-track-color': C.accent,
-              '--md-switch-selected-focus-track-color': C.accent,
-              '--md-switch-selected-pressed-track-color': C.accent,
-              '--md-switch-track-outline-color': C.divider,
-              '--md-switch-track-color': C.bgSoft,
-            }} />
+              width: '100%',
+              '--md-outlined-segmented-button-container-height': `${Math.max(30, px(32))}px`,
+              '--md-outlined-segmented-button-label-text-font': NC_FONT_STACK,
+              '--md-outlined-segmented-button-label-text-size': `${Math.max(11, px(12))}px`,
+              '--md-outlined-segmented-button-outline-color': C.divider,
+              '--md-outlined-segmented-button-selected-container-color': C.hover,
+              '--md-outlined-segmented-button-selected-label-text-color': C.text,
+              '--md-outlined-segmented-button-unselected-label-text-color': C.muted,
+              '--md-outlined-segmented-button-selected-icon-color': C.accent,
+            }}>
+            <SegmentedButton selected={!preferPc} label="Tablet" title="Tablet holds the phone" />
+            <SegmentedButton selected={preferPc} label="PC" title="PC holds the phone" />
+          </SegmentedButtonSet>
         </div>
       ) : (
         <button onClick={flipHost} title={phoneHostTitle} aria-label="Switch phone host"

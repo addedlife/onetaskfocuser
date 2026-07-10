@@ -206,6 +206,9 @@ class HostService : Service() {
 
     fun isBusyConnecting(): Boolean = connecting.get()
 
+    /** Any non-idle call (ringing, dialing, active) — a handoff release must wait. */
+    fun isCallActive(): Boolean = hfp.currentCall.status != CallStatus.Idle
+
     fun isPaused(): Boolean = released
 
     /** Human name for a paired device, for consumer-facing UI. */
