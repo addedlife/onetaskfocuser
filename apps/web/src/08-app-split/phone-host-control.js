@@ -29,7 +29,7 @@ export const OWNER_DOC_PATH = { collection: 'phone-relay', doc: 'owner' };
 // import site. OWNER_LIVE_WINDOW_MS is the same value as the machine's
 // HEARTBEAT_LIVE_WINDOW_MS, aliased for older call sites.
 export { HOST_LABEL, PREFERRED_DEFAULT, HEARTBEAT_LIVE_WINDOW_MS as OWNER_LIVE_WINDOW_MS } from './phone-link.js';
-import { PREFERRED_DEFAULT } from './phone-link.js';
+import { PREFERRED_DEFAULT, HEARTBEAT_LIVE_WINDOW_MS as OWNER_LIVE_WINDOW_MS } from './phone-link.js';
 
 function ownerRef() {
   return db ? db.collection(OWNER_DOC_PATH.collection).doc(OWNER_DOC_PATH.doc) : null;

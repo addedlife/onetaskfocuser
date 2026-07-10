@@ -1,5 +1,13 @@
 # PC handoff — phone-link overhaul (2026-07-10)
 
+> **PC session status (2026-07-10 ~12:15 PM):**
+> - §1 Pull — done.
+> - §2 DeskPhone b329 — built, deployed, `/status` confirms `b329` running with HFP+MAP connected.
+> - §3 Android APK — built (`app-debug.apk`, 12:05 PM) and handed to the owner to sideload on the tablet; **not yet confirmed installed**.
+> - Found + fixed a 4.37.125 ship-stopper: `phone-host-control.js` re-exported `OWNER_LIVE_WINDOW_MS` without importing it, so the whole app crashed on load (`ReferenceError`). Fixed in 4.37.126, tests 19/19, deployed to Firebase hosting, verified live.
+> - §4 — state machine + live feed verified from the PC (PC currently holds the phone). Send-a-text, rail-toggle handoff, and kill-the-tablet-host checks are pending the owner + tablet install.
+> - §5 legacy-fallback removal — **do NOT do yet**; tablet host still on the pre-cid build.
+
 _Written by the cloud Claude session that shipped web 4.37.125. The web half is
 already live; this doc is the exact to-do for the PC, where the two host apps
 must be rebuilt. If you open Claude Code locally, point it at this file._
