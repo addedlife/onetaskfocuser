@@ -1488,7 +1488,10 @@ function corsFor(event, methods = "POST, OPTIONS") {
     isAllowed,
     headers: {
       "Access-Control-Allow-Origin": isAllowed ? (origin || ALLOWED_ORIGINS[0]) : ALLOWED_ORIGINS[0],
-      "Access-Control-Allow-Headers": "Content-Type",
+      // Authorization must be preflight-approved for cross-origin callers
+      // (rabbimetrics.web.app sends its Firebase ID token in that header;
+      // same-origin Shamash calls never preflight, so this only affects them).
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
       "Access-Control-Allow-Methods": methods,
     },
   };
