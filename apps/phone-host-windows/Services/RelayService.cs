@@ -40,7 +40,9 @@ public class RelayService : IDisposable
     public Func<Task>?                             HangUp      { get; set; }
     public Func<Task>?                             Answer      { get; set; }
     public Func<Task>?                             ToggleMute  { get; set; }
-    public Func<string, string, Task<bool>>?       Send        { get; set; }
+    // (to, body, clientMessageId?) — cid from the web echo rides through so the
+    // new message's LocalId matches it exactly (see ControlApiService.Send).
+    public Func<string, string, string?, Task<bool>>? Send     { get; set; }
     public Func<Task>?                             Refresh     { get; set; }
     public Func<string, Task>?                     MarkRead    { get; set; }
     public Func<string, Task>?                     MarkUnread  { get; set; }
@@ -583,13 +585,14 @@ public class RelayService : IDisposable
                 case "/send":
                     var to   = ParseStr(qs, "to");
                     var body = ParseStr(qs, "body");
+                    var cid  = ParseStr(qs, "cid");
                     if (string.IsNullOrWhiteSpace(to) || string.IsNullOrWhiteSpace(body) || Send is null)
                     {
                         ok = false; error = "missing recipient or message body";
                     }
                     else
                     {
-                        ok = await Send(to, body);
+                        ok = await Send(to, body, string.IsNullOrWhiteSpace(cid) ? null : cid);
                         if (!ok) error = "phone link rejected the send — kept as Failed in DeskPhone for retry";
                         LogLine?.Invoke(ok
                             ? $"[RELAY CMD] send delivered to phone ({to})"

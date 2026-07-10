@@ -24,13 +24,12 @@ import { db } from '../01-core.js';
 
 export const OWNER_DOC_PATH = { collection: 'phone-relay', doc: 'owner' };
 
-// How fresh the active host's heartbeat must be for the link to count as live.
-// The hosts renew every ~20 s, so 60 s tolerates two missed beats before the UI
-// says "offline" — the standard 3× heartbeat margin for presence systems.
-export const OWNER_LIVE_WINDOW_MS = 60000;
-
-export const HOST_LABEL = { android: 'Tablet', windows: 'PC' };
-export const PREFERRED_DEFAULT = 'tablet';
+// Canonical constants (heartbeat window, host labels) live in phone-link.js —
+// the pure, testable module; re-exported here so existing callers keep one
+// import site. OWNER_LIVE_WINDOW_MS is the same value as the machine's
+// HEARTBEAT_LIVE_WINDOW_MS, aliased for older call sites.
+export { HOST_LABEL, PREFERRED_DEFAULT, HEARTBEAT_LIVE_WINDOW_MS as OWNER_LIVE_WINDOW_MS } from './phone-link.js';
+import { PREFERRED_DEFAULT } from './phone-link.js';
 
 function ownerRef() {
   return db ? db.collection(OWNER_DOC_PATH.collection).doc(OWNER_DOC_PATH.doc) : null;

@@ -107,13 +107,20 @@ export function removePendingSms(id) {
 }
 
 // Does this host-reported outgoing message account for the given echo?
-// `outgoing` items: { key, bodyKey, timeMs } built by the caller from
+// `outgoing` items: { cid?, key, bodyKey, timeMs } built by the caller from
 // whatever raw shape its host feed uses.
+//
+// Exact match first: the composer's echo id rides the /send command as `cid`,
+// hosts ≥ b329/tablet-b5 stamp it as the message's own id, so the blob copy
+// carries the echo's id back verbatim — deterministic, industry-standard
+// client-message-id reconciliation. The fuzzy recipient+body+time match stays
+// only as the fallback for hosts that predate the cid plumbing.
 function echoMatches(echo, outgoing) {
   return outgoing.some(m =>
-    m.key === echo.key &&
-    m.bodyKey === echo.bodyKey &&
-    (!m.timeMs || m.timeMs >= echo.at - MATCH_SKEW_MS));
+    (m.cid && m.cid === echo.id) ||
+    (m.key === echo.key &&
+      m.bodyKey === echo.bodyKey &&
+      (!m.timeMs || m.timeMs >= echo.at - MATCH_SKEW_MS)));
 }
 
 // Synchronous filter for render time: which echoes are NOT yet covered by a

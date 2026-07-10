@@ -117,11 +117,15 @@ class MessageStore(context: Context) : JsonStore(context, "messages.json") {
             .replace(Regex("\n+"), "\n")
             .trim()
 
-    /** Local echo for an outgoing message before the phone assigns a handle. */
+    /**
+     * Local echo for an outgoing message before the phone assigns a handle.
+     * `clientMessageId` (web composer's `cid`) becomes the echo's identity so
+     * the state blob returns it and the browser's bubble reconciles exactly.
+     */
     @Synchronized
-    fun addLocalSent(to: String, body: String, status: String): SmsMessage {
+    fun addLocalSent(to: String, body: String, status: String, clientMessageId: String? = null): SmsMessage {
         val msg = SmsMessage(
-            localId = "local-${UUID.randomUUID()}",
+            localId = clientMessageId?.takeIf { it.isNotBlank() } ?: "local-${UUID.randomUUID()}",
             from = "Me > $to",
             body = body,
             isSent = true,

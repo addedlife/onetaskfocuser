@@ -3,7 +3,8 @@ import { cleanTheme, DUR, EASE, ELEV, gvIconButton, ICON, NC_FONT_STACK, NC_TYPE
 import { ActionBtn, AssistChip, IconBtn, ListItem, denseListVars } from '../m3.jsx';
 import { db } from '../../01-core.js';
 import { hostFetch, hostAuthHeaders, pairWithHost } from '../host-auth.js';
-import { subscribeOwner, HOST_LABEL, OWNER_LIVE_WINDOW_MS } from '../phone-host-control.js';
+import { subscribeOwner } from '../phone-host-control.js';
+import { derivePhoneLinkState, describePhoneLink, formatAgeShort, messageListSignature } from '../phone-link.js';
 import {
   addPendingSms, updatePendingSms, getPendingSms, subscribePendingSms,
   reconcilePendingSms, unmatchedPendingSms, collapseHostDoubles, smsBodyKey, smsPhoneKey,
@@ -11,21 +12,8 @@ import {
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 const PHONE_FETCH_TIMEOUT_MS = 4500;
-// Fallback staleness window, used ONLY until the rebuilt hosts write the owner
-// heartbeat doc (phone-host-control.js). The legacy path refreshes the state doc
-// on change or every 5 min, so a tight window there reads a healthy-but-quiet
-// link as constant flapping — the exact iPad "connected/unconnected" bug. The
-// owner-doc path renews every ~20 s and uses the tight OWNER_LIVE_WINDOW_MS.
-const RELAY_STATE_FALLBACK_WINDOW_MS = 360000;
-
-// Compact "27s" / "4m" / "2h" age label for the relay's last-connected time.
-function relayAgeLabel(ms) {
-  const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.round(s / 60)}m`;
-  if (s < 86400) return `${Math.round(s / 3600)}h`;
-  return `${Math.round(s / 86400)}d`;
-}
+// All liveness/staleness windows and age labels live in phone-link.js — the
+// shared state machine both phone surfaces derive from.
 
 // True on a real phone/tablet (Android, iPhone, iPad) — by user-agent and touch,
 // NOT by window width, so a narrow desktop window is still treated as desktop.
@@ -239,6 +227,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // holds the phone's Bluetooth link. DeskPhone stays available as a fallback,
   // but the daily product path is the tablet phone link.
   const isMobile = useMemo(() => isMobilePhoneDevice(), []);
+  const phoneDiag = useMemo(() => {
+    try { return /[?&]phonediag=1/.test(window.location.search); } catch { return false; }
+  }, []);
   const localApi = (typeof window !== "undefined" && window.location.port === "8765")
     ? window.location.origin
     : "http://127.0.0.1:8765";
@@ -348,6 +339,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const [owner, setOwner] = useState({ preferred: 'tablet', host: '', t: 0, connected: false, present: false });
   // Ticks so staleness re-evaluates over time even when no new data arrives.
   const [nowTick, setNowTick] = useState(() => Date.now());
+  // When the last successful fetch completed — drives loopback-path liveness
+  // (a dead local host has no heartbeat doc to go stale).
+  const lastFetchOkAtRef = useRef(0);
   const refreshInFlightRef = useRef(false);
   const expandedConversationEndRef = useRef(null);
   const composeBodyRef = useRef(null);
@@ -423,7 +417,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     const contactsParsed = contactsRes || [];
     const nextContacts = Array.isArray(contactsParsed) ? contactsParsed : (contactsParsed?.contacts || []);
     setStatus(nextStatus);
-    const msgSig = `${nextMessages.length}|${nextMessages[0]?.id ?? nextMessages[0]?.handle ?? ""}|${nextMessages[nextMessages.length - 1]?.id ?? nextMessages[nextMessages.length - 1]?.handle ?? ""}`;
+    // Full-list signature (id + send status + read state of EVERY message) —
+    // the old length+endpoints check missed a mid-list Confirming→Sent flip,
+    // so a send could stay visually "Confirming" long after it confirmed.
+    const msgSig = messageListSignature(nextMessages);
     if (msgSig !== messagesSigRef.current) {
       messagesSigRef.current = msgSig;
       setMessages(nextMessages);
@@ -507,6 +504,8 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         payload = await fetchViaRelay();
       }
       failStreakRef.current = 0;
+      lastFetchOkAtRef.current = Date.now();
+      setNowTick(Date.now());   // re-derive liveness immediately on fresh data
       setError("");
       transportRef.current = transport;
       usingRelayRef.current = transport === "relay";
@@ -515,26 +514,21 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     } catch (e) {
       transportRef.current = null;   // both paths failed — re-resolve from scratch next cycle
       const msg = String(e?.message || "");
-      // One bad cycle keeps the last-known data on screen with a soft note;
-      // only a sustained outage (3 consecutive cycles ≈ 20 s) blanks the
-      // surface. This kills the every-few-seconds error/recover thrash.
       failStreakRef.current += 1;
       const hardFail = failStreakRef.current >= 3 || !messagesSigRef.current;
-      if (hardFail) {
-        setStatus(null); setMessages([]); setCalls([]); setRelayReceivedAt(0);
-        messagesSigRef.current = ""; callsSigRef.current = ""; contactsSigRef.current = "";
-        usingRelayRef.current = false;
-        setUsingRelay(false);
-        onOnlineChange?.(false);
-      }
+      // NEVER-BLANK RULE: the last-known feed stays on screen no matter how
+      // long the outage — data with an honest age label always beats a screen
+      // that empties and refills (that vanish/reappear cycle IS the "glitchy"
+      // feeling). The state machine flips the status line to Offline on its
+      // own as the heartbeat/fetch freshness lapses.
+      if (hardFail) onOnlineChange?.(false);
       if (msg === "relay:no_state") setError("Waiting for Shamash Phone Link on the tablet.");
       else if (msg === "relay:no_auth") setError("Sign in to see your phone here.");
       else if (msg === "relay:denied") setError("Phone relay blocked by security rules.");
-      else if (hardFail) setError("Can't reach the phone link — check the tablet host.");
-      // A single bad cycle with data still on screen stays QUIET — the status
-      // line already reads Connecting/Offline. Flashing a red "can't connect"
-      // banner over a visible call/text feed was the owner's "one big mess"
-      // confusion (ticket 7/9): two contradictory truths at once.
+      else if (hardFail && !messagesSigRef.current) setError("Can't reach the phone link — check the tablet host.");
+      // With data on screen, transient failures stay QUIET — the status line
+      // already reads Connecting/Offline; a red banner over a visible feed is
+      // two contradictory truths at once (owner ticket 7/9).
     } finally {
       refreshInFlightRef.current = false;
     }
@@ -625,13 +619,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     };
   }, [refresh]);
 
-  // Re-evaluate relay freshness on a clock even when no new data arrives, so the
-  // "Live" indicator flips offline once the active host stops heartbeating.
+  // Re-evaluate freshness on a clock even when no new data arrives, so the
+  // "Live" indicator flips offline once the heartbeat (relay) or the last
+  // successful fetch (loopback) lapses. Always on — both paths need it now.
   useEffect(() => {
-    if (!usingRelay) return undefined;
     const id = setInterval(() => setNowTick(Date.now()), 5000);
     return () => clearInterval(id);
-  }, [usingRelay]);
+  }, []);
 
   // Owner control doc — one small doc, one listener. Feeds the plain-language
   // status line (Connected/Connecting/Offline) and the tablet-vs-PC label.
@@ -793,7 +787,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     let echoId = existingEchoId;
     if (echoId) updatePendingSms(echoId, { status: "sending", error: "", at: Date.now() });
     else echoId = addPendingSms({ to, body: text }).id;
-    post(`/send?to=${encodeURIComponent(to)}&body=${encodeURIComponent(text)}`, "send", {
+    // `cid` rides to the host, which stamps it as the message's own id — the
+    // blob copy then matches this echo EXACTLY (no fuzzy dedupe needed).
+    post(`/send?to=${encodeURIComponent(to)}&body=${encodeURIComponent(text)}&cid=${encodeURIComponent(echoId)}`, "send", {
       background: true,
       onError: msg => updatePendingSms(echoId, { status: "failed", error: msg || "Failed" }),
     }).then(ok => { if (ok) updatePendingSms(echoId, { status: "sent" }); });
@@ -816,54 +812,41 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const isIncoming = /ring|incoming/i.test(callState);
   const isOnCall = !!callState && !isIncoming && /^(active|dialing|oncall|callactive)$/i.test(callState.replace(/\s+/g, ""));
   const statusOnline = !!status;
-  // Relay liveness: on relay, the green light means an active host is currently
-  // pushing. A stale stamp means incoming texts/calls are not reaching this device live. On the LAN path
-  // there's no relay; liveness is simply whether the just-completed /status fetch worked.
-  // Relay liveness comes from the owner heartbeat doc when present (renewed every
-  // ~20 s), else from the state-doc stamp with the wide fallback window. Content
-  // still comes from the state doc; only the "is a host alive right now" signal is
-  // decoupled onto the cheap heartbeat — that decoupling is what kills the flapping.
-  const heartbeatMs = owner.present ? owner.t : relayReceivedAt;
-  const liveWindowMs = owner.present ? OWNER_LIVE_WINDOW_MS : RELAY_STATE_FALLBACK_WINDOW_MS;
-  const ownerSaysConnected = owner.present ? owner.connected : true;
-  const relayAgeMs = heartbeatMs > 0 ? Math.max(0, nowTick - heartbeatMs) : 0;
-  const relayStale = usingRelay && heartbeatMs > 0 && (relayAgeMs >= liveWindowMs || !ownerSaysConnected);
-  relayStaleRef.current = relayStale;   // lets resolveTransport re-probe LAN hosts aggressively while the relay is dead
-  const phoneLinkLive = usingRelay ? (statusOnline && heartbeatMs > 0 && !relayStale) : statusOnline;
   // A raw Bluetooth address ("7E4B46E95FBA") is plumbing, not a phone name — never show it.
   const deviceNameRaw = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
   const deviceName = /^[0-9a-f]{12}$/i.test(String(deviceNameRaw).trim().replace(/[:\-]/g, "")) ? "" : deviceNameRaw;
   const idleLabel = deviceName ? `Connected · ${deviceName}` : "Connected";
-  // Which machine holds the phone right now — the owner doc is authoritative when
-  // present (it's who's actually connected); else infer from the state blob.
-  const activeHostLabel = (owner.present && owner.host ? HOST_LABEL[owner.host] : null)
-    || (status?.hostPlatform === "android" ? "Tablet" : "PC");
-  const statusText = !statusOnline
-    ? "Phone link offline"
-    : relayStale
-      ? `Phone link offline · last seen ${relayAgeLabel(relayAgeMs)} ago`
-      : (isIncoming ? "Incoming call" : isOnCall ? "On call" : callState ? "Call status changed" : idleLabel);
-
-  // Plain-language phone-link status for the always-visible indicator (owner
-  // ticket: "there's no status indicator that says what it's doing"). One dot +
-  // one clear line, no jargon; Reconnect appears only when it's actually offline.
-  const linkDotColor = phoneLinkLive ? C.success : relayStale ? C.warning : C.faint;
-  // When the link is down but old data is still on screen, SAY SO in one line —
-  // "can't connect" next to a feed of calls with no age label was the owner's
-  // "shows recent calls from 4 hours ago" confusion.
   const hasFeedData = (Array.isArray(messages) && messages.length > 0) || (Array.isArray(calls) && calls.length > 0);
-  // The owner flipped the rail toggle but the handoff hasn't landed yet —
-  // surface that in-between state instead of looking like the toggle is dead.
-  const preferredHostLabel = owner.preferred === 'pc' ? HOST_LABEL.windows : HOST_LABEL.android;
-  const hostSwitchPending = owner.present && !!owner.host && HOST_LABEL[owner.host] !== preferredHostLabel;
-  const linkStatusLabel = phoneLinkLive
-    ? `Connected · ${activeHostLabel}${deviceName ? ` · ${deviceName}` : ""}${hostSwitchPending ? ` · handing to ${preferredHostLabel}…` : ""}`
-    : relayStale
-      ? (hasFeedData
-        ? `Offline — showing texts & calls from ${relayAgeLabel(relayAgeMs)} ago`
-        : `Offline — last seen ${relayAgeLabel(relayAgeMs)} ago`)
-      : (usingRelay ? "Connecting…" : "Looking for phone host…");
-  const linkOffline = !phoneLinkLive && (relayStale || !statusOnline);
+
+  // ── The one status truth ──────────────────────────────────────────────────
+  // All liveness/staleness/wording comes from the shared state machine in
+  // phone-link.js — the DeskPhone web page derives from the SAME machine, so
+  // the two surfaces can no longer disagree about whether the link is up.
+  // On the loopback path a dead host can't rely on a heartbeat doc, so
+  // "status exists" only counts while a fetch succeeded within ~3 poll cycles.
+  const directFresh = usingRelay || (nowTick - lastFetchOkAtRef.current) < 30000;
+  const link = derivePhoneLinkState({
+    now: nowTick,
+    usingRelay,
+    statusOnline: statusOnline && directFresh,
+    hasData: hasFeedData,
+    owner,
+    relayReceivedAt,
+  });
+  const relayStale = link.stale;
+  relayStaleRef.current = link.stale;   // lets resolveTransport re-probe LAN hosts aggressively while the relay is dead
+  const phoneLinkLive = link.live;
+  // Which machine holds the phone right now — the owner doc is authoritative
+  // when present; else infer from the state blob.
+  const activeHostLabel = link.activeHostLabel
+    || (status?.hostPlatform === "android" ? "Tablet" : statusOnline ? "PC" : "");
+  const linkText = describePhoneLink(link, { deviceName, hostFallbackLabel: activeHostLabel });
+  const statusText = !phoneLinkLive
+    ? linkText.label
+    : (isIncoming ? "Incoming call" : isOnCall ? "On call" : callState ? "Call status changed" : idleLabel);
+  const linkDotColor = linkText.tone === "ok" ? C.success : linkText.tone === "warn" ? C.warning : C.faint;
+  const linkStatusLabel = linkText.label;
+  const linkOffline = linkText.showReconnect;
 
   // Report true liveness to the NerveCenter (not just "we have a blob"), and flip it to
   // offline as soon as the relay goes stale, so the dashboard tile can't claim "connected"
@@ -881,7 +864,12 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const hostOutgoing = useMemo(() => (
     (Array.isArray(messages) ? messages : [])
       .filter(isOutgoingMessage)
-      .map(m => ({ key: smsPhoneKey(messagePeerNumber(m)), bodyKey: smsBodyKey(messageBody(m)), timeMs: messageTimeMs(m) }))
+      .map(m => ({
+        cid: String(m?.id ?? m?.localId ?? m?.LocalId ?? ""),
+        key: smsPhoneKey(messagePeerNumber(m)),
+        bodyKey: smsBodyKey(messageBody(m)),
+        timeMs: messageTimeMs(m),
+      }))
   ), [messages]);
   useEffect(() => { reconcilePendingSms(hostOutgoing); }, [hostOutgoing]);
 
@@ -1630,11 +1618,29 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       {compact && !error && !(statusOnline && (hasMessages || hasCalls)) && (
         <div style={{ display: "flex", alignItems: "center", gap: SP.xs, padding: `${SP.xs} ${SP.xs}`, fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, minWidth: 0 }}>
           <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, flexShrink: 0, background: phoneLinkLive ? C.success : relayStale ? C.warning : C.faint }} />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{phoneLinkLive ? "Connected · no recent calls or texts" : relayStale ? `Host offline · ${relayAgeLabel(relayAgeMs)}` : "Phone host offline"}</span>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{phoneLinkLive ? "Connected · no recent calls or texts" : relayStale ? `Host offline · ${formatAgeShort(link.ageMs)}` : "Phone host offline"}</span>
         </div>
       )}
       {!statusOnline && !error && !compact && <div style={{ fontSize: NC_TYPE.meta, color: C.muted, padding: `${SP.xs} 2px` }}>Start Shamash Phone Link on the tablet to connect calls and texts. DeskPhone can still be opened on the PC as a fallback.</div>}
       {error && <div style={{ fontSize: NC_TYPE.meta, color: C.danger, background: C.bgSoft, borderRadius: RADIUS.sm, padding: `${SP.sm} ${SP.sm}`, marginTop: 2 }}>{error}</div>}
+
+      {/* ?phonediag=1 — raw state-machine readout so a "the indicator is lying"
+          report takes minutes to diagnose instead of guesswork. Debug-only. */}
+      {phoneDiag && !compact && !dense && (
+        <pre style={{ position: "fixed", right: 8, bottom: 8, zIndex: 9999, maxWidth: 360, maxHeight: "45vh", overflow: "auto", background: "rgba(0,0,0,0.85)", color: "#7CFC9A", fontSize: 10, lineHeight: 1.35, padding: 8, borderRadius: 6, margin: 0 }}>
+          {JSON.stringify({
+            transport: usingRelay ? "relay" : "direct",
+            link,
+            owner,
+            relayReceivedAgo: relayReceivedAt ? formatAgeShort(nowTick - relayReceivedAt) : "never",
+            lastFetchOkAgo: lastFetchOkAtRef.current ? formatAgeShort(nowTick - lastFetchOkAtRef.current) : "never",
+            messages: Array.isArray(messages) ? messages.length : 0,
+            calls: Array.isArray(calls) ? calls.length : 0,
+            pendingEchoes: pendingEchoes.map(e => ({ id: e.id, status: e.status, to: e.to })),
+            busy, error,
+          }, null, 1)}
+        </pre>
+      )}
     </div>
   );
 }

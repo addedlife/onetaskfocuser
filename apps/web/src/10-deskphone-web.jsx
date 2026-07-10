@@ -6,6 +6,8 @@ import {
   addPendingSms, updatePendingSms, getPendingSms, subscribePendingSms,
   reconcilePendingSms, unmatchedPendingSms, collapseHostDoubles, smsBodyKey, smsPhoneKey,
 } from './08-app-split/utils/pending-sms.js';
+import { derivePhoneLinkState, describePhoneLink, messageListSignature } from './08-app-split/phone-link.js';
+import { subscribeOwner } from './08-app-split/phone-host-control.js';
 
 const DEFAULT_HOST = "http://127.0.0.1:8765";
 // Cloud fallback: when no host answers on loopback, the panel reads the same
@@ -14,7 +16,8 @@ const DEFAULT_HOST = "http://127.0.0.1:8765";
 // mailbox. Not used when the page IS the DeskPhone shell (port 8765): there,
 // loopback is the host by definition and the relative /api path wouldn't exist.
 const RELAY_BASE = "/api/phone-relay";
-const RELAY_LIVE_WINDOW_MS = 45000;   // ~9 missed 5s host heartbeats = host offline
+// Liveness windows + status wording come from the shared phone-link.js state
+// machine — this page and the NerveCenter card can no longer disagree.
 const CLOUD_ALLOWED_COMMANDS = new Set([
   "/dial", "/answer", "/hangup", "/toggle-mute", "/send", "/refresh", "/connect",
   "/mark-conversation-read", "/mark-conversation-unread",
@@ -533,11 +536,13 @@ function sendComposeMessage({ onCommand, to, body, attachments, label, echoId = 
   }
   (async () => {
     try {
+      // `cid` rides to the host, which stamps it as the message's own id — the
+      // host copy then matches this echo EXACTLY (no fuzzy dedupe needed).
       if (attachments.length) {
         const uploads = await Promise.all(attachments.map(composeAttachmentUpload));
-        await onCommand("/send-with-attachments", label, { to: phone, body: text, attachments: uploads }, { background: true });
+        await onCommand("/send-with-attachments", label, { to: phone, body: text, cid: id, attachments: uploads }, { background: true });
       } else {
-        await onCommand(`/send?to=${encodeURIComponent(phone)}&body=${encodeURIComponent(text)}`, label, undefined, { background: true });
+        await onCommand(`/send?to=${encodeURIComponent(phone)}&body=${encodeURIComponent(text)}&cid=${encodeURIComponent(id)}`, label, undefined, { background: true });
       }
       updatePendingSms(id, { status: "sent" });
     } catch (err) {
@@ -6011,6 +6016,20 @@ export function DeskPhoneWebPanel({
   const [viaCloud, setViaCloud] = useState(false);
   const viaCloudRef = useRef(false);
   const [relayStamp, setRelayStamp] = useState(0);
+  const lastFetchOkAtRef = useRef(0);
+  // Owner control doc — the ACTIVE host's heartbeat; feeds the shared state
+  // machine so this page and the NerveCenter card read one liveness truth.
+  const [owner, setOwner] = useState({ preferred: 'tablet', host: '', t: 0, connected: false, present: false });
+  useEffect(() => {
+    const unsub = subscribeOwner(setOwner);
+    return () => { try { unsub && unsub(); } catch {} };
+  }, []);
+  // Re-derive staleness on a clock even with no new data.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTick(Date.now()), 5000);
+    return () => window.clearInterval(id);
+  }, []);
 
   // Optimistic outgoing echoes — the same shared store the NerveCenter phone
   // surface uses, so a text fired from either surface shows everywhere at once.
@@ -6020,6 +6039,7 @@ export function DeskPhoneWebPanel({
     getApiList(messages)
       .filter((raw) => !!raw?.isSent)
       .map((raw) => ({
+        cid: String(raw?.id ?? raw?.localId ?? ""),
         key: smsPhoneKey(raw?.number || raw?.to || raw?.from || ""),
         bodyKey: smsBodyKey(raw?.body || raw?.preview || ""),
         timeMs: parseDate(raw?.timestamp || raw?.datetime || raw?.date || raw?.time || "")?.getTime() || 0,
@@ -6118,7 +6138,9 @@ export function DeskPhoneWebPanel({
       if (nextMessages.ok) {
         const mediaData = nextMediaMessages.ok ? nextMediaMessages.data : mediaMessagesRef.current;
         const merged = mergeMessagesWithMedia(nextMessages.data, mediaData);
-        const msgSig = `${merged.length}|${merged[0]?.id ?? ""}|${merged[merged.length - 1]?.id ?? ""}`;
+        // Full-list signature (phone-link.js) — sees send-status/read flips
+        // anywhere in the list, not just length/endpoint changes.
+        const msgSig = messageListSignature(getApiList(merged));
         if (msgSig !== messagesSigRef.current) {
           messagesSigRef.current = msgSig;
           setMessages(merged);
@@ -6141,19 +6163,17 @@ export function DeskPhoneWebPanel({
         }
       }
       setOnline(true);
+      lastFetchOkAtRef.current = Date.now();
       const failed = cloud ? [] : [nextStatus, nextMessages, nextCalls, nextContacts].filter((item) => !item.ok);
       setError(failed.length ? failed.map((item) => item.error?.message || `${item.path} failed`).join(" | ") : "");
       onOnlineChange?.(true);
     } catch (err) {
-      setStatus(null);
-      setMessages([]);
-      setCalls([]);
-      setContacts([]);
-      messagesSigRef.current = "";
-      callsSigRef.current = "";
-      contactsSigRef.current = "";
+      // NEVER-BLANK RULE: keep the last-known threads/calls/contacts on screen
+      // through any outage — the status line reports Offline with data age.
+      // A feed that empties and refills reads as "glitchy" even when the code
+      // is technically correct.
       setOnline(false);
-      setError(err?.message || "No phone host was reached.");
+      setError(messagesSigRef.current ? "" : (err?.message || "No phone host was reached."));
       onOnlineChange?.(false);
     } finally {
       refreshInFlightRef.current = false;
@@ -6174,32 +6194,44 @@ export function DeskPhoneWebPanel({
   useEffect(() => saveNumber(MESSAGE_LIST_WIDTH_KEY, messageListWidth), [messageListWidth]);
   useEffect(() => saveNumber(CALL_HISTORY_WIDTH_KEY, callHistoryWidth), [callHistoryWidth]);
 
-  // Cloud liveness: the feeding host stamps relayReceivedAt each push; a stale
-  // stamp means that host stopped pushing (closed / lost the phone).
-  const relayStale = viaCloud && relayStamp > 0 && (Date.now() - relayStamp) >= RELAY_LIVE_WINDOW_MS;
-  const hostLabel = (status?.hostPlatform === "android" || status?.HostPlatform === "android") ? "the tablet" : "your PC";
+  // ── The one status truth — same machine the NerveCenter card derives from ──
+  const hasFeedData = getApiList(messages).length > 0 || getApiList(calls).length > 0;
+  const link = derivePhoneLinkState({
+    now: nowTick,
+    usingRelay: viaCloud,
+    statusOnline: online,
+    hasData: hasFeedData,
+    owner,
+    relayReceivedAt: relayStamp,
+  });
+  const relayStale = link.stale;
+  const hostLabel = link.activeHostLabel
+    ? (link.activeHostId === "android" ? "the tablet" : "your PC")
+    : ((status?.hostPlatform === "android" || status?.HostPlatform === "android") ? "the tablet" : "your PC");
 
   // ONE human status line (owner ticket): no two-hop plumbing, no second line
   // repeating the device, no raw Bluetooth address — just "is my phone live here?".
+  // Non-live states take the shared machine's wording verbatim; the live state
+  // keeps this page's richer per-channel detail (calls/texts live).
   const connectionStatus = useMemo(() => {
+    if (!link.live) return describePhoneLink(link).label;
     const name = hostDeviceName(status);
     const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
     const callsOk = includesConnected(status?.hfp || status?.Hfp || "");
     const textsOk = includesConnected(status?.map || status?.Map || "");
     const phoneConnected = !!(status?.connected || status?.Connected) || callsOk || textsOk;
     const connecting = !!(status?.isConnecting || status?.IsConnecting);
-    if (!online) return "No phone host running — start DeskPhone on the PC or the Shamash host on the tablet";
-    if (viaCloud && relayStale) return `${hostLabel} went offline — its last update was a while ago`;
+    const handing = link.switching ? ` — handing to ${link.preferredLabel}…` : "";
     if (phoneConnected) {
       const via = viaCloud ? ` (via ${hostLabel})` : "";
-      if (callsOk && textsOk) return cap(`${name} — calls & texts live${via}`);
+      if (callsOk && textsOk) return cap(`${name} — calls & texts live${via}${handing}`);
       if (callsOk) return cap(`${name} — calls live, texts connecting…`);
       if (textsOk) return cap(`${name} — texts live, calls connecting…`);
-      return cap(`${name} is connected${via}`);
+      return cap(`${name} is connected${via}${handing}`);
     }
     if (connecting) return cap(`connecting to ${name}…`);
     return cap(`${name} is out of range — reconnects when nearby`);
-  }, [online, status, viaCloud, relayStale, hostLabel]);
+  }, [link, status, viaCloud, hostLabel]);
   // Reconnect prompt only makes sense on the direct path — over the cloud the
   // user can't "start" the host from here, so don't nag with it.
   const showReconnectPrompt = !reconnectDismissed && !viaCloud && !!(status?.showReconnectPrompt || status?.ShowReconnectPrompt || !online);

@@ -2925,7 +2925,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             });
             return Task.CompletedTask;
         };
-        _api.Send = (to, body) =>
+        _api.Send = (to, body, cid) =>
         {
             // Marshal to the UI thread but return the REAL send outcome (not an
             // optimistic true) so LAN/relay callers can see and log failures.
@@ -2937,13 +2937,14 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                     ComposeToNumber = to;
                     ComposeRecipientInput = to;
                     ComposeBody = body;
+                    _pendingClientMessageId = cid;
                     tcs.TrySetResult(await SendMessageAsync());
                 }
                 catch (Exception ex) { tcs.TrySetException(ex); }
             });
             return tcs.Task;
         };
-        _api.SendWithAttachments = (to, body, attachments) =>
+        _api.SendWithAttachments = (to, body, attachments, cid) =>
         {
             var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             Dispatch(async () =>
@@ -2953,6 +2954,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                     ComposeToNumber = to;
                     ComposeRecipientInput = to;
                     ComposeBody = body;
+                    _pendingClientMessageId = cid;
                     ClearComposeAttachments();
                     foreach (var attachment in attachments)
                     {
@@ -6427,8 +6429,24 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
 
 
+    // Client message id handed in by the web composer for the NEXT send
+    // (set by the _api.Send/_api.SendWithAttachments lambdas on the UI thread,
+    // consumed once by SendMessageAsync on the same thread). Lets the browser's
+    // optimistic bubble and this host's bubble share one identity.
+    private string? _pendingClientMessageId;
+
+    private string? TakePendingClientMessageId()
+    {
+        var cid = _pendingClientMessageId;
+        _pendingClientMessageId = null;
+        return string.IsNullOrWhiteSpace(cid) ? null : cid;
+    }
+
     private async Task<bool> SendMessageAsync()
     {
+        // Consume the cid up front so an aborted send can't leak it into the
+        // next (unrelated) compose-button send.
+        var clientMessageId = TakePendingClientMessageId();
         if (string.IsNullOrWhiteSpace(ComposeToNumber)) return false;
         if (string.IsNullOrWhiteSpace(ComposeBody) && !HasComposeAttachments) return false;
 
@@ -6457,7 +6475,10 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             IsRead    = true,
             IsSent    = true,
             SourceDeviceAddress = ActiveDeviceAddress,
-            LocalId   = Guid.NewGuid().ToString("N"),
+            // Adopt the web composer's echo id when the send came through the
+            // API/relay (`cid`) — the state blob exposes id = LocalId, so the
+            // browser's optimistic bubble reconciles EXACTLY with this one.
+            LocalId   = clientMessageId ?? Guid.NewGuid().ToString("N"),
             SendStatus = mapReady ? "Sending" : "Failed"
         };
         sent.Attachments = stagedAttachments

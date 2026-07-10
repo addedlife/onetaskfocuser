@@ -470,8 +470,12 @@ class HostService : Service() {
                 req.method == "POST" && req.path == "/send" -> {
                     val to = req.qs("to")
                     val text = req.qs("body")
+                    // Optional client message id from the web composer's echo
+                    // bubble — becomes the local echo's id so the state blob
+                    // returns it verbatim and the browser reconciles exactly.
+                    val cid = req.qs("cid")
                     if (to.isBlank() || text.isBlank()) bad("missing ?to=X&body=Y")
-                    else ok(ApiJson.result(if (sendMessageBlocking(to, text)) "sent" else "failed"))
+                    else ok(ApiJson.result(if (sendMessageBlocking(to, text, cid.ifBlank { null })) "sent" else "failed"))
                 }
                 req.method == "POST" && req.path == "/refresh" -> {
                     executor.execute {
@@ -539,11 +543,11 @@ class HostService : Service() {
         return ok(ApiJson.result("conversation marked ${if (read) "read" else "unread"}"))
     }
 
-    private fun sendMessageBlocking(to: String, text: String): Boolean {
+    private fun sendMessageBlocking(to: String, text: String, clientMessageId: String? = null): Boolean {
         if (!map.isConnected) { HostLog.add("[SEND] rejected — MAP not connected"); return false }
         sending.set(true)
         realOpActive = true
-        val local = messageStore.addLocalSent(to, text, "sending")
+        val local = messageStore.addLocalSent(to, text, "sending", clientMessageId)
         return try {
             val sent = map.sendMessage(to, text)
             if (sent) {

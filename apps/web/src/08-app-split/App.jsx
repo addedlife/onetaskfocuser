@@ -13,7 +13,6 @@ import { buildDeskPhoneThemeQuery, cleanTheme, DUR, EASE, ELEV, getInitialSuiteV
 import { AppSuiteChrome } from './components/AppSuiteChrome.jsx';
 import { DeskPhoneSuitePanel, SuiteShailosPanel } from './components/SuitePanels.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './components/NerveCenterPhoneSurface.jsx';
-import { DeskPhoneMiniDock } from './components/DeskPhoneMiniDock.jsx';
 import { compactNerveSummary, nerveSummarySource, NerveCenterPanel } from './components/NerveCenterPanel.jsx';
 import { TaskRiverPanel } from './components/TaskRiverPanel.jsx';
 import { ConvCapture } from './components/ConvCapture.jsx';

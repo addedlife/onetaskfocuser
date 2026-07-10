@@ -64,8 +64,12 @@ public class ControlApiService : IDisposable
     public Func<Task>?                       Answer      { get; set; }
     public Func<Task>?                       HangUp      { get; set; }
     public Func<string, Task>?               Dial        { get; set; }
-    public Func<string, string, Task<bool>>? Send        { get; set; }
-    public Func<string, string, IReadOnlyList<MessageAttachment>, Task<bool>>? SendWithAttachments { get; set; }
+    // Send delegates carry an optional client message id (`cid`) minted by the
+    // web composer's echo bubble; DeskPhone stamps it as the new message's
+    // LocalId so the state blob returns it verbatim and the web echo
+    // reconciles EXACTLY instead of by recipient+body+time heuristics.
+    public Func<string, string, string?, Task<bool>>? Send { get; set; }
+    public Func<string, string, IReadOnlyList<MessageAttachment>, string?, Task<bool>>? SendWithAttachments { get; set; }
     public Func<Task>?                       Refresh     { get; set; }
     public Func<Task>?                       RefreshAudio { get; set; }
     public Func<Task>?                       OpenBluetoothSettings { get; set; }
@@ -856,24 +860,25 @@ public class ControlApiService : IDisposable
             {
                 var to   = ParseStr(qs, "to");
                 var text = ParseStr(qs, "body");
+                var cid  = ParseStr(qs, "cid");
                 if (string.IsNullOrWhiteSpace(to) || string.IsNullOrWhiteSpace(text))
                     { statusCode = 400; body = JsonError("missing ?to=X&body=Y"); }
                 else
                 {
-                    bool ok = Send is not null && await Send(to, text);
+                    bool ok = Send is not null && await Send(to, text, string.IsNullOrWhiteSpace(cid) ? null : cid);
                     body = Json("result", ok ? "sent" : "failed");
                 }
             }
             else if (method == "POST" && path == "/send-with-attachments")
             {
-                if (!TryParseAttachmentSendRequest(requestBody, out var to, out var text, out var attachments, out var error))
+                if (!TryParseAttachmentSendRequest(requestBody, out var to, out var text, out var attachments, out var cid, out var error))
                 {
                     statusCode = 400;
                     body = JsonError(error);
                 }
                 else
                 {
-                    bool ok = SendWithAttachments is not null && await SendWithAttachments(to, text, attachments);
+                    bool ok = SendWithAttachments is not null && await SendWithAttachments(to, text, attachments, cid);
                     body = Json("result", ok ? "sent" : "failed");
                 }
             }
@@ -1501,11 +1506,13 @@ setInterval(refreshState, 1500);
         out string to,
         out string text,
         out IReadOnlyList<MessageAttachment> attachments,
+        out string? cid,
         out string error)
     {
         to = "";
         text = "";
         attachments = Array.Empty<MessageAttachment>();
+        cid = null;
         error = "";
 
         if (string.IsNullOrWhiteSpace(requestBody))
@@ -1529,6 +1536,7 @@ setInterval(refreshState, 1500);
 
         to = request?.To?.Trim() ?? "";
         text = request?.Body?.Trim() ?? "";
+        cid = string.IsNullOrWhiteSpace(request?.Cid) ? null : request!.Cid!.Trim();
         var uploads = request?.Attachments ?? new List<AttachmentUpload>();
         if (string.IsNullOrWhiteSpace(to))
         {
@@ -1629,6 +1637,7 @@ setInterval(refreshState, 1500);
     {
         public string? To { get; set; }
         public string? Body { get; set; }
+        public string? Cid { get; set; }
         public List<AttachmentUpload>? Attachments { get; set; }
     }
 

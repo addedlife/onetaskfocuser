@@ -114,6 +114,9 @@ public class MessageStoreService
                         PreserveRicherAttachments(m, matched);
                         if (string.IsNullOrWhiteSpace(m.SourceDeviceAddress))
                             m.SourceDeviceAddress = matched.SourceDeviceAddress;
+                        // Keep the bubble's identity (id = LocalId in the API) so the
+                        // web composer's echo id survives phone-copy adoption.
+                        m.LocalId ??= matched.LocalId;
                         m.SendStatus = "";
                         byHandle[BuildStoreKey(m.SourceDeviceAddress, m.Handle)] = m;
                     }
