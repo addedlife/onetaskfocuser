@@ -1,6 +1,12 @@
 const ALLOWED_ORIGINS = [
   "https://onetaskonly-app.web.app",
   "https://onetaskonly-app.firebaseapp.com",
+  // RabbiMetrics (Firebase project rabbi-s-metrics) shares this gateway for its
+  // AI score suggestions; its users authenticate with rabbi-s-metrics ID tokens
+  // (see _requireUser in ai-proxy.js).
+  "https://rabbimetrics.web.app",
+  "https://rabbi-s-metrics.web.app",
+  "https://rabbi-s-metrics.firebaseapp.com",
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:4173",

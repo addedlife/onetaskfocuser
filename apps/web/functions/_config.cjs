@@ -57,6 +57,26 @@ function getAdminAuth() {
   return _auth;
 }
 
+// ── RabbiMetrics token verification ───────────────────────────────────────────
+// The rabbimetrics.web.app client (Firebase project rabbi-s-metrics) reuses the
+// ai-proxy gateway. Its ID tokens carry a different audience, so they need an
+// Admin app scoped to that project. verifyIdToken only checks the token
+// signature against Google's public certs plus audience/issuer — it makes no
+// authenticated API calls — so a projectId-only app (no service account for
+// that project) is sufficient.
+const RABBI_PROJECT_ID = "rabbi-s-metrics";
+let _rabbiAuth = null;
+
+function getRabbiAuth() {
+  if (_rabbiAuth) return _rabbiAuth;
+  const { getApps, initializeApp } = require("firebase-admin/app");
+  const { getAuth } = require("firebase-admin/auth");
+  const existing = getApps().find((a) => a.name === "rabbimetrics");
+  const app = existing || initializeApp({ projectId: RABBI_PROJECT_ID }, "rabbimetrics");
+  _rabbiAuth = getAuth(app);
+  return _rabbiAuth;
+}
+
 // ── Google Workspace OAuth ────────────────────────────────────────────────────
 function googleWorkspaceClientId() {
   return String(
@@ -89,6 +109,8 @@ module.exports = {
   getAdminApp,
   getAdminDb,
   getAdminAuth,
+  RABBI_PROJECT_ID,
+  getRabbiAuth,
   googleWorkspaceClientId,
   googleWorkspaceClientSecret,
   googleHealthClientId,

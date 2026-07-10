@@ -1,5 +1,5 @@
 const { corsFor, processAiPayload } = require("./_ai-core.cjs");
-const { getAdminAuth } = require("./_config.cjs");
+const { getAdminAuth, getRabbiAuth, RABBI_PROJECT_ID } = require("./_config.cjs");
 
 // ── Auth gate ───────────────────────────────────────────────────────────────
 // This endpoint spends real money on every call (Claude/Gemini). Without an auth
@@ -7,11 +7,24 @@ const { getAdminAuth } = require("./_config.cjs");
 // security (it only constrains browsers; curl can spoof Origin). So we require a
 // valid Firebase ID token, same as chief-profile.js. Uses the ADMIN_SA_JSON
 // service-account env the other functions already rely on.
+//
+// Two Firebase projects are trusted: this one (onetaskonly-app) and RabbiMetrics
+// (rabbi-s-metrics), whose web app reuses this gateway. The unverified `aud`
+// claim only routes the token to the matching verifier — the verifier then
+// checks the signature AND that same audience, so a forged aud buys nothing.
+function _tokenAudience(token) {
+  try {
+    const payload = token.split(".")[1];
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")).aud || "";
+  } catch { return ""; }
+}
+
 async function _requireUser(authorizationHeader) {
   const h = authorizationHeader || "";
   const token = h.startsWith("Bearer ") ? h.slice(7).trim() : "";
   if (!token) { const e = new Error("Sign-in required"); e.statusCode = 401; throw e; }
-  await getAdminAuth().verifyIdToken(token);
+  const auth = _tokenAudience(token) === RABBI_PROJECT_ID ? getRabbiAuth() : getAdminAuth();
+  await auth.verifyIdToken(token);
 }
 
 module.exports = async (req, res) => {
