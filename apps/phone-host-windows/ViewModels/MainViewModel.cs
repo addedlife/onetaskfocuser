@@ -3090,6 +3090,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _relay.GetLanUrl   = () => _api.LanUrl ?? "";
         _relay.GetRelayMedia = BuildRelayMedia;
         _relay.IsPhoneConnected = () => IsFullyConnected;
+        _relay.ReleasePhone     = ReleasePhoneForHandoffAsync;
         _relay.Configure(_settings.Current.RelayKey, _settings.Current.RelayUrl);
         _api.GetRelayStatus = () =>
         {
@@ -6125,10 +6126,52 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         }, ct);
     }
 
+    /// <summary>
+    /// Arbitration asked this host to let go of the phone (the owner flipped
+    /// `preferred` to the other host). The phone serves HFP/MAP to one host at a
+    /// time, so the handoff only completes once we drop the link — but NEVER
+    /// mid-call: if a call is live we decline, and arbitration re-fires on its
+    /// next tick until the call ends and the release goes through.
+    /// </summary>
+    private int _handoffReleaseInFlight;
+    private async Task ReleasePhoneForHandoffAsync()
+    {
+        if (!IsFullyConnected && !IsConnecting) return;
+        if (CurrentCall.Status != CallStatus.Idle)
+        {
+            AppendDebugThreadSafe("[ARBITRATION] release requested but a call is live — deferring until idle");
+            return;
+        }
+        if (Interlocked.Exchange(ref _handoffReleaseInFlight, 1) == 1) return;
+        try
+        {
+            AppendDebugThreadSafe("[ARBITRATION] releasing Bluetooth link — handing the phone to the other host");
+            await ResetConnectionSessionAsync();
+            IsFullyConnected = false;
+            Dispatch(() => ConnectionStatus = "Standing by — the other host holds the phone");
+        }
+        catch (Exception ex)
+        {
+            AppendDebugThreadSafe($"[ARBITRATION] release failed: {ex.Message}");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _handoffReleaseInFlight, 0);
+        }
+    }
+
     private void QueueAutoReconnect(string reason)
     {
         if (!HasQuickConnectDevice || IsConnecting || CurrentCall.Status != CallStatus.Idle)
             return;
+
+        // Arbitration gate: a parked host must never reconnect on its own — this is
+        // what makes a handoff release stick instead of bouncing straight back.
+        if (!_relay.ShouldHoldPhone)
+        {
+            AppendDebugThreadSafe($"[CONNECT] Auto-reconnect suppressed (other host holds the phone): {reason}");
+            return;
+        }
 
         var now = DateTime.UtcNow;
         if (now < _nextAutoReconnectUtc)

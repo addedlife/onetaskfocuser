@@ -59,6 +59,11 @@ public class RelayService : IDisposable
     /// remote command never executes twice.</summary>
     public Func<bool>? IsPhoneConnected { get; set; }
     private bool _lastPushedConnected = true;   // true → the farewell push always fires once
+    /// <summary>Fired when arbitration says this host must let go of the phone while it
+    /// still holds the Bluetooth link (the owner flipped `preferred` to the other host).
+    /// MainViewModel wires this to a clean BT teardown — but never mid-call, so it may
+    /// decline; arbitration re-fires every tick until the link is actually down.</summary>
+    public Func<Task>? ReleasePhone { get; set; }
 
     // ── Host arbitration (owner doc: phone-relay/owner) ─────────────────────────
     // One tiny shared doc decides which host holds the phone, so the PC and the
@@ -72,7 +77,10 @@ public class RelayService : IDisposable
     private const int  OwnerHeartbeatMs     = 15_000;     // renew cadence while holding
     private const int  OwnerStaleMs         = 90_000;     // preferred host silent this long ⇒ treat as dead
     private const int  OwnerTakeoverGraceMs = 90_000;     // brief yield after a fresh switch before taking over
+    private const int  OwnerSwitchPollMs    = 5_000;      // faster poll while a handoff is in flight
+    private const int  OwnerSwitchWindowMs  = 90_000;     // how long after a preference flip we poll fast
     private volatile bool _shouldHoldPhone  = true;       // default true = legacy "always try to hold"
+    private long _lastPreferredAtMs;                      // preferredAtMs from the last owner-doc read
     /// <summary>Whether THIS host should currently hold the phone. MainViewModel's
     /// startup auto-connect and watchdog consult this before initiating a connection.</summary>
     public bool ShouldHoldPhone => _shouldHoldPhone;
@@ -660,7 +668,11 @@ public class RelayService : IDisposable
             try { await EvaluateShouldHoldAsync(ct); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
             catch (Exception ex) { LogLine?.Invoke($"[ARBITRATION] {ex.GetType().Name}: {ex.Message}"); }
-            try { await Task.Delay(OwnerHeartbeatMs, ct); }
+            // A handoff in flight (fresh preference flip) polls fast so both hosts
+            // converge in seconds — release on one side, connect on the other.
+            var sincePreferred = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - Interlocked.Read(ref _lastPreferredAtMs);
+            var delayMs = (sincePreferred >= 0 && sincePreferred < OwnerSwitchWindowMs) ? OwnerSwitchPollMs : OwnerHeartbeatMs;
+            try { await Task.Delay(delayMs, ct); }
             catch (OperationCanceledException) { break; }
         }
     }
@@ -707,12 +719,48 @@ public class RelayService : IDisposable
         if (amPreferred)         shouldHold = true;                                  // I'm the chosen host — always try
         else if (preferredFresh) shouldHold = false;                                // preferred host is alive & holding — stay parked
         else                     shouldHold = (now - preferredAt) >= OwnerTakeoverGraceMs; // brief yield after a switch, else take over so the phone isn't orphaned
+        var wasHolding = _shouldHoldPhone;
         _shouldHoldPhone = shouldHold;
+        Interlocked.Exchange(ref _lastPreferredAtMs, preferredAt);
 
         // Only the intended holder writes the heartbeat — a parked host writing
         // host=windows would clobber the tablet's ownership. While holding, renew.
         if (shouldHold)
+        {
             await WriteOwnerHeartbeatAsync(now, IsPhoneConnected?.Invoke() ?? false, ct);
+
+            // Acquire: we hold (or just won) the phone but aren't connected. During the
+            // switch window this retries every fast tick — the first attempts usually
+            // lose the race with the other host's release, and the phone needs a few
+            // seconds to free the profiles. Connect() has its own in-flight/idle guards.
+            var withinSwitchWindow = (now - preferredAt) >= 0 && (now - preferredAt) < OwnerSwitchWindowMs;
+            if ((!wasHolding || withinSwitchWindow) && !(IsPhoneConnected?.Invoke() ?? false) && Connect is not null)
+            {
+                LogLine?.Invoke("[ARBITRATION] this host is now preferred — connecting to the phone");
+                try { await Connect(); }
+                catch (Exception ex) { LogLine?.Invoke($"[ARBITRATION] acquire connect failed: {ex.Message}"); }
+            }
+            return;
+        }
+
+        // Resign-then-acquire: the phone serves HFP/MAP to ONE host at a time, so a
+        // handoff only completes if the losing host actively drops its BT link — the
+        // winner cannot connect around a held link. Only a FRESH, explicit preference
+        // flip triggers a release (a stale doc must never yank a working connection),
+        // and MainViewModel declines while a call is live; we re-fire each tick until
+        // the link is really down.
+        var stillConnected = IsPhoneConnected?.Invoke() ?? false;
+        if (stillConnected && (now - preferredAt) < OwnerSwitchWindowMs && ReleasePhone is not null)
+        {
+            LogLine?.Invoke("[ARBITRATION] preferred host changed — releasing the phone's Bluetooth link");
+            try { await ReleasePhone(); }
+            catch (Exception ex) { LogLine?.Invoke($"[ARBITRATION] release failed: {ex.Message}"); }
+
+            // Farewell heartbeat: we were the recorded holder, so mark connected=false
+            // once so web surfaces and the winner see the link drop within a tick.
+            if (ownerHost == HostId && !(IsPhoneConnected?.Invoke() ?? false))
+                await WriteOwnerHeartbeatAsync(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), false, ct);
+        }
     }
 
     /// <summary>Fire a heartbeat immediately on a connect/disconnect edge so remote
