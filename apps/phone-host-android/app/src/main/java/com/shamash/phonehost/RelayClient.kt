@@ -340,6 +340,36 @@ class RelayClient(private val host: HostService) {
         }
     }
 
+    /** Explicit takeover/handoff: write `preferred` to the owner doc — the same
+     *  lever the web segmented control pulls, so every browser's Tablet|PC control
+     *  shifts on its own and the losing host releases via the b6 resign-then-acquire
+     *  flow. Field-masked (never touches host/t/connected). Runs on the relay
+     *  executor — safe to call from the UI thread. Optimistically flips shouldHold
+     *  and schedules a fast arbitration tick so the switch converges in seconds. */
+    fun writePreferred(preferred: String) {
+        val value = if (preferred == "pc") "pc" else "tablet"
+        shouldHold = (if (value == "pc") "windows" else "android") == HOST_ID
+        executor.execute {
+            runCatching {
+                val nowMs = System.currentTimeMillis()
+                val body = JSONObject()
+                    .put("writes", JSONArray().put(JSONObject()
+                        .put("update", JSONObject()
+                            .put("name", OWNER_DOC)
+                            .put("fields", JSONObject()
+                                .put("preferred", JSONObject().put("stringValue", value))
+                                .put("preferredAtMs", JSONObject().put("integerValue", nowMs.toString()))))
+                        .put("updateMask", JSONObject()
+                            .put("fieldPaths", JSONArray().put("preferred").put("preferredAtMs")))))
+                    .toString()
+                val code = httpSend("POST", FS_COMMIT_URL, body)
+                if (code in 200..299) HostLog.add("[ARBITRATION] preferred host set to $value (explicit)")
+                else HostLog.add("[ARBITRATION] set preferred=$value HTTP $code")
+                arbitrationTick()   // converge immediately (also opens the fast-poll window)
+            }
+        }
+    }
+
     private fun writeOwnerHeartbeat(nowMs: Long, connected: Boolean) {
         val body = JSONObject()
             .put("writes", JSONArray().put(JSONObject()

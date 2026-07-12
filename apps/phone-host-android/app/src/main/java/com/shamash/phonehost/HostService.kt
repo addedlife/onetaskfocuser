@@ -49,7 +49,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 class HostService : Service() {
 
     companion object {
-        const val BUILD_STAMP = "android-b4"
+        // Single bump point: hostBuild in app/build.gradle.kts (drives this,
+        // versionCode/Name, the launcher label, and the icon color).
+        val BUILD_STAMP = "android-b${BuildConfig.HOST_BUILD}"
         private const val CHANNEL_ID = "phonehost"
         private const val NOTIFICATION_ID = 1
 
@@ -270,6 +272,26 @@ class HostService : Service() {
                 connecting.set(false)
             }
         }
+    }
+
+    /** Last arbitration verdict: true means the OTHER host (the PC) is the live
+     *  preferred holder — connecting from here is a takeover, not a retry. */
+    fun otherHostHoldsPhone(): Boolean = !relay.shouldHoldPhone()
+
+    /** Explicit takeover (user confirmed in the UI): claim `preferred=tablet` on the
+     *  owner doc — the PC releases the Bluetooth link on its own (b330) and every
+     *  browser's Tablet|PC control shifts — then connect. Early connect attempts may
+     *  lose the race with the PC's release; the arbitration fast ticks retry. */
+    fun requestTakeover() {
+        relay.writePreferred("tablet")
+        connectToDefault()
+    }
+
+    /** Explicit handoff (user confirmed in the UI): point `preferred` at the PC so
+     *  it picks the phone up within seconds, then release our link. */
+    fun handoffToOtherHost() {
+        relay.writePreferred("pc")
+        handoffRelease()
     }
 
     /** Cleanly release the Bluetooth link so another host can take over. */

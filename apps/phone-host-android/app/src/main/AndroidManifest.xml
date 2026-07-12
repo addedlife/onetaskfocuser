@@ -17,9 +17,11 @@
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
 
+    <!-- Label + icon color are per-build gradle resValues (build.gradle.kts
+         hostBuild) so every installed build is recognizable on the home screen. -->
     <application
-        android:label="Shamash Phone Host"
-        android:icon="@android:drawable/stat_sys_data_bluetooth"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.DeviceDefault.DayNight">
 
         <activity

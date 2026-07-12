@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cleanTheme, DUR, EASE, ELEV, gvIconButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { ActionBtn, AssistChip, IconBtn, ListItem, denseListVars } from '../m3.jsx';
 import { db } from '../../01-core.js';
-import { hostFetch, hostAuthHeaders, pairWithHost } from '../host-auth.js';
 import { subscribeOwner } from '../phone-host-control.js';
 import { derivePhoneLinkState, describePhoneLink, formatAgeShort, messageListSignature } from '../phone-link.js';
 import {
@@ -160,20 +159,15 @@ function linkedMessageParts(text, linkStyle = {}) {
   return parts;
 }
 
-// `host` is a host descriptor from host-auth.js ({ base, forward? }); pass it for
-// direct host calls so pairing auth (X-Host-Token / silent /pair on 401) targets
-// the right machine. Relay calls omit it — they authenticate with the Firebase
-// bearer token in extraHeaders instead.
-async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS, extraHeaders = {}, host = null) {
+// Relay-only fetch: authenticates with the Firebase bearer token passed in
+// extraHeaders. (The old `host` pairing-auth parameter left with the loopback path.)
+async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS, extraHeaders = {}) {
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timer = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
   try {
-    const run = () => fetch(url, {
-      cache: "no-store", signal: controller?.signal,
-      headers: { ...extraHeaders, ...(host ? hostAuthHeaders(host) : {}) },
+    const response = await fetch(url, {
+      cache: "no-store", signal: controller?.signal, headers: extraHeaders,
     });
-    let response = await run();
-    if (response.status === 401 && host && await pairWithHost(host)) response = await run();
     if (!response.ok) throw new Error(`${url} returned ${response.status}`);
     return await response.json();
   } finally {
@@ -230,10 +224,6 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const phoneDiag = useMemo(() => {
     try { return /[?&]phonediag=1/.test(window.location.search); } catch { return false; }
   }, []);
-  const localApi = (typeof window !== "undefined" && window.location.port === "8765")
-    ? window.location.origin
-    : "http://127.0.0.1:8765";
-
   const viewportW = useViewportWidth();
   const touchActions = viewportW < 980;
   const [status, setStatus] = useState(null);
@@ -328,8 +318,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const [composeFocused, setComposeFocused] = useState(false);
   const [openPhoneActionId, setOpenPhoneActionId] = useState(null);
   const [expandedPhoneMessageId, setExpandedPhoneMessageId] = useState(null);
-  const usingRelayRef = useRef(false);
-  const [usingRelay, setUsingRelay] = useState(false);
+  // Cloud-only client: the relay is THE transport, not one of two (see the
+  // pure-cloud note below). Kept as a const so the shared state machine and the
+  // diag overlay still name their mode explicitly.
+  const usingRelay = true;
   // Server-stamped time the relay last received a push from a live phone host.
   // Drives the live/stale connection indicator on relay devices.
   const [relayReceivedAt, setRelayReceivedAt] = useState(0);
@@ -352,33 +344,12 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const RELAY_BASE = "/api/phone-relay";
 
   // ── Transport resolution — fully automatic, no user modes ─────────────────
-  // The old pinned direct/relay override + menu is gone (buglog: head-scratching);
-  // transportRef caches the resolved path so we don't probe every cycle: an
-  // established 'direct' is trusted until a fetch fails; on 'relay' we re-probe
-  // at most every 25 s so a host starting on this device flips back on its own.
-  const transportRef = useRef(null);
-  const lastProbeAtRef = useRef(0);
-  const localHost = useMemo(() => ({ base: localApi }), [localApi]);
-  const relayStaleRef = useRef(false);
+  // The web app is a PURE CLOUD CLIENT (owner decision 7/10/26): every browser
+  // reads the one relay state blob fed by whichever host holds the phone, and
+  // queues commands through the one cloud mailbox — identical behavior on the
+  // PC, iPad, tablet, and phone, no loopback probing, no dual transports. The
+  // local surface for the PC-holds-the-phone case is DeskPhone's own window.
   const failStreakRef = useRef(0);
-
-  const probeLocal = useCallback(async () => {
-    try { return !!(await fetchPhoneJson(`${localApi}/status`, 2500, {}, localHost)); }
-    catch { return false; }
-  }, [localApi, localHost]);
-
-  const resolveTransport = useCallback(async (force = false) => {
-    if (isMobile) return "relay";   // a phone can never host on loopback
-    const now = Date.now();
-    if (!force && transportRef.current === "direct") return "direct";
-    // On the relay we re-probe loopback every 25 s (coming home flips back on
-    // its own) — or every cycle while the relay blob is stale, since a local
-    // host would then be the only live path.
-    const reprobeMs = relayStaleRef.current ? 0 : 25000;
-    if (!force && transportRef.current === "relay" && now - lastProbeAtRef.current < reprobeMs) return "relay";
-    lastProbeAtRef.current = now;
-    return (await probeLocal()) ? "direct" : "relay";
-  }, [isMobile, probeLocal]);
 
   // ── Relay command acknowledgements ─────────────────────────────────────────
   // DeskPhone acknowledges every relayed command by id inside the state blob it
@@ -440,8 +411,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     if (receivedAt) setRelayReceivedAt(receivedAt);
   }, []);
 
-  // forceProbe must be EXACTLY true (the Refresh button passes a click event).
-  const refresh = useCallback(async (forceProbe) => {
+  const refresh = useCallback(async () => {
     if (refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
 
@@ -474,45 +444,14 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       }
     };
 
-    // The Android host serves /messages?limit=5000 noticeably slower than the
-    // PC — timeouts sized so a slow-but-healthy host doesn't read as "down"
-    // (that misread is what caused the tablet's direct↔relay flapping).
-    const fetchDirect = async (host) => {
-      const [statusRes, messagesRes, callsRes, contactsRes] = await Promise.all([
-        fetchPhoneJson(`${host.base}/status`, 7000, {}, host),
-        fetchPhoneJson(`${host.base}/messages?limit=5000`, 7000, {}, host),
-        fetchPhoneJson(`${host.base}/calls`, 7000, {}, host).catch(() => null),
-        fetchPhoneJson(`${host.base}/contacts`, 7000, {}, host).catch(() => null),
-      ]);
-      return { statusRes, messagesRes, callsRes, contactsRes, receivedAt: 0 };
-    };
-
     try {
-      let transport = await resolveTransport(forceProbe === true);
-      let payload = null;
-      if (transport === "direct") {
-        try {
-          payload = await fetchDirect(localHost);
-        } catch {
-          // Local host went away mid-session — fall through to the cloud,
-          // which is fed by whichever host holds the phone now.
-          transport = "relay";
-          lastProbeAtRef.current = Date.now();
-          payload = await fetchViaRelay();
-        }
-      } else {
-        payload = await fetchViaRelay();
-      }
+      const payload = await fetchViaRelay();
       failStreakRef.current = 0;
       lastFetchOkAtRef.current = Date.now();
       setNowTick(Date.now());   // re-derive liveness immediately on fresh data
       setError("");
-      transportRef.current = transport;
-      usingRelayRef.current = transport === "relay";
-      setUsingRelay(transport === "relay");
       applyPhoneState(payload.statusRes, payload.messagesRes, payload.callsRes, payload.contactsRes, payload.receivedAt);
     } catch (e) {
-      transportRef.current = null;   // both paths failed — re-resolve from scratch next cycle
       const msg = String(e?.message || "");
       failStreakRef.current += 1;
       const hardFail = failStreakRef.current >= 3 || !messagesSigRef.current;
@@ -532,7 +471,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     } finally {
       refreshInFlightRef.current = false;
     }
-  }, [localHost, resolveTransport, onOnlineChange, user, applyPhoneState, processCommandResults]);
+  }, [onOnlineChange, user, applyPhoneState, processCommandResults]);
 
   // Build phone-number → name map from contacts, covering many possible field names from the phone host API
   const contactMap = useMemo(() => {
@@ -597,18 +536,11 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     }));
   }, [contacts, number, composeSearch, composeIsNew]);
 
-  // On relay transport the onSnapshot listener (below) delivers updates in real time —
-  // no REST poll needed, and polling would hit the Netlify function ~13k times/day for nothing.
-  // On direct LAN transport there is no listener, so the poll stays.
-  useEffect(() => {
-    refresh();
-    if (usingRelay) return;
-    const id = setInterval(refresh, 6500);
-    return () => clearInterval(id);
-  }, [refresh, usingRelay]);
+  // One fetch on mount seeds the surface; from then on the onSnapshot listener
+  // (below) delivers updates in real time — no REST poll, no idle function hits.
+  useEffect(() => { refresh(); }, [refresh]);
 
-  // Waking the tab (or unlocking the laptop) re-resolves the best path right
-  // away — local host means direct, otherwise relay, no clicks.
+  // Waking the tab (or unlocking the laptop) refreshes right away — no clicks.
   useEffect(() => {
     const onWake = () => { if (document.visibilityState !== "hidden") refresh(true); };
     window.addEventListener("focus", onWake);
@@ -643,7 +575,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // never reconnects itself), so — exactly like Store.listenShailos — we tear down
   // and resubscribe on capped exponential backoff so a transport drop self-heals.
   useEffect(() => {
-    if (!usingRelay || !db || !user) return;
+    if (!db || !user) return;
     let stopped = false;
     let unsub = null;
     let retryTimer = null;
@@ -684,7 +616,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       if (retryTimer) clearTimeout(retryTimer);
       try { unsub && unsub(); } catch (_) {}
     };
-  }, [usingRelay, user, applyPhoneState, processCommandResults]);
+  }, [user, applyPhoneState, processCommandResults]);
 
   // Returns true only when the active phone host confirmed the command ran (or, on the LAN path,
   // when its HTTP response said so). Callers use this to decide whether user input
@@ -699,70 +631,51 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     const fail = msg => { if (opts.background) opts.onError?.(msg); else setError(msg); };
     if (!opts.background) setBusy(label);
     try {
-      if (usingRelayRef.current) {
-        // Route command through the cloud relay — the active host drains it.
-        // Include Firebase ID token so the function can gate on auth.
-        let cmdAuthHeaders = {};
-        try {
-          if (user?.getIdToken) {
-            const tok = await user.getIdToken();
-            cmdAuthHeaders["Authorization"] = `Bearer ${tok}`;
-          }
-        } catch {}
-        const res = await fetch(`${RELAY_BASE}?action=command`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...cmdAuthHeaders },
-          body: JSON.stringify({ path }),
-        });
-        if (!res.ok) {
-          let msg = `Relay rejected the command (${res.status})`;
-          try { const d = await res.json(); if (d?.error) msg = d.error; } catch {}
-          fail(msg);
-          return false;
+      // Route command through the cloud relay — the active host drains it.
+      // Include Firebase ID token so the function can gate on auth.
+      let cmdAuthHeaders = {};
+      try {
+        if (user?.getIdToken) {
+          const tok = await user.getIdToken();
+          cmdAuthHeaders["Authorization"] = `Bearer ${tok}`;
         }
-        const queued = await res.json().catch(() => ({}));
-        if (queued?.id) {
-          // Await the host acknowledgement — it rides the state pushes we already
-          // receive. No ack within 25 s means no live host accepted the command.
-          const ack = await waitForAck(queued.id, 25000);
-          await refresh();
-          if (ack && !ack.ok) {
-            fail(ack.error || "The phone host could not run the command.");
-            return false;
-          }
-          if (!ack) {
-            fail("No confirmation from the phone host. The command will expire if the phone link stays offline.");
-            return false;
-          }
-          if (!opts.background) setError("");
-          return true;
-        }
-        // Relay without command ids (older function) — keep the legacy blind wait.
-        if (!opts.background) setError("");
-        await new Promise(r => setTimeout(r, 2500));
-      } else {
-        const res = await hostFetch(localHost, path, { method: "POST" });
-        if (!res.ok) {
-          let msg = `Phone host error (${res.status})`;
-          try { const d = await res.json(); if (d?.error || d?.message) msg = d.error || d.message; } catch {}
-          await refresh();
-          fail(msg);
-          return false;
-        }
-        const data = await res.json().catch(() => ({}));
-        if (data?.success === false || data?.ok === false || data?.result === "failed") {
-          await refresh();
-          fail(data?.error || data?.message || data?.reason || "The phone host reported failure.");
-          return false;
-        }
-        if (!opts.background) setError("");
+      } catch {}
+      const res = await fetch(`${RELAY_BASE}?action=command`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...cmdAuthHeaders },
+        body: JSON.stringify({ path }),
+      });
+      if (!res.ok) {
+        let msg = `Relay rejected the command (${res.status})`;
+        try { const d = await res.json(); if (d?.error) msg = d.error; } catch {}
+        fail(msg);
+        return false;
       }
+      const queued = await res.json().catch(() => ({}));
+      if (queued?.id) {
+        // Await the host acknowledgement — it rides the state pushes we already
+        // receive. No ack within 25 s means no live host accepted the command.
+        const ack = await waitForAck(queued.id, 25000);
+        await refresh();
+        if (ack && !ack.ok) {
+          fail(ack.error || "The phone host could not run the command.");
+          return false;
+        }
+        if (!ack) {
+          fail("No confirmation from the phone host. The command will expire if the phone link stays offline.");
+          return false;
+        }
+        if (!opts.background) setError("");
+        return true;
+      }
+      // Relay without command ids (older function) — keep the legacy blind wait.
+      if (!opts.background) setError("");
+      await new Promise(r => setTimeout(r, 2500));
       await refresh();
       return true;
     }
     catch {
       fail("The phone host did not answer.");
-      transportRef.current = null;   // direct path died mid-command — re-resolve next cycle
       onOnlineChange?.(false);
       return false;
     }
@@ -770,10 +683,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   };
 
   // The ONE reconnect control: ask the active phone host to re-establish the
-  // Bluetooth link (/connect only exists on the loopback API; the relay whitelist
-  // maps /refresh to a full re-sync + push), then force the transport re-probe.
+  // Bluetooth link (the relay whitelist maps /refresh to a full re-sync + push).
   const reconnectPhone = async () => {
-    await post(usingRelayRef.current ? "/refresh" : "/connect", "reconnect");
+    await post("/refresh", "reconnect");
     await refresh(true);
   };
 
@@ -822,19 +734,15 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // All liveness/staleness/wording comes from the shared state machine in
   // phone-link.js — the DeskPhone web page derives from the SAME machine, so
   // the two surfaces can no longer disagree about whether the link is up.
-  // On the loopback path a dead host can't rely on a heartbeat doc, so
-  // "status exists" only counts while a fetch succeeded within ~3 poll cycles.
-  const directFresh = usingRelay || (nowTick - lastFetchOkAtRef.current) < 30000;
   const link = derivePhoneLinkState({
     now: nowTick,
     usingRelay,
-    statusOnline: statusOnline && directFresh,
+    statusOnline,
     hasData: hasFeedData,
     owner,
     relayReceivedAt,
   });
   const relayStale = link.stale;
-  relayStaleRef.current = link.stale;   // lets resolveTransport re-probe LAN hosts aggressively while the relay is dead
   const phoneLinkLive = link.live;
   // Which machine holds the phone right now — the owner doc is authoritative
   // when present; else infer from the state blob.
@@ -1215,32 +1123,8 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     </div>
   );
 
-  // ── One phone screen everywhere ──────────────────────────────────────────
-  // When this desktop browser reaches DeskPhone directly, the full phone view
-  // embeds the exact UI DeskPhone itself serves (?standalone=deskphone) instead
-  // of this summary surface — identical pixels in the webapp and on the PC.
-  // All hooks above keep running, so the poll still detects the PC going away,
-  // flips the transport to relay, and this falls back to the built-in surface
-  // transparently. Compact/dense NerveCenter cards always keep the summary UI.
-  // Chromium-only by design: a browser that blocks HTTP-loopback iframes from
-  // an HTTPS page also fails the direct probe, so it never reaches this branch.
-  // Only when the local host is the Windows DeskPhone: the Android tablet host
-  // is API-only (no embedded UI) — it stays on the summary surface below.
-  const embedsDeskPhoneUi = !usingRelay && status && (status.hostPlatform || "windows") === "windows";
-  if (!compact && !dense && !isMobile && embedsDeskPhoneUi) {
-    return (
-      <div style={{ flex: "1 1 auto", minHeight: 0, minWidth: 0, display: "flex",
-        animation: `nc-phone-surface-fade ${DUR.base} ${EASE.standard}` }}>
-        <iframe
-          src={`${localApi}/?standalone=deskphone`}
-          style={{ width: "100%", height: "100%", border: "none", borderRadius: 0, display: "block" }}
-          title="DeskPhone"
-          sandbox="allow-scripts allow-same-origin allow-forms"
-        />
-      </div>
-    );
-  }
-
+  // (The old "embed DeskPhone's own UI over loopback" branch is gone — the web
+  // app is a pure cloud client; DeskPhone's window is its own local surface.)
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: dense ? 2 : (compact ? 6 : 12), minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden", color: C.text, animation: `nc-phone-surface-fade ${DUR.base} ${EASE.standard}` }}>
 
@@ -1629,7 +1513,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       {phoneDiag && !compact && !dense && (
         <pre style={{ position: "fixed", right: 8, bottom: 8, zIndex: 9999, maxWidth: 360, maxHeight: "45vh", overflow: "auto", background: "rgba(0,0,0,0.85)", color: "#7CFC9A", fontSize: 10, lineHeight: 1.35, padding: 8, borderRadius: 6, margin: 0 }}>
           {JSON.stringify({
-            transport: usingRelay ? "relay" : "direct",
+            transport: "relay",
             link,
             owner,
             relayReceivedAgo: relayReceivedAt ? formatAgeShort(nowTick - relayReceivedAt) : "never",

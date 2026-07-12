@@ -143,48 +143,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   // for this + user being loaded (Firebase auth is async) before reading Firestore.
   const [healthOAuthReady, setHealthOAuthReady] = useState(false);
   const [deskPhoneOnline, setDeskPhoneOnline] = useState(false);
-  // Direct-reachability probe for the desktop Phone screen: when DeskPhone's
-  // loopback host answers, the deskphone view embeds the UI DeskPhone itself
-  // serves (?standalone=deskphone) instead of the locally bundled copy — one
-  // phone screen everywhere. Re-probes every 25s, so the PC going away falls
-  // back to the built-in panel and coming back flips to the embed, no clicks.
-  // Chromium-only by design: browsers that block HTTP-loopback frames from an
-  // HTTPS page also fail this probe, so they keep the built-in panel.
-  const [deskPhoneDirect, setDeskPhoneDirect] = useState(false);
-  useEffect(() => {
-    if (suiteView !== "deskphone" || IS_MOBILE_DEVICE) return undefined;
-    let cancelled = false;
-    const probe = async () => {
-      let ok = false;
-      try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 1500);
-        const res = await fetch("http://127.0.0.1:8765/status", { signal: ctrl.signal });
-        clearTimeout(timer);
-        ok = !!res.ok;
-      } catch { ok = false; }
-      if (cancelled) return;
-      setDeskPhoneDirect(ok);
-      // The embed replaces the panel that normally reports online state.
-      if (ok) setDeskPhoneOnline(true);
-    };
-    probe();
-    const id = setInterval(probe, 25000);
-    return () => { cancelled = true; clearInterval(id); };
-  }, [suiteView]);
-  // When DeskPhone's own UI is live in the iframe, minimize the WPF window so
-  // the user isn't looking at the same UI twice. Restore it when they leave.
-  useEffect(() => {
-    if (!deskPhoneDirect || suiteView !== "deskphone") return;
-    fetch("http://127.0.0.1:8765/hide", { method: "POST", cache: "no-store" }).catch(() => {});
-    return () => {
-      fetch("http://127.0.0.1:8765/show", { method: "POST", cache: "no-store" }).catch(() => {});
-    };
-  }, [deskPhoneDirect, suiteView]);
+  // The web app is a pure cloud client (owner decision 7/10/26): the old
+  // loopback probe + DeskPhone-UI iframe embed + hide/show window dance are
+  // gone. DeskPhone's own window is the local surface when the PC hosts.
   const deskPhoneLaunchAtRef = useRef(0);
   const lastDeskPhoneThemeRef = useRef("");
-  const deskPhoneIframeRef = useRef(null);
-  const deskPhoneTRef = useRef(null); // always holds latest T; updated each render
   const [justComp, setJustComp] = useState(false);
   const [showRip, setShowRip] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -1562,7 +1525,6 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       : "claude";
   const deskPhoneThemeSyncEnabled = true; // always live — user toggle removed
   const deskPhoneThemeQuery = useMemo(() => buildDeskPhoneThemeQuery(deskPhoneThemePalette, T), [deskPhoneThemePalette, T]);
-  deskPhoneTRef.current = T; // keep ref current for postMessage effects
   // Share theme with Shaila sub-app via localStorage
   try { localStorage.setItem('onetask_theme', JSON.stringify(sc)); } catch(e) {}
   // Share the selected AI route with the Shaila sub-app; both still call the same server gateway.
@@ -2743,27 +2705,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash || ""}`);
   }, [syncDeskPhoneTheme]);
 
-  // Push the live Shamash Pro 4 theme to the DeskPhone iframe via postMessage
-  // whenever the palette changes. Zero cloud cost — pure local frame messaging.
-  // deskPhoneTRef is updated every render below (after T is computed).
-  useEffect(() => {
-    const iframe = deskPhoneIframeRef.current;
-    if (!iframe) return;
-    try { iframe.contentWindow?.postMessage({ type: 'dp-theme', T: deskPhoneTRef.current }, '*'); } catch {}
-  }, [deskPhoneThemeQuery]); // deskPhoneThemeQuery is a stable string that encodes T
-
-  // Listen for 'dp-ready' from the iframe so we can send the theme on first load
-  // (the onLoad fires before React state is flushed; this message arrives after).
-  useEffect(() => {
-    const onMessage = (event) => {
-      if (event.data?.type !== 'dp-ready') return;
-      const iframe = deskPhoneIframeRef.current;
-      if (!iframe) return;
-      try { iframe.contentWindow?.postMessage({ type: 'dp-theme', T: deskPhoneTRef.current }, '*'); } catch {}
-    };
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, []);
+  // (The DeskPhone-iframe theme postMessage effects left with the loopback embed —
+  // theme sync to the native window still runs over /theme in syncDeskPhoneTheme.)
 
 
   // Handle Google Health OAuth callback (/health-callback?code=...&state=uid)
@@ -3743,18 +3686,13 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
       {!shellHidden && suiteView === "deskphone" && (
         <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: Z.panel, overflow: "hidden", background: T.bg, borderLeft: `1px solid ${C.divider}` }}>
-          {/* Live surface indicator — which phone surface is on screen right now.
-              Teal = DeskPhone's own served UI (direct loopback embed); amber = the
-              webapp's bundled fallback panel. pointerEvents none: never blocks the UI. */}
-          {!IS_MOBILE_DEVICE && (
-            <div aria-label={deskPhoneDirect ? "Showing DeskPhone's own UI (direct)" : "Showing the webapp's built-in phone panel"}
-              style={{ position: "absolute", top: 8, right: 12, zIndex: 5, pointerEvents: "none", display: "flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: RADIUS.pill, background: "rgba(255,255,255,0.92)", border: `1px solid ${GV_CLEAN.divider}`, color: GV_CLEAN.muted, fontSize: NC_TYPE.small, fontWeight: 600, fontFamily: NC_FONT_STACK, letterSpacing: 0.2, boxShadow: ELEV[1] }}>
-              <span style={{ width: 7, height: 7, borderRadius: RADIUS.pill, background: deskPhoneDirect ? GV_CLEAN.accent : GV_CLEAN.warning, boxShadow: deskPhoneDirect ? "0 0 5px rgba(0,121,107,0.55)" : "none" }} />
-              {deskPhoneDirect ? "DeskPhone · live" : "Web fallback"}
-            </div>
-          )}
+          {/* ONE phone surface, one cloud source (owner decision 7/10/26): the
+              web app never talks loopback — the built-in panel reads the relay
+              fed by whichever host holds the phone. The old DeskPhone-iframe
+              embed + "DeskPhone · live / Web fallback" pill are gone; the local
+              surface for the PC-holds case is DeskPhone's own window. */}
           {IS_MOBILE_DEVICE ? (
-            // Phone: cloud-relay surface only — the direct/LAN DeskPhone panel can't reach a PC from a phone.
+            // Phone: the compact surface fits the narrow viewport better.
             <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "12px 14px", boxSizing: "border-box", minHeight: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexShrink: 0 }}>
                 <button onClick={()=>openCommandView("focus")} title="Back"
@@ -3767,21 +3705,6 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 onOnlineChange={setDeskPhoneOnline}
                 onRecordConversation={()=>{setConvCallMode(false); setShowConvCapture(true);}}
                 onRecordCall={()=>{setConvCallMode(true); setShowConvCapture(true);}}
-              />
-            </div>
-          ) : deskPhoneDirect ? (
-            // DeskPhone is reachable on this PC — embed the UI it serves itself.
-            // Theme is pushed via postMessage whenever T changes (zero cloud cost).
-            <div style={{ width: "100%", height: "100%", animation: `nc-phone-surface-fade ${DUR.base} ${EASE.standard}` }}>
-              <iframe
-                ref={deskPhoneIframeRef}
-                src="http://127.0.0.1:8765/?standalone=deskphone&embedded=1"
-                style={{ width: "100%", height: "100%", border: "none", borderRadius: 0, display: "block" }}
-                title="DeskPhone"
-                sandbox="allow-scripts allow-same-origin allow-forms"
-                onLoad={() => {
-                  try { deskPhoneIframeRef.current?.contentWindow?.postMessage({ type: 'dp-theme', T }, '*'); } catch {}
-                }}
               />
             </div>
           ) : (

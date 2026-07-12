@@ -6013,8 +6013,10 @@ export function DeskPhoneWebPanel({
   const refreshQueuedRef = useRef(false);
   // Cloud fallback state: viaCloud = data is coming from the relay blob (no host
   // on this device's loopback); relayStamp = when the feeding host last pushed.
-  const [viaCloud, setViaCloud] = useState(false);
-  const viaCloudRef = useRef(false);
+  // Initialized from the serving origin so a command fired before the first
+  // refresh already routes correctly (cloud everywhere except the host's own page).
+  const [viaCloud, setViaCloud] = useState(() => canUseCloud());
+  const viaCloudRef = useRef(canUseCloud());
   const [relayStamp, setRelayStamp] = useState(0);
   const lastFetchOkAtRef = useRef(0);
   // Owner control doc — the ACTIVE host's heartbeat; feeds the shared state
@@ -6101,25 +6103,33 @@ export function DeskPhoneWebPanel({
     }
     refreshInFlightRef.current = true;
     try {
-      const shouldFetchMedia = Date.now() - lastMediaRefreshRef.current > 60000;
-      const [nextStatus, nextMessages, nextMediaMessages, nextCalls, nextContacts] = await Promise.all([
-        readOptionalJson(host, "/status"),
-        readOptionalJson(host, `/messages?limit=${WEBPHONE_MESSAGE_LIMIT}`),
-        shouldFetchMedia
-          ? readOptionalJson(host, `/messages?limit=${WEBPHONE_MEDIA_MESSAGE_LIMIT}&includeAttachmentData=1`, { timeoutMs: MEDIA_FETCH_TIMEOUT_MS })
-          : Promise.resolve({ ok: false, data: mediaMessagesRef.current, path: "/messages media cache" }),
-        readOptionalJson(host, "/calls"),
-        readOptionalJson(host, "/contacts"),
-      ]);
-      if (nextMediaMessages.ok) {
-        mediaMessagesRef.current = getApiList(nextMediaMessages.data);
-        lastMediaRefreshRef.current = Date.now();
-      }
-      let anyOnline = nextStatus.ok || nextMessages.ok || nextCalls.ok || nextContacts.ok;
+      // ONE transport per surface (owner decision 7/10/26): served by DeskPhone
+      // itself (port 8765) this page reads the host's own store over loopback —
+      // it IS the local surface. Everywhere else it is a pure cloud client fed
+      // by whichever host holds the phone. No probing, no fallback chain.
+      const hostServed = !canUseCloud();
+      let nextStatus = { ok: false, data: null, path: "/status" };
+      let nextMessages = { ok: false, data: null, path: "/messages" };
+      let nextMediaMessages = { ok: false, data: mediaMessagesRef.current, path: "/messages media cache" };
+      let nextCalls = { ok: false, data: null, path: "/calls" };
+      let nextContacts = { ok: false, data: null, path: "/contacts" };
       let cloud = false;
-      if (!anyOnline && canUseCloud()) {
-        // No host on this device — fall back to the cloud relay blob so the full
-        // phone screen works anywhere, fed by whichever host holds the phone.
+      if (hostServed) {
+        const shouldFetchMedia = Date.now() - lastMediaRefreshRef.current > 60000;
+        [nextStatus, nextMessages, nextMediaMessages, nextCalls, nextContacts] = await Promise.all([
+          readOptionalJson(host, "/status"),
+          readOptionalJson(host, `/messages?limit=${WEBPHONE_MESSAGE_LIMIT}`),
+          shouldFetchMedia
+            ? readOptionalJson(host, `/messages?limit=${WEBPHONE_MEDIA_MESSAGE_LIMIT}&includeAttachmentData=1`, { timeoutMs: MEDIA_FETCH_TIMEOUT_MS })
+            : Promise.resolve({ ok: false, data: mediaMessagesRef.current, path: "/messages media cache" }),
+          readOptionalJson(host, "/calls"),
+          readOptionalJson(host, "/contacts"),
+        ]);
+        if (nextMediaMessages.ok) {
+          mediaMessagesRef.current = getApiList(nextMediaMessages.data);
+          lastMediaRefreshRef.current = Date.now();
+        }
+      } else {
         const blob = await fetchCloudState();
         cloud = true;
         setRelayStamp(Number(blob?.relayReceivedAt) || 0);
@@ -6127,8 +6137,8 @@ export function DeskPhoneWebPanel({
         Object.assign(nextMessages, { ok: true, data: blob?.messages || [] });
         Object.assign(nextCalls,    { ok: true, data: blob?.calls || [] });
         Object.assign(nextContacts, { ok: true, data: blob?.contacts || [] });
-        anyOnline = nextStatus.ok || nextMessages.ok;
       }
+      const anyOnline = nextStatus.ok || nextMessages.ok || nextCalls.ok || nextContacts.ok;
       viaCloudRef.current = cloud;
       setViaCloud(cloud);
       if (!anyOnline) {

@@ -108,7 +108,15 @@ class MainActivity : Activity() {
             isAllCaps = false
             textSize = 14f
             text = "Disconnect (use another device instead)"
-            setOnClickListener { HostService.instance?.handoffRelease(); refresh() }
+            setOnClickListener {
+                val service = HostService.instance ?: return@setOnClickListener
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Hand your phone to the PC?")
+                    .setMessage("This tablet will disconnect from your phone and the PC takes over as the phone host. The web app's Tablet | PC switch follows automatically.")
+                    .setPositiveButton("Hand off") { _, _ -> service.handoffToOtherHost(); refresh() }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
         }
         root.addView(disconnectButton)
 
@@ -164,6 +172,20 @@ class MainActivity : Activity() {
 
         setContentView(ScrollView(this).apply { addView(root) })
         requestNeededPermissions()
+    }
+
+    /** Manual Connect: if the PC is the live preferred host, connecting is a
+     *  TAKEOVER — confirm first, then claim `preferred=tablet` (the PC releases on
+     *  its own and every browser's Tablet|PC switch shifts). Plain retry otherwise.
+     *  Only these user-facing buttons prompt; the watchdog/startup never do. */
+    private fun confirmTakeoverThenConnect(service: HostService) {
+        if (!service.otherHostHoldsPhone()) { service.connectToDefault(); refresh(); return }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Take over on this tablet?")
+            .setMessage("The PC currently hosts your phone. It will disconnect and this tablet takes over. The web app's Tablet | PC switch follows automatically.")
+            .setPositiveButton("Take over") { _, _ -> service.requestTakeover(); refresh() }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun sectionHeader(title: String) = TextView(this).apply {
@@ -233,7 +255,7 @@ class MainActivity : Activity() {
                 gray, "Paused",
                 "Another device is handling your phone right now. Tap Connect to take over on this tablet.",
                 "Connect",
-            ) { service.connectToDefault() }
+            ) { confirmTakeoverThenConnect(service) }
 
             service.defaultDeviceAddress.isBlank() -> setStatus(
                 orange, "Choose your phone",
@@ -257,7 +279,7 @@ class MainActivity : Activity() {
                 red, "Not connected",
                 "Trying to reconnect automatically. Keep your phone nearby with Bluetooth turned on, or tap Connect to retry now.",
                 "Connect",
-            ) { service.connectToDefault() }
+            ) { confirmTakeoverThenConnect(service) }
         }
 
         disconnectButton.visibility =
