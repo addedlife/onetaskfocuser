@@ -335,6 +335,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // (a dead local host has no heartbeat doc to go stale).
   const lastFetchOkAtRef = useRef(0);
   const refreshInFlightRef = useRef(false);
+  // True while the visible error came from the transport layer (a failed relay
+  // fetch). Live data arriving via the Firestore listener proves the link works,
+  // so it may clear THESE errors — but never a command failure the user must see.
+  const errorIsTransportRef = useRef(false);
   const expandedConversationEndRef = useRef(null);
   const composeBodyRef = useRef(null);
   const messagesSigRef = useRef("");
@@ -449,6 +453,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       failStreakRef.current = 0;
       lastFetchOkAtRef.current = Date.now();
       setNowTick(Date.now());   // re-derive liveness immediately on fresh data
+      errorIsTransportRef.current = false;
       setError("");
       applyPhoneState(payload.statusRes, payload.messagesRes, payload.callsRes, payload.contactsRes, payload.receivedAt);
     } catch (e) {
@@ -461,10 +466,11 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       // feeling). The state machine flips the status line to Offline on its
       // own as the heartbeat/fetch freshness lapses.
       if (hardFail) onOnlineChange?.(false);
-      if (msg === "relay:no_state") setError("Waiting for Shamash Phone Link on the tablet.");
-      else if (msg === "relay:no_auth") setError("Sign in to see your phone here.");
-      else if (msg === "relay:denied") setError("Phone relay blocked by security rules.");
-      else if (hardFail && !messagesSigRef.current) setError("Can't reach the phone link — check the tablet host.");
+      const setTransportError = text => { errorIsTransportRef.current = true; setError(text); };
+      if (msg === "relay:no_state") setTransportError("Waiting for a phone host — start Shamash Phone Link on the tablet or DeskPhone on the PC.");
+      else if (msg === "relay:no_auth") setTransportError("Sign in to see your phone here.");
+      else if (msg === "relay:denied") setTransportError("Phone relay blocked by security rules.");
+      else if (hardFail && !messagesSigRef.current) setTransportError("Can't reach the phone link — make sure a phone host (tablet or PC) is running.");
       // With data on screen, transient failures stay QUIET — the status line
       // already reads Connecting/Offline; a red banner over a visible feed is
       // two contradictory truths at once (owner ticket 7/9).
@@ -598,6 +604,15 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         try { blob = JSON.parse(raw); } catch { return; }
         applyPhoneState(blob.status, blob.messages, blob.calls, blob.contacts, Number(blob.relayReceivedAt) || 0);
         processCommandResults(blob.commandResults);
+        // A server snapshot IS a working transport. Without this, a few failed
+        // REST fetches at mount left a "Can't reach the phone link" banner
+        // sitting over a live feed forever (owner ticket 7/12 — tablet browser).
+        failStreakRef.current = 0;
+        lastFetchOkAtRef.current = Date.now();
+        if (errorIsTransportRef.current) {
+          errorIsTransportRef.current = false;
+          setError("");
+        }
       }, err => {
         console.warn("[Phone] relay listener error — resubscribing:", err);
         try { unsub && unsub(); } catch (_) {}
@@ -628,7 +643,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // use this so the compose UI never freezes while a command round-trips
   // (owner ticket: "the text just freezes for 5 seconds").
   const post = async (path, label, opts = {}) => {
-    const fail = msg => { if (opts.background) opts.onError?.(msg); else setError(msg); };
+    // Command failures are NOT transport errors — the listener must never
+    // auto-clear them, the user needs to see the command didn't run.
+    const fail = msg => { if (opts.background) opts.onError?.(msg); else { errorIsTransportRef.current = false; setError(msg); } };
     if (!opts.background) setBusy(label);
     try {
       // Route command through the cloud relay — the active host drains it.
@@ -1143,7 +1160,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             the compact card, which carries its own status dot lower down. ── */}
       {!compact && (
         <div style={{ display: "flex", alignItems: "center", gap: SP.sm, minHeight: 30, padding: "0 2px" }}>
-          <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, flexShrink: 0, background: linkDotColor }} />
+          <span style={{ width: 8, height: 8, borderRadius: RADIUS.pill, flexShrink: 0, background: linkDotColor,
+            // Handover in flight: the dot blinks until the new host's heartbeat confirms.
+            animation: link.switching ? "nc-host-blink 1.1s ease-in-out infinite" : "none" }} />
           <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.control, fontWeight: 600, color: phoneLinkLive ? C.success : relayStale ? C.warning : C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {linkStatusLabel}
           </span>

@@ -60,6 +60,12 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
   const preferredLabel = preferPc ? 'PC' : 'Tablet';
   const actualHostLabel = phoneHost.present && ownerIsLive(phoneHost) ? (HOST_LABEL[phoneHost.host] || '') : '';
   const hostSwitchPending = !!actualHostLabel && actualHostLabel !== preferredLabel;
+  // While a switch is pending, the SOLID highlight stays on the device that
+  // actually holds the phone; the requested device BLINKS until the new host's
+  // heartbeat confirms the handover (owner spec 7/12). No pending switch ⇒
+  // solid simply follows the preference.
+  const solidPc = hostSwitchPending ? actualHostLabel === 'PC' : preferPc;
+  const hostBlinkStyle = { animation: 'nc-host-blink 1.1s ease-in-out infinite' };
   const phoneHostLabel = hostSwitchPending
     ? `Handing to ${preferredLabel}…`
     : `Phone: ${actualHostLabel || preferredLabel}`;
@@ -290,15 +296,20 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
               '--md-outlined-segmented-button-unselected-label-text-color': C.muted,
               '--md-outlined-segmented-button-selected-icon-color': C.accent,
             }}>
-            <SegmentedButton selected={!preferPc} label="Tablet" title="Tablet holds the phone" />
-            <SegmentedButton selected={preferPc} label="PC" title="PC holds the phone" />
+            <SegmentedButton selected={!solidPc} label="Tablet" title="Tablet holds the phone"
+              style={hostSwitchPending && !preferPc ? hostBlinkStyle : undefined} />
+            <SegmentedButton selected={solidPc} label="PC" title="PC holds the phone"
+              style={hostSwitchPending && preferPc ? hostBlinkStyle : undefined} />
           </SegmentedButtonSet>
         </div>
       ) : (
         <button onClick={flipHost} title={phoneHostTitle} aria-label="Switch phone host"
           style={navBtn(false)}>
           <Ripple />
-          {suiteIcon(preferPc ? 'computer' : 'smartphone', ic(24))}
+          {/* Requested-host icon blinks until the handover is confirmed. */}
+          <span style={hostSwitchPending ? hostBlinkStyle : undefined}>
+            {suiteIcon(preferPc ? 'computer' : 'smartphone', ic(24))}
+          </span>
         </button>
       )}
 

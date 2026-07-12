@@ -1224,6 +1224,7 @@ function ConnectionRail({
   online,
   status,
   connectionStatus,
+  switching = false,
   onReconnect,
   onSettings,
 }) {
@@ -1236,7 +1237,7 @@ function ConnectionRail({
     return (
       <div className="dp-rail-connection-collapsed" data-native-source="MainWindow.xaml:710">
         <div className="dp-collapsed-status-tile" title={connectionStatus}>
-          <span className={`dp-status-dot ${online && status?.connected ? "is-online" : ""}`} />
+          <span className={`dp-status-dot ${online && status?.connected ? "is-online" : ""}${switching ? " is-switching" : ""}`} />
           <span className="dp-collapsed-bt">{collapsedCode}</span>
         </div>
         <button
@@ -1271,7 +1272,7 @@ function ConnectionRail({
       <div className="dp-rail-status-card">
         <div className="dp-rail-status-row">
           <div className="dp-rail-status-left">
-            <span className={`dp-status-dot ${online && status?.connected ? "is-online" : ""}`} />
+            <span className={`dp-status-dot ${online && status?.connected ? "is-online" : ""}${switching ? " is-switching" : ""}`} />
             <span className="dp-rail-status-text">{connectionStatus}</span>
           </div>
           <button
@@ -3689,6 +3690,15 @@ const css = `
 }
 .dp-status-dot.is-online {
   background: var(--dp-green);
+}
+/* Host handover in flight — the dot blinks until the new host's heartbeat
+   confirms; the requesting device blinks, the current holder stays solid. */
+.dp-status-dot.is-switching {
+  animation: dp-host-blink 1.1s ease-in-out infinite;
+}
+@keyframes dp-host-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
 }
 .dp-rail-status-text {
   font-size: 13px;
@@ -6431,6 +6441,7 @@ export function DeskPhoneWebPanel({
             online={online}
             status={status}
             connectionStatus={connectionStatus}
+            switching={link.switching}
             onReconnect={() => runCommand("/connect", "reconnect phone")}
             onSettings={() => setActiveTab("settings")}
           />

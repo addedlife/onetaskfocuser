@@ -463,6 +463,12 @@ md-text-button[trailing-icon] { padding-inline: 16px 12px; }
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+/* Pending host-switch blink — the REQUESTED phone host pulses while the current
+   holder stays solid, until the new host's heartbeat confirms the handover. */
+@keyframes nc-host-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
+}
 `;
 
 // ─── Accent derivation (M3 secondary + tertiary) ────────────────────────────
