@@ -1,5 +1,11 @@
 [
     {
+        "version":  "b334",
+        "timestamp":  "2026-07-12 19:06:34",
+        "notes":  "Quiets the debug log: while the background history downloader waits for a send or sync to finish, it used to print \u0027Yielding for real op\u0027 three times every second, drowning out everything useful. It now logs one line when the pause starts and one line with the total wait time when it resumes.",
+        "devNotes":  "FullHistoryLoadAsync body-download wait loop logged MapLogLine on every 300 ms isPaused() poll iteration, flooding deskphone.log (~3 lines/sec for the whole pause window - observed continuously during b332/b333 live-log review because fast delta rounds plus 10-20 s send priority windows kept isPaused() true for long stretches). Replaced with a single \u0027Paused for real op\u0027 line on entry plus \u0027Resumed after N.Ns\u0027 on exit; the 300 ms poll cadence itself is unchanged, no behavioral difference to pausing/resuming or Bluetooth traffic."
+    },
+    {
         "version":  "b333",
         "timestamp":  "2026-07-12 18:56:19",
         "notes":  "Two live-log findings from b332 fixed. This phone sends its Bluetooth \u0027new message\u0027 push events with an empty body, so the app never got proof that push works and kept polling fast forever - now any push event, even an empty one, counts as proof AND triggers an instant sync, so the poll actually relaxes to 30 seconds. Also stops the delete-reconcile loop that removed and re-downloaded the same 26 old messages every minute.",

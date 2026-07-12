@@ -565,7 +565,15 @@ public class MapService : IAsyncDisposable
                     foreach (var (handle, meta) in unknown)
                     {
                         ct.ThrowIfCancellationRequested();
-                        while (isPaused()) { MapLogLine?.Invoke("[FULLHIST] Yielding for real op"); await Task.Delay(300, ct); }
+                        if (isPaused())
+                        {
+                            // Log the pause once, not once per 300 ms check — the old
+                            // per-iteration line flooded the debug log (~3 lines/sec).
+                            MapLogLine?.Invoke("[FULLHIST] Paused for real op…");
+                            var pausedAtUtc = DateTime.UtcNow;
+                            while (isPaused()) await Task.Delay(300, ct);
+                            MapLogLine?.Invoke($"[FULLHIST] Resumed after {(DateTime.UtcNow - pausedAtUtc).TotalSeconds:0.0}s");
+                        }
 
                         await _obexLock.WaitAsync(ct);
                         try
