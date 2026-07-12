@@ -109,6 +109,7 @@ public class MapService : IAsyncDisposable
         if (!ok)
             throw lastEx ?? new Exception($"OBEX CONNECT rejected by phone ({MaxAttempts} attempts)");
 
+        _atMsgRoot = false;   // fresh session starts at the OBEX root
         IsConnected = true;
         StatusChanged?.Invoke("MAP connected");
         MapLogLine?.Invoke($"[OBEX CONNECT OK] ConnID={_obex.ConnectionId}");
@@ -129,6 +130,45 @@ public class MapService : IAsyncDisposable
     private string?         _lastSentHandle;
     private bool            _isInitialSync = true;
     private HashSet<string> _seenHandles   = new();
+
+    // ── OBEX folder-position tracking ─────────────────────────────────────
+    // Industry MAP practice: park the session at telecom/msg once and issue
+    // listing GETs with the child folder in the Name header (MAP spec §5.5.4),
+    // instead of re-walking root→telecom→msg→folder (4 round-trips) before
+    // every single operation. _atMsgRoot remembers whether we are already
+    // parked there. _useLegacyFolderNav goes (and stays) true if the handset
+    // rejects child-folder Name listings, restoring the original SetPath walk.
+    private bool _atMsgRoot;
+    private bool _useLegacyFolderNav;
+
+    // Navigate to telecom/msg only when we are not already there. Caller must
+    // hold _obexLock. Position is only cached when every SetPath succeeded.
+    private async Task EnsureMsgRootAsync(CancellationToken ct)
+    {
+        if (_atMsgRoot) return;
+        bool ok = await _obex!.SetPathAsync("",       ct: ct);
+        ok     &= await _obex.SetPathAsync("telecom", ct: ct);
+        ok     &= await _obex.SetPathAsync("msg",     ct: ct);
+        _atMsgRoot = ok;
+    }
+
+    /// <summary>
+    /// Read/unread flags harvested from the most recent delta-sync listings.
+    /// The listing rows already carry the read flag, so the ViewModel can refresh
+    /// read states every round without any extra Bluetooth traffic.
+    /// </summary>
+    public IReadOnlyDictionary<string, bool> LastDeltaReadStates { get; private set; }
+        = new Dictionary<string, bool>();
+
+    private void PublishListingReadStates(params List<(string Handle, MsgMeta Meta)>[] listings)
+    {
+        var byHandle = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var listing in listings)
+            foreach (var (handle, meta) in listing)
+                if (!string.IsNullOrWhiteSpace(handle))
+                    byHandle[handle] = meta.IsSent ? true : meta.IsRead;
+        LastDeltaReadStates = byHandle;
+    }
 
     public async Task<List<SmsMessage>> PerformDeltaSyncAsync(CancellationToken ct = default)
     {
@@ -155,6 +195,8 @@ public class MapService : IAsyncDisposable
 
             _lastInboxHandle = inboxListing.FirstOrDefault().Handle;
             _lastSentHandle  = sentListing.FirstOrDefault().Handle;
+
+            PublishListingReadStates(inboxListing, sentListing);
 
             // Which handles does the phone have that we don't?
             var newInbox = inboxListing.Where(h => !_seenHandles.Contains(h.Handle)).Take(5).ToList();
@@ -209,99 +251,98 @@ public class MapService : IAsyncDisposable
             return initialResults;
         }
 
-        // Subsequent: probe newest handle in both folders in one lock acquisition
-        var (probeInbox, probeSent, probeFailures) = await ProbeBothFoldersAsync(ct);
+        // Subsequent: ONE listing window per folder (2 GETs steady-state) serves
+        // three jobs at once — newest-handle probe, new-message detection, and
+        // read-state refresh. Replaces the old separate 1-entry probe, 5-entry
+        // listing refetch, and 15 s read-state sweep.
+        const ushort DeltaWindowSize = 25;
+
+        List<(string Handle, MsgMeta Meta)> inbox = new(), sent = new();
+        int probeFailures = 0;
+        await _obexLock.WaitAsync(ct);
+        try
+        {
+            try { inbox = await GetHandleListingCoreAsync("inbox", ct, maxCount: DeltaWindowSize); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            { probeFailures++; MapLogLine?.Invoke($"[PROBE inbox] {ex.Message}"); }
+
+            try { sent = await GetHandleListingCoreAsync("sent", ct, maxCount: DeltaWindowSize); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            { probeFailures++; MapLogLine?.Invoke($"[PROBE sent] {ex.Message}"); }
+        }
+        finally { _obexLock.Release(); }
+
         if (probeFailures >= 2)
         {
             MarkDisconnected("Both MAP folder probes failed; marking message sync disconnected.");
             throw new IOException("MAP message sync stopped responding.");
         }
 
+        PublishListingReadStates(inbox, sent);
+
+        var probeInbox = inbox.FirstOrDefault().Handle;
+        var probeSent  = sent.FirstOrDefault().Handle;
         bool inboxChanged = probeInbox != null && probeInbox != _lastInboxHandle;
         bool sentChanged  = probeSent  != null && probeSent  != _lastSentHandle;
 
-        if (!inboxChanged && !sentChanged)
+        // Unknown handles anywhere in the window count as new — this also catches
+        // messages that landed *below* the newest handle, which the old newest-only
+        // probe could miss entirely.
+        var unknownInbox = inbox.Where(h => !_seenHandles.Contains(h.Handle)).Take(5).ToList();
+        var unknownSent  = sent.Where(h => !_seenHandles.Contains(h.Handle)).Take(5).ToList();
+
+        if (!inboxChanged && !sentChanged && unknownInbox.Count == 0 && unknownSent.Count == 0)
         {
             MapLogLine?.Invoke("[DELTA-SYNC] No change");
             return new List<SmsMessage>();
         }
 
-        // Something changed — pull a small window from the changed folder(s)
+        if (inboxChanged) InboxChangeDetected?.Invoke();
+
+        // Download bodies only for unknown handles — the listing already carries
+        // everything else (sender, timestamp, read flag). Handles are marked seen
+        // only after a successful download so failures retry next round.
         var results = new List<SmsMessage>();
 
-        if (inboxChanged)
+        foreach (var (handle, meta) in unknownInbox)
         {
-            InboxChangeDetected?.Invoke();
-            MapLogLine?.Invoke($"[DELTA-SYNC] Inbox changed ({_lastInboxHandle} → {probeInbox}), fetching 5");
-            var msgs = await GetInboxAsync(5, ct: ct);
-            var newOnes = msgs.Where(m => !_seenHandles.Contains(m.Handle)).ToList();
-            foreach (var m in newOnes) _seenHandles.Add(m.Handle);
-            results.AddRange(newOnes.Count > 0 ? newOnes : msgs); // if all seen, still return them for timestamp updates
-            _lastInboxHandle = probeInbox;
+            ct.ThrowIfCancellationRequested();
+            await _obexLock.WaitAsync(ct);
+            try
+            {
+                var msg = await GetMessageAsync(handle, ct, isMms: meta.Type == "MMS");
+                msg.From = meta.From; msg.Timestamp = meta.Timestamp; msg.IsRead = meta.IsRead;
+                _seenHandles.Add(handle);
+                results.Add(msg);
+            }
+            catch (Exception ex) { MapLogLine?.Invoke($"[DELTA-SYNC] inbox {handle} failed: {ex.Message}"); }
+            finally { _obexLock.Release(); }
+            await Task.Delay(20, ct);
         }
 
-        if (sentChanged)
+        foreach (var (handle, meta) in unknownSent)
         {
-            MapLogLine?.Invoke($"[DELTA-SYNC] Sent changed ({_lastSentHandle} → {probeSent}), fetching 5");
-            var msgs = await GetSentAsync(5, ct: ct);
-            var newOnes = msgs.Where(m => !_seenHandles.Contains(m.Handle)).ToList();
-            foreach (var m in newOnes) _seenHandles.Add(m.Handle);
-            results.AddRange(newOnes.Count > 0 ? newOnes : msgs);
-            _lastSentHandle = probeSent;
+            ct.ThrowIfCancellationRequested();
+            await _obexLock.WaitAsync(ct);
+            try
+            {
+                var msg = await GetMessageAsync(handle, ct, isMms: meta.Type == "MMS");
+                var recipient = !string.IsNullOrEmpty(meta.To) ? meta.To : meta.From;
+                msg.From = $"Me > {recipient}"; msg.IsSent = true;
+                msg.Timestamp = meta.Timestamp; msg.IsRead = meta.IsRead;
+                _seenHandles.Add(handle);
+                results.Add(msg);
+            }
+            catch (Exception ex) { MapLogLine?.Invoke($"[DELTA-SYNC] sent {handle} failed: {ex.Message}"); }
+            finally { _obexLock.Release(); }
+            await Task.Delay(20, ct);
         }
 
-        MapLogLine?.Invoke($"[DELTA-SYNC] Change sync complete ({results.Count} new/updated messages)");
+        if (probeInbox != null) _lastInboxHandle = probeInbox;
+        if (probeSent  != null) _lastSentHandle  = probeSent;
+
+        MapLogLine?.Invoke($"[DELTA-SYNC] Change sync complete ({results.Count} new messages)");
         return results;
-    }
-
-    // Probe newest handle in BOTH inbox and sent in a single lock acquisition.
-    // This cuts RFCOMM round-trips from 10 to 7 compared to two separate probe calls.
-    // Returns (inboxHandle, sentHandle) — either may be null on error.
-    private async Task<(string? inbox, string? sent, int failures)> ProbeBothFoldersAsync(CancellationToken ct)
-    {
-        if (_obex is null) return (null, null, 2);
-        await _obexLock.WaitAsync(ct);
-        try
-        {
-            var appParams = new byte[] { 0x01, 0x02, 0x00, 0x01 }; // MaxListCount=1
-            var failures = 0;
-
-            // Navigate once to telecom/msg — shared prefix for both folders
-            await _obex.SetPathAsync("",        ct: ct);
-            await _obex.SetPathAsync("telecom", ct: ct);
-            await _obex.SetPathAsync("msg",     ct: ct);
-
-            // inbox
-            string? inboxHandle = null;
-            try
-            {
-                await _obex.SetPathAsync("inbox", ct: ct);
-                var xml = await _obex.GetAsync("x-bt/MAP-msg-listing", name: null, appParams: appParams, ct: ct);
-                if (xml.Length == 0)
-                    xml = await _obex.GetAsync("x-bt/MAP-msg-listing", name: null, appParams: null, ct: ct);
-                inboxHandle = ParseMessageListing(Encoding.UTF8.GetString(xml)).FirstOrDefault().Handle;
-            }
-            catch (Exception ex) { failures++; MapLogLine?.Invoke($"[PROBE inbox] {ex.Message}"); }
-
-            // sent — navigate from inbox via root shortcut (SetPath with empty = parent)
-            string? sentHandle = null;
-            try
-            {
-                // Back to msg, then into sent
-                await _obex.SetPathAsync("",      ct: ct);   // back to root
-                await _obex.SetPathAsync("telecom", ct: ct);
-                await _obex.SetPathAsync("msg",   ct: ct);
-                await _obex.SetPathAsync("sent",  ct: ct);
-                var xml = await _obex.GetAsync("x-bt/MAP-msg-listing", name: null, appParams: appParams, ct: ct);
-                if (xml.Length == 0)
-                    xml = await _obex.GetAsync("x-bt/MAP-msg-listing", name: null, appParams: null, ct: ct);
-                sentHandle = ParseMessageListing(Encoding.UTF8.GetString(xml)).FirstOrDefault().Handle;
-            }
-            catch (Exception ex) { failures++; MapLogLine?.Invoke($"[PROBE sent] {ex.Message}"); }
-
-            return (inboxHandle, sentHandle, failures);
-        }
-        finally { _obexLock.Release(); }
     }
 
     private void MarkDisconnected(string reason)
@@ -310,6 +351,7 @@ public class MapService : IAsyncDisposable
             return;
 
         IsConnected = false;
+        _atMsgRoot = false;   // folder position is meaningless on a dead session
         MapLogLine?.Invoke($"[MAP] {reason}");
         StatusChanged?.Invoke("MAP disconnected");
     }
@@ -576,11 +618,6 @@ public class MapService : IAsyncDisposable
     private async Task<List<(string Handle, MsgMeta Meta)>> GetHandleListingCoreAsync(
         string folderName, CancellationToken ct, ushort maxCount = 0xFFFF, ushort offset = 0)
     {
-        await _obex!.SetPathAsync("",         ct: ct);
-        await _obex.SetPathAsync("telecom",   ct: ct);
-        await _obex.SetPathAsync("msg",       ct: ct);
-        await _obex.SetPathAsync(folderName,  ct: ct);
-
         // Build app-params: always include MaxListCount; add ListStartOffset (Tag 0x02) if paginating.
         byte[] appParams = offset > 0
             ? new byte[]
@@ -590,14 +627,49 @@ public class MapService : IAsyncDisposable
               }
             : new byte[] { 0x01, 0x02, (byte)(maxCount >> 8), (byte)(maxCount & 0xFF) };
 
-        var xml = await _obex.GetAsync("x-bt/MAP-msg-listing", name: null, appParams: appParams, ct: ct);
-        if (xml.Length == 0)
-            xml = await _obex.GetAsync("x-bt/MAP-msg-listing", name: null, appParams: null, ct: ct);
+        byte[] xml;
+        if (_useLegacyFolderNav)
+        {
+            xml = await GetListingViaLegacyNavAsync(folderName, appParams, ct);
+        }
+        else
+        {
+            // Fast path: stay parked at telecom/msg and name the child folder in
+            // the GET itself (2 round-trips steady-state instead of 5).
+            await EnsureMsgRootAsync(ct);
+            xml = await _obex!.GetAsync("x-bt/MAP-msg-listing", name: folderName, appParams: appParams, ct: ct);
+            if (xml.Length == 0)
+            {
+                // Zero bytes means the phone did not serve the child-folder listing
+                // (an empty folder still returns listing XML). Fall back to SetPath
+                // navigation for the rest of the session.
+                _useLegacyFolderNav = true;
+                MapLogLine?.Invoke($"[MAP] Child-folder listing rejected for '{folderName}' — falling back to SetPath navigation");
+                xml = await GetListingViaLegacyNavAsync(folderName, appParams, ct);
+            }
+        }
 
         bool isSentFolder = string.Equals(folderName, "sent", StringComparison.OrdinalIgnoreCase);
         return ParseMessageListing(Encoding.UTF8.GetString(xml))
             .Select(h => (h.Handle, h.Meta with { Folder = folderName, IsSent = isSentFolder || h.Meta.IsSent }))
             .ToList();
+    }
+
+    // Original pre-b332 navigation: walk root→telecom→msg→folder, then GET the
+    // listing of the current folder. Kept as the compatibility fallback for
+    // handsets that reject child-folder Name listings.
+    private async Task<byte[]> GetListingViaLegacyNavAsync(string folderName, byte[] appParams, CancellationToken ct)
+    {
+        _atMsgRoot = false;   // about to leave telecom/msg
+        await _obex!.SetPathAsync("",         ct: ct);
+        await _obex.SetPathAsync("telecom",   ct: ct);
+        await _obex.SetPathAsync("msg",       ct: ct);
+        await _obex.SetPathAsync(folderName,  ct: ct);
+
+        var xml = await _obex.GetAsync("x-bt/MAP-msg-listing", name: null, appParams: appParams, ct: ct);
+        if (xml.Length == 0)
+            xml = await _obex.GetAsync("x-bt/MAP-msg-listing", name: null, appParams: null, ct: ct);
+        return xml;
     }
 
     /// <summary>
@@ -800,15 +872,7 @@ public class MapService : IAsyncDisposable
         await _obexLock.WaitAsync(ct);
         try
         {
-            var appParams = new byte[] { 0x01, 0x02, 0x00, 0x01 }; // MaxListCount=1
-            await _obex.SetPathAsync("",       ct: ct);
-            await _obex.SetPathAsync("telecom",ct: ct);
-            await _obex.SetPathAsync("msg",    ct: ct);
-            await _obex.SetPathAsync("sent",   ct: ct);
-            var xml = await _obex.GetAsync("x-bt/MAP-msg-listing", name: null, appParams: appParams, ct: ct);
-            if (xml.Length == 0)
-                xml = await _obex.GetAsync("x-bt/MAP-msg-listing", name: null, appParams: null, ct: ct);
-            var list = ParseMessageListing(Encoding.UTF8.GetString(xml));
+            var list = await GetHandleListingCoreAsync("sent", ct, maxCount: 1);
             return list.FirstOrDefault().Handle;
         }
         catch { return null; }
@@ -845,9 +909,7 @@ public class MapService : IAsyncDisposable
         await _obexLock.WaitAsync(ct);
         try
         {
-            await _obex.SetPathAsync("",        ct: ct);
-            await _obex.SetPathAsync("telecom", ct: ct);
-            await _obex.SetPathAsync("msg",     ct: ct);
+            await EnsureMsgRootAsync(ct);
 
             var appParams = new byte[]
             {
@@ -882,11 +944,9 @@ public class MapService : IAsyncDisposable
         {
             MapLogLine?.Invoke($"[MAP SEND] → {toNumber}");
 
-            // Navigate to telecom/msg — MAP spec says PushMessage is PUT here
-            var sp0 = await _obex.SetPathAsync("",        ct: ct);  // reset to root
-            var sp1 = await _obex.SetPathAsync("telecom", ct: ct);
-            var sp2 = await _obex.SetPathAsync("msg",     ct: ct);
-            MapLogLine?.Invoke($"[MAP SEND SETPATH root={sp0} telecom={sp1} msg={sp2}]");
+            // PushMessage is PUT at telecom/msg — no-op if we are already parked there
+            await EnsureMsgRootAsync(ct);
+            MapLogLine?.Invoke($"[MAP SEND at msg root={_atMsgRoot}]");
 
             // App-Parameters for PushMessage (MAP spec §3.1.3.3).
             // Format: Tag (1 byte), Length (1 byte), Value (Length bytes).

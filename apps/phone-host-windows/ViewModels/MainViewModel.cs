@@ -64,19 +64,27 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private readonly SemaphoreSlim _messageDeleteReconcileLock = new(1, 1);
     private readonly SemaphoreSlim _messagePollWakeSignal = new(0, 1);
     private readonly ConcurrentQueue<string> _priorityMessageHandles = new();
+    // Adaptive message polling: MNS push is the primary new-message signal, the
+    // poll is the safety net (same design as the Android host). Fast (2 s) while
+    // push is unproven or right after any wake request; slow (30 s) once an MNS
+    // event has proven push works this session. If a timer-fired poll ever finds
+    // messages MNS never announced, we drop back to fast until push proves itself
+    // again — worst case is one 30 s delay, then the old 2 s behavior.
     private static readonly TimeSpan MessagePollInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan IdleMessagePollInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan FastPollBurstWindow = TimeSpan.FromSeconds(30);
+    private volatile bool _mnsPushProven;
+    private long _fastPollUntilTicksUtc;   // DateTime ticks; Interlocked — UI + poll threads
     private static readonly TimeSpan BusyMessagePollRetryInterval = TimeSpan.FromSeconds(5);
     // 30 s: short enough that the phone reconnects within one watchdog cycle after it
     // comes back into range.  The in-flight guards (_autoReconnectInFlight, IsConnecting)
     // prevent concurrent reconnects, so this no longer needs to cover the MAP retry
     // cycle (that was the old reason for 90 s).
     private static readonly TimeSpan AutoReconnectRetryWindow = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan PhoneReadStatePollInterval = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan MessageDeleteReconcileInterval = TimeSpan.FromMinutes(1);
     private const int AutomaticDeleteReconcilePhoneWindowPerFolder = 150;
     private const int AutomaticDeleteReconcilePruneWindowPerFolder = 100;
     private DateTime _nextMessageDeleteReconcileUtc = DateTime.MinValue;
-    private DateTime _nextPhoneReadStateRefreshUtc = DateTime.MinValue;
     private int _messagePollWakeRequests = 0;
     private int _pendingPriorityMessageSync = 0;
     private int _autoReconnectInFlight = 0;
@@ -1249,6 +1257,15 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             AppendDebugThreadSafe($"[READSTATE SYNC] {ex.Message}");
             return 0;
         }
+
+        return ApplyPhoneReadStates(recentStates);
+    }
+
+    // Applies a handle→isRead map to the local store. Local-only (no Bluetooth):
+    // the poll loop feeds it the read flags that arrived free with the delta listing.
+    private int ApplyPhoneReadStates(IReadOnlyDictionary<string, bool> recentStates)
+    {
+        if (recentStates.Count == 0) return 0;
 
         int changed = 0;
         lock (_msgLock)
@@ -2670,8 +2687,27 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _backup.LogLine += s => AppendDebugThreadSafe(s);
         _backup.IsPaused = _settings.Current.PauseHistoryActivity;
 
-        // Start MAP Push Notification Server
-        _mns.NewMessage += (handle, folder) => RequestMessageSync($"MNS new message handle={handle}", handle);
+        // Start MAP Push Notification Server.
+        // Every MNS event also marks push as proven for this session, which lets the
+        // background poll relax from 2 s to 30 s (push carries the real-time load).
+        _mns.NewMessage += (handle, folder) =>
+        {
+            _mnsPushProven = true;
+            RequestMessageSync($"MNS new message handle={handle}", handle);
+        };
+        _mns.MessageSent += handle =>
+        {
+            _mnsPushProven = true;
+            // No priority handle: the delta listing supplies sent-message metadata
+            // (sender direction, timestamp) that a raw handle fetch would miss.
+            RequestMessageSync("MNS sending success (phone-sent message)");
+        };
+        _mns.MessageDelivered += _ => _mnsPushProven = true;
+        _mns.MessageRead += _ =>
+        {
+            _mnsPushProven = true;
+            RequestMessageSync("MNS message read");
+        };
         _mns.LogLine    += s => Dispatch(() => AppendDebug(s));
         _pbap.LogLine   += s => Dispatch(() => AppendDebug(s));
         _mns.Start();
@@ -5391,6 +5427,10 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 AppendDebugThreadSafe(mapNotificationsEnabled
                     ? "[POLL] MAP event notifications enabled; delta polling remains the safety net."
                     : "[POLL] MAP event notifications unavailable; using adaptive delta polling fallback.");
+                // Push must re-prove itself on every new session; until it does (and
+                // for a burst window after connect) the poll runs fast.
+                _mnsPushProven = false;
+                Interlocked.Exchange(ref _fastPollUntilTicksUtc, DateTime.UtcNow.Add(FastPollBurstWindow).Ticks);
                 StartPollLoop(ct);
                 StartOrQueueFullHistoryLoader(ct, "Messages connected");
                 StartContactSyncLoop(ct);
@@ -5926,6 +5966,9 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         if (!string.IsNullOrWhiteSpace(handle))
             _priorityMessageHandles.Enqueue(handle.Trim());
 
+        // Any wake opens a fast-poll burst window: follow-up activity (delivery
+        // reports, replies, send confirmations) tends to cluster right after.
+        Interlocked.Exchange(ref _fastPollUntilTicksUtc, DateTime.UtcNow.Add(FastPollBurstWindow).Ticks);
         Interlocked.Increment(ref _messagePollWakeRequests);
         Interlocked.Exchange(ref _pendingPriorityMessageSync, 1);
 
@@ -5993,7 +6036,15 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             {
                 try
                 {
-                    var wokeEarly = await _messagePollWakeSignal.WaitAsync(MessagePollInterval, ct);
+                    // Adaptive cadence: 30 s once MNS push has proven itself and no
+                    // burst window is open, otherwise the classic 2 s. A wake signal
+                    // (MNS event, send, user action) still interrupts the wait instantly.
+                    var fastUntilUtc = new DateTime(
+                        Interlocked.Read(ref _fastPollUntilTicksUtc), DateTimeKind.Utc);
+                    var pollInterval = _mnsPushProven && DateTime.UtcNow >= fastUntilUtc
+                        ? IdleMessagePollInterval
+                        : MessagePollInterval;
+                    var wokeEarly = await _messagePollWakeSignal.WaitAsync(pollInterval, ct);
                     var coalescedWakeRequests = wokeEarly
                         ? Interlocked.Exchange(ref _messagePollWakeRequests, 0)
                         : 0;
@@ -6049,6 +6100,16 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                             : new List<SmsMessage>();
 
                         var fromPhone = await _map.PerformDeltaSyncAsync(syncCts.Token);
+
+                        // Self-correction: a timer-fired poll (no wake) that finds
+                        // messages means MNS missed an event — stop trusting push
+                        // until it announces something again.
+                        if (!wokeEarly && fromPhone.Count > 0 && _mnsPushProven)
+                        {
+                            _mnsPushProven = false;
+                            AppendDebugThreadSafe("[POLL] Timer poll found messages MNS never announced — reverting to fast polling until push proves itself again");
+                        }
+
                         if (priorityMessages.Count > 0)
                             fromPhone.InsertRange(0, priorityMessages);
 
@@ -6093,16 +6154,12 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                                         ShowMessageNotification(newestIncoming);
                                 });
                                 HandleInboxChangeDetected();
-                                _nextPhoneReadStateRefreshUtc = DateTime.MinValue;
                             }
                         }
 
-                        var now = DateTime.UtcNow;
-                        if (newCount > 0 || now >= _nextPhoneReadStateRefreshUtc)
-                        {
-                            await RefreshPhoneReadStatesAsync(syncCts.Token);
-                            _nextPhoneReadStateRefreshUtc = now.Add(PhoneReadStatePollInterval);
-                        }
+                        // Read states piggyback on the delta listing — applying them is
+                        // pure local work, zero extra Bluetooth traffic, so every round.
+                        ApplyPhoneReadStates(_map.LastDeltaReadStates);
                         await ReconcilePhoneMessageDeletesAsync(syncCts.Token);
                     }
                     finally
@@ -6491,7 +6548,7 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 });
             }
 
-            await RefreshPhoneReadStatesAsync(_sessionCts.Token);
+            ApplyPhoneReadStates(_map.LastDeltaReadStates);
             await ReconcilePhoneMessageDeletesAsync(_sessionCts.Token, force: forceDeleteReconcile);
         }
         catch (Exception ex) { AppendDebug($"[SYNC ERROR] {ex.Message}"); }

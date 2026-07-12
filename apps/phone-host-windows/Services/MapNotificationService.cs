@@ -53,6 +53,10 @@ public sealed class MapNotificationService : IAsyncDisposable
     public event Action<string /*handle*/>?                    MessageDelivered;
     /// <summary>Fired when the phone reports a sent message was read by the recipient.</summary>
     public event Action<string /*handle*/>?                    MessageRead;
+    /// <summary>Fired when the phone reports a message send completed (including sends
+    /// made on the phone itself) — lets the desk pick up phone-sent texts via push
+    /// instead of waiting for the next poll.</summary>
+    public event Action<string /*handle*/>?                    MessageSent;
     /// <summary>Log line for the debug panel.</summary>
     public event Action<string>?                               LogLine;
 
@@ -275,7 +279,11 @@ public sealed class MapNotificationService : IAsyncDisposable
                     MessageRead?.Invoke(handle);
                     break;
 
-                // "SendingSuccess", "SendingFailure", "MemoryAvailable", etc. — ignore for now
+                case "sendingsuccess":
+                    MessageSent?.Invoke(handle);
+                    break;
+
+                // "SendingFailure", "MemoryAvailable", etc. — ignore for now
                 default:
                     LogLine?.Invoke($"[MNS] Event type '{type}' not handled");
                     break;

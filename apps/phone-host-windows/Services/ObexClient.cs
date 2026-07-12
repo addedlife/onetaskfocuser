@@ -10,6 +10,12 @@ namespace DeskPhone.Services;
 /// </summary>
 internal class ObexClient : IDisposable
 {
+    // Wire-level hex dumps of every packet. Hex-encoding every received chunk
+    // (including multi-MB MMS bodies) is pure CPU/allocation waste in normal use,
+    // so it is opt-in: set DESKPHONE_OBEX_WIRELOG=1 before launch to enable.
+    public static readonly bool VerboseWireLog =
+        Environment.GetEnvironmentVariable("DESKPHONE_OBEX_WIRELOG") == "1";
+
     private readonly Stream _stream;
     private readonly byte[]? _targetUuid;
     private uint _connectionId;
@@ -236,9 +242,9 @@ internal class ObexClient : IDisposable
 
         await _stream.WriteAsync(pkt, ct);
         await _stream.FlushAsync(ct);
-        
-        var hex = string.Join(" ", pkt.Select(b => b.ToString("X2")));
-        Console.WriteLine($"[OBEX DEBUG] PUT PACKET: {hex}");
+
+        if (VerboseWireLog)
+            Console.WriteLine($"[OBEX DEBUG] PUT PACKET: {string.Join(" ", pkt.Select(b => b.ToString("X2")))}");
 
         while (true)
         {
@@ -290,8 +296,8 @@ internal class ObexClient : IDisposable
         if (bodyLen > 0)
             await ReadExactAsync(pkt, 3, bodyLen, ct);
 
-        var hex = string.Join(" ", pkt.Select(b => b.ToString("X2")));
-        Console.WriteLine($"[OBEX DEBUG] RECV PACKET: {hex}");
+        if (VerboseWireLog)
+            Console.WriteLine($"[OBEX DEBUG] RECV PACKET: {string.Join(" ", pkt.Select(b => b.ToString("X2")))}");
 
         return pkt;
     }
