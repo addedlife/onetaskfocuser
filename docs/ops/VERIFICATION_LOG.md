@@ -1,5 +1,14 @@
 # Verification Log
 
+## 2026-07-12 Host-switch blink-until-confirmed + stale "can't reach" banner fix (4.41.127)
+
+- Owner report (tablet browser): "Can't reach the phone link" error showing while the feed was live via the PC host. Root cause in `NerveCenterPhoneSurface.jsx`: only a successful REST relay fetch cleared the error banner — data arriving via the Firestore `phone-relay/state` listener never did. A few failed fetches at mount (before the listener's first server snapshot) set the banner, then the listener carried the whole session and the stale error sat over a live feed forever.
+- Fix: the listener now counts as transport success (resets `failStreakRef`, stamps `lastFetchOkAtRef`, clears the error). New `errorIsTransportRef` distinguishes transport errors (listener may clear) from command failures (never auto-cleared — the user must see a command didn't run). Error copy made host-neutral ("make sure a phone host (tablet or PC) is running" instead of blaming the tablet while the PC hosts).
+- Switch UX (owner spec, same message): while a host handover is pending, the SOLID highlight on the rail's Tablet|PC segmented control stays on the ACTUAL holder (`owner.host`) and the REQUESTED host's segment blinks (`nc-host-blink` keyframe in `ui-tokens.jsx`) until the new host's heartbeat confirms — then solid moves, blink stops. Same treatment: collapsed-rail host icon, the phone card's status dot (`link.switching`), and the DeskPhone web page dot (`.dp-status-dot.is-switching`). All driven by the shared `phone-link.js` machine's existing `switching` state — no new data plumbing, no host rebuilds.
+- Takeover-compliance ask ("all sources recognize an authorized switch"): already shipped in 4.40.127 / DeskPhone b331 / Android b7 — no code change; requires both devices to run those builds.
+- Concurrency note: another session was editing `apps/phone-host-windows` C# files in the same working tree; only the five web files were staged/committed. Remote main verified unmoved before push.
+- Gates: `npm run build` (apps/web) → 0 errors, pushed `f4121e5c`; deploy Action green (Deploy to Firebase run 29200539172).
+
 ## 2026-07-07 Phone Link UI simplification after tablet relay bridge (4.35.122)
 
 - Scope: web-facing cleanup after the tablet bridge/relay simplification already landed in `4880191c` (`4.35.121`, Android b4 relay client, DeskPhone b327 parked fallback).
