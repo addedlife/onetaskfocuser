@@ -703,10 +703,14 @@ public class MapService : IAsyncDisposable
     }
 
     /// <summary>
-    /// Returns a lightweight recent handle window from inbox and sent so DeskPhone can
+    /// Returns a lightweight recent window from inbox and sent so DeskPhone can
     /// reconcile phone-side deletes without walking the entire phone history.
+    /// Besides the handles, it reports the OLDEST timestamp each folder window
+    /// reaches back to — the caller must only judge local messages inside that
+    /// time span: a local message older than the window's oldest entry may simply
+    /// be beyond the newest-N cut, not deleted from the phone.
     /// </summary>
-    public async Task<HashSet<string>> GetRecentVisibleMessageHandlesAsync(
+    public async Task<PhoneMessageWindow> GetRecentVisibleMessageWindowAsync(
         int maxCountPerFolder = 150,
         CancellationToken ct = default)
     {
@@ -714,6 +718,7 @@ public class MapService : IAsyncDisposable
 
         ushort pageSize = (ushort)Math.Max(1, Math.Min(maxCountPerFolder, ushort.MaxValue));
         var handles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        DateTime? oldestInbox = null, oldestSent = null;
 
         await _obexLock.WaitAsync(ct);
         try
@@ -721,15 +726,30 @@ public class MapService : IAsyncDisposable
             foreach (var folder in new[] { "inbox", "sent" })
             {
                 var listing = await GetHandleListingCoreAsync(folder, ct, maxCount: pageSize);
-                foreach (var (handle, _) in listing)
-                    if (!string.IsNullOrWhiteSpace(handle))
-                        handles.Add(handle);
+                DateTime? oldest = null;
+                foreach (var (handle, meta) in listing)
+                {
+                    if (string.IsNullOrWhiteSpace(handle)) continue;
+                    handles.Add(handle);
+                    if (meta.Timestamp != default && (oldest is null || meta.Timestamp < oldest))
+                        oldest = meta.Timestamp;
+                }
+                if (string.Equals(folder, "inbox", StringComparison.OrdinalIgnoreCase))
+                    oldestInbox = oldest;
+                else
+                    oldestSent = oldest;
             }
 
-            return handles;
+            return new PhoneMessageWindow(handles, oldestInbox, oldestSent);
         }
         finally { _obexLock.Release(); }
     }
+
+    /// <summary>Snapshot of the phone's recent message window per folder.</summary>
+    public sealed record PhoneMessageWindow(
+        HashSet<string> Handles,
+        DateTime? OldestInboxTimestamp,
+        DateTime? OldestSentTimestamp);
 
     /// <summary>
     /// Returns the full set of message handles currently exposed by the phone in the

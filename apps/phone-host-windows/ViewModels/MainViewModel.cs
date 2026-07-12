@@ -2688,26 +2688,18 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _backup.IsPaused = _settings.Current.PauseHistoryActivity;
 
         // Start MAP Push Notification Server.
-        // Every MNS event also marks push as proven for this session, which lets the
-        // background poll relax from 2 s to 30 s (push carries the real-time load).
-        _mns.NewMessage += (handle, folder) =>
+        // EventReceived fires on EVERY event PUT — including the zero-byte reports
+        // this handset always sends — so it is the single signal that (a) proves
+        // push works this session (lets the poll relax from 2 s to 30 s) and
+        // (b) wakes a sync round, since even a bodyless event means something
+        // changed on the phone. Typed events below only add extras on top.
+        _mns.EventReceived += () =>
         {
             _mnsPushProven = true;
-            RequestMessageSync($"MNS new message handle={handle}", handle);
+            RequestMessageSync("MNS event report");
         };
-        _mns.MessageSent += handle =>
-        {
-            _mnsPushProven = true;
-            // No priority handle: the delta listing supplies sent-message metadata
-            // (sender direction, timestamp) that a raw handle fetch would miss.
-            RequestMessageSync("MNS sending success (phone-sent message)");
-        };
-        _mns.MessageDelivered += _ => _mnsPushProven = true;
-        _mns.MessageRead += _ =>
-        {
-            _mnsPushProven = true;
-            RequestMessageSync("MNS message read");
-        };
+        // Typed NewMessage additionally carries the handle for a priority fetch.
+        _mns.NewMessage += (handle, folder) => RequestMessageSync($"MNS new message handle={handle}", handle);
         _mns.LogLine    += s => Dispatch(() => AppendDebug(s));
         _pbap.LogLine   += s => Dispatch(() => AppendDebug(s));
         _mns.Start();
@@ -5092,9 +5084,19 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
             _nextMessageDeleteReconcileUtc = now + MessageDeleteReconcileInterval;
 
-            var phoneHandles = force
-                ? await _map.GetVisibleMessageHandlesAsync(ct)
-                : await _map.GetRecentVisibleMessageHandlesAsync(AutomaticDeleteReconcilePhoneWindowPerFolder, ct);
+            HashSet<string> phoneHandles;
+            DateTime? oldestInbox = null, oldestSent = null;
+            if (force)
+            {
+                phoneHandles = await _map.GetVisibleMessageHandlesAsync(ct);
+            }
+            else
+            {
+                var window = await _map.GetRecentVisibleMessageWindowAsync(AutomaticDeleteReconcilePhoneWindowPerFolder, ct);
+                phoneHandles = window.Handles;
+                oldestInbox = window.OldestInboxTimestamp;
+                oldestSent = window.OldestSentTimestamp;
+            }
 
             int removedCount = 0;
             lock (_msgLock)
@@ -5107,6 +5109,14 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                         .ToHashSet(StringComparer.OrdinalIgnoreCase)
                     : _allMessages
                         .Where(m => MessageBelongsToActiveDevice(m) && !string.IsNullOrWhiteSpace(m.Handle))
+                        // Only judge messages inside the time span the phone window
+                        // actually covers. When the per-device store is sparse (mid
+                        // backfill or after the phone's Bluetooth address rotates),
+                        // the local "newest N" reaches back months past the phone's
+                        // newest-150 cut — those older messages are NOT deleted, they
+                        // are just beyond the window, and pruning them caused a
+                        // prune/re-download flap every reconcile tick.
+                        .Where(m => (m.IsSent ? oldestSent : oldestInbox) is DateTime cutoff && m.Timestamp > cutoff)
                         .GroupBy(m => m.IsSent)
                         .SelectMany(g => g
                             .OrderByDescending(m => m.Timestamp)

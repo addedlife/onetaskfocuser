@@ -57,6 +57,13 @@ public sealed class MapNotificationService : IAsyncDisposable
     /// made on the phone itself) — lets the desk pick up phone-sent texts via push
     /// instead of waiting for the next poll.</summary>
     public event Action<string /*handle*/>?                    MessageSent;
+    /// <summary>
+    /// Fired on EVERY event PUT from the phone, even a zero-byte one, before XML
+    /// parsing. Some handsets (kosher MediaTek firmware) always send empty event
+    /// reports — the arrival itself still proves the push channel works and that
+    /// something changed on the phone, so subscribers can trigger a sync.
+    /// </summary>
+    public event Action?                                       EventReceived;
     /// <summary>Log line for the debug panel.</summary>
     public event Action<string>?                               LogLine;
 
@@ -233,13 +240,17 @@ public sealed class MapNotificationService : IAsyncDisposable
     // ── MAP event-report XML parser ───────────────────────────────────────
     private void ParseEventReport(string xml)
     {
+        // Generic signal first: even a bodyless PUT means the phone pushed an event.
+        EventReceived?.Invoke();
+
         // Phone occasionally sends a zero-byte (empty) MAP event notification —
-        // this is a known quirk on some Android firmware. Guard here so we never
-        // pass an empty string to XmlDocument.LoadXml, which throws
-        // "Root element is missing" and pollutes the debug log.
+        // this is a known quirk on some Android firmware (and the ONLY form this
+        // handset sends). Guard here so we never pass an empty string to
+        // XmlDocument.LoadXml, which throws "Root element is missing".
+        // EventReceived above already turned the arrival into a sync trigger.
         if (string.IsNullOrWhiteSpace(xml))
         {
-            LogLine?.Invoke("[MNS] Event body empty — phone sent empty notification, ignoring");
+            LogLine?.Invoke("[MNS] Event body empty — treating as generic change signal");
             return;
         }
 

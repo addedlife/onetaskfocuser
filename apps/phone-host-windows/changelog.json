@@ -1,5 +1,11 @@
 [
     {
+        "version":  "b333",
+        "timestamp":  "2026-07-12 18:56:19",
+        "notes":  "Two live-log findings from b332 fixed. This phone sends its Bluetooth \u0027new message\u0027 push events with an empty body, so the app never got proof that push works and kept polling fast forever - now any push event, even an empty one, counts as proof AND triggers an instant sync, so the poll actually relaxes to 30 seconds. Also stops the delete-reconcile loop that removed and re-downloaded the same 26 old messages every minute.",
+        "devNotes":  "Fix 1: MapNotificationService.EventReceived fires on EVERY event PUT before XML parsing (this handset - kosher MediaTek firmware - always sends zero-byte MAP event reports; 14 observed in the 18:42 session, none parsed). ViewModel wires EventReceived to _mnsPushProven=true + RequestMessageSync; typed NewMessage keeps only the priority-handle enqueue. Fix 2: prune/re-download flap - snapshot diff proved the 26 flapped messages were April 14-15 inbox texts at inbox rank 74-119 (sparse per-device store mid-backfill), inside the local newest-100 prune window but beyond the phone\u0027s newest-150 cut, so the minute reconcile pruned them and FULLHIST re-downloaded them forever. GetRecentVisibleMessageHandlesAsync replaced by GetRecentVisibleMessageWindowAsync returning per-folder oldest timestamps; ReconcilePhoneMessageDeletesAsync non-force branch now only judges messages with Timestamp newer than the window\u0027s oldest entry per folder. Force (full) reconcile unchanged."
+    },
+    {
         "version":  "b332",
         "timestamp":  "2026-07-12 12:43:20",
         "notes":  "Bluetooth messaging now runs at industry-standard efficiency: the phone\u0027s own push notifications carry new texts instantly, and the background poll relaxes from every 2 seconds to every 30 once push proves itself (snapping back to 2 s automatically if push ever misses). Texts sent from the phone itself now also arrive by push. Same speed you see, far less radio chatter and phone battery drain.",
