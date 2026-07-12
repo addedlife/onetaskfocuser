@@ -1,5 +1,11 @@
 [
     {
+        "timestamp":  "2026-07-12 00:34:13",
+        "version":  "b331",
+        "notes":  "Pressing Connect while the tablet hosts your phone is now a proper takeover: DeskPhone asks first (\u0027Take over on this PC? The tablet will disconnect\u0027), and on Yes it claims the preferred-host slot in the cloud - the tablet releases the Bluetooth link by itself within seconds and the web app\u0027s Tablet | PC switch flips on its own. No more silent tug-of-war when you connect manually while the other device holds the phone. Watchdog, startup, and remote reconnects never prompt and never steal the phone.",
+        "devNotes":  "RelayService.cs: new SetPreferredAsync(value) writes preferred + preferredAtMs to phone-relay/owner via field-masked PATCH (never touches host/t/connected), optimistically flips _shouldHoldPhone and stamps _lastPreferredAtMs so the b330 fast-poll switch window opens immediately. MainViewModel.cs: ConnectCommand and ReconnectCommand now route through ManualConnectAsync - one EvaluateShouldHoldAsync round-trip; if ShouldHoldPhone is false (tablet is the live preferred holder) a YesNo MessageBox confirms the takeover, Yes writes preferred=pc then connects (the tablet\u0027s b7 release + our switch-window connect retries converge in ~10-20s), No aborts. Auto paths (watchdog, startup, remote /connect) are untouched and never prompt. Pairs with Android b7 (confirmTakeoverThenConnect + handoffToOtherHost writing preferred=pc before releasing) and web 4.39.x cloud-only surfaces."
+    },
+    {
         "timestamp":  "2026-07-10 17:18:50",
         "version":  "b330",
         "notes":  "The phone handoff toggle now actually moves the Bluetooth link. Before, flipping Tablet-to-PC (or back) only changed which host was ALLOWED to connect - the losing host kept holding the phone, so the winner could never reach texts or calls. Now the losing host cleanly releases the Bluetooth link within seconds of the flip (never during a live call - it waits for the call to end), and the winning host connects immediately instead of waiting for its next watchdog pass. During a handoff both hosts check the owner doc every 5 seconds so the whole switch completes in roughly 10-20 seconds.",

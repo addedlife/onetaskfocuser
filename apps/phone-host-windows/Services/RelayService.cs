@@ -780,6 +780,36 @@ public class RelayService : IDisposable
         });
     }
 
+    /// <summary>
+    /// Explicit takeover: write `preferred` to the owner doc — the same lever the
+    /// web segmented control pulls, so every browser's Tablet|PC control shifts on
+    /// its own and the losing host releases via the b330 resign-then-acquire flow.
+    /// Field-masked: never touches host/t/connected. Optimistically flips
+    /// ShouldHoldPhone and opens the fast-poll switch window so the local connect
+    /// isn't gated while the doc round-trips.
+    /// </summary>
+    public async Task<bool> SetPreferredAsync(string preferred, CancellationToken ct = default)
+    {
+        if (!IsEnabled) return false;
+        var value = preferred == "pc" ? "pc" : "tablet";
+        var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var fsBody = $"{{\"fields\":{{\"preferred\":{{\"stringValue\":\"{value}\"}},\"preferredAtMs\":{{\"integerValue\":\"{nowMs}\"}}}}}}";
+        var url = $"{FS_BASE}/phone-relay/owner?key={FB_API_KEY}" +
+                  "&updateMask.fieldPaths=preferred&updateMask.fieldPaths=preferredAtMs";
+        using var content = new StringContent(fsBody, Encoding.UTF8, "application/json");
+        using var req = new HttpRequestMessage(HttpMethod.Patch, url) { Content = content };
+        using var resp = await _http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            LogLine?.Invoke($"[ARBITRATION] set preferred={value} HTTP {(int)resp.StatusCode}");
+            return false;
+        }
+        _shouldHoldPhone = (value == "pc" ? "windows" : "android") == HostId;
+        Interlocked.Exchange(ref _lastPreferredAtMs, nowMs);
+        LogLine?.Invoke($"[ARBITRATION] preferred host set to {value} (explicit takeover)");
+        return true;
+    }
+
     private async Task WriteOwnerHeartbeatAsync(long nowMs, bool connected, CancellationToken ct)
     {
         var fsBody = $"{{\"fields\":{{\"host\":{{\"stringValue\":\"{HostId}\"}},\"t\":{{\"integerValue\":\"{nowMs}\"}},\"connected\":{{\"booleanValue\":{(connected ? "true" : "false")}}}}}}}";

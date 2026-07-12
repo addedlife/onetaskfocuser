@@ -3108,8 +3108,8 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         // ── Initialize Commands ──────────────────────────────────────────
         ScanCommand          = new RelayCommand(_ => _ = ScanAsync());
-        ConnectCommand       = new RelayCommand(_ => _ = ConnectAsync());
-        ReconnectCommand     = new RelayCommand(_ => _ = ReconnectToMostRecentAsync());
+        ConnectCommand       = new RelayCommand(_ => _ = ManualConnectAsync(() => ConnectAsync()));
+        ReconnectCommand     = new RelayCommand(_ => _ = ManualConnectAsync(ReconnectToMostRecentAsync));
         ConnectToSavedDeviceCommand = new RelayCommand(addr => { if (addr is string a) _ = ConnectToAddressAsync(a); });
         SetDefaultSavedDeviceCommand = new RelayCommand(addr =>
         {
@@ -6133,6 +6133,41 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     /// mid-call: if a call is live we decline, and arbitration re-fires on its
     /// next tick until the call ends and the release goes through.
     /// </summary>
+    /// <summary>
+    /// Human-initiated connect (Connect/Reconnect buttons ONLY — watchdog, startup,
+    /// and remote paths never prompt). If the tablet is the live preferred host,
+    /// connecting is a TAKEOVER: confirm first, then write preferred=pc to the owner
+    /// doc — the tablet releases the Bluetooth link on its own (b6 resign-then-acquire)
+    /// and every browser's Tablet|PC control shifts automatically. If the other host
+    /// is dead or we're already the preferred host, no dialog — it's just a connect.
+    /// </summary>
+    private async Task ManualConnectAsync(Func<Task> connect)
+    {
+        try
+        {
+            await _relay.EvaluateShouldHoldAsync();
+            if (!_relay.ShouldHoldPhone)
+            {
+                var confirmed = System.Windows.MessageBox.Show(
+                    "The tablet currently hosts your phone.\n\n" +
+                    "Take over on this PC? The tablet will disconnect from the phone " +
+                    "and this PC becomes the phone host (the web app's Tablet | PC switch follows automatically).",
+                    "Take over phone hosting?",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question,
+                    MessageBoxResult.No);
+                if (confirmed != MessageBoxResult.Yes) return;
+                if (!await _relay.SetPreferredAsync("pc"))
+                    AppendDebug("[ARBITRATION] takeover write failed — connecting anyway (grace takeover applies)");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendDebug($"[ARBITRATION] takeover check failed: {ex.Message} — connecting anyway");
+        }
+        await connect();
+    }
+
     private int _handoffReleaseInFlight;
     private async Task ReleasePhoneForHandoffAsync()
     {
