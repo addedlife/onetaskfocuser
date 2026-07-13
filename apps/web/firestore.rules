@@ -5,13 +5,31 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
+    // The app keys all user data by canonicalUid = lowercase email prefix
+    // (01-core.js canonicalUid). A signed-in, email-verified user owns exactly
+    // the /users/{prefix} tree whose prefix matches their own email — that is
+    // the whole multi-user compartment model. (Known limitation, documented in
+    // HANDOFF: two different addresses with the same prefix would collide; the
+    // durable fix is a uid-keyed storage migration, which is a guarded
+    // storage refactor — not done in rules.)
+    function isVerifiedSelf(userId) {
+      return isAuthenticated()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string
+        && request.auth.token.email.lower().split('@')[0] == userId;
+    }
+    // The owner's accounts — full access (both map to the same person; the
+    // rabbi account is primary and holds the live data).
+    function isAdmin() {
+      return isAuthenticated()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+          'rabbidanziger@hocsouthbend.com',
+          'ydanziger20@gmail.com'
+        ];
+    }
     function isDocOwner() {
       return isAuthenticated() && request.auth.uid == resource.data.userId;
-    }
-    function isAdmin() {
-      return isAuthenticated() &&
-        request.auth.token.email == "rabbidanziger@hocsouthbend.com" &&
-        request.auth.token.email_verified == true;
     }
     function isValidShaila(data) {
       return data.keys().hasAll(['content', 'status', 'createdAt', 'userId']) &&
@@ -20,11 +38,10 @@ service cloud.firestore {
              data.userId is string;
     }
 
-    // Main app data — keyed by email prefix (e.g. "rabbidanziger")
-    // The app derives this key from the email, not auth.uid, so we
-    // gate by verified email identity rather than raw Firebase UID.
+    // Main app data — each verified user reads/writes ONLY their own
+    // email-prefix compartment; the owner's accounts see everything.
     match /users/{userId}/{document=**} {
-      allow read, write: if isAdmin();
+      allow read, write: if isAdmin() || isVerifiedSelf(userId);
     }
 
     match /shailos/{shailaId} {
@@ -34,22 +51,31 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── Phone relay — the owner's single phone channel ──────────────────────
+    // state/media are READ-gated to the owner's accounts: the phone-relay
+    // function verifies callers by reading `state` WITH their ID token, so
+    // this one rule also locks the function's state + command endpoints to
+    // the owner. Other signed-in users simply see "no phone link".
+    // Writes stay open because the native hosts push with only the public API
+    // key (no auth token) — tightening writes requires a host rebuild
+    // (tracked in backend security followups).
     match /phone-relay/state {
-      allow read: if request.auth != null;
+      allow read: if isAdmin();
       allow write: if true;
     }
     match /phone-relay/commands {
       allow read, write: if true;
     }
     // Host arbitration doc (phone-host-control.js / RelayService.cs / RelayClient.kt).
-    // Non-sensitive coordination state (which host is preferred + a liveness
-    // heartbeat). Read/write open like /commands: the native hosts touch it with
-    // only the public API key (no auth token), and it carries nothing private.
+    // Carries only "which host holds the phone" + a heartbeat; hosts touch it
+    // unauthenticated. Reads stay open (needed by the web toggle pre-auth),
+    // writes too — nothing private inside.
     match /phone-relay/owner {
       allow read, write: if true;
     }
+    // Message media (MMS images) — owner-only reads, host (unauthenticated) writes.
     match /phone-media/{imageId} {
-      allow read: if request.auth != null;
+      allow read: if isAdmin();
       allow write: if true;
     }
   }

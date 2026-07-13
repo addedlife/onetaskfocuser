@@ -44,7 +44,8 @@ export function normalizeOwner(data) {
   const host = typeof d.host === 'string' ? d.host : '';
   const t = Number(d.t) || 0;
   const connected = d.connected === true;
-  return { preferred, host, t, connected, present: t > 0 };
+  const preferredAtMs = Number(d.preferredAtMs) || 0;
+  return { preferred, host, t, connected, present: t > 0, preferredAtMs };
 }
 
 // Live subscription to the owner doc. Calls back with the normalized shape on

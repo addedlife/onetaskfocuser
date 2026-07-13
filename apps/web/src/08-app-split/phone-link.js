@@ -32,6 +32,14 @@ export const HEARTBEAT_LIVE_WINDOW_MS = 60000;
 // healthy-but-quiet link as flapping. Remove once both hosts run ≥ b329.
 export const STATE_FALLBACK_WINDOW_MS = 360000;
 
+// After the owner flips the preferred host, the releasing host drops its
+// heartbeat BEFORE the taking host confirms — a gap that used to read as
+// "Offline / lost connection" mid-handoff. Within this window after a flip,
+// a dead link whose owner doc still names the old (or no) host is reported as
+// a patient "handover" state instead. Past the window, honesty resumes:
+// the taking host really didn't show up, so Offline + Reconnect is correct.
+export const HANDOFF_GRACE_MS = 150000;
+
 // Compact "27s" / "4m" / "2h" / "3d" age label.
 export function formatAgeShort(ms) {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -76,7 +84,7 @@ export function derivePhoneLinkState({
   usingRelay = true,
   statusOnline = false,
   hasData = false,
-  owner = { preferred: PREFERRED_DEFAULT, host: '', t: 0, connected: false, present: false },
+  owner = { preferred: PREFERRED_DEFAULT, host: '', t: 0, connected: false, present: false, preferredAtMs: 0 },
   relayReceivedAt = 0,
 } = {}) {
   const heartbeatMs = owner.present ? owner.t : (Number(relayReceivedAt) || 0);
@@ -91,19 +99,32 @@ export function derivePhoneLinkState({
   const activeHostId = (owner.present && owner.host) ? owner.host : '';
   const switching = live && !!activeHostId && activeHostId !== preferredId;
 
+  // Mid-handoff gap: the preferred host was flipped moments ago, the link is
+  // not live, and the owner doc does not yet show the NEW host holding the
+  // phone. That is a handover in progress, not a lost connection. Once the
+  // doc names the preferred host (even dead), or the grace window lapses,
+  // normal offline reporting takes over.
+  const preferredAtMs = Number(owner.preferredAtMs) || 0;
+  const handover = !live && usingRelay
+    && preferredAtMs > 0 && (now - preferredAtMs) < HANDOFF_GRACE_MS
+    && activeHostId !== preferredId;
+
   const state = live
     ? (switching ? 'switching' : 'connected')
-    : stale
-      ? 'offline'
-      : (heartbeatMs > 0 || statusOnline || hasData)
-        ? 'connecting'
-        : 'no-host';
+    : handover
+      ? 'handover'
+      : stale
+        ? 'offline'
+        : (heartbeatMs > 0 || statusOnline || hasData)
+          ? 'connecting'
+          : 'no-host';
 
   return {
     state,
     live,
     stale,
     switching,
+    handover,
     heartbeatMs,
     ageMs,
     hasData,
@@ -131,6 +152,12 @@ export function describePhoneLink(link, { deviceName = '', hostFallbackLabel = '
         tone: 'ok',
         showReconnect: false,
       };
+    case 'handover':
+      return {
+        label: `Handing to ${link.preferredLabel} — waiting for it to confirm…`,
+        tone: 'muted',
+        showReconnect: false,
+      };
     case 'offline':
       return {
         label: link.hasData
@@ -148,4 +175,105 @@ export function describePhoneLink(link, { deviceName = '', hostFallbackLabel = '
         showReconnect: true,
       };
   }
+}
+
+// ── Feed retention across host switches ─────────────────────────────────────
+// A freshly connected (or freshly handed-to) host pushes a state blob whose
+// message/call store starts near-empty and refills over minutes as it re-syncs
+// from the phone. Surfaces that render the blob verbatim therefore WIPE the
+// visible history on every handoff and slowly restore it — the owner's ticket.
+// These merges union the incoming list with what was already on screen: the
+// incoming copy always wins per message (so send-status/read flips repaint),
+// and previously seen entries the new host hasn't re-synced yet stay visible.
+// Session-scoped only — nothing here persists.
+
+const FEED_RETENTION_CAP = 2000;         // hard bound on retained entries
+const MSG_FUZZY_WINDOW_MS = 120000;      // same text within 2 min = same SMS
+const CALL_FUZZY_WINDOW_MS = 90000;      // same number within 90 s = same call
+
+function digitsKey(value) {
+  const d = String(value ?? '').replace(/\D+/g, '');
+  return d.length > 10 ? d.slice(-10) : d;
+}
+function feedTimeMs(entry) {
+  const raw = entry?.timestamp ?? entry?.Timestamp ?? entry?.date ?? entry?.Date
+    ?? entry?.time ?? entry?.Time ?? entry?.startTime ?? entry?.StartTime;
+  if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+  const parsed = Date.parse(raw ?? '');
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+function messageIdKey(m) {
+  const id = m?.id ?? m?.Id ?? m?.handle ?? m?.Handle ?? m?.localId ?? m?.LocalId;
+  return id === undefined || id === null || id === '' ? '' : String(id);
+}
+function messageBodyKey(m) {
+  return String(m?.body ?? m?.Body ?? m?.text ?? m?.Text ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+function messagePeerKey(m) {
+  return digitsKey(m?.address ?? m?.Address ?? m?.number ?? m?.Number ?? m?.from ?? m?.From ?? m?.to ?? m?.To ?? m?.peer ?? '');
+}
+
+// Union-merge message lists: `next` (the incoming host truth) verbatim, plus
+// any `prev` entry the incoming list doesn't contain — matched first by id,
+// then fuzzily (same body + same peer-or-unknown + close timestamp) so the
+// SAME SMS seen under two hosts' different id schemes never doubles up.
+export function mergeMessageFeeds(prev, next) {
+  const nextArr = Array.isArray(next) ? next : [];
+  const prevArr = Array.isArray(prev) ? prev : [];
+  if (!prevArr.length) return nextArr;
+  const ids = new Set();
+  const fuzzy = [];   // { body, peer, at }
+  for (const m of nextArr) {
+    const id = messageIdKey(m);
+    if (id) ids.add(id);
+    fuzzy.push({ body: messageBodyKey(m), peer: messagePeerKey(m), at: feedTimeMs(m) });
+  }
+  const retained = prevArr.filter(m => {
+    const id = messageIdKey(m);
+    if (id && ids.has(id)) return false;
+    const body = messageBodyKey(m);
+    const peer = messagePeerKey(m);
+    const at = feedTimeMs(m);
+    // Fuzzy layer only applies to messages WITH text — two attachment-only
+    // entries with empty bodies must never collapse into each other.
+    return !body || !fuzzy.some(f => f.body === body && (!f.peer || !peer || f.peer === peer)
+      && Math.abs(f.at - at) < MSG_FUZZY_WINDOW_MS);
+  });
+  if (!retained.length) return nextArr;
+  const merged = nextArr.concat(retained);
+  if (merged.length <= FEED_RETENTION_CAP) return merged;
+  // Over cap: drop the oldest RETAINED entries first — the host's own list is truth.
+  retained.sort((a, b) => feedTimeMs(b) - feedTimeMs(a));
+  return nextArr.concat(retained.slice(0, Math.max(0, FEED_RETENTION_CAP - nextArr.length)));
+}
+
+function callIdKey(c) {
+  const id = c?.id ?? c?.Id;
+  return id === undefined || id === null || id === '' ? '' : String(id);
+}
+
+// Union-merge call lists — same contract as mergeMessageFeeds.
+export function mergeCallFeeds(prev, next) {
+  const nextArr = Array.isArray(next) ? next : [];
+  const prevArr = Array.isArray(prev) ? prev : [];
+  if (!prevArr.length) return nextArr;
+  const ids = new Set();
+  const fuzzy = [];
+  for (const c of nextArr) {
+    const id = callIdKey(c);
+    if (id) ids.add(id);
+    fuzzy.push({ num: digitsKey(c?.number ?? c?.Number ?? c?.address ?? c?.Address ?? ''), at: feedTimeMs(c) });
+  }
+  const retained = prevArr.filter(c => {
+    const id = callIdKey(c);
+    if (id && ids.has(id)) return false;
+    const num = digitsKey(c?.number ?? c?.Number ?? c?.address ?? c?.Address ?? '');
+    const at = feedTimeMs(c);
+    return !fuzzy.some(f => f.num === num && Math.abs(f.at - at) < CALL_FUZZY_WINDOW_MS);
+  });
+  if (!retained.length) return nextArr;
+  const merged = nextArr.concat(retained);
+  if (merged.length <= FEED_RETENTION_CAP) return merged;
+  retained.sort((a, b) => feedTimeMs(b) - feedTimeMs(a));
+  return nextArr.concat(retained.slice(0, Math.max(0, FEED_RETENTION_CAP - nextArr.length)));
 }

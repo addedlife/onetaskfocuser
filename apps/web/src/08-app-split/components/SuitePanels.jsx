@@ -143,10 +143,9 @@ function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch,
           </div>
         </div>
         <div style={{ display: "flex", gap: SP.sm, alignItems: "center" }}>
-          <button onClick={() => { if (!status) onLaunch?.(); syncStage(); setTimeout(syncStage, 900); }} title={status ? "Dock DeskPhone" : "Open DeskPhone"}
-            style={{ height: 36, padding: `0 ${SP.md}`, borderRadius: RADIUS.md, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, cursor: "pointer", fontWeight: 500, fontSize: NC_TYPE.body, display: "flex", alignItems: "center", gap: SP.xs }}>
-            {suiteIcon("open_in_new", ICON.md)} {status ? "Dock" : "Open"}
-          </button>
+          <ActionBtn variant="tonal" icon="open_in_new" iconSize={ICON.md} height={36} containerColor={C.bgSoft} labelColor={C.text}
+            onClick={() => { if (!status) onLaunch?.(); syncStage(); setTimeout(syncStage, 900); }}
+            title={status ? "Dock DeskPhone" : "Open DeskPhone"}>{status ? "Dock" : "Open"}</ActionBtn>
           <ActionBtn variant="filled" icon="fit_screen" iconSize={ICON.md} height={36}
             onClick={syncStage} disabled={!!busy} title="Move DeskPhone to the dock position">Position</ActionBtn>
           <IconBtn variant="tonal" icon="close_fullscreen" iconSize={ICON.md} size={36}
@@ -160,14 +159,11 @@ function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch,
           <div style={{ fontSize: 22, fontWeight: 500, color: C.text, fontFamily: NC_FONT_STACK, display: "flex", alignItems: "center", gap: SP.sm }}>{suiteIcon("phone_in_talk", 28)} Phone</div>
           {error && <div style={{ fontSize: NC_TYPE.body, lineHeight: 1.45, color: C.danger, background: `${C.danger}18`, border: `1px solid ${C.danger}40`, borderRadius: RADIUS.md, padding: SP.sm }}>{error}</div>}
           <div style={{ display: "grid", gap: SP.sm }}>
-            <button onClick={() => { if (!status) onLaunch?.(); syncStage(); setTimeout(syncStage, 900); }}
-              style={{ height: 44, borderRadius: RADIUS.md, border: "none", background: C.accent, color: "#fff", cursor: "pointer", fontWeight: 500, fontSize: NC_TYPE.body, display: "flex", alignItems: "center", justifyContent: "center", gap: SP.sm }}>
-              {suiteIcon("desktop_windows", ICON.lg)} Dock DeskPhone
-            </button>
-            <button onClick={() => releaseStage()}
-              style={{ height: 40, borderRadius: RADIUS.md, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, cursor: "pointer", fontWeight: 500, fontSize: NC_TYPE.body, display: "flex", alignItems: "center", justifyContent: "center", gap: SP.sm }}>
-              {suiteIcon("open_in_full", ICON.md)} Release
-            </button>
+            <ActionBtn variant="filled" icon="desktop_windows" iconSize={ICON.lg} height={44} containerColor={C.accent} labelColor="#fff"
+              onClick={() => { if (!status) onLaunch?.(); syncStage(); setTimeout(syncStage, 900); }}
+              title="Dock DeskPhone">Dock DeskPhone</ActionBtn>
+            <ActionBtn variant="outlined" icon="open_in_full" iconSize={ICON.md} height={40} outlineColor={C.divider} labelColor={C.text}
+              onClick={() => releaseStage()} title="Release DeskPhone sizing">Release</ActionBtn>
           </div>
         </div>
         <DeskPhoneWebPanel T={T} onOnlineChange={onOnlineChange} onLaunchNative={onLaunch} embedded />

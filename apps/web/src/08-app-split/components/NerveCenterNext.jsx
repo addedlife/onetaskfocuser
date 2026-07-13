@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, textOnColor } from '../../01-core.js';
-import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BG, GOLD_BRD, gvIconButton, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, ncSectionHeaderStyle, ncSectionIconStyle, ncSectionTitleStyle, ncSmallIconBtnStyle, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
+import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BG, GOLD_BRD, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, ncSectionHeaderStyle, ncSectionIconStyle, ncSectionTitleStyle, ncSmallIconBtnStyle, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { ActionBtn, IconBtn, List, ListItem, AssistChip, FilterChip, ChipSet, Divider, CircularProgress, denseListVars } from '../m3.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
@@ -881,7 +881,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const [clockStyle, setClockStyle] = useState(() => { try { return localStorage.getItem("nc_clock_style") || "digital"; } catch { return "digital"; } });
   const [clockMenuPos, setClockMenuPos] = useState(null);
   const [clockTimelineOpen, setClockTimelineOpen] = useState(() => { try { return localStorage.getItem("nc_clock_timeline") === "1"; } catch { return false; } });
-  const [ncViewMode, setNcViewMode] = useState(() => { try { return localStorage.getItem("nc_view_mode") || "full"; } catch { return "full"; } });
+  // Full/Focus view toggle removed per owner ticket 5ORgAKX — always Full now.
+  const ncViewMode = "full";
   const [taskDraft, setTaskDraft] = useState("");
   const [taskPriority, setTaskPriority] = useState(priorities.find(p => p.id === "now")?.id || priorities[0]?.id || "now");
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
@@ -1062,6 +1063,53 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
   const C = cleanTheme(T);
   const ncType = NC_TYPE;
+
+  // One Google account picker, shared by EVERY layout's Calendar/Mail headers —
+  // it used to exist only in the desktop card strip (owner ticket HwhngHW).
+  const googleAcctMenuEl = googleToken && googleAccounts.length >= 1 ? (
+    <div style={{ position: "relative" }}>
+      <IconBtn icon="manage_accounts" size={28} iconSize={16}
+        color={googleAcctMenuOpen ? C.accent : C.muted}
+        title={`Account: ${googleAccountFilter === "all" ? "Both" : googleAccountFilter}`}
+        onClick={() => setGoogleAcctMenuOpen(p => !p)} />
+      {googleAcctMenuOpen && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={() => setGoogleAcctMenuOpen(false)} />
+          <div style={{ position: "absolute", right: 0, top: 30, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, minWidth: 200, boxShadow: ELEV[3], overflow: "hidden" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "8px 12px 4px" }}>Account</div>
+            {[...googleAccounts.map(em => ({ key: em, label: em })), ...(googleAccounts.length > 1 ? [{ key: "all", label: "Both accounts" }] : [])].map(opt => {
+              const active = opt.key === "all" ? googleAccountFilter === "all" : googleAccountFilter === opt.key;
+              return (
+                <button key={opt.key} onClick={() => { onSelectGoogleAccount?.(opt.key); setGoogleAcctMenuOpen(false); }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderTop: `1px solid ${C.divider}`, background: active ? softBg(C.accent, 0.08) : "transparent", color: active ? C.accent : C.text, cursor: "pointer", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, textAlign: "left", fontWeight: active ? 600 : 400 }}>
+                  <span style={{ width: 14, flexShrink: 0, display: "inline-flex" }}>{active && suiteIcon("check", 13)}</span>
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{opt.label}</span>
+                </button>
+              );
+            })}
+            <button onClick={() => { onConnectGoogle?.(); setGoogleAcctMenuOpen(false); }}
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderTop: `1px solid ${C.divider}`, background: "transparent", color: C.muted, cursor: "pointer", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, textAlign: "left" }}>
+              <span style={{ width: 14, flexShrink: 0, display: "inline-flex" }}>{suiteIcon("add", 13)}</span> Add account
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  ) : null;
+  // Same choices as menu-row items, for the compact list layout's section menus.
+  const googleAcctMenuItems = googleToken && googleAccounts.length >= 1 ? [
+    ...googleAccounts.map(em => ({
+      icon: googleAccountFilter === em ? "radio_button_checked" : "radio_button_unchecked",
+      label: em,
+      run: () => onSelectGoogleAccount?.(em),
+    })),
+    ...(googleAccounts.length > 1 ? [{
+      icon: googleAccountFilter === "all" ? "radio_button_checked" : "radio_button_unchecked",
+      label: "Both accounts",
+      run: () => onSelectGoogleAccount?.("all"),
+    }] : []),
+    { icon: "person_add", label: "Add account", run: () => onConnectGoogle?.() },
+  ] : [];
   const availableW = Math.max(0, viewportW - sidebarW);
   // A real phone/tablet (not just a narrow desktop window) — gets the 5-box grid.
   const isMobileDevice = useMemo(() => isMobilePhoneDevice(), []);
@@ -1967,10 +2015,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         {ncSummaryStatus === "updating" ? "Updating" : "Unavailable"}
       </span>
       {ncSummaryRetryable && (
-        <button type="button" onClick={retryNcSummary} title="Try the summary again" aria-label="Retry summary"
-          style={{ fontSize: NC_TYPE.small, fontWeight: 600, color: C.accent, background: "none", border: `1px solid ${C.accent}`, borderRadius: RADIUS.sm, padding: "1px 8px", cursor: "pointer", fontFamily: NC_FONT_STACK }}>
-          Try again
-        </button>
+        <ActionBtn variant="outlined" outlineColor={C.accent} labelColor={C.accent} height={20} labelSize={NC_TYPE.small}
+          onClick={retryNcSummary} title="Try the summary again" aria-label="Retry summary">Try again</ActionBtn>
       )}
     </span>
   );
@@ -1984,13 +2030,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             ? (ncSummary?.supercrunch || "")
             : ncSummaryStatusPill}
         </span>
-        <button type="button"
-          onClick={retryNcSummary}
+        <IconBtn icon="autorenew" size={24} iconSize={13} color={C.faint}
+          onClick={retryNcSummary} disabled={ncSummaryLoading}
           title="Refresh summary" aria-label="Refresh summary"
-          disabled={ncSummaryLoading}
-          style={{ flexShrink: 0, width: 24, height: 24, borderRadius: RADIUS.xs, border: "none", background: "transparent", color: C.faint, cursor: ncSummaryLoading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: ncSummaryLoading ? 0.4 : 1, ...(ncSummaryLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }}>
-          {suiteIcon("autorenew", 13)}
-        </button>
+          style={{ flexShrink: 0, opacity: ncSummaryLoading ? 0.4 : 1, ...(ncSummaryLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }} />
       </div>
       {/* Row 2: single most important next action + resuggest */}
       {activeChiefTaskText && (
@@ -2000,13 +2043,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: C.accent, marginRight: 6 }}>{chiefRefreshNonce > 0 ? "Re-suggested:" : "Suggested now:"}</span>
             {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
           </span>
-          <button type="button"
-            onClick={() => setChiefRefreshNonce(n => n + 1)}
+          <IconBtn icon="autorenew" size={24} iconSize={14} color={chiefLoading ? C.faint : C.accent}
+            onClick={() => setChiefRefreshNonce(n => n + 1)} disabled={chiefLoading}
             title="Suggest something else" aria-label="Suggest something else"
-            disabled={chiefLoading}
-            style={{ flexShrink: 0, width: 24, height: 24, borderRadius: RADIUS.xs, border: "none", background: "transparent", color: chiefLoading ? C.faint : C.accent, cursor: chiefLoading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: chiefLoading ? 0.4 : 1, ...(chiefLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }}>
-            {suiteIcon("autorenew", 14)}
-          </button>
+            style={{ flexShrink: 0, opacity: chiefLoading ? 0.4 : 1, ...(chiefLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }} />
         </div>
       )}
     </div>
@@ -2115,10 +2155,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               {chiefLoading && <div title="Scanning" style={{ width: 14, height: 14, borderRadius: "50%", border: `2px solid ${activeChiefTone}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
-              <button type="button" onClick={() => setChiefRefreshNonce(n => n + 1)} title="Refresh Chief scan" aria-label="Refresh Chief scan"
-                style={gvIconButton({ width: 38, height: 38, color: C.text, background: C.bg }, C)}>{suiteIcon("refresh", 17)}</button>
-              <button type="button" onClick={onCloseChiefPage} title="Back to NerveCenter" aria-label="Back to NerveCenter"
-                style={gvIconButton({ width: 38, height: 38, color: C.muted, background: C.bg }, C)}>{suiteIcon("close", 17)}</button>
+              <IconBtn icon="refresh" size={38} iconSize={17} color={C.text} onClick={() => setChiefRefreshNonce(n => n + 1)} title="Refresh Chief scan" aria-label="Refresh Chief scan" />
+              <IconBtn icon="close" size={38} iconSize={17} color={C.muted} onClick={onCloseChiefPage} title="Back to NerveCenter" aria-label="Back to NerveCenter" />
             </div>
           </header>
 
@@ -2173,11 +2211,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </div>
                 {!activeChiefBrief && !chiefLoading && (
                   <div style={{ display: "flex", alignItems: "center", paddingTop: 4, paddingBottom: 4 }}>
-                    <button type="button" onClick={() => setChiefRefreshNonce(n => n + 1)}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 20px", borderRadius: RADIUS.pill, border: `1.5px solid ${C.accent}`, background: "transparent", color: C.accent, fontSize: NC_TYPE.base, fontFamily: NC_FONT_STACK, fontWeight: 600, cursor: "pointer", letterSpacing: 0.1 }}>
-                      ✦ Brief me
-                      <span style={{ fontSize: NC_TYPE.small, fontWeight: 400, opacity: 0.6 }}>beta</span>
-                    </button>
+                    <ActionBtn variant="outlined" outlineColor={C.accent} labelColor={C.accent} height={38} labelSize={NC_TYPE.base}
+                      onClick={() => setChiefRefreshNonce(n => n + 1)} title="Run a Chief brief" aria-label="Run a Chief brief">
+                      ✦ Brief me <span style={{ fontSize: NC_TYPE.small, fontWeight: 400, opacity: 0.6 }}>beta</span>
+                    </ActionBtn>
                   </div>
                 )}
                 <div style={{ borderLeft: `4px solid ${chiefLoading ? C.divider : activeChiefTone}`, paddingLeft: 14, display: "grid", gap: 8, opacity: chiefLoading ? 0.55 : 1, transition: "opacity 0.25s" }}>
@@ -2202,8 +2239,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   style={{ minWidth: 0, height: 36, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, background: C.bgSoft, color: C.text, fontSize: NC_TYPE.control, fontFamily: NC_FONT_STACK, padding: "0 8px" }}>
                   {taskSuggestionPriorities.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                 </select>
-                <button type="button" onClick={createChiefNextTask} disabled={!chiefTaskDraft.trim()} title="Create task" aria-label="Create task"
-                  style={gvIconButton({ width: 38, height: 36, borderRadius: RADIUS.sm, color: chiefTaskDraft.trim() ? "#fff" : C.faint, background: chiefTaskDraft.trim() ? (chiefPri.color || C.accent) : "transparent" }, C)}>{suiteIcon("add", 16)}</button>
+                <IconBtn variant="filled" icon="add" size={38} iconSize={16}
+                  color={chiefTaskDraft.trim() ? "#fff" : C.faint}
+                  containerColor={chiefTaskDraft.trim() ? (chiefPri.color || C.accent) : "transparent"}
+                  onClick={createChiefNextTask} disabled={!chiefTaskDraft.trim()} title="Create task" aria-label="Create task"
+                  style={{ "--md-filled-icon-button-container-shape": RADIUS.sm }} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: isStacked ? "1fr" : "repeat(3,minmax(0,1fr))", gap: 8 }}>
                 {[
@@ -2248,10 +2288,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                           style={{ minWidth: 0, height: 30, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, background: C.bg, color: C.text, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, padding: "0 6px" }}>
                           {taskSuggestionPriorities.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                         </select>
-                        <button type="button" onClick={() => dismissTaskSuggestion(row)} title="Dismiss suggestion" aria-label="Dismiss suggestion"
-                          style={gvIconButton({ width: 30, height: 30, color: C.faint, background: "transparent" }, C)}>{suiteIcon("close", 13)}</button>
-                        <button type="button" onClick={() => createTaskSuggestion(row)} disabled={!row.text.trim()} title="Create task" aria-label="Create task"
-                          style={gvIconButton({ width: 30, height: 30, color: row.text.trim() ? "#fff" : C.faint, background: row.text.trim() ? (pri.color || C.accent) : "transparent" }, C)}>{suiteIcon("add", 14)}</button>
+                        <IconBtn icon="close" size={30} iconSize={13} color={C.faint}
+                          onClick={() => dismissTaskSuggestion(row)} title="Dismiss suggestion" aria-label="Dismiss suggestion" />
+                        <IconBtn variant="filled" icon="add" size={30} iconSize={14}
+                          color={row.text.trim() ? "#fff" : C.faint}
+                          containerColor={row.text.trim() ? (pri.color || C.accent) : "transparent"}
+                          onClick={() => createTaskSuggestion(row)} disabled={!row.text.trim()} title="Create task" aria-label="Create task" />
                       </div>
                       {(row.reason || row.sourceTitle) && (
                         <div style={{ color: C.faint, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, lineHeight: 1.35, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{row.reason || row.sourceTitle}</div>
@@ -2281,10 +2323,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             <form onSubmit={e => { e.preventDefault(); submitChiefPrompt(); }} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 40px", gap: 8, padding: 12, borderTop: `1px solid ${C.divider}` }}>
               <textarea ref={chiefPromptRef} value={chiefPrompt} rows={2} onChange={e => setChiefPrompt(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitChiefPrompt(); } }} placeholder="Respond, correct, or ask for the next move"
                 style={{ minWidth: 0, minHeight: 46, maxHeight: 140, borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "9px 10px", fontSize: NC_TYPE.control, lineHeight: 1.35, fontFamily: NC_FONT_STACK, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
-              <button type="submit" disabled={!chiefPrompt.trim() || chiefDialogueLoading} title="Ask Chief" aria-label="Ask Chief"
-                style={gvIconButton({ width: 40, height: 46, borderRadius: RADIUS.sm, color: chiefPrompt.trim() && !chiefDialogueLoading ? "#fff" : C.faint, background: chiefPrompt.trim() && !chiefDialogueLoading ? C.accent : "transparent" }, C)}>
-                {suiteIcon(chiefDialogueLoading ? "hourglass_top" : "send", 16)}
-              </button>
+              <IconBtn variant="filled" type="submit" icon={chiefDialogueLoading ? "hourglass_top" : "send"} size={44} iconSize={16}
+                color={chiefPrompt.trim() && !chiefDialogueLoading ? "#fff" : C.faint}
+                containerColor={chiefPrompt.trim() && !chiefDialogueLoading ? C.accent : "transparent"}
+                disabled={!chiefPrompt.trim() || chiefDialogueLoading} title="Ask Chief" aria-label="Ask Chief"
+                style={{ "--md-filled-icon-button-container-shape": RADIUS.sm }} />
             </form>
           </section>
 
@@ -2302,10 +2345,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <textarea value={chiefProfileDraft} onChange={e => setChiefProfileDraft(e.target.value)} rows={7}
                   style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, background: C.bgSoft, color: C.text, padding: "9px 10px", fontSize: NC_TYPE.control, lineHeight: 1.4, fontFamily: NC_FONT_STACK, resize: "vertical", outline: "none" }} />
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                  <button type="button" onClick={() => setChiefProfileDraft(markdownFromChiefProfile(chiefProfile))} title="Reset profile draft" aria-label="Reset profile draft"
-                    style={gvIconButton({ width: 34, height: 34, color: C.faint, background: "transparent" }, C)}>{suiteIcon("undo", 14)}</button>
-                  <button type="button" onClick={saveChiefProfileDraft} disabled={!onSaveChiefProfileMarkdown || chiefProfileSaving} title="Save Chief profile" aria-label="Save Chief profile"
-                    style={gvIconButton({ width: 34, height: 34, color: !chiefProfileSaving ? "#fff" : C.faint, background: !chiefProfileSaving ? C.accent : "transparent" }, C)}>{suiteIcon(chiefProfileSaving ? "hourglass_top" : "save", 15)}</button>
+                  <IconBtn icon="undo" size={34} iconSize={14} color={C.faint}
+                    onClick={() => setChiefProfileDraft(markdownFromChiefProfile(chiefProfile))} title="Reset profile draft" aria-label="Reset profile draft" />
+                  <IconBtn variant="filled" icon={chiefProfileSaving ? "hourglass_top" : "save"} size={34} iconSize={15}
+                    color={!chiefProfileSaving ? "#fff" : C.faint}
+                    containerColor={!chiefProfileSaving ? C.accent : "transparent"}
+                    onClick={saveChiefProfileDraft} disabled={!onSaveChiefProfileMarkdown || chiefProfileSaving} title="Save Chief profile" aria-label="Save Chief profile" />
                 </div>
               </div>
             )}
@@ -2409,6 +2454,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Mail */}
           <MobileBox {...boxCtx} {...boxProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail")} style={cardStyle} dense={dense}
             onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}>
+            {googleAcctMenuEl && (
+              <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", gap:2, padding:"2px 6px", borderBottom:`1px solid ${C.divider}` }}>
+                {googleAcctMenuEl}
+              </div>
+            )}
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : gmailMessages.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
               const from = fmtFromM(gmailHdr(msg,"From"));
@@ -2517,8 +2567,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   </div>
                 </div>
               )}
-              {/* Agenda ⇄ Live time toggle */}
+              {/* Account picker + Agenda ⇄ Live time toggle */}
               <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", gap:2, padding:"2px 6px", flexShrink:0, borderBottom:`1px solid ${C.divider}` }}>
+                {googleAcctMenuEl}
                 <IconBtn icon="schedule" size={26} iconSize={14} color={calCardView==="timeline"?C.text:C.muted} active={calCardView==="timeline"} activeBg={C.hover} onClick={()=>setCalCardView("timeline")} title="Live time" aria-label="Live time view" />
                 <IconBtn icon="view_agenda" size={26} iconSize={14} color={calCardView==="agenda"?C.text:C.muted} active={calCardView==="agenda"} activeBg={C.hover} onClick={()=>setCalCardView("agenda")} title="Agenda" aria-label="Agenda view" />
               </div>
@@ -2758,6 +2809,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 { icon: "add",         label: "Add event",            run: () => { setMobileExpanded(prev => new Set(prev).add("cal")); setShowAddEvent(true); } },
                 { icon: "refresh",     label: "Refresh",              run: onRefreshCalendar || onConnectGoogle },
                 { icon: "open_in_new", label: "Open Google Calendar", run: () => window.open("https://calendar.google.com/calendar/r","_blank") },
+                ...googleAcctMenuItems,
                 { icon: "link_off",    label: "Disconnect",           run: onDisconnectGoogle },
               ]}
             >
@@ -2802,6 +2854,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               menuItems={[
                 { icon: "refresh",     label: "Refresh",    run: onRefreshCalendar || onConnectGoogle },
                 { icon: "open_in_new", label: "Open Gmail", run: () => window.open("https://mail.google.com/mail/u/0/#inbox","_blank") },
+                ...googleAcctMenuItems,
               ]}
             >
               {!gmailMessages || gmailMessages.length === 0 ? (
@@ -2932,22 +2985,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             {/* Density: compact (aggressively tight rows) vs comfortable */}
             <IconBtn icon={dense ? "density_small" : "density_medium"} size={28} iconSize={15} onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density"
               color={dense ? C.muted : C.faint} active={dense} activeBg={softBorder(C.divider, 0.55)} />
-            <span style={{ width: 1, height: 14, background: C.divider, flexShrink: 0 }} />
-            {/* View: Full / Focus (only meaningful in full panel mode) */}
-            {desktopLayout === "full" && [{ id: "full", lbl: "Full" }, { id: "focus", lbl: "Focus" }].map(({ id, lbl }) => (
-              <button key={id}
-                onClick={() => { setNcViewMode(id); try { localStorage.setItem("nc_view_mode", id); } catch {} }}
-                style={{
-                  background: ncViewMode === id ? softBorder(C.divider, 0.45) : "transparent",
-                  border: "none", borderRadius: RADIUS.xs, padding: "2px 7px",
-                  cursor: "pointer", fontFamily: NC_FONT_STACK,
-                  fontSize: 8, fontWeight: 700, letterSpacing: 1.4,
-                  textTransform: "uppercase",
-                  color: ncViewMode === id ? C.muted : C.faint,
-                  transition: "background 0.12s, color 0.12s",
-                }}
-              >{lbl}</button>
-            ))}
           </div>
         )}
 
@@ -3308,36 +3345,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
               {/* ── Calendar card — Google Calendar-style daily timeline ── */}
               {(calendarEvents !== null || (googleLoading && googleToken)) && (() => {
-                const acctMenu = googleToken && googleAccounts.length >= 1 ? (
-                  <div style={{ position: "relative" }}>
-                    <IconBtn icon="manage_accounts" size={28} iconSize={16}
-                      color={googleAcctMenuOpen ? accentBlue : C.muted}
-                      title={`Account: ${googleAccountFilter === "all" ? "Both" : googleAccountFilter}`}
-                      onClick={() => setGoogleAcctMenuOpen(p => !p)} />
-                    {googleAcctMenuOpen && (
-                      <>
-                        <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={() => setGoogleAcctMenuOpen(false)} />
-                        <div style={{ position: "absolute", right: 0, top: 30, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, minWidth: 200, boxShadow: ELEV[3], overflow: "hidden" }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "8px 12px 4px" }}>Account</div>
-                          {[...googleAccounts.map(em => ({ key: em, label: em })), ...(googleAccounts.length > 1 ? [{ key: "all", label: "Both accounts" }] : [])].map(opt => {
-                            const active = opt.key === "all" ? googleAccountFilter === "all" : googleAccountFilter === opt.key;
-                            return (
-                              <button key={opt.key} onClick={() => { onSelectGoogleAccount?.(opt.key); setGoogleAcctMenuOpen(false); }}
-                                style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderTop: `1px solid ${C.divider}`, background: active ? softBg(accentBlue, 0.08) : "transparent", color: active ? accentBlue : C.text, cursor: "pointer", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, textAlign: "left", fontWeight: active ? 600 : 400 }}>
-                                <span style={{ width: 14, flexShrink: 0, display: "inline-flex" }}>{active && suiteIcon("check", 13)}</span>
-                                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{opt.label}</span>
-                              </button>
-                            );
-                          })}
-                          <button onClick={() => { onConnectGoogle?.(); setGoogleAcctMenuOpen(false); }}
-                            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderTop: `1px solid ${C.divider}`, background: "transparent", color: C.muted, cursor: "pointer", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, textAlign: "left" }}>
-                            <span style={{ width: 14, flexShrink: 0, display: "inline-flex" }}>{suiteIcon("add", 13)}</span> Add account
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ) : null;
+                const acctMenu = googleAcctMenuEl;
                 return (
                   <div className="nc-card-group" style={tintedCard(C.warning)}>
                     {cardHeader("calendar_today", "Today", C.warning, <>
@@ -3615,36 +3623,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <div className="nc-card-group" style={tintedCard(CAT_MAIL)}>
                   {cardHeader("mail", "Mail", CAT_MAIL, <>
                     {googleLoading && <Spinner size={13} color={C.faint} />}
-                    {googleToken && googleAccounts.length >= 1 && (
-                      <div style={{ position: "relative" }}>
-                        <IconBtn icon="manage_accounts" size={28} iconSize={16}
-                          color={googleAcctMenuOpen ? accentBlue : C.muted}
-                          title={`Account: ${googleAccountFilter === "all" ? "Both" : googleAccountFilter}`}
-                          onClick={() => setGoogleAcctMenuOpen(p => !p)} />
-                        {googleAcctMenuOpen && (
-                          <>
-                            <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={() => setGoogleAcctMenuOpen(false)} />
-                            <div style={{ position: "absolute", right: 0, top: 30, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, minWidth: 200, boxShadow: ELEV[3], overflow: "hidden" }}>
-                              <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "8px 12px 4px" }}>Account</div>
-                              {[...googleAccounts.map(em => ({ key: em, label: em })), ...(googleAccounts.length > 1 ? [{ key: "all", label: "Both accounts" }] : [])].map(opt => {
-                                const active = opt.key === "all" ? googleAccountFilter === "all" : googleAccountFilter === opt.key;
-                                return (
-                                  <button key={opt.key} onClick={() => { onSelectGoogleAccount?.(opt.key); setGoogleAcctMenuOpen(false); }}
-                                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderTop: `1px solid ${C.divider}`, background: active ? softBg(accentBlue, 0.08) : "transparent", color: active ? accentBlue : C.text, cursor: "pointer", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, textAlign: "left", fontWeight: active ? 600 : 400 }}>
-                                    <span style={{ width: 14, flexShrink: 0, display: "inline-flex" }}>{active && suiteIcon("check", 13)}</span>
-                                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{opt.label}</span>
-                                  </button>
-                                );
-                              })}
-                              <button onClick={() => { onConnectGoogle?.(); setGoogleAcctMenuOpen(false); }}
-                                style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderTop: `1px solid ${C.divider}`, background: "transparent", color: C.muted, cursor: "pointer", fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, textAlign: "left" }}>
-                                <span style={{ width: 14, flexShrink: 0, display: "inline-flex" }}>{suiteIcon("add", 13)}</span> Add account
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
+                    {googleAcctMenuEl}
                     <CardAction icon="open_in_new" title="Open Gmail" href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" />
                     <CardAction icon="refresh" title="Refresh mail and calendar" onClick={onRefreshCalendar || onConnectGoogle} />
                   </>)}

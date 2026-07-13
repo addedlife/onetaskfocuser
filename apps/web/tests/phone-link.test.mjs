@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 
 import {
   derivePhoneLinkState, describePhoneLink, messageListSignature, formatAgeShort,
+  mergeMessageFeeds, mergeCallFeeds,
   HEARTBEAT_LIVE_WINDOW_MS, STATE_FALLBACK_WINDOW_MS,
 } from '../src/08-app-split/phone-link.js';
 
@@ -117,4 +118,81 @@ test('formatAgeShort buckets', () => {
   assert.equal(formatAgeShort(4 * 60_000), '4m');
   assert.equal(formatAgeShort(2 * 3600_000), '2h');
   assert.equal(formatAgeShort(3 * 86_400_000), '3d');
+});
+
+// ── handover grace state (owner ticket r0wEKJ7) ─────────────────────────────
+
+test('recent preferred flip + dead link + old host still named = handover, not offline', () => {
+  const link = derivePhoneLinkState({
+    now: NOW, usingRelay: true, statusOnline: true, hasData: true,
+    owner: owner({ preferred: 'pc', present: true, host: 'android', t: NOW - 5_000, connected: false, preferredAtMs: NOW - 20_000 }),
+  });
+  assert.equal(link.state, 'handover');
+  assert.equal(link.handover, true);
+  const d = describePhoneLink(link);
+  assert.ok(d.label.includes('Handing to PC'));
+  assert.equal(d.showReconnect, false);
+});
+
+test('handover grace expires -> honest offline with Reconnect', () => {
+  const link = derivePhoneLinkState({
+    now: NOW, usingRelay: true, statusOnline: true, hasData: true,
+    owner: owner({ preferred: 'pc', present: true, host: 'android', t: NOW - 300_000, connected: false, preferredAtMs: NOW - 300_000 }),
+  });
+  assert.equal(link.state, 'offline');
+  assert.equal(describePhoneLink(link).showReconnect, true);
+});
+
+test('link drop AFTER a completed handoff (host == preferred) is offline, not handover', () => {
+  const link = derivePhoneLinkState({
+    now: NOW, usingRelay: true, statusOnline: true, hasData: true,
+    owner: owner({ preferred: 'pc', present: true, host: 'windows', t: NOW - 5_000, connected: false, preferredAtMs: NOW - 60_000 }),
+  });
+  assert.equal(link.state, 'offline');
+});
+
+// ── feed retention merges (owner ticket LDu4QWw: history wiped on handoff) ──
+
+test('mergeMessageFeeds keeps prev history a fresh host has not re-synced yet', () => {
+  const prev = [
+    { id: 'w1', body: 'old text one', address: '+15741112222', timestamp: NOW - 3600_000 },
+    { id: 'w2', body: 'old text two', address: '+15741112222', timestamp: NOW - 7200_000 },
+  ];
+  const next = [{ id: 'a9', body: 'fresh text', address: '+15741112222', timestamp: NOW - 60_000 }];
+  const merged = mergeMessageFeeds(prev, next);
+  assert.equal(merged.length, 3);
+  assert.equal(merged[0].id, 'a9'); // incoming host truth first
+});
+
+test('mergeMessageFeeds dedupes the SAME sms under two hosts id schemes (fuzzy)', () => {
+  const prev = [{ id: 'win-5', body: 'Same message', address: '15741112222', timestamp: NOW - 100_000 }];
+  const next = [{ id: 'and-77', body: 'same   message', address: '+1 574 111 2222', timestamp: NOW - 90_000 }];
+  const merged = mergeMessageFeeds(prev, next);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].id, 'and-77'); // host copy wins
+});
+
+test('mergeMessageFeeds: incoming copy wins per id (send-status flips repaint)', () => {
+  const prev = [{ id: 'x', body: 'hello', sendStatus: 'Confirming', timestamp: NOW }];
+  const next = [{ id: 'x', body: 'hello', sendStatus: 'Sent', timestamp: NOW }];
+  const merged = mergeMessageFeeds(prev, next);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].sendStatus, 'Sent');
+});
+
+test('mergeMessageFeeds: attachment-only (empty body) entries never fuzzy-collapse', () => {
+  const prev = [{ id: 'm1', body: '', address: '+15741112222', timestamp: NOW - 30_000 }];
+  const next = [{ id: 'm2', body: '', address: '+15741112222', timestamp: NOW - 20_000 }];
+  assert.equal(mergeMessageFeeds(prev, next).length, 2);
+});
+
+test('mergeCallFeeds keeps prev calls, dedupes same number+time across id schemes', () => {
+  const prev = [
+    { id: 'c1', number: '+15743334444', timestamp: NOW - 3600_000, type: 1 },
+    { id: 'c2', number: '15743334444',  timestamp: NOW - 50_000, type: 3 },
+  ];
+  const next = [{ id: 'z9', number: '+1 (574) 333-4444', timestamp: NOW - 55_000, type: 3 }];
+  const merged = mergeCallFeeds(prev, next);
+  assert.equal(merged.length, 2); // c2 fuzzy-matches z9; c1 retained
+  assert.equal(merged[0].id, 'z9');
 });

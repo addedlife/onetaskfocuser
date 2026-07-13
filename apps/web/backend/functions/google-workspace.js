@@ -221,7 +221,7 @@ async function fetchCalendarData(accessToken, { timeMin, timeMax } = {}) {
   const now = new Date();
   const start = timeMin || new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const end   = timeMax || new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2).toISOString();
-  const eventsUrl = (calId) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=50`;
+  const eventsUrl = (calId) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=100`;
   let calendars = null;
   try {
     const list = await googleJson("https://www.googleapis.com/calendar/v3/users/me/calendarList?showHidden=false&maxResults=50", accessToken);
@@ -231,7 +231,9 @@ async function fetchCalendarData(accessToken, { timeMin, timeMax } = {}) {
   }
   if (!calendars?.length) {
     const data = await googleJson(eventsUrl("primary"), accessToken);
-    return sortCalEvents((data.items || []).map(event => ({ ...event, calendarId: "primary" }))).slice(0, 20);
+    // 120-cap (was 20): a zmanim calendar fills 20 slots before evening,
+    // silently dropping later-day events (owner tickets rRYEUOn / Bm7Phcr).
+    return sortCalEvents((data.items || []).map(event => ({ ...event, calendarId: "primary" }))).slice(0, 120);
   }
   const results = await Promise.allSettled(calendars.map(cal =>
     googleJson(eventsUrl(cal.id), accessToken)
@@ -246,7 +248,7 @@ async function fetchCalendarData(accessToken, { timeMin, timeMax } = {}) {
       seen.add(event.id);
       return true;
     });
-  return sortCalEvents(all).slice(0, 20);
+  return sortCalEvents(all).slice(0, 120);
 }
 
 async function fetchGmailData(accessToken) {

@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { cleanTheme, DUR, EASE, ELEV, gvIconButton, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
+import { cleanTheme, DUR, EASE, ELEV, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { ActionBtn, AssistChip, IconBtn, ListItem, denseListVars } from '../m3.jsx';
 import { db } from '../../01-core.js';
 import { subscribeOwner } from '../phone-host-control.js';
-import { derivePhoneLinkState, describePhoneLink, formatAgeShort, messageListSignature } from '../phone-link.js';
+import { derivePhoneLinkState, describePhoneLink, formatAgeShort, messageListSignature, mergeMessageFeeds, mergeCallFeeds } from '../phone-link.js';
 import {
   addPendingSms, updatePendingSms, getPendingSms, subscribePendingSms,
   reconcilePendingSms, unmatchedPendingSms, collapseHostDoubles, smsBodyKey, smsPhoneKey,
@@ -344,6 +344,12 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const messagesSigRef = useRef("");
   const callsSigRef = useRef("");
   const contactsSigRef = useRef("");
+  // Session-scoped retention caches for the handoff union-merge (phone-link.js).
+  const messagesCacheRef = useRef([]);
+  const callsCacheRef = useRef([]);
+  // Optimistic hang-up: suppress a lagging host "Active" callState after the
+  // user pressed Hang up, until the host reports a NEW state (ticket 0kti1vt).
+  const callSuppressRef = useRef(null);
   const C = cleanTheme(T);
   const RELAY_BASE = "/api/phone-relay";
 
@@ -386,12 +392,19 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const applyPhoneState = useCallback((statusRes, messagesRes, callsRes, contactsRes, receivedAt = 0) => {
     const nextStatus = statusRes;
     const parsed = messagesRes || [];
-    const nextMessages = Array.isArray(parsed) ? parsed : (parsed?.messages || []);
+    const incomingMessages = Array.isArray(parsed) ? parsed : (parsed?.messages || []);
     const callsParsed = callsRes || [];
-    const nextCalls = Array.isArray(callsParsed) ? callsParsed : (callsParsed?.calls || nextStatus?.recentCalls || []);
+    const incomingCalls = Array.isArray(callsParsed) ? callsParsed : (callsParsed?.calls || nextStatus?.recentCalls || []);
     const contactsParsed = contactsRes || [];
     const nextContacts = Array.isArray(contactsParsed) ? contactsParsed : (contactsParsed?.contacts || []);
     setStatus(nextStatus);
+    // Retention merge (phone-link.js): a freshly handed-to host re-syncs its
+    // store from the phone over minutes — union its (small) list with what we
+    // already showed so history never wipes-and-refills across a handoff.
+    const nextMessages = mergeMessageFeeds(messagesCacheRef.current, incomingMessages);
+    messagesCacheRef.current = nextMessages;
+    const nextCalls = mergeCallFeeds(callsCacheRef.current, incomingCalls);
+    callsCacheRef.current = nextCalls;
     // Full-list signature (id + send status + read state of EVERY message) —
     // the old length+endpoints check missed a mid-list Confirming→Sent flip,
     // so a send could stay visually "Confirming" long after it confirmed.
@@ -738,8 +751,16 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // Normalize callState so "Idle", "None", "Available" etc. all collapse to "" (shows "Connected · device")
   const callStateRaw = status?.CallState || status?.callState || status?.CurrentCallState || status?.currentCallState || "";
   const callState = /^(idle|none|available|ready|standby|free|disconnected|inactive)$/i.test(callStateRaw.trim()) ? "" : callStateRaw.trim();
-  const isIncoming = /ring|incoming/i.test(callState);
-  const isOnCall = !!callState && !isIncoming && /^(active|dialing|oncall|callactive)$/i.test(callState.replace(/\s+/g, ""));
+  // Hang-up suppression (owner ticket 0kti1vt): the host's callState can lag the
+  // phone by minutes when the call was ended ON the phone itself, so the card
+  // kept showing "On call". Pressing Hang up now optimistically clears the call
+  // UI; the suppression self-lifts the moment the host reports any NEW state
+  // (fresh call, ring, or clean idle), or after 90 s regardless.
+  const suppressedCall = !!(callSuppressRef.current
+    && callSuppressRef.current.raw === callStateRaw
+    && nowTick < callSuppressRef.current.until);
+  const isIncoming = !suppressedCall && /ring|incoming/i.test(callState);
+  const isOnCall = !suppressedCall && !!callState && !isIncoming && /^(active|dialing|oncall|callactive)$/i.test(callState.replace(/\s+/g, ""));
   const statusOnline = !!status;
   // A raw Bluetooth address ("7E4B46E95FBA") is plumbing, not a phone name — never show it.
   const deviceNameRaw = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
@@ -883,12 +904,12 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       voicemailCount: vmCount,
     });
   }, [onStatusSummary, phoneLinkLive, relayStale, isIncoming, isOnCall, callerDisplay, statusText, vmCount]);
-  const phoneIconButton = (active = false) => gvIconButton({
-    width: compact ? 28 : 32,
-    height: compact ? 28 : 32,
-    background: active ? C.hover : "transparent",
-    color: active ? C.text : C.muted,
-  }, C);
+  // Card-density REAL M3 icon button (md-icon-button via m3.jsx IconBtn) —
+  // replaces the old raw `<button style={phoneIconButton()}>` lookalikes.
+  const PhoneIconBtn = ({ icon, iconSize = 15, active = false, color, ...rest }) => (
+    <IconBtn icon={icon} size={compact ? 28 : 32} iconSize={iconSize}
+      color={color || (active ? C.text : C.muted)} active={active} activeBg={C.hover} {...rest} />
+  );
   const phoneRowStyle = {
     display: "grid",
     gridTemplateColumns: dense ? "16px minmax(0,1fr) 26px" : "20px minmax(0,1fr) 30px",
@@ -1094,7 +1115,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
           {suiteIcon("sms", 14)}
           <span style={{ fontSize: 13, color: C.muted, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{selected.name || selected.number}</span>
-          <button onClick={closeCompose} style={gvIconButton({ width: 32, height: 32 }, C)}>{suiteIcon("close", 14)}</button>
+          <IconBtn icon="close" size={32} iconSize={14} color={C.muted} onClick={closeCompose} title="Close" aria-label="Close" />
         </div>
       )}
       {(!composeIsNew || selected) && (
@@ -1187,37 +1208,26 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             <ActionBtn variant="filled" icon="phone_callback" iconSize={14} containerColor={C.success} labelColor="#fff"
               onClick={() => post("/answer", "answer")} disabled={!!busy} title="Answer">Answer</ActionBtn>
             <ActionBtn variant="filled" icon="call_end" iconSize={14} containerColor={C.danger} labelColor="#fff"
-              onClick={() => post("/hangup", "decline")} disabled={!!busy} title="Decline">Decline</ActionBtn>
+              onClick={() => { callSuppressRef.current = { raw: callStateRaw, until: Date.now() + 90000 }; setNowTick(Date.now()); post("/hangup", "decline"); }} disabled={!!busy} title="Decline">Decline</ActionBtn>
           </>
         ) : isOnCall ? (
           <ActionBtn variant="filled" icon="call_end" iconSize={14} containerColor={C.danger} labelColor="#fff"
-            onClick={() => post("/hangup", "hangup")} disabled={!!busy} title="Hang up">Hang up</ActionBtn>
+            onClick={() => { callSuppressRef.current = { raw: callStateRaw, until: Date.now() + 90000 }; setNowTick(Date.now()); post("/hangup", "hangup"); }} disabled={!!busy} title="Hang up">Hang up</ActionBtn>
         ) : null}
         <div style={{ flex: 1 }} />
         {/* Reconnect now lives in the always-visible status line above (offline-only
             Reconnect chip) — no more unlabeled "reverse circle" here. */}
         {/* Record general */}
-        <button onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs"
-          style={phoneIconButton(false)}>
-          {suiteIcon("mic", 15)}
-        </button>
+        <PhoneIconBtn icon="mic" onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs" aria-label="Record" />
         {/* Record active call */}
         {isOnCall && (
-          <button onClick={onRecordCall} title="Record this call and extract tasks/shailos"
-            style={gvIconButton({ width: 36, height: 36, background: C.danger, color: "#fff" }, C)}>
-            {suiteIcon("fiber_manual_record", 14)}
-          </button>
+          <IconBtn variant="filled" icon="fiber_manual_record" size={36} iconSize={14} color="#fff" containerColor={C.danger}
+            onClick={onRecordCall} title="Record this call and extract tasks/shailos" aria-label="Record this call" />
         )}
         {/* New message button */}
-        <button onClick={openNewMessage} title="New message"
-          style={phoneIconButton(composeOpen && composeIsNew)}>
-          {suiteIcon("edit", 15)}
-        </button>
+        <PhoneIconBtn icon="edit" active={composeOpen && composeIsNew} onClick={openNewMessage} title="New message" aria-label="New message" />
         {/* Keypad toggle */}
-        <button onClick={() => setShowDialer(v => !v)} title="Keypad"
-          style={phoneIconButton(showDialer)}>
-          {suiteIcon("dialpad", 15)}
-        </button>
+        <PhoneIconBtn icon="dialpad" active={showDialer} onClick={() => setShowDialer(v => !v)} title="Keypad" aria-label="Keypad" />
         {/* (Status now lives in the always-visible plain-language line above.) */}
       </div>
       )}
@@ -1234,10 +1244,11 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
               onKeyDown={e => e.key === "Enter" && dial()}
               placeholder="Name or number"
               style={{ width: "100%", height: 40, boxSizing: "border-box", padding: "0 46px 0 32px", borderRadius: RADIUS.pill, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: NC_TYPE.body, fontWeight: 400, outline: "none" }} />
-            <button onClick={dial} disabled={!number.trim() || !!busy} title="Call"
-              style={gvIconButton({ position: "absolute", right: 4, top: 4, width: 32, height: 32, background: number.trim() ? C.success : "transparent", color: number.trim() ? "#fff" : C.faint, cursor: number.trim() ? "pointer" : "default", minHeight: 32 }, C)}>
-              {suiteIcon("call", 14)}
-            </button>
+            <IconBtn variant="filled" icon="call" size={32} iconSize={14}
+              color={number.trim() ? "#fff" : C.faint}
+              containerColor={number.trim() ? C.success : "transparent"}
+              onClick={dial} disabled={!number.trim() || !!busy} title="Call" aria-label="Call"
+              style={{ position: "absolute", right: 4, top: 4 }} />
           </div>
           {/* Contact suggestions below input */}
           {inputFocused && suggestions.length > 0 && (
@@ -1302,9 +1313,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                       {preview && !expanded && <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted, marginTop: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: NC_TYPE.line }}>{thread._name}</span>}
                     </button>
                     {!expanded && (
-                      <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
-                        {suiteIcon("more_horiz", 17)}
-                      </button>
+                      <PhoneIconBtn icon="more_horiz" iconSize={17} active={actionsOpen}
+                        onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }}
+                        title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} />
                     )}
                     {!expanded && actionsOpen && (
                       <div style={phoneActionGroupStyle}>
@@ -1322,15 +1333,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
                           <div style={{ flex: 1, minWidth: 0, color: C.muted }}>{count} message{count === 1 ? "" : "s"}</div>
                           <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                            <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); dialNum(thread._who); }} title="Call" aria-label="Call" style={phoneIconButton(false)}>
-                              {suiteIcon("call", 15)}
-                            </button>
-                            <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); openCompose(thread._name, thread._who, actionId); }} title="Reply" aria-label="Reply" style={phoneIconButton(false)}>
-                              {suiteIcon("sms", 15)}
-                            </button>
-                            <button type="button" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); setExpandedPhoneMessageId(null); }} title="Close conversation" aria-label="Close conversation" style={phoneIconButton(false)}>
-                              {suiteIcon("close", 16)}
-                            </button>
+                            <PhoneIconBtn icon="call" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); dialNum(thread._who); }} title="Call" aria-label="Call" />
+                            <PhoneIconBtn icon="sms" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); openCompose(thread._name, thread._who, actionId); }} title="Reply" aria-label="Reply" />
+                            <PhoneIconBtn icon="close" iconSize={16} onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); setExpandedPhoneMessageId(null); }} title="Close conversation" aria-label="Close conversation" />
                           </div>
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -1400,36 +1405,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                               boxShadow: `0 2px 8px ${C.shadow || "rgba(15,23,42,0.18)"}`,
                             }}
                           >
-                            <button
-                              type="button"
-                              onMouseDown={e => e.preventDefault()}
-                              onClick={e => { e.stopPropagation(); dialNum(thread._who); }}
-                              title="Call"
-                              aria-label="Call"
-                              style={phoneIconButton(false)}
-                            >
-                              {suiteIcon("call", 15)}
-                            </button>
-                            <button
-                              type="button"
-                              onMouseDown={e => e.preventDefault()}
-                              onClick={e => { e.stopPropagation(); openCompose(thread._name, thread._who, actionId); }}
-                              title="Reply"
-                              aria-label="Reply"
-                              style={phoneIconButton(false)}
-                            >
-                              {suiteIcon("sms", 15)}
-                            </button>
-                            <button
-                              type="button"
-                              onMouseDown={e => e.preventDefault()}
-                              onClick={e => { e.stopPropagation(); setExpandedPhoneMessageId(null); }}
-                              title="Close conversation"
-                              aria-label="Close conversation"
-                              style={phoneIconButton(false)}
-                            >
-                              {suiteIcon("close", 16)}
-                            </button>
+                            <PhoneIconBtn icon="call" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); dialNum(thread._who); }} title="Call" aria-label="Call" />
+                            <PhoneIconBtn icon="sms" onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); openCompose(thread._name, thread._who, actionId); }} title="Reply" aria-label="Reply" />
+                            <PhoneIconBtn icon="close" iconSize={16} onMouseDown={e => e.preventDefault()} onClick={e => { e.stopPropagation(); setExpandedPhoneMessageId(null); }} title="Close conversation" aria-label="Close conversation" />
                           </div>
                           <div ref={expandedConversationEndRef} style={{ height: 1 }} />
                         </div>
@@ -1488,11 +1466,11 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                     <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
                       {/* Direct resolve/reopen toggle for missed calls — one tap, no menu. */}
                       {isMissed && mKey && (resolved
-                        ? <button onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, false); }} title="Reopen missed call" aria-label="Reopen missed call" style={phoneIconButton(false)}>{suiteIcon("undo", 16)}</button>
-                        : <button onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, true); }} title="Mark resolved" aria-label="Mark resolved" style={{ ...phoneIconButton(false), color: C.success }}>{suiteIcon("check_circle", 17)}</button>)}
-                      <button onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }} title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} style={phoneIconButton(actionsOpen)}>
-                        {suiteIcon("more_horiz", 17)}
-                      </button>
+                        ? <PhoneIconBtn icon="undo" iconSize={16} onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, false); }} title="Reopen missed call" aria-label="Reopen missed call" />
+                        : <PhoneIconBtn icon="check_circle" iconSize={17} color={C.success} onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, true); }} title="Mark resolved" aria-label="Mark resolved" />)}
+                      <PhoneIconBtn icon="more_horiz" iconSize={17} active={actionsOpen}
+                        onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }}
+                        title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} />
                     </div>
                     {actionsOpen && (
                       <div style={phoneActionGroupStyle}>

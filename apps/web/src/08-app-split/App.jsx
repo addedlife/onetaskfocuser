@@ -10,6 +10,7 @@ import { savePendingRecording, deletePendingRecording, updatePendingRecordingErr
 import { DeskPhoneWebPanel } from '../10-deskphone-web.jsx';
 import { isOfflineShellReady } from '../offline-support.js';
 import { buildDeskPhoneThemeQuery, cleanTheme, DUR, EASE, ELEV, getInitialSuiteView, GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, NC_TYPE, RADIUS, suiteIcon, themeVarsCss, useViewportWidth, Z } from './ui-tokens.jsx';
+import { ActionBtn, IconBtn } from './m3.jsx';
 import { AppSuiteChrome } from './components/AppSuiteChrome.jsx';
 import { DeskPhoneSuitePanel, SuiteShailosPanel } from './components/SuitePanels.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './components/NerveCenterPhoneSurface.jsx';
@@ -926,7 +927,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
-    const eventsUrl = (calId) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&showDeleted=false&orderBy=startTime&maxResults=25`;
+    const eventsUrl = (calId) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&showDeleted=false&orderBy=startTime&maxResults=100`;
 
     // Step 1: try to get all subscribed calendars via calendarList
     let cals = null;
@@ -951,7 +952,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       if (r.status === 401) throw new Error('token_expired');
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(`Calendar: ${d?.error?.message || 'HTTP ' + r.status}`); }
       const d = await r.json();
-      return sortCalEvents((d.items || []).filter(evt => evt.status !== "cancelled").map(evt => ({ ...evt, calendarId: "primary" }))).slice(0, 20);
+      // Cap at 120 (was 20): a zmanim calendar alone can put 15+ events before noon,
+      // and the old cap silently dropped everything later in the day (owner tickets).
+      return sortCalEvents((d.items || []).filter(evt => evt.status !== "cancelled").map(evt => ({ ...evt, calendarId: "primary" }))).slice(0, 120);
     }
 
     // Step 2: fetch events from each calendar in parallel
@@ -964,11 +967,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     );
     // Re-throw token_expired if any calendar hit it
     for (const r of results) { if (r.reason?.message === 'token_expired') throw new Error('token_expired'); }
-    // Merge, dedupe by event id, sort (timed first, all-day last), cap at 20
+    // Merge, dedupe by event id, sort (timed first, all-day last), cap at 120 —
+    // the old 20-cap dropped later-day events whenever zmanim filled the morning.
     const seen = new Set();
     const all = results.flatMap(r => r.status === 'fulfilled' ? r.value : []).filter(evt => { if (seen.has(evt.id)) return false; seen.add(evt.id); return true; });
     console.log('[Google] Total calendar events after merge:', all.length);
-    return sortCalEvents(all).slice(0, 20);
+    return sortCalEvents(all).slice(0, 120);
   }
 
   async function fetchGmailData(token) {
@@ -3068,14 +3072,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 <p style={{fontSize:NC_TYPE.meta,color:C.muted,margin:"0 0 6px",fontFamily:NC_FONT_STACK,lineHeight:1.5}}>AI flagged <strong style={{color:C.text}}>{optConfirm.taskName}</strong> as urgent enough to jump above your pinned tasks.</p>
                 <p style={{fontSize:NC_TYPE.small,color:C.faint,margin:"0 0 26px",fontFamily:NC_FONT_STACK,lineHeight:1.5,fontStyle:"italic"}}>{optConfirm.reason}</p>
                 <div style={{display:"flex",gap:10,justifyContent:"center"}}>
-                  <button onClick={()=>{uT(()=>optConfirm.optimizedWithOverride);setOptConfirm(null);showToast("Moved above pins ✦",2500);}}
-                    style={{padding:"9px 20px",borderRadius:RADIUS.md,border:"none",background:C.accent,cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,color:"#fff",fontWeight:700}}>
-                    Yes, move above pins
-                  </button>
-                  <button onClick={()=>setOptConfirm(null)}
-                    style={{padding:"9px 20px",borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,background:"none",cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,color:C.muted,fontWeight:500}}>
-                    Keep pins
-                  </button>
+                  <ActionBtn variant="filled" containerColor={C.accent} labelColor="#fff" height={38} labelSize={NC_TYPE.meta}
+                    onClick={()=>{uT(()=>optConfirm.optimizedWithOverride);setOptConfirm(null);showToast("Moved above pins ✦",2500);}}>Yes, move above pins</ActionBtn>
+                  <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} height={38} labelSize={NC_TYPE.meta}
+                    onClick={()=>setOptConfirm(null)}>Keep pins</ActionBtn>
                 </div>
               </>
             ) : (
@@ -3084,14 +3084,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 <p style={{fontSize:NC_TYPE.title,fontWeight:700,color:C.text,margin:"0 0 10px",fontFamily:NC_FONT_STACK,letterSpacing:.2}}>Queue already looks sharp</p>
                 <p style={{fontSize:NC_TYPE.meta,color:C.muted,margin:"0 0 26px",fontFamily:NC_FONT_STACK,lineHeight:1.6}}>{optConfirm.insight || "The current order is already well-prioritized."}</p>
                 <div style={{display:"flex",gap:10,justifyContent:"center"}}>
-                  <button onClick={()=>{uT(()=>optConfirm.optimized);setOptConfirm(null);showToast("Reordered anyway ✦",2500);}}
-                    style={{padding:"9px 22px",borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,background:"none",cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,color:C.muted,fontWeight:500}}>
-                    Reorder anyway
-                  </button>
-                  <button onClick={()=>setOptConfirm(null)}
-                    style={{padding:"9px 24px",borderRadius:RADIUS.md,border:"none",background:C.accent,cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,color:"#fff",fontWeight:700}}>
-                    Got it
-                  </button>
+                  <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} height={38} labelSize={NC_TYPE.meta}
+                    onClick={()=>{uT(()=>optConfirm.optimized);setOptConfirm(null);showToast("Reordered anyway ✦",2500);}}>Reorder anyway</ActionBtn>
+                  <ActionBtn variant="filled" containerColor={C.accent} labelColor="#fff" height={38} labelSize={NC_TYPE.meta}
+                    onClick={()=>setOptConfirm(null)}>Got it</ActionBtn>
                 </div>
               </>
             )}
@@ -3120,14 +3116,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   style={{width:"100%",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,border:`1px solid ${C.divider}`,borderRadius:RADIUS.md,padding:"9px 12px",outline:"none",color:C.text,background:C.bgSoft,boxSizing:"border-box",marginBottom:16}}
                 />
                 <div style={{display:"flex",gap:10,justifyContent:"center"}}>
-                  <button onClick={()=>setFirstStepModal(null)}
-                    style={{padding:"9px 20px",borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,background:"none",cursor:"pointer",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,color:C.muted,fontWeight:500}}>
-                    Cancel
-                  </button>
-                  <button onClick={confirmFirstStep} disabled={!firstStepModal.edited?.trim()}
-                    style={{padding:"9px 24px",borderRadius:RADIUS.md,border:"none",background:firstStepModal.edited?.trim()?C.accent:"#aaa",cursor:firstStepModal.edited?.trim()?"pointer":"default",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,color:"#fff",fontWeight:700,display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
-                    Create as Now {suiteIcon("star_rate", 16)}
-                  </button>
+                  <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} height={38} labelSize={NC_TYPE.meta}
+                    onClick={()=>setFirstStepModal(null)}>Cancel</ActionBtn>
+                  <ActionBtn variant="filled" icon="star_rate" iconSize={16} height={38} labelSize={NC_TYPE.meta}
+                    containerColor={firstStepModal.edited?.trim()?C.accent:"#aaa"} labelColor="#fff"
+                    onClick={confirmFirstStep} disabled={!firstStepModal.edited?.trim()}>Create as Now</ActionBtn>
                 </div>
               </>
             )}
@@ -3151,14 +3144,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               style={{width:"100%",fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,border:`1px solid ${C.divider}`,borderRadius:RADIUS.md,padding:"10px 12px",outline:"none",color:C.text,background:C.bgSoft,boxSizing:"border-box",marginBottom:16}}
             />
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setListNameModal(null)}
-                style={{flex:1,padding:12,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,background:C.bgSoft,color:C.text,cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:NC_TYPE.meta,fontWeight:500}}>
-                Cancel
-              </button>
-              <button onClick={confirmListName} disabled={!listNameInput.trim()}
-                style={{flex:1,padding:12,borderRadius:RADIUS.md,border:"none",background:listNameInput.trim()?C.accent:"#aaa",color:"#fff",cursor:listNameInput.trim()?"pointer":"default",fontFamily:NC_FONT_STACK,fontSize:NC_TYPE.meta,fontWeight:600}}>
-                {listNameModal.mode === 'new' ? 'Create' : 'Rename'}
-              </button>
+              <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.text} height={44} labelSize={NC_TYPE.meta} style={{flex:1}}
+                onClick={()=>setListNameModal(null)}>Cancel</ActionBtn>
+              <ActionBtn variant="filled" containerColor={listNameInput.trim()?C.accent:"#aaa"} labelColor="#fff" height={44} labelSize={NC_TYPE.meta} style={{flex:1}}
+                onClick={confirmListName} disabled={!listNameInput.trim()}>{listNameModal.mode === 'new' ? 'Create' : 'Rename'}</ActionBtn>
             </div>
           </div>
         </div>
@@ -3181,14 +3170,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             </div>
             <p style={{fontSize:NC_TYPE.small,color:C.faint,margin:"0 0 16px",fontFamily:NC_FONT_STACK}}>This will replace your current tasks and restore shailos.</p>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setRestoreConfirm(null)}
-                style={{flex:1,padding:12,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,background:C.bgSoft,color:C.text,cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:NC_TYPE.meta,fontWeight:500}}>
-                Cancel
-              </button>
-              <button onClick={doConfirmRestore}
-                style={{flex:1,padding:12,borderRadius:RADIUS.md,border:"none",background:C.danger,color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:NC_TYPE.meta,fontWeight:600}}>
-                Restore
-              </button>
+              <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.text} height={44} labelSize={NC_TYPE.meta} style={{flex:1}}
+                onClick={()=>setRestoreConfirm(null)}>Cancel</ActionBtn>
+              <ActionBtn variant="filled" containerColor={C.danger} labelColor="#fff" height={44} labelSize={NC_TYPE.meta} style={{flex:1}}
+                onClick={doConfirmRestore}>Restore</ActionBtn>
             </div>
           </div>
         </div>
@@ -3198,19 +3183,21 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       {deletedUndo && (
         <div style={{position:"fixed",bottom:"clamp(55px,9vh,80px)",left:"50%",transform:"translateX(-50%)",background:C.bg,border:`1px solid ${C.divider}`,borderRadius:RADIUS.pill,padding:"8px 14px",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:C.muted,whiteSpace:"nowrap",boxShadow:ELEV[3],display:"flex",alignItems:"center",gap:10,zIndex:Z.toast,animation:"ot-fade 0.2s"}}>
           <span style={{color:C.faint}}>Task deleted</span>
-          <button onClick={()=>{clearTimeout(deletedTmr.current);setAS(p=>({...p,lists:p.lists.map(l=>l.id===deletedUndo.listId?{...l,tasks:[...l.tasks,deletedUndo.task]}:l)}));setDeletedUndo(null);}} style={{background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,padding:"3px 10px",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:500,color:C.text,fontFamily:NC_FONT_STACK}}>Undo</button>
+          <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.text} height={26} labelSize={NC_TYPE.meta}
+            onClick={()=>{clearTimeout(deletedTmr.current);setAS(p=>({...p,lists:p.lists.map(l=>l.id===deletedUndo.listId?{...l,tasks:[...l.tasks,deletedUndo.task]}:l)}));setDeletedUndo(null);}}>Undo</ActionBtn>
         </div>
       )}
       {compUndo && (
         <div style={{position:"fixed",bottom:"clamp(55px,9vh,80px)",left:"50%",transform:"translateX(-50%)",background:C.bg,border:`1px solid ${C.divider}`,borderRadius:RADIUS.pill,padding:"8px 14px",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:C.muted,whiteSpace:"nowrap",boxShadow:ELEV[3],display:"flex",alignItems:"center",gap:10,zIndex:Z.toast,animation:"ot-fade 0.2s"}}>
           <span style={{color:C.faint}}>Task completed</span>
-          <button onClick={undoCompTask} style={{background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,padding:"3px 10px",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:500,color:C.text,fontFamily:NC_FONT_STACK}}>Undo</button>
+          <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.text} height={26} labelSize={NC_TYPE.meta} onClick={undoCompTask}>Undo</ActionBtn>
         </div>
       )}
       {parkedUndo && (
         <div style={{position:"fixed",bottom:"clamp(55px,9vh,80px)",left:"50%",transform:"translateX(-50%)",background:C.bg,border:`1px solid ${C.divider}`,borderRadius:RADIUS.pill,padding:"8px 14px",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:C.muted,whiteSpace:"nowrap",boxShadow:ELEV[3],display:"flex",alignItems:"center",gap:10,zIndex:Z.toast,animation:"ot-fade 0.2s"}}>
           <span style={{color:C.faint,display:"flex",alignItems:"center",gap:4}}>{suiteIcon("sunny", 16)} Parked until tomorrow</span>
-          <button onClick={()=>{clearTimeout(parkedTmr.current);setAS(p=>({...p,lists:p.lists.map(l=>l.id===parkedUndo.listId?{...l,tasks:l.tasks.map(t=>t.id===parkedUndo.task.id?{...t,snoozedUntil:parkedUndo.task.snoozedUntil}:t)}:l)}));setParkedUndo(null);}} style={{background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,padding:"3px 10px",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:500,color:C.text,fontFamily:NC_FONT_STACK}}>Undo</button>
+          <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.text} height={26} labelSize={NC_TYPE.meta}
+            onClick={()=>{clearTimeout(parkedTmr.current);setAS(p=>({...p,lists:p.lists.map(l=>l.id===parkedUndo.listId?{...l,tasks:l.tasks.map(t=>t.id===parkedUndo.task.id?{...t,snoozedUntil:parkedUndo.task.snoozedUntil}:t)}:l)}));setParkedUndo(null);}}>Undo</ActionBtn>
         </div>
       )}
 
@@ -3268,10 +3255,16 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",borderBottom:`1px solid ${C.divider}`,background:C.bg,flexShrink:0}}>
             <span style={{fontSize:NC_TYPE.body,fontWeight:600,color:C.text,fontFamily:NC_FONT_STACK}}>Shaila Transcriber</span>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <button onClick={doFullBackup} disabled={backupLoading} title="Download full backup (tasks + shailos)" style={{fontSize:NC_TYPE.meta,padding:"4px 10px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,color:C.muted,cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,opacity:backupLoading ? .5 : 1,display:"flex",alignItems:"center",gap:6}}>{backupLoading?suiteIcon("schedule",14):suiteIcon("download",14)} Backup</button>
-              <button onClick={doLoadBackup} title="Restore from backup file" style={{fontSize:NC_TYPE.meta,padding:"4px 10px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,color:C.muted,cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,display:"flex",alignItems:"center",gap:6}}>{suiteIcon("folder",14)} Restore</button>
-              <button onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check" style={{fontSize:NC_TYPE.meta,padding:"4px 10px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,color:C.muted,cursor:"pointer",fontFamily:NC_FONT_STACK,fontWeight:500,opacity:reconcileLoading ? .5 : 1,display:"flex",alignItems:"center",gap:6}}>{reconcileLoading?suiteIcon("schedule",14):suiteIcon("refresh",14)}</button>
-              <button onClick={()=>{setShowShailos(false);setShailosAction(null);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:C.muted,padding:4,display:"flex",alignItems:"center",justifyContent:"center"}}>{suiteIcon("close",18)}</button>
+              <ActionBtn variant="tonal" icon={backupLoading ? "schedule" : "download"} iconSize={14} height={28} labelSize={NC_TYPE.meta}
+                containerColor={C.bgSoft} labelColor={C.muted}
+                onClick={doFullBackup} disabled={backupLoading} title="Download full backup (tasks + shailos)">Backup</ActionBtn>
+              <ActionBtn variant="tonal" icon="folder" iconSize={14} height={28} labelSize={NC_TYPE.meta}
+                containerColor={C.bgSoft} labelColor={C.muted}
+                onClick={doLoadBackup} title="Restore from backup file">Restore</ActionBtn>
+              <IconBtn variant="tonal" icon={reconcileLoading ? "schedule" : "refresh"} iconSize={14} size={28} containerColor={C.bgSoft} color={C.muted}
+                onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check" aria-label="Sync check" />
+              <IconBtn icon="close" iconSize={18} size={32} color={C.muted}
+                onClick={()=>{setShowShailos(false);setShailosAction(null);}} title="Close" aria-label="Close" />
             </div>
           </div>
           <iframe src={shailosAction ? `/shailos/?action=${shailosAction}` : "/shailos/"} style={{flex:1,border:"none",width:"100%"}} title="Shaila Transcriber"/>
@@ -3286,8 +3279,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               The task <strong>"{shailaDelPrompt.taskText?.substring(0,50)}"</strong> was removed from your queue. Delete it from the Shaila Transcriber record too?
             </p>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>{setShailaDelPrompt(null);}} style={{flex:1,padding:12,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,background:C.bgSoft,color:C.text,cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:NC_TYPE.meta,fontWeight:500}}>Keep record</button>
-              <button onClick={()=>{Store.deleteShailaDoc(shailaDelPrompt.shailaId);setShailaDelPrompt(null);showToast("Shaila record deleted",3000);}} style={{flex:1,padding:12,borderRadius:RADIUS.md,border:"none",background:C.danger,color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:NC_TYPE.meta,fontWeight:600}}>Delete both</button>
+              <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.text} height={44} labelSize={NC_TYPE.meta} style={{flex:1}}
+                onClick={()=>{setShailaDelPrompt(null);}}>Keep record</ActionBtn>
+              <ActionBtn variant="filled" containerColor={C.danger} labelColor="#fff" height={44} labelSize={NC_TYPE.meta} style={{flex:1}}
+                onClick={()=>{Store.deleteShailaDoc(shailaDelPrompt.shailaId);setShailaDelPrompt(null);showToast("Shaila record deleted",3000);}}>Delete both</ActionBtn>
             </div>
           </div>
         </div>
@@ -3505,8 +3500,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:RADIUS.md,padding:"32px 28px",maxWidth:340,textAlign:"center",boxShadow:ELEV[4]}}>
             <h3 style={{margin:"0 0 12px",fontSize:18,fontWeight:500}}>Delete list?</h3>
             <div style={{display:"flex",gap:10}}>
-              <button onClick={()=>setDelConf(null)} style={{flex:1,padding:12,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,background:C.bg,cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:600,color:C.muted}}>Cancel</button>
-              <button onClick={()=>doDelList(delConf)} style={{flex:1,padding:12,borderRadius:RADIUS.md,border:"none",background:C.danger,color:"#fff",cursor:"pointer",fontFamily:NC_FONT_STACK,fontSize:13,fontWeight:600}}>Delete</button>
+              <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} height={44} labelSize={13} style={{flex:1}}
+                onClick={()=>setDelConf(null)}>Cancel</ActionBtn>
+              <ActionBtn variant="filled" containerColor={C.danger} labelColor="#fff" height={44} labelSize={13} style={{flex:1}}
+                onClick={()=>doDelList(delConf)}>Delete</ActionBtn>
             </div>
           </div>
         </div>
@@ -4018,20 +4015,19 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
               {/* ✦ AI Prioritize — direct button */}
-              <button
-                onClick={tasksOptimize}
-                disabled={optLoading}
-                title={hasAI ? "AI Prioritize queue" : "Prioritize queue"}
-                style={{width:32,height:32,borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,cursor:optLoading?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:optLoading?0.5:1,flexShrink:0}}
-              >
+              <IconBtn variant="outlined" size={32} title={hasAI ? "AI Prioritize queue" : "Prioritize queue"} aria-label="Prioritize queue"
+                onClick={tasksOptimize} disabled={optLoading}
+                style={{"--md-outlined-icon-button-outline-color":C.divider,"--md-outlined-icon-button-container-shape":RADIUS.sm,opacity:optLoading?0.5:1,flexShrink:0}}>
                 {optLoading
                   ? <div style={{width:12,height:12,borderRadius:"50%",border:`2px solid ${C.muted}`,borderTopColor:"transparent",animation:"ot-spin 0.7s linear infinite"}}/>
                   : <IC.Sparkle s={14} c={C.muted}/>}
-              </button>
+              </IconBtn>
               {/* ⚙ Settings — consolidated gear */}
-              <button onClick={()=>{setSettingsInitialTab("queue"); setShowSet(true);}} style={{width:32,height:32,borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} title="Settings">
+              <IconBtn variant="outlined" size={32} title="Settings" aria-label="Settings"
+                onClick={()=>{setSettingsInitialTab("queue"); setShowSet(true);}}
+                style={{"--md-outlined-icon-button-outline-color":C.divider,"--md-outlined-icon-button-container-shape":RADIUS.sm,flexShrink:0}}>
                 <IC.Gear s={15} c={C.muted}/>
-              </button>
+              </IconBtn>
               </div>{/* end right-side flex row */}
             </div>
 
@@ -4044,7 +4040,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 style={{width:"100%",padding:"9px 14px",paddingRight:searchQ?36:14,fontSize:13,border:`1px solid ${C.divider}`,borderRadius:RADIUS.md,outline:"none",background:C.bgSoft,color:C.text,fontFamily:NC_FONT_STACK}}
               />
               {searchQ && (
-                <button onClick={()=>setSearchQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:14,color:C.faint,padding:"2px 4px",lineHeight:1,fontFamily:NC_FONT_STACK}} title="Clear search">×</button>
+                <IconBtn icon="close" size={26} iconSize={14} color={C.faint} title="Clear search" aria-label="Clear search"
+                  onClick={()=>setSearchQ("")} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)"}} />
               )}
             </div>
 
@@ -4076,9 +4073,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                     onKeyDown={e=>{if(e.key==="Escape"){setQAddPri(null);setQAddText("");}}}
                     placeholder={qAddPri==="shaila"?"Who + what shaila?":"What needs doing?"}
                     style={{flex:1,minWidth:0,padding:"7px 12px",fontSize:13,border:`1.5px solid ${gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color}`,borderRadius:RADIUS.sm,outline:"none",background:C.bgSoft,color:C.text,fontFamily:"Georgia,serif"}}/>
-                  <button type="submit" style={{background:gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color,border:"none",borderRadius:RADIUS.sm,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                  <IconBtn variant="filled" type="submit" size={34} title="Add task" aria-label="Add task"
+                    containerColor={gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color}
+                    style={{"--md-filled-icon-button-container-shape":RADIUS.sm,flexShrink:0}}>
                     <IC.Plus s={14} c={textOnColor(gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color)}/>
-                  </button>
+                  </IconBtn>
                 </form>
               )}
             </div>
@@ -4131,14 +4130,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                             })()}
                             <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.7}}/>
                             <div style={queueActionRail}>
-                              <button onClick={e=>{e.stopPropagation();compTask(gSteps[0]?.id);}} title="Complete next step" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></button>
-                              {AS.legacyCompleteUI && <button onClick={e=>{e.stopPropagation();legacyCompTask(gSteps[0]?.id);}} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></button>}
-                              <button onClick={e=>{e.stopPropagation();moveTop(gSteps[0]?.id);}} title="To top" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={rowSoft}/></button>
-                              <button onClick={e=>{e.stopPropagation();setChgPri(gSteps[0]?.id);}} title="Change priority" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={rowSoft}/></button>
-                              <button onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.add(task.parentTask);return n;});setGroupAdding(task.parentTask);}} title="Add step" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity,color:rowSoft,display:"flex",alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}>{suiteIcon("add_circle",12)}</button>
-                              <button onClick={e=>{e.stopPropagation();gSteps.forEach(s=>delTask(s.id));}} title="Delete group" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={rowSoft}/></button>
+                              <IconBtn size={22} title="Complete next step" aria-label="Complete next step" onClick={e=>{e.stopPropagation();compTask(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></IconBtn>
+                              {AS.legacyCompleteUI && <IconBtn size={22} title="Legacy complete (no timestamp)" aria-label="Legacy complete" onClick={e=>{e.stopPropagation();legacyCompTask(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></IconBtn>}
+                              <IconBtn size={22} title="To top" aria-label="Move to top" onClick={e=>{e.stopPropagation();moveTop(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={rowSoft}/></IconBtn>
+                              <IconBtn size={22} title="Change priority" aria-label="Change priority" onClick={e=>{e.stopPropagation();setChgPri(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={rowSoft}/></IconBtn>
+                              <IconBtn icon="add_circle" size={22} iconSize={12} color={rowSoft} title="Add step" aria-label="Add step" onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.add(task.parentTask);return n;});setGroupAdding(task.parentTask);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity} />
+                              <IconBtn size={22} title="Delete group" aria-label="Delete group" onClick={e=>{e.stopPropagation();gSteps.forEach(s=>delTask(s.id));}} style={{opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={rowSoft}/></IconBtn>
                               {/* THE one extra icon — expand/collapse steps */}
-                              <button onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;});}} title={isOpen?"Hide steps":"Show steps"} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Chev d={isOpen?"up":"down"} s={12} c={rowSoft}/></button>
+                              <IconBtn size={22} title={isOpen?"Hide steps":"Show steps"} aria-label={isOpen?"Hide steps":"Show steps"} onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;});}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Chev d={isOpen?"up":"down"} s={12} c={rowSoft}/></IconBtn>
                             </div>
                           </div>
                           {/* Subtle progress bar */}
@@ -4164,7 +4163,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                                   const pillStatus = st.gotBackToAsker ? "got_back" : researchDone ? "have_answer" : "researching";
                                   return <ShailaMiniPill status={pillStatus} shailaNum={shailaNum} onToggle={()=>handleShailaGotBack(st.id, !st.gotBackToAsker)}/>;
                                 })()}
-                                <button onClick={e=>{e.stopPropagation();delTask(st.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:.3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.3}><IC.Trash s={11} c={C.faint}/></button>
+                                <IconBtn size={22} title="Delete step" aria-label="Delete step" onClick={e=>{e.stopPropagation();delTask(st.id);}} style={{opacity:.3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.3}><IC.Trash s={11} c={C.faint}/></IconBtn>
                               </div>
                             ))}
                             {gDone > 0 && <div style={{padding:"3px 10px 3px 28px",fontSize:10,color:C.faint,fontFamily:NC_FONT_STACK,borderBottom:`1px solid ${C.divider}`,display:"flex",alignItems:"center",gap:4}}>{gDone} step{gDone!==1?"s":""} completed {suiteIcon("done",10)}</div>}
@@ -4225,15 +4224,15 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                           )}
                           <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.7}}/>
                           <div draggable={false} onPointerDown={e=>e.stopPropagation()} style={queueActionRail}>
-                            <button onClick={e=>{e.stopPropagation();compTask(task.id);}} title="Mark done" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></button>
-                            {AS.legacyCompleteUI && <button onClick={e=>{e.stopPropagation();legacyCompTask(task.id);}} title="Legacy complete (no timestamp)" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></button>}
-                            <button onClick={e=>{e.stopPropagation();moveTop(task.id);}} title="Top" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={_qSoft}/></button>
-                            {task.pinned && <button onClick={e=>{e.stopPropagation();unpinTask(task.id);}} title="Unpin" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity,color:_qSoft,display:"flex",alignItems:"center"}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}>{suiteIcon("location_on",10)}</button>}
-                            <button onClick={e=>{e.stopPropagation();setChgPri(task.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={_qSoft}/></button>
-                            <button onClick={e=>{e.stopPropagation();setShowBD(task);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity}} title="Shatter with AI" onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Split s={12} c={_qSoft}/></button>
-                            <button onClick={e=>{e.stopPropagation();openFirstStep(task);}} title="Suggest first step with AI" style={{background:"none",border:"none",cursor:hasAI?"pointer":"default",padding:4,opacity:hasAI?rowActionOpacity:.15,color:_qSoft,display:"flex",alignItems:"center"}} onMouseEnter={e=>{if(hasAI)e.currentTarget.style.opacity=1;}} onMouseLeave={e=>e.currentTarget.style.opacity=hasAI?rowActionOpacity:.15}>{suiteIcon("arrow_forward",12)}</button>
-                            <button onClick={e=>{e.stopPropagation();startManualGroup(task);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:rowActionOpacity,color:_qSoft,display:"flex",alignItems:"center"}} title="Add subtasks manually" onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}>{suiteIcon("add_circle",12)}</button>
-                            <button onClick={e=>{e.stopPropagation();delTask(task.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={_qSoft}/></button>
+                            <IconBtn size={22} title="Mark done" aria-label="Mark done" onClick={e=>{e.stopPropagation();compTask(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></IconBtn>
+                            {AS.legacyCompleteUI && <IconBtn size={22} title="Legacy complete (no timestamp)" aria-label="Legacy complete" onClick={e=>{e.stopPropagation();legacyCompTask(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></IconBtn>}
+                            <IconBtn size={22} title="Top" aria-label="Move to top" onClick={e=>{e.stopPropagation();moveTop(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={_qSoft}/></IconBtn>
+                            {task.pinned && <IconBtn icon="location_on" size={22} iconSize={10} color={_qSoft} title="Unpin" aria-label="Unpin" onClick={e=>{e.stopPropagation();unpinTask(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity} />}
+                            <IconBtn size={22} title="Change priority" aria-label="Change priority" onClick={e=>{e.stopPropagation();setChgPri(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={_qSoft}/></IconBtn>
+                            <IconBtn size={22} title="Shatter with AI" aria-label="Shatter with AI" onClick={e=>{e.stopPropagation();setShowBD(task);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Split s={12} c={_qSoft}/></IconBtn>
+                            <IconBtn icon="arrow_forward" size={22} iconSize={12} color={_qSoft} title="Suggest first step with AI" aria-label="Suggest first step" disabled={!hasAI} onClick={e=>{e.stopPropagation();openFirstStep(task);}} style={{opacity:hasAI?rowActionOpacity:.15}} onMouseEnter={e=>{if(hasAI)e.currentTarget.style.opacity=1;}} onMouseLeave={e=>e.currentTarget.style.opacity=hasAI?rowActionOpacity:.15} />
+                            <IconBtn icon="add_circle" size={22} iconSize={12} color={_qSoft} title="Add subtasks manually" aria-label="Add subtasks" onClick={e=>{e.stopPropagation();startManualGroup(task);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity} />
+                            <IconBtn size={22} title="Delete" aria-label="Delete" onClick={e=>{e.stopPropagation();delTask(task.id);}} style={{opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={_qSoft}/></IconBtn>
                           </div>
                         </div>
                       );

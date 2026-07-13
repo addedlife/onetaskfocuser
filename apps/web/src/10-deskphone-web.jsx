@@ -6,7 +6,7 @@ import {
   addPendingSms, updatePendingSms, getPendingSms, subscribePendingSms,
   reconcilePendingSms, unmatchedPendingSms, collapseHostDoubles, smsBodyKey, smsPhoneKey,
 } from './08-app-split/utils/pending-sms.js';
-import { derivePhoneLinkState, describePhoneLink, messageListSignature } from './08-app-split/phone-link.js';
+import { derivePhoneLinkState, describePhoneLink, messageListSignature, mergeMessageFeeds, mergeCallFeeds } from './08-app-split/phone-link.js';
 import { subscribeOwner } from './08-app-split/phone-host-control.js';
 
 const DEFAULT_HOST = "http://127.0.0.1:8765";
@@ -6019,6 +6019,9 @@ export function DeskPhoneWebPanel({
   const contactsSigRef = useRef("");
   const messagesSigRef = useRef("");
   const callsSigRef = useRef("");
+  // Session-scoped retention caches for the handoff union-merge (phone-link.js).
+  const messagesFeedCacheRef = useRef([]);
+  const callsFeedCacheRef = useRef([]);
   const refreshInFlightRef = useRef(false);
   const refreshQueuedRef = useRef(false);
   // Cloud fallback state: viaCloud = data is coming from the relay blob (no host
@@ -6157,17 +6160,23 @@ export function DeskPhoneWebPanel({
       if (nextStatus.ok) setStatus(nextStatus.data);
       if (nextMessages.ok) {
         const mediaData = nextMediaMessages.ok ? nextMediaMessages.data : mediaMessagesRef.current;
-        const merged = mergeMessagesWithMedia(nextMessages.data, mediaData);
+        const mergedMedia = mergeMessagesWithMedia(nextMessages.data, mediaData);
+        // Retention merge (phone-link.js): a host that just took the handoff
+        // (or just reconnected to the phone) re-syncs its store over minutes —
+        // union with what's already on screen so history never wipes/refills.
+        const merged = mergeMessageFeeds(messagesFeedCacheRef.current, getApiList(mergedMedia));
+        messagesFeedCacheRef.current = merged;
         // Full-list signature (phone-link.js) — sees send-status/read flips
         // anywhere in the list, not just length/endpoint changes.
-        const msgSig = messageListSignature(getApiList(merged));
+        const msgSig = messageListSignature(merged);
         if (msgSig !== messagesSigRef.current) {
           messagesSigRef.current = msgSig;
           setMessages(merged);
         }
       }
       if (nextCalls.ok) {
-        const callList = getApiList(nextCalls.data);
+        const callList = mergeCallFeeds(callsFeedCacheRef.current, getApiList(nextCalls.data));
+        callsFeedCacheRef.current = callList;
         const callSig = `${callList.length}|${callList[0]?.id ?? ""}`;
         if (callSig !== callsSigRef.current) {
           callsSigRef.current = callSig;
