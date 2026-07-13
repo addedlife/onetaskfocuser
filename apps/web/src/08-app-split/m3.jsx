@@ -58,7 +58,9 @@ export const TextField = createComponent({
   react: React,
   tagName: 'md-outlined-text-field',
   elementClass: MdOutlinedTextField,
-  events: { onInput: 'input', onChange: 'change', onKeyDown: 'keydown' },
+  // onBlur maps to focusout (bubbles AND crosses the shadow boundary, unlike
+  // blur) so save-on-blur callers fire when the inner <input> loses focus.
+  events: { onInput: 'input', onChange: 'change', onKeyDown: 'keydown', onBlur: 'focusout' },
 });
 export const Switch = createComponent({
   react: React,

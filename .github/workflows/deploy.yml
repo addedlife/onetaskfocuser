@@ -24,7 +24,9 @@ jobs:
         working-directory: apps/web
         env:
           GIT_COMMIT: ${{ github.sha }}
-        run: npm run build && node scripts/copy-shailos-to-dist.cjs
+        # Shailos is a native component of the web app now (ShailosTracker.jsx) —
+        # the old copy-shailos-to-dist iframe payload is no longer shipped.
+        run: npm run build
 
       - name: Install functions deps
         working-directory: apps/web/functions

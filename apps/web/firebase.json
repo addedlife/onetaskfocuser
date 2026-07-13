@@ -34,7 +34,6 @@
       { "source": "/api/mcp",              "function": "mcp",             "region": "us-central1" },
       { "source": "/api/google-search",     "function": "googleSearch",    "region": "us-central1" },
       { "source": "/mcp",                  "function": "mcp",             "region": "us-central1" },
-      { "source": "/shailos/**",           "destination": "/shailos/index.html" },
       { "source": "/health-callback",      "destination": "/index.html" },
       { "source": "/**",                   "destination": "/index.html" }
     ]

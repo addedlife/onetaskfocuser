@@ -2,9 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DeskPhoneWebPanel } from '../../10-deskphone-web.jsx';
 import { buildDeskPhoneThemeQuery, cleanTheme, ELEV, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
 import { ActionBtn, IconBtn } from '../m3.jsx';
+import { ShailosTracker } from './ShailosTracker.jsx';
 
 
-function SuiteShailosPanel({ T, action, onClose, sidebarW = 0 }) {
+// The Shailos Tracker is a NATIVE surface now (ShailosTracker.jsx) — the old
+// /shailos/ iframe (separate build, postMessage handshake) is gone.
+function SuiteShailosPanel({ T, action, onClose, sidebarW = 0, user = null, onRecordCall = null }) {
   const C = cleanTheme(T);
   return (
     <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7600, overflow: "hidden", background: C.bg, borderLeft: `1px solid ${C.divider}`, boxShadow: ELEV.drawer, display: "flex", flexDirection: "column" }}>
@@ -19,7 +22,9 @@ function SuiteShailosPanel({ T, action, onClose, sidebarW = 0 }) {
         <IconBtn variant="tonal" icon="close" iconSize={ICON.lg} size={36}
           color={C.muted} containerColor={C.bgSoft} onClick={onClose} title="Back to tasks" />
       </div>
-      <iframe src={action ? `/shailos/?action=${action}` : "/shailos/"} title="Shailos Tracker" style={{ flex: 1, border: "none", width: "100%", background: C.bgSoft }} />
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <ShailosTracker T={T} user={user} action={action} onRecordCall={onRecordCall} />
+      </div>
     </div>
   );
 }

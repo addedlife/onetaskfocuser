@@ -13,6 +13,7 @@ import { buildDeskPhoneThemeQuery, cleanTheme, DUR, EASE, ELEV, getInitialSuiteV
 import { ActionBtn, IconBtn } from './m3.jsx';
 import { AppSuiteChrome } from './components/AppSuiteChrome.jsx';
 import { DeskPhoneSuitePanel, SuiteShailosPanel } from './components/SuitePanels.jsx';
+import { ShailosTracker } from './components/ShailosTracker.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './components/NerveCenterPhoneSurface.jsx';
 import { compactNerveSummary, nerveSummarySource, NerveCenterPanel } from './components/NerveCenterPanel.jsx';
 import { TaskRiverPanel } from './components/TaskRiverPanel.jsx';
@@ -1196,18 +1197,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     return { deleted: true, eventId, calendarId };
   }
 
-  // ─── Listen for shailos iframe "close" message ───────────────────────────
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.data === 'shailos:close') { setShowShailos(false); setShailosAction(null); }
-      if (e.data === 'shailos:open-conv-capture') {
-        setShowShailos(false); setShailosAction(null);
-        setConvCallMode(true); setShowConvCapture(true);
-      }
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, []);
+  // (The shailos iframe postMessage handshake is gone — the tracker is a
+  // native component now and gets onClose/onRecordCall as plain props.)
 
   // ─── Shaila ↔ Task real-time sync ───────────────────────────────────────
   // Uses setAS directly (not uT) so it can check ALL lists for existing shailaId links.
@@ -3249,7 +3240,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         />
       )}
       {showBrainDump && <BrainDump T={T} pris={pris} onCapture={(text)=>{captureZenDump(text);setShowZenReview(true);setShowBrainDump(false);}} onClose={()=>setShowBrainDump(false)}/>}
-      {/* Shaila Transcriber — full-screen iframe overlay */}
+      {/* Shaila Transcriber — full-screen native overlay */}
       {showShailos && (
         <div style={{position:"fixed",inset:0,zIndex:Z.overlay,background:T.bg,display:"flex",flexDirection:"column",animation:"ot-fade 0.2s"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",borderBottom:`1px solid ${C.divider}`,background:C.bg,flexShrink:0}}>
@@ -3267,7 +3258,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 onClick={()=>{setShowShailos(false);setShailosAction(null);}} title="Close" aria-label="Close" />
             </div>
           </div>
-          <iframe src={shailosAction ? `/shailos/?action=${shailosAction}` : "/shailos/"} style={{flex:1,border:"none",width:"100%"}} title="Shaila Transcriber"/>
+          <div style={{flex:1,minHeight:0}}>
+            <ShailosTracker T={T} user={user} action={shailosAction}
+              onRecordCall={()=>{setShowShailos(false);setShailosAction(null);setConvCallMode(true);setShowConvCapture(true);}} />
+          </div>
         </div>
       )}
       {/* Shaila delete prompt — asks if user also wants to delete from transcriber record */}
@@ -3678,7 +3672,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       )}
 
       {!shellHidden && suiteView === "shailos" && (
-        <SuiteShailosPanel T={T} action={shailosAction} onClose={()=>setSuiteView("focus")} sidebarW={sidebarW}/>
+        <SuiteShailosPanel T={T} action={shailosAction} onClose={()=>setSuiteView("focus")} sidebarW={sidebarW}
+          user={user} onRecordCall={()=>{setSuiteView("focus");setConvCallMode(true);setShowConvCapture(true);}}/>
       )}
 
       {!shellHidden && suiteView === "deskphone" && (
