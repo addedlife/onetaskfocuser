@@ -1,6 +1,16 @@
-# iPad Phone Bridge (probe + LAN host proxy)
+# iPad Phone Bridge (probe + LAN host proxy + cloud lane)
 
-Native iPadOS app for the Shamash WebPhone bridge contract. Two lanes:
+Native iPadOS app for the Shamash WebPhone bridge contract. Lanes:
+
+0. **Cloud lane (2026-07).** `RelayPresenceService.swift` makes the iPad a
+   third link on the SAME Firestore relay as the Android/PC hosts: it beacons
+   `hosts.ios` presence into `phone-relay/owner` every ~20 s (the auto-finder's
+   input), and while the web rail toggle prefers the iPad it pushes the full
+   LAN-proxied state blob (`status/messages/calls/contacts`) to
+   `phone-relay/state`, so every remote browser reads the phone feed through
+   the iPad. The iPad still cannot hold the phone's Bluetooth itself (see the
+   verdict below) — this lane FEEDS the cloud from whichever BT-capable host
+   holds the link.
 
 1. **LAN host proxy (the working lane).** The app discovers the active Shamash
    phone host on the local network via Bonjour (`_shamash-phonehost._tcp`,

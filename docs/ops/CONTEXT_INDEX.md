@@ -73,11 +73,27 @@ Goal: minimize cached and uncached tokens while preserving accuracy. Start from 
 - Key facts: original ESP32 only (S3/C3/C6 are BLE-only — no BT Classic); prototype lane is Pi Zero 2 W + BlueZ obexd; BT protocol reference to port is `apps/phone-host-android` `bt/*.kt`
 - Gate: bench validation 1 (ESP32 OBEX CONNECT accepted by the source phone) before further investment; open question flagged in the spec — RAM-only cache vs. truly zero caching (affects `/messages` responsiveness)
 
-### iPad Phone Bridge (LAN host proxy + BT probe gate)
+### iPad Phone Bridge (LAN host proxy + cloud lane + BT probe gate)
 
 - Primary folder: `apps/ipad-phone-bridge`
-- Search terms: `LanHostClient`, `lan-host`, `BluetoothProbeService`, `localOnlyPrefixes`
+- Search terms: `LanHostClient`, `lan-host`, `BluetoothProbeService`, `RelayPresenceService`, `localOnlyPrefixes`
 - Verdict: direct BT host on iPadOS is blocked by public API (Classic RFCOMM profiles ≠ GATT); live lane is the Bonjour LAN proxy of the active host
+- Cloud lane (2026-07): `RelayPresenceService.swift` beacons `hosts.ios` presence into `phone-relay/owner` and, while the web toggle prefers the iPad, pushes the proxied state blob to `phone-relay/state` — the iPad is a third link on the same relay as the ActiveTab/PC hosts
+
+### Phone-Link Arbitration / Auto-Finder (three lanes)
+
+- Primary files: `apps/web/src/08-app-split/phone-link.js`, `apps/web/src/08-app-split/phone-host-control.js`, `apps/web/src/08-app-split/components/AppSuiteChrome.jsx`
+- Native ports: `apps/phone-host-windows/Services/RelayService.cs`, `apps/phone-host-android/.../RelayClient.kt`
+- Search terms: `chooseAutoHost`, `scoreHostLink`, `PREFERRED_VALUES`, `hosts.{id}`, `WritePresenceAsync`, `writePresence`
+- Contract: owner doc `preferred` ∈ tablet|pc|ipad|auto; presence map `hosts.{id} = {t, connected, quality}`; scoring spec lives in phone-link.js and is ported verbatim to both hosts
+- Gate: `npm run test:phone` (36 tests) + `npm run build` in `apps/web`
+
+### Call-Audio Feed / Record → Parser
+
+- Primary files: `apps/web/src/08-app-split/call-audio-feed.js`, `apps/web/src/08-app-split/components/ConvCapture.jsx`, `apps/phone-host-windows/Services/CallAudioBridgeService.cs`
+- Search terms: `probeCallAudioFeed`, `openCallAudioFeed`, `pclink`, `ResolveDownlinkDeviceId`, `call-audio.ws`
+- Contract: DeskPhone serves 16 kHz mono PCM16 over ws://127.0.0.1:8765/call-audio.ws (loopback-exempt from mixed content); ConvCapture records it and feeds the AI conversation parser
+- Gate: `npm run build`; on the PC, `/call-audio/state` + a live-call record smoke
 - Gate: build in Xcode on a Mac; smoke `http://127.0.0.1:8765/status` on the iPad (check the `lanHost` block)
 
 ### Git / Release Docs

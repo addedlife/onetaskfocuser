@@ -59,6 +59,11 @@ class RelayClient(private val host: HostService) {
         private const val OWNER_SWITCH_POLL_MS = 5_000L     // faster poll while a handoff is in flight
         private const val OWNER_SWITCH_WINDOW_MS = 90_000L  // how long after a preference flip we poll fast
 
+        // Auto-finder constants — mirror phone-link.js exactly (one shared spec).
+        private const val PRESENCE_LIVE_WINDOW_MS = 60_000L // presence older than this scores 0
+        private const val AUTO_SWITCH_MARGIN = 25.0         // challenger must win by this (hysteresis)
+        private val BT_CAPABLE_HOSTS = listOf("android", "windows") // the iPad can't hold BT Classic
+
         private const val MESSAGE_RELAY_LIMIT = 150   // whole doc re-sent to every device on change
         private const val CALL_RELAY_LIMIT = 100
         private const val HEARTBEAT_MS = 300_000L     // backup push when nothing changed
@@ -277,6 +282,7 @@ class RelayClient(private val host: HostService) {
     private fun arbitrationTick() {
         fastTickQueued = false
         var preferred = "tablet"; var ownerHost = ""; var ownerT = 0L; var preferredAt = 0L; var ownerConnected = false
+        val presence = HashMap<String, Triple<Long, Boolean, Long>>()   // id → (t, connected, quality)
         val raw = httpGet(OWNER_GET_URL)
         if (raw != null && raw.trim().startsWith("{")) {
             try {
@@ -286,12 +292,33 @@ class RelayClient(private val host: HostService) {
                     ownerT = f.optJSONObject("t")?.optString("integerValue")?.toLongOrNull() ?: 0L
                     preferredAt = f.optJSONObject("preferredAtMs")?.optString("integerValue")?.toLongOrNull() ?: 0L
                     ownerConnected = f.optJSONObject("connected")?.optBoolean("booleanValue") ?: false
+                    f.optJSONObject("hosts")?.optJSONObject("mapValue")?.optJSONObject("fields")?.let { hs ->
+                        for (id in hs.keys()) {
+                            val hf = hs.optJSONObject(id)?.optJSONObject("mapValue")?.optJSONObject("fields") ?: continue
+                            presence[id] = Triple(
+                                hf.optJSONObject("t")?.optString("integerValue")?.toLongOrNull() ?: 0L,
+                                hf.optJSONObject("connected")?.optBoolean("booleanValue") ?: false,
+                                hf.optJSONObject("quality")?.optString("integerValue")?.toLongOrNull() ?: 0L,
+                            )
+                        }
+                    }
                 }
             } catch (_: Exception) {}
         }
         val now = System.currentTimeMillis()
-        // preferred "pc" ⇒ the Windows host should hold; "tablet" ⇒ this Android host.
-        val preferredId = if (preferred == "pc") "windows" else "android"
+
+        // Presence beacon: every host advertises hosts.{id} each tick, parked or
+        // not — the auto-finder's input (spec: phone-link.js chooseAutoHost).
+        writePresence(now, host.isFullyConnected())
+
+        // preferred "pc" ⇒ the Windows host; "tablet" ⇒ this Android host.
+        // "auto" ⇒ the strongest live BT-capable link wins; "ipad" fronts the
+        // cloud feed but can't hold Bluetooth Classic, so BT also auto-arbitrates.
+        val preferredId = when (preferred) {
+            "pc" -> "windows"
+            "tablet" -> "android"
+            else -> chooseAutoHost(presence, now, ownerHost).ifEmpty { "android" }
+        }
         val amPreferred = preferredId == HOST_ID
         val preferredFresh = ownerHost == preferredId && (now - ownerT) < OWNER_STALE_MS && ownerConnected
         val wasHolding = shouldHold
@@ -347,8 +374,11 @@ class RelayClient(private val host: HostService) {
      *  executor — safe to call from the UI thread. Optimistically flips shouldHold
      *  and schedules a fast arbitration tick so the switch converges in seconds. */
     fun writePreferred(preferred: String) {
-        val value = if (preferred == "pc") "pc" else "tablet"
-        shouldHold = (if (value == "pc") "windows" else "android") == HOST_ID
+        val value = if (preferred in setOf("pc", "tablet", "ipad", "auto")) preferred else "tablet"
+        // 'ipad'/'auto' have no single BT target — the next arbitration tick's
+        // auto scoring decides; only explicit device picks flip shouldHold here.
+        if (value == "pc" || value == "tablet")
+            shouldHold = (if (value == "pc") "windows" else "android") == HOST_ID
         executor.execute {
             runCatching {
                 val nowMs = System.currentTimeMillis()
@@ -368,6 +398,53 @@ class RelayClient(private val host: HostService) {
                 arbitrationTick()   // converge immediately (also opens the fast-poll window)
             }
         }
+    }
+
+    // ── Auto-finder (spec: apps/web/src/08-app-split/phone-link.js) ───────────
+    // Verbatim port of scoreHostLink/chooseAutoHost so web, Windows, and this
+    // host rank the lanes identically — auto mode can never oscillate between
+    // arbiters that disagree. Only BT-capable hosts are candidates.
+    private fun scoreHostLink(id: String, e: Triple<Long, Boolean, Long>?, now: Long): Double {
+        if (e == null || e.first <= 0L || now - e.first >= PRESENCE_LIVE_WINDOW_MS) return 0.0
+        val quality = e.third.coerceIn(0L, 100L)
+        val staticPriority = when (id) { "android" -> 3; "windows" -> 2; "ios" -> 1; else -> 0 }
+        return 10.0 + (if (e.second) 100.0 else 0.0) + quality * 0.5 + staticPriority
+    }
+
+    private fun chooseAutoHost(presence: Map<String, Triple<Long, Boolean, Long>>, now: Long, currentHostId: String): String {
+        var bestId = ""; var bestScore = 0.0
+        for (id in BT_CAPABLE_HOSTS) {
+            val score = scoreHostLink(id, presence[id], now)
+            if (score > bestScore) { bestScore = score; bestId = id }
+        }
+        if (bestId.isEmpty()) return ""
+        // Hysteresis: the holder keeps the phone unless dead or beaten by a clear margin.
+        if (currentHostId in BT_CAPABLE_HOSTS) {
+            val currentScore = scoreHostLink(currentHostId, presence[currentHostId], now)
+            if (currentScore > 0 && bestScore < currentScore + AUTO_SWITCH_MARGIN) return currentHostId
+        }
+        return bestId
+    }
+
+    // Link quality is self-reported 0–100. Android exposes no per-profile RSSI
+    // for a bonded HFP/MAP link either, so the honest signal is binary for now.
+    private fun writePresence(nowMs: Long, connected: Boolean) {
+        val quality = if (connected) 100 else 0
+        val body = JSONObject()
+            .put("writes", JSONArray().put(JSONObject()
+                .put("update", JSONObject()
+                    .put("name", OWNER_DOC)
+                    .put("fields", JSONObject()
+                        .put("hosts", JSONObject().put("mapValue", JSONObject().put("fields", JSONObject()
+                            .put(HOST_ID, JSONObject().put("mapValue", JSONObject().put("fields", JSONObject()
+                                .put("t", JSONObject().put("integerValue", nowMs.toString()))
+                                .put("connected", JSONObject().put("booleanValue", connected))
+                                .put("quality", JSONObject().put("integerValue", quality.toString()))))))))))
+                .put("updateMask", JSONObject()
+                    .put("fieldPaths", JSONArray().put("hosts.$HOST_ID")))))
+            .toString()
+        val code = httpSend("POST", FS_COMMIT_URL, body)
+        if (code !in 200..299) HostLog.add("[ARBITRATION] presence write HTTP $code")
     }
 
     private fun writeOwnerHeartbeat(nowMs: Long, connected: Boolean) {

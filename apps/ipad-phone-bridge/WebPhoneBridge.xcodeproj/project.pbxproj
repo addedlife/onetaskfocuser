@@ -13,6 +13,7 @@
 		81A000070000000000000001 /* LocalApiServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A000080000000000000001 /* LocalApiServer.swift */; };
 		81A000180000000000000001 /* BluetoothProbeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A000190000000000000001 /* BluetoothProbeService.swift */; };
 		81A0001A0000000000000001 /* LanHostClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A0001B0000000000000001 /* LanHostClient.swift */; };
+		81A0001C0000000000000001 /* RelayPresenceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A0001D0000000000000001 /* RelayPresenceService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +23,7 @@
 		81A000080000000000000001 /* LocalApiServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalApiServer.swift; sourceTree = "<group>"; };
 		81A000190000000000000001 /* BluetoothProbeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothProbeService.swift; sourceTree = "<group>"; };
 		81A0001B0000000000000001 /* LanHostClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanHostClient.swift; sourceTree = "<group>"; };
+		81A0001D0000000000000001 /* RelayPresenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayPresenceService.swift; sourceTree = "<group>"; };
 		81A000090000000000000001 /* WebPhoneBridge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WebPhoneBridge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -52,6 +54,7 @@
 				81A000060000000000000001 /* BridgeController.swift */,
 				81A000190000000000000001 /* BluetoothProbeService.swift */,
 				81A0001B0000000000000001 /* LanHostClient.swift */,
+				81A0001D0000000000000001 /* RelayPresenceService.swift */,
 				81A000080000000000000001 /* LocalApiServer.swift */,
 			);
 			path = WebPhoneBridge;
@@ -138,6 +141,7 @@
 				81A000050000000000000001 /* BridgeController.swift in Sources */,
 				81A000180000000000000001 /* BluetoothProbeService.swift in Sources */,
 				81A0001A0000000000000001 /* LanHostClient.swift in Sources */,
+				81A0001C0000000000000001 /* RelayPresenceService.swift in Sources */,
 				81A000070000000000000001 /* LocalApiServer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

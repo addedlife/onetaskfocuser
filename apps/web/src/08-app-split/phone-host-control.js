@@ -28,8 +28,8 @@ export const OWNER_DOC_PATH = { collection: 'phone-relay', doc: 'owner' };
 // the pure, testable module; re-exported here so existing callers keep one
 // import site. OWNER_LIVE_WINDOW_MS is the same value as the machine's
 // HEARTBEAT_LIVE_WINDOW_MS, aliased for older call sites.
-export { HOST_LABEL, PREFERRED_DEFAULT, HEARTBEAT_LIVE_WINDOW_MS as OWNER_LIVE_WINDOW_MS } from './phone-link.js';
-import { PREFERRED_DEFAULT, HEARTBEAT_LIVE_WINDOW_MS as OWNER_LIVE_WINDOW_MS } from './phone-link.js';
+export { HOST_LABEL, PREFERRED_DEFAULT, PREFERRED_VALUES, BT_CAPABLE_HOSTS, HEARTBEAT_LIVE_WINDOW_MS as OWNER_LIVE_WINDOW_MS } from './phone-link.js';
+import { PREFERRED_DEFAULT, PREFERRED_VALUES, HEARTBEAT_LIVE_WINDOW_MS as OWNER_LIVE_WINDOW_MS } from './phone-link.js';
 
 function ownerRef() {
   return db ? db.collection(OWNER_DOC_PATH.collection).doc(OWNER_DOC_PATH.doc) : null;
@@ -40,12 +40,25 @@ function ownerRef() {
 // defaults so callers never have to null-check.
 export function normalizeOwner(data) {
   const d = data || {};
-  const preferred = d.preferred === 'pc' ? 'pc' : PREFERRED_DEFAULT;
+  const preferred = PREFERRED_VALUES.includes(d.preferred) ? d.preferred : PREFERRED_DEFAULT;
   const host = typeof d.host === 'string' ? d.host : '';
   const t = Number(d.t) || 0;
   const connected = d.connected === true;
   const preferredAtMs = Number(d.preferredAtMs) || 0;
-  return { preferred, host, t, connected, present: t > 0, preferredAtMs };
+  // Per-host presence map (auto-finder input): hosts.{id} = { t, connected, quality }.
+  // Absent until the rebuilt hosts start writing it — callers get {}.
+  const hosts = {};
+  if (d.hosts && typeof d.hosts === 'object') {
+    for (const [id, raw] of Object.entries(d.hosts)) {
+      if (!raw || typeof raw !== 'object') continue;
+      hosts[id] = {
+        t: Number(raw.t) || 0,
+        connected: raw.connected === true,
+        quality: Number(raw.quality) || 0,
+      };
+    }
+  }
+  return { preferred, host, t, connected, present: t > 0, preferredAtMs, hosts };
 }
 
 // Live subscription to the owner doc. Calls back with the normalized shape on
@@ -70,7 +83,7 @@ export function subscribeOwner(onUpdate) {
 export function setPreferredHost(preferred) {
   const ref = ownerRef();
   if (!ref) return Promise.resolve(false);
-  const value = preferred === 'pc' ? 'pc' : 'tablet';
+  const value = PREFERRED_VALUES.includes(preferred) ? preferred : PREFERRED_DEFAULT;
   return ref
     .set({ preferred: value, preferredAtMs: Date.now() }, { merge: true })
     .then(() => true)

@@ -121,6 +121,69 @@ public sealed class CallAudioBridgeService : IDisposable
             ? _enum.GetDefaultAudioEndpoint(flow, Role.Communications)
             : _enum.GetDevice(id);
 
+    // ── Plug-and-play device detection ────────────────────────────────────
+    // The owner's pain: recording a call meant hand-picking Windows
+    // input/output devices every time the carkit re-enumerated. These markers
+    // identify carkit/speakerphone-class endpoints by friendly name (same
+    // approach as CallAudioRouteService); when no device is configured — or
+    // the configured one has vanished — the bridge finds the likely carkit
+    // itself instead of silently capturing the PC's built-in mic.
+    private static readonly string[] CarkitNameMarkers =
+    {
+        "carkit", "car kit", "handsfree", "hands-free",
+        "jabra", "poly sync", "polycom", "yealink", "anker powerconf", "ankerwork",
+        "emeet", "konftel", "plantronics", "speakerphone",
+        "usb audio",          // generic BT-to-USB audio dongles enumerate like this
+        "line in", "line-in", // 3.5 mm loopback lane
+    };
+
+    private static bool LooksLikeCarkit(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        var lower = name.ToLowerInvariant();
+        foreach (var marker in CarkitNameMarkers)
+            if (lower.Contains(marker)) return true;
+        return false;
+    }
+
+    private bool DeviceExists(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return false;
+        try { _ = _enum.GetDevice(id); return true; }
+        catch { return false; }
+    }
+
+    /// <summary>The input the downlink should capture: the configured carkit if it
+    /// is still present, else the first carkit-looking active input, else null
+    /// (default communications capture). Auto-detection is logged so a wrong pick
+    /// is diagnosable rather than silent.</summary>
+    public string? ResolveDownlinkDeviceId()
+    {
+        if (DeviceExists(Settings.CarkitInputId)) return Settings.CarkitInputId;
+        foreach (var d in ListInputs())
+        {
+            if (!LooksLikeCarkit(d.Name)) continue;
+            Log?.Invoke($"[call-audio] auto-detected carkit input: '{d.Name}'");
+            return d.Id;
+        }
+        if (!string.IsNullOrWhiteSpace(Settings.CarkitInputId))
+            Log?.Invoke("[call-audio] configured carkit input is gone and nothing matches — falling back to the default communications mic");
+        return null;
+    }
+
+    /// <summary>Same plug-and-play resolution for the uplink render side.</summary>
+    public string? ResolveUplinkDeviceId()
+    {
+        if (DeviceExists(Settings.CarkitOutputId)) return Settings.CarkitOutputId;
+        foreach (var d in ListOutputs())
+        {
+            if (!LooksLikeCarkit(d.Name)) continue;
+            Log?.Invoke($"[call-audio] auto-detected carkit output: '{d.Name}'");
+            return d.Id;
+        }
+        return null;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     //  1) DOWNLINK — capture → 16 kHz mono PCM fan-out
     // ═══════════════════════════════════════════════════════════════════════
@@ -301,8 +364,16 @@ public sealed class CallAudioBridgeService : IDisposable
             _subs.Add(sub);
             if (!IsRunning)
             {
-                try { Start(string.IsNullOrWhiteSpace(Settings.CarkitInputId) ? null : Settings.CarkitInputId); }
-                catch (Exception ex) { Log?.Invoke($"[call-audio] auto-start failed: {ex.Message}"); }
+                // Plug-and-play: prefer the configured carkit, auto-detect one by
+                // name if the config is empty/stale, and only then fall back to
+                // the default communications mic — a failed open retries on the
+                // fallback so one bad device id can't dead-end the whole feed.
+                try { Start(ResolveDownlinkDeviceId()); }
+                catch
+                {
+                    try { Start(null); }
+                    catch (Exception ex) { Log?.Invoke($"[call-audio] auto-start failed: {ex.Message}"); }
+                }
             }
         }
 
@@ -356,8 +427,7 @@ public sealed class CallAudioBridgeService : IDisposable
             StopUplinkLocked();
 
             var resolved = !string.IsNullOrWhiteSpace(deviceId) ? deviceId
-                         : !string.IsNullOrWhiteSpace(Settings.CarkitOutputId) ? Settings.CarkitOutputId
-                         : null;
+                         : ResolveUplinkDeviceId();
 
             MMDevice device;
             try { device = ResolveDevice(resolved, DataFlow.Render); }

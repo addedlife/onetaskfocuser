@@ -4,10 +4,12 @@ import UIKit
 final class BridgeController {
     private let probe: BluetoothProbeService
     private let lanHost: LanHostClient?
+    private let relay: RelayPresenceService?
 
-    init(probe: BluetoothProbeService, lanHost: LanHostClient? = nil) {
+    init(probe: BluetoothProbeService, lanHost: LanHostClient? = nil, relay: RelayPresenceService? = nil) {
         self.probe = probe
         self.lanHost = lanHost
+        self.relay = relay
     }
 
     func handle(method: String, path: String, body: [String: Any]) -> (Int, [String: Any]) {
@@ -92,7 +94,8 @@ final class BridgeController {
             ],
             "probe": probeSnapshot,
             "lanHost": lanHost?.snapshot() ?? NSNull(),
-            "nextMilestone": "Direct Bluetooth is gated on the probe; live path is the LAN proxy to whichever host holds the phone link."
+            "cloudRelay": relay?.snapshot() ?? NSNull(),
+            "nextMilestone": "Direct Bluetooth is gated on the probe; live path is the LAN proxy to whichever host holds the phone link, feeding the shared cloud relay."
         ])
     }
 

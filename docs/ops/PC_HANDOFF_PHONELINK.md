@@ -89,3 +89,39 @@ Given that, the current tablet-primary + owner-doc arbitration + cloud relay
 is the right shape — the reliability work went into one shared state machine
 (`phone-link.js`), exact message identity (`cid`), never-blank data, and a
 committed test suite (`npm run test:phone`, 19 tests) instead of a rewrite.
+
+---
+
+## Addendum (2026-07-13) — three-lane link + auto-finder + call-feed record
+
+Web 4.44.132 shipped the iPad/ActiveTab/PC toggle, the auto-finder (owner doc
+`preferred` now also takes `ipad`/`auto`, plus a `hosts.{id}` presence map),
+and the one-click "Record live call feed" lane. The web half is inert until
+the native builds catch up. On the PC:
+
+1. **DeskPhone (next b3xx)** — changed files, all committed:
+   - `Services/RelayService.cs` — presence beacon (`WritePresenceAsync`, every
+     arbitration tick, parked or not), `hosts` map parsing, auto/ipad
+     arbitration via the ported `ChooseAutoHost`, `SetPreferredAsync` accepts
+     all four values.
+   - `Services/CallAudioBridgeService.cs` — plug-and-play carkit detection
+     (`ResolveDownlinkDeviceId`/`ResolveUplinkDeviceId` by friendly-name
+     markers); the downlink no longer silently opens the PC's own mic when the
+     configured carkit vanished.
+   Build/release per the normal pipeline; smoke: `/call-audio/state` shows the
+   carkit auto-picked, and the owner doc grows `hosts.windows` within ~20 s.
+2. **Android host (ActiveTab)** — `RelayClient.kt`: same presence beacon +
+   auto arbitration port + four-value `writePreferred`. `gradlew assembleDebug`,
+   sideload, confirm `hosts.android` appears.
+3. **iPad bridge** — needs a Mac with Xcode: new
+   `WebPhoneBridge/RelayPresenceService.swift` (already in the pbxproj).
+   After install, `/status` gains a `cloudRelay` block and the owner doc grows
+   `hosts.ios`; flipping the rail toggle to iPad starts state pushes through
+   the LAN proxy.
+4. **Verify auto mode**: tap the rail "Auto" chip → owner doc `preferred:
+   "auto"`; kill the tablet host mid-session → the PC should take the phone
+   within ~60–90 s (presence stale + takeover grace), and the web card should
+   read "Connected · PC (auto)".
+5. **MCP bug tools**: `apps/web/functions/mcp.js` gained
+   `list_bugs`/`add_bug_note`/`set_bug_status` — deploys with the normal
+   functions deploy; then cloud Claude sessions can autopull the Bug Log.

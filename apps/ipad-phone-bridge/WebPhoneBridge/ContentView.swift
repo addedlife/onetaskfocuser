@@ -181,13 +181,21 @@ final class BridgeModel: ObservableObject {
     @Published var isRunning = false
     let probe = BluetoothProbeService()
     let lanHost = LanHostClient()
+    private var relay: RelayPresenceService?
     private var server: LocalApiServer?
 
     func start() {
         probe.activate()
         lanHost.start()
+        if relay == nil {
+            // Cloud lane: presence beacon (hosts.ios) + state push while the
+            // web toggle prefers the iPad — same Firestore relay as the other hosts.
+            let r = RelayPresenceService(lanHost: lanHost)
+            r.start()
+            relay = r
+        }
         if server != nil { return }
-        let controller = BridgeController(probe: probe, lanHost: lanHost)
+        let controller = BridgeController(probe: probe, lanHost: lanHost, relay: relay)
         let next = LocalApiServer(port: 8765, controller: controller, lanHost: lanHost)
         do {
             try next.start()

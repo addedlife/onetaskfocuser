@@ -1,5 +1,9 @@
-// MCP server — read-only Firestore tools for OneTask/Shailos
+// MCP server — Firestore tools for OneTask/Shailos
 // (Converted from mcp.mjs — ESM → CJS, Web Fetch API → Express req/res)
+// Read-only for app data (tasks/shailos/config), with ONE sanctioned write
+// surface: the Bug Log ticket workflow (notes + status), so cloud Claude
+// sessions can autopull and work tickets without the PC-only admin key.
+// The wire name stays "onetask-firestore-readonly" for connector back-compat.
 
 const { FIREBASE_PROJECT_ID, getAdminDb } = require("./_config.cjs");
 const USER_KEY = "rabbidanziger";
@@ -94,6 +98,46 @@ const tools = [
     description: "Get the legacy backup blob at users/rabbidanziger/appData/appState_v4.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
+  // ── Bug Log (users/rabbidanziger/bugs) ────────────────────────────────────
+  // The owner's standing "connect the buglog for autopull" workflow: any Claude
+  // session with the MCP token can pull the ticket list and leave work notes —
+  // no service-account key needed (that key only lives on the owner's PC, so
+  // cloud sessions used to be blind here). Same semantics as
+  // tools/bug-log-reader: closing a ticket REQUIRES a resolution note.
+  {
+    name: "list_bugs",
+    description: "List Bug Log tickets for rabbidanziger. Default returns unresolved only; pass status 'all' for everything.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["unresolved", "paused", "resolved", "future", "all"] },
+        limit: { type: "number", minimum: 1, maximum: MAX_LIMIT },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "add_bug_note",
+    description: "Append a work note to a Bug Log ticket (status unchanged).",
+    inputSchema: {
+      type: "object",
+      properties: { bugId: { type: "string" }, note: { type: "string" } },
+      required: ["bugId", "note"], additionalProperties: false,
+    },
+  },
+  {
+    name: "set_bug_status",
+    description: "Set a Bug Log ticket's status. Marking 'resolved' requires a note — every resolution carries the coder's process notes.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        bugId: { type: "string" },
+        status: { type: "string", enum: ["unresolved", "paused", "resolved", "future"] },
+        note: { type: "string" },
+      },
+      required: ["bugId", "status"], additionalProperties: false,
+    },
+  },
 ];
 
 module.exports = async (req, res) => {
@@ -184,8 +228,49 @@ async function callTool(name, args) {
     case "get_settings":       return toolResult(await getConfigDoc("settings"));
     case "get_meta":           return toolResult(await getConfigDoc("meta"));
     case "get_legacy_app_state": return toolResult(await getLegacyAppState());
+    case "list_bugs":          return toolResult(await listBugs(args));
+    case "add_bug_note":       return toolResult(await addBugNote(requiredString(args, "bugId"), requiredString(args, "note")));
+    case "set_bug_status":     return toolResult(await setBugStatus(requiredString(args, "bugId"), requiredString(args, "status"), args.note));
     default: throw new Error(`Unknown tool: ${name}`);
   }
+}
+
+// ── Bug Log tools ────────────────────────────────────────────────────────────
+async function listBugs(args = {}) {
+  const status = args.status || "unresolved";
+  const col = userDoc().collection("bugs");
+  const snap = status === "all" ? await col.get() : await col.where("status", "==", status).get();
+  const bugs = snap.docs
+    .map(doc => ({ id: doc.id, ...normalizeValue(doc.data()) }))
+    .sort((a, b) => (Number(b.createdAtMs) || 0) - (Number(a.createdAtMs) || 0))
+    .slice(0, Math.min(Math.max(Number(args.limit) || DEFAULT_LIMIT, 1), MAX_LIMIT));
+  return { source: `users/${USER_KEY}/bugs`, status, count: bugs.length, bugs };
+}
+
+async function addBugNote(bugId, note) {
+  const ref = userDoc().collection("bugs").doc(bugId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error(`No bug with id ${bugId}`);
+  const prior = Array.isArray(snap.data().notes) ? snap.data().notes : [];
+  await ref.update({ notes: [...prior, { text: note, atMs: Date.now() }], updatedAtMs: Date.now() });
+  return { source: `users/${USER_KEY}/bugs/${bugId}`, ok: true, noted: note };
+}
+
+async function setBugStatus(bugId, status, note) {
+  const allowed = ["unresolved", "paused", "resolved", "future"];
+  if (!allowed.includes(status)) throw new Error(`status must be one of ${allowed.join(", ")}`);
+  const noteText = typeof note === "string" ? note.trim() : "";
+  if (status === "resolved" && !noteText) throw new Error("Resolving a ticket requires a resolution note.");
+  const ref = userDoc().collection("bugs").doc(bugId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new Error(`No bug with id ${bugId}`);
+  const update = { status, updatedAtMs: Date.now() };
+  if (noteText) {
+    const prior = Array.isArray(snap.data().notes) ? snap.data().notes : [];
+    update.notes = [...prior, { text: noteText, atMs: Date.now() }];
+  }
+  await ref.update(update);
+  return { source: `users/${USER_KEY}/bugs/${bugId}`, ok: true, status, noted: noteText || null };
 }
 
 async function listTasks(args = {}) {

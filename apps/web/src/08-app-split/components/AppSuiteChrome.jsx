@@ -9,7 +9,9 @@ import { MdOutlinedSegmentedButtonSet } from '@material/web/labs/segmentedbutton
 import { cleanTheme, DUR, EASE, NC_FONT_STACK, NC_TYPE, RADIUS, suiteIcon } from '../ui-tokens.jsx';
 import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
 import { textOnColor } from '../../01-core.js';
+import { MdFilterChip } from '@material/web/chips/filter-chip.js';
 import { subscribeOwner, setPreferredHost, ownerIsLive, HOST_LABEL } from '../phone-host-control.js';
+import { preferredHostId } from '../phone-link.js';
 
 // Real M3 web components — Google's official implementations, not hand-coded lookalikes.
 // md-navigation-rail is not yet in @material/web v2.4; nav items stay hand-coded with
@@ -26,6 +28,7 @@ const SegmentedButtonSet = createComponent({
   events: { onSelection: 'segmented-button-set-selection' },
 });
 const SegmentedButton = createComponent({ react: React, tagName: 'md-outlined-segmented-button', elementClass: MdOutlinedSegmentedButton });
+const FilterChip = createComponent({ react: React, tagName: 'md-filter-chip', elementClass: MdFilterChip });
 
 // Cross-component signaling for the Bug Log rail item, without prop-drilling
 // through App.jsx (which already owns a large prop surface). BugLog.jsx
@@ -42,36 +45,50 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
     return () => window.removeEventListener(BUGLOG_COUNT_EVENT, onCount);
   }, []);
 
-  // Phone-host control: which machine the owner wants holding the phone. Default
-  // is the tablet (primary); flipping this hands primacy to the PC (e.g. for call
-  // audio) and the tablet steps aside — the native hosts honor `preferred`.
-  const [phoneHost, setPhoneHost] = React.useState({ preferred: 'tablet', host: '', connected: false, present: false });
+  // Phone-host control: which link the owner wants feeding the phone. Three
+  // manual lanes — iPad (bridge app), ActiveTab (Galaxy Tab Active, the daily
+  // primary), PC (DeskPhone, e.g. for call audio) — plus Auto, where the hosts
+  // arbitrate among themselves and the strongest live connection wins
+  // (phone-link.js chooseAutoHost — same scoring the native hosts run).
+  const [phoneHost, setPhoneHost] = React.useState({ preferred: 'tablet', host: '', connected: false, present: false, hosts: {} });
   React.useEffect(() => {
     const unsub = subscribeOwner(setPhoneHost);
     return () => { try { unsub && unsub(); } catch (_) {} };
   }, []);
-  const preferPc = phoneHost.preferred === 'pc';
-  const flipHost = () => setPreferredHost(preferPc ? 'tablet' : 'pc');
+  const autoHost = phoneHost.preferred === 'auto';
+  const preferredId = preferredHostId(phoneHost.preferred);   // '' in auto mode
   // Honest toggle feedback (owner ticket: "toggle seems to do nothing" / "it
   // just stays hooked up to pc"): the label shows which host ACTUALLY holds the
   // phone right now, and while the owner's choice hasn't landed yet it reads
   // "Handing to …" so the flip visibly did something. Falls back to the
   // preference alone until a rebuilt host writes the heartbeat doc.
-  const preferredLabel = preferPc ? 'PC' : 'Tablet';
-  const actualHostLabel = phoneHost.present && ownerIsLive(phoneHost) ? (HOST_LABEL[phoneHost.host] || '') : '';
-  const hostSwitchPending = !!actualHostLabel && actualHostLabel !== preferredLabel;
+  const preferredLabel = autoHost ? 'Auto' : (HOST_LABEL[preferredId] || HOST_LABEL.android);
+  const actualHostId = phoneHost.present && ownerIsLive(phoneHost) ? phoneHost.host : '';
+  const actualHostLabel = HOST_LABEL[actualHostId] || '';
+  const hostSwitchPending = !autoHost && !!actualHostId && actualHostId !== preferredId;
   // While a switch is pending, the SOLID highlight stays on the device that
   // actually holds the phone; the requested device BLINKS until the new host's
   // heartbeat confirms the handover (owner spec 7/12). No pending switch ⇒
-  // solid simply follows the preference.
-  const solidPc = hostSwitchPending ? actualHostLabel === 'PC' : preferPc;
+  // solid follows the preference (or, in auto mode, the live holder).
+  const solidId = hostSwitchPending ? actualHostId : (autoHost ? actualHostId : preferredId);
   const hostBlinkStyle = { animation: 'nc-host-blink 1.1s ease-in-out infinite' };
   const phoneHostLabel = hostSwitchPending
     ? `Handing to ${preferredLabel}…`
-    : `Phone: ${actualHostLabel || preferredLabel}`;
+    : autoHost
+      ? `Phone: Auto${actualHostLabel ? ` · ${actualHostLabel}` : ''}`
+      : `Phone: ${actualHostLabel || preferredLabel}`;
   const phoneHostTitle = hostSwitchPending
     ? `Waiting for the ${preferredLabel} to pick up the phone — the ${actualHostLabel} still holds it`
-    : `Phone hosted by ${actualHostLabel || preferredLabel} — switch to hand it to the ${preferPc ? 'Tablet' : 'PC'}`;
+    : autoHost
+      ? `Auto-finder is on — the strongest live link holds the phone${actualHostLabel ? ` (currently the ${actualHostLabel})` : ''}. Tap a device to pin it manually.`
+      : `Phone link via ${actualHostLabel || preferredLabel} — pick another device to hand it over, or Auto to always use the strongest link`;
+  // Collapsed rail: one icon button cycles auto → ActiveTab → PC → iPad.
+  const CYCLE = ['auto', 'tablet', 'pc', 'ipad'];
+  const HOST_MODE_ICON = { auto: 'auto_mode', tablet: 'tablet_android', pc: 'computer', ipad: 'tablet_mac' };
+  const flipHost = () => {
+    const idx = CYCLE.indexOf(phoneHost.preferred);
+    setPreferredHost(CYCLE[(idx + 1) % CYCLE.length]);
+  };
 
   const mainApps = [
     { id: "focus",      label: "Tasks",      icon: "rule"          },
@@ -264,51 +281,76 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         {displayOpen && "Bug Log"}
       </button>
 
-      {/* Phone host — which machine holds the phone's Bluetooth link (tablet is
-          the daily primary; PC e.g. for call audio). A CHOICE between two hosts,
-          so this is M3's segmented button (single-select), not a switch — a
-          switch reads as on/off state, which is exactly what confused the owner.
-          Real labs md-outlined-segmented-button-set when the rail is open, sized
-          to rail density via the official tokens; a tap-to-flip icon when
-          collapsed. The caption above still reflects the ACTUAL holder and shows
-          "Handing to …" until the native hosts complete the Bluetooth handoff. */}
+      {/* Phone link — which lane feeds the phone: iPad (bridge), ActiveTab
+          (Galaxy Tab Active — daily primary), or PC (DeskPhone, call audio);
+          plus the auto-finder chip, where the strongest live connection wins
+          and the hosts hand off among themselves. A CHOICE between lanes, so
+          this is M3's segmented button (single-select), not a switch. Real
+          labs md-outlined-segmented-button-set when the rail is open, sized to
+          rail density via the official tokens; a tap-to-cycle icon when
+          collapsed. The caption above still reflects the ACTUAL holder and
+          shows "Handing to …" until the hosts complete the Bluetooth handoff. */}
       {displayOpen ? (
         <div title={phoneHostTitle} style={{ width: '100%', padding: `${GAP}px 2px`, boxSizing: 'border-box', flexShrink: 0 }}>
           <div style={{
-            fontSize: Math.max(10, px(11)), color: C.muted, fontFamily: NC_FONT_STACK,
-            padding: '0 2px 3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            fontStyle: hostSwitchPending ? 'italic' : 'normal',
-          }}>{phoneHostLabel}</div>
+            display: 'flex', alignItems: 'center', gap: 4, padding: '0 2px 3px',
+          }}>
+            <span style={{
+              flex: 1, minWidth: 0, fontSize: Math.max(10, px(11)), color: C.muted, fontFamily: NC_FONT_STACK,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              fontStyle: hostSwitchPending ? 'italic' : 'normal',
+            }}>{phoneHostLabel}</span>
+            <FilterChip
+              label="Auto"
+              selected={autoHost}
+              title="Auto-finder: auto-connect and auto-switch to the strongest link"
+              onClick={() => setPreferredHost(autoHost ? 'tablet' : 'auto')}
+              style={{
+                flexShrink: 0,
+                '--md-filter-chip-container-height': `${Math.max(20, px(22))}px`,
+                '--md-filter-chip-label-text-font': NC_FONT_STACK,
+                '--md-filter-chip-label-text-size': `${Math.max(10, px(11))}px`,
+                '--md-filter-chip-outline-color': C.divider,
+              }}
+            />
+          </div>
           <SegmentedButtonSet
             onSelection={(e) => {
               const idx = e?.detail?.index;
-              if (idx === 0 || idx === 1) setPreferredHost(idx === 1 ? 'pc' : 'tablet');
+              // Any manual pick pins that lane (turning the auto-finder off).
+              if (idx === 0) setPreferredHost('ipad');
+              else if (idx === 1) setPreferredHost('tablet');
+              else if (idx === 2) setPreferredHost('pc');
             }}
-            aria-label="Which device hosts the phone"
+            aria-label="Which device hosts the phone link"
             style={{
               width: '100%',
               '--md-outlined-segmented-button-container-height': `${Math.max(30, px(32))}px`,
               '--md-outlined-segmented-button-label-text-font': NC_FONT_STACK,
-              '--md-outlined-segmented-button-label-text-size': `${Math.max(11, px(12))}px`,
+              '--md-outlined-segmented-button-label-text-size': `${Math.max(10, px(11))}px`,
+              '--md-outlined-segmented-button-spacing-leading-space': '6px',
+              '--md-outlined-segmented-button-spacing-trailing-space': '6px',
               '--md-outlined-segmented-button-outline-color': C.divider,
               '--md-outlined-segmented-button-selected-container-color': C.hover,
               '--md-outlined-segmented-button-selected-label-text-color': C.text,
               '--md-outlined-segmented-button-unselected-label-text-color': C.muted,
               '--md-outlined-segmented-button-selected-icon-color': C.accent,
             }}>
-            <SegmentedButton selected={!solidPc} label="Tablet" title="Tablet holds the phone"
-              style={hostSwitchPending && !preferPc ? hostBlinkStyle : undefined} />
-            <SegmentedButton selected={solidPc} label="PC" title="PC holds the phone"
-              style={hostSwitchPending && preferPc ? hostBlinkStyle : undefined} />
+            <SegmentedButton selected={solidId === 'ios'} label="iPad" title="iPad bridge feeds the phone link"
+              style={hostSwitchPending && preferredId === 'ios' ? hostBlinkStyle : undefined} />
+            <SegmentedButton selected={solidId === 'android'} label="ActiveTab" title="Galaxy Tab Active holds the phone"
+              style={hostSwitchPending && preferredId === 'android' ? hostBlinkStyle : undefined} />
+            <SegmentedButton selected={solidId === 'windows'} label="PC" title="PC holds the phone (call audio)"
+              style={hostSwitchPending && preferredId === 'windows' ? hostBlinkStyle : undefined} />
           </SegmentedButtonSet>
         </div>
       ) : (
-        <button onClick={flipHost} title={phoneHostTitle} aria-label="Switch phone host"
+        <button onClick={flipHost} title={phoneHostTitle} aria-label="Switch phone link"
           style={navBtn(false)}>
           <Ripple />
-          {/* Requested-host icon blinks until the handover is confirmed. */}
+          {/* Requested-mode icon blinks until the handover is confirmed. */}
           <span style={hostSwitchPending ? hostBlinkStyle : undefined}>
-            {suiteIcon(preferPc ? 'computer' : 'smartphone', ic(24))}
+            {suiteIcon(HOST_MODE_ICON[phoneHost.preferred] || 'tablet_android', ic(24))}
           </span>
         </button>
       )}

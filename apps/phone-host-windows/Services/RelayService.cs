@@ -689,6 +689,7 @@ public class RelayService : IDisposable
         if (!IsEnabled) { _shouldHoldPhone = true; return; }
 
         var preferred = "tablet"; var ownerHost = ""; long ownerT = 0, preferredAt = 0; var ownerConnected = false;
+        var presence = new Dictionary<string, (long T, bool Connected, double Quality)>();
         try
         {
             using var resp = await _http.GetAsync($"{FS_BASE}/phone-relay/owner?key={FB_API_KEY}", ct);
@@ -703,6 +704,7 @@ public class RelayService : IDisposable
                     ownerT         = ReadLong(f, "t", 0);
                     preferredAt    = ReadLong(f, "preferredAtMs", 0);
                     ownerConnected = ReadBool(f, "connected", false);
+                    ReadPresenceMap(f, presence);
                 }
             }
             // 404 = no owner doc yet ⇒ leave defaults ⇒ shouldHold stays true (legacy).
@@ -710,8 +712,23 @@ public class RelayService : IDisposable
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        // Presence beacon: EVERY host advertises hosts.{id} = { t, connected, quality }
+        // each tick, parked or not — this is the auto-finder's input. Field-masked to
+        // our own map entry, so hosts never clobber each other (or host/t/connected).
+        await WritePresenceAsync(now, IsPhoneConnected?.Invoke() ?? false, ct);
+
         // preferred "pc" ⇒ the PC (this host) should hold; "tablet" ⇒ the Android host.
-        var preferredId    = preferred == "pc" ? "windows" : "android";
+        // "auto" ⇒ the strongest live BT-capable link wins (chooseAutoHost — the same
+        // scoring the web's phone-link.js publishes). "ipad" ⇒ the iPad fronts the
+        // cloud feed, but it physically cannot hold Bluetooth Classic, so the
+        // BT-holding decision also falls back to auto arbitration.
+        var preferredId = preferred switch
+        {
+            "pc"     => "windows",
+            "tablet" => "android",
+            _        => ChooseAutoHost(presence, now, ownerHost) is { Length: > 0 } winner ? winner : "android",
+        };
         var amPreferred    = preferredId == HostId;
         var preferredFresh = ownerHost == preferredId && (now - ownerT) < OwnerStaleMs && ownerConnected;
 
@@ -791,7 +808,7 @@ public class RelayService : IDisposable
     public async Task<bool> SetPreferredAsync(string preferred, CancellationToken ct = default)
     {
         if (!IsEnabled) return false;
-        var value = preferred == "pc" ? "pc" : "tablet";
+        var value = preferred is "pc" or "tablet" or "ipad" or "auto" ? preferred : "tablet";
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var fsBody = $"{{\"fields\":{{\"preferred\":{{\"stringValue\":\"{value}\"}},\"preferredAtMs\":{{\"integerValue\":\"{nowMs}\"}}}}}}";
         var url = $"{FS_BASE}/phone-relay/owner?key={FB_API_KEY}" +
@@ -804,10 +821,109 @@ public class RelayService : IDisposable
             LogLine?.Invoke($"[ARBITRATION] set preferred={value} HTTP {(int)resp.StatusCode}");
             return false;
         }
-        _shouldHoldPhone = (value == "pc" ? "windows" : "android") == HostId;
+        // 'ipad'/'auto' have no single BT target — leave shouldHold to the next
+        // arbitration tick's auto scoring instead of guessing here.
+        if (value is "pc" or "tablet")
+            _shouldHoldPhone = (value == "pc" ? "windows" : "android") == HostId;
         Interlocked.Exchange(ref _lastPreferredAtMs, nowMs);
         LogLine?.Invoke($"[ARBITRATION] preferred host set to {value} (explicit takeover)");
         return true;
+    }
+
+    // ── Auto-finder (spec: apps/web/src/08-app-split/phone-link.js) ─────────────
+    // Verbatim port of scoreHostLink/chooseAutoHost so every arbiter — web,
+    // Windows, Android — ranks the lanes identically and auto mode cannot
+    // oscillate. Only BT-capable hosts are candidates; the iPad never holds.
+    private const long   PresenceLiveWindowMs = 60_000;
+    private const double AutoSwitchMargin     = 25;
+    private static readonly string[] BtCapableHosts = { "android", "windows" };
+
+    private static double ScoreHostLink(string hostId, (long T, bool Connected, double Quality) e, long now)
+    {
+        if (e.T <= 0 || now - e.T >= PresenceLiveWindowMs) return 0;
+        var quality = Math.Clamp(e.Quality, 0, 100);
+        var staticPriority = hostId switch { "android" => 3, "windows" => 2, "ios" => 1, _ => 0 };
+        return 10 + (e.Connected ? 100 : 0) + quality * 0.5 + staticPriority;
+    }
+
+    internal static string ChooseAutoHost(
+        IReadOnlyDictionary<string, (long T, bool Connected, double Quality)> presence, long now, string currentHostId)
+    {
+        var bestId = ""; double bestScore = 0;
+        foreach (var id in BtCapableHosts)
+        {
+            var score = presence.TryGetValue(id, out var e) ? ScoreHostLink(id, e, now) : 0;
+            if (score > bestScore) { bestScore = score; bestId = id; }
+        }
+        if (bestId.Length == 0) return "";
+        // Hysteresis: the current holder keeps the phone unless dead or beaten by a clear margin.
+        if (currentHostId.Length > 0 && Array.IndexOf(BtCapableHosts, currentHostId) >= 0 &&
+            presence.TryGetValue(currentHostId, out var cur))
+        {
+            var currentScore = ScoreHostLink(currentHostId, cur, now);
+            if (currentScore > 0 && bestScore < currentScore + AutoSwitchMargin) return currentHostId;
+        }
+        return bestId;
+    }
+
+    private static void ReadPresenceMap(JsonElement fields, Dictionary<string, (long, bool, double)> into)
+    {
+        if (!fields.TryGetProperty("hosts", out var hostsField) ||
+            !hostsField.TryGetProperty("mapValue", out var map) ||
+            !map.TryGetProperty("fields", out var entries)) return;
+        foreach (var entry in entries.EnumerateObject())
+        {
+            if (!entry.Value.TryGetProperty("mapValue", out var mv) ||
+                !mv.TryGetProperty("fields", out var f)) continue;
+            into[entry.Name] = (ReadLong(f, "t", 0), ReadBool(f, "connected", false), ReadLong(f, "quality", 0));
+        }
+    }
+
+    // Link quality is self-reported 0–100. Windows' Bluetooth stack exposes no
+    // RSSI for an HFP/MAP link, so the honest signal here is binary: a working
+    // phone connection is a 100, anything else a 0. (Refine if a metric appears.)
+    private async Task WritePresenceAsync(long nowMs, bool connected, CancellationToken ct)
+    {
+        var quality = connected ? 100 : 0;
+        var fsBody = JsonSerializer.Serialize(new
+        {
+            fields = new
+            {
+                hosts = new
+                {
+                    mapValue = new
+                    {
+                        fields = new Dictionary<string, object>
+                        {
+                            [HostId] = new
+                            {
+                                mapValue = new
+                                {
+                                    fields = new
+                                    {
+                                        t         = new { integerValue = nowMs.ToString() },
+                                        connected = new { booleanValue = connected },
+                                        quality   = new { integerValue = quality.ToString() },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        var url = $"{FS_BASE}/phone-relay/owner?key={FB_API_KEY}" +
+                  $"&updateMask.fieldPaths=hosts.{HostId}";
+        using var content = new StringContent(fsBody, Encoding.UTF8, "application/json");
+        using var req = new HttpRequestMessage(HttpMethod.Patch, url) { Content = content };
+        try
+        {
+            using var resp = await _http.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode)
+                LogLine?.Invoke($"[ARBITRATION] presence write HTTP {(int)resp.StatusCode}");
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception ex) { LogLine?.Invoke($"[ARBITRATION] presence write failed: {ex.Message}"); }
     }
 
     private async Task WriteOwnerHeartbeatAsync(long nowMs, bool connected, CancellationToken ct)

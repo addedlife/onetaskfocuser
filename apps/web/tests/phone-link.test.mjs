@@ -22,7 +22,7 @@ test('fresh tablet heartbeat + state = connected', () => {
   });
   assert.equal(link.state, 'connected');
   assert.equal(link.live, true);
-  assert.equal(link.activeHostLabel, 'Tablet');
+  assert.equal(link.activeHostLabel, 'ActiveTab');
 });
 
 test('stale heartbeat = offline with age, data or not', () => {
@@ -50,7 +50,7 @@ test('owner prefers PC while tablet still holds = switching', () => {
   });
   assert.equal(link.state, 'switching');
   assert.equal(link.preferredLabel, 'PC');
-  assert.equal(link.activeHostLabel, 'Tablet');
+  assert.equal(link.activeHostLabel, 'ActiveTab');
 });
 
 test('legacy host (no owner doc): state stamp inside wide window = connected', () => {
@@ -89,8 +89,8 @@ test('offline with data names the data age; without data names last-seen', () =>
 });
 
 test('switching label says who is handing to whom', () => {
-  const d = describePhoneLink({ state: 'switching', activeHostLabel: 'Tablet', preferredLabel: 'PC' });
-  assert.equal(d.label, 'Connected · Tablet — handing to PC…');
+  const d = describePhoneLink({ state: 'switching', activeHostLabel: 'ActiveTab', preferredLabel: 'PC' });
+  assert.equal(d.label, 'Connected · ActiveTab — handing to PC…');
   assert.equal(d.tone, 'ok');
 });
 
@@ -195,4 +195,89 @@ test('mergeCallFeeds keeps prev calls, dedupes same number+time across id scheme
   const merged = mergeCallFeeds(prev, next);
   assert.equal(merged.length, 2); // c2 fuzzy-matches z9; c1 retained
   assert.equal(merged[0].id, 'z9');
+});
+
+// ── Three lanes + auto-finder (2026-07-13) ──────────────────────────────────
+import {
+  preferredHostId, chooseAutoHost, scoreHostLink,
+  PRESENCE_LIVE_WINDOW_MS, AUTO_SWITCH_MARGIN, BT_CAPABLE_HOSTS, HOST_LABEL,
+} from '../src/08-app-split/phone-link.js';
+
+test('preferredHostId maps all four modes', () => {
+  assert.equal(preferredHostId('tablet'), 'android');
+  assert.equal(preferredHostId('pc'), 'windows');
+  assert.equal(preferredHostId('ipad'), 'ios');
+  assert.equal(preferredHostId('auto'), '');
+  assert.equal(preferredHostId('garbage'), 'android'); // unknown → tablet primary
+});
+
+test('host labels are iPad / ActiveTab / PC', () => {
+  assert.equal(HOST_LABEL.ios, 'iPad');
+  assert.equal(HOST_LABEL.android, 'ActiveTab');
+  assert.equal(HOST_LABEL.windows, 'PC');
+});
+
+test('preferring the iPad names the ios lane and blinks a handover at it', () => {
+  const link = derivePhoneLinkState({
+    now: NOW, usingRelay: true, statusOnline: true, hasData: true,
+    owner: owner({ preferred: 'ipad', present: true, host: 'android', t: NOW - 5_000, connected: true }),
+  });
+  assert.equal(link.state, 'switching');
+  assert.equal(link.preferredLabel, 'iPad');
+  assert.equal(link.activeHostLabel, 'ActiveTab');
+});
+
+test('auto mode never reports switching — the live holder IS the preference', () => {
+  const link = derivePhoneLinkState({
+    now: NOW, usingRelay: true, statusOnline: true, hasData: true,
+    owner: owner({ preferred: 'auto', present: true, host: 'windows', t: NOW - 5_000, connected: true }),
+  });
+  assert.equal(link.state, 'connected');
+  assert.equal(link.auto, true);
+  assert.equal(link.switching, false);
+  const d = describePhoneLink(link);
+  assert.ok(d.label.includes('(auto)'));
+});
+
+test('scoreHostLink: dead/absent presence scores 0; connected beats parked', () => {
+  assert.equal(scoreHostLink(null, NOW), 0);
+  assert.equal(scoreHostLink({ t: NOW - PRESENCE_LIVE_WINDOW_MS - 1, connected: true }, NOW), 0);
+  const parked = scoreHostLink({ hostId: 'windows', t: NOW - 5_000, connected: false, quality: 100 }, NOW);
+  const connected = scoreHostLink({ hostId: 'android', t: NOW - 5_000, connected: true, quality: 0 }, NOW);
+  assert.ok(connected > parked);
+});
+
+test('chooseAutoHost picks the only live BT-capable host and ignores the iPad', () => {
+  const hosts = {
+    ios: { t: NOW - 1_000, connected: true, quality: 100 },      // never a BT candidate
+    windows: { t: NOW - 5_000, connected: true, quality: 50 },
+  };
+  assert.equal(chooseAutoHost({ hosts, now: NOW }), 'windows');
+  assert.ok(!BT_CAPABLE_HOSTS.includes('ios'));
+});
+
+test('chooseAutoHost is sticky: a healthy holder is not evicted without a clear win', () => {
+  const hosts = {
+    android: { t: NOW - 5_000, connected: true, quality: 60 },
+    windows: { t: NOW - 5_000, connected: true, quality: 70 },   // slightly better, within margin
+  };
+  assert.equal(chooseAutoHost({ hosts, now: NOW, currentHostId: 'android' }), 'android');
+});
+
+test('chooseAutoHost fails over when the holder dies, and honors a margin win', () => {
+  const dead = {
+    android: { t: NOW - PRESENCE_LIVE_WINDOW_MS - 5_000, connected: true, quality: 100 },
+    windows: { t: NOW - 5_000, connected: true, quality: 10 },
+  };
+  assert.equal(chooseAutoHost({ hosts: dead, now: NOW, currentHostId: 'android' }), 'windows');
+  const clearWin = {
+    android: { t: NOW - 5_000, connected: false, quality: 0 },   // alive, lost BT
+    windows: { t: NOW - 5_000, connected: true, quality: 80 },   // beats it by >> margin
+  };
+  assert.equal(chooseAutoHost({ hosts: clearWin, now: NOW, currentHostId: 'android' }), 'windows');
+  assert.ok(AUTO_SWITCH_MARGIN > 0);
+});
+
+test('chooseAutoHost with nobody alive returns empty', () => {
+  assert.equal(chooseAutoHost({ hosts: {}, now: NOW, currentHostId: 'android' }), '');
 });

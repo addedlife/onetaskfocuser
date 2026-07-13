@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, textOnColor } from '../../01-core.js';
 import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BG, GOLD_BRD, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, ncSectionHeaderStyle, ncSectionIconStyle, ncSectionTitleStyle, ncSmallIconBtnStyle, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
-import { ActionBtn, IconBtn, List, ListItem, AssistChip, FilterChip, ChipSet, Divider, CircularProgress, denseListVars } from '../m3.jsx';
+import { ActionBtn, IconBtn, List, ListItem, AssistChip, FilterChip, ChipSet, Divider, CircularProgress, denseListVars, OutlinedSelect, SelectOption } from '../m3.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthCard } from './HealthCard.jsx';
@@ -2235,10 +2235,17 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               <input value={chiefTaskDraft} onChange={e => setChiefTaskDraft(e.target.value)} placeholder="Task text"
                 style={{ minWidth: 0, width: "100%", boxSizing: "border-box", height: 38, borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "0 10px", fontSize: NC_TYPE.control, lineHeight: 1.35, fontFamily: NC_FONT_STACK, outline: "none" }} />
               <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 8 }}>
-                <select value={chiefTaskPriority || defaultSuggestionPriorityId} onChange={e => setChiefTaskPriority(e.target.value)}
-                  style={{ minWidth: 0, height: 36, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, background: C.bgSoft, color: C.text, fontSize: NC_TYPE.control, fontFamily: NC_FONT_STACK, padding: "0 8px" }}>
-                  {taskSuggestionPriorities.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-                </select>
+                <OutlinedSelect value={chiefTaskPriority || defaultSuggestionPriorityId} onChange={e => setChiefTaskPriority(e.target.value)}
+                  aria-label="Task priority"
+                  style={{ minWidth: 0, "--md-outlined-select-text-field-container-shape": RADIUS.sm,
+                    "--md-outlined-field-top-space": "6px", "--md-outlined-field-bottom-space": "6px",
+                    "--md-outlined-select-text-field-label-text-size": NC_TYPE.control, "--md-outlined-select-text-field-input-text-size": NC_TYPE.control }}>
+                  {taskSuggestionPriorities.map(p => (
+                    <SelectOption key={p.id} value={p.id} selected={p.id === (chiefTaskPriority || defaultSuggestionPriorityId)}>
+                      <div slot="headline">{p.label}</div>
+                    </SelectOption>
+                  ))}
+                </OutlinedSelect>
                 <IconBtn variant="filled" icon="add" size={38} iconSize={16}
                   color={chiefTaskDraft.trim() ? "#fff" : C.faint}
                   containerColor={chiefTaskDraft.trim() ? (chiefPri.color || C.accent) : "transparent"}
@@ -2284,10 +2291,17 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       <input value={row.text} onChange={e => updateTaskSuggestion(row.id, { text: e.target.value })}
                         style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, background: C.bg, color: C.text, padding: "7px 8px", fontSize: NC_TYPE.control, fontFamily: NC_FONT_STACK, outline: "none" }} />
                       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto auto", gap: 6, alignItems: "center" }}>
-                        <select value={row.priorityId || defaultSuggestionPriorityId} onChange={e => updateTaskSuggestion(row.id, { priorityId: e.target.value })}
-                          style={{ minWidth: 0, height: 30, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, background: C.bg, color: C.text, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, padding: "0 6px" }}>
-                          {taskSuggestionPriorities.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-                        </select>
+                        <OutlinedSelect value={row.priorityId || defaultSuggestionPriorityId} onChange={e => updateTaskSuggestion(row.id, { priorityId: e.target.value })}
+                          aria-label="Suggestion priority"
+                          style={{ minWidth: 0, "--md-outlined-select-text-field-container-shape": RADIUS.sm,
+                            "--md-outlined-field-top-space": "4px", "--md-outlined-field-bottom-space": "4px",
+                            "--md-outlined-select-text-field-input-text-size": NC_TYPE.small }}>
+                          {taskSuggestionPriorities.map(p => (
+                            <SelectOption key={p.id} value={p.id} selected={p.id === (row.priorityId || defaultSuggestionPriorityId)}>
+                              <div slot="headline">{p.label}</div>
+                            </SelectOption>
+                          ))}
+                        </OutlinedSelect>
                         <IconBtn icon="close" size={30} iconSize={13} color={C.faint}
                           onClick={() => dismissTaskSuggestion(row)} title="Dismiss suggestion" aria-label="Dismiss suggestion" />
                         <IconBtn variant="filled" icon="add" size={30} iconSize={14}

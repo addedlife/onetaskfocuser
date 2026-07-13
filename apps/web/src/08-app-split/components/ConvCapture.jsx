@@ -3,6 +3,7 @@ import { aiParseCalendarEvent, aiParseConversation, fmtMs, uid } from '../../01-
 import { deletePendingRecording, savePendingRecording, transcribePendingRecording, updatePendingRecordingError } from '../../09-transcription-pen.js';
 import { cleanTheme, ELEV, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
 import { IconBtn } from '../m3.jsx';
+import { probeCallAudioFeed, openCallAudioFeed } from '../call-audio-feed.js';
 
 function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalendar, tasks, shailos, pris, aiOpts, T, callMode=false }) {
   const C = cleanTheme(T);
@@ -15,9 +16,14 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
   const [err, setErr] = useState('');
   const [applying, setApplying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  // Tracks which source the current recording is using ('mic' | 'system'),
-  // so the recording UI and transcription label can reflect it.
+  // Tracks which source the current recording is using ('mic' | 'system' |
+  // 'pclink'), so the recording UI and transcription label can reflect it.
   const [source, setSource] = useState(callMode ? 'system' : 'mic');
+  // Is the DeskPhone call-audio bridge answering on this machine's loopback?
+  // When it is, "record the call" is one click — the host's own carkit capture
+  // arrives as a MediaStream, no screen-share dialog, no device fiddling.
+  const [feedInfo, setFeedInfo] = useState(null);   // { available, state } | null while probing
+  const feedStopRef = useRef(null);
   const phaseRef = useRef(callMode ? 'ready' : 'choose');
   const streamRef = useRef(null);
   const mediaRecRef = useRef(null);
@@ -109,8 +115,32 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       if (recogRef.current) { try { recogRef.current.onend = null; recogRef.current.abort(); } catch(_) {} }
       if (mediaRecRef.current && mediaRecRef.current.state !== 'inactive') { try { mediaRecRef.current.stop(); } catch(_) {} }
       if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); }
+      if (feedStopRef.current) { try { feedStopRef.current(); } catch(_) {} }
     };
   }, []); // eslint-disable-line
+
+  // Probe the PC-link call-audio feed once per open (cheap loopback GET).
+  useEffect(() => {
+    let alive = true;
+    probeCallAudioFeed().then(r => { if (alive) setFeedInfo(r); });
+    return () => { alive = false; };
+  }, []);
+
+  // PC-link capture: the DeskPhone bridge streams the call's carkit audio as a
+  // MediaStream — the reliable, zero-dialog lane whenever the host runs here.
+  async function startFeedCapture() {
+    setErr('');
+    setSource('pclink');
+    try {
+      const feed = await openCallAudioFeed();
+      feedStopRef.current = feed.stop;
+      chunksRef.current = [];
+      startMediaRecorder(feed.stream);
+      goPhase('recording');
+    } catch (e) {
+      setErr(e.message || 'Could not open the PC link call-audio feed.');
+    }
+  }
 
   // System-audio capture: triggered by "Start capturing" (call mode) or by
   // picking "Other screen's audio" on the choose screen. Captures another
@@ -149,6 +179,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       try { mediaRecRef.current.stop(); } catch(_) { mediaStopPRef.current = null; }
     }
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+    if (feedStopRef.current) { try { feedStopRef.current(); } catch(_) {} feedStopRef.current = null; }
     goPhase('processing');
     let pending = null;
 
@@ -158,9 +189,10 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       let transcript = webSpeechText;
 
       if (webmBlob.size >= 500 && aiOpts) {
-        pending = await savePendingRecording(webmBlob, source === 'system' ? 'conversation_call' : 'conversation_mic', {
+        pending = await savePendingRecording(webmBlob, source === 'mic' ? 'conversation_mic' : 'conversation_call', {
           source: 'main',
-          label: source === 'system' ? 'Conversation system-audio capture' : 'Conversation mic capture',
+          label: source === 'pclink' ? 'Live call feed capture (PC link)'
+            : source === 'system' ? 'Conversation system-audio capture' : 'Conversation mic capture',
         });
         // If Gemini transcription fails, fall back to Web Speech text — never kill the whole flow
         try {
@@ -176,7 +208,8 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       }
 
       if (!transcript.trim()) {
-        setErr(source === 'system' ? 'No audio was captured. Make sure audio was playing and you checked "Share tab/system audio".' : 'Nothing was captured. Check mic permissions and try again.');
+        setErr(source === 'pclink' ? 'No audio came through the PC link feed — check the call was live and the carkit input is connected.'
+          : source === 'system' ? 'No audio was captured. Make sure audio was playing and you checked "Share tab/system audio".' : 'Nothing was captured. Check mic permissions and try again.');
         setItems([]);
         goPhase('review');
         return;
@@ -347,6 +380,15 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
               <span style={{ fontSize: NC_TYPE.meta, color: C.faint }}>Record what you say out loud</span>
             </span>
           </button>
+          {feedInfo?.available && (
+            <button onClick={startFeedCapture} style={{ display: 'flex', alignItems: 'center', gap: SP.md, textAlign: 'left', background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, padding: `${SP.md} ${SP.lg}`, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+              <span style={{ fontSize: 22 }}>📞</span>
+              <span style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: NC_TYPE.body, fontWeight: 500, color: C.text }}>Live call feed (PC link)</span>
+                <span style={{ fontSize: NC_TYPE.meta, color: C.faint }}>Record the phone call straight from the DeskPhone bridge — no dialogs</span>
+              </span>
+            </button>
+          )}
           <button onClick={startCallCapture} style={{ display: 'flex', alignItems: 'center', gap: SP.md, textAlign: 'left', background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, padding: `${SP.md} ${SP.lg}`, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             <span style={{ fontSize: 22 }}>🔊</span>
             <span style={{ display: 'flex', flexDirection: 'column' }}>
@@ -359,7 +401,9 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
     </div>
   );
 
-  // ── Call mode: waiting for user to share screen ───────────────────────────
+  // ── Call mode: pick the capture lane. When the DeskPhone bridge answers on
+  // this machine, the PC-link feed is the primary, zero-dialog path; the
+  // screen-share lane stays as the fallback for every other device. ─────────
   if (phase === 'ready') return (
     <div style={overlayS} onClick={onClose}>
       <div style={cardS} onClick={e => e.stopPropagation()}>
@@ -368,16 +412,30 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
             <span style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text }}>Capture Call Audio</span>
             <CloseBtn />
           </div>
-          <div style={{ fontSize: NC_TYPE.body, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.55, marginBottom: SP.md }}>
-            Click <strong>Start capturing</strong>, then in the browser dialog:<br/>
-            1. Select the tab or window playing the call<br/>
-            2. Check <em>"Share tab audio"</em> before clicking Share
-          </div>
+          {feedInfo?.available ? (
+            <div style={{ fontSize: NC_TYPE.body, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.55, marginBottom: SP.md }}>
+              The PC phone link is live on this computer — one click records the call's
+              audio feed directly{feedInfo.state?.downlink?.deviceName ? <> (via <strong>{feedInfo.state.downlink.deviceName}</strong>)</> : null}, no dialogs.
+            </div>
+          ) : (
+            <div style={{ fontSize: NC_TYPE.body, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.55, marginBottom: SP.md }}>
+              Click <strong>Start capturing</strong>, then in the browser dialog:<br/>
+              1. Select the tab or window playing the call<br/>
+              2. Check <em>"Share tab audio"</em> before clicking Share
+            </div>
+          )}
           {err && <div style={{ fontSize: NC_TYPE.meta, color: C.danger, fontFamily: NC_FONT_STACK, marginBottom: SP.sm }}>{err}</div>}
         </div>
-        <div style={{ padding: `${SP.lg} ${SP.xl}`, display: 'flex', gap: SP.sm, justifyContent: 'center' }}>
-          <button onClick={startCallCapture} style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: RADIUS.md, padding: `${SP.md} ${SP.xl}`, fontSize: NC_TYPE.body, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
-            Start capturing
+        <div style={{ padding: `${SP.lg} ${SP.xl}`, display: 'flex', gap: SP.sm, justifyContent: 'center', flexWrap: 'wrap' }}>
+          {feedInfo?.available && (
+            <button onClick={startFeedCapture} style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: RADIUS.md, padding: `${SP.md} ${SP.xl}`, fontSize: NC_TYPE.body, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+              Record live call feed
+            </button>
+          )}
+          <button onClick={startCallCapture} style={feedInfo?.available
+            ? { background: 'none', border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, padding: `${SP.md} ${SP.lg}`, fontSize: NC_TYPE.body, color: C.muted, cursor: 'pointer', fontFamily: NC_FONT_STACK }
+            : { background: C.accent, color: '#fff', border: 'none', borderRadius: RADIUS.md, padding: `${SP.md} ${SP.xl}`, fontSize: NC_TYPE.body, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+            {feedInfo?.available ? 'Screen-share instead' : 'Start capturing'}
           </button>
           <button onClick={onClose} style={{ background: 'none', border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, padding: `${SP.md} ${SP.lg}`, fontSize: NC_TYPE.body, color: C.muted, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
             Cancel
@@ -393,13 +451,13 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       <div style={cardS} onClick={e => e.stopPropagation()}>
         <div style={{ padding: `${SP.xl} ${SP.xl} ${SP.lg}`, borderBottom: `1px solid ${C.divider}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SP.md }}>
-            <span style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text }}>{source === 'system' ? 'Capturing Screen Audio' : 'Recording Conversation'}</span>
+            <span style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text }}>{source === 'pclink' ? 'Recording Live Call Feed' : source === 'system' ? 'Capturing Screen Audio' : 'Recording Conversation'}</span>
             <CloseBtn />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, marginBottom: SP.md }}>
             <div style={{ width: 10, height: 10, borderRadius: RADIUS.pill, background: C.danger, animation: 'conv-pulse 1.4s ease infinite' }}/>
             <span style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, fontVariantNumeric: 'tabular-nums' }}>{fmtElapsed}</span>
-            <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>{source === 'system' ? 'Listening to the shared audio — AI will extract everything' : 'Speak freely — AI will extract everything'}</span>
+            <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>{source === 'pclink' ? 'Recording the call straight from the PC link — AI will extract everything' : source === 'system' ? 'Listening to the shared audio — AI will extract everything' : 'Speak freely — AI will extract everything'}</span>
           </div>
           {liveText && (
             <div style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1.5, maxHeight: 72, overflowY: 'auto', background: C.bgSoft, borderRadius: RADIUS.sm, padding: `${SP.sm} ${SP.md}`, border: `1px solid ${C.divider}` }}>

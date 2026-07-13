@@ -328,7 +328,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // Owner control doc — the preferred host plus the ACTIVE host's heartbeat.
   // `present` is false until a rebuilt host first writes it, so liveness cleanly
   // falls back to the state-doc stamp during rollout.
-  const [owner, setOwner] = useState({ preferred: 'tablet', host: '', t: 0, connected: false, present: false });
+  const [owner, setOwner] = useState({ preferred: 'tablet', host: '', t: 0, connected: false, present: false, hosts: {} });
   // Ticks so staleness re-evaluates over time even when no new data arrives.
   const [nowTick, setNowTick] = useState(() => Date.now());
   // When the last successful fetch completed — drives loopback-path liveness
@@ -785,7 +785,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // Which machine holds the phone right now — the owner doc is authoritative
   // when present; else infer from the state blob.
   const activeHostLabel = link.activeHostLabel
-    || (status?.hostPlatform === "android" ? "Tablet" : statusOnline ? "PC" : "");
+    || (status?.hostPlatform === "android" ? "ActiveTab" : status?.hostPlatform === "ios" ? "iPad" : statusOnline ? "PC" : "");
   const linkText = describePhoneLink(link, { deviceName, hostFallbackLabel: activeHostLabel });
   const statusText = !phoneLinkLive
     ? linkText.label

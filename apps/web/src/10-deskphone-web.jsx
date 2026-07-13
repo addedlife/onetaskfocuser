@@ -6034,7 +6034,7 @@ export function DeskPhoneWebPanel({
   const lastFetchOkAtRef = useRef(0);
   // Owner control doc — the ACTIVE host's heartbeat; feeds the shared state
   // machine so this page and the NerveCenter card read one liveness truth.
-  const [owner, setOwner] = useState({ preferred: 'tablet', host: '', t: 0, connected: false, present: false });
+  const [owner, setOwner] = useState({ preferred: 'tablet', host: '', t: 0, connected: false, present: false, hosts: {} });
   useEffect(() => {
     const unsub = subscribeOwner(setOwner);
     return () => { try { unsub && unsub(); } catch {} };

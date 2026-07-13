@@ -18,6 +18,8 @@ import { MdDivider } from '@material/web/divider/divider.js';
 import { MdCircularProgress } from '@material/web/progress/circular-progress.js';
 import { MdOutlinedTextField } from '@material/web/textfield/outlined-text-field.js';
 import { MdSwitch } from '@material/web/switch/switch.js';
+import { MdOutlinedSelect } from '@material/web/select/outlined-select.js';
+import { MdSelectOption } from '@material/web/select/select-option.js';
 
 // ─── Shared @material/web button layer ───────────────────────────────────────
 // Single home for the real Google Material 3 button + icon-button components,
@@ -62,6 +64,17 @@ export const TextField = createComponent({
   // blur) so save-on-blur callers fire when the inner <input> loses focus.
   events: { onInput: 'input', onChange: 'change', onKeyDown: 'keydown', onBlur: 'focusout' },
 });
+// Select — the real M3 dropdown. Pair with SelectOption children:
+//   <OutlinedSelect value={v} onChange={e => set(e.target.value)}>
+//     <SelectOption value="x"><div slot="headline">X</div></SelectOption>
+//   </OutlinedSelect>
+export const OutlinedSelect = createComponent({
+  react: React,
+  tagName: 'md-outlined-select',
+  elementClass: MdOutlinedSelect,
+  events: { onChange: 'change' },
+});
+export const SelectOption = createComponent({ react: React, tagName: 'md-select-option', elementClass: MdSelectOption });
 export const Switch = createComponent({
   react: React,
   tagName: 'md-switch',

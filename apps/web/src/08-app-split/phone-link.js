@@ -20,8 +20,28 @@
 // This module is intentionally PURE — no imports, no Firebase, no window — so
 // the node test suite (apps/web/tests) exercises it exactly as production
 // runs it. phone-host-control.js re-exports these constants for its callers.
-export const HOST_LABEL = { android: 'Tablet', windows: 'PC' };
+//
+// Three link lanes (2026-07-13): the Samsung Galaxy Tab Active ("ActiveTab",
+// host id `android`), the Windows PC (`windows`), and the iPad bridge (`ios`).
+// Only the first two can hold the phone's Bluetooth Classic profiles —
+// iPadOS has no public RFCOMM API (see apps/ipad-phone-bridge/README.md) —
+// so the iPad lane is a cloud/LAN feeder, never the BT holder.
+export const HOST_LABEL = { android: 'ActiveTab', windows: 'PC', ios: 'iPad' };
 export const PREFERRED_DEFAULT = 'tablet';
+// Owner-doc `preferred` values the UI can write. 'auto' = the auto-finder:
+// hosts arbitrate among themselves and the strongest live link wins.
+export const PREFERRED_VALUES = ['tablet', 'pc', 'ipad', 'auto'];
+// Hosts that can physically hold the phone's Bluetooth Classic link.
+export const BT_CAPABLE_HOSTS = ['android', 'windows'];
+
+// preferred value → host id it names. 'auto' names nobody (the winner is
+// computed from presence); unknown values fall back to the tablet.
+export function preferredHostId(preferred) {
+  if (preferred === 'pc') return 'windows';
+  if (preferred === 'ipad') return 'ios';
+  if (preferred === 'auto') return '';
+  return 'android';
+}
 
 // The active host renews the owner-doc heartbeat every ~20 s; 60 s tolerates
 // two missed beats before the UI says offline (standard 3× presence margin).
@@ -39,6 +59,50 @@ export const STATE_FALLBACK_WINDOW_MS = 360000;
 // a patient "handover" state instead. Past the window, honesty resumes:
 // the taking host really didn't show up, so Offline + Reconnect is correct.
 export const HANDOFF_GRACE_MS = 150000;
+
+// ── Auto-finder: strongest-link scoring ─────────────────────────────────────
+// Each host writes a presence entry into the owner doc's `hosts` map every
+// heartbeat tick, EVEN WHILE PARKED: hosts.{id} = { t, connected, quality }.
+//   t         — last check-in (ms epoch)
+//   connected — that host's Bluetooth link to the phone is up right now
+//   quality   — 0–100 self-reported link quality (RSSI-derived where the
+//               platform exposes it; fetch success rate otherwise)
+// This scoring is the ONE spec for "strongest connection" — the native hosts
+// (RelayService.cs / RelayClient.kt) port it verbatim, so every party ranks
+// the lanes identically and auto mode can never oscillate between two
+// arbiters that disagree.
+export const PRESENCE_LIVE_WINDOW_MS = 60000;   // same 3× margin as the heartbeat
+export const AUTO_SWITCH_MARGIN = 25;           // challenger must win by this much (hysteresis)
+const HOST_STATIC_PRIORITY = { android: 3, windows: 2, ios: 1 }; // stable tiebreak: tablet is the daily primary
+
+// Score one presence entry. 0 = not a candidate (dead or absent).
+export function scoreHostLink(entry, now = Date.now()) {
+  if (!entry || !(Number(entry.t) > 0)) return 0;
+  if (now - Number(entry.t) >= PRESENCE_LIVE_WINDOW_MS) return 0;
+  const quality = Math.max(0, Math.min(100, Number(entry.quality) || 0));
+  const base = 10 + (entry.connected === true ? 100 : 0) + quality * 0.5;
+  return base + (HOST_STATIC_PRIORITY[entry.hostId] || 0);
+}
+
+// Pick the host that should hold the phone in auto mode. Only BT-capable
+// hosts are candidates (the iPad physically cannot hold the phone's link).
+// Sticky by design: the current holder keeps the phone unless it is dead
+// (score 0) or a challenger beats it by AUTO_SWITCH_MARGIN — flapping between
+// two healthy links would drop calls for nothing.
+export function chooseAutoHost({ hosts = {}, now = Date.now(), currentHostId = '' } = {}) {
+  let bestId = '';
+  let bestScore = 0;
+  for (const id of BT_CAPABLE_HOSTS) {
+    const score = scoreHostLink({ ...(hosts[id] || null), hostId: id }, now);
+    if (score > bestScore) { bestScore = score; bestId = id; }
+  }
+  if (!bestId) return '';
+  if (currentHostId && BT_CAPABLE_HOSTS.includes(currentHostId)) {
+    const currentScore = scoreHostLink({ ...(hosts[currentHostId] || null), hostId: currentHostId }, now);
+    if (currentScore > 0 && bestScore < currentScore + AUTO_SWITCH_MARGIN) return currentHostId;
+  }
+  return bestId;
+}
 
 // Compact "27s" / "4m" / "2h" / "3d" age label.
 export function formatAgeShort(ms) {
@@ -84,7 +148,7 @@ export function derivePhoneLinkState({
   usingRelay = true,
   statusOnline = false,
   hasData = false,
-  owner = { preferred: PREFERRED_DEFAULT, host: '', t: 0, connected: false, present: false, preferredAtMs: 0 },
+  owner = { preferred: PREFERRED_DEFAULT, host: '', t: 0, connected: false, present: false, preferredAtMs: 0, hosts: {} },
   relayReceivedAt = 0,
 } = {}) {
   const heartbeatMs = owner.present ? owner.t : (Number(relayReceivedAt) || 0);
@@ -95,9 +159,15 @@ export function derivePhoneLinkState({
   // On the loopback path liveness is simply "the fetch just worked".
   const live = usingRelay ? (statusOnline && heartbeatMs > 0 && !stale) : statusOnline;
 
-  const preferredId = owner.preferred === 'pc' ? 'windows' : 'android';
+  const auto = owner.preferred === 'auto';
   const activeHostId = (owner.present && owner.host) ? owner.host : '';
-  const switching = live && !!activeHostId && activeHostId !== preferredId;
+  // Auto mode has no single named target: whatever the auto-finder would pick
+  // right now IS the preference, so a live link is never "switching" and a
+  // dead one points the UI at the strongest candidate instead of a fixed host.
+  const preferredId = auto
+    ? (activeHostId || chooseAutoHost({ hosts: owner.hosts, now, currentHostId: activeHostId }) || 'android')
+    : preferredHostId(owner.preferred);
+  const switching = !auto && live && !!activeHostId && activeHostId !== preferredId;
 
   // Mid-handoff gap: the preferred host was flipped moments ago, the link is
   // not live, and the owner doc does not yet show the NEW host holding the
@@ -105,7 +175,7 @@ export function derivePhoneLinkState({
   // doc names the preferred host (even dead), or the grace window lapses,
   // normal offline reporting takes over.
   const preferredAtMs = Number(owner.preferredAtMs) || 0;
-  const handover = !live && usingRelay
+  const handover = !auto && !live && usingRelay
     && preferredAtMs > 0 && (now - preferredAtMs) < HANDOFF_GRACE_MS
     && activeHostId !== preferredId;
 
@@ -125,13 +195,14 @@ export function derivePhoneLinkState({
     stale,
     switching,
     handover,
+    auto,
     heartbeatMs,
     ageMs,
     hasData,
     activeHostId,
     activeHostLabel: HOST_LABEL[activeHostId] || '',
     preferredId,
-    preferredLabel: HOST_LABEL[preferredId] || 'Tablet',
+    preferredLabel: HOST_LABEL[preferredId] || HOST_LABEL.android,
   };
 }
 
@@ -148,7 +219,7 @@ export function describePhoneLink(link, { deviceName = '', hostFallbackLabel = '
       };
     case 'connected':
       return {
-        label: `Connected${hostLabel ? ` · ${hostLabel}` : ''}${deviceName ? ` · ${deviceName}` : ''}`,
+        label: `Connected${hostLabel ? ` · ${hostLabel}` : ''}${link.auto ? ' (auto)' : ''}${deviceName ? ` · ${deviceName}` : ''}`,
         tone: 'ok',
         showReconnect: false,
       };
@@ -170,7 +241,7 @@ export function describePhoneLink(link, { deviceName = '', hostFallbackLabel = '
       return { label: 'Connecting…', tone: 'muted', showReconnect: false };
     default: // no-host
       return {
-        label: 'No phone link — start Shamash Phone Link on the tablet (or DeskPhone on the PC)',
+        label: 'No phone link — start Shamash Phone Link on the ActiveTab (or DeskPhone on the PC, or the iPad bridge)',
         tone: 'muted',
         showReconnect: true,
       };
