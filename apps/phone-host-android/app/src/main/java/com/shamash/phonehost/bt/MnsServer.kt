@@ -35,6 +35,14 @@ class MnsServer(
     var onMessageDelivered: ((handle: String) -> Unit)? = null
     var onMessageRead: ((handle: String) -> Unit)? = null
 
+    /**
+     * Fired on EVERY event PUT, even a zero-byte one, before XML parsing.
+     * The owner's handset (kosher MediaTek firmware) always sends empty MAP
+     * event reports — no type, no handle — so this generic "something changed
+     * on the phone" signal is the only push trigger that actually fires there.
+     */
+    var onEventReceived: (() -> Unit)? = null
+
     @Volatile
     var isRunning = false
         private set
@@ -149,8 +157,15 @@ class MnsServer(
     }
 
     private fun parseEventReport(xml: String) {
-        // Some Android firmware sends empty MAP event notifications — ignore.
-        if (xml.isBlank()) return
+        // Generic signal first: even a bodyless PUT proves the phone pushed an event.
+        onEventReceived?.invoke()
+
+        // Some Android firmware sends empty MAP event notifications (this handset
+        // ALWAYS does) — onEventReceived above already turned it into a sync trigger.
+        if (xml.isBlank()) {
+            log("[MNS] Event body empty — treating as generic change signal")
+            return
+        }
         log("[MNS] Event: ${xml.replace("\n", "↵").replace("\r", "")}")
         val event = Regex("<event\\s+([^>]*)/?>", RegexOption.IGNORE_CASE).find(xml) ?: run {
             log("[MNS] No <event> node found in report")

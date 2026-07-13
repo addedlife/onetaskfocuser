@@ -381,19 +381,23 @@ class HostService : Service() {
     private fun wireMns() {
         val a = adapter ?: return
         val server = MnsServer(a)
-        server.onNewMessage = { handle, folder ->
+        // Sync on EVERY event PUT — this handset only ever sends zero-byte event
+        // reports, so the typed onNewMessage callback below never fires for it and
+        // the generic arrival is the real push signal. (A back-to-back duplicate
+        // sync from a typed event is harmless: the second delta returns empty.)
+        server.onEventReceived = {
             executor.execute {
                 try {
                     if (map.isConnected) {
-                        val newMsgs = map.performDeltaSync()
-                        val added = messageStore.merge(newMsgs)
-                        HostLog.add("[MNS→SYNC] $folder $handle → +$added messages")
+                        val added = messageStore.merge(map.performDeltaSync())
+                        if (added > 0) HostLog.add("[MNS→SYNC] event → +$added messages")
                     }
                 } catch (ex: Exception) {
                     HostLog.add("[MNS→SYNC] failed: ${ex.message}")
                 }
             }
         }
+        server.onNewMessage = { handle, folder -> HostLog.add("[MNS] NewMessage $folder $handle") }
         server.onMessageDelivered = { handle -> map.rememberKnownHandle(handle) }
         mns = server
     }
