@@ -2698,6 +2698,16 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             _mnsPushProven = true;
             RequestMessageSync("MNS event report");
         };
+        // The phone opening its OBEX connection to our MNS server already proves the
+        // push channel — don't wait hours for the first actual event before relaxing
+        // the poll. The timer-poll self-correction still catches a connected-but-mute
+        // channel (one 30 s delay worst case, then back to fast polling).
+        _mns.ClientConnected += () =>
+        {
+            if (!_mnsPushProven)
+                AppendDebugThreadSafe("[POLL] MNS channel open — treating push as proven, relaxing poll cadence");
+            _mnsPushProven = true;
+        };
         // Typed NewMessage additionally carries the handle for a priority fetch.
         _mns.NewMessage += (handle, folder) => RequestMessageSync($"MNS new message handle={handle}", handle);
         _mns.LogLine    += s => Dispatch(() => AppendDebug(s));

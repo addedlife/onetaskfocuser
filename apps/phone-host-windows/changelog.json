@@ -1,5 +1,11 @@
 [
     {
+        "version":  "b335",
+        "timestamp":  "2026-07-13 00:16:59",
+        "notes":  "The relaxed 30-second poll now kicks in as soon as the phone opens its push-notification channel, instead of waiting for the first actual message event - which overnight could be hours away, leaving the fast 2-second poll running all night for nothing. Same instant delivery, the radio just goes quiet sooner.",
+        "devNotes":  "b334 live-log review at 00:15 showed the poll still at fast cadence ~11 rounds/min hours after connect: _mnsPushProven only flipped on an MNS event PUT, and no messages had arrived since the 19:06 restart, so the proof never landed. New MapNotificationService.ClientConnected event fires when the phone\u0027s OBEX CONNECT to our MNS server is accepted; MainViewModel wires it to _mnsPushProven=true (log line: \u0027MNS channel open - treating push as proven\u0027). The channel being open is sufficient proof - the existing timer-poll self-correction (clear _mnsPushProven when a timer-fired poll finds unannounced messages) covers a connected-but-mute channel with a single 30s worst-case delay. No wire-protocol changes."
+    },
+    {
         "version":  "b334",
         "timestamp":  "2026-07-12 19:06:34",
         "notes":  "Quiets the debug log: while the background history downloader waits for a send or sync to finish, it used to print \u0027Yielding for real op\u0027 three times every second, drowning out everything useful. It now logs one line when the pause starts and one line with the total wait time when it resumes.",

@@ -64,6 +64,12 @@ public sealed class MapNotificationService : IAsyncDisposable
     /// something changed on the phone, so subscribers can trigger a sync.
     /// </summary>
     public event Action?                                       EventReceived;
+    /// <summary>
+    /// Fired when the phone opens its OBEX connection to this MNS server. The
+    /// connection itself proves the push channel is live — the poll loop can relax
+    /// before the first actual event arrives (which may be hours away overnight).
+    /// </summary>
+    public event Action?                                       ClientConnected;
     /// <summary>Log line for the debug panel.</summary>
     public event Action<string>?                               LogLine;
 
@@ -178,6 +184,7 @@ public sealed class MapNotificationService : IAsyncDisposable
                     await stream.WriteAsync(resp, ct);
                     await stream.FlushAsync(ct);
                     LogLine?.Invoke("[MNS] OBEX CONNECT accepted");
+                    ClientConnected?.Invoke();
                 }
 
                 // ── OBEX PUT (0x82 or 0x02) — event report ───────────────
