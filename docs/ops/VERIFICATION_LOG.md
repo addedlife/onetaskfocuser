@@ -1283,3 +1283,8 @@ Current source-grade file count after cleanup: 162 files.
 - **AI/cloud inspection (6:30 PM 7/10)**: `docs/ops/AI_CLOUD_INSPECTION_2026-07.md` — verdict: already one Firebase project + one AI gateway; cleanup list = delete the Netlify site, cancel Serper, treat `backend/functions` as frozen rollback, add the two CSE GitHub secrets.
 - Verified: `npm run build` green (multiple gates), `npm run test:phone` 36/36, `node --check` on both edited functions, live probes of `/api/google-search` (503 root cause) and Sefaria's API (fallback shape + lenient ref URLs, 301 to canonical).
 - Version 4.44.132 → 4.45.132 (feat).
+
+## 2026-07-14 Follow-up — Sefaria fallback needed slop (web 4.45.133)
+
+- Live probe after the 4.45.132 deploy: the fallback engine answered but with 0 hits for realistic research queries — Sefaria's search-wrapper phrase-matches with zero slop by default, so multi-word AI queries missed. Fix: primary call now sends `slop: 10`, the slimmed retry `slop: 50` (verified against the live API: "waiting between meat and milk" 0 → 2 hits with slop 10; slim retry "waiting between meat" 7 hits with slop 50).
+- Version 4.45.132 → 4.45.133 (fix).

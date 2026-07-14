@@ -20,22 +20,24 @@ const SEFARIA_FILLER = new Set([
 ]);
 
 async function sefariaSearch(query, count) {
-  const call = async (q) => {
+  const call = async (q, slop) => {
     const r = await fetch("https://www.sefaria.org/api/search-wrapper", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: q, type: "text", size: count, field: "naive_lemmatizer", source_proj: true }),
+      body: JSON.stringify({ query: q, type: "text", size: count, field: "naive_lemmatizer", slop, source_proj: true }),
     });
     if (!r.ok) throw new Error(`Sefaria search failed (${r.status})`);
     const data = await r.json().catch(() => ({}));
     return data?.hits?.hits || [];
   };
-  let hits = await call(query);
+  let hits = await call(query, 10);
   if (!hits.length) {
+    // Filler words like "halacha" defeat the phrase window — retry with the
+    // strongest few content words and a wide slop.
     const words = query.toLowerCase().replace(/[^a-z֐-׿\s]/g, " ").split(/\s+/)
       .filter(w => w.length > 3 && !SEFARIA_FILLER.has(w));
     const slim = words.slice(0, 3).join(" ");
-    if (slim && slim !== query.toLowerCase().trim()) hits = await call(slim);
+    if (slim && slim !== query.toLowerCase().trim()) hits = await call(slim, 50);
   }
   return hits.map(h => {
     const ref = h._source?.ref || String(h._id || "").replace(/\s*\([^)]*\)\s*$/, "");
