@@ -24,12 +24,16 @@ public class BluetoothScanner
 
             using var client = new BluetoothClient();
 
-            // Paired / remembered devices — instant, no radio scan needed
+            // Paired / remembered devices — instant, no radio scan needed.
+            // Windows/InTheHand cache DeviceName and Connected at pairing time, so a
+            // phone renamed after pairing (or one that's since gone out of range)
+            // reports stale info unless we force a live re-query per device.
             try
             {
                 foreach (var d in client.PairedDevices)
                 {
                     ct.ThrowIfCancellationRequested();
+                    try { d.Refresh(); } catch { /* best-effort; fall back to cached values */ }
                     results.Add(new BluetoothDeviceModel(d));
                 }
             }
@@ -52,11 +56,18 @@ public class BluetoothScanner
             catch (OperationCanceledException) { throw; }
             catch { /* discovery timed out — paired list is still useful */ }
 
-            StatusChanged?.Invoke(results.Count == 0
-                ? "No devices found — is Bluetooth on?"
-                : $"{results.Count} device(s) found");
+            // Currently-connected devices first, so the list leads with what's actually
+            // reachable right now instead of burying it under every device ever paired.
+            var ordered = results
+                .OrderByDescending(r => r.IsConnected)
+                .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-            return results;
+            StatusChanged?.Invoke(ordered.Count == 0
+                ? "No devices found — is Bluetooth on?"
+                : $"{ordered.Count} device(s) found");
+
+            return ordered;
         }, ct);
     }
 

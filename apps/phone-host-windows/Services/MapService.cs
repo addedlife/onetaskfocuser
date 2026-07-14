@@ -1557,15 +1557,42 @@ public class MapService : IAsyncDisposable
         return result;
     }
 
-    // MAP datetime format: YYYYMMDDTHHMMSS or YYYYMMDDTHHMMSS±HHMM
+    // MAP datetime format: YYYYMMDDTHHMMSS or YYYYMMDDTHHMMSS±HHMM (or trailing "Z").
+    // The offset suffix, when present, is the timestamp's true UTC offset — dropping
+    // it (as this used to) parsed the wall-clock digits as if they were already in
+    // this PC's local zone. When the phone reports a different zone (commonly UTC)
+    // that produced a fixed multi-hour skew across every synced message (the
+    // long-standing "+4h" ticket), which in turn defeated the web's fuzzy
+    // send-dedupe window and made sent texts double up.
     private static DateTime ParseMapDate(string? s)
     {
         if (s is null) return DateTime.Now;
-        if (DateTime.TryParseExact(s.Length >= 15 ? s[..15] : s,
-                "yyyyMMddTHHmmss", null,
+        var core = s.Length >= 15 ? s[..15] : s;
+        if (!DateTime.TryParseExact(core, "yyyyMMddTHHmmss", null,
                 System.Globalization.DateTimeStyles.None, out var dt))
-            return dt;
-        return DateTime.Now;
+            return DateTime.Now;
+
+        if (s.Length > 15)
+        {
+            var suffix = s[15..].Trim();
+            TimeSpan? offset = suffix switch
+            {
+                "Z" => TimeSpan.Zero,
+                { Length: 5 } when (suffix[0] == '+' || suffix[0] == '-')
+                    && int.TryParse(suffix.AsSpan(1, 2), out var offH)
+                    && int.TryParse(suffix.AsSpan(3, 2), out var offM)
+                    => TimeSpan.FromMinutes((suffix[0] == '-' ? -1 : 1) * (offH * 60 + offM)),
+                _ => null
+            };
+
+            if (offset is { } off)
+            {
+                var utc = new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Unspecified), off).UtcDateTime;
+                return utc.ToLocalTime();
+            }
+        }
+
+        return dt;
     }
 
     private record MsgMeta(string From = "", string To = "", bool IsRead = false,

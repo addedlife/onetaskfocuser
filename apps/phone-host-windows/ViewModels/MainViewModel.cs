@@ -5519,7 +5519,12 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         if (newCall.Status == CallStatus.Idle && prev.Status != CallStatus.Idle)
         {
-            var duration = prev.Status == CallStatus.Active && prev.StartTime != default
+            // Note: prev here can be CallStatus.Ending, not just Active — HangUpAsync
+            // stamps an intermediate Ending state (for instant UI feedback) that
+            // carries StartTime forward from the real Active call. Gating on
+            // prev.Status == Active alone dropped that StartTime and misclassified
+            // real, answered calls as missed the moment the user pressed Hang up.
+            var duration = prev.StartTime != default
                 ? DateTime.Now - prev.StartTime
                 : TimeSpan.Zero;
 
