@@ -784,7 +784,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
 // When onToggleExpand is provided the header tap toggles expand instead of opening the full
 // surface; onOpen moves to a small trailing open_in_new button. collapsed=true renders the
 // header only (content hidden via display:none so embedded pollers — Phone — keep running).
-function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, stickyHeader = false, dense = false, expanded = false, collapsed = false, onToggleExpand = null }) {
+function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, stickyHeader = false, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null }) {
   const [scrolled, setScrolled] = useState(false);
   const [fade, setFade] = useState(false); // more content below → show a bottom fade so the
   const scrollRef = useRef(null);          // last (partial) row dissolves instead of hard-cutting
@@ -832,6 +832,9 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
               <span style={{ display: "block", fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: 26, fontStyle: "normal", alignSelf: "stretch" }}>{summary}</span>
             )}
           </button>
+          {headerActions && (
+            <span style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, margin: "3px 4px 0 0" }}>{headerActions}</span>
+          )}
           {onToggleExpand && onOpen && (
             <IconBtn icon="open_in_new" size={24} iconSize={12} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} style={{ margin: "5px 4px 0 0" }} />
           )}
@@ -846,6 +849,9 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
             <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.small, fontWeight: 400, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{summary}</span>
             {onToggleExpand && <span style={{ display: "flex", color: C.faint, flexShrink: 0 }}>{suiteIcon(expanded ? "close_fullscreen" : "expand_content", 12)}</span>}
           </button>
+          {headerActions && (
+            <span style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, marginRight: 2 }}>{headerActions}</span>
+          )}
           {onToggleExpand && onOpen && (
             <IconBtn icon="open_in_new" size={26} iconSize={13} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} style={{ marginRight: 4 }} />
           )}
@@ -2472,13 +2478,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
           {/* Mail */}
           <MobileBox {...boxCtx} {...boxProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail")} style={cardStyle} dense={dense}
-            onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}>
-            {/* Toolbar always renders so the reload icon exists in box/row mode too
-                (owner ticket 7/13: "email reload icon on tablet row mode also"). */}
-            <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", gap:2, padding:"2px 6px", borderBottom:`1px solid ${C.divider}` }}>
+            onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}
+            /* Account picker + refresh ride the card's own header row instead of a second
+               toolbar row underneath it (owner ticket 7/14: "two rows when they need only
+               one" — was its own <div> above the list, doubling the header height). */
+            headerActions={<>
               {googleAcctMenuEl}
               <IconBtn icon="refresh" size={26} iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh mail" aria-label="Refresh mail" />
-            </div>
+            </>}>
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : gmailMessages.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
               const from = fmtFromM(gmailHdr(msg,"From"));
@@ -2572,7 +2579,16 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
           {/* Calendar */}
           <MobileBox {...boxCtx} {...boxProps("calendar")} icon="calendar_today" title="Calendar" accentColor={C.warning} summary={cardSummary("Calendar")} style={cardStyle} dense={dense}
-            onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}>
+            onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}
+            /* Account picker + refresh + Agenda/Live-time toggle ride the card's own header
+               row instead of a second toolbar row underneath it (owner ticket 7/14: "two
+               rows when they need only one"). */
+            headerActions={<>
+              {googleAcctMenuEl}
+              <IconBtn icon="refresh" size={26} iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh calendar" aria-label="Refresh calendar" />
+              <IconBtn icon="schedule" size={26} iconSize={14} color={calCardView==="timeline"?C.text:C.muted} active={calCardView==="timeline"} activeBg={C.hover} onClick={()=>setCalCardView("timeline")} title="Live time" aria-label="Live time view" />
+              <IconBtn icon="view_agenda" size={26} iconSize={14} color={calCardView==="agenda"?C.text:C.muted} active={calCardView==="agenda"} activeBg={C.hover} onClick={()=>setCalCardView("agenda")} title="Agenda" aria-label="Agenda view" />
+            </>}>
             {/* Fill the box as a flex column so the timeline's internal scroll bounds correctly. */}
             <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0 }}>
               {showAddEvent && (
@@ -2587,13 +2603,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   </div>
                 </div>
               )}
-              {/* Account picker + refresh + Agenda ⇄ Live time toggle */}
-              <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", gap:2, padding:"2px 6px", flexShrink:0, borderBottom:`1px solid ${C.divider}` }}>
-                {googleAcctMenuEl}
-                <IconBtn icon="refresh" size={26} iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh calendar" aria-label="Refresh calendar" />
-                <IconBtn icon="schedule" size={26} iconSize={14} color={calCardView==="timeline"?C.text:C.muted} active={calCardView==="timeline"} activeBg={C.hover} onClick={()=>setCalCardView("timeline")} title="Live time" aria-label="Live time view" />
-                <IconBtn icon="view_agenda" size={26} iconSize={14} color={calCardView==="agenda"?C.text:C.muted} active={calCardView==="agenda"} activeBg={C.hover} onClick={()=>setCalCardView("agenda")} title="Agenda" aria-label="Agenda view" />
-              </div>
               {!calendarEvents ? (
                 <div style={{ flex:1, minHeight:0, display:"flex", alignItems:"center" }}>{emptyMsg("Loading…")}</div>
               ) : calCardView === "timeline" ? (
