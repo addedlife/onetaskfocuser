@@ -10,7 +10,7 @@ import { cleanTheme, DUR, EASE, NC_FONT_STACK, NC_TYPE, RADIUS, suiteIcon } from
 import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
 import { textOnColor } from '../../01-core.js';
 import { MdFilterChip } from '@material/web/chips/filter-chip.js';
-import { subscribeOwner, setPreferredHost, ownerIsLive, HOST_LABEL } from '../phone-host-control.js';
+import { subscribeOwner, setPreferredHost, ownerIsLive, HOST_LABEL, OWNER_LIVE_WINDOW_MS } from '../phone-host-control.js';
 import { preferredHostId } from '../phone-link.js';
 
 // Real M3 web components — Google's official implementations, not hand-coded lookalikes.
@@ -45,11 +45,13 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
     return () => window.removeEventListener(BUGLOG_COUNT_EVENT, onCount);
   }, []);
 
-  // Phone-host control: which link the owner wants feeding the phone. Three
-  // manual lanes — iPad (bridge app), ActiveTab (Galaxy Tab Active, the daily
-  // primary), PC (DeskPhone, e.g. for call audio) — plus Auto, where the hosts
-  // arbitrate among themselves and the strongest live connection wins
-  // (phone-link.js chooseAutoHost — same scoring the native hosts run).
+  // Phone-host control: which link the owner wants feeding the phone. Two
+  // manual lanes — ActiveTab (Galaxy Tab Active, the daily primary) and PC
+  // (DeskPhone, e.g. for call audio) — plus Auto, where the hosts arbitrate
+  // among themselves and the strongest live connection wins (phone-link.js
+  // chooseAutoHost — same scoring the native hosts run). The iPad lane was
+  // retired 7/13 (owner ticket): iPadOS can't hold the BT link itself and the
+  // bridge-feeder never shipped, so the segment was dead weight in the rail.
   const [phoneHost, setPhoneHost] = React.useState({ preferred: 'tablet', host: '', connected: false, present: false, hosts: {} });
   React.useEffect(() => {
     const unsub = subscribeOwner(setPhoneHost);
@@ -72,20 +74,34 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
   // solid follows the preference (or, in auto mode, the live holder).
   const solidId = hostSwitchPending ? actualHostId : (autoHost ? actualHostId : preferredId);
   const hostBlinkStyle = { animation: 'nc-host-blink 1.1s ease-in-out infinite' };
+  // Auto-mode honesty (owner ticket 7/13: "auto should show state — searching,
+  // establishing with pc, etc."): when no host holds the link yet, say what the
+  // finder is actually doing instead of a bare "Auto". A host beaconing presence
+  // but not yet connected reads "establishing"; total silence reads "searching".
+  const beaconingId = Object.entries(phoneHost.hosts || {})
+    .filter(([, h]) => h.t && (Date.now() - h.t) < OWNER_LIVE_WINDOW_MS)
+    .sort((a, b) => (b[1].connected - a[1].connected) || (b[1].quality - a[1].quality))
+    .map(([id]) => id)[0] || '';
+  const autoStatus = actualHostLabel
+    ? `Auto · ${actualHostLabel}`
+    : beaconingId
+      ? `Auto — establishing with ${HOST_LABEL[beaconingId] || 'device'}…`
+      : 'Auto — searching…';
   const phoneHostLabel = hostSwitchPending
     ? `Handing to ${preferredLabel}…`
     : autoHost
-      ? `Phone: Auto${actualHostLabel ? ` · ${actualHostLabel}` : ''}`
+      ? autoStatus
       : `Phone: ${actualHostLabel || preferredLabel}`;
   const phoneHostTitle = hostSwitchPending
     ? `Waiting for the ${preferredLabel} to pick up the phone — the ${actualHostLabel} still holds it`
     : autoHost
       ? `Auto-finder is on — the strongest live link holds the phone${actualHostLabel ? ` (currently the ${actualHostLabel})` : ''}. Tap a device to pin it manually.`
       : `Phone link via ${actualHostLabel || preferredLabel} — pick another device to hand it over, or Auto to always use the strongest link`;
-  // Collapsed rail: one icon button cycles auto → ActiveTab → PC → iPad.
-  const CYCLE = ['auto', 'tablet', 'pc', 'ipad'];
-  const HOST_MODE_ICON = { auto: 'auto_mode', tablet: 'tablet_android', pc: 'computer', ipad: 'tablet_mac' };
+  // Collapsed rail: one icon button cycles auto → ActiveTab → PC.
+  const CYCLE = ['auto', 'tablet', 'pc'];
+  const HOST_MODE_ICON = { auto: 'auto_mode', tablet: 'tablet_android', pc: 'computer' };
   const flipHost = () => {
+    // indexOf(-1) + 1 = 0, so a legacy 'ipad' preference safely re-enters at 'auto'.
     const idx = CYCLE.indexOf(phoneHost.preferred);
     setPreferredHost(CYCLE[(idx + 1) % CYCLE.length]);
   };
@@ -277,15 +293,18 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
         {displayOpen && "Bug Log"}
       </button>
 
-      {/* Phone link — which lane feeds the phone: iPad (bridge), ActiveTab
-          (Galaxy Tab Active — daily primary), or PC (DeskPhone, call audio);
-          plus the auto-finder chip, where the strongest live connection wins
-          and the hosts hand off among themselves. A CHOICE between lanes, so
-          this is M3's segmented button (single-select), not a switch. Real
-          labs md-outlined-segmented-button-set when the rail is open, sized to
+      {/* Phone link — which lane feeds the phone: ActiveTab (Galaxy Tab
+          Active — daily primary) or PC (DeskPhone, call audio); plus the
+          auto-finder chip, where the strongest live connection wins and the
+          hosts hand off among themselves. A CHOICE between lanes, so this is
+          M3's segmented button (single-select), not a switch. Real labs
+          md-outlined-segmented-button-set when the rail is open, sized to
           rail density via the official tokens; a tap-to-cycle icon when
-          collapsed. The caption above still reflects the ACTUAL holder and
-          shows "Handing to …" until the hosts complete the Bluetooth handoff. */}
+          collapsed. The caption above reflects the ACTUAL holder ("Handing
+          to …" until the hosts complete the Bluetooth handoff; in Auto it
+          narrates searching/establishing/connected). The holder's segment
+          carries a state icon instead of the stock checkmark: auto_mode when
+          the auto-finder picked it, a pin when the owner pinned it manually. */}
       {displayOpen ? (
         <div title={phoneHostTitle} style={{ width: '100%', padding: `${GAP}px 2px`, boxSizing: 'border-box', flexShrink: 0 }}>
           <div style={{
@@ -314,9 +333,8 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
             onSelection={(e) => {
               const idx = e?.detail?.index;
               // Any manual pick pins that lane (turning the auto-finder off).
-              if (idx === 0) setPreferredHost('ipad');
-              else if (idx === 1) setPreferredHost('tablet');
-              else if (idx === 2) setPreferredHost('pc');
+              if (idx === 0) setPreferredHost('tablet');
+              else if (idx === 1) setPreferredHost('pc');
             }}
             aria-label="Which device hosts the phone link"
             style={{
@@ -332,12 +350,27 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
               '--md-outlined-segmented-button-unselected-label-text-color': C.muted,
               '--md-outlined-segmented-button-selected-icon-color': C.accent,
             }}>
-            <SegmentedButton selected={solidId === 'ios'} label="iPad" title="iPad bridge feeds the phone link"
-              style={hostSwitchPending && preferredId === 'ios' ? hostBlinkStyle : undefined} />
-            <SegmentedButton selected={solidId === 'android'} label="ActiveTab" title="Galaxy Tab Active holds the phone"
-              style={hostSwitchPending && preferredId === 'android' ? hostBlinkStyle : undefined} />
-            <SegmentedButton selected={solidId === 'windows'} label="PC" title="PC holds the phone (call audio)"
-              style={hostSwitchPending && preferredId === 'windows' ? hostBlinkStyle : undefined} />
+            {['android', 'windows'].map(id => {
+              // State icon in place of the stock checkmark: the segment that
+              // holds (or is pinned to hold) the phone shows HOW it got the
+              // job — auto-finder (auto_mode) vs a manual pin (push_pin).
+              const showIcon = autoHost ? actualHostId === id : preferredId === id;
+              return (
+                <SegmentedButton key={id} noCheckmark
+                  selected={solidId === id}
+                  label={id === 'android' ? 'ActiveTab' : 'PC'}
+                  title={id === 'android'
+                    ? 'Galaxy Tab Active holds the phone'
+                    : 'PC holds the phone (call audio)'}
+                  style={hostSwitchPending && preferredId === id ? hostBlinkStyle : undefined}>
+                  {showIcon && (
+                    <span slot="icon" style={{ display: 'inline-flex', color: C.accent }}>
+                      {suiteIcon(autoHost ? 'auto_mode' : 'push_pin', 14)}
+                    </span>
+                  )}
+                </SegmentedButton>
+              );
+            })}
           </SegmentedButtonSet>
         </div>
       ) : (

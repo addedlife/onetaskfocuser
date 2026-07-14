@@ -47,6 +47,27 @@ function _isMobileOrTablet() {
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
+function _isIOS() {
+  if (typeof navigator === "undefined") return false;
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+// iOS home-screen PWA (added to Home Screen → runs "standalone"): a popup opens
+// in a disconnected in-app sheet that can never message the opener back, so
+// signInWithPopup hangs forever after the account pick — and no error fires, so
+// the popup→redirect fallback below never triggers (owner ticket 7/13). The
+// redirect flow IS reliable here because the app is served from the auth domain
+// itself (same-origin /__/auth/handler), so standalone iOS goes straight to it.
+function _isStandaloneIOS() {
+  if (!_isIOS()) return false;
+  try {
+    if (typeof navigator !== "undefined" && navigator.standalone === true) return true;
+    return typeof window !== "undefined" && !!window.matchMedia &&
+      window.matchMedia("(display-mode: standalone)").matches;
+  } catch (_) { return false; }
+}
+
 function _readStaySignedIn() {
   try { return localStorage.getItem(_AUTH_STAY_SIGNED_IN_KEY) !== "0"; } catch (_) { return true; }
 }
@@ -85,6 +106,11 @@ async function _signInWithGoogle(staySignedIn = true) {
     prompt: "select_account",
     ...(lastEmail ? { login_hint: lastEmail } : {}),
   });
+
+  if (_isStandaloneIOS()) {
+    await firebase.auth().signInWithRedirect(provider);
+    return null; // page reloads after the redirect; boot() captures the result
+  }
 
   let cred;
   try {

@@ -2473,11 +2473,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {/* Mail */}
           <MobileBox {...boxCtx} {...boxProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail")} style={cardStyle} dense={dense}
             onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}>
-            {googleAcctMenuEl && (
-              <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", gap:2, padding:"2px 6px", borderBottom:`1px solid ${C.divider}` }}>
-                {googleAcctMenuEl}
-              </div>
-            )}
+            {/* Toolbar always renders so the reload icon exists in box/row mode too
+                (owner ticket 7/13: "email reload icon on tablet row mode also"). */}
+            <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", gap:2, padding:"2px 6px", borderBottom:`1px solid ${C.divider}` }}>
+              {googleAcctMenuEl}
+              <IconBtn icon="refresh" size={26} iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh mail" aria-label="Refresh mail" />
+            </div>
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : gmailMessages.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
               const from = fmtFromM(gmailHdr(msg,"From"));
@@ -2586,9 +2587,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   </div>
                 </div>
               )}
-              {/* Account picker + Agenda ⇄ Live time toggle */}
+              {/* Account picker + refresh + Agenda ⇄ Live time toggle */}
               <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", gap:2, padding:"2px 6px", flexShrink:0, borderBottom:`1px solid ${C.divider}` }}>
                 {googleAcctMenuEl}
+                <IconBtn icon="refresh" size={26} iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh calendar" aria-label="Refresh calendar" />
                 <IconBtn icon="schedule" size={26} iconSize={14} color={calCardView==="timeline"?C.text:C.muted} active={calCardView==="timeline"} activeBg={C.hover} onClick={()=>setCalCardView("timeline")} title="Live time" aria-label="Live time view" />
                 <IconBtn icon="view_agenda" size={26} iconSize={14} color={calCardView==="agenda"?C.text:C.muted} active={calCardView==="agenda"} activeBg={C.hover} onClick={()=>setCalCardView("agenda")} title="Agenda" aria-label="Agenda view" />
               </div>

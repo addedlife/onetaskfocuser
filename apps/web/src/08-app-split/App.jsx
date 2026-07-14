@@ -2755,7 +2755,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
   if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:NC_FONT_STACK,color:"#999"}}>Loading...</div>;
 
-  const switchboardTaskList = actT.filter(t => !t.completed);
+  // Snoozed tasks leave the NerveCenter feed too — they used to drop in the
+  // queue but still top the NC display (owner ticket 7/13). minTick re-renders
+  // every 60 s, so a task reappears here on its own when the snooze expires.
+  const switchboardTaskList = actT.filter(t => !t.completed && (!t.snoozedUntil || t.snoozedUntil <= Date.now()));
   const allSwitchboardTasks = AS ? AS.lists.flatMap(l => l.tasks || []) : tasks;
   const switchboardShailaList = buildNerveShailaRows(allSwitchboardTasks, pris, shailosSnapshot);
   const shailaOpenCount = switchboardShailaList.length;

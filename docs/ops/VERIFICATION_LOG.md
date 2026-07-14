@@ -1288,3 +1288,15 @@ Current source-grade file count after cleanup: 162 files.
 
 - Live probe after the 4.45.132 deploy: the fallback engine answered but with 0 hits for realistic research queries — Sefaria's search-wrapper phrase-matches with zero slop by default, so multi-word AI queries missed. Fix: primary call now sends `slop: 10`, the slimmed retry `slop: 50` (verified against the live API: "waiting between meat and milk" 0 → 2 hits with slop 10; slim retry "waiting between meat" 7 hits with slop 50).
 - Version 4.45.132 → 4.45.133 (fix).
+
+## 2026-07-13 Evening Ticket Batch — iPad Lane Retired, Picker State Icons, iOS PWA Sign-In, Box Toolbars, NC Snooze (web 4.45.134)
+
+- Session scope: close out the interrupted 7/13 cloud session (its 4.44/4.45 work HAD landed on main and deployed, but tickets were never closed) + fix the four new evening tickets.
+- **iPad lane retired (ticket 9:29 PM)**: the rail picker is back to two segments (ActiveTab / PC) + the Auto chip; `CYCLE` drops `ipad` (a legacy `ipad` preference re-enters the cycle at `auto`). The unshipped `apps/ipad-phone-bridge` feeder stays in the repo as archive; `phone-link.js` still normalizes the value so old owner docs can't break.
+- **Picker fit + honest Auto state (ticket 9:28 PM)**: two segments fit the 184px rail. Auto mode now narrates what the finder is doing — "Auto — searching…" (no host heartbeat), "Auto — establishing with X…" (a host beacons presence but no BT link yet, from the `hosts.{id}` presence map), "Auto · X" (connected). The holding segment shows a state icon in place of the stock checkmark (`noCheckmark` + icon slot): `auto_mode` when the auto-finder picked it, `push_pin` when manually pinned.
+- **iOS home-screen sign-in (ticket 8:20 PM)**: in a standalone iOS PWA, `signInWithPopup` opens a disconnected sheet that can never message the opener — it hangs after the account pick and throws nothing, so the popup→redirect fallback never fired. `_signInWithGoogle` now detects standalone iOS (`navigator.standalone` / `display-mode: standalone` + iOS UA) and goes straight to `signInWithRedirect`, which is reliable here because the app is served from the auth domain itself (same-origin `/__/auth/handler`).
+- **Mail reload icon in box/row mode (ticket 8:18 PM)**: the Mail box's toolbar now always renders and carries a refresh IconBtn; the Calendar box toolbar gained one too (other layouts already had refresh via menus/CardActions).
+- **NC snooze ordering (ticket 3:43 PM)**: `switchboardTaskList` (the list every NerveCenter surface ranks) now filters `snoozedUntil > now`, matching the queue; `minTick` re-renders each minute so tasks self-restore on wake.
+- Host-side holdouts noted on their tickets (double sends / stale device names / MMS pictures need tablet+PC host rebuilds — next host batch alongside the b336 missed-call fix).
+- Verified: `npm run test:phone` 36/36; `npm run build` green in `apps/web`.
+- Version 4.45.133 → 4.45.134 (fix).
