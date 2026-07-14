@@ -233,10 +233,9 @@ export async function performResearch(user, shaila) {
     .join("\n\n");
 
   const parsed = await runAiJob(user, "shaila.research_summarize_sources.v1", { shaila, articlesText }, "research");
-  if (!parsed?.articles?.length) throw new Error("No research data generated from search results.");
 
   const sources = [];
-  for (const a of parsed.articles) {
+  for (const a of parsed?.articles || []) {
     if (sources.length >= 8) break;
     // a.i is the 1-based result number the AI was shown ([N] in articlesText),
     // so the link, summary, and label all come from this one object — they can't drift apart.
@@ -250,7 +249,23 @@ export async function performResearch(user, shaila) {
     sources.push({ label, url, summary });
   }
 
-  const seforim = (parsed.seforim ?? []).map((s) => ({
+  // The summarizer filters aggressively for quality — with only the Sefaria
+  // fallback engine answering, it can (correctly) judge every passage
+  // tangential and keep nothing, which used to dead-end as "No research data
+  // generated from search results" (owner ticket 7/13 9:42 PM). Candidates are
+  // guaranteed non-empty here, so degrade to an honest closest-matches list
+  // built straight from the search hits instead of erroring.
+  if (!sources.length) {
+    for (const r of candidates.slice(0, 5)) {
+      sources.push({
+        label: fallbackLabel(r.link, r.title),
+        url: r.link,
+        summary: r.snippet || r.title,
+      });
+    }
+  }
+
+  const seforim = (parsed?.seforim ?? []).map((s) => ({
     label: s.location ? `${s.name} ${s.location}` : s.name,
     url: buildSeferiaDeepLink(s.name, s.location) || buildSeferiaSearchLink(s.name, s.location),
   }));

@@ -1300,3 +1300,10 @@ Current source-grade file count after cleanup: 162 files.
 - Host-side holdouts noted on their tickets (double sends / stale device names / MMS pictures need tablet+PC host rebuilds — next host batch alongside the b336 missed-call fix).
 - Verified: `npm run test:phone` 36/36; `npm run build` green in `apps/web`.
 - Version 4.45.133 → 4.45.134 (fix).
+
+## 2026-07-13 Late — Research "No Results" With Sefaria-Only (web 4.45.135)
+
+- Owner reported research still failing after 4.45.134 ("no research data generated from search results") — new ticket udYqlSK4oK3tgSGko4Fi. Root cause: `performResearch` in `shailos-ai.js` threw whenever the AI summarizer's `articles` array came back empty. With only the Sefaria fallback engine answering (Google CSE secrets still unset), the summarizer's own "filter aggressively, skip tangential results" instruction can legitimately judge every passage off-topic and return zero articles — a correct AI judgment that was wrongly treated as total failure.
+- Fix: `performResearch` no longer throws on an empty AI-summarized list. When the summarizer keeps nothing, it now degrades to an honest closest-matches list built directly from the raw search hits (top 5 candidates, source title as label, snippet as summary) instead of erroring. The hard failure case (search backend itself failing) is untouched — that still throws with the real error message.
+- Verified: `npm run test:phone` 36/36; `npm run build` green.
+- Version 4.45.134 → 4.45.135 (fix).
