@@ -3,6 +3,7 @@ package com.shamash.phonehost
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
@@ -340,12 +341,28 @@ class MainActivity : Activity() {
                 })
                 return
             }
-            for (device in bonded) {
+            // Every bonded device is listed (Android has no public API to filter
+            // "in range now" from "paired at some point"), but the one actually
+            // live right now should lead instead of being buried alphabetically —
+            // that's what made the list read as "fake" (paired-forever devices
+            // with no sense of which one is real).
+            val liveAddress = service?.defaultDeviceAddress
+                ?.takeIf { service.isFullyConnected() }
+            val ordered = bonded.sortedWith(
+                compareByDescending<BluetoothDevice> { it.address == liveAddress }
+                    .thenBy { it.name ?: "" }
+            )
+            for (device in ordered) {
                 val isSelected = device.address == service?.defaultDeviceAddress
+                val isLive = device.address == liveAddress
                 deviceList.addView(Button(this).apply {
                     isAllCaps = false
                     textSize = 15f
-                    text = (device.name ?: "Unnamed device") + if (isSelected) "   ✓" else ""
+                    text = (device.name ?: "Unnamed device") + when {
+                        isLive -> "   ✓ Connected now"
+                        isSelected -> "   ✓"
+                        else -> ""
+                    }
                     setOnClickListener {
                         HostService.instance?.let {
                             it.defaultDeviceAddress = device.address

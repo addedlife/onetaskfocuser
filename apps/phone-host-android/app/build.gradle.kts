@@ -8,7 +8,7 @@ plugins {
 // the icon background color (cycles a palette so every build looks different on
 // the home screen — owner ticket: "put a different icon each build so it's
 // recognizable"), and HostService.BUILD_STAMP via BuildConfig.HOST_BUILD.
-val hostBuild = 8
+val hostBuild = 9
 val iconPalette = listOf(
     "#00796B", // teal
     "#C2185B", // pink

@@ -382,9 +382,15 @@ class HostService : Service() {
         // notification line must not care whether the platform profile or the
         // raw RFCOMM lane produced the event.
         val onCall: (CallInfo) -> Unit = { call ->
-            // Record history when a call transitions to Idle
+            // Record history when a call transitions to Idle.
+            // Note: lastCallStatus can be CallStatus.Ending, not just Active —
+            // hangUp() stamps an intermediate Ending state (for instant UI
+            // feedback) that carries startTime forward from the real Active
+            // call. Gating the duration on lastCallStatus == Active alone
+            // dropped that startTime and recorded every locally-hung-up call
+            // as 0 seconds, even a real 10-minute conversation.
             if (call.status == CallStatus.Idle && lastCallStatus != CallStatus.Idle) {
-                val duration = if (call.startTime > 0 && lastCallStatus == CallStatus.Active)
+                val duration = if (call.startTime > 0)
                     ((System.currentTimeMillis() - call.startTime) / 1000).toInt() else 0
                 if (call.number.isNotBlank()) {
                     callLogStore.addLive(call.number, call.direction, call.startTime, duration, defaultDeviceAddress)

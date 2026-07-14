@@ -7,9 +7,7 @@ import com.shamash.phonehost.HostLog
 import com.shamash.phonehost.MessageAttachment
 import com.shamash.phonehost.SmsMessage
 import java.io.IOException
-import java.text.SimpleDateFormat
 import java.util.Base64
-import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
@@ -26,7 +24,6 @@ class MapClient(private val log: (String) -> Unit = { HostLog.add(it) }) {
 
     companion object {
         val MAS_UUID: UUID = UUID.fromString("00001132-0000-1000-8000-00805F9B34FB")
-        private val MAP_DATE = SimpleDateFormat("yyyyMMdd'T'HHmmss", Locale.US)
     }
 
     var isConnected = false
@@ -838,12 +835,5 @@ class MapClient(private val log: (String) -> Unit = { HostLog.add(it) }) {
         .replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
         .replace("&quot;", "\"").replace("&apos;", "'")
 
-    private fun parseMapDate(s: String?): Long {
-        if (s == null) return System.currentTimeMillis()
-        return try {
-            synchronized(MAP_DATE) {
-                MAP_DATE.parse(if (s.length >= 15) s.substring(0, 15) else s)?.time
-            } ?: System.currentTimeMillis()
-        } catch (_: Exception) { System.currentTimeMillis() }
-    }
+    private fun parseMapDate(s: String?): Long = ObexDateTime.parse(s) ?: System.currentTimeMillis()
 }

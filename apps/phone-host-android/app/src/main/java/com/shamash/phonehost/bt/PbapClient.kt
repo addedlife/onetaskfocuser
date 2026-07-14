@@ -8,8 +8,6 @@ import com.shamash.phonehost.CallRecord
 import com.shamash.phonehost.ContactEntry
 import com.shamash.phonehost.HostLog
 import com.shamash.phonehost.PhoneUtil
-import java.text.SimpleDateFormat
-import java.util.Locale
 import java.util.UUID
 
 /**
@@ -228,17 +226,5 @@ class PbapClient(private val log: (String) -> Unit = { HostLog.add(it) }) {
         .replace("\\;", ";")
         .replace("\\\\", "\\")
 
-    private fun parseCallDateTime(value: String): Long? {
-        val formats = arrayOf(
-            "yyyyMMdd'T'HHmmss",
-            "yyyyMMdd'T'HHmmss'Z'",
-            "yyyyMMdd'T'HHmmssZ",
-        )
-        for (f in formats) {
-            try {
-                return SimpleDateFormat(f, Locale.US).parse(value.trim())?.time
-            } catch (_: Exception) {}
-        }
-        return null
-    }
+    private fun parseCallDateTime(value: String): Long? = ObexDateTime.parse(value)
 }
