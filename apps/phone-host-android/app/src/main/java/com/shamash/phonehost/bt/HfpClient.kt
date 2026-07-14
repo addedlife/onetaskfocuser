@@ -50,6 +50,7 @@ class HfpClient(private val log: (String) -> Unit = { HostLog.add(it) }) {
     @Volatile private var stopping = false
     private val writeLock = ReentrantLock()
     @Volatile private var lastTrafficAt = 0L
+    @Volatile private var clccSawCall = false // set when a +CLCC row arrives (active-call check)
 
     // CIND indicator index → name, populated during handshake
     private val indicators = HashMap<Int, String>()
@@ -134,9 +135,33 @@ class HfpClient(private val log: (String) -> Unit = { HostLog.add(it) }) {
             Thread.sleep(5000)
             val idleMs = System.currentTimeMillis() - lastTrafficAt
             if (idleMs < 30_000) continue
-            // Skip the probe during an active call — SCO on the phone side proves
-            // the link, and AT during audio confuses some firmware.
-            if (currentCall.status != CallStatus.Idle) continue
+            // During a call the generic probe stays off (AT+NREC during audio
+            // confuses some firmware) — but a lost +CIEV call=0 used to leave a
+            // phantom "active call" on screen forever. After 60 s of URC silence
+            // ask the phone for its real call list instead: AT+CLCC is the
+            // standard carkit in-call status poll. A reply with no +CLCC rows
+            // means the call already ended — clear it.
+            if (currentCall.status != CallStatus.Idle) {
+                if (idleMs < 60_000) continue
+                try {
+                    clccSawCall = false
+                    log("[keepalive] active-call check — AT+CLCC")
+                    send("AT+CLCC")
+                    Thread.sleep(3000)
+                    val answered = System.currentTimeMillis() - lastTrafficAt < 3_000
+                    if (answered && !clccSawCall && currentCall.status != CallStatus.Idle) {
+                        log("[keepalive] phone reports no calls — clearing phantom active call")
+                        forceIdle()
+                    }
+                } catch (ex: Exception) {
+                    if (!stopping) {
+                        log("[keepalive] ${ex.message}")
+                        try { socket?.close() } catch (_: Exception) {}
+                    }
+                    return
+                }
+                continue
+            }
             try {
                 log("[keepalive] 30 s idle — probing HFP link with AT+NREC=0")
                 send("AT+NREC=0")
@@ -196,6 +221,11 @@ class HfpClient(private val log: (String) -> Unit = { HostLog.add(it) }) {
             return
         }
 
+        if (line.startsWith("+CLCC:")) {
+            clccSawCall = true
+            return
+        }
+
         if (line.startsWith("+CCWA:")) log("[call waiting] $line")
     }
 
@@ -206,6 +236,11 @@ class HfpClient(private val log: (String) -> Unit = { HostLog.add(it) }) {
                     // Call ended. Direction is preserved for history recording.
                     forceIdle()
                 } else if (value == 1 && currentCall.status != CallStatus.Active) {
+                    // A connected call is by definition not missed — if a reordered
+                    // callsetup=0 already misfiled the direction, correct it here.
+                    if (currentCall.direction == CallDirection.Missed) {
+                        currentCall.direction = CallDirection.Incoming
+                    }
                     currentCall.status = CallStatus.Active
                     currentCall.startTime = System.currentTimeMillis()
                     publishCallState()
@@ -213,13 +248,24 @@ class HfpClient(private val log: (String) -> Unit = { HostLog.add(it) }) {
             }
             "callsetup" -> when (value) {
                 0 -> {
-                    // Setup over. If still ringing/dialing → caller hung up / missed.
+                    // Setup over. If still ringing/dialing this LOOKS like a hang-up /
+                    // missed call — but several AGs send callsetup=0 BEFORE call=1 when
+                    // the call is answered on the handset. Deciding "missed" right here
+                    // misfiled real conversations as missed calls, so give the call
+                    // indicator a moment to land before classifying.
                     if (currentCall.status == CallStatus.IncomingRinging ||
                         currentCall.status == CallStatus.Dialing
                     ) {
-                        val direction = if (currentCall.direction == CallDirection.Outgoing)
-                            CallDirection.Outgoing else CallDirection.Missed
-                        replaceCallState(CallInfo(CallStatus.Idle, direction, currentCall.number))
+                        val candidateStatus = currentCall.status
+                        val candidateNumber = currentCall.number
+                        Thread {
+                            Thread.sleep(800)
+                            if (currentCall.status == candidateStatus && currentCall.number == candidateNumber) {
+                                val direction = if (currentCall.direction == CallDirection.Outgoing)
+                                    CallDirection.Outgoing else CallDirection.Missed
+                                replaceCallState(CallInfo(CallStatus.Idle, direction, candidateNumber))
+                            }
+                        }.apply { isDaemon = true }.start()
                     }
                 }
                 1 -> if (currentCall.status != CallStatus.IncomingRinging) {

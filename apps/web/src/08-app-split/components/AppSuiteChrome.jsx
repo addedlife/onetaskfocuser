@@ -37,7 +37,7 @@ const FilterChip = createComponent({ react: React, tagName: 'md-filter-chip', el
 const BUGLOG_OPEN_EVENT = 'shamash-buglog:open';
 const BUGLOG_COUNT_EVENT = 'shamash-buglog:count';
 
-function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreActions, topOffset = 0, forceCompact = false, clockTime = null, onSettings, features = {} }) {
+function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffset = 0, forceCompact = false, clockTime = null, onSettings, features = {} }) {
   const [bugLogCount, setBugLogCount] = React.useState(0);
   React.useEffect(() => {
     const onCount = (e) => setBugLogCount(e.detail?.unresolved || 0);
@@ -258,12 +258,8 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, onMoreA
         {displayOpen && "Settings"}
       </button>
 
-      {/* More Actions */}
-      <button onClick={onMoreActions} title="More Actions" aria-label="More Actions" style={navBtn(false, { color: C.accent })}>
-        <Ripple />
-        {suiteIcon("apps", ic(24))}
-        {displayOpen && "More Actions"}
-      </button>
+      {/* More Actions retired (owner ticket 7/13: "we can officially retire more
+          actions, i never use it") — every action it held lives on its own surface. */}
 
       {/* Bug Log — utility item; badge mirrors BugLog's live unresolved count */}
       <button onClick={() => window.dispatchEvent(new CustomEvent(BUGLOG_OPEN_EVENT))} title="Bug Log" aria-label="Bug Log" style={navBtn(false)}>

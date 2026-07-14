@@ -171,12 +171,19 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
   const [pendingRecordings, setPendingRecordings] = useState([]);
   const [processingRecordingId, setProcessingRecordingId] = useState(null);
   const [potentialMatches, setPotentialMatches] = useState(null);
-  const [isTranscribingField, setIsTranscribingField] = useState(null);
+  // Field dictation — exactly two record buttons (shaila box + answer box),
+  // explicit start/stop toggle, no auto-timeout guesswork.
+  const [fieldRec, setFieldRec] = useState(null);      // field currently recording
+  const [fieldRecSecs, setFieldRecSecs] = useState(0); // elapsed seconds while recording
+  const [fieldBusy, setFieldBusy] = useState(null);    // field awaiting transcription
+  const fieldRecRef = useRef(null);                    // { recorder, stream, timer, maxTimer }
   const [error, setError] = useState(null);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const researchRef = useRef(null);
+  const [mainRecSecs, setMainRecSecs] = useState(0); // elapsed time on the main Record Shaila/Call take
+  const mainRecTimerRef = useRef(null);
 
   // Same canonical key the whole app stores under: email prefix.
   const USER_ID = user?.email?.split('@')[0]?.toLowerCase()?.trim() || 'unauthenticated';
@@ -192,11 +199,13 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
   // Stop any live recorder if the surface unmounts mid-recording.
   useEffect(() => () => {
     try { if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop(); } catch {}
+    try { if (fieldRecRef.current?.recorder?.state === 'recording') fieldRecRef.current.recorder.stop(); } catch {}
   }, []);
 
-  // FAB entry point (was ?action=add-manual on the iframe URL).
+  // Entry-point actions (were ?action= on the iframe URL).
   useEffect(() => {
     if (action === 'add-manual' && user) handleAddManually();
+    if (action === 'record-shaila' && user && !isRecording && !isCallRecording) startRecording();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action, user]);
 
@@ -278,6 +287,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
       if (event.data.size > 0) audioChunksRef.current.push(event.data);
     };
     mediaRecorder.onstop = async () => {
+      if (mainRecTimerRef.current) { clearInterval(mainRecTimerRef.current); mainRecTimerRef.current = null; }
       const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
       stream.getTracks().forEach(track => track.stop());
       extraTracks.forEach(track => track.stop());
@@ -292,6 +302,9 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
       }
     };
     mediaRecorder.start(1000);
+    setMainRecSecs(0);
+    if (mainRecTimerRef.current) clearInterval(mainRecTimerRef.current);
+    mainRecTimerRef.current = setInterval(() => setMainRecSecs(s => s + 1), 1000);
   };
 
   const stopRecording = () => {
@@ -345,29 +358,6 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
     if (processingRecordingId === recordingId) return;
     await deletePendingRecording(recordingId);
     await refreshPendingRecordings();
-  };
-
-  const quickMicIntoPaste = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
-      const mediaRecorder = new MediaRecorder(stream, mediaRecorderOptions());
-      const chunks = [];
-      setIsProcessing(true);
-      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-        stream.getTracks().forEach(t => t.stop());
-        try {
-          const pending = await savePendingRecording(blob, 'quick_mic');
-          await refreshPendingRecordings();
-          await processPendingRecording(pending.id);
-        } finally {
-          setIsProcessing(false);
-        }
-      };
-      mediaRecorder.start(1000);
-      setTimeout(() => { if (mediaRecorder.state === 'recording') mediaRecorder.stop(); }, 30000);
-    } catch (err) { console.error(err); setIsProcessing(false); }
   };
 
   // ── CRUD + AI ──────────────────────────────────────────────────────────────
@@ -441,37 +431,58 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
     ));
   };
 
-  const startFieldTranscription = async (field) => {
+  // One explicit toggle: tap ● to record, tap ■ to stop, then the take is
+  // transcribed with the yeshivish dialect protocol (transcribe.yeshivish.v1
+  // via transcribeAudio) and appended to the box. 10-minute safety cap only.
+  const FIELD_REC_MAX_MS = 10 * 60 * 1000;
+  const toggleFieldRecording = async (field) => {
+    if (fieldBusy) return;
+    if (fieldRec) {
+      if (fieldRec === field && fieldRecRef.current?.recorder?.state === 'recording') fieldRecRef.current.recorder.stop();
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
-      const mediaRecorder = new MediaRecorder(stream, mediaRecorderOptions());
+      const recorder = new MediaRecorder(stream, mediaRecorderOptions());
       const chunks = [];
-      setIsTranscribingField(field);
-      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = async () => {
+        const rec = fieldRecRef.current;
+        if (rec?.timer) clearInterval(rec.timer);
+        if (rec?.maxTimer) clearTimeout(rec.maxTimer);
+        fieldRecRef.current = null;
+        stream.getTracks().forEach(t => t.stop());
+        setFieldRec(null);
+        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        setFieldBusy(field);
         try {
-          const transcription = await transcribeAudio(user, blob, 'Transcribe this audio faithfully. It is a halachic answer or additional information for a shaila.');
-          setSelectedShaila(prev => {
-            if (!prev) return prev;
-            if (field === 'answer') return { ...prev, answer: (prev.answer || '') + ' ' + transcription };
-            if (field === 'content') return { ...prev, content: (prev.content || '') + ' ' + transcription };
-            if (field === 'synopsis') return { ...prev, synopsis: transcription };
-            if (field === 'askerName') return { ...prev, askerName: transcription };
-            if (field === 'date') return { ...prev, date: transcription };
-            return prev;
-          });
+          const transcription = (await transcribeAudio(user, blob, field === 'answer'
+            ? 'Transcribe this audio exactly and faithfully. It is a halachic answer (psak) with reasons, possibly in Yeshivish English with Hebrew and Yiddish terms. Return only the transcript.'
+            : 'Transcribe this audio exactly and faithfully. It is a halachic question (shaila), possibly in Yeshivish English with Hebrew and Yiddish terms. Return only the transcript.')).trim();
+          if (transcription) {
+            setSelectedShaila(prev => {
+              if (!prev) return prev;
+              if (field === 'answer') return { ...prev, answer: `${prev.answer?.trim() ? prev.answer + ' ' : ''}${transcription}` };
+              const content = `${prev.content?.trim() ? prev.content + ' ' : ''}${transcription}`;
+              return { ...prev, content, parsedShaila: content };
+            });
+          }
         } catch (err) {
           console.error('Field transcription error:', err);
+          setError('Transcription failed — ' + (err instanceof Error ? err.message : String(err)));
         } finally {
-          setIsTranscribingField(null);
-          stream.getTracks().forEach(t => t.stop());
+          setFieldBusy(null);
         }
       };
-      mediaRecorder.start(1000);
-      setTimeout(() => { if (mediaRecorder.state === 'recording') mediaRecorder.stop(); }, 30000);
+      recorder.start(1000);
+      const timer = setInterval(() => setFieldRecSecs(s => s + 1), 1000);
+      const maxTimer = setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, FIELD_REC_MAX_MS);
+      fieldRecRef.current = { recorder, stream, timer, maxTimer };
+      setFieldRecSecs(0);
+      setFieldRec(field);
     } catch (err) {
       console.error('Mic access error:', err);
+      setError('Microphone access denied or not available.');
     }
   };
 
@@ -636,13 +647,30 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
         }} />
     );
   };
-  const micBtn = (field, { size = 26, iconSize = 13 } = {}) => (
-    <IconBtn icon="mic" size={size} iconSize={iconSize}
-      color={isTranscribingField === field ? C.danger : C.faint}
-      onClick={() => startFieldTranscription(field)}
-      title={isTranscribingField === field ? 'Listening… (stops after 30s)' : 'Dictate'}
-      aria-label="Dictate" />
-  );
+  // The only two dictation controls: an unmistakable red ● that flips to a
+  // filled ■ with a live REC timer while recording — no ambiguous glow.
+  const fmtRecSecs = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const recordBtn = (field) => {
+    if (fieldBusy === field) return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: NC_TYPE.small, color: C.accent, ...font }}>
+        <Spin size={14} color={C.accent} /> Transcribing…
+      </span>
+    );
+    if (fieldRec === field) return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.danger, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...font }}>
+          ● REC {fmtRecSecs(fieldRecSecs)}
+        </span>
+        <IconBtn variant="filled" icon="stop" size={28} iconSize={15} containerColor={C.danger} color="#fff"
+          onClick={() => toggleFieldRecording(field)} title="Stop recording" aria-label="Stop recording" />
+      </span>
+    );
+    return (
+      <IconBtn icon="radio_button_checked" size={28} iconSize={17} color={C.danger}
+        onClick={() => toggleFieldRecording(field)} disabled={!!fieldRec || !!fieldBusy}
+        title="Record into this box" aria-label="Record into this box" />
+    );
+  };
   const fieldBlur = () => { if (selectedShaila) saveShailaDetails(selectedShaila); };
 
   // ── Guards ─────────────────────────────────────────────────────────────────
@@ -687,10 +715,10 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                 title="Record a call">Record Call</ActionBtn>
             </>
           ) : (
+            // Solid red + live timer — unmistakably "recording, tap to stop" (no pulsing glow).
             <ActionBtn variant="filled" icon="stop" iconSize={15} height={36} containerColor={C.danger} labelColor="#fff"
-              onClick={stopRecording} title="Stop recording"
-              style={{ animation: 'ot-fade 1.1s ease-in-out infinite alternate' }}>
-              Stop {isCallRecording ? 'Call ' : ''}Recording
+              onClick={stopRecording} title="Stop recording">
+              Stop {isCallRecording ? 'Call ' : ''}Recording · {fmtRecSecs(mainRecSecs)}
             </ActionBtn>
           )}
           <ActionBtn variant="tonal" icon="add" iconSize={15} height={36} containerColor={C.bgSoft} labelColor={C.text}
@@ -845,7 +873,6 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                         value={selectedShaila.date || ''}
                         onChange={(e) => setSelectedShaila({ ...selectedShaila, date: e.target.value })}
                         onBlur={fieldBlur} aria-label="Date" />
-                      {micBtn('date', { size: 22, iconSize: 11 })}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
                       <textarea rows={2} placeholder="Synopsis"
@@ -859,7 +886,6 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                         disabled={isGeneratingSynopsis === selectedShaila.id}
                         title="Regenerate synopsis with AI" aria-label="Regenerate synopsis"
                         style={isGeneratingSynopsis === selectedShaila.id ? { animation: 'ot-spin 0.9s linear infinite' } : undefined} />
-                      {micBtn('synopsis', { size: 24, iconSize: 12 })}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                       <span style={{ fontSize: NC_TYPE.small, color: C.faint, flexShrink: 0 }}>Asker:</span>
@@ -868,7 +894,6 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                         value={selectedShaila.askerName || ''}
                         onChange={(e) => setSelectedShaila({ ...selectedShaila, askerName: e.target.value })}
                         onBlur={fieldBlur} aria-label="Asker name" />
-                      {micBtn('askerName', { size: 22, iconSize: 11 })}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
@@ -892,7 +917,10 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                 {/* Body sections */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
                   <section>
-                    <div style={{ ...sectionLabel, marginBottom: 8 }}>Shaila question</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <span style={sectionLabel}>Shaila question</span>
+                      {recordBtn('content')}
+                    </div>
                     <TextField type="textarea" rows={5} placeholder="The shaila text…" value={selectedShaila.content || selectedShaila.parsedShaila || ''}
                       onInput={(e) => setSelectedShaila({ ...selectedShaila, content: e.target.value, parsedShaila: e.target.value })}
                       onBlur={fieldBlur} style={{ width: '100%', '--md-outlined-text-field-container-shape': RADIUS.sm }} />
@@ -901,7 +929,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                   <section>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                       <span style={sectionLabel}>Answer details</span>
-                      {micBtn('answer')}
+                      {recordBtn('answer')}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: wide ? 'minmax(0,220px) minmax(0,1fr)' : '1fr', gap: 12 }}>
                       <TextField label="Answerer" placeholder="e.g. YCD, CC" value={selectedShaila.answererName || ''}
@@ -921,10 +949,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                   </section>
 
                   <section>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span style={sectionLabel}>Raw transcript / content</span>
-                      {micBtn('content')}
-                    </div>
+                    <div style={{ ...sectionLabel, marginBottom: 8 }}>Raw transcript / content</div>
                     <TextField type="textarea" rows={4} value={selectedShaila.content || ''}
                       onInput={(e) => setSelectedShaila({ ...selectedShaila, content: e.target.value })}
                       onBlur={fieldBlur} style={{ width: '100%', '--md-outlined-text-field-container-shape': RADIUS.sm }} />
@@ -968,8 +993,6 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                 <div style={{ fontSize: NC_TYPE.title, fontWeight: 700, color: C.text }}>Paste shaila text</div>
                 <div style={{ fontSize: NC_TYPE.meta, color: C.faint }}>Paste the text of a shaila to have it parsed by AI.</div>
               </div>
-              <IconBtn icon="mic" size={34} iconSize={17} color={isProcessing ? C.danger : C.muted}
-                onClick={quickMicIntoPaste} title="Dictate into the box (30s max)" aria-label="Dictate" />
             </div>
             <div style={{ padding: 20 }}>
               <TextField type="textarea" rows={8} placeholder="Paste text here…" value={pastedText}

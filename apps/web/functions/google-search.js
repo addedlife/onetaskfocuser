@@ -1,10 +1,52 @@
 // Google Custom Search API — replaces serper-proxy (Spark-OK: calls googleapis.com)
 // POST /api/google-search  { query, num? }
-// Returns { results: [{ title, link, snippet }] }
-// Env vars: GOOGLE_SEARCH_API_KEY, GOOGLE_SEARCH_CSE_ID
+// Returns { results: [{ title, link, snippet }], engine: "google"|"sefaria" }
+// Env vars: GOOGLE_SEARCH_API_KEY, GOOGLE_SEARCH_CSE_ID (GitHub repo secrets → functions .env)
 // Free tier: 100 queries/day
+//
+// Fallback: when Google CSE is unconfigured, over quota, or erroring, the
+// search runs against Sefaria's public search API instead (keyless, free) so
+// the shailos research pipeline never dead-ends with "no results".
 
 const { corsHeaders } = require("./cors-helper");
+
+// Sefaria's search phrase-matches multi-word queries (AND within a sliding
+// window), so a long AI-generated query often returns zero hits. Retry with
+// the strongest few content words before giving up.
+const SEFARIA_FILLER = new Set([
+  "halacha", "halakha", "halachic", "jewish", "torah", "with", "that", "this",
+  "what", "when", "does", "have", "from", "into", "about", "there", "their",
+  "shaila", "shailah", "question", "regarding", "concerning", "permitted", "allowed",
+]);
+
+async function sefariaSearch(query, count) {
+  const call = async (q) => {
+    const r = await fetch("https://www.sefaria.org/api/search-wrapper", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: q, type: "text", size: count, field: "naive_lemmatizer", source_proj: true }),
+    });
+    if (!r.ok) throw new Error(`Sefaria search failed (${r.status})`);
+    const data = await r.json().catch(() => ({}));
+    return data?.hits?.hits || [];
+  };
+  let hits = await call(query);
+  if (!hits.length) {
+    const words = query.toLowerCase().replace(/[^a-z֐-׿\s]/g, " ").split(/\s+/)
+      .filter(w => w.length > 3 && !SEFARIA_FILLER.has(w));
+    const slim = words.slice(0, 3).join(" ");
+    if (slim && slim !== query.toLowerCase().trim()) hits = await call(slim);
+  }
+  return hits.map(h => {
+    const ref = h._source?.ref || String(h._id || "").replace(/\s*\([^)]*\)\s*$/, "");
+    const snippet = (h.highlight?.naive_lemmatizer || []).join(" … ").replace(/<\/?b>/g, "");
+    return {
+      title: ref,
+      link: `https://www.sefaria.org/${encodeURIComponent(ref)}`,
+      snippet: snippet.slice(0, 400),
+    };
+  }).filter(res => res.title && res.snippet);
+}
 
 module.exports = async (req, res) => {
   const origin = req.headers.origin || "";
@@ -20,9 +62,6 @@ module.exports = async (req, res) => {
 
   const apiKey = process.env.GOOGLE_SEARCH_API_KEY || "";
   const cx = process.env.GOOGLE_SEARCH_CSE_ID || "";
-  if (!apiKey || !cx) {
-    return res.status(503).set(headers).json({ error: "Google Custom Search is not configured." });
-  }
 
   const { query, num = 8 } = req.body || {};
   if (!query || typeof query !== "string" || !query.trim()) {
@@ -30,26 +69,37 @@ module.exports = async (req, res) => {
   }
 
   const count = Math.min(10, Math.max(1, Number(num) || 8));
-  const url = `https://www.googleapis.com/customsearch/v1?${new URLSearchParams({
-    key: apiKey,
-    cx,
-    q: query.trim(),
-    num: String(count),
-  })}`;
+
+  // Google CSE first (broad web coverage), Sefaria as the keyless safety net.
+  let googleError = apiKey && cx ? "" : "Google Custom Search is not configured.";
+  if (!googleError) {
+    const url = `https://www.googleapis.com/customsearch/v1?${new URLSearchParams({
+      key: apiKey,
+      cx,
+      q: query.trim(),
+      num: String(count),
+    })}`;
+    try {
+      const r = await fetch(url);
+      const data = await r.json().catch(() => ({}));
+      if (r.ok) {
+        const results = (data.items || []).map(item => ({
+          title: item.title || "",
+          link: item.link || "",
+          snippet: item.snippet || "",
+        }));
+        return res.status(200).set(headers).json({ results, engine: "google" });
+      }
+      googleError = data?.error?.message || `Google Search failed (${r.status})`;
+    } catch (e) {
+      googleError = e.message || "Search request failed.";
+    }
+  }
 
   try {
-    const r = await fetch(url);
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      return res.status(r.status).set(headers).json({ error: data?.error?.message || `Google Search failed (${r.status})` });
-    }
-    const results = (data.items || []).map(item => ({
-      title: item.title || "",
-      link: item.link || "",
-      snippet: item.snippet || "",
-    }));
-    return res.status(200).set(headers).json({ results });
+    const results = await sefariaSearch(query.trim(), count);
+    return res.status(200).set(headers).json({ results, engine: "sefaria", googleError });
   } catch (e) {
-    return res.status(502).set(headers).json({ error: e.message || "Search request failed." });
+    return res.status(502).set(headers).json({ error: `${googleError} Fallback ${e.message || "Sefaria search failed."}` });
   }
 };

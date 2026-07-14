@@ -818,16 +818,24 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
     <div style={{ position: "relative", background: C.bg, borderRadius: 16, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
       {stickyHeader ? (
         // Sticky header: never collapses. Shows icon chip + title label + summary on separate line.
-        <button onClick={onOpen} title={title} aria-label={title}
-          style={{ display: "flex", flexDirection: "column", width: "100%", textAlign: "left", border: "none", background: "transparent", padding: "6px 10px 5px", cursor: onOpen ? "pointer" : "default", flexShrink: 0, minWidth: 0, borderBottom: `1px solid ${C.divider}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, color: C.muted, flexShrink: 0 }}>{suiteIcon(icon, 15)}</span>
-            <span style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: 0 }}>{title}</span>
-          </div>
-          {summary && (
-            <span style={{ display: "block", fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: 26, fontStyle: "normal" }}>{summary}</span>
+        // With onToggleExpand (5-column card grid) the header tap expands this column and
+        // squishes the rest; opening the full surface moves to a trailing open_in_new button.
+        <div style={{ display: "flex", alignItems: "flex-start", width: "100%", flexShrink: 0, minWidth: 0, borderBottom: `1px solid ${C.divider}` }}>
+          <button onClick={onToggleExpand || onOpen} title={title} aria-label={title} aria-expanded={onToggleExpand ? expanded : undefined}
+            style={{ display: "flex", flexDirection: "column", flex: 1, textAlign: "left", border: "none", background: "transparent", padding: "6px 10px 5px", cursor: (onToggleExpand || onOpen) ? "pointer" : "default", minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, color: C.muted, flexShrink: 0 }}>{suiteIcon(icon, 15)}</span>
+              <span style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
+              {onToggleExpand && <span style={{ display: "flex", color: C.faint, flexShrink: 0, marginLeft: "auto" }}>{suiteIcon(expanded ? "close_fullscreen" : "expand_content", 12)}</span>}
+            </div>
+            {summary && (
+              <span style={{ display: "block", fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingLeft: 26, fontStyle: "normal", alignSelf: "stretch" }}>{summary}</span>
+            )}
+          </button>
+          {onToggleExpand && onOpen && (
+            <IconBtn icon="open_in_new" size={24} iconSize={12} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} style={{ margin: "5px 4px 0 0" }} />
           )}
-        </button>
+        </div>
       ) : (
         // Collapsing header: hides when the card content scrolls (mobile default).
         // dense = aggressively compact: a thin single-line header that reclaims vertical space.
@@ -1882,16 +1890,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     opacity: active ? 1 : 0.9,
   });
 
-  const bySection = Object.fromEntries(sections.map(s => [s.id, s]));
-  const collectActions = (...ids) => ids.flatMap(id => bySection[id]?.actions || []);
-  const actionCategories = [
-    { id: "tasks",   title: "Tasks",   icon: "rule",         actions: collectActions("priority", "focus") },
-    { id: "health",  title: "Health",  icon: "monitor_heart",actions: collectActions("health") },
-    { id: "shailos", title: "Shailos", icon: "question_mark",         actions: [...collectActions("shaila"), ...(bySection.record?.actions || []).filter(a => a.id === "record-shaila")] },
-    { id: "phone",   title: "Phone",   icon: "phone_in_talk",actions: [...collectActions("phone"), ...(bySection.record?.actions || []).filter(a => a.id === "record-call")] },
-    { id: "setup",   title: "Setup",   icon: "settings",     actions: [...(bySection.record?.actions || []).filter(a => !["record-shaila","record-call"].includes(a.id)), ...collectActions("system")] },
-  ].filter(c => c.actions.length);
-  const activeActionCategory = actionCategories.find(c => c.id === actionCategoryId) || actionCategories[0];
+  // "More Actions" drawer retired (owner ticket 7/13) — the sections prop and
+  // the actionsOpen/actionCategoryId plumbing stay only for the legacy ?ui=legacy panel.
 
   const addDraft = (priorityOverride = taskPriority, opts = {}) => {
     const text = taskDraft.trim();
@@ -2389,16 +2389,22 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // Surface Laptop 7 (15″ at 150% DPI) ≈ 1444 px available → rows. 1080p desktop ≈ 1700 px → columns.
     const boxesFiveCol = availableW >= 1500;
     const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, stickyHeader: boxesFiveCol };
-    // Card-level expand-to-page: rows orientation only (5-column desktop keeps even columns).
-    // Tapping a header gives that card the whole page; the rest shrink to header strips.
+    // Card-level expand: both orientations. Rows: tapping a header gives that card the
+    // whole page and the rest shrink to header strips. Columns (wide screens): the
+    // expanded card takes most of the width and the other columns squish to slim
+    // still-live strips — same gesture, same escape (tap again to restore the even split).
     const BOX_ORDER = ["mail", "phone", "tasks", "shailos", "calendar"];
-    const boxProps = id => boxesFiveCol ? {} : {
+    const boxProps = id => ({
       expanded: expandedBoxId === id,
-      collapsed: !!expandedBoxId && expandedBoxId !== id,
+      // Only rows-mode hides content; squished columns keep rendering (narrow).
+      collapsed: !boxesFiveCol && !!expandedBoxId && expandedBoxId !== id,
       onToggleExpand: () => setExpandedBoxId(prev => prev === id ? null : id),
-    };
+    });
     const boxRows = expandedBoxId
       ? BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,1fr)" : "min-content").join(" ")
+      : "repeat(5, minmax(0,1fr))";
+    const boxCols = expandedBoxId
+      ? BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,1fr)" : "minmax(120px,0.28fr)").join(" ")
       : "repeat(5, minmax(0,1fr))";
 
     const fmtTimeM = (raw) => { try { const d = new Date(raw); const now = new Date(); return d.toDateString()===now.toDateString() ? d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : d.toLocaleDateString([],{month:"short",day:"numeric"}); } catch { return ""; } };
@@ -2451,7 +2457,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {!isMobileDevice && (
             <IconBtn icon="grid_view" size={28} iconSize={16} color={C.muted} onClick={() => setDesktopLayoutPersist("full")} title="Full panels" aria-label="Full panels" />
           )}
-          <IconBtn icon="apps" size={28} iconSize={16} color={C.muted} onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" aria-label="More actions" />
         </div>
 
         {nextActionBar}
@@ -2462,7 +2467,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             breathing) — tone + space do the separation, matching the full-panel view. */}
         <div style={{ flex:1, minHeight:0, gap: dense?8:14, marginTop:10, display:"grid", overflow:"hidden",
           ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }),
-          gridTemplateColumns: boxesFiveCol ? "repeat(5, minmax(0,1fr))" : "1fr",
+          gridTemplateColumns: boxesFiveCol ? boxCols : "1fr",
           gridTemplateRows:    boxesFiveCol ? "1fr" : boxRows }}>
 
           {/* Mail */}
@@ -2641,39 +2646,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
         </div>
 
-        {/* Actions drawer */}
-        {actionsOpen && (
-          <div style={{ position:"fixed", inset:`0 0 0 ${sidebarW}px`, zIndex:7800, display:"flex", justifyContent:"flex-end", background:"rgba(0,0,0,0.28)" }} onClick={()=>setActionsOpen(false)}>
-            <aside onClick={e=>e.stopPropagation()} style={{ width:"min(540px,94vw)", height:"100%", background:C.bg, borderLeft:`1px solid ${C.divider}`, boxShadow:ELEV.drawer, display:"flex", flexDirection:"column" }}>
-              <div style={{ height:64, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 18px", borderBottom:`1px solid ${C.divider}`, flexShrink:0 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:NC_TYPE.title, fontWeight:500, fontFamily:NC_FONT_STACK, color:C.text }}>{suiteIcon("apps",20)} More Actions</div>
-                <IconBtn icon="close" size={40} iconSize={17} color={C.muted} onClick={()=>setActionsOpen(false)} title="Close" aria-label="Close" />
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"130px minmax(0,1fr)", minHeight:0, flex:1 }}>
-                <div style={{ borderRight:`1px solid ${C.divider}`, padding:12, display:"grid", alignContent:"start", gap:6, background:C.bgSoft, overflow:"auto" }}>
-                  {actionCategories.map(cat => {
-                    const isCatActive = activeActionCategory?.id === cat.id;
-                    return (
-                      <button key={cat.id} onClick={()=>setActionCategoryId(cat.id)}
-                        style={{ height:40, borderRadius:20, border:"none", background:isCatActive?C.hover:"transparent", color:isCatActive?C.text:C.muted, cursor:"pointer", display:"flex", alignItems:"center", gap:8, padding:"0 12px", fontWeight:500, fontFamily:NC_FONT_STACK, fontSize:NC_TYPE.control, textAlign:"left" }}>
-                        {suiteIcon(cat.icon,17)} {cat.title}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div style={{ padding:14, overflow:"auto", display:"grid", alignContent:"start", gap:8 }}>
-                  {(activeActionCategory?.actions||[]).map(action=>(
-                    <button key={action.id||action.label} onClick={()=>{if(action.disabled)return;setActionsOpen(false);action.run?.();}} disabled={action.disabled}
-                      style={{ minHeight:48, borderRadius:8, border:`1px solid ${action.primary?"transparent":C.divider}`, background:action.primary?C.accent:C.bg, color:action.primary?"#fff":C.text, cursor:action.disabled?"default":"pointer", opacity:action.disabled?0.5:1, padding:"0 14px", display:"grid", gridTemplateColumns:"32px minmax(0,1fr)", gap:10, alignItems:"center", fontFamily:NC_FONT_STACK, textAlign:"left" }}>
-                      <span style={{ width:32, height:32, borderRadius:16, display:"flex", alignItems:"center", justifyContent:"center", background:action.primary?"rgba(255,255,255,0.16)":C.hover, color:action.primary?"#fff":C.muted, flexShrink:0 }}>{suiteIcon(action.icon,16)}</span>
-                      <span style={{ fontSize:NC_TYPE.control, fontWeight:500, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{action.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </aside>
-          </div>
-        )}
       </div>
     );
   }
@@ -2737,7 +2709,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <IconBtn key={id} icon={icon} size={28} iconSize={16} color={desktopLayout === id ? C.text : C.muted} active={desktopLayout === id} activeBg={C.hover} onClick={() => setDesktopLayoutPersist(id)} title={label} aria-label={label} />
               ))}
               <IconBtn icon={dense ? "density_small" : "density_medium"} size={28} iconSize={16} color={C.muted} onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density" />
-              <IconBtn icon="apps" size={28} iconSize={16} color={C.muted} onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="More actions" aria-label="More actions" />
             </div>
           </div>
           {mobileTimelineOpen && (
@@ -2937,39 +2908,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
 
         </div>
 
-        {/* Actions drawer (same as desktop) */}
-        {actionsOpen && (
-          <div style={{ position:"fixed",inset:`0 0 0 ${sidebarW}px`,zIndex:7800,display:"flex",justifyContent:"flex-end",background:"rgba(0,0,0,0.28)" }} onClick={()=>setActionsOpen(false)}>
-            <aside onClick={e=>e.stopPropagation()} style={{ width:"min(540px,94vw)",height:"100%",background:C.bg,borderLeft:`1px solid ${C.divider}`,boxShadow:ELEV.drawer,display:"flex",flexDirection:"column" }}>
-              <div style={{height:64,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 18px",borderBottom:`1px solid ${C.divider}`,flexShrink:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:10,fontSize:NC_TYPE.title,fontWeight:500,fontFamily:NC_FONT_STACK,color:C.text}}>{suiteIcon("apps",20)} More Actions</div>
-                <IconBtn icon="close" size={40} iconSize={17} color={C.muted} onClick={()=>setActionsOpen(false)} title="Close" aria-label="Close" />
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"130px minmax(0,1fr)",minHeight:0,flex:1}}>
-                <div style={{borderRight:`1px solid ${C.divider}`,padding:12,display:"grid",alignContent:"start",gap:6,background:C.bgSoft,overflow:"auto"}}>
-                  {actionCategories.map(cat => {
-                    const isCatActive = activeActionCategory?.id === cat.id;
-                    return (
-                      <button key={cat.id} onClick={()=>setActionCategoryId(cat.id)}
-                        style={{height:40,borderRadius:20,border:"none",background:isCatActive?C.hover:"transparent",color:isCatActive?C.text:C.muted,cursor:"pointer",display:"flex",alignItems:"center",gap:8,padding:"0 12px",fontWeight:500,fontFamily:NC_FONT_STACK,fontSize:NC_TYPE.control,textAlign:"left"}}>
-                        {suiteIcon(cat.icon,17)} {cat.title}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div style={{padding:14,overflow:"auto",display:"grid",alignContent:"start",gap:8}}>
-                  {(activeActionCategory?.actions||[]).map(action=>(
-                    <button key={action.id||action.label} onClick={()=>{if(action.disabled)return;setActionsOpen(false);action.run?.();}} disabled={action.disabled}
-                      style={{minHeight:48,borderRadius:8,border:`1px solid ${action.primary?"transparent":C.divider}`,background:action.primary?C.accent:C.bg,color:action.primary?"#fff":C.text,cursor:action.disabled?"default":"pointer",opacity:action.disabled?0.5:1,padding:"0 14px",display:"grid",gridTemplateColumns:"32px minmax(0,1fr)",gap:10,alignItems:"center",fontFamily:NC_FONT_STACK,textAlign:"left"}}>
-                      <span style={{width:32,height:32,borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",background:action.primary?"rgba(255,255,255,0.16)":C.hover,color:action.primary?"#fff":C.muted,flexShrink:0}}>{suiteIcon(action.icon,16)}</span>
-                      <span style={{fontSize:NC_TYPE.control,fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{action.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </aside>
-          </div>
-        )}
       </div>
     );
   }
@@ -3047,7 +2985,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   <span style={{ width: 1, height: 13, background: C.divider, margin: "0 3px", flexShrink: 0 }} />
                   {onOpenZen && <IconBtn icon="local_drink" size={26} iconSize={14} color={C.muted} onClick={onOpenZen} title="Zen mode" aria-label="Zen mode" />}
                   <IconBtn icon="list_alt" size={26} iconSize={14} color={C.muted} onClick={onOpenQueue} title="Open full task queue" aria-label="Open full task queue" />
-                  <IconBtn icon="apps" size={26} iconSize={14} color={C.muted} onClick={() => { setActionCategoryId("tasks"); setActionsOpen(true); }} title="Task actions" aria-label="Task actions" />
                 </div>
               </div>
               {taskComposerOpen && (
@@ -3151,7 +3088,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <ActionBtn variant="filled" icon="add" iconSize={15} containerColor={GOLD} labelColor="#fff" onClick={onOpenShailaAdd}>Add</ActionBtn>
                 <ActionBtn variant="text" icon="open_in_full" iconSize={15} labelColor={GOLD} onClick={onOpenShailos}>Open</ActionBtn>
-                <IconBtn icon="apps" size={26} iconSize={14} color={GOLD} onClick={() => { setActionCategoryId("shailos"); setActionsOpen(true); }} title="Shailos actions" aria-label="Shailos actions" />
               </div>
             </div>
             <div style={{ ...ncScrollPane, ...denseListVars({ dense, primary: C.text, secondary: GOLD, hover: GOLD }) }}>
@@ -3212,7 +3148,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <ActionBtn variant="text" icon="open_in_full" iconSize={15} onClick={onOpenPhone}>Open</ActionBtn>
-                <IconBtn icon="apps" size={26} iconSize={14} color={C.muted} onClick={() => { setActionCategoryId("phone"); setActionsOpen(true); }} title="Phone actions" aria-label="Phone actions" />
               </div>
             </div>
             <div style={{ overflow: "hidden", flex: "1 1 auto", minHeight: 0, padding: dense ? "3px 12px 8px" : "10px 14px 14px", display: "flex", flexDirection: "column" }}>
@@ -3778,41 +3713,6 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         {/* Health card removed from the default dashboard — health stays reachable via the
             Health page (actions menu / onOpenHealth). */}
 
-        {/* Actions drawer */}
-        {actionsOpen && (
-          <div style={{ position: "fixed", inset: `0 0 0 ${sidebarW}px`, zIndex: 7800, display: "flex", justifyContent: "flex-end", background: "rgba(0,0,0,0.28)" }} onClick={() => setActionsOpen(false)}>
-            <aside onClick={e => e.stopPropagation()} style={{ width: "min(540px,94vw)", height: "100%", background: C.bg, borderLeft: `1px solid ${C.divider}`, boxShadow: ELEV.drawer, display: "flex", flexDirection: "column" }}>
-              <div style={{ height: 64, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: NC_TYPE.title, fontWeight: 500, fontFamily: NC_FONT_STACK, color: C.text }}>
-                  {suiteIcon("apps", 20)} More Actions
-                </div>
-                <IconBtn icon="close" size={40} iconSize={17} color={C.muted} onClick={() => setActionsOpen(false)} title="Close" aria-label="Close" />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "130px minmax(0,1fr)", minHeight: 0, flex: 1 }}>
-                <div style={{ borderRight: `1px solid ${C.divider}`, padding: 12, display: "grid", alignContent: "start", gap: 6, background: C.bgSoft, overflow: "auto" }}>
-                  {actionCategories.map(cat => {
-                    const isActive = activeActionCategory?.id === cat.id;
-                    return (
-                      <button key={cat.id} onClick={() => setActionCategoryId(cat.id)}
-                        style={{ height: 40, borderRadius: RADIUS.pill, border: "none", background: isActive ? C.hover : "transparent", color: isActive ? C.text : C.muted, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: "0 12px", fontWeight: 500, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.control, textAlign: "left" }}>
-                        {suiteIcon(cat.icon, 17)} {cat.title}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div style={{ padding: 14, overflow: "auto", display: "grid", alignContent: "start", gap: 8 }}>
-                  {(activeActionCategory?.actions || []).map(action => (
-                    <button key={action.id || action.label} onClick={() => { if (action.disabled) return; setActionsOpen(false); action.run?.(); }} disabled={action.disabled}
-                      style={{ minHeight: 48, borderRadius: RADIUS.sm, border: `1px solid ${action.primary ? "transparent" : C.divider}`, background: action.primary ? C.accent : C.bg, color: action.primary ? "#fff" : C.text, cursor: action.disabled ? "default" : "pointer", opacity: action.disabled ? 0.5 : 1, padding: "0 14px", display: "grid", gridTemplateColumns: "32px minmax(0,1fr)", gap: 10, alignItems: "center", fontFamily: NC_FONT_STACK, textAlign: "left" }}>
-                      <span style={{ width: 32, height: 32, borderRadius: RADIUS.pill, display: "flex", alignItems: "center", justifyContent: "center", background: action.primary ? "rgba(255,255,255,0.16)" : C.hover, color: action.primary ? "#fff" : C.muted, flexShrink: 0 }}>{suiteIcon(action.icon, 16)}</span>
-                      <span style={{ fontSize: NC_TYPE.control, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{action.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </aside>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -17,6 +17,7 @@ import android.os.IBinder
 import com.shamash.phonehost.api.ApiJson
 import com.shamash.phonehost.api.HostAuth
 import com.shamash.phonehost.api.LocalApiServer
+import com.shamash.phonehost.bt.CarKitClient
 import com.shamash.phonehost.bt.HfpClient
 import com.shamash.phonehost.bt.MapClient
 import com.shamash.phonehost.bt.MnsServer
@@ -65,6 +66,7 @@ class HostService : Service() {
 
     private val map = MapClient()
     private val hfp = HfpClient()
+    private val carKit = CarKitClient()
     private val pbap = PbapClient()
     private var mns: MnsServer? = null
     private val api = LocalApiServer()
@@ -93,6 +95,13 @@ class HostService : Service() {
         get() = prefs.getString("defaultDevice", "") ?: ""
         set(value) { prefs.edit().putString("defaultDevice", value).apply() }
 
+    /** Car-kit simulator mode: the platform HFP-client profile holds calls (with
+     *  stack-routed SCO audio through the tablet) instead of the raw RFCOMM lane.
+     *  MAP/PBAP/MNS are unaffected either way. */
+    var carKitMode: Boolean
+        get() = prefs.getBoolean("carKitMode", false)
+        set(value) { prefs.edit().putBoolean("carKitMode", value).apply() }
+
     // ── Lifecycle ─────────────────────────────────────────────────────────
     override fun onCreate() {
         super.onCreate()
@@ -118,6 +127,7 @@ class HostService : Service() {
         api.start()
         registerNsd()
         relay.start()
+        carKit.probe(this, adapter)
 
         // NOTE: every periodic body is wrapped in runCatching — a single thrown
         // exception permanently cancels a scheduled task, which would silently
@@ -204,12 +214,17 @@ class HostService : Service() {
     }
 
     // ── Connection orchestration ──────────────────────────────────────────
-    fun isFullyConnected(): Boolean = map.isConnected && hfp.isConnected
+    private fun callLaneConnected(): Boolean = if (carKitMode) carKit.engaged else hfp.isConnected
+
+    /** The call lane currently in charge (car-kit platform profile or raw RFCOMM). */
+    private fun laneCall(): CallInfo = if (carKitMode && carKit.engaged) carKit.currentCall else hfp.currentCall
+
+    fun isFullyConnected(): Boolean = map.isConnected && callLaneConnected()
 
     fun isBusyConnecting(): Boolean = connecting.get()
 
     /** Any non-idle call (ringing, dialing, active) — a handoff release must wait. */
-    fun isCallActive(): Boolean = hfp.currentCall.status != CallStatus.Idle
+    fun isCallActive(): Boolean = laneCall().status != CallStatus.Idle
 
     fun isPaused(): Boolean = released
 
@@ -237,7 +252,16 @@ class HostService : Service() {
                 updateNotification("Connecting to $label…")
 
                 // HFP first (fast), then MAP (retry ladder), then MNS + seed + sync.
-                try {
+                // Car-kit mode: the platform profile owns HFP (one HF per device),
+                // so the raw RFCOMM lane stays parked.
+                if (carKitMode) {
+                    if (!carKit.engaged && !carKit.engage(device)) {
+                        statusHfp = "Car kit: ${carKit.lastError ?: "unavailable"}"
+                        HostLog.add("[HOST] car-kit engage failed: ${carKit.lastError}")
+                    } else {
+                        statusHfp = "Car kit (platform HFP)"
+                    }
+                } else try {
                     if (!hfp.isConnected) hfp.connect(device)
                 } catch (ex: Exception) {
                     statusHfp = "HFP failed: ${ex.message}"
@@ -353,7 +377,11 @@ class HostService : Service() {
 
     private fun wireHfp() {
         hfp.onStatus = { statusHfp = it; HostLog.add("[HFP] $it") }
-        hfp.onCallStateChanged = { call ->
+        carKit.onStatus = { if (carKitMode) statusHfp = it }
+        // One shared consumer for both call lanes — history recording and the
+        // notification line must not care whether the platform profile or the
+        // raw RFCOMM lane produced the event.
+        val onCall: (CallInfo) -> Unit = { call ->
             // Record history when a call transitions to Idle
             if (call.status == CallStatus.Idle && lastCallStatus != CallStatus.Idle) {
                 val duration = if (call.startTime > 0 && lastCallStatus == CallStatus.Active)
@@ -375,6 +403,8 @@ class HostService : Service() {
                 },
             )
         }
+        hfp.onCallStateChanged = onCall
+        carKit.onCallStateChanged = onCall
     }
 
     // ── MNS wiring ────────────────────────────────────────────────────────
@@ -481,20 +511,44 @@ class HostService : Service() {
                     ok(ApiJson.result("link released for another host"))
                 }
                 req.method == "POST" && req.path == "/answer" -> {
-                    executor.execute { runCatching { hfp.answer() } }
+                    executor.execute { runCatching { if (carKitMode && carKit.engaged) carKit.answer() else hfp.answer() } }
                     ok(ApiJson.result("answering"))
                 }
                 req.method == "POST" && req.path == "/hangup" -> {
-                    executor.execute { runCatching { hfp.hangUp() } }
+                    executor.execute { runCatching { if (carKitMode && carKit.engaged) carKit.hangUp() else hfp.hangUp() } }
                     ok(ApiJson.result("hanging up"))
                 }
                 req.method == "POST" && req.path == "/dial" -> {
                     val n = req.qs("n")
                     if (n.isBlank()) bad("missing ?n=NUMBER")
                     else {
-                        executor.execute { runCatching { hfp.dial(n) } }
+                        executor.execute { runCatching { if (carKitMode && carKit.engaged) carKit.dial(n) else hfp.dial(n) } }
                         ok(ApiJson.result("dialing $n"))
                     }
+                }
+                req.path == "/carkit" -> ok(carKit.statusJson().put("mode", carKitMode).toString())
+                req.method == "POST" && req.path == "/carkit/mode" -> {
+                    val on = req.qs("on") == "1"
+                    carKitMode = on
+                    executor.execute {
+                        runCatching {
+                            if (on) {
+                                // Free the HFP slot for the platform profile, then engage.
+                                hfp.disconnect()
+                                adapter?.getRemoteDevice(defaultDeviceAddress)?.let { carKit.engage(it) }
+                            } else {
+                                carKit.disengage()
+                                connectToDefault()
+                            }
+                        }
+                    }
+                    ok(ApiJson.result(if (on) "car-kit mode engaging" else "car-kit mode off"))
+                }
+                req.method == "POST" && req.path == "/carkit/audio" -> {
+                    val on = req.qs("on") == "1"
+                    val okAudio = carKit.setAudioRoute(on)
+                    if (okAudio) ok(ApiJson.result(if (on) "call audio → tablet" else "call audio → phone"))
+                    else bad(carKit.lastError ?: "car-kit audio route refused")
                 }
                 req.method == "POST" && req.path == "/send" -> {
                     val to = req.qs("to")
@@ -611,7 +665,8 @@ class HostService : Service() {
         o.put("connected", isFullyConnected())
         o.put("hfp", statusHfp)
         o.put("map", statusMap)
-        val call = hfp.currentCall
+        val call = laneCall()
+        o.put("carKit", carKit.statusJson().put("mode", carKitMode))
         o.put("callState", call.status.name)
         o.put("callNumber", call.number)
         o.put("isRinging", call.status == CallStatus.IncomingRinging)

@@ -33,7 +33,7 @@ async function runAiJob(user, job, input, task = "shailos") {
     body: JSON.stringify({ job, input, task, provider, model, geminiCredential }),
   });
   const data = await r.json().catch(() => ({ error: r.statusText }));
-  if (!r.ok) throw new Error(data.error || "AI gateway error");
+  if (!r.ok) throw new Error(data.error || `AI gateway error (${r.status}${r.statusText ? " " + r.statusText : ""})`);
   if (data.error) throw new Error(data.error);
   return data.output ?? data.text ?? data.raw ?? data;
 }
@@ -200,14 +200,20 @@ function fallbackLabel(link, title) {
 export async function performResearch(user, shaila) {
   const queries = await buildSearchQueries(user, shaila);
 
-  const allResultArrays = await Promise.all(queries.map(q => searchWeb(q).catch(() => [])));
+  // Keep the real failure — "no results" must never mask a broken search backend.
+  const searchErrors = [];
+  const allResultArrays = await Promise.all(queries.map(q => searchWeb(q).catch(err => { searchErrors.push(err); return []; })));
   const seen = new Set();
   const results = allResultArrays.flat().filter(r => {
     if (seen.has(r.link)) return false;
     seen.add(r.link);
     return true;
   });
-  if (!results.length) throw new Error("No search results found for this shaila.");
+  if (!results.length) {
+    throw new Error(searchErrors.length
+      ? `Search backend failed: ${searchErrors[0]?.message || searchErrors[0]}`
+      : "No search results found for this shaila.");
+  }
 
   // Follow-up queries to fill gaps
   const initialSnippets = results.slice(0, 6).map((r, i) => `[${i + 1}] ${r.title}: ${r.snippet}`).join("\n");

@@ -381,7 +381,11 @@ public class HfpService : IAsyncDisposable
                 else if (value == 1 && CurrentCall.Status != CallStatus.Active)
                 {
                     // Call connected. Keep the existing CallInfo (preserves Direction
-                    // and Number) — only update status and start time.
+                    // and Number) — only update status and start time. A connected
+                    // call is by definition not missed — if a reordered callsetup=0
+                    // already misfiled the direction, correct it here.
+                    if (CurrentCall.Direction == CallDirection.Missed)
+                        CurrentCall.Direction = CallDirection.Incoming;
                     CurrentCall.Status    = CallStatus.Active;
                     CurrentCall.StartTime = DateTime.Now;
                     PublishCallStateChanged();
@@ -393,22 +397,35 @@ public class HfpService : IAsyncDisposable
                 switch (value)
                 {
                     case 0:
-                        // callsetup=0 means call setup is over.
-                        // If the call indicator is already 0 (no active call) and we
-                        // were ringing, the caller hung up before we answered — clear it.
+                        // callsetup=0 means call setup is over. If we are still
+                        // ringing/dialing this LOOKS like a hang-up / missed call —
+                        // but several AGs send callsetup=0 BEFORE call=1 when the
+                        // call is answered on the handset. Deciding "missed" right
+                        // here misfiled real conversations as missed calls, so give
+                        // the call indicator a moment to land before classifying.
                         if (CurrentCall.Status == CallStatus.IncomingRinging ||
                             CurrentCall.Status == CallStatus.Dialing)
                         {
+                            var revisionAtSetupEnd = Interlocked.Read(ref _callStateRevision);
                             var direction = CurrentCall.Direction;
                             var number    = CurrentCall.Number;
-                            _lastAudioConnectionRequestUtc = DateTime.MinValue;
-                            ReplaceCallState(new CallInfo
+                            _ = Task.Run(async () =>
                             {
-                                Status    = CallStatus.Idle,
-                                Direction = direction == CallDirection.Outgoing
-                                                ? CallDirection.Outgoing
-                                                : CallDirection.Missed,
-                                Number    = number
+                                await Task.Delay(800);
+                                // Any state change (call=1 → Active, new ring, …)
+                                // bumps the revision and cancels the missed verdict.
+                                if (Interlocked.Read(ref _callStateRevision) != revisionAtSetupEnd) return;
+                                if (CurrentCall.Status != CallStatus.IncomingRinging &&
+                                    CurrentCall.Status != CallStatus.Dialing) return;
+                                _lastAudioConnectionRequestUtc = DateTime.MinValue;
+                                ReplaceCallState(new CallInfo
+                                {
+                                    Status    = CallStatus.Idle,
+                                    Direction = direction == CallDirection.Outgoing
+                                                    ? CallDirection.Outgoing
+                                                    : CallDirection.Missed,
+                                    Number    = number
+                                });
                             });
                         }
                         break;

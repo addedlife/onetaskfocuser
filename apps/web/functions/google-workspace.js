@@ -319,12 +319,20 @@ async function summary(user, body = {}) {
   ).slice(0, 30);
 
   const mailSeen = new Set();
+  // Interleave accounts by date (newest first) — never stack account A's inbox
+  // on top of account B's, and never let the 30-cap silently drop one account.
+  const mailTime = m => {
+    const t = Number(m.internalDate);
+    if (Number.isFinite(t) && t > 0) return t;
+    const d = Date.parse((m.payload?.headers || []).find(h => h.name === "Date")?.value || "");
+    return Number.isFinite(d) ? d : 0;
+  };
   const gmailMessages = perAccount.flatMap(p => p.gmail).filter(m => {
     const key = messageIdHeader(m) || m.id;
     if (mailSeen.has(key)) return false;
     mailSeen.add(key);
     return true;
-  }).slice(0, 30);
+  }).sort((a, b) => mailTime(b) - mailTime(a)).slice(0, 30);
 
   return {
     connected: true,

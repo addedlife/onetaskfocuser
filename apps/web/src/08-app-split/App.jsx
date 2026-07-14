@@ -13,7 +13,6 @@ import { buildDeskPhoneThemeQuery, cleanTheme, DUR, EASE, ELEV, getInitialSuiteV
 import { ActionBtn, IconBtn } from './m3.jsx';
 import { AppSuiteChrome } from './components/AppSuiteChrome.jsx';
 import { DeskPhoneSuitePanel, SuiteShailosPanel } from './components/SuitePanels.jsx';
-import { ShailosTracker } from './components/ShailosTracker.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './components/NerveCenterPhoneSurface.jsx';
 import { compactNerveSummary, nerveSummarySource, NerveCenterPanel } from './components/NerveCenterPanel.jsx';
 import { TaskRiverPanel } from './components/TaskRiverPanel.jsx';
@@ -185,7 +184,6 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const [bdMinimized, setBdMinimized] = useState(false);
   const [jsMinimized, setJsMinimized] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
-  const [showShailos, setShowShailos] = useState(false);
   const [shailosAction, setShailosAction] = useState(null); // null | "record-shaila" | "record-call"
   const [justStartId, setJustStartId] = useState(null);
   const [tipCat, setTipCat] = useState("All");
@@ -2814,7 +2812,6 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     if (view === "deskphone") {
       setSuiteView("deskphone");
       setShailosAction(null);
-      setShowShailos(false);
       syncDeskPhoneTheme(true);
       return;
     }
@@ -2825,7 +2822,6 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     }
     setSuiteView(view);
     if (view !== "shailos") setShailosAction(null);
-    if (view === "focus") setShowShailos(false);
   };
 
   // ── Health data helpers (go through backend so Firestore rules don't apply) ─
@@ -3240,30 +3236,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         />
       )}
       {showBrainDump && <BrainDump T={T} pris={pris} onCapture={(text)=>{captureZenDump(text);setShowZenReview(true);setShowBrainDump(false);}} onClose={()=>setShowBrainDump(false)}/>}
-      {/* Shaila Transcriber — full-screen native overlay */}
-      {showShailos && (
-        <div style={{position:"fixed",inset:0,zIndex:Z.overlay,background:T.bg,display:"flex",flexDirection:"column",animation:"ot-fade 0.2s"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",borderBottom:`1px solid ${C.divider}`,background:C.bg,flexShrink:0}}>
-            <span style={{fontSize:NC_TYPE.body,fontWeight:600,color:C.text,fontFamily:NC_FONT_STACK}}>Shaila Transcriber</span>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <ActionBtn variant="tonal" icon={backupLoading ? "schedule" : "download"} iconSize={14} height={28} labelSize={NC_TYPE.meta}
-                containerColor={C.bgSoft} labelColor={C.muted}
-                onClick={doFullBackup} disabled={backupLoading} title="Download full backup (tasks + shailos)">Backup</ActionBtn>
-              <ActionBtn variant="tonal" icon="folder" iconSize={14} height={28} labelSize={NC_TYPE.meta}
-                containerColor={C.bgSoft} labelColor={C.muted}
-                onClick={doLoadBackup} title="Restore from backup file">Restore</ActionBtn>
-              <IconBtn variant="tonal" icon={reconcileLoading ? "schedule" : "refresh"} iconSize={14} size={28} containerColor={C.bgSoft} color={C.muted}
-                onClick={runShailaReconcile} disabled={reconcileLoading} title="Sync check" aria-label="Sync check" />
-              <IconBtn icon="close" iconSize={18} size={32} color={C.muted}
-                onClick={()=>{setShowShailos(false);setShailosAction(null);}} title="Close" aria-label="Close" />
-            </div>
-          </div>
-          <div style={{flex:1,minHeight:0}}>
-            <ShailosTracker T={T} user={user} action={shailosAction}
-              onRecordCall={()=>{setShowShailos(false);setShailosAction(null);setConvCallMode(true);setShowConvCapture(true);}} />
-          </div>
-        </div>
-      )}
+      {/* The old full-screen "Shaila Transcriber" overlay is gone (unreachable dead
+          screen — nothing ever set showShailos). The one real Shailos surface is the
+          suite "shailos" view (SuiteShailosPanel → ShailosTracker). */}
       {/* Shaila delete prompt — asks if user also wants to delete from transcriber record */}
       {shailaDelPrompt && (
         <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setShailaDelPrompt(null)}>
@@ -3550,7 +3525,6 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           open={sidebarOpen}
           onToggle={() => { const next = !sidebarOpen; setSidebarOpen(next); try { localStorage.setItem("shamash_sidebar_open", String(next)); } catch {} }}
           onRecord={() => { setConvCallMode(false); setShowConvCapture(true); }}
-          onMoreActions={() => setNcActionsOpen(true)}
           onSettings={() => { setSettingsInitialTab("queue"); setShowSet(true); }}
           currentTask={curT}
           onGoodEnough={() => curT && goodEnoughTask(curT.id)}
