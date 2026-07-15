@@ -918,6 +918,14 @@ numbers were spent on a rewrite and a plan, not a release.
 - **4.77.0** (2026-07-15) — Search results now pass through a live check before being shown,
   to catch bad or unsafe links. *(feat: search results pass through a live link-inspection
   gate)*
+- **4.78.0** (2026-07-15) — Whole-web search now runs through Gemini's own native grounding
+  instead of a separate search API. *(feat: real whole-web search via Gemini native
+  grounding)*
+  - *4.78.1* (2026-07-15) — Picking "PC" (or "Auto," where PC is a candidate) as the phone-link
+    host used to just silently fail if DeskPhone wasn't already running — nothing checked or
+    tried to start it. Now it probes the local DeskPhone app and launches it automatically when
+    it's not already open. *(fix: phonelink auto-launches DeskPhone host when not already
+    running)*
 
 ---
 
@@ -941,4 +949,4 @@ numbers were spent on a rewrite and a plan, not a release.
 zero** — on every feature release. Patch increments on every fix/polish release since the last
 feature. Full policy in [`CLAUDE.md`](CLAUDE.md).
 
-**Current version: 4.77.0**
+**Current version: 4.78.1**

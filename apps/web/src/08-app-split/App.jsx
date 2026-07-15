@@ -3538,6 +3538,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           topOffset={noticeTopOffset}
           clockTime={clockTime}
           features={AS.features || {}}
+          onEnsurePcHost={bringDeskPhoneForward}
         />
       )}
 

@@ -37,7 +37,7 @@ const FilterChip = createComponent({ react: React, tagName: 'md-filter-chip', el
 const BUGLOG_OPEN_EVENT = 'shamash-buglog:open';
 const BUGLOG_COUNT_EVENT = 'shamash-buglog:count';
 
-function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffset = 0, forceCompact = false, clockTime = null, onSettings, features = {} }) {
+function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffset = 0, forceCompact = false, clockTime = null, onSettings, features = {}, onEnsurePcHost }) {
   const [bugLogCount, setBugLogCount] = React.useState(0);
   React.useEffect(() => {
     const onCount = (e) => setBugLogCount(e.detail?.unresolved || 0);
@@ -57,6 +57,22 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
     const unsub = subscribeOwner(setPhoneHost);
     return () => { try { unsub && unsub(); } catch (_) {} };
   }, []);
+  // Owner ticket 7/15: picking PC (or Auto, where PC is a candidate host) used to
+  // just fail silently until the owner noticed DeskPhone wasn't running — nothing
+  // ever probed for that or launched it. Whenever the preference wants PC in play
+  // and the PC's presence heartbeat (hosts.windows) isn't fresh, ask App.jsx's
+  // bringDeskPhoneForward to check the local loopback and fire deskphone://open if
+  // needed. Runs for manual "pc" picks AND "auto" (since auto can't ever select a
+  // host that never beacons), and re-fires on every owner snapshot so a slow
+  // DeskPhone launch gets retried instead of only checked once.
+  React.useEffect(() => {
+    if (!onEnsurePcHost) return;
+    const wantsPc = phoneHost.preferred === 'pc' || phoneHost.preferred === 'auto';
+    if (!wantsPc) return;
+    const pcInfo = phoneHost.hosts?.windows;
+    const pcBeaconLive = pcInfo?.t && (Date.now() - pcInfo.t) < OWNER_LIVE_WINDOW_MS;
+    if (!pcBeaconLive) onEnsurePcHost();
+  }, [phoneHost.preferred, phoneHost.hosts, onEnsurePcHost]);
   const autoHost = phoneHost.preferred === 'auto';
   const preferredId = preferredHostId(phoneHost.preferred);   // '' in auto mode
   // Honest toggle feedback (owner ticket: "toggle seems to do nothing" / "it
