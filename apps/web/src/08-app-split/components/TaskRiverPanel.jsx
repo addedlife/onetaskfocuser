@@ -261,7 +261,7 @@ export function TaskRiverPanel({
   const act = (it) => {
     if (it.type === 'task') onCompleteTask?.(it.id);
     else if (it.type === 'shaila') onOpenShailos?.();
-    else if (it.type === 'mail') window.open('https://mail.google.com/mail/u/0/#inbox/' + (it.raw?.id || ''), '_blank');
+    else if (it.type === 'mail') window.open(`https://mail.google.com/mail/u/${encodeURIComponent(it.raw?.sourceAccount || 0)}/#inbox/${it.raw?.id || ''}`, '_blank');
     else if (it.type === 'calendar') window.open('https://calendar.google.com/calendar/r', '_blank');
   };
 

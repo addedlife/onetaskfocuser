@@ -2397,7 +2397,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   {exp && subj && subj !== snip && <span slot="overline" style={{ color:C.text, fontWeight:600 }}>{subj}</span>}
                   <span slot="supporting-text" style={{ color:C.muted, ...(exp ? { whiteSpace:"normal", wordBreak:"break-word" } : { overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }) }}>{snip}</span>
                   <span slot="trailing-supporting-text" style={{ color:C.faint, whiteSpace:"nowrap" }}>{date}</span>
-                  <span slot="end"><IconBtn icon="open_in_new" size={28} iconSize={14} color={C.faint} title="Open in Gmail" href={`https://mail.google.com/mail/u/0/#inbox/${msg.id}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} /></span>
+                  <span slot="end"><IconBtn icon="open_in_new" size={28} iconSize={14} color={C.faint} title="Open in Gmail" href={`https://mail.google.com/mail/u/${encodeURIComponent(msg.sourceAccount || 0)}/#inbox/${msg.id}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} /></span>
                 </ListItem>
               );
             })}
@@ -2787,7 +2787,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const subj = gmailHdr(msg,"Subject")||"(no subject)";
                 const from = fmtFromM(gmailHdr(msg,"From"));
                 const date = fmtTimeM(gmailHdr(msg,"Date"));
-                const url  = `https://mail.google.com/mail/u/0/#inbox/${msg.id}`;
+                const url  = `https://mail.google.com/mail/u/${encodeURIComponent(msg.sourceAccount || 0)}/#inbox/${msg.id}`;
                 return (
                   <ListItem key={msg.id||i} type="link" href={url} target="_blank" style={{ borderRadius: RADIUS.sm }}>
                     <span slot="headline" style={{ color:C.text, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{from}</span>
@@ -3632,7 +3632,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       const subject = gmailHeader(msg, 'Subject') || '(no subject)';
                       const from = fmtFrom(gmailHeader(msg, 'From'));
                       const date = fmtTime(gmailHeader(msg, 'Date'));
-                      const url = `https://mail.google.com/mail/u/0/#inbox/${msg.id}`;
+                      const url = `https://mail.google.com/mail/u/${encodeURIComponent(msg.sourceAccount || 0)}/#inbox/${msg.id}`;
                       const selected = selectedEmailId === msg.id;
                       return (
                         <React.Fragment key={msg.id || i}>
