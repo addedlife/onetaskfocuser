@@ -12,7 +12,10 @@ being promised in chat and forgotten. Read `BRIEF.txt` and `AGENTS.md` too.
   smoke-test the affected surface when feasible), commit it and **push straight to `origin/main`**.
   **Firebase Hosting is the only live deploy target.** A push to `main` triggers
   `.github/workflows/deploy.yml`, which builds `apps/web` and runs
-  `firebase deploy --only hosting,functions --project onetaskonly-app`. Netlify is fully
+  `firebase deploy --only hosting,functions,firestore,database --project onetaskonly-app`
+  (firestore/database rules deploy alongside hosting+functions as of 2026-07-15 — before that,
+  rules-file edits were silently never reaching production through the normal push flow).
+  Netlify is fully
   decommissioned — `netlify.toml` (root) and `apps/web/netlify.toml` are kept only as a labeled
   rollback path and do not build or serve anything; never describe Netlify as live, auto-building,
   or in any way part of the current deploy path. Then confirm the pushed commit shows up on the
@@ -22,6 +25,30 @@ being promised in chat and forgotten. Read `BRIEF.txt` and `AGENTS.md` too.
 - Exceptions that still require an explicit heads-up first: storage/sync refactors (see
   `HANDOFF.md` §9 — these can wipe live data), schema migrations, secret/permission changes, or
   anything that could be destructive or hard to reverse.
+
+## DeskPhone build gate (STANDING — do not skip, do not ask first)
+
+**Any change under `apps/phone-host-windows/**` is not done until the build has actually run.**
+This is fully scriptable on the owner's machine — there is no "ask the owner to build it later"
+step, and no need to check first before running it.
+
+- Before building: add/update a `changelog.json` entry for the upcoming build number (check
+  `build.num` for the current value — deploy.ps1 reads that number, so the entry's `version`
+  must be `b<that number>`). `notes` (user-facing, 24+ chars) and `devNotes` (technical, 48+
+  chars, real root cause not a placeholder) are both hard-enforced by deploy.ps1 — it fails the
+  build outright without them.
+- Then run: `dotnet build -c Release -p:Platform=ARM64` from `apps/phone-host-windows`. The
+  `DeployDesktop` MSBuild target fires automatically after a successful Release build and runs
+  `deploy.ps1`, which: archives the build under `deployed-builds/b<N>`, publishes the launcher +
+  UI auditor, updates the Desktop "DeskPhone"/"DeskPhone Previous Build" shortcuts, creates its
+  own `release(b<N>): ...` git commit scoped to the native-app paths, and — only if a DeskPhone
+  instance is currently running — POSTs a non-destructive update *offer* to it (the running
+  instance decides whether to accept; nothing is force-killed or silently swapped).
+- Push that release commit to `origin/main` same as any other verified fix (see Release policy
+  above) — it's a normal commit, not a special case.
+- The one thing still outside this automation: the produced `DeskPhone.exe` is unsigned
+  (no Authenticode step exists yet in `deploy.ps1`) and the Android host's release build has no
+  signing keystore configured either — both are flagged as open findings, not part of this gate.
 
 ## Concurrent coding session protocol (STANDING)
 
