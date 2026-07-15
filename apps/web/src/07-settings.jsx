@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Store, aiGenSchemes, uid, DEF_AGE_THRESHOLDS, DEF_PRI, BEFORE_SHAVUOS_PRIORITY_ID, SCHEMES, ensureSchemeContrast } from './01-core.js';
 import { PriEditor } from './04-components.jsx';
 import { NC_TYPE, RADIUS, SP } from './08-app-split/ui-tokens.jsx';
+import { ActionBtn, IconBtn, Switch, TextField, Slider } from './08-app-split/m3.jsx';
 
 const NC_FONT_STACK = '"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
 
@@ -130,26 +131,31 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
     line: 1.55,
   };
   const sh = {fontSize:settingsType.section,fontWeight:500,color:T.tFaint,margin:"0 0 14px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:0};
-  const tog = (on) => ({width:44,height:24,borderRadius:RADIUS.md,background:on?ap[0]?.color:T.brd,border:"none",cursor:"pointer",position:"relative",flexShrink:0});
-  const knob = (on) => ({width:18,height:18,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:on?23:3,transition:"left 0.25s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)"});
+  // Shared md-switch color vars — matches the old tog()'s on-color (first priority's
+  // accent) so every toggle in Settings keeps the same "on" tint it always had.
+  const switchVars = {
+    '--md-switch-selected-track-color': ap[0]?.color || T.text,
+    '--md-switch-selected-hover-track-color': ap[0]?.color || T.text,
+    '--md-switch-selected-focus-track-color': ap[0]?.color || T.text,
+    '--md-switch-selected-pressed-track-color': ap[0]?.color || T.text,
+  };
   const rowSB = {display:"flex",alignItems:"center",justifyContent:"space-between",gap:SP.lg,marginBottom:18};
-  const schemeButtonStyle = (id, scheme, hasDelete = false) => {
+  // Per-scheme ActionBtn props (variant="tonal") — swatch pill keeps its own bg/border/
+  // label color per color scheme, same values schemeButtonStyle used to compute.
+  const schemeBtnProps = (id, scheme, hasDelete = false) => {
     scheme = ensureSchemeContrast(scheme);
     const active = AS.colorScheme === id;
     const bg = scheme.card || scheme.bg || "#FFFFFF";
     const accent = scheme.primary || scheme.brd || "#00796B";
     return {
-      minHeight: 40,
-      padding: hasDelete ? "8px 34px 8px 14px" : "8px 14px",
-      borderRadius: RADIUS.pill,
-      border: `1px solid ${active ? accent : (scheme.brd || T.brd)}`,
-      background: active ? (scheme.tonal || scheme.bgW || bg) : bg,
-      cursor: "pointer",
-      fontSize: settingsType.control,
-      fontWeight: 500,
-      fontFamily: NC_FONT_STACK,
-      color: scheme.text || T.text,
-      boxShadow: "none",
+      containerColor: active ? (scheme.tonal || scheme.bgW || bg) : bg,
+      labelColor: scheme.text || T.text,
+      height: 40,
+      labelSize: settingsType.control,
+      style: {
+        border: `1px solid ${active ? accent : (scheme.brd || T.brd)}`,
+        ...(hasDelete ? { '--md-filled-tonal-button-trailing-space': '34px' } : {}),
+      },
     };
   };
 
@@ -160,15 +166,16 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
         {/* Header */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <h3 style={{fontSize:22,fontWeight:500,margin:0,fontFamily:NC_FONT_STACK}}>Settings</h3>
-          <button onClick={onClose} style={{width:40,height:40,background:"none",border:"none",cursor:"pointer",fontSize:22,color:T.tSoft,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+          <IconBtn icon="close" size={40} iconSize={20} color={T.tSoft} onClick={onClose} title="Close" aria-label="Close settings" />
         </div>
 
         {/* Tab bar */}
         <div style={{display:"flex",gap:6,background:T.bgW,borderRadius:RADIUS.sm,padding:SP.xs,marginBottom:24}}>
           {TABS.map(t => (
-            <button key={t.id} onClick={()=>setSTab(t.id)} style={{flex:1,minHeight:40,padding:"8px 8px",borderRadius:RADIUS.xs,border:"none",background:sTab===t.id?T.card:"transparent",cursor:"pointer",fontSize:NC_TYPE.body,fontWeight:sTab===t.id?500:400,fontFamily:NC_FONT_STACK,color:sTab===t.id?T.text:T.tSoft,transition:"background 0.15s",boxShadow:"none"}}>
+            <ActionBtn key={t.id} variant={sTab===t.id?"tonal":"text"} containerColor={T.card} labelColor={sTab===t.id?T.text:T.tSoft}
+              height={40} labelSize={NC_TYPE.body} onClick={()=>setSTab(t.id)} style={{flex:1}}>
               {t.label}
-            </button>
+            </ActionBtn>
           ))}
         </div>
 
@@ -177,11 +184,18 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
           <div>
             <h4 style={sh}>Energy Filter</h4>
             <div style={{display:"flex",gap:6,marginBottom:18}}>
-              {["high","low",null].map(e => (
-                <button key={String(e)} onClick={()=>onSetEnergy(e)} style={{flex:1,minHeight:40,padding:"8px 0",borderRadius:RADIUS.sm,border:`1px solid ${e==="high"?"#E07040":e==="low"?"#7EB0DE":T.brd}`,background:curEnergy===e?(e==="high"?"#E0704020":e==="low"?"#7EB0DE20":T.bgW):T.bgW,cursor:"pointer",fontSize:settingsType.control,fontFamily:"system-ui",fontWeight:curEnergy===e?500:400,color:e==="high"?"#B85030":e==="low"?"#4A7898":T.tSoft}}>
-                  {e==="high"?"⚡ High":e==="low"?"🌊 Low":"All"}
-                </button>
-              ))}
+              {["high","low",null].map(e => {
+                const brand = e==="high"?"#E07040":e==="low"?"#7EB0DE":T.brd;
+                const labelColor = e==="high"?"#B85030":e==="low"?"#4A7898":T.tSoft;
+                const active = curEnergy===e;
+                return (
+                  <ActionBtn key={String(e)} variant={active?"tonal":"outlined"} outlineColor={brand}
+                    containerColor={active?`${brand}20`:T.bgW} labelColor={labelColor}
+                    height={40} labelSize={settingsType.control} onClick={()=>onSetEnergy(e)} style={{flex:1}}>
+                    {e==="high"?"⚡ High":e==="low"?"🌊 Low":"All"}
+                  </ActionBtn>
+                );
+              })}
             </div>
 
             {effectiveCount > overwhelmThreshold && <>
@@ -191,7 +205,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                   <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Focus mode</span>
                   <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Show only top {overwhelmThreshold} tasks (queue has {effectiveCount})</p>
                 </div>
-                <button onClick={onToggleFocusMode} style={tog(focusModeActive)}><div style={knob(focusModeActive)}/></button>
+                <Switch selected={focusModeActive} onChange={onToggleFocusMode} style={switchVars} />
               </div>
             </>}
           </div>
@@ -203,28 +217,32 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             <h4 style={sh}>Theme</h4>
             <div style={{display:"flex",flexWrap:"wrap",gap:SP.sm,marginBottom:10}}>
               {Object.entries(SCHEMES).map(([k,v]) => (
-                <button key={k} onClick={()=>setAS(p=>({...p,colorScheme:k}))} style={schemeButtonStyle(k, v)}>{v.name}</button>
+                <ActionBtn key={k} variant="tonal" {...schemeBtnProps(k, v)} onClick={()=>setAS(p=>({...p,colorScheme:k}))}>{v.name}</ActionBtn>
               ))}
               {Object.entries(AS.customSchemes || {}).map(([k,v]) => {
                 return (
                 <div key={k} style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
-                  <button onClick={()=>setAS(p=>({...p,colorScheme:k}))} style={schemeButtonStyle(k, v, true)}>{v.name}</button>
-                  <button onClick={e=>{e.stopPropagation();setAS(p=>{const c={...(p.customSchemes||{})};delete c[k];return {...p,customSchemes:c,colorScheme:p.colorScheme===k?"claude":p.colorScheme};});}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:NC_TYPE.meta,color:v.tSoft || T.tSoft,lineHeight:1,padding:0,opacity:0.6}}>✕</button>
+                  <ActionBtn variant="tonal" {...schemeBtnProps(k, v, true)} onClick={()=>setAS(p=>({...p,colorScheme:k}))}>{v.name}</ActionBtn>
+                  <IconBtn icon="close" size={22} iconSize={12} color={v.tSoft || T.tSoft}
+                    onClick={e=>{e.stopPropagation();setAS(p=>{const c={...(p.customSchemes||{})};delete c[k];return {...p,customSchemes:c,colorScheme:p.colorScheme===k?"claude":p.colorScheme};});}}
+                    style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",opacity:0.6}} title="Remove theme" aria-label="Remove theme" />
                 </div>);
               })}
             </div>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <button onClick={handleGenSchemes} disabled={schemeGenLoading} style={{minHeight:40,fontSize:settingsType.control,color:T.tSoft,background:"none",border:`1px dashed ${T.brd}`,borderRadius:RADIUS.sm,padding:"8px 16px",cursor:schemeGenLoading?"default":"pointer",fontFamily:"system-ui",opacity:schemeGenLoading?0.6:1}}>
+              <ActionBtn variant="outlined" outlineColor={T.brd} labelColor={T.tSoft} height={40} labelSize={settingsType.control}
+                onClick={handleGenSchemes} disabled={schemeGenLoading}>
                 {schemeGenLoading ? "Generating…" : "✦ Generate more themes"}
-              </button>
+              </ActionBtn>
               {Object.keys(AS.customSchemes || {}).length > 0 && (
-                <button onClick={()=>{
-                  const n = Object.keys(AS.customSchemes || {}).length;
-                  if (!window.confirm(`Remove all ${n} generated theme${n===1?"":"s"}? Your 8 built-in themes stay, and you can generate more anytime.`)) return;
-                  setAS(p=>({...p, customSchemes:{}, colorScheme: SCHEMES[p.colorScheme] ? p.colorScheme : "claude"}));
-                }} style={{minHeight:40,fontSize:settingsType.control,color:T.tSoft,background:"none",border:`1px solid ${T.brd}`,borderRadius:RADIUS.sm,padding:"8px 16px",cursor:"pointer",fontFamily:"system-ui"}}>
+                <ActionBtn variant="outlined" outlineColor={T.brd} labelColor={T.tSoft} height={40} labelSize={settingsType.control}
+                  onClick={()=>{
+                    const n = Object.keys(AS.customSchemes || {}).length;
+                    if (!window.confirm(`Remove all ${n} generated theme${n===1?"":"s"}? Your 8 built-in themes stay, and you can generate more anytime.`)) return;
+                    setAS(p=>({...p, customSchemes:{}, colorScheme: SCHEMES[p.colorScheme] ? p.colorScheme : "claude"}));
+                  }}>
                   Clear generated ({Object.keys(AS.customSchemes || {}).length})
-                </button>
+                </ActionBtn>
               )}
               {schemeGenErr && <span style={{fontSize:settingsType.help,color:T.danger,fontFamily:"system-ui",lineHeight:settingsType.line}}>{schemeGenErr}</span>}
             </div>
@@ -235,9 +253,9 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text,fontWeight:500}}>Font weight</span>
                 <span style={{fontSize:settingsType.help,fontFamily:"system-ui",color:T.tFaint}}>{AS.fontWeightScale || 400}</span>
               </div>
-              <input type="range" min="340" max="520" step="20" value={AS.fontWeightScale || 400}
-                onChange={e=>setAS(p=>({...p,fontWeightScale:Number(e.target.value)}))}
-                style={{width:"100%",accentColor:T.primary || T.text}}
+              <Slider min={340} max={520} step={20} value={AS.fontWeightScale || 400}
+                onInput={e=>setAS(p=>({...p,fontWeightScale:Number(e.target.value)}))}
+                style={{width:"100%", '--md-slider-handle-color':T.primary || T.text, '--md-slider-active-track-color':T.primary || T.text}}
               />
               <div style={{display:"flex",justifyContent:"space-between",fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui"}}>
                 <span>lighter</span>
@@ -252,12 +270,13 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text,fontWeight:500}}>Link DeskPhone to this app's theme</span>
                 <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"4px 0 0",lineHeight:settingsType.line}}>When on, Shamash Pro 4 pushes its active color scheme to DeskPhone. DeskPhone must also allow this in its Appearance settings.</p>
               </div>
-              <button onClick={onToggleDeskPhoneThemeSync} style={tog(deskPhoneThemeSync)} title={deskPhoneThemeSync ? "DeskPhone theme sync is on" : "DeskPhone theme sync is off"}><div style={knob(deskPhoneThemeSync)}/></button>
+              <Switch selected={deskPhoneThemeSync} onChange={onToggleDeskPhoneThemeSync} title={deskPhoneThemeSync ? "DeskPhone theme sync is on" : "DeskPhone theme sync is off"} style={switchVars} />
             </div>
             <div style={{display:"flex",alignItems:"center",gap:SP.sm,flexWrap:"wrap"}}>
-              <button onClick={handleDeskPhoneThemeRefresh} disabled={!deskPhoneThemeSync || deskPhoneSyncBusy} style={{minHeight:40,fontSize:settingsType.control,color:T.tSoft,background:T.bgW,border:`1px solid ${T.brd}`,borderRadius:RADIUS.sm,padding:"8px 14px",cursor:(!deskPhoneThemeSync || deskPhoneSyncBusy)?"default":"pointer",fontFamily:"system-ui",opacity:(!deskPhoneThemeSync || deskPhoneSyncBusy)?0.55:1}}>
+              <ActionBtn variant="tonal" containerColor={T.bgW} labelColor={T.tSoft} height={40} labelSize={settingsType.control}
+                onClick={handleDeskPhoneThemeRefresh} disabled={!deskPhoneThemeSync || deskPhoneSyncBusy} style={{border:`1px solid ${T.brd}`}}>
                 {deskPhoneSyncBusy ? "Refreshing..." : "Refresh sync"}
-              </button>
+              </ActionBtn>
               <span style={{fontSize:settingsType.help,color:deskPhoneOnline?"#2E7D32":T.tFaint,fontFamily:"system-ui",lineHeight:settingsType.line}}>
                 {deskPhoneSyncNote || (deskPhoneOnline ? "DeskPhone linked." : "DeskPhone not confirmed.")}
               </span>
@@ -274,19 +293,20 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 <div key={p.id} style={{display:"flex",alignItems:"center",gap:6,background:T.bgW,borderRadius:RADIUS.sm,padding:"6px 10px"}}>
                   <div style={{width:14,height:14,borderRadius:"50%",background:p.color}}/>
                   {p.id === BEFORE_SHAVUOS_PRIORITY_ID ? (
-                    <input value={p.label || "Before Shavuos"} aria-label="Before Shavuos category title"
-                      onChange={e=>renamePri(p.id, e.target.value)}
+                    <TextField value={p.label || "Before Shavuos"} aria-label="Before Shavuos category title"
+                      onInput={e=>renamePri(p.id, e.target.value)}
                       onBlur={e=>{ if (!e.target.value.trim()) renamePri(p.id, "Before Shavuos"); }}
-                      style={{width:150,minHeight:30,border:`1px solid ${p.color}66`,borderRadius:RADIUS.sm,background:T.card,color:T.text,padding:"4px 7px",fontSize:settingsType.body,fontFamily:"system-ui",outline:"none"}}
+                      style={{width:150, '--md-outlined-text-field-outline-color':`${p.color}66`, '--md-outlined-text-field-top-space':'2px', '--md-outlined-text-field-bottom-space':'2px'}}
                     />
                   ) : (
                     <span style={{fontSize:settingsType.body,fontFamily:"system-ui"}}>{p.label}{p.isShaila?" ⚡":""}</span>
                   )}
-                  {p.id !== "shaila" && p.id !== BEFORE_SHAVUOS_PRIORITY_ID && ap.length > 1 && <button onClick={()=>remPri(p.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:NC_TYPE.body,color:T.tFaint}}>✕</button>}
+                  {p.id !== "shaila" && p.id !== BEFORE_SHAVUOS_PRIORITY_ID && ap.length > 1 && <IconBtn icon="close" size={22} iconSize={12} color={T.tFaint} onClick={()=>remPri(p.id)} title="Remove priority" aria-label="Remove priority" />}
                 </div>
               ))}
             </div>
-            <button onClick={()=>setShowPE(true)} style={{minHeight:40,fontSize:settingsType.control,color:T.tSoft,background:"none",border:`1px dashed ${T.brd}`,borderRadius:RADIUS.sm,padding:"8px 14px",cursor:"pointer",fontFamily:"system-ui",marginBottom:4}}>+ Add Priority</button>
+            <ActionBtn variant="outlined" icon="add" iconSize={14} outlineColor={T.brd} labelColor={T.tSoft} height={40} labelSize={settingsType.control}
+              onClick={()=>setShowPE(true)} style={{marginBottom:4}}>Add Priority</ActionBtn>
             {showPE && <PriEditor T={T} onAdd={(l,c)=>{addPri(l,c);setShowPE(false);}} onClose={()=>setShowPE(false)}/>}
 
             <div style={{height:1,background:T.brdS,margin:"16px 0"}}/>
@@ -297,10 +317,10 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               <div key={p.id} style={{display:"flex",alignItems:"center",gap:SP.md,marginBottom:10,minHeight:40}}>
                 <div style={{width:10,height:10,borderRadius:"50%",background:p.color,flexShrink:0}}/>
                 <span style={{flex:1,fontSize:settingsType.body,fontFamily:"system-ui"}}>{p.label}</span>
-                <input type="number" min="1" max="720"
+                <TextField type="number" min={1} max={720}
                   value={ageThresholds[p.id] ?? DEF_AGE_THRESHOLDS[p.id] ?? 72}
-                  onChange={e=>setAS(prev=>({...prev,ageThresholds:{...(prev.ageThresholds||DEF_AGE_THRESHOLDS),[p.id]:parseInt(e.target.value)||24}}))}
-                  style={{width:76,minHeight:36,padding:"6px 10px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:settingsType.control,fontFamily:"system-ui",outline:"none",textAlign:"right"}}
+                  onInput={e=>setAS(prev=>({...prev,ageThresholds:{...(prev.ageThresholds||DEF_AGE_THRESHOLDS),[p.id]:parseInt(e.target.value)||24}}))}
+                  style={{width:76, textAlign:'right', '--md-outlined-text-field-top-space':'6px', '--md-outlined-text-field-bottom-space':'6px'}}
                 />
                 <span style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",width:24}}>h</span>
               </div>
@@ -323,7 +343,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Completion sound</span>
                 <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Chime + haptic when task done</p>
               </div>
-              <button onClick={()=>setAS(p=>({...p,completionSound:!p.completionSound}))} style={tog(AS.completionSound)}><div style={knob(AS.completionSound)}/></button>
+              <Switch selected={!!AS.completionSound} onChange={()=>setAS(p=>({...p,completionSound:!p.completionSound}))} style={switchVars} />
             </div>
 
             <div style={rowSB}>
@@ -331,7 +351,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Legacy Complete UI</span>
                 <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Dedicated icon for completions without timestamps</p>
               </div>
-              <button onClick={()=>setAS(p=>({...p,legacyCompleteUI:!p.legacyCompleteUI}))} style={tog(AS.legacyCompleteUI)}><div style={knob(AS.legacyCompleteUI)}/></button>
+              <Switch selected={!!AS.legacyCompleteUI} onChange={()=>setAS(p=>({...p,legacyCompleteUI:!p.legacyCompleteUI}))} style={switchVars} />
             </div>
           </div>
         )}
@@ -345,26 +365,26 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             <div style={{marginBottom:12}}>
               <span style={{fontSize:settingsType.help,fontFamily:"system-ui",color:T.tSoft,display:"block",marginBottom:8}}>Mon–Thu:</span>
               <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                <input type="time" value={mrsWWindows.monThu.start}
-                  onChange={e=>setAS(p=>({...p,mrsWWindows:{...mrsWWindows,monThu:{...mrsWWindows.monThu,start:e.target.value}}}))}
-                  style={{minHeight:40,padding:"6px 10px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:settingsType.control,fontFamily:"system-ui",outline:"none"}}/>
+                <TextField type="time" value={mrsWWindows.monThu.start}
+                  onInput={e=>setAS(p=>({...p,mrsWWindows:{...mrsWWindows,monThu:{...mrsWWindows.monThu,start:e.target.value}}}))}
+                  style={{'--md-outlined-text-field-top-space':'6px', '--md-outlined-text-field-bottom-space':'6px'}}/>
                 <span style={{fontSize:settingsType.help,color:T.tFaint}}>to</span>
-                <input type="time" value={mrsWWindows.monThu.end}
-                  onChange={e=>setAS(p=>({...p,mrsWWindows:{...mrsWWindows,monThu:{...mrsWWindows.monThu,end:e.target.value}}}))}
-                  style={{minHeight:40,padding:"6px 10px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:settingsType.control,fontFamily:"system-ui",outline:"none"}}/>
+                <TextField type="time" value={mrsWWindows.monThu.end}
+                  onInput={e=>setAS(p=>({...p,mrsWWindows:{...mrsWWindows,monThu:{...mrsWWindows.monThu,end:e.target.value}}}))}
+                  style={{'--md-outlined-text-field-top-space':'6px', '--md-outlined-text-field-bottom-space':'6px'}}/>
               </div>
             </div>
 
             <div style={{marginBottom:20}}>
               <span style={{fontSize:settingsType.help,fontFamily:"system-ui",color:T.tSoft,display:"block",marginBottom:8}}>Friday:</span>
               <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                <input type="time" value={mrsWWindows.fri.start}
-                  onChange={e=>setAS(p=>({...p,mrsWWindows:{...mrsWWindows,fri:{...mrsWWindows.fri,start:e.target.value}}}))}
-                  style={{minHeight:40,padding:"6px 10px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:settingsType.control,fontFamily:"system-ui",outline:"none"}}/>
+                <TextField type="time" value={mrsWWindows.fri.start}
+                  onInput={e=>setAS(p=>({...p,mrsWWindows:{...mrsWWindows,fri:{...mrsWWindows.fri,start:e.target.value}}}))}
+                  style={{'--md-outlined-text-field-top-space':'6px', '--md-outlined-text-field-bottom-space':'6px'}}/>
                 <span style={{fontSize:settingsType.help,color:T.tFaint}}>to</span>
-                <input type="time" value={mrsWWindows.fri.end}
-                  onChange={e=>setAS(p=>({...p,mrsWWindows:{...mrsWWindows,fri:{...mrsWWindows.fri,end:e.target.value}}}))}
-                  style={{minHeight:40,padding:"6px 10px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:settingsType.control,fontFamily:"system-ui",outline:"none"}}/>
+                <TextField type="time" value={mrsWWindows.fri.end}
+                  onInput={e=>setAS(p=>({...p,mrsWWindows:{...mrsWWindows,fri:{...mrsWWindows.fri,end:e.target.value}}}))}
+                  style={{'--md-outlined-text-field-top-space':'6px', '--md-outlined-text-field-bottom-space':'6px'}}/>
               </div>
             </div>
 
@@ -375,7 +395,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Hourly auto-optimize</span>
                 <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Silent background reprioritize every hour</p>
               </div>
-              <button onClick={()=>setAS(p=>({...p,autoOptimize:!p.autoOptimize}))} style={tog(AS.autoOptimize)}><div style={knob(AS.autoOptimize)}/></button>
+              <Switch selected={!!AS.autoOptimize} onChange={()=>setAS(p=>({...p,autoOptimize:!p.autoOptimize}))} style={switchVars} />
             </div>
           </div>
         )}
@@ -436,10 +456,12 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 12px",lineHeight:settingsType.line}}>
               Auto-backups save weekly to your selected folder. Without a folder, reloads use cloud/local recovery and do not create Downloads files.
             </p>
-            <button
+            <ActionBtn variant="outlined" outlineColor={backupFolderInfo.set ? "#4caf50" : T.brd}
+              labelColor={backupFolderInfo.set ? "#4caf50" : T.tSoft}
+              height={44} labelSize={settingsType.control}
               onClick={handleSetBackupFolder}
               disabled={backupFolderSetting || !backupFolderInfo.available}
-              style={{width:"100%",minHeight:44,padding:"10px 14px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:backupFolderInfo.set?"rgba(80,180,100,0.08)":"none",color:backupFolderInfo.set?"#4caf50":T.tSoft,fontSize:settingsType.control,fontWeight:500,cursor:(backupFolderSetting || !backupFolderInfo.available)?"default":"pointer",fontFamily:"system-ui",marginBottom:8,opacity:backupFolderInfo.available?1:.6}}
+              style={{width:"100%",marginBottom:8,opacity:backupFolderInfo.available?1:.6}}
             >
               {backupFolderSetting
                 ? "Opening..."
@@ -448,7 +470,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                   : backupFolderInfo.available
                     ? "Choose backup folder..."
                     : "Folder backup unavailable in this browser"}
-            </button>
+            </ActionBtn>
             <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 16px",lineHeight:settingsType.line}}>
               {backupFolderInfo.set
                 ? (backupFolderInfo.permission === "granted" ? "Automatic weekly backups can write there silently." : "Chrome/Edge may ask once before writing there again.")
@@ -461,15 +483,17 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 {/* Switch account: signs out, so the next Google sign-in shows the
                     account picker (prompt=select_account) — the graceful way to
                     move between the rabbi and secondary Google accounts. */}
-                <button onClick={()=>{onClose();onSignOut();}} style={{width:"100%",minHeight:44,padding:"10px 14px",marginBottom:10,borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:"none",color:T.text,fontSize:settingsType.control,fontWeight:600,cursor:"pointer",fontFamily:"system-ui"}}>
+                <ActionBtn variant="outlined" outlineColor={T.brd} labelColor={T.text} height={44} labelSize={settingsType.control}
+                  onClick={()=>{onClose();onSignOut();}} style={{width:"100%",marginBottom:10,'--md-outlined-button-label-text-weight':'600'}}>
                   Switch Google account…
-                </button>
+                </ActionBtn>
                 <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 16px",lineHeight:settingsType.line}}>
                   Signs out here and returns to the sign-in screen, where you can pick a different Google account.
                 </p>
-                <button onClick={()=>{onClose();onSignOut();}} style={{width:"100%",minHeight:44,padding:"10px 14px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:"none",color:T.tSoft,fontSize:settingsType.control,fontWeight:500,cursor:"pointer",fontFamily:"system-ui"}}>
+                <ActionBtn variant="outlined" outlineColor={T.brd} labelColor={T.tSoft} height={44} labelSize={settingsType.control}
+                  onClick={()=>{onClose();onSignOut();}} style={{width:"100%"}}>
                   Sign out
-                </button>
+                </ActionBtn>
               </>
             )}
           </div>
@@ -494,11 +518,11 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             </div>
             <div style={{marginBottom:16}}>
               <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",fontWeight:500,display:"block",marginBottom:6}}>OAuth 2.0 Client ID</label>
-              <input
+              <TextField
                 value={AS.googleClientId||""}
-                onChange={e=>setAS(p=>({...p,googleClientId:e.target.value.trim()}))}
+                onInput={e=>setAS(p=>({...p,googleClientId:e.target.value.trim()}))}
                 placeholder="1234567890-abc….apps.googleusercontent.com"
-                style={{width:"100%",minHeight:42,padding:"8px 12px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,outline:"none",fontSize:NC_TYPE.meta,fontFamily:"monospace",background:T.bgW,color:T.text,boxSizing:"border-box"}}
+                style={{width:"100%", '--md-outlined-text-field-input-text-font':"monospace", '--md-outlined-text-field-input-text-size':`${NC_TYPE.meta}px`}}
               />
               <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",marginTop:6,lineHeight:settingsType.line}}>Stored only in your account — never sent to any server.</p>
             </div>
@@ -524,7 +548,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>AI move-up popup</span>
                 <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>When AI suggests moving a task above your pinned items, show a confirmation dialog</p>
               </div>
-              <button onClick={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,moveUpPopup:!ft.moveUpPopup}};})} style={tog(AS.features?.moveUpPopup===true)}><div style={knob(AS.features?.moveUpPopup===true)}/></button>
+              <Switch selected={AS.features?.moveUpPopup===true} onChange={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,moveUpPopup:!ft.moveUpPopup}};})} style={switchVars} />
             </div>
 
             <div style={{height:1,background:T.brdS,margin:"0 0 18px"}}/>
@@ -534,7 +558,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Chief of Staff</span>
                 <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>AI-powered chief of staff — shows in the sidebar under Experimental</p>
               </div>
-              <button onClick={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,chief:!ft.chief}};})} style={tog(AS.features?.chief===true)}><div style={knob(AS.features?.chief===true)}/></button>
+              <Switch selected={AS.features?.chief===true} onChange={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,chief:!ft.chief}};})} style={switchVars} />
             </div>
 
             <div style={{height:1,background:T.brdS,margin:"0 0 18px"}}/>
@@ -544,7 +568,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Health</span>
                 <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Health tracking and wellness features — shows in the sidebar under Experimental</p>
               </div>
-              <button onClick={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,health:!ft.health}};})} style={tog(AS.features?.health===true)}><div style={knob(AS.features?.health===true)}/></button>
+              <Switch selected={AS.features?.health===true} onChange={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,health:!ft.health}};})} style={switchVars} />
             </div>
           </div>
         )}

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ELEV, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
+import { ELEV, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP } from '../ui-tokens.jsx';
+import { ActionBtn, IconBtn, Switch, TextButton } from '../m3.jsx';
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 const M = {
@@ -245,11 +246,7 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "18px 20px 14px", borderBottom: `1px solid ${C.divider}` }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Connect Health Data</span>
-          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: RADIUS.pill, border: "none",
-            background: C.hover || "transparent", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", color: C.muted }}>
-            <span className="material-symbols-rounded" style={{ fontSize: 16 }}>close</span>
-          </button>
+          <IconBtn icon="close" size={28} iconSize={16} color={C.muted} onClick={onClose} title="Close" aria-label="Close" />
         </div>
 
         <div style={{ padding: "18px 20px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -287,17 +284,14 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
                 </div>
               )}
             </div>
-            <button onClick={onStartGoogleHealth} disabled={connectLoading} style={{
-              flexShrink: 0, height: 34, padding: "0 16px", borderRadius: 17,
-              border: "none", background: connectLoading ? C.divider : C.accent, color: "#fff",
-              cursor: connectLoading ? "wait" : "pointer", fontSize: 13,
-              fontFamily: NC_FONT_STACK, fontWeight: 600, whiteSpace: "nowrap",
-            }}>
+            <ActionBtn variant="filled" containerColor={connectLoading ? C.divider : C.accent} labelColor="#fff"
+              height={34} labelSize={13} onClick={onStartGoogleHealth} disabled={connectLoading}
+              style={{ flexShrink: 0, whiteSpace: "nowrap" }}>
               {connectLoading ? "Opening…"
                 : connectError ? "Retry"
                 : googleHealthLinked ? "Reconnect"
                 : "Connect"}
-            </button>
+            </ActionBtn>
           </div>
 
           {/* Manual log shortcut */}
@@ -307,25 +301,21 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
               <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 1 }}>Manual entry</div>
               <div style={{ fontSize: 11.5, color: C.muted }}>Log today's values yourself</div>
             </div>
-            <button onClick={onClose} style={{ height: 30, padding: "0 14px", borderRadius: 15,
-              border: `1px solid ${C.divider}`, background: "none", color: C.muted,
-              cursor: "pointer", fontSize: 12, fontFamily: NC_FONT_STACK }}>
+            <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} height={30} labelSize={12}
+              onClick={onClose}>
               Use Log button ↗
-            </button>
+            </ActionBtn>
           </div>
 
           {/* Other sources — collapsible */}
-          <button onClick={() => setShowOther(v => !v)} style={{
-            width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 5,
-            background: "none", border: "none", cursor: "pointer", padding: "2px 0",
-            color: C.faint, fontSize: 12, fontFamily: NC_FONT_STACK,
-          }}>
-            <span className="material-symbols-rounded" style={{ fontSize: 14,
+          <TextButton onClick={() => setShowOther(v => !v)} style={{ width: "100%",
+            '--md-text-button-label-text-color': C.faint, '--md-text-button-label-text-size': '12px' }}>
+            <span slot="icon" className="material-symbols-rounded" style={{ fontSize: 14,
               transition: "transform 0.15s", transform: showOther ? "rotate(180deg)" : "none" }}>
               expand_more
             </span>
-            Other sources (Apple Health)
-          </button>
+            <span>Other sources (Apple Health)</span>
+          </TextButton>
 
           {showOther && (
             <div style={{ border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, padding: "12px 14px",
@@ -390,16 +380,10 @@ function ManualEntryModal({ C, onClose, onSave }) {
           {field("Weight (lb)",      weight,    setWeight, "e.g. 174.5")}
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
-          <button onClick={onClose} style={{
-            height: 34, padding: "0 16px", borderRadius: RADIUS.sm,
-            border: `1px solid ${C.divider}`, background: "none", color: C.muted,
-            cursor: "pointer", fontSize: 12.5, fontFamily: NC_FONT_STACK,
-          }}>Cancel</button>
-          <button onClick={handleSave} style={{
-            height: 34, padding: "0 18px", borderRadius: RADIUS.sm,
-            border: "none", background: C.accent, color: "#fff",
-            cursor: "pointer", fontSize: 12.5, fontFamily: NC_FONT_STACK, fontWeight: 600,
-          }}>Save</button>
+          <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} height={34} labelSize={12.5}
+            onClick={onClose}>Cancel</ActionBtn>
+          <ActionBtn variant="filled" containerColor={C.accent} labelColor="#fff" height={34} labelSize={12.5}
+            onClick={handleSave}>Save</ActionBtn>
         </div>
       </div>
     </div>
@@ -484,14 +468,7 @@ export function HealthPage({
         borderBottom: `1px solid ${C.divider}`,
         background: C.bg,
       }}>
-        <button onClick={onClose} style={{
-          width: 32, height: 32, borderRadius: RADIUS.pill, border: "none",
-          background: C.hover || "transparent", cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color: C.muted, flexShrink: 0,
-        }}>
-          <span className="material-symbols-rounded" style={{ fontSize: 18 }}>close</span>
-        </button>
+        <IconBtn icon="close" size={32} iconSize={18} color={C.muted} onClick={onClose} title="Close" aria-label="Close Health" style={{ flexShrink: 0 }} />
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
           <span className="material-symbols-rounded" style={{ fontSize: 22, color: "#EA4335" }}>favorite</span>
@@ -511,46 +488,30 @@ export function HealthPage({
           borderRadius: 20, padding: 3,
         }}>
           {PERIODS.map(p => (
-            <button key={p.id} onClick={() => setPeriod(p.id)} style={{
-              height: 28, padding: "0 12px", borderRadius: 17, border: "none",
-              background: period === p.id ? C.bg : "transparent",
-              color: period === p.id ? C.text : C.muted,
-              cursor: "pointer", fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 500,
-              boxShadow: period === p.id ? ELEV[1] : "none",
-              transition: "all 0.15s",
-            }}>{p.label}</button>
+            <ActionBtn key={p.id} variant={period === p.id ? "tonal" : "text"} containerColor={C.bg}
+              labelColor={period === p.id ? C.text : C.muted} height={28} labelSize={12}
+              onClick={() => setPeriod(p.id)} style={{ boxShadow: period === p.id ? ELEV[1] : "none" }}>
+              {p.label}
+            </ActionBtn>
           ))}
         </div>
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-          <button onClick={() => setShowManual(true)} title="Log data manually" style={{
-            height: 32, padding: "0 12px", borderRadius: RADIUS.pill,
-            border: `1px solid ${C.divider}`, background: C.bg, color: C.text,
-            cursor: "pointer", fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 500,
-            display: "flex", alignItems: "center", gap: 5,
-          }}>
-            {suiteIcon("edit", 13)} Log
-          </button>
+          <ActionBtn variant="outlined" icon="edit" iconSize={13} outlineColor={C.divider} labelColor={C.text}
+            height={32} labelSize={12} onClick={() => setShowManual(true)} title="Log data manually">Log</ActionBtn>
           {connected && (
-            <button onClick={handleSync} disabled={syncing} title="Sync now" style={{
-              height: 32, padding: "0 12px", borderRadius: RADIUS.pill,
-              border: `1px solid ${C.divider}`, background: C.bg, color: C.text,
-              cursor: syncing ? "wait" : "pointer", fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 500,
-              display: "flex", alignItems: "center", gap: 5, opacity: syncing ? 0.6 : 1,
-            }}>
-              {suiteIcon(syncing ? "hourglass_top" : "sync", 13)} {syncing ? "Syncing…" : "Sync"}
-            </button>
+            <ActionBtn variant="outlined" icon={syncing ? "hourglass_top" : "sync"} iconSize={13}
+              outlineColor={C.divider} labelColor={C.text} height={32} labelSize={12}
+              onClick={handleSync} disabled={syncing} title="Sync now" style={{ opacity: syncing ? 0.6 : 1 }}>
+              {syncing ? "Syncing…" : "Sync"}
+            </ActionBtn>
           )}
-          <button onClick={() => setShowConnect(true)} style={{
-            height: 32, padding: "0 14px", borderRadius: RADIUS.pill,
-            border: "none", background: C.accent, color: "#fff",
-            cursor: "pointer", fontSize: 12, fontFamily: NC_FONT_STACK, fontWeight: 600,
-            display: "flex", alignItems: "center", gap: 5,
-          }}>
-            {suiteIcon(connected ? "manage_accounts" : "link", 13)}
+          <ActionBtn variant="filled" icon={connected ? "manage_accounts" : "link"} iconSize={13}
+            containerColor={C.accent} labelColor="#fff" height={32} labelSize={12}
+            onClick={() => setShowConnect(true)}>
             {connected ? "Manage" : "Connect"}
-          </button>
+          </ActionBtn>
         </div>
       </div>
 
@@ -584,12 +545,11 @@ export function HealthPage({
             <span style={{ fontSize: 12, color: C.text, fontFamily: NC_FONT_STACK }}>
               Google Health connected — hit <strong>Sync</strong> to pull your first data.
             </span>
-            <button onClick={handleSync} disabled={syncing} style={{
-              marginLeft: "auto", flexShrink: 0, height: 28, padding: "0 12px",
-              borderRadius: RADIUS.md, border: `1px solid ${C.success || "#34A853"}`, background: "none",
-              color: C.success || "#34A853", cursor: syncing ? "wait" : "pointer",
-              fontSize: 11.5, fontFamily: NC_FONT_STACK, fontWeight: 600, opacity: syncing ? 0.6 : 1,
-            }}>{syncing ? "Syncing…" : "Sync now"}</button>
+            <ActionBtn variant="outlined" outlineColor={C.success || "#34A853"} labelColor={C.success || "#34A853"}
+              height={28} labelSize={11.5} onClick={handleSync} disabled={syncing}
+              style={{ marginLeft: "auto", flexShrink: 0, opacity: syncing ? 0.6 : 1 }}>
+              {syncing ? "Syncing…" : "Sync now"}
+            </ActionBtn>
           </div>
         )}
 
@@ -698,22 +658,9 @@ export function HealthPage({
               <div style={{ fontSize: 13, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK }}>Show on NerveCenter</div>
               <div style={{ fontSize: 11.5, color: C.muted, fontFamily: NC_FONT_STACK, marginTop: 2 }}>Display a compact health strip in the NerveCenter dashboard</div>
             </div>
-            <button
-              onClick={() => onSetHealthCardVisible(!healthCardVisible)}
-              style={{
-                width: 42, height: 24, borderRadius: RADIUS.pill, border: "none",
-                background: healthCardVisible ? C.accent : C.divider,
-                cursor: "pointer", padding: 0, position: "relative", flexShrink: 0,
-                transition: "background 0.2s",
-              }}
-            >
-              <span style={{
-                position: "absolute", top: 3, left: healthCardVisible ? 21 : 3,
-                width: 18, height: 18, borderRadius: RADIUS.pill, background: "#fff",
-                boxShadow: "0 1px 4px rgba(0,0,0,0.18)",
-                transition: "left 0.2s",
-              }} />
-            </button>
+            <Switch selected={healthCardVisible} onChange={() => onSetHealthCardVisible(!healthCardVisible)}
+              style={{ '--md-switch-selected-track-color': C.accent, '--md-switch-selected-hover-track-color': C.accent,
+                '--md-switch-selected-focus-track-color': C.accent, '--md-switch-selected-pressed-track-color': C.accent }} />
           </div>
         )}
       </div>
@@ -779,21 +726,17 @@ function SetupStep({ num, color, title, steps, C }) {
     <div style={{
       border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, overflow: "hidden",
     }}>
-      <button onClick={() => setOpen(v => !v)} style={{
-        width: "100%", display: "flex", alignItems: "center", gap: 10,
-        padding: "11px 14px", border: "none", background: "none", cursor: "pointer",
-        textAlign: "left",
-      }}>
+      <TextButton onClick={() => setOpen(v => !v)} trailingIcon style={{ width: "100%" }}>
         <div style={{
           width: 22, height: 22, borderRadius: RADIUS.pill, background: `${color}18`,
           display: "flex", alignItems: "center", justifyContent: "center",
           flexShrink: 0, fontSize: 11, fontWeight: 700, color, fontFamily: NC_FONT_STACK,
         }}>{num}</div>
         <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK }}>{title}</span>
-        <span className="material-symbols-rounded" style={{ fontSize: 16, color: C.faint }}>
+        <span slot="icon" className="material-symbols-rounded" style={{ fontSize: 16, color: C.faint }}>
           {open ? "expand_less" : "expand_more"}
         </span>
-      </button>
+      </TextButton>
       {open && (
         <div style={{ padding: "0 14px 14px 46px", borderTop: `1px solid ${C.divider}` }}>
           <ol style={{ margin: "10px 0 0", padding: "0 0 0 16px", display: "flex", flexDirection: "column", gap: 5 }}>

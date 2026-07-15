@@ -20,6 +20,8 @@ import { MdOutlinedTextField } from '@material/web/textfield/outlined-text-field
 import { MdSwitch } from '@material/web/switch/switch.js';
 import { MdOutlinedSelect } from '@material/web/select/outlined-select.js';
 import { MdSelectOption } from '@material/web/select/select-option.js';
+import { MdCheckbox } from '@material/web/checkbox/checkbox.js';
+import { MdSlider } from '@material/web/slider/slider.js';
 
 // ─── Shared @material/web button layer ───────────────────────────────────────
 // Single home for the real Google Material 3 button + icon-button components,
@@ -80,6 +82,21 @@ export const Switch = createComponent({
   tagName: 'md-switch',
   elementClass: MdSwitch,
   events: { onChange: 'change' },
+});
+export const Checkbox = createComponent({
+  react: React,
+  tagName: 'md-checkbox',
+  elementClass: MdCheckbox,
+  events: { onChange: 'change' },
+});
+// Slider — the only M3-native control for a numeric range (`<input type="range">`
+// is on @material/web's own "invalid text-field type" list, so it can't go
+// through TextField). Fires `input` continuously while dragging, `change` on release.
+export const Slider = createComponent({
+  react: React,
+  tagName: 'md-slider',
+  elementClass: MdSlider,
+  events: { onInput: 'input', onChange: 'change' },
 });
 
 // DENSE_LIST_VARS — NerveCenter's tuned md-list-item density. M3's stock two-line

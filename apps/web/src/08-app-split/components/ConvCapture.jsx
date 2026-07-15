@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, aiParseConversation, fmtMs, uid } from '../../01-core.js';
 import { deletePendingRecording, savePendingRecording, transcribePendingRecording, updatePendingRecordingError } from '../../09-transcription-pen.js';
 import { cleanTheme, ELEV, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
-import { IconBtn } from '../m3.jsx';
+import { ActionBtn, IconBtn, List, ListItem } from '../m3.jsx';
 import { probeCallAudioFeed, openCallAudioFeed } from '../call-audio-feed.js';
 
 function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalendar, tasks, shailos, pris, aiOpts, T, callMode=false }) {
@@ -372,31 +372,25 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
           </div>
           {err && <div style={{ fontSize: NC_TYPE.meta, color: C.danger, fontFamily: NC_FONT_STACK, marginTop: SP.sm }}>{err}</div>}
         </div>
-        <div style={{ padding: `${SP.lg} ${SP.xl}`, display: 'flex', flexDirection: 'column', gap: SP.md }}>
-          <button onClick={startMicCapture} style={{ display: 'flex', alignItems: 'center', gap: SP.md, textAlign: 'left', background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, padding: `${SP.md} ${SP.lg}`, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
-            <span style={{ fontSize: 22 }}>🎤</span>
-            <span style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: NC_TYPE.body, fontWeight: 500, color: C.text }}>My microphone</span>
-              <span style={{ fontSize: NC_TYPE.meta, color: C.faint }}>Record what you say out loud</span>
-            </span>
-          </button>
+        <List style={{ padding: `${SP.lg} ${SP.xl}`, display: 'flex', flexDirection: 'column', gap: SP.md, background: 'none' }}>
+          <ListItem type="button" onClick={startMicCapture} style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, fontFamily: NC_FONT_STACK }}>
+            <span slot="start" style={{ fontSize: 22 }}>🎤</span>
+            <div slot="headline" style={{ fontSize: NC_TYPE.body, fontWeight: 500, color: C.text }}>My microphone</div>
+            <div slot="supporting-text" style={{ fontSize: NC_TYPE.meta, color: C.faint }}>Record what you say out loud</div>
+          </ListItem>
           {feedInfo?.available && (
-            <button onClick={startFeedCapture} style={{ display: 'flex', alignItems: 'center', gap: SP.md, textAlign: 'left', background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, padding: `${SP.md} ${SP.lg}`, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
-              <span style={{ fontSize: 22 }}>📞</span>
-              <span style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: NC_TYPE.body, fontWeight: 500, color: C.text }}>Live call feed (PC link)</span>
-                <span style={{ fontSize: NC_TYPE.meta, color: C.faint }}>Record the phone call straight from the DeskPhone bridge — no dialogs</span>
-              </span>
-            </button>
+            <ListItem type="button" onClick={startFeedCapture} style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, fontFamily: NC_FONT_STACK }}>
+              <span slot="start" style={{ fontSize: 22 }}>📞</span>
+              <div slot="headline" style={{ fontSize: NC_TYPE.body, fontWeight: 500, color: C.text }}>Live call feed (PC link)</div>
+              <div slot="supporting-text" style={{ fontSize: NC_TYPE.meta, color: C.faint }}>Record the phone call straight from the DeskPhone bridge — no dialogs</div>
+            </ListItem>
           )}
-          <button onClick={startCallCapture} style={{ display: 'flex', alignItems: 'center', gap: SP.md, textAlign: 'left', background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, padding: `${SP.md} ${SP.lg}`, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
-            <span style={{ fontSize: 22 }}>🔊</span>
-            <span style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: NC_TYPE.body, fontWeight: 500, color: C.text }}>Another screen's audio</span>
-              <span style={{ fontSize: NC_TYPE.meta, color: C.faint }}>Capture a tab/window/app's sound — check "Share audio" in the dialog</span>
-            </span>
-          </button>
-        </div>
+          <ListItem type="button" onClick={startCallCapture} style={{ background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, fontFamily: NC_FONT_STACK }}>
+            <span slot="start" style={{ fontSize: 22 }}>🔊</span>
+            <div slot="headline" style={{ fontSize: NC_TYPE.body, fontWeight: 500, color: C.text }}>Another screen's audio</div>
+            <div slot="supporting-text" style={{ fontSize: NC_TYPE.meta, color: C.faint }}>Capture a tab/window/app's sound — check "Share audio" in the dialog</div>
+          </ListItem>
+        </List>
       </div>
     </div>
   );
@@ -428,18 +422,21 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
         </div>
         <div style={{ padding: `${SP.lg} ${SP.xl}`, display: 'flex', gap: SP.sm, justifyContent: 'center', flexWrap: 'wrap' }}>
           {feedInfo?.available && (
-            <button onClick={startFeedCapture} style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: RADIUS.md, padding: `${SP.md} ${SP.xl}`, fontSize: NC_TYPE.body, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+            <ActionBtn variant="filled" containerColor={C.accent} labelColor="#fff" labelSize={NC_TYPE.body}
+              onClick={startFeedCapture}>
               Record live call feed
-            </button>
+            </ActionBtn>
           )}
-          <button onClick={startCallCapture} style={feedInfo?.available
-            ? { background: 'none', border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, padding: `${SP.md} ${SP.lg}`, fontSize: NC_TYPE.body, color: C.muted, cursor: 'pointer', fontFamily: NC_FONT_STACK }
-            : { background: C.accent, color: '#fff', border: 'none', borderRadius: RADIUS.md, padding: `${SP.md} ${SP.xl}`, fontSize: NC_TYPE.body, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+          <ActionBtn variant={feedInfo?.available ? "outlined" : "filled"}
+            outlineColor={C.divider} labelColor={feedInfo?.available ? C.muted : "#fff"}
+            containerColor={feedInfo?.available ? undefined : C.accent}
+            labelSize={NC_TYPE.body} onClick={startCallCapture}>
             {feedInfo?.available ? 'Screen-share instead' : 'Start capturing'}
-          </button>
-          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, padding: `${SP.md} ${SP.lg}`, fontSize: NC_TYPE.body, color: C.muted, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+          </ActionBtn>
+          <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} labelSize={NC_TYPE.body}
+            onClick={onClose}>
             Cancel
-          </button>
+          </ActionBtn>
         </div>
       </div>
     </div>
@@ -467,12 +464,14 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
           {err && <div style={{ fontSize: NC_TYPE.meta, color: C.danger, fontFamily: NC_FONT_STACK, marginTop: SP.sm }}>{err}</div>}
         </div>
         <div style={{ padding: `${SP.lg} ${SP.xl}`, display: 'flex', gap: SP.sm, justifyContent: 'center' }}>
-          <button onClick={stopAndProcess} style={{ background: C.danger, color: '#fff', border: 'none', borderRadius: RADIUS.md, padding: `${SP.md} ${SP.xl}`, fontSize: NC_TYPE.body, fontWeight: 500, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+          <ActionBtn variant="filled" containerColor={C.danger} labelColor="#fff" labelSize={NC_TYPE.body}
+            onClick={stopAndProcess}>
             Stop &amp; Process
-          </button>
-          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, padding: `${SP.md} ${SP.lg}`, fontSize: NC_TYPE.body, color: C.muted, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+          </ActionBtn>
+          <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} labelSize={NC_TYPE.body}
+            onClick={onClose}>
             Cancel
-          </button>
+          </ActionBtn>
         </div>
       </div>
     </div>
@@ -559,10 +558,11 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
                             />
                           </div>
                         ) : (
-                          <button onClick={() => updateShailaField(it.id, 'answer', '')}
-                            style={{ marginTop: 4, background: 'none', border: 'none', cursor: 'pointer', fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, padding: 0, textDecoration: 'underline' }}>
+                          <ActionBtn variant="text" labelColor={C.faint} labelSize={NC_TYPE.small}
+                            onClick={() => updateShailaField(it.id, 'answer', '')}
+                            style={{ marginTop: 4, textDecoration: 'underline' }}>
                             + Add answer
-                          </button>
+                          </ActionBtn>
                         )}
                         <div style={{ display: 'flex', gap: SP.sm, alignItems: 'center', marginTop: SP.xs }}>
                           <select value={it.cat} onChange={e => updateCategory(it.id, e.target.value)}
@@ -601,10 +601,11 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
                             <option value="shaila">Shaila</option>
                           </select>
                           {it.schedulingHint && (
-                            <button onClick={() => promoteToSchedule(it.id)}
-                              style={{ display: 'block', marginTop: 5, background: '#9B59B615', border: `1px solid #9B59B640`, borderRadius: RADIUS.xs, color: '#9B59B6', fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, padding: '3px 8px', cursor: 'pointer', textAlign: 'left' }}>
+                            <ActionBtn variant="tonal" containerColor="#9B59B615" labelColor="#9B59B6" labelSize={NC_TYPE.small}
+                              onClick={() => promoteToSchedule(it.id)}
+                              style={{ display: 'block', marginTop: 5, border: '1px solid #9B59B640' }}>
                               📅 Also add to Calendar: {it.schedulingHint}
-                            </button>
+                            </ActionBtn>
                           )}
                         </>)}
                         {it.cat === 'scheduleItems' && (
@@ -638,14 +639,15 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
 
         {/* Footer */}
         <div style={{ padding: `${SP.md} ${SP.xl} ${SP.lg}`, borderTop: `1px solid ${C.divider}`, display: 'flex', gap: SP.sm, flexShrink: 0 }}>
-          <button onClick={applyApproved} disabled={approvedCount === 0 || applying}
-            style={{ flex: 1, background: approvedCount > 0 && !applying ? C.accent : C.divider, color: approvedCount > 0 && !applying ? '#fff' : C.faint, border: 'none', borderRadius: RADIUS.sm, padding: SP.md, fontSize: NC_TYPE.body, fontWeight: 500, cursor: approvedCount > 0 && !applying ? 'pointer' : 'default', fontFamily: NC_FONT_STACK, transition: 'background 0.15s' }}>
+          <ActionBtn variant="filled" containerColor={approvedCount > 0 && !applying ? C.accent : C.divider}
+            labelColor={approvedCount > 0 && !applying ? '#fff' : C.faint} labelSize={NC_TYPE.body}
+            onClick={applyApproved} disabled={approvedCount === 0 || applying} style={{ flex: 1 }}>
             {applying ? 'Adding...' : `Add ${approvedCount > 0 ? approvedCount : 0} item${approvedCount !== 1 ? 's' : ''}`}
-          </button>
-          <button onClick={onClose}
-            style={{ padding: `${SP.md} ${SP.lg}`, background: 'none', border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, fontSize: NC_TYPE.body, color: C.muted, cursor: 'pointer', fontFamily: NC_FONT_STACK }}>
+          </ActionBtn>
+          <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} labelSize={NC_TYPE.body}
+            onClick={onClose}>
             Cancel
-          </button>
+          </ActionBtn>
         </div>
       </div>
     </div>
