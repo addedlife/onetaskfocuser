@@ -12,9 +12,19 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanTheme, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { runAIJob } from '../../01-core.js';
+import { shouldRunAndClaim } from '../ai-call-throttle.js';
 
-const RANK_LAST_RUN_KEY = 'ot_river_rank_last_run_v1';
-const RANK_MIN_GAP_MS = 4 * 60 * 1000; // 4-min cross-tab throttle
+// Owner ticket 7/15: this used to rerank every 4 min regardless of whether the
+// TaskRiver screen was even open (it's always mounted — see App.jsx), which alone
+// could burn ~300 calls/day for a feature nobody was looking at. New cadence: rank
+// once on app open, again on opening this screen (if it's been a couple minutes),
+// otherwise once an hour in the background. The throttle itself now lives in
+// Firestore (ai-call-throttle.js) instead of localStorage, so it's durable across a
+// remount and shared across every tab/device the same user has open.
+const RANK_THROTTLE_KEY = 'task-river-rank';
+const RANK_MIN_GAP_MS = 60 * 60 * 1000;      // hourly background baseline
+const VISIBLE_MIN_GAP_MS = 2 * 60 * 1000;    // don't force-refresh on rapid tab flips
+const RECHECK_INTERVAL_MS = 5 * 60 * 1000;   // how often to poll the throttle while blocked
 
 // ── color helpers ───────────────────────────────────────────────────────────
 function hexToRgb(hex) {
@@ -140,6 +150,11 @@ export function TaskRiverPanel({
   const retryCountdownRef = useRef(null);
   const retryStreakRef = useRef(0);
   const mountedAtRef = useRef(Date.now());
+  const forcedByUserRef = useRef(false);   // set by reprioritize(); bypasses the throttle entirely
+  const didMountRankRef = useRef(false);   // "run once on app open" fires exactly once
+  const prevVisibleRef = useRef(visible);  // detects the false -> true "opened this screen" transition
+  const watchdogRef = useRef(null);
+  const pendingRecheckRef = useRef(null);
   const rankKey = useMemo(() => items.map(i => i.id).join('|'), [items]);
 
   function cancelRetry() {
@@ -164,53 +179,77 @@ export function TaskRiverPanel({
   }, []);
 
   useEffect(() => {
-    if (!items.length) { setAiState('idle'); return; }
-    if (rankInFlight.current) return;
-    if (lastRankKeyRef.current === rankKey && Object.keys(aiMeta).length) { setAiState('ok'); return; }
+    if (!items.length) { setAiState('idle'); return undefined; }
+    if (rankInFlight.current) return undefined;
+
+    // Opening this screen always re-evaluates (the Firestore claim below still governs
+    // whether it actually fires) — clears the cache-hit shortcut just for this pass.
+    const justBecameVisible = visible && !prevVisibleRef.current;
+    prevVisibleRef.current = visible;
+    if (justBecameVisible) lastRankKeyRef.current = '';
+
+    if (lastRankKeyRef.current === rankKey && Object.keys(aiMeta).length) { setAiState('ok'); return undefined; }
     // 4-second startup delay on first call so snapshot.v1 gets the first flash-lite slot.
     const elapsed = Date.now() - mountedAtRef.current;
     if (elapsed < 4000 && retryStreakRef.current === 0 && !Object.keys(aiMeta).length) {
       const t = setTimeout(() => setRankNonce(n => n + 1), 4000 - elapsed);
       return () => clearTimeout(t);
     }
-    // Cross-tab throttle: skip if another tab ranked recently AND this isn't a retry or
-    // a user-forced reprioritize (reprioritize() clears lastRankKeyRef to signal forced).
-    const isUserForced = lastRankKeyRef.current === '';
-    const sinceLastRank = Date.now() - Number(localStorage.getItem(RANK_LAST_RUN_KEY) || 0);
-    if (!isUserForced && retryStreakRef.current === 0 && sinceLastRank < RANK_MIN_GAP_MS) {
-      const t = setTimeout(() => setRankNonce(n => n + 1), RANK_MIN_GAP_MS - sinceLastRank + 500);
-      return () => clearTimeout(t);
-    }
-    // New content or forced retry — cancel any waiting countdown and rank now
-    cancelRetry();
-    rankInFlight.current = true;
-    setAiState('ranking');
-    let settled = false;
-    const settle = (state, meta) => {
-      if (settled) return; settled = true; rankInFlight.current = false;
-      if (meta) {
-        try { localStorage.setItem(RANK_LAST_RUN_KEY, String(Date.now())); } catch {}
-        setAiMeta(meta); lastRankKeyRef.current = rankKey; retryStreakRef.current = 0;
-      } else if (state === 'error') {
-        retryStreakRef.current += 1;
-        scheduleRetry(Math.min(90, 20 * retryStreakRef.current));
+
+    const isUserForced = forcedByUserRef.current;
+    forcedByUserRef.current = false;
+    const isRetry = retryStreakRef.current > 0;
+    const justMounted = !didMountRankRef.current;
+    if (justMounted) didMountRankRef.current = true;
+    // App just opened, screen just opened, forced, or retrying -> bypass the wait
+    // entirely (still claims the slot, so the shared clock stays honest). Otherwise:
+    // the durable, cross-tab/cross-device hourly gate in ai-call-throttle.js.
+    const effectiveGapMs = (isUserForced || isRetry || justMounted) ? 0
+      : justBecameVisible ? VISIBLE_MIN_GAP_MS
+      : RANK_MIN_GAP_MS;
+
+    let cancelled = false;
+    shouldRunAndClaim(RANK_THROTTLE_KEY, effectiveGapMs).then(allowed => {
+      if (cancelled) return;
+      if (!allowed) {
+        pendingRecheckRef.current = setTimeout(() => setRankNonce(n => n + 1), RECHECK_INTERVAL_MS);
+        return;
       }
-      setAiState(state);
+      // Claimed — cancel any waiting countdown and rank now.
+      cancelRetry();
+      rankInFlight.current = true;
+      setAiState('ranking');
+      let settled = false;
+      const settle = (state, meta) => {
+        if (settled) return; settled = true; rankInFlight.current = false;
+        if (meta) {
+          setAiMeta(meta); lastRankKeyRef.current = rankKey; retryStreakRef.current = 0;
+        } else if (state === 'error') {
+          retryStreakRef.current += 1;
+          scheduleRetry(Math.min(90, 20 * retryStreakRef.current));
+        }
+        setAiState(state);
+      };
+      watchdogRef.current = setTimeout(() => settle('error'), 29000);
+      const payload = items.map(i => ({ id: i.id, type: i.type, text: (i.text || '').slice(0, 200), meta: i.meta || '' }));
+      runAIJob('dashboard.river_rank.v1', { items: payload, currentTime: now.toLocaleString() }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 8192 } })
+        .then(job => {
+          const ranking = job?.output?.ranking;
+          if (Array.isArray(ranking) && ranking.length) {
+            const map = {}; ranking.forEach(r => { if (r && r.id != null) map[r.id] = { score: r.score, label: r.label, reason: r.reason }; });
+            settle('ok', map);
+          } else { settle('error'); }
+        })
+        .catch(() => settle('error'))
+        .finally(() => { if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; } });
+    });
+
+    return () => {
+      cancelled = true;
+      if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
+      if (pendingRecheckRef.current) { clearTimeout(pendingRecheckRef.current); pendingRecheckRef.current = null; }
     };
-    const watchdog = setTimeout(() => settle('error'), 29000);
-    const payload = items.map(i => ({ id: i.id, type: i.type, text: (i.text || '').slice(0, 200), meta: i.meta || '' }));
-    runAIJob('dashboard.river_rank.v1', { items: payload, currentTime: now.toLocaleString() }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 8192 } })
-      .then(job => {
-        const ranking = job?.output?.ranking;
-        if (Array.isArray(ranking) && ranking.length) {
-          const map = {}; ranking.forEach(r => { if (r && r.id != null) map[r.id] = { score: r.score, label: r.label, reason: r.reason }; });
-          settle('ok', map);
-        } else { settle('error'); }
-      })
-      .catch(() => settle('error'))
-      .finally(() => clearTimeout(watchdog));
-    return () => clearTimeout(watchdog);
-  }, [rankKey, aiOpts, rankNonce]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rankKey, aiOpts, rankNonce, visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [order, setOrder] = useState(readOrder);
   useEffect(() => { writeOrder(order); }, [order]);
@@ -237,6 +276,7 @@ export function TaskRiverPanel({
     setOrder([]);
     cancelRetry();
     retryStreakRef.current = 0;
+    forcedByUserRef.current = true;
     lastRankKeyRef.current = '';
     setRankNonce(n => n + 1);
   };

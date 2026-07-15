@@ -1790,6 +1790,100 @@ async function recordAiLaneEvent(result, reason = "") {
   }
 }
 
+// ── AI call manager: usage tracking + leak detection ────────────────────────
+// Owner ticket 7/15: both Gemini keys burned their entire daily quota in under a day
+// from essentially one person's use — traced to background loops (TaskRiver's
+// ranking, NerveCenter's dashboard summary) whose "don't run too often" brake didn't
+// actually hold. This is the automatic watchdog for the NEXT version of that bug:
+// every successful call gets logged per job/task, and two cheap heuristics run on
+// each write — no ML, no new infra, just the same Firestore doc the AI status chip
+// already reads.
+const AI_USAGE_MAX_DAYS = 14;         // rolling window kept per job
+const AI_USAGE_MAX_CALL_TIMES = 20;   // rolling call-timestamp sample per job
+const AI_USAGE_MAX_LEAKS = 10;        // capped leak-history list
+const LEAK_SPIKE_MULTIPLIER = 3;      // today's count vs trailing-avg ratio that trips the spike check
+const LEAK_SPIKE_FLOOR = 20;          // ...but never flag a job doing normal single-digit volume
+const LEAK_REGULARITY_MIN_SAMPLES = 6;    // need this many recent calls before judging regularity
+const LEAK_REGULARITY_MAX_CV = 0.2;       // coefficient of variation (stddev/mean) below this reads as "clockwork"
+const LEAK_REGULARITY_MAX_INTERVAL_MIN = 90; // ...and only worth flagging if it's firing faster than this
+
+async function recordAiUsage(jobKey, result) {
+  const key = String(jobKey || "").trim() || "general";
+  const db = firestoreLimiter();
+  if (!db) return;
+
+  const ref = db.collection("_system").doc("ai-status");
+  const dayKey = pacificDayKey(new Date());
+  const nowMs = Date.now();
+
+  try {
+    await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      const data = snap.exists ? snap.data() : {};
+      const jobs = { ...(data.usage?.jobs || {}) };
+      const job = jobs[key] || { dailyCounts: {}, recentCallTimes: [] };
+      const dailyCounts = { ...(job.dailyCounts || {}) };
+      dailyCounts[dayKey] = (dailyCounts[dayKey] || 0) + 1;
+
+      // Prune to the trailing window, oldest first (day keys sort lexically).
+      const days = Object.keys(dailyCounts).sort();
+      while (days.length > AI_USAGE_MAX_DAYS) delete dailyCounts[days.shift()];
+
+      const recentCallTimes = [...(job.recentCallTimes || []), nowMs].slice(-AI_USAGE_MAX_CALL_TIMES);
+      jobs[key] = { dailyCounts, recentCallTimes };
+
+      // Spike check: today vs. this job's own trailing average (excludes today itself).
+      const todayCount = dailyCounts[dayKey] || 0;
+      const priorCounts = days.filter(d => d !== dayKey).map(d => dailyCounts[d]);
+      const trailingAvg = priorCounts.length ? priorCounts.reduce((a, b) => a + b, 0) / priorCounts.length : null;
+      const spikeFlag = trailingAvg != null && todayCount > Math.max(LEAK_SPIKE_FLOOR, trailingAvg * LEAK_SPIKE_MULTIPLIER);
+
+      // Regularity check: a background loop fires like clockwork; a human clicking a
+      // button doesn't. Low variation in the gaps between calls is the tell — and unlike
+      // the spike check, this can catch a brand-new leak on day one, before any history
+      // exists to compare against.
+      let regularityFlag = false, meanIntervalMin = null, coefficientOfVariation = null;
+      if (recentCallTimes.length >= LEAK_REGULARITY_MIN_SAMPLES) {
+        const intervals = [];
+        for (let i = 1; i < recentCallTimes.length; i++) intervals.push(recentCallTimes[i] - recentCallTimes[i - 1]);
+        const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+        const variance = intervals.reduce((a, b) => a + (b - mean) ** 2, 0) / intervals.length;
+        const stddev = Math.sqrt(variance);
+        coefficientOfVariation = mean > 0 ? stddev / mean : 1;
+        meanIntervalMin = mean / 60000;
+        regularityFlag = coefficientOfVariation < LEAK_REGULARITY_MAX_CV && meanIntervalMin < LEAK_REGULARITY_MAX_INTERVAL_MIN;
+      }
+
+      const leaks = Array.isArray(data.leaks) ? [...data.leaks] : [];
+      const alreadyFlaggedToday = leaks.some(l => l.jobId === key && l.dayKey === dayKey);
+      if ((spikeFlag || regularityFlag) && !alreadyFlaggedToday) {
+        const reason = regularityFlag
+          ? `Firing every ~${meanIntervalMin.toFixed(0)} min with very regular timing (${(coefficientOfVariation * 100).toFixed(0)}% variation) — looks automatic, not user-triggered.`
+          : `${todayCount} calls today vs. a ~${trailingAvg.toFixed(1)}/day trailing average (${(todayCount / trailingAvg).toFixed(1)}x normal).`;
+        const proposedFix = regularityFlag
+          ? `Check where "${key}" is called from in the frontend — confirm it's gated behind an explicit user action or a durable (Firestore-backed) throttle, not one that resets on remount or a new tab.`
+          : `Check for a retry loop without backoff, or multiple tabs/devices independently triggering the same job.`;
+        leaks.push({ jobId: key, dayKey, detectedAt: nowMs, reason, proposedFix, todayCount, trailingAvg: trailingAvg ?? 0 });
+        while (leaks.length > AI_USAGE_MAX_LEAKS) leaks.shift();
+      }
+
+      const monthPrefix = dayKey.slice(0, 7);
+      const hourAgo = nowMs - 60 * 60 * 1000;
+      const usage = {
+        totalToday: Object.values(jobs).reduce((sum, j) => sum + (j.dailyCounts[dayKey] || 0), 0),
+        totalThisHour: Object.values(jobs).reduce((sum, j) => sum + (j.recentCallTimes || []).filter(t => t >= hourAgo).length, 0),
+        totalThisMonth: Object.values(jobs).reduce((sum, j) =>
+          sum + Object.entries(j.dailyCounts).filter(([d]) => d.startsWith(monthPrefix)).reduce((s, [, c]) => s + c, 0), 0),
+        jobs,
+      };
+
+      tx.set(ref, { usage, leaks, updatedAt: nowMs }, { merge: true });
+    });
+  } catch (e) {
+    console.warn("[AI] Failed to record usage/leak-check (non-fatal):", e.message);
+  }
+}
+
 // Wraps callGemini with a genuine last-resort Claude tier. Only fires once every
 // Gemini credential lane is truly exhausted (callGemini's own final throw) — never on
 // ordinary request errors, which should surface to the caller as-is. Audio callers never
@@ -1976,7 +2070,9 @@ async function processAiPayload(payload = {}) {
     credential: payload.geminiCredential || payload.credential || payload.keyLane,
   };
 
-  return kind === "audio" ? callGemini(common) : callWithFallback(common);
+  const result = await (kind === "audio" ? callGemini(common) : callWithFallback(common));
+  recordAiUsage(task, result).catch(() => {});
+  return result;
 }
 
 function publicAiConfig() {

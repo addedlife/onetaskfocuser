@@ -21,7 +21,27 @@ export function normalizeAiLaneStatus(data) {
         .filter(e => e && typeof e === 'object')
         .map(e => ({ lane: String(e.lane || ''), label: String(e.label || ''), at: Number(e.at) || 0, reason: String(e.reason || '') }))
     : [];
-  return { currentLane, label, provider: d.provider || 'gemini', model: d.model || '', updatedAt: Number(d.updatedAt) || 0, recent };
+  const rawUsage = d.usage && typeof d.usage === 'object' ? d.usage : {};
+  const usage = {
+    totalToday: Number(rawUsage.totalToday) || 0,
+    totalThisHour: Number(rawUsage.totalThisHour) || 0,
+    totalThisMonth: Number(rawUsage.totalThisMonth) || 0,
+  };
+  // Owner ticket 7/15 (AI call manager): leak alerts the recordAiUsage() heuristics in
+  // _ai-core.cjs flag — a spike vs. a job's own trailing average, or suspiciously
+  // regular/clockwork timing that looks automatic rather than user-triggered.
+  const leaks = Array.isArray(d.leaks)
+    ? d.leaks
+        .filter(l => l && typeof l === 'object')
+        .map(l => ({
+          jobId: String(l.jobId || ''),
+          dayKey: String(l.dayKey || ''),
+          detectedAt: Number(l.detectedAt) || 0,
+          reason: String(l.reason || ''),
+          proposedFix: String(l.proposedFix || ''),
+        }))
+    : [];
+  return { currentLane, label, provider: d.provider || 'gemini', model: d.model || '', updatedAt: Number(d.updatedAt) || 0, recent, usage, leaks };
 }
 
 export function subscribeAiLaneStatus(onUpdate) {

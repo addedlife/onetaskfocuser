@@ -6,6 +6,12 @@ import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhone
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthCard } from './HealthCard.jsx';
 import { HealthPage } from './HealthPage.jsx';
+import { shouldRunAndClaim } from '../ai-call-throttle.js';
+
+// Owner ticket 7/15: same fix as NerveCenterNext.jsx — the 5-min gate lived only in an
+// in-memory ref, which reset on every remount and had no cross-tab/device awareness.
+// Now backed by Firestore (ai-call-throttle.js). Legacy (?ui=legacy) mirror.
+const SNAPSHOT_THROTTLE_KEY = 'dashboard-snapshot';
 
 function nerveSummarySource(item) {
   // Subtasks store the parent's name in parentTask and their own text in text —
@@ -903,7 +909,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const [ncSummaryRefreshNonce, setNcSummaryRefreshNonce] = useState(0);
   const ncInFlightRef = useRef(false); // a summary scan is in flight (survives effect re-runs)
   const ncFailStreakRef = useRef(0);   // consecutive failed scans → exponential retry backoff
-  const lastScanTimeRef = useRef(0);   // ms timestamp of the most recent snapshot scan start
+  const forcedSnapshotRef = useRef(false); // set by retryNcSummary(); bypasses the Firestore throttle
+  const pendingSnapshotRecheckRef = useRef(null);
   const [chiefLoading, setChiefLoading] = useState(false);
   const [chiefError, setChiefError] = useState("");
   const [chiefPrompt, setChiefPrompt] = useState("");
@@ -1363,90 +1370,97 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     if (ncInFlightRef.current) return undefined;
     // Wait for AI config before scanning; show spinner while it's still loading.
     if (!aiOpts) { if (aiConfigLoading) setNcSummaryLoading(true); return undefined; }
-    // Settle after first run: re-triggers within 5 min (tab switches, minor data changes)
-    // are silently deferred — no spinner, current result stays visible.
-    const now = Date.now();
+
     const SESSION_GAP_MS = 5 * 60 * 1000;
-    if (lastScanTimeRef.current > 0 && now - lastScanTimeRef.current < SESSION_GAP_MS) {
-      const wait = SESSION_GAP_MS - (now - lastScanTimeRef.current) + 100;
-      const t = window.setTimeout(() => setNcSummaryRefreshNonce(n => n + 1), wait);
-      return () => window.clearTimeout(t);
-    }
-    lastScanTimeRef.current = now;
-    ncInFlightRef.current = true;
-    setNcSummaryLoading(true);
-    setNcSummaryError(false);
-    setTaskSuggestionsLoading(true);
-    const scanKeyAtStart = ncSummaryScanKey;
-    const existingKeys = new Set(
-      primaryTaskQueue
-        .map(task => taskSuggestionKey(`${task.text || ""} ${nerveDisplaySummary(task, "")}`))
-        .filter(Boolean)
-    );
-    const validPriorityIds = new Set(taskSuggestionPriorities.map(p => p.id));
-    runAIJob("dashboard.snapshot.v1", {
-      context: chiefContext,
-      priorityOptions: taskSuggestionPriorities.map((p, index) => ({ id: p.id, label: p.label || p.id, rank: index + 1 })),
-      existingTasks: primaryTaskQueue.slice(0, 80).map(task => ({ text: nerveDisplaySummary(task, task.text || "") })),
-      learningProfile: chiefLearningProfile,
-    }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 1600 } })
-      .then(job => {
-        const out = job?.output;
-        if (!out || !out.supercrunch) {
+    const isForced = forcedSnapshotRef.current;
+    forcedSnapshotRef.current = false;
+    let cancelled = false;
+    shouldRunAndClaim(SNAPSHOT_THROTTLE_KEY, isForced ? 0 : SESSION_GAP_MS).then(allowed => {
+      if (cancelled) return;
+      if (!allowed) {
+        // Silently deferred — no spinner, current result stays visible.
+        pendingSnapshotRecheckRef.current = window.setTimeout(() => setNcSummaryRefreshNonce(n => n + 1), 30000);
+        return;
+      }
+      ncInFlightRef.current = true;
+      setNcSummaryLoading(true);
+      setNcSummaryError(false);
+      setTaskSuggestionsLoading(true);
+      const scanKeyAtStart = ncSummaryScanKey;
+      const existingKeys = new Set(
+        primaryTaskQueue
+          .map(task => taskSuggestionKey(`${task.text || ""} ${nerveDisplaySummary(task, "")}`))
+          .filter(Boolean)
+      );
+      const validPriorityIds = new Set(taskSuggestionPriorities.map(p => p.id));
+      runAIJob("dashboard.snapshot.v1", {
+        context: chiefContext,
+        priorityOptions: taskSuggestionPriorities.map((p, index) => ({ id: p.id, label: p.label || p.id, rank: index + 1 })),
+        existingTasks: primaryTaskQueue.slice(0, 80).map(task => ({ text: nerveDisplaySummary(task, task.text || "") })),
+        learningProfile: chiefLearningProfile,
+      }, aiOpts || {}, { genConfig: { temperature: 0.1, maxOutputTokens: 1600 } })
+        .then(job => {
+          const out = job?.output;
+          if (!out || !out.supercrunch) {
+            ncFailStreakRef.current += 1;
+            setNcSummary(null);
+            setNcSummaryError(true);
+            console.warn("[Snapshot] No output. Raw job:", JSON.stringify(job).slice(0, 400));
+            return;
+          }
+          ncFailStreakRef.current = 0;
+          const summaryPart = { supercrunch: out.supercrunch, signals: out.signals || [] };
+          setNcSummary(summaryPart);
+          setNcSummaryError(false);
+          const seen = new Set();
+          const rows = (out.taskSuggestions || [])
+            .map((item, index) => {
+              const text = cleanOneLine(item.text, 260);
+              const key = taskSuggestionKey(`${item.source || ""} ${item.sourceTitle || ""} ${text}`);
+              return {
+                id: key || `suggestion-${index}`,
+                key,
+                text,
+                priorityId: validPriorityIds.has(item.priorityId) ? item.priorityId : defaultSuggestionPriorityId,
+                source: cleanOneLine(item.source || "Dashboard", 40),
+                sourceKey: cleanOneLine(item.sourceKey || "", 80),
+                freshnessKey: cleanOneLine(item.freshnessKey || "", 80),
+                sourceTitle: cleanOneLine(item.sourceTitle || "", 160),
+                reason: cleanOneLine(item.reason || "", 160),
+                actionType: cleanOneLine(item.actionType || "", 40),
+              };
+            })
+            .map(item => decorateTaskSuggestion(item, chiefContext))
+            .filter(item => item.text && item.key && !shouldHideTaskSuggestion(item, chiefLearning))
+            .filter(item => {
+              const bare = taskSuggestionKey(item.text);
+              if (!bare || existingKeys.has(bare) || seen.has(item.key) || seen.has(item.suppressionKey) || seen.has(item.textKey)) return false;
+              seen.add(item.key); seen.add(item.suppressionKey); seen.add(item.textKey);
+              return true;
+            })
+            .slice(0, 3);
+          setTaskSuggestions(rows);
+          writeStorageJson(CHIEF_SUGGESTIONS_CACHE_KEY, { scanKey: ncSummaryScanKey, ts: Date.now(), rows });
+          writeStorageJson(SNAPSHOT_CACHE_KEY, { scanKey: scanKeyAtStart, ts: Date.now(), result: { ...summaryPart, taskSuggestions: rows } });
+        })
+        .catch(e => {
           ncFailStreakRef.current += 1;
           setNcSummary(null);
           setNcSummaryError(true);
-          console.warn("[Snapshot] No output. Raw job:", JSON.stringify(job).slice(0, 400));
-          return;
-        }
-        ncFailStreakRef.current = 0;
-        const summaryPart = { supercrunch: out.supercrunch, signals: out.signals || [] };
-        setNcSummary(summaryPart);
-        setNcSummaryError(false);
-        const seen = new Set();
-        const rows = (out.taskSuggestions || [])
-          .map((item, index) => {
-            const text = cleanOneLine(item.text, 260);
-            const key = taskSuggestionKey(`${item.source || ""} ${item.sourceTitle || ""} ${text}`);
-            return {
-              id: key || `suggestion-${index}`,
-              key,
-              text,
-              priorityId: validPriorityIds.has(item.priorityId) ? item.priorityId : defaultSuggestionPriorityId,
-              source: cleanOneLine(item.source || "Dashboard", 40),
-              sourceKey: cleanOneLine(item.sourceKey || "", 80),
-              freshnessKey: cleanOneLine(item.freshnessKey || "", 80),
-              sourceTitle: cleanOneLine(item.sourceTitle || "", 160),
-              reason: cleanOneLine(item.reason || "", 160),
-              actionType: cleanOneLine(item.actionType || "", 40),
-            };
-          })
-          .map(item => decorateTaskSuggestion(item, chiefContext))
-          .filter(item => item.text && item.key && !shouldHideTaskSuggestion(item, chiefLearning))
-          .filter(item => {
-            const bare = taskSuggestionKey(item.text);
-            if (!bare || existingKeys.has(bare) || seen.has(item.key) || seen.has(item.suppressionKey) || seen.has(item.textKey)) return false;
-            seen.add(item.key); seen.add(item.suppressionKey); seen.add(item.textKey);
-            return true;
-          })
-          .slice(0, 3);
-        setTaskSuggestions(rows);
-        writeStorageJson(CHIEF_SUGGESTIONS_CACHE_KEY, { scanKey: ncSummaryScanKey, ts: Date.now(), rows });
-        writeStorageJson(SNAPSHOT_CACHE_KEY, { scanKey: scanKeyAtStart, ts: Date.now(), result: { ...summaryPart, taskSuggestions: rows } });
-      })
-      .catch(e => {
-        ncFailStreakRef.current += 1;
-        setNcSummary(null);
-        setNcSummaryError(true);
-        setTaskSuggestions([]);
-        console.warn("[Snapshot] Error:", e?.message || String(e));
-      })
-      .finally(() => {
-        ncInFlightRef.current = false;
-        setNcSummaryLoading(false);
-        setTaskSuggestionsLoading(false);
-      });
-    return undefined;
+          setTaskSuggestions([]);
+          console.warn("[Snapshot] Error:", e?.message || String(e));
+        })
+        .finally(() => {
+          ncInFlightRef.current = false;
+          setNcSummaryLoading(false);
+          setTaskSuggestionsLoading(false);
+        });
+    });
+
+    return () => {
+      cancelled = true;
+      if (pendingSnapshotRecheckRef.current) { window.clearTimeout(pendingSnapshotRecheckRef.current); pendingSnapshotRecheckRef.current = null; }
+    };
   }, [ncSummaryScanKey, aiOpts, ncSummaryRefreshNonce]); // eslint-disable-line
 
   async function submitChiefPrompt(questionOverride = null) {
@@ -1906,7 +1920,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // It must NOT touch Gmail/Calendar — re-fetching app-config here re-triggered the Google
   // load and discarded already-computed email summaries (a wasted, visible AI re-run).
   const retryNcSummary = () => {
-    lastScanTimeRef.current = 0; // bypass in-session rate limit for manual rescan
+    forcedSnapshotRef.current = true; // bypass the throttle for a manual rescan
     ncFailStreakRef.current = 0;
     setNcSummaryError(false);
     onRefreshCalendar?.();

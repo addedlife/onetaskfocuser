@@ -61,9 +61,25 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
 
   // Live "which AI lane is answering requests" chip — Gemini primary is the quiet
   // default; overflow/Claude only ever show up here when Gemini's own quota is
-  // genuinely exhausted (_ai-core.cjs recordAiLaneEvent).
-  const [aiLane, setAiLane] = React.useState({ currentLane: 'gemini:primary', label: 'Gemini', recent: [] });
+  // genuinely exhausted (_ai-core.cjs recordAiLaneEvent). Also carries usage stats and
+  // any leak alerts the AI call manager's heuristics flagged (recordAiUsage()).
+  const [aiLane, setAiLane] = React.useState({ currentLane: 'gemini:primary', label: 'Gemini', recent: [], usage: { totalToday: 0, totalThisHour: 0, totalThisMonth: 0 }, leaks: [] });
   const [aiLanePopoverOpen, setAiLanePopoverOpen] = React.useState(false);
+  // Which leak timestamps the owner has already opened the popover for — clears the
+  // exclamation badge without needing a server round-trip.
+  const [seenLeakTimes, setSeenLeakTimes] = React.useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('nc_ai_leaks_seen') || '[]')); } catch (_) { return new Set(); }
+  });
+  const unseenLeaks = React.useMemo(() => (aiLane.leaks || []).filter(l => !seenLeakTimes.has(l.detectedAt)), [aiLane.leaks, seenLeakTimes]);
+  const markLeaksSeen = () => {
+    if (!aiLane.leaks?.length) return;
+    setSeenLeakTimes(prev => {
+      const next = new Set(prev);
+      aiLane.leaks.forEach(l => next.add(l.detectedAt));
+      try { localStorage.setItem('nc_ai_leaks_seen', JSON.stringify([...next].slice(-50))); } catch (_) {}
+      return next;
+    });
+  };
   React.useEffect(() => {
     const unsub = subscribeAiLaneStatus(setAiLane);
     return () => { try { unsub && unsub(); } catch (_) {} };
@@ -329,20 +345,29 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
 
       {/* AI lane status — owner ticket: make the Gemini-overflow/Claude fallback
           visible, not just automatic. Quiet dot on Gemini primary; amber on Gemini
-          overflow; red once it's fully fallen through to Claude. Click opens the
-          recent-switch history, same popover pattern as the account switcher. */}
+          overflow; red once it's fully fallen through to Claude. A second, smaller
+          exclamation badge appears when the AI call manager (recordAiUsage() in
+          _ai-core.cjs) has flagged a usage leak — a spike vs. a job's own trailing
+          average, or suspiciously clockwork timing that looks automatic rather than
+          user-triggered. Click opens usage stats + any flagged leaks with a plain-
+          language reason and proposed fix, same popover pattern as the account
+          switcher; opening it marks the current leaks seen and clears the badge. */}
       {(() => {
         const laneDot = aiLane.currentLane === 'claude:fallback' ? C.danger
           : aiLane.currentLane === 'gemini:overflow-01' ? C.warning
           : null; // primary lane: no dot, nothing to draw attention to
+        const hasUnseenLeak = unseenLeaks.length > 0;
         return (
           <div style={{ position: 'relative', width: '100%', flexShrink: 0 }}>
-            <button onClick={() => setAiLanePopoverOpen(p => !p)} title={`AI: ${aiLane.label}`} aria-label={`AI lane: ${aiLane.label}`} style={navBtn(aiLanePopoverOpen)}>
+            <button onClick={() => { setAiLanePopoverOpen(p => !p); markLeaksSeen(); }} title={`AI: ${aiLane.label}${hasUnseenLeak ? ' — possible leak flagged' : ''}`} aria-label={`AI lane: ${aiLane.label}`} style={navBtn(aiLanePopoverOpen)}>
               <Ripple />
               <span style={{ position: 'relative', display: 'inline-flex' }}>
                 {suiteIcon('bolt', ic(24))}
                 {laneDot && (
                   <span style={{ position: 'absolute', top: -1, right: -1, width: 8, height: 8, borderRadius: RADIUS.pill, background: laneDot, boxShadow: `0 0 0 2px ${C.bg}` }} />
+                )}
+                {hasUnseenLeak && (
+                  <span style={{ position: 'absolute', top: -3, left: -3, width: 12, height: 12, borderRadius: RADIUS.pill, background: C.danger, color: '#fff', fontSize: 9, fontWeight: 800, lineHeight: '12px', textAlign: 'center', boxShadow: `0 0 0 2px ${C.bg}` }}>!</span>
                 )}
               </span>
               {displayOpen && aiLane.label}
@@ -350,8 +375,26 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
             {aiLanePopoverOpen && (
               <>
                 <div style={{ position: 'fixed', inset: 0, zIndex: 9100 }} onClick={() => setAiLanePopoverOpen(false)} />
-                <div style={{ position: 'absolute', left: displayOpen ? 0 : '100%', bottom: 0, marginLeft: displayOpen ? 0 : 8, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, minWidth: 240, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', left: displayOpen ? 0 : '100%', bottom: 0, marginLeft: displayOpen ? 0 : 8, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, minWidth: 260, maxWidth: 320, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', overflow: 'hidden', maxHeight: '70vh', overflowY: 'auto' }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, padding: '8px 12px 4px' }}>AI lane — currently {aiLane.label}</div>
+                  <div style={{ display: 'flex', gap: 10, padding: '2px 12px 9px', fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK }}>
+                    <span><b style={{ color: C.text }}>{aiLane.usage.totalToday}</b> today</span>
+                    <span><b style={{ color: C.text }}>{aiLane.usage.totalThisHour}</b> this hour</span>
+                    <span><b style={{ color: C.text }}>{aiLane.usage.totalThisMonth}</b> this month</span>
+                  </div>
+                  {aiLane.leaks.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: C.danger, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, padding: '8px 12px 4px', borderTop: `1px solid ${C.divider}` }}>Possible leak</div>
+                      {[...aiLane.leaks].reverse().map((leak, i) => (
+                        <div key={i} style={{ padding: '6px 12px 10px' }}>
+                          <div style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: 600 }}>{leak.jobId}</div>
+                          <div style={{ fontSize: 11, color: C.muted, fontFamily: NC_FONT_STACK, marginTop: 2 }}>{leak.reason}</div>
+                          <div style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 3, fontStyle: 'italic' }}>{leak.proposedFix}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, padding: '8px 12px 4px', borderTop: `1px solid ${C.divider}` }}>Recent fallovers</div>
                   {aiLane.recent.length === 0 ? (
                     <div style={{ padding: '9px 12px 12px', fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>No fallovers yet — running on Gemini primary.</div>
                   ) : (
