@@ -250,6 +250,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const [zenDumpParsing, setZenDumpParsing] = useState(false);
   const [showZenReview, setShowZenReview] = useState(false);
   const [entryEnergy, setEntryEnergy] = useState(null); // energy level for new task: null | "high" | "low"
+  // Owner ticket: pin-to-top used to need adding the task, then going to Queue,
+  // finding it, and hitting the separate push-to-top action. This toggle lets
+  // the entry box itself pin on add — same "pinned" flag moveTop() sets.
+  const [pinOnAdd, setPinOnAdd] = useState(false);
+  const [qAddPin, setQAddPin] = useState(false); // same toggle for the Queue tab's own quick-add form
   const [clockTime, setClockTime] = useState(() => new Date());
   const [queueToast, setQueueToast] = useState(null); // {color, tmr} for "Added to queue" notice
   const [queueToastKey, setQueueToastKey] = useState(0);
@@ -1891,6 +1896,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     if (!tx || !selPri) return;
     const newT = {id:uid(), text:tx, completed:false, priority:selPri, createdAt:Date.now()};
     if (entryEnergy) newT.energy = entryEnergy;
+    if (pinOnAdd) newT.pinned = true;
     // Pre-assign shailaId BEFORE adding to state (prevents race with onSnapshot listener)
     if (selPri === "shaila") {
       const col = Store.shailosCol();
@@ -1899,8 +1905,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         pendingShailaIds.current.add(newT.shailaId);
       }
     }
-    uT(ts => doOpt([...ts, newT]));
-    setNewTask(""); setSelPri(null); setEntryEnergy(null); flashOpt();
+    uT(ts => doOpt(pinOnAdd ? [newT, ...ts] : [...ts, newT]));
+    setNewTask(""); setSelPri(null); setEntryEnergy(null); setPinOnAdd(false); flashOpt();
     // Flow 2: shaila-priority task → create shaila doc with the pre-assigned ID
     if (newT.shailaId) {
       Store.createShailaFromTask(newT);
@@ -3801,7 +3807,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               <div style={{width:"100%",display:"flex",flexDirection:"column",alignItems:"center",gap:"clamp(10px,2vh,20px)",paddingTop:"clamp(12px,2.5vh,28px)"}} onFocus={pauseZ} onBlur={resumeZ}
                 ref={el=>{
                   if(!el)return;
-                  el._outsideHandler=el._outsideHandler||((e)=>{if(selPri&&!el.contains(e.target)&&!e.target.closest('[data-voice-panel]')){setSelPri(null);setNewTask("");}});
+                  el._outsideHandler=el._outsideHandler||((e)=>{if(selPri&&!el.contains(e.target)&&!e.target.closest('[data-voice-panel]')){setSelPri(null);setNewTask("");setPinOnAdd(false);}});
                   document.removeEventListener("mousedown",el._outsideHandler);
                   document.addEventListener("mousedown",el._outsideHandler);
                 }}>
@@ -3849,9 +3855,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 {selPri && (
                   <div data-input-area="true" style={{width:"100%",animation:"ot-fade 0.2s"}}>
                     <form onSubmit={addTask} style={{display:"flex",gap:8,alignItems:"flex-end"}}>
-                      <textarea ref={inRef} value={newTask} onChange={e=>{setNewTask(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";}} placeholder={selPri==="shaila"?"Who + what shaila?":ph} autoFocus onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addTask(e);}if(e.key==="Escape"){setSelPri(null);setNewTask("");}}} rows={1} style={{flex:1,padding:"clamp(10px,1.5vw,14px) clamp(12px,2vw,18px)",fontSize:"clamp(14px,2vw,16px)",border:`2px solid ${gP(pris,selPri).color}`,borderRadius:RADIUS.md,outline:"none",background:C.bg,color:C.text,fontFamily:"Georgia,serif",resize:"none",overflow:"hidden",minHeight:44,lineHeight:1.4}}/>
+                      <textarea ref={inRef} value={newTask} onChange={e=>{setNewTask(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";}} placeholder={selPri==="shaila"?"Who + what shaila?":ph} autoFocus onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addTask(e);}if(e.key==="Escape"){setSelPri(null);setNewTask("");setPinOnAdd(false);}}} rows={1} style={{flex:1,padding:"clamp(10px,1.5vw,14px) clamp(12px,2vw,18px)",fontSize:"clamp(14px,2vw,16px)",border:`2px solid ${gP(pris,selPri).color}`,borderRadius:RADIUS.md,outline:"none",background:C.bg,color:C.text,fontFamily:"Georgia,serif",resize:"none",overflow:"hidden",minHeight:44,lineHeight:1.4}}/>
                       <button type="button" onClick={()=>setEntryEnergy(e=>e===null?"high":e==="high"?"low":null)} title={entryEnergy?`Energy: ${entryEnergy}`:"Set energy"} style={{width:40,height:40,borderRadius:RADIUS.pill,border:`1.5px solid ${entryEnergy?C.accent:C.divider}`,background:entryEnergy==="high"?`${C.accent}18`:entryEnergy==="low"?`${C.muted}18`:C.bgSoft,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}>
                         {entryEnergy==="high"?"⚡":entryEnergy==="low"?"🌊":"·"}
+                      </button>
+                      {/* Owner ticket: pin to top right from the entry box instead of adding
+                          then hunting it down in Queue to push up. */}
+                      <button type="button" onClick={()=>setPinOnAdd(p=>!p)} title={pinOnAdd?"Will pin to top of queue":"Pin to top of queue"} aria-pressed={pinOnAdd} style={{width:40,height:40,borderRadius:RADIUS.pill,border:`1.5px solid ${pinOnAdd?C.accent:C.divider}`,background:pinOnAdd?`${C.accent}18`:C.bgSoft,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",color:pinOnAdd?C.accent:C.muted,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}>
+                        {suiteIcon("push_pin",18)}
                       </button>
                       <FilledIconButton onClick={addTask} style={{"--md-filled-icon-button-container-color":gP(pris,selPri).color,"--md-filled-icon-button-icon-color":textOnColor(gP(pris,selPri).color),flexShrink:0}}><IC.Plus s={16} c={textOnColor(gP(pris,selPri).color)}/></FilledIconButton>
                     </form>
@@ -4041,11 +4052,16 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               </div>
               {/* Text input — shown once priority selected */}
               {qAddPri && (
-                <form onSubmit={e=>{e.preventDefault();const t=qAddText.trim();if(!t)return;const newQT={id:uid(),text:t,completed:false,priority:qAddPri,createdAt:Date.now()};uT(ts=>doOpt([...ts,newQT]));setQAddText("");setQAddPri(null);clearTimeout(queueToastTmr.current);const clr=gP(pris,newQT.priority).isShaila?"#C8A84C":gP(pris,newQT.priority).color;setQueueToast(clr);setQueueToastKey(k=>k+1);queueToastTmr.current=setTimeout(()=>setQueueToast(null),5000);triggerAIPrioritize();}} style={{display:"flex",gap:6,animation:"ot-fade 0.2s",minWidth:0}}>
+                <form onSubmit={e=>{e.preventDefault();const t=qAddText.trim();if(!t)return;const newQT={id:uid(),text:t,completed:false,priority:qAddPri,createdAt:Date.now()};if(qAddPin)newQT.pinned=true;uT(ts=>doOpt(qAddPin?[newQT,...ts]:[...ts,newQT]));setQAddText("");setQAddPri(null);setQAddPin(false);clearTimeout(queueToastTmr.current);const clr=gP(pris,newQT.priority).isShaila?"#C8A84C":gP(pris,newQT.priority).color;setQueueToast(clr);setQueueToastKey(k=>k+1);queueToastTmr.current=setTimeout(()=>setQueueToast(null),5000);triggerAIPrioritize();}} style={{display:"flex",gap:6,animation:"ot-fade 0.2s",minWidth:0}}>
                   <input autoFocus value={qAddText} onChange={e=>setQAddText(e.target.value)}
-                    onKeyDown={e=>{if(e.key==="Escape"){setQAddPri(null);setQAddText("");}}}
+                    onKeyDown={e=>{if(e.key==="Escape"){setQAddPri(null);setQAddText("");setQAddPin(false);}}}
                     placeholder={qAddPri==="shaila"?"Who + what shaila?":"What needs doing?"}
                     style={{flex:1,minWidth:0,padding:"7px 12px",fontSize:13,border:`1.5px solid ${gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color}`,borderRadius:RADIUS.sm,outline:"none",background:C.bgSoft,color:C.text,fontFamily:"Georgia,serif"}}/>
+                  {/* Owner ticket: pin to top right from the entry box. */}
+                  <button type="button" onClick={()=>setQAddPin(p=>!p)} title={qAddPin?"Will pin to top of queue":"Pin to top of queue"} aria-pressed={qAddPin}
+                    style={{width:34,height:34,borderRadius:RADIUS.sm,border:`1.5px solid ${qAddPin?C.accent:C.divider}`,background:qAddPin?`${C.accent}18`:C.bgSoft,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",color:qAddPin?C.accent:C.muted}}>
+                    {suiteIcon("push_pin",16)}
+                  </button>
                   <IconBtn variant="filled" type="submit" size={34} title="Add task" aria-label="Add task"
                     containerColor={gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color}
                     style={{"--md-filled-icon-button-container-shape":RADIUS.sm,flexShrink:0}}>
