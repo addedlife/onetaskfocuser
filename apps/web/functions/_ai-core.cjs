@@ -1577,13 +1577,6 @@ function buildAudioGeminiBody(base64, mimeType, prompt, genConfig = {}) {
   };
 }
 
-function isDailyQuotaError(status, message, retryAfterSecondsValue) {
-  const text = String(message || "").toLowerCase();
-  if (text.includes("daily safety cap") || text.includes("requestsperday") || text.includes("per day") || text.includes("rpd")) return true;
-  if (status === 429 && retryAfterSecondsValue && retryAfterSecondsValue > 3600) return true;
-  return false;
-}
-
 async function callGeminiOnce({ body, prompt, base64, mimeType, model, genConfig, credential }) {
   const requestBody = normalizeGeminiBody(body || (base64
     ? buildAudioGeminiBody(base64, mimeType, prompt, genConfig)
@@ -1642,8 +1635,17 @@ async function callGemini({ body, prompt, base64, mimeType, model, genConfig, cr
       });
     } catch (e) {
       lastError = e;
-      if (!isDailyQuotaError(e.statusCode, e.message, e.retryAfterSeconds)) throw e;
-      console.warn(`[AI] Gemini ${credential.id} hit daily quota for ${model}; trying next credential lane.`);
+      // Any 429 is worth trying the next credential lane, not just ones whose message
+      // literally reads like a daily cap. A per-minute pacing-queue timeout on one
+      // credential (reserveGeminiSlot giving up after GEMINI_QUEUE_TIMEOUT_MS) 429s with
+      // a short retryAfter and a generic "pacing requests" message — that used to throw
+      // straight through here without ever trying the overflow credential, which has its
+      // own independent RPM/RPD budget and was very likely free. A burst of traffic on one
+      // model (e.g. research's grounded search sharing the flash-lite lane with the
+      // dashboard-polish job) could fill the primary lane's per-minute slot and silently
+      // fail every caller on it instead of spilling over.
+      if (e.statusCode !== 429) throw e;
+      console.warn(`[AI] Gemini ${credential.id} returned 429 for ${model} (${e.message}); trying next credential lane.`);
     }
   }
 
