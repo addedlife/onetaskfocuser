@@ -439,11 +439,21 @@ async function postJson(host, path, payload, { timeoutMs = HOST_FETCH_TIMEOUT_MS
   if (!response.ok) throw new Error(`${path} returned ${response.status}`);
   const text = await response.text();
   if (!text) return {};
+  let parsed;
   try {
-    return JSON.parse(text);
+    parsed = JSON.parse(text);
   } catch {
     return { ok: true };
   }
+  // The host reports command outcomes as HTTP 200 + a JSON body (e.g.
+  // {"result":"failed"} when the phone rejects a PushMessage send) — never a
+  // non-2xx status. Callers like sendComposeMessage rely on this function
+  // throwing to flip a send's echo bubble to Failed; without this check a
+  // rejected MMS/SMS silently looked like "Sent" because only response.ok was
+  // ever inspected, not the body (owner ticket: recipient never got the real
+  // MMS but the composer showed it as sent).
+  if (parsed?.result === "failed") throw new Error(`${path}: ${parsed?.error || "the phone host reported failure"}`);
+  return parsed;
 }
 
 function formatFileSize(bytes = 0) {
@@ -552,13 +562,29 @@ function sendComposeMessage({ onCommand, to, body, attachments, label, echoId = 
   return true;
 }
 
+// Owner ticket: the compose tray showed only a filename chip for an attached
+// image — no way to confirm what you're actually about to send. Image
+// attachments now get a real thumbnail (an object URL onto the local File),
+// same as the inline images already shown for received MMS further down.
 function ComposeAttachmentTray({ attachments, onRemove, removeSource }) {
+  const [previewUrls, setPreviewUrls] = useState({});
+  useEffect(() => {
+    const next = {};
+    for (const a of attachments) {
+      if (a.contentType?.startsWith("image/") && a.file) next[a.id] = URL.createObjectURL(a.file);
+    }
+    setPreviewUrls(next);
+    return () => { Object.values(next).forEach((url) => URL.revokeObjectURL(url)); };
+  }, [attachments]);
+
   if (!attachments.length) return null;
   return (
     <div className="dp-compose-attachments">
       {attachments.map((attachment) => (
         <span className="dp-compose-attachment-chip" key={attachment.id}>
-          {icon(attachment.contentType?.startsWith("image/") ? "image" : "attach_file", 16)}
+          {previewUrls[attachment.id]
+            ? <img className="dp-compose-attachment-thumb" src={previewUrls[attachment.id]} alt="" />
+            : icon(attachment.contentType?.startsWith("image/") ? "image" : "attach_file", 16)}
           <span>{attachment.fileName}</span>
           <small>{formatFileSize(attachment.size)}</small>
           <button type="button" aria-label={`Remove ${attachment.fileName}`} data-native-source={removeSource} onClick={() => onRemove(attachment.id)}>
@@ -4845,6 +4871,13 @@ const css = `
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 6px;
+}
+.dp-compose-attachment-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 .dp-compose-attachment-chip span {
   min-width: 0;

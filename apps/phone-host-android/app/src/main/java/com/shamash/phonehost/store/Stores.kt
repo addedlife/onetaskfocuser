@@ -123,7 +123,13 @@ class MessageStore(context: Context) : JsonStore(context, "messages.json") {
      * the state blob returns it and the browser's bubble reconciles exactly.
      */
     @Synchronized
-    fun addLocalSent(to: String, body: String, status: String, clientMessageId: String? = null): SmsMessage {
+    fun addLocalSent(
+        to: String,
+        body: String,
+        status: String,
+        clientMessageId: String? = null,
+        attachments: List<MessageAttachment> = emptyList(),
+    ): SmsMessage {
         val msg = SmsMessage(
             localId = clientMessageId?.takeIf { it.isNotBlank() } ?: "local-${UUID.randomUUID()}",
             from = "Me > $to",
@@ -132,6 +138,10 @@ class MessageStore(context: Context) : JsonStore(context, "messages.json") {
             isRead = true,
             sendStatus = status,
         )
+        if (attachments.isNotEmpty()) {
+            msg.attachments.addAll(attachments)
+            msg.isMms = true
+        }
         messages.add(msg)
         markDirty()
         return msg

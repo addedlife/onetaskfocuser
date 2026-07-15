@@ -2461,6 +2461,12 @@
                                                     <DataTemplate>
                                                         <Border Background="{DynamicResource BgHover}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="10" Padding="8,4" Margin="0,0,6,6">
                                                             <StackPanel Orientation="Horizontal">
+                                                                <!-- Owner ticket: compose chip showed only a filename for image
+                                                                     attachments, no way to confirm what you're about to send. -->
+                                                                <Border Width="22" Height="22" CornerRadius="4" ClipToBounds="True" Margin="0,0,6,0"
+                                                                        Visibility="{Binding IsImage, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                                    <Image Source="{Binding Image}" Stretch="UniformToFill"/>
+                                                                </Border>
                                                                 <TextBlock Text="{Binding DisplayName}" FontSize="12" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" MaxWidth="180"/>
                                                                 <Button Content="&#xE5CD;" FontFamily="{StaticResource MaterialIconsRoundFont}" FontSize="14" Width="22" Height="22" Margin="6,0,0,0" Padding="0" Style="{StaticResource CompactIconButton}"
                                                                         Command="{Binding DataContext.RemoveComposeAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -3214,6 +3220,12 @@
                                     <DataTemplate>
                                         <Border Background="{DynamicResource BgHover}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="10" Padding="8,4" Margin="0,0,6,6">
                                             <StackPanel Orientation="Horizontal">
+                                                <!-- Owner ticket: compose chip showed only a filename for image
+                                                     attachments, no way to confirm what you're about to send. -->
+                                                <Border Width="22" Height="22" CornerRadius="4" ClipToBounds="True" Margin="0,0,6,0"
+                                                        Visibility="{Binding IsImage, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <Image Source="{Binding Image}" Stretch="UniformToFill"/>
+                                                </Border>
                                                 <TextBlock Text="{Binding DisplayName}" FontSize="12" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" MaxWidth="220"/>
                                                 <Button Content="&#xE5CD;" FontFamily="{StaticResource MaterialIconsRoundFont}" FontSize="14" Width="22" Height="22" Margin="6,0,0,0" Padding="0" Style="{StaticResource CompactIconButton}"
                                                         Command="{Binding DataContext.RemoveComposeAttachmentCommand, RelativeSource={RelativeSource AncestorType=Window}}"

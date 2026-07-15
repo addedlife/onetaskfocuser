@@ -566,6 +566,45 @@ class HostService : Service() {
                     if (to.isBlank() || text.isBlank()) bad("missing ?to=X&body=Y")
                     else ok(ApiJson.result(if (sendMessageBlocking(to, text, cid.ifBlank { null })) "sent" else "failed"))
                 }
+                req.method == "POST" && req.path == "/send-with-attachments" -> {
+                    // JSON body (not query string): {to, body, cid, attachments:[{fileName,contentType,dataBase64}]}
+                    // Same contract as the Windows host's ControlApiService — this route
+                    // simply didn't exist here before, so a web composer send routed to
+                    // the tablet host 404'd (now correctly surfaced as a failure since the
+                    // web's postJson checks response.ok; previously with no route at all it
+                    // was an obvious 404, but the fix belongs here: implement the route).
+                    try {
+                        val json = JSONObject(req.body)
+                        val to = json.optString("to").trim()
+                        val text = json.optString("body").trim()
+                        val cid = json.optString("cid").trim()
+                        val uploads = json.optJSONArray("attachments") ?: JSONArray()
+                        val decoded = mutableListOf<MessageAttachment>()
+                        for (i in 0 until uploads.length()) {
+                            val item = uploads.getJSONObject(i)
+                            var dataBase64 = item.optString("dataBase64").trim()
+                            if (dataBase64.isBlank()) continue
+                            val comma = dataBase64.indexOf(',')
+                            if (dataBase64.startsWith("data:", ignoreCase = true) && comma >= 0) {
+                                dataBase64 = dataBase64.substring(comma + 1)
+                            }
+                            val bytes = try { android.util.Base64.decode(dataBase64, android.util.Base64.DEFAULT) } catch (ex: IllegalArgumentException) {
+                                return bad("invalid attachment data for ${item.optString("fileName", "attachment")}")
+                            }
+                            if (bytes.isEmpty()) continue
+                            decoded.add(MessageAttachment(
+                                contentType = item.optString("contentType").ifBlank { "application/octet-stream" },
+                                fileName = item.optString("fileName").ifBlank { "attachment-${decoded.size + 1}.bin" },
+                                data = bytes,
+                            ))
+                        }
+                        if (to.isBlank()) bad("missing to")
+                        else if (text.isBlank() && decoded.isEmpty()) bad("missing body or attachments")
+                        else ok(ApiJson.result(if (sendMessageBlocking(to, text, cid.ifBlank { null }, decoded)) "sent" else "failed"))
+                    } catch (ex: Exception) {
+                        bad("invalid JSON: ${ex.message}")
+                    }
+                }
                 req.method == "POST" && req.path == "/refresh" -> {
                     executor.execute {
                         runCatching {
@@ -632,13 +671,18 @@ class HostService : Service() {
         return ok(ApiJson.result("conversation marked ${if (read) "read" else "unread"}"))
     }
 
-    private fun sendMessageBlocking(to: String, text: String, clientMessageId: String? = null): Boolean {
+    private fun sendMessageBlocking(
+        to: String,
+        text: String,
+        clientMessageId: String? = null,
+        attachments: List<MessageAttachment> = emptyList(),
+    ): Boolean {
         if (!map.isConnected) { HostLog.add("[SEND] rejected — MAP not connected"); return false }
         sending.set(true)
         realOpActive = true
-        val local = messageStore.addLocalSent(to, text, "sending", clientMessageId)
+        val local = messageStore.addLocalSent(to, text, "sending", clientMessageId, attachments)
         return try {
-            val sent = map.sendMessage(to, text)
+            val sent = map.sendMessage(to, text, attachments)
             if (sent) {
                 val handle = runCatching { map.getNewestSentHandle() }.getOrNull()
                 map.rememberKnownHandle(handle)
