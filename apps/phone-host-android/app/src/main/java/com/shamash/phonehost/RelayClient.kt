@@ -47,6 +47,18 @@ class RelayClient(private val host: HostService) {
         private const val RTDB_COMMANDS_URL =
             "https://$FB_PROJECT-default-rtdb.firebaseio.com/phone-relay/commands.json"
 
+        // RTDB auth: phone-relay/commands used to be a public .read/.write:true
+        // rule — anyone, signed in or not, could read the mailbox or inject dial/
+        // send commands. It now requires a Firebase ID token carrying
+        // relay_device:true. We get one by POSTing RELAY_SECRET to the phone-relay
+        // Function's ?action=relay-token (mints a custom token, same mechanism
+        // DeskPhone's RelayService.cs uses), then exchanging it via Identity
+        // Toolkit. Cached ~55 min, refreshed 5 min before its 1-hour expiry.
+        private const val RELAY_TOKEN_MINT_URL =
+            "https://us-central1-$FB_PROJECT.cloudfunctions.net/phoneRelay?action=relay-token"
+        private const val IDENTITY_SIGNIN_URL =
+            "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=$FB_API_KEY"
+
         // Host arbitration (owner doc) — see phone-host-control.js / RelayService.cs.
         private const val OWNER_DOC =
             "projects/$FB_PROJECT/databases/(default)/documents/phone-relay/owner"
@@ -90,6 +102,49 @@ class RelayClient(private val host: HostService) {
     @Volatile private var pushNowRequested = false
     @Volatile private var pushErrors = 0
     @Volatile private var shouldHold = true   // default true = legacy "always try to hold"
+
+    @Volatile private var relayIdToken: String? = null
+    @Volatile private var relayIdTokenExpiryMs: Long = 0L
+    private val relayTokenLock = Any()
+
+    /** Mints/caches the Firebase ID token the RTDB command mailbox now requires.
+     *  Returns null (drainTick just skips that tick) if RELAY_SECRET isn't
+     *  configured or either hop fails — never throws. */
+    private fun getRelayIdToken(): String? {
+        val now = System.currentTimeMillis()
+        relayIdToken?.let { if (now < relayIdTokenExpiryMs) return it }
+        synchronized(relayTokenLock) {
+            val now2 = System.currentTimeMillis()
+            relayIdToken?.let { if (now2 < relayIdTokenExpiryMs) return it }
+            if (BuildConfig.RELAY_SECRET.isBlank()) {
+                HostLog.add("[RELAY AUTH] no relay secret configured — cannot mint an RTDB token")
+                return null
+            }
+            return try {
+                val mintResp = httpPostForBody(
+                    RELAY_TOKEN_MINT_URL, "",
+                    mapOf("X-Relay-Secret" to BuildConfig.RELAY_SECRET, "Content-Type" to "application/json")
+                )
+                if (mintResp == null) { HostLog.add("[RELAY AUTH] token mint failed"); return null }
+                val customToken = JSONObject(mintResp).optString("customToken")
+                if (customToken.isBlank()) return null
+
+                val signInBody = JSONObject().put("token", customToken).put("returnSecureToken", true).toString()
+                val signInResp = httpPostForBody(IDENTITY_SIGNIN_URL, signInBody, mapOf("Content-Type" to "application/json"))
+                if (signInResp == null) { HostLog.add("[RELAY AUTH] sign-in failed"); return null }
+                val signInJson = JSONObject(signInResp)
+                val idToken = signInJson.optString("idToken")
+                if (idToken.isBlank()) return null
+                val expiresInSec = signInJson.optString("expiresIn", "3600").toIntOrNull() ?: 3600
+                relayIdToken = idToken
+                relayIdTokenExpiryMs = System.currentTimeMillis() + maxOf(60_000L, (expiresInSec - 300) * 1000L)
+                idToken
+            } catch (ex: Exception) {
+                HostLog.add("[RELAY AUTH] ${ex.javaClass.simpleName}: ${ex.message}")
+                null
+            }
+        }
+    }
 
     /** Whether THIS host should currently hold the phone (owner-doc arbitration).
      *  HostService's watchdog + startup connect gate on this so the tablet and the
@@ -186,12 +241,13 @@ class RelayClient(private val host: HostService) {
 
     private fun drainTick() {
         if (!host.isFullyConnected()) return   // parked host: the mailbox belongs to the live host
-        val raw = httpGet(RTDB_COMMANDS_URL) ?: return
+        val bearer = getRelayIdToken()
+        val raw = httpGetAuthed(RTDB_COMMANDS_URL, bearer) ?: return
         val trimmed = raw.trim()
         if (trimmed.isEmpty() || trimmed == "null" || trimmed == "[]" || trimmed == "{}") return
 
         // Clear BEFORE dispatch so a slow command can't be re-read and re-run.
-        httpSend("PUT", RTDB_COMMANDS_URL, "null")
+        httpSendAuthed("PUT", RTDB_COMMANDS_URL, "null", bearer)
 
         for (cmd in normalizeRtdbArray(trimmed)) {
             val rawPath = cmd.optString("path")
@@ -484,4 +540,43 @@ class RelayClient(private val host: HostService) {
         runCatching { (if (code in 200..299) conn.inputStream else conn.errorStream)?.close() }
         code
     } catch (_: Exception) { -1 }
+
+    // ── Auth-header variants, used only for the RTDB command mailbox ─────
+    private fun httpGetAuthed(url: String, bearer: String?): String? = try {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.connectTimeout = HTTP_TIMEOUT_MS
+        conn.readTimeout = HTTP_TIMEOUT_MS
+        if (bearer != null) conn.setRequestProperty("Authorization", "Bearer $bearer")
+        if (conn.responseCode in 200..299) conn.inputStream.bufferedReader().use { it.readText() } else null
+    } catch (_: Exception) { null }
+
+    private fun httpSendAuthed(method: String, url: String, body: String, bearer: String?): Int = try {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.requestMethod = method
+        conn.connectTimeout = HTTP_TIMEOUT_MS
+        conn.readTimeout = HTTP_TIMEOUT_MS
+        conn.doOutput = true
+        conn.setRequestProperty("Content-Type", "application/json")
+        if (bearer != null) conn.setRequestProperty("Authorization", "Bearer $bearer")
+        conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+        val code = conn.responseCode
+        runCatching { (if (code in 200..299) conn.inputStream else conn.errorStream)?.close() }
+        code
+    } catch (_: Exception) { -1 }
+
+    /** POST with custom headers, returning the response body only on 2xx (used
+     *  for the relay-token mint + Identity Toolkit exchange, neither of which
+     *  fits the existing httpSend, which returns a status code, not a body). */
+    private fun httpPostForBody(url: String, body: String, headers: Map<String, String>): String? = try {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.connectTimeout = HTTP_TIMEOUT_MS
+        conn.readTimeout = HTTP_TIMEOUT_MS
+        conn.doOutput = true
+        for ((k, v) in headers) conn.setRequestProperty(k, v)
+        conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+        val code = conn.responseCode
+        val text = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() }
+        if (code in 200..299) text else null
+    } catch (_: Exception) { null }
 }
