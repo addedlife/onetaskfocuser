@@ -1,7 +1,7 @@
 {
-  "name": "OneTask Switchboard",
-  "short_name": "OneTask",
-  "description": "OneTask, Shailos, and DeskPhone web shell with offline launch support.",
+  "name": "Shamash Pro 4",
+  "short_name": "Shamash Pro",
+  "description": "Shamash Pro 4 — tasks, Shailos, and DeskPhone web shell with offline launch support.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

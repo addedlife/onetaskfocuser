@@ -389,8 +389,8 @@ const Store = {
       const { backup, counts } = await this._buildBackup(d, forced ? "explicit" : "daily_auto");
       const content = JSON.stringify(backup, null, 2);
       const fileName = forced
-        ? `onetask_explicit_backup_${this._backupStamp(true)}.json`
-        : `onetask_daily_backup_${dayStamp}.json`;
+        ? `shamash_pro_4_explicit_backup_${this._backupStamp(true)}.json`
+        : `shamash_pro_4_daily_backup_${dayStamp}.json`;
 
       const dirHandle = await this._idbGet('backupDir');
       if (!dirHandle) {
@@ -408,7 +408,7 @@ const Store = {
 
       localStorage.setItem(`${this.lsKey()}_last_file_bk`, dayStamp);
       // Keep 30 daily backups (~1 month of history)
-      if (!forced) await this._pruneBackups(dirHandle, 'onetask_daily_backup_', 30);
+      if (!forced) await this._pruneBackups(dirHandle, 'shamash_pro_4_daily_backup_', 30);
       console.log(`[Backup] Daily backup saved: ${fileName} (${counts.tasks} tasks, ${counts.shailos} shailos)`);
       return { ...counts, fileName };
     } catch(e) { console.warn('[Backup] Daily auto-backup failed:', e); }
@@ -815,7 +815,7 @@ const Store = {
     try {
       const { backup, counts } = await this._buildBackup(appState, "manual");
       const content = JSON.stringify(backup, null, 2);
-      const fileName = `onetask_full_backup_${this._backupStamp(true)}.json`;
+      const fileName = `shamash_pro_4_full_backup_${this._backupStamp(true)}.json`;
 
       const dirHandle = await this._idbGet('backupDir');
       if (dirHandle) {

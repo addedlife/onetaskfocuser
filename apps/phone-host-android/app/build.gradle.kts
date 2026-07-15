@@ -4,7 +4,7 @@ plugins {
 }
 
 // ── ONE bump point per release ──────────────────────────────────────────────
-// hostBuild drives versionCode/versionName, the launcher label ("Phone Host b7"),
+// hostBuild drives versionCode/versionName, the launcher label ("Shamash Phone Host b7"),
 // the icon background color (cycles a palette so every build looks different on
 // the home screen — owner ticket: "put a different icon each build so it's
 // recognizable"), and HostService.BUILD_STAMP via BuildConfig.HOST_BUILD.
@@ -30,7 +30,7 @@ android {
         targetSdk = 34
         versionCode = hostBuild
         versionName = "b$hostBuild"
-        resValue("string", "app_name", "Phone Host b$hostBuild")
+        resValue("string", "app_name", "Shamash Phone Host b$hostBuild")
         resValue("color", "ic_launcher_bg", iconPalette[hostBuild % iconPalette.size])
         buildConfigField("int", "HOST_BUILD", "$hostBuild")
     }
