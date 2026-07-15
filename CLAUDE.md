@@ -23,13 +23,21 @@ being promised in chat and forgotten. Read `BRIEF.txt` and `AGENTS.md` too.
 The app version is the single constant in `apps/web/src/version.js`, shown in the left rail.
 **Bump it on every release** and update `APP_VERSION_DATE` to the release date.
 
-Scheme (reproducible from git history):
-- **major** = product generation — "Shamash **Pro 4**" → `4`.
-- **minor** = number of feature releases: `git log --pretty=%s | grep -cE '^feat'`
-- **patch** = number of fixes/tweaks: `git log --pretty=%s | grep -cE '^(fix|style)'`
+Real SemVer (`major.minor.patch`) — each level resets everything below it:
+- **major** = product generation, set manually — "Shamash **Pro 4**" → `4`. Only changes when
+  the owner explicitly declares a new generation. Resets minor and patch to 0 when it changes.
+- **minor** = feature releases since the last major bump. A `feat:` release increments minor
+  and **resets patch to 0**.
+- **patch** = fix/polish releases since the last minor bump. A `fix:`/`style:` release
+  increments patch only.
 
-After committing a `feat:`-prefixed change, bump minor; after a `fix:`/`style:` change, bump patch;
-then push live per the release policy above.
+Do not recompute from a full `git log` grep — that was the old (broken) scheme and it drifts,
+because it counts every matching commit ever instead of resetting. Just look at the current
+`APP_VERSION` and bump from there: `feat:` → `(major).(minor+1).0`; `fix:`/`style:` →
+`(major).(minor).(patch+1)`. Then push live per the release policy above.
+
+Full reconstructed version history (back through the pre-Pro-4 era) lives in
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## M3 component rule (STANDING — hard constraint, no exceptions)
 

@@ -1,21 +1,22 @@
 // ── App version stamp ───────────────────────────────────────────────────────
 // Shown in the left rail. BUMP APP_VERSION on every release (see CLAUDE.md "Release policy").
 //
-// Numbering scheme (reproducible from git history):
-//   major = product generation — "Shamash Pro 4" → 4
-//   minor = number of feature releases   (`feat:` commits)
-//   patch = number of fixes/tweaks       (`fix:` + `style:` commits)
+// Real SemVer (major.minor.patch), not a lifetime counter:
+//   major = product generation, set manually — "Shamash Pro 4" → 4
+//   minor = feature releases since the last major bump; a feat: release increments
+//           minor and RESETS patch to 0
+//   patch = fix:/style: releases since the last minor bump
 //
-// To recompute after new commits:
-//   minor: git log --pretty=%s | grep -cE '^feat'
-//   patch: git log --pretty=%s | grep -cE '^(fix|style)'
-export const APP_VERSION = "4.45.137";
+// On your next release: if it's a feat:, do (major).(minor+1).0
+//                        if it's a fix:/style:, do (major).(minor).(patch+1)
+// Full reconstructed history: see CHANGELOG.md.
+export const APP_VERSION = "4.76.5";
 
 // The "updated" stamp is taken from the real build time (injected by Vite's `define` in
 // vite.config.js as __BUILD_TIME__), so every deploy — including multiple pushes in one
 // day — auto-stamps its own date AND time, with no manual entry. Falls back to this ISO
 // date if the build global isn't present (e.g. unit tests running the raw source).
-export const APP_VERSION_DATE = "2026-07-14";
+export const APP_VERSION_DATE = "2026-07-15";
 const BUILD_TIME = (typeof __BUILD_TIME__ !== "undefined" && __BUILD_TIME__) ? __BUILD_TIME__ : null;
 
 function versionDate() {
