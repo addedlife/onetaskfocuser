@@ -18,7 +18,7 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type, X-Relay-Secret, Authorization",
 };
 
-const { FIREBASE_PROJECT_ID, FIREBASE_WEB_API_KEY } = require("./_config.cjs");
+const { FIREBASE_PROJECT_ID, FIREBASE_WEB_API_KEY, getAdminAuth } = require("./_config.cjs");
 const FS_BASE = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/phone-relay`;
 const FS_MEDIA_BASE = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/phone-media`;
 // Command mailbox lives in the Realtime Database (not Firestore) so DeskPhone can
@@ -193,6 +193,22 @@ module.exports = async (req, res) => {
       return sendOk(res, commands);
     } catch (e) {
       return sendErr(res, 500, "Failed to drain commands: " + e.message);
+    }
+  }
+
+  // ── POST relay-token (DeskPhone → cloud, relay secret required) ──────────
+  // The commands mailbox lives in the Realtime Database so DeskPhone can hold a
+  // true SSE stream on it (see RelayService.cs) — but RTDB rules can't check an
+  // arbitrary shared secret, only a real Firebase auth token. This mints a
+  // short-lived custom token (exchanged by DeskPhone for an ID token) carrying
+  // relay_device:true, which database.rules.json requires for that one path.
+  if (action === "relay-token" && method === "POST") {
+    if (!secret || incoming !== secret) return sendErr(res, 401, "unauthorized");
+    try {
+      const customToken = await getAdminAuth().createCustomToken("deskphone-relay", { relay_device: true });
+      return sendOk(res, { customToken });
+    } catch (e) {
+      return sendErr(res, 500, "Failed to mint relay token: " + e.message);
     }
   }
 

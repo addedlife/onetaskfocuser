@@ -4,8 +4,8 @@
     ".write": false,
     "phone-relay": {
       "commands": {
-        ".read": true,
-        ".write": true
+        ".read": "auth != null && auth.token.relay_device === true",
+        ".write": "auth != null && auth.token.relay_device === true"
       }
     }
   }

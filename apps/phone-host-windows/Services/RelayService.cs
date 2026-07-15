@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.IO;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
@@ -248,6 +249,74 @@ public class RelayService : IDisposable
     private readonly HttpClient _streamHttp = new() { Timeout = Timeout.InfiniteTimeSpan };
     private volatile bool _rtdbStreamHealthy;
 
+    // ── RTDB auth: the commands mailbox used to be a public .read/.write:true
+    // rule (anyone, signed in or not, could read/inject phone commands). It now
+    // requires a Firebase ID token carrying relay_device:true. DeskPhone gets one
+    // by POSTing its existing X-Relay-Secret to the phone-relay Function's
+    // ?action=relay-token (mints a custom token), then exchanging that for a real
+    // ID token via Identity Toolkit. Cached and refreshed ~5 min before its
+    // 1-hour expiry; every direct RTDB call below attaches it as a Bearer header.
+    private const string RelayTokenMintUrl = "https://us-central1-" + FB_PROJECT + ".cloudfunctions.net/phoneRelay?action=relay-token";
+    private const string IdentityToolkitSignInUrl = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=" + FB_API_KEY;
+    private string? _relayIdToken;
+    private DateTime _relayIdTokenExpiryUtc = DateTime.MinValue;
+    private readonly SemaphoreSlim _relayTokenGate = new(1, 1);
+
+    private async Task<string?> GetRelayIdTokenAsync(CancellationToken ct)
+    {
+        if (_relayIdToken != null && DateTime.UtcNow < _relayIdTokenExpiryUtc) return _relayIdToken;
+        await _relayTokenGate.WaitAsync(ct);
+        try
+        {
+            if (_relayIdToken != null && DateTime.UtcNow < _relayIdTokenExpiryUtc) return _relayIdToken;
+            if (string.IsNullOrWhiteSpace(_relayKey))
+            {
+                LogLine?.Invoke("[RELAY AUTH] no relay secret configured — cannot mint an RTDB token");
+                return null;
+            }
+            using var mintReq = new HttpRequestMessage(HttpMethod.Post, RelayTokenMintUrl);
+            mintReq.Headers.Add("X-Relay-Secret", _relayKey);
+            using var mintResp = await _http.SendAsync(mintReq, ct);
+            if (!mintResp.IsSuccessStatusCode)
+            {
+                LogLine?.Invoke($"[RELAY AUTH] token mint HTTP {(int)mintResp.StatusCode}");
+                return null;
+            }
+            using var mintDoc = JsonDocument.Parse(await mintResp.Content.ReadAsStringAsync(ct));
+            var customToken = mintDoc.RootElement.GetProperty("customToken").GetString();
+
+            using var signInReq = new HttpRequestMessage(HttpMethod.Post, IdentityToolkitSignInUrl)
+            {
+                Content = new StringContent(
+                    JsonSerializer.Serialize(new { token = customToken, returnSecureToken = true }),
+                    Encoding.UTF8, "application/json")
+            };
+            using var signInResp = await _http.SendAsync(signInReq, ct);
+            if (!signInResp.IsSuccessStatusCode)
+            {
+                LogLine?.Invoke($"[RELAY AUTH] sign-in HTTP {(int)signInResp.StatusCode}");
+                return null;
+            }
+            using var signInDoc = JsonDocument.Parse(await signInResp.Content.ReadAsStringAsync(ct));
+            _relayIdToken = signInDoc.RootElement.GetProperty("idToken").GetString();
+            var expiresInSec = int.TryParse(signInDoc.RootElement.GetProperty("expiresIn").GetString(), out var s) ? s : 3600;
+            _relayIdTokenExpiryUtc = DateTime.UtcNow.AddSeconds(Math.Max(60, expiresInSec - 300));
+            return _relayIdToken;
+        }
+        catch (Exception ex)
+        {
+            LogLine?.Invoke($"[RELAY AUTH] {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+        finally { _relayTokenGate.Release(); }
+    }
+
+    private async Task AttachRelayAuthAsync(HttpRequestMessage req, CancellationToken ct)
+    {
+        var idToken = await GetRelayIdTokenAsync(ct);
+        if (idToken != null) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", idToken);
+    }
+
     private const int DrainStreamHealthyMs = 120_000; // safety sweep behind a live stream
     private const int DrainIdleMs          = 6_000;   // stream down, no recent commands
     private const int DrainActiveMs        = 2_000;   // stream down, commands flowing
@@ -265,6 +334,7 @@ public class RelayService : IDisposable
             {
                 using var req = new HttpRequestMessage(HttpMethod.Get, RtdbCommandsUrl);
                 req.Headers.Accept.ParseAdd("text/event-stream");
+                await AttachRelayAuthAsync(req, ct);
                 using var resp = await _streamHttp.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
                 if (!resp.IsSuccessStatusCode)
                 {
@@ -325,7 +395,9 @@ public class RelayService : IDisposable
         // Parked host: the command mailbox belongs to whichever host holds the
         // phone — draining here would execute commands on a phone-less PC.
         if (IsPhoneConnected?.Invoke() == false) return false;
-        using var resp = await _http.GetAsync(RtdbCommandsUrl, ct);
+        using var getReq = new HttpRequestMessage(HttpMethod.Get, RtdbCommandsUrl);
+        await AttachRelayAuthAsync(getReq, ct);
+        using var resp = await _http.SendAsync(getReq, ct);
         if (!resp.IsSuccessStatusCode)
         {
             LogLine?.Invoke($"[RELAY DRAIN] RTDB HTTP {(int)resp.StatusCode}");
@@ -337,6 +409,7 @@ public class RelayService : IDisposable
         using (var clearReq = new HttpRequestMessage(HttpMethod.Put, RtdbCommandsUrl)
         { Content = new StringContent("null", Encoding.UTF8, "application/json") })
         {
+            await AttachRelayAuthAsync(clearReq, ct);
             await _http.SendAsync(clearReq, ct);
         }
 
