@@ -1,5 +1,11 @@
 [
     {
+        "version":  "b337",
+        "timestamp":  "2026-07-15 09:42:50",
+        "notes":  "Compose attachment chips now show a real image thumbnail for photos you\u0027re about to send, instead of just a filename - so you can confirm what you\u0027re sending before it goes out.",
+        "devNotes":  "Owner ticket: the compose-attachment DataTemplate in MainWindow.xaml (both the full and compact layouts) bound only DisplayName to text - MessageAttachment already had a lazily-loaded Image (BitmapImage) property used elsewhere for received MMS, it just was never wired into the outgoing compose chip. Added a small clipped Border+Image bound to IsImage/Image right before the filename text in both DataTemplate instances. No ViewModel or model changes - purely a missing binding in the existing template. Paired with a web-side fix (10-deskphone-web.jsx ComposeAttachmentTray) and a new Android host /send-with-attachments route in the same pass; also fixed a web bug where postJson() only checked HTTP status and never the {result:\"failed\"} body the host returns when a phone rejects a PushMessage send, so a rejected MMS previously showed as a false \"Sent\" with no error."
+    },
+    {
         "version":  "b336",
         "timestamp":  "2026-07-14 08:15:36",
         "notes":  "Fixes four open owner tickets: sent texts no longer double up on this host, the paired-phone list now leads with what\u0027s actually connected right now instead of every device ever paired, and hanging up a real call after a long conversation no longer logs it as a missed call.",
