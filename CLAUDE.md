@@ -23,6 +23,41 @@ being promised in chat and forgotten. Read `BRIEF.txt` and `AGENTS.md` too.
   `HANDOFF.md` §9 — these can wipe live data), schema migrations, secret/permission changes, or
   anything that could be destructive or hard to reverse.
 
+## Concurrent coding session protocol (STANDING)
+
+More than one Claude Code session sometimes works this repo at the same time (different
+windows/devices, or the owner running one session while another is mid-task). They share one
+working directory and one `origin/main` — a session can silently start editing a file another
+session already has open, mid-edit, uncommitted (this has actually happened: one session found
+`google-search.js`/`brave-search.js` changing on disk, seconds old and not its own, while doing
+unrelated work). Firebase project `onetaskonly-app` already has a `coding-sessions` top-level
+Firestore collection for this — reachable with the Firebase MCP tools you already have
+(`firestore_query_collection` / `firestore_update_document` / `firestore_delete_document`), no
+extra script or credential needed.
+
+**Before starting substantial work** (more than a quick one-file fix):
+1. Query `coding-sessions` for docs with `status: "active"`. Ignore any whose `lastPing` is
+   more than ~2 hours old (an abandoned/crashed session, safe to ignore or overwrite).
+2. If a live entry's `task`/`filesTouched` clearly overlaps what you're about to do, don't
+   silently proceed — tell the user you found a concurrent session on related work and ask
+   how to proceed.
+3. Register your own entry: doc id = `<YYYY-MM-DD>-<short-kebab-task-slug>`, fields
+   `{startedAt, lastPing, task: "one-line description", filesTouched: [...], status: "active"}`
+   (all as plain ints/strings — `firestore_update_document` needs a `fields`/`updateMask` shape,
+   same as writing a Bug Log note).
+4. Update `lastPing`/`filesTouched` if the session runs long or the file set changes.
+
+**Before every push:** run `git status`/`git diff` first. Uncommitted changes to files you
+didn't touch this session are a live signal of a concurrent session — never stage, commit, or
+overwrite them; leave them alone and flag it to the user rather than guessing.
+
+**When you finish:** set your entry's `status` to `"done"` (or delete the doc) so it stops
+reading as active for the next session.
+
+This is intentionally lightweight — a presence/advisory system, not a hard lock. It only helps
+once a session actually reads this file and follows it; it can't retroactively coordinate with
+a session that started before this section existed.
+
 ## Versioning (STANDING)
 
 The app version is the single constant in `apps/web/src/version.js`, shown in the left rail.
