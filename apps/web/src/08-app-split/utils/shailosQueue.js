@@ -184,4 +184,4 @@ function buildNerveShailaRows(tasks = [], priorities = [], sourceShailos = []) {
     .sort((a, b) => (a._nerveOrder - b._nerveOrder) || ((a._nerveCreatedAt || 0) - (b._nerveCreatedAt || 0)));
 }
 
-export { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack };
+export { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack, shailaText, shailaCreatedAt, shailaField };

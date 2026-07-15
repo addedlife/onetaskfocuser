@@ -28,7 +28,7 @@ const UI_NEXT = (() => {
   try { return new URLSearchParams(window.location.search).get('ui') !== 'legacy'; }
   catch { return true; }
 })();
-import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack } from './utils/shailosQueue.js';
+import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack, shailaText, shailaCreatedAt, shailaField } from './utils/shailosQueue.js';
 import { createComponent } from '@lit/react';
 import { MdIconButton } from '@material/web/iconbutton/icon-button.js';
 import { MdOutlinedIconButton } from '@material/web/iconbutton/outlined-icon-button.js';
@@ -179,6 +179,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const [blockedModal, setBlockedModal] = useState(null);
   const [ctxPicker, setCtxPicker] = useState(null);
   const [firstStepModal, setFirstStepModal] = useState(null); // {task, step, loading, edited}
+  // Owner ticket: a clean rail function that looks at everything on the plate + the
+  // calendar and suggests exactly three good things to focus on now — positive-only,
+  // no edit/retry (per the ticket, this is a suggestion-only box for now).
+  const [focusSuggest, setFocusSuggest] = useState(null); // null | {loading:true} | {items:[...]} | {error:"..."}
   const [energyModal, setEnergyModal] = useState(false);
   const [showBodyDouble, setShowBodyDouble] = useState(false);
   const [bdMinimized, setBdMinimized] = useState(false);
@@ -2242,6 +2246,41 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     }
   }
 
+  // ─── Focus suggestions: three positive-only recommendations, on demand ───
+  function openFocusSuggestions() {
+    setFocusSuggest({ loading: true });
+    if (!hasAI) { setFocusSuggest({ error: "AI isn't configured, so I can't generate suggestions right now." }); return; }
+    const hebrewDate = (() => {
+      try {
+        const now = new Date();
+        const dayN = parseInt(new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric' }).format(now), 10);
+        const month = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', { month: 'long' }).format(now);
+        const ones = ['','א','ב','ג','ד','ה','ו','ז','ח','ט'];
+        const tens = ['','י','כ','ל'];
+        const letter = dayN === 15 ? 'טו' : dayN === 16 ? 'טז' : (tens[Math.floor(dayN / 10)] || '') + (ones[dayN % 10] || '');
+        return `${letter} ${month}`;
+      } catch (_) { return ''; }
+    })();
+    const openTasks = actT.filter(t => !t.parentTask || !actT.some(o => o.parentTask === t.parentTask && o.id !== t.id))
+      .map(t => ({ text: t.text, priority: gP(pris, t.priority).label, ageHours: getTaskAgeHours(t) }));
+    const openShailos = (shailosSnapshot || []).filter(s => !shailaIsAnswered(s))
+      .map(s => {
+        const createdMs = shailaCreatedAt(shailaField(s, "createdAt"));
+        return { text: shailaText(s), askedBy: shailaField(s, "askerName"), ageHours: createdMs ? (Date.now() - createdMs) / 3600000 : null };
+      });
+    const upcoming = (calendarEvents || []).slice(0, 40)
+      .map(e => ({ summary: e.summary, start: e.start?.dateTime || e.start?.date || "" }));
+    runAIJob("dashboard.focus_suggestions.v1", {
+      currentTime: new Date().toLocaleString(), hebrewDate,
+      tasks: openTasks, shailos: openShailos, calendarEvents: upcoming,
+    }, aiOpts).then(job => {
+      const items = Array.isArray(job?.output) ? job.output : [];
+      setFocusSuggest(items.length ? { items } : { error: "Couldn't put together suggestions just now — try again in a moment." });
+    }).catch(() => {
+      setFocusSuggest({ error: "Couldn't put together suggestions just now — try again in a moment." });
+    });
+  }
+
   // ─── Create the confirmed first step as a Now task ───────────────────────
   function confirmFirstStep() {
     if (!firstStepModal?.edited?.trim()) return;
@@ -3124,6 +3163,37 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         </div>
       )}
 
+      {/* Focus suggestions — clean box, three positive-only recommends, no edit/retry. */}
+      {focusSuggest && (
+        <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setFocusSuggest(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:RADIUS.md,padding:"24px 24px 20px",maxWidth:420,width:"90%",boxShadow:ELEV[4]}}>
+            <div style={{fontSize:22,marginBottom:8,lineHeight:1,display:"flex",justifyContent:"center",color:C.text}}>{suiteIcon("auto_awesome", 24)}</div>
+            <h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:"0 0 4px",color:C.text,fontFamily:NC_FONT_STACK,textAlign:"center"}}>Focus on these three</h3>
+            <p style={{fontSize:NC_TYPE.small,color:C.faint,margin:"0 0 16px",fontFamily:NC_FONT_STACK,textAlign:"center"}}>A quick look at your plate and calendar</p>
+            {focusSuggest.loading ? (
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"16px 0 24px",color:C.faint,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK}}>
+                <div style={{width:14,height:14,borderRadius:RADIUS.pill,border:`2px solid ${C.faint}`,borderTopColor:"transparent",animation:"ot-spin 0.7s linear infinite"}}/>
+                Thinking…
+              </div>
+            ) : focusSuggest.error ? (
+              <p style={{fontSize:NC_TYPE.meta,color:C.faint,textAlign:"center",fontFamily:NC_FONT_STACK,margin:"0 0 8px"}}>{focusSuggest.error}</p>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:8}}>
+                {focusSuggest.items.map((line, i) => (
+                  <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 12px",background:C.bgSoft,borderRadius:RADIUS.sm}}>
+                    <span style={{fontSize:NC_TYPE.title,fontWeight:700,color:C.accent,fontFamily:NC_FONT_STACK,lineHeight:1.3}}>{i+1}</span>
+                    <span style={{fontSize:NC_TYPE.meta,color:C.text,fontFamily:NC_FONT_STACK,lineHeight:1.4}}>{line}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{display:"flex",justifyContent:"center",marginTop:8}}>
+              <ActionBtn variant="text" labelColor={C.muted} onClick={()=>setFocusSuggest(null)}>Close</ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* List name modal (new/rename) */}
       {listNameModal && (
         <div style={{position:"fixed",inset:0,zIndex:Z.modal,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={()=>setListNameModal(null)}>
@@ -3545,6 +3615,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           clockTime={clockTime}
           features={AS.features || {}}
           onEnsurePcHost={bringDeskPhoneForward}
+          onOpenFocusSuggest={openFocusSuggestions}
         />
       )}
 

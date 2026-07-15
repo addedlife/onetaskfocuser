@@ -37,7 +37,7 @@ const FilterChip = createComponent({ react: React, tagName: 'md-filter-chip', el
 const BUGLOG_OPEN_EVENT = 'shamash-buglog:open';
 const BUGLOG_COUNT_EVENT = 'shamash-buglog:count';
 
-function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffset = 0, forceCompact = false, clockTime = null, onSettings, features = {}, onEnsurePcHost }) {
+function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffset = 0, forceCompact = false, clockTime = null, onSettings, features = {}, onEnsurePcHost, onOpenFocusSuggest }) {
   const [bugLogCount, setBugLogCount] = React.useState(0);
   React.useEffect(() => {
     const onCount = (e) => setBugLogCount(e.detail?.unresolved || 0);
@@ -294,6 +294,17 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
 
       {/* Spacer — pushes utility cluster to bottom (M3: destinations above, utilities below) */}
       <div style={{ flex: 1 }} />
+
+      {/* Focus — owner ticket: a clean rail function that looks at everything on the
+          plate + the calendar and suggests exactly three good things to do now,
+          positive-only, no edit/retry. */}
+      {onOpenFocusSuggest && (
+        <button onClick={onOpenFocusSuggest} title="Focus suggestions" aria-label="Focus suggestions" style={navBtn(false)}>
+          <Ripple />
+          {suiteIcon("auto_awesome", ic(24))}
+          {displayOpen && "Focus"}
+        </button>
+      )}
 
       {/* Settings — M3 bottom anchor for utility cluster */}
       <button onClick={onSettings} title="Settings" aria-label="Settings" style={navBtn(false)}>

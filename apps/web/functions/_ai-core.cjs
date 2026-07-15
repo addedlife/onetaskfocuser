@@ -1154,6 +1154,38 @@ const AI_JOB_REGISTRY = {
       ]);
     },
   },
+  "dashboard.focus_suggestions.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL, // same cheap/fast lane as the other dashboard jobs
+    task: "focus-suggestions",
+    output: "json",
+    shape: "array",
+    genConfig: { temperature: 0.3, maxOutputTokens: 500 },
+    schema: '["one clear, positive-only sentence naming a specific task/shaila and why it is a good one to do now"]',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "Look at everything on this person's plate and the days ahead, then pick exactly the THREE best things to focus on right now.",
+        "Weigh industry-standard prioritization signals: how long something has waited, stated priority/urgency, and whether an upcoming calendar event (English or Hebrew/Jewish date) makes it more or less time-sensitive (e.g. a shaila or errand tied to an approaching Yom Tov).",
+        "Tone is STRICTLY positive and encouraging - never say a thing is overdue, stale, critical, or has been neglected. Frame each pick as a good, doable next move, not a warning.",
+        "Do not invent tasks, dates, or facts not present in the data below.",
+        `Current time: ${cleanString(input.currentTime, 60)}. Hebrew date: ${cleanString(input.hebrewDate, 40)}.`,
+        `Open tasks:\n${jsonBlock(ensureArray(input.tasks).slice(0, 60).map(t => ({
+          text: cleanString(t?.text, 200), priority: cleanString(t?.priority, 40),
+          ageHours: Number.isFinite(Number(t?.ageHours)) ? Math.round(Number(t.ageHours)) : null,
+        })))}`,
+        `Open shailos:\n${jsonBlock(ensureArray(input.shailos).slice(0, 30).map(s => ({
+          text: cleanString(s?.text, 200), askedBy: cleanString(s?.askedBy, 80),
+          ageHours: Number.isFinite(Number(s?.ageHours)) ? Math.round(Number(s.ageHours)) : null,
+        })))}`,
+        `Upcoming calendar (next few days, English + Hebrew/Jewish events alike):\n${jsonBlock(ensureArray(input.calendarEvents).slice(0, 40).map(e => ({
+          summary: cleanString(e?.summary, 160), start: cleanString(e?.start, 60),
+        })))}`,
+        "Return exactly 3 items. Each item: one sentence, names the specific task/shaila, gives a brief positive reason (age/priority/upcoming-event context only if it genuinely applies). No harsh language, no edit/retry framing needed - this is a one-shot suggestion.",
+        responseJsonInstruction("array", this.schema),
+      ]);
+    },
+    validate: value => normalizeStringArray(value, 3, 240),
+  },
   "settings.color_schemes.v1": {
     task: "settings-color-schemes",
     output: "json",
