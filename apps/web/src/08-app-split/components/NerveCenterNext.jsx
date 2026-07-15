@@ -791,19 +791,32 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
   const tint = hexToRgba(accentColor, 0.05);
   const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
   const measureRef = useRef(null);
-  const measure = () => {
+  const measureFadeRef = useRef(null);
+  // fade (bottom "more content" gradient) is safe to recompute on any container
+  // resize. scrolled (which collapses the header) must NOT be: collapsing the
+  // header itself changes this container's box height, which would re-fire the
+  // ResizeObserver below and could flip `scrolled` back — an oscillating
+  // collapse/expand loop that read as rapid flicker and intermittently left the
+  // header's buttons under pointerEvents:none. So `scrolled` only ever updates
+  // from a real onScroll gesture, never from a resize.
+  const measureFade = () => {
     const el = scrollRef.current; if (!el) return;
     const more = el.scrollHeight - el.scrollTop - el.clientHeight > 4;
     setFade(p => p !== more ? more : p);
+  };
+  const measure = () => {
+    measureFade();
+    const el = scrollRef.current; if (!el) return;
     const s = el.scrollTop > 8;
     setScrolled(p => p !== s ? s : p);
   };
   measureRef.current = measure;
+  measureFadeRef.current = measureFade;
   useEffect(() => {
     const el = scrollRef.current; if (!el) return;
     measureRef.current?.();
     if (typeof ResizeObserver === "undefined") return;
-    const obs = new ResizeObserver(() => measureRef.current?.());
+    const obs = new ResizeObserver(() => measureFadeRef.current?.());
     obs.observe(el);
     return () => obs.disconnect();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
