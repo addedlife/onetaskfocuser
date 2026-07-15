@@ -10,8 +10,13 @@ being promised in chat and forgotten. Read `BRIEF.txt` and `AGENTS.md` too.
 
 - After a fix or change is made AND verified (at minimum `npm run build` passes in `apps/web`;
   smoke-test the affected surface when feasible), commit it and **push straight to `origin/main`**.
-  Netlify auto-builds production from `apps/web` via the root `netlify.toml`. Then confirm the
-  pushed commit shows up on the live site.
+  **Firebase Hosting is the only live deploy target.** A push to `main` triggers
+  `.github/workflows/deploy.yml`, which builds `apps/web` and runs
+  `firebase deploy --only hosting,functions --project onetaskonly-app`. Netlify is fully
+  decommissioned — `netlify.toml` (root) and `apps/web/netlify.toml` are kept only as a labeled
+  rollback path and do not build or serve anything; never describe Netlify as live, auto-building,
+  or in any way part of the current deploy path. Then confirm the pushed commit shows up on the
+  live Firebase-hosted site.
 - Do NOT leave a verified web fix sitting on a feature branch waiting for separate approval, and
   do NOT ask "should I push this live?" for a normal fix — the answer is yes. Push it.
 - Exceptions that still require an explicit heads-up first: storage/sync refactors (see
