@@ -12,6 +12,7 @@ import { textOnColor } from '../../01-core.js';
 import { MdFilterChip } from '@material/web/chips/filter-chip.js';
 import { subscribeOwner, setPreferredHost, ownerIsLive, HOST_LABEL, OWNER_LIVE_WINDOW_MS } from '../phone-host-control.js';
 import { preferredHostId, HANDOFF_GRACE_MS } from '../phone-link.js';
+import { subscribeAiLaneStatus } from '../ai-lane-status.js';
 
 // Real M3 web components — Google's official implementations, not hand-coded lookalikes.
 // md-navigation-rail is not yet in @material/web v2.4; nav items stay hand-coded with
@@ -55,6 +56,16 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
   const [phoneHost, setPhoneHost] = React.useState({ preferred: 'tablet', host: '', connected: false, present: false, hosts: {} });
   React.useEffect(() => {
     const unsub = subscribeOwner(setPhoneHost);
+    return () => { try { unsub && unsub(); } catch (_) {} };
+  }, []);
+
+  // Live "which AI lane is answering requests" chip — Gemini primary is the quiet
+  // default; overflow/Claude only ever show up here when Gemini's own quota is
+  // genuinely exhausted (_ai-core.cjs recordAiLaneEvent).
+  const [aiLane, setAiLane] = React.useState({ currentLane: 'gemini:primary', label: 'Gemini', recent: [] });
+  const [aiLanePopoverOpen, setAiLanePopoverOpen] = React.useState(false);
+  React.useEffect(() => {
+    const unsub = subscribeAiLaneStatus(setAiLane);
     return () => { try { unsub && unsub(); } catch (_) {} };
   }, []);
   // Owner ticket 7/15: picking PC (or Auto, where PC is a candidate host) used to
@@ -315,6 +326,51 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
 
       {/* More Actions retired (owner ticket 7/13: "we can officially retire more
           actions, i never use it") — every action it held lives on its own surface. */}
+
+      {/* AI lane status — owner ticket: make the Gemini-overflow/Claude fallback
+          visible, not just automatic. Quiet dot on Gemini primary; amber on Gemini
+          overflow; red once it's fully fallen through to Claude. Click opens the
+          recent-switch history, same popover pattern as the account switcher. */}
+      {(() => {
+        const laneDot = aiLane.currentLane === 'claude:fallback' ? C.danger
+          : aiLane.currentLane === 'gemini:overflow-01' ? C.warning
+          : null; // primary lane: no dot, nothing to draw attention to
+        return (
+          <div style={{ position: 'relative', width: '100%', flexShrink: 0 }}>
+            <button onClick={() => setAiLanePopoverOpen(p => !p)} title={`AI: ${aiLane.label}`} aria-label={`AI lane: ${aiLane.label}`} style={navBtn(aiLanePopoverOpen)}>
+              <Ripple />
+              <span style={{ position: 'relative', display: 'inline-flex' }}>
+                {suiteIcon('bolt', ic(24))}
+                {laneDot && (
+                  <span style={{ position: 'absolute', top: -1, right: -1, width: 8, height: 8, borderRadius: RADIUS.pill, background: laneDot, boxShadow: `0 0 0 2px ${C.bg}` }} />
+                )}
+              </span>
+              {displayOpen && aiLane.label}
+            </button>
+            {aiLanePopoverOpen && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9100 }} onClick={() => setAiLanePopoverOpen(false)} />
+                <div style={{ position: 'absolute', left: displayOpen ? 0 : '100%', bottom: 0, marginLeft: displayOpen ? 0 : 8, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, minWidth: 240, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, padding: '8px 12px 4px' }}>AI lane — currently {aiLane.label}</div>
+                  {aiLane.recent.length === 0 ? (
+                    <div style={{ padding: '9px 12px 12px', fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>No fallovers yet — running on Gemini primary.</div>
+                  ) : (
+                    [...aiLane.recent].reverse().map((event, i) => (
+                      <div key={i} style={{ padding: '7px 12px', borderTop: `1px solid ${C.divider}` }}>
+                        <div style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: 600 }}>{event.label}</div>
+                        <div style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 1 }}>
+                          {new Date(event.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          {event.reason ? ` · ${event.reason}` : ''}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Bug Log — utility item; badge mirrors BugLog's live unresolved count */}
       <button onClick={() => window.dispatchEvent(new CustomEvent(BUGLOG_OPEN_EVENT))} title="Bug Log" aria-label="Bug Log" style={navBtn(false)}>

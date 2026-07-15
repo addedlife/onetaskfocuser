@@ -21,6 +21,10 @@ function isAllowedOrigin(origin) {
 const DEFAULT_PROVIDER = "gemini";
 const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
 const QUOTA_FALLBACK_GEMINI_MODEL = "gemini-3.1-flash-lite";
+// Last-resort fallback once every Gemini credential lane is genuinely exhausted (not on
+// ordinary request errors). Haiku: cheap and fast, appropriate for a safety-net lane that
+// should rarely fire and shouldn't run up cost when it does.
+const CLAUDE_FALLBACK_MODEL = "claude-haiku-4-5-20251001";
 const DEFAULT_CALENDAR_TIME_ZONE = "America/New_York";
 const GEMINI_DEFAULT_SAFE_RPM = 4;
 const GEMINI_DEFAULT_TPM = 200000;
@@ -1701,6 +1705,114 @@ async function callGemini({ body, prompt, base64, mimeType, model, genConfig, cr
   throw lastError || httpError(429, "All Gemini credential lanes reached their daily safety cap.", 3600);
 }
 
+async function callClaude({ body, prompt, genConfig }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY || "";
+  if (!apiKey) throw httpError(500, "ANTHROPIC_API_KEY not configured — Claude fallback is unavailable.");
+
+  const input = prompt || geminiBodyToPrompt(body);
+  const controller = new AbortController();
+  const fetchTimeout = setTimeout(() => controller.abort(), 2 * 60 * 1000);
+  let r;
+  try {
+    r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: CLAUDE_FALLBACK_MODEL,
+        max_tokens: maxOutputTokensFrom(genConfig, 4096),
+        messages: [{ role: "user", content: input }],
+      }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(fetchTimeout);
+  }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.error) {
+    throw httpError(r.status || 502, data?.error?.message || r.statusText || "Claude API error", retryAfterSeconds(r.headers, data));
+  }
+
+  const text = data.content?.map(part => part.text || "").join("") || "";
+  return { provider: "claude", model: CLAUDE_FALLBACK_MODEL, credential: "fallback", text, raw: data };
+}
+
+// ── Live AI-lane status ─────────────────────────────────────────────────────
+// A small owner-visible record of which lane (Gemini primary / overflow / Claude
+// fallback) is actually serving requests right now, and why it last switched. Kept
+// cheap: an in-memory cache (mirrors the rate-limiter's globalThis pattern above)
+// means we only touch Firestore when the lane actually changes, not on every call.
+const aiLaneState = globalThis.__shamashAiLaneState || { currentLane: null };
+globalThis.__shamashAiLaneState = aiLaneState;
+
+const AI_LANE_LABELS = {
+  "gemini:primary": "Gemini",
+  "gemini:overflow-01": "Gemini · overflow",
+  "claude:fallback": "Claude · fallback",
+};
+
+function laneIdFor(result) {
+  if (result.provider === "claude") return "claude:fallback";
+  return `gemini:${result.credential || "primary"}`;
+}
+
+async function recordAiLaneEvent(result, reason = "") {
+  const lane = laneIdFor(result);
+  if (lane === aiLaneState.currentLane) return; // no change — skip the Firestore write
+  aiLaneState.currentLane = lane;
+
+  const db = firestoreLimiter();
+  if (!db) return;
+
+  const label = AI_LANE_LABELS[lane] || lane;
+  const ref = db.collection("_system").doc("ai-status");
+  try {
+    await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      const data = snap.exists ? snap.data() : {};
+      const recent = Array.isArray(data.recent) ? data.recent : [];
+      recent.push({ lane, label, at: Date.now(), reason: reason || "" });
+      while (recent.length > 15) recent.shift();
+      tx.set(ref, {
+        currentLane: lane,
+        label,
+        provider: result.provider,
+        model: result.model,
+        updatedAt: Date.now(),
+        recent,
+      });
+    });
+  } catch (e) {
+    console.warn("[AI] Failed to record lane status (non-fatal):", e.message);
+  }
+}
+
+// Wraps callGemini with a genuine last-resort Claude tier. Only fires once every
+// Gemini credential lane is truly exhausted (callGemini's own final throw) — never on
+// ordinary request errors, which should surface to the caller as-is. Audio callers never
+// reach this (Claude has no transcription capability; see the kind==="audio" gate in
+// processAiPayload).
+async function callWithFallback(common) {
+  try {
+    const result = await callGemini(common);
+    recordAiLaneEvent(result).catch(() => {});
+    return result;
+  } catch (e) {
+    if (e.statusCode !== 429) throw e;
+    try {
+      const result = await callClaude(common);
+      recordAiLaneEvent(result, e.message || "Gemini exhausted").catch(() => {});
+      return result;
+    } catch (claudeError) {
+      console.warn("[AI] Claude fallback also failed:", claudeError.message);
+      throw e; // Gemini's exhaustion error is the more informative one for the caller
+    }
+  }
+}
+
 function maxOutputTokensFrom(genConfig = {}, fallback = 4096) {
   const value = Number.parseInt(genConfig.maxOutputTokens || genConfig.max_output_tokens || genConfig.max_tokens || "", 10);
   // Cap client-supplied token counts so a bad/hostile config can't run up cost.
@@ -1864,7 +1976,7 @@ async function processAiPayload(payload = {}) {
     credential: payload.geminiCredential || payload.credential || payload.keyLane,
   };
 
-  return callGemini(common);
+  return kind === "audio" ? callGemini(common) : callWithFallback(common);
 }
 
 function publicAiConfig() {
@@ -1884,6 +1996,7 @@ function publicAiConfig() {
       researchModel: model,
       available: {
         gemini: geminiCredentialCatalog().some(credential => credential.available),
+        claudeFallback: !!process.env.ANTHROPIC_API_KEY,
         googleSearch: !!(process.env.GOOGLE_SEARCH_API_KEY && process.env.GOOGLE_SEARCH_CSE_ID),
       },
       models: {

@@ -78,5 +78,12 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if true;
     }
+    // Live "which AI lane is serving requests" status (_ai-core.cjs recordAiLaneEvent) —
+    // owner-only read for the status chip; only the Function's Admin SDK writes it, so
+    // client writes stay fully closed.
+    match /_system/ai-status {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
   }
 }
