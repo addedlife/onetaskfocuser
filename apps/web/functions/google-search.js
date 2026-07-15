@@ -7,8 +7,15 @@
 // Fallback: when Google CSE is unconfigured, over quota, or erroring, the
 // search runs against Sefaria's public search API instead (keyless, free) so
 // the shailos research pipeline never dead-ends with "no results".
+//
+// Every result set (either engine) is passed through link-inspector.js,
+// which drops stale index entries whose pages now 404 — see that file for
+// why this doesn't need to guard against AI-hallucinated links: the AI
+// synthesis step downstream only ever cites these real, index-numbered
+// results, it never invents its own URLs.
 
 const { corsHeaders } = require("./cors-helper");
+const { inspectLinks } = require("./link-inspector");
 
 // Sefaria's search phrase-matches multi-word queries (AND within a sliding
 // window), so a long AI-generated query often returns zero hits. Retry with
@@ -85,11 +92,12 @@ module.exports = async (req, res) => {
       const r = await fetch(url);
       const data = await r.json().catch(() => ({}));
       if (r.ok) {
-        const results = (data.items || []).map(item => ({
+        const rawResults = (data.items || []).map(item => ({
           title: item.title || "",
           link: item.link || "",
           snippet: item.snippet || "",
         }));
+        const results = await inspectLinks(rawResults);
         return res.status(200).set(headers).json({ results, engine: "google" });
       }
       googleError = data?.error?.message || `Google Search failed (${r.status})`;
@@ -99,7 +107,8 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const results = await sefariaSearch(query.trim(), count);
+    const rawResults = await sefariaSearch(query.trim(), count);
+    const results = await inspectLinks(rawResults);
     return res.status(200).set(headers).json({ results, engine: "sefaria", googleError });
   } catch (e) {
     return res.status(502).set(headers).json({ error: `${googleError} Fallback ${e.message || "Sefaria search failed."}` });
