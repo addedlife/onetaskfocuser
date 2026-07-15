@@ -136,6 +136,11 @@ function ResearchReport({ text, C }) {
           <p style={{ fontSize: 11, color: C.faint, padding: '14px 20px 6px', lineHeight: 1.6, margin: 0, fontFamily: NC_FONT_STACK }}>
             Searched: {(data.queries || []).join(' · ')}
           </p>
+          {data.engine === 'sefaria' && (
+            <p style={{ fontSize: 11, color: C.warning || C.faint, padding: '0 20px 10px', lineHeight: 1.6, margin: 0, fontFamily: NC_FONT_STACK }}>
+              ⚠ Google Search isn't configured, so this pass only searched Sefaria's own library — which barely digitizes contemporary teshuvos. Results skew toward Gemara/Rishonim; for psak-level contemporary sources, add the two Google Search secrets (see docs/ops/AI_CLOUD_INSPECTION_2026-07.md §5).
+            </p>
+          )}
           {data.sources?.length > 0 && (<><SectionLabel>Sources</SectionLabel>{data.sources.map((s, i) => <Row key={i} label={s.label} url={s.url} summary={s.summary} />)}</>)}
           {data.seforim?.length > 0 && (<><SectionLabel>Seforim</SectionLabel>{data.seforim.map((s, i) => <Row key={i} label={s.label} url={s.url} />)}</>)}
         </>

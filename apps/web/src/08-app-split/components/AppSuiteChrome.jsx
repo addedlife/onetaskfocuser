@@ -11,7 +11,7 @@ import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../versio
 import { textOnColor } from '../../01-core.js';
 import { MdFilterChip } from '@material/web/chips/filter-chip.js';
 import { subscribeOwner, setPreferredHost, ownerIsLive, HOST_LABEL, OWNER_LIVE_WINDOW_MS } from '../phone-host-control.js';
-import { preferredHostId } from '../phone-link.js';
+import { preferredHostId, HANDOFF_GRACE_MS } from '../phone-link.js';
 
 // Real M3 web components — Google's official implementations, not hand-coded lookalikes.
 // md-navigation-rail is not yet in @material/web v2.4; nav items stay hand-coded with
@@ -67,12 +67,23 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
   const preferredLabel = autoHost ? 'Auto' : (HOST_LABEL[preferredId] || HOST_LABEL.android);
   const actualHostId = phoneHost.present && ownerIsLive(phoneHost) ? phoneHost.host : '';
   const actualHostLabel = HOST_LABEL[actualHostId] || '';
-  const hostSwitchPending = !autoHost && !!actualHostId && actualHostId !== preferredId;
+  // The releasing host drops its heartbeat BEFORE the taking host confirms
+  // (same gap phone-link.js's `handover` state exists for) — during that gap
+  // actualHostId goes empty, and without this grace window the rail wrongly
+  // read that as "already switched" (no blink, no pending pill) instead of
+  // staying pending (owner ticket 7/14: "doesn't stay as pending... instead
+  // says dropped connection... till it blinks on"). rawHostId ignores
+  // liveness so the previous holder still anchors the solid highlight
+  // through the gap instead of jumping straight to the unconfirmed target.
+  const rawHostId = phoneHost.host || '';
+  const preferredAtMs = Number(phoneHost.preferredAtMs) || 0;
+  const inHandoffGrace = preferredAtMs > 0 && (Date.now() - preferredAtMs) < HANDOFF_GRACE_MS;
+  const hostSwitchPending = !autoHost && rawHostId !== preferredId && (!!actualHostId || inHandoffGrace);
   // While a switch is pending, the SOLID highlight stays on the device that
   // actually holds the phone; the requested device BLINKS until the new host's
   // heartbeat confirms the handover (owner spec 7/12). No pending switch ⇒
   // solid follows the preference (or, in auto mode, the live holder).
-  const solidId = hostSwitchPending ? actualHostId : (autoHost ? actualHostId : preferredId);
+  const solidId = hostSwitchPending ? (actualHostId || rawHostId || preferredId) : (autoHost ? actualHostId : preferredId);
   const hostBlinkStyle = { animation: 'nc-host-blink 1.1s ease-in-out infinite' };
   // Auto-mode honesty (owner ticket 7/13: "auto should show state — searching,
   // establishing with pc, etc."): when no host holds the link yet, say what the
@@ -92,8 +103,9 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
     : autoHost
       ? autoStatus
       : `Phone: ${actualHostLabel || preferredLabel}`;
+  const priorHostLabel = actualHostLabel || HOST_LABEL[rawHostId] || '';
   const phoneHostTitle = hostSwitchPending
-    ? `Waiting for the ${preferredLabel} to pick up the phone — the ${actualHostLabel} still holds it`
+    ? `Waiting for the ${preferredLabel} to pick up the phone${priorHostLabel ? ` — the ${priorHostLabel} still holds it` : ''}`
     : autoHost
       ? `Auto-finder is on — the strongest live link holds the phone${actualHostLabel ? ` (currently the ${actualHostLabel})` : ''}. Tap a device to pin it manually.`
       : `Phone link via ${actualHostLabel || preferredLabel} — pick another device to hand it over, or Auto to always use the strongest link`;
