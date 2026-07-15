@@ -1890,4 +1890,6 @@ module.exports = {
   corsFor,
   processAiPayload,
   publicAiConfig,
+  callGemini,
+  DEFAULT_GEMINI_MODEL,
 };

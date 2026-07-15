@@ -9,7 +9,7 @@ const TIMEOUT_MS = 4000;
 const MAX_CONCURRENCY = 6;
 const DEAD_STATUSES = new Set([404, 410]);
 
-async function isDead(url) {
+async function checkOne(url) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -18,27 +18,42 @@ async function isDead(url) {
     if (r.status === 405 || r.status === 501) {
       r = await fetch(url, { method: "GET", redirect: "follow", signal: controller.signal });
     }
-    return DEAD_STATUSES.has(r.status);
+    return { dead: DEAD_STATUSES.has(r.status), resolvedUrl: r.url || url };
   } catch {
-    return true;
+    return { dead: true, resolvedUrl: url };
   } finally {
     clearTimeout(timer);
   }
 }
 
-async function inspectLinks(results) {
+async function runInspection(results, { rewriteLink }) {
   if (!results.length) return results;
-  const dead = new Array(results.length).fill(false);
+  const checks = new Array(results.length);
   let next = 0;
   async function worker() {
     while (next < results.length) {
       const i = next++;
-      dead[i] = await isDead(results[i].link);
+      checks[i] = await checkOne(results[i].link);
     }
   }
   await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENCY, results.length) }, worker));
-  const kept = results.filter((_, i) => !dead[i]);
+  const kept = results
+    .map((r, i) => (checks[i].dead ? null : (rewriteLink ? { ...r, link: checks[i].resolvedUrl } : r)))
+    .filter(Boolean);
   return kept.length ? kept : results;
 }
 
-module.exports = { inspectLinks };
+// Drops dead links, keeps the original URL as-is.
+async function inspectLinks(results) {
+  return runInspection(results, { rewriteLink: false });
+}
+
+// Drops dead links AND rewrites the link to its final resolved destination —
+// for sources like Gemini grounding chunks, whose URIs are Google redirect
+// wrappers (vertexaisearch.cloud.google.com/...) that can expire after a
+// few days, so the durable real URL should be stored instead of the wrapper.
+async function resolveAndInspectLinks(results) {
+  return runInspection(results, { rewriteLink: true });
+}
+
+module.exports = { inspectLinks, resolveAndInspectLinks };

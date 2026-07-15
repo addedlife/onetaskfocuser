@@ -1,21 +1,25 @@
-// Google Custom Search API — replaces serper-proxy (Spark-OK: calls googleapis.com)
 // POST /api/google-search  { query, num? }
-// Returns { results: [{ title, link, snippet }], engine: "google"|"sefaria" }
-// Env vars: GOOGLE_SEARCH_API_KEY, GOOGLE_SEARCH_CSE_ID (GitHub repo secrets → functions .env)
-// Free tier: 100 queries/day
+// Returns { results: [{ title, link, snippet }], engine: "gemini"|"google"|"sefaria" }
 //
-// Fallback: when Google CSE is unconfigured, over quota, or erroring, the
-// search runs against Sefaria's public search API instead (keyless, free) so
-// the shailos research pipeline never dead-ends with "no results".
+// Search chain, each step only tried if the one before it errors or comes
+// back empty:
+//   1. Gemini native Google Search grounding — true whole-web coverage,
+//      near-free (Gemini 3.x: 5,000 grounded prompts/month free). See
+//      gemini-grounded-search.js for why this can't hand back an
+//      AI-invented URL.
+//   2. Google Custom Search JSON API (GOOGLE_SEARCH_API_KEY/CSE_ID) — kept
+//      as a secondary net; note the CSE currently configured is domain-
+//      restricted, not whole-web, so this step is mostly inert until that's
+//      reconfigured.
+//   3. Sefaria's public search API (keyless, free) — the pipeline must
+//      never dead-end with "no results" even if both of the above fail.
 //
-// Every result set (either engine) is passed through link-inspector.js,
-// which drops stale index entries whose pages now 404 — see that file for
-// why this doesn't need to guard against AI-hallucinated links: the AI
-// synthesis step downstream only ever cites these real, index-numbered
-// results, it never invents its own URLs.
+// Every result set (any engine) is passed through link-inspector.js, which
+// drops stale/removed entries (404/410) before they reach the user.
 
 const { corsHeaders } = require("./cors-helper");
 const { inspectLinks } = require("./link-inspector");
+const { geminiGroundedSearch } = require("./gemini-grounded-search");
 
 // Sefaria's search phrase-matches multi-word queries (AND within a sliding
 // window), so a long AI-generated query often returns zero hits. Retry with
@@ -79,7 +83,18 @@ module.exports = async (req, res) => {
 
   const count = Math.min(10, Math.max(1, Number(num) || 8));
 
-  // Google CSE first (broad web coverage), Sefaria as the keyless safety net.
+  let geminiError = "";
+  try {
+    const results = await geminiGroundedSearch(query.trim(), count);
+    if (results.length) {
+      return res.status(200).set(headers).json({ results, engine: "gemini" });
+    }
+    geminiError = "Gemini grounding returned no results.";
+  } catch (e) {
+    geminiError = e.message || "Gemini grounded search failed.";
+  }
+
+  // Google CSE next (currently domain-restricted — mostly inert), Sefaria as the keyless safety net.
   let googleError = apiKey && cx ? "" : "Google Custom Search is not configured.";
   if (!googleError) {
     const url = `https://www.googleapis.com/customsearch/v1?${new URLSearchParams({
@@ -109,8 +124,8 @@ module.exports = async (req, res) => {
   try {
     const rawResults = await sefariaSearch(query.trim(), count);
     const results = await inspectLinks(rawResults);
-    return res.status(200).set(headers).json({ results, engine: "sefaria", googleError });
+    return res.status(200).set(headers).json({ results, engine: "sefaria", googleError: `${geminiError} ${googleError}`.trim() });
   } catch (e) {
-    return res.status(502).set(headers).json({ error: `${googleError} Fallback ${e.message || "Sefaria search failed."}` });
+    return res.status(502).set(headers).json({ error: `${geminiError} ${googleError} Fallback ${e.message || "Sefaria search failed."}`.trim() });
   }
 };
