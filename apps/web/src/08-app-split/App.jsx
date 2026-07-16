@@ -2820,7 +2820,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const launchDeskPhone = (force = false) => {
     if (!force && deskPhoneOnline) return;
     const now = Date.now();
-    if (now - deskPhoneLaunchAtRef.current < 15000) return;
+    // 45s, not 15s (owner-reported bug 7/15): DeskPhone.exe takes several
+    // seconds to start and complete its first arbitration tick before its
+    // presence heartbeat goes live. At 15s the auto-launch effect in
+    // AppSuiteChrome.jsx was re-firing deskphone://open while the previous
+    // launch's OS "Open DeskPhone?" prompt was still up, interrupting it
+    // before the owner could act — it kept "blinking" and never actually
+    // launched. 45s gives a slow startup room to finish and beacon.
+    if (now - deskPhoneLaunchAtRef.current < 45000) return;
     deskPhoneLaunchAtRef.current = now;
     try {
       const link = document.createElement("a");

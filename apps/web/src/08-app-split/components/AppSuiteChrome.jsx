@@ -13,6 +13,7 @@ import { MdFilterChip } from '@material/web/chips/filter-chip.js';
 import { subscribeOwner, setPreferredHost, ownerIsLive, HOST_LABEL, OWNER_LIVE_WINDOW_MS } from '../phone-host-control.js';
 import { preferredHostId, HANDOFF_GRACE_MS } from '../phone-link.js';
 import { subscribeAiLaneStatus } from '../ai-lane-status.js';
+import { isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 
 // Real M3 web components — Google's official implementations, not hand-coded lookalikes.
 // md-navigation-rail is not yet in @material/web v2.4; nav items stay hand-coded with
@@ -92,8 +93,17 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
   // needed. Runs for manual "pc" picks AND "auto" (since auto can't ever select a
   // host that never beacons), and re-fires on every owner snapshot so a slow
   // DeskPhone launch gets retried instead of only checked once.
+  //
+  // BUG FIXED 7/15 (owner-reported): this doc is shared by every device — the
+  // effect was firing on the Android tablet too, repeatedly asking a browser
+  // that has no idea what "deskphone://" means to open it ("trying to open
+  // another application... unsuccessful", looping every retry). deskphone://open
+  // can only ever be handled by a browser running ON the Windows PC itself, so
+  // this must never fire from a phone/tablet — same rationale as the loopback
+  // probe elsewhere (NerveCenterPhoneSurface.jsx's isMobilePhoneDevice doc).
   React.useEffect(() => {
     if (!onEnsurePcHost) return;
+    if (isMobilePhoneDevice()) return;
     const wantsPc = phoneHost.preferred === 'pc' || phoneHost.preferred === 'auto';
     if (!wantsPc) return;
     const pcInfo = phoneHost.hosts?.windows;
