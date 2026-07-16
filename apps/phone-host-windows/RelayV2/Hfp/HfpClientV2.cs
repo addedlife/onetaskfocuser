@@ -11,6 +11,14 @@ namespace DeskPhone.RelayV2.Hfp;
 // parsing is delegated to AtTokenizer and all state to CallStateMachine, so
 // this class is only: connect, handshake, supervised read loop, serialized
 // writes, and a liveness probe for the half-open-socket Windows quirk.
+//
+// ONE line reader per connection, created in AttachAsync and shared by the
+// handshake and the read loop. Two readers on the same stream (the original
+// draft) is a silent data-loss bug: a buffered reader reads AHEAD of the
+// lines it returns, so any URC the phone sends right behind the handshake's
+// final OK could be stranded in the first reader's buffer and never seen by
+// the second. AttachAsync is internal so tests drive the full handshake+loop
+// over a fixture stream with zero Bluetooth hardware.
 public sealed class HfpClientV2 : IAsyncDisposable
 {
     // Named constants — every one of these was a bare number in the legacy
@@ -25,8 +33,10 @@ public sealed class HfpClientV2 : IAsyncDisposable
     private readonly ResiliencePipeline _connectRetry;
 
     private RfcommConnection? _conn;
+    private Stream? _stream;
+    private StreamReader? _reader;
     private CancellationTokenSource? _loopCts;
-    private DateTimeOffset _lastLineAt;
+    private Task? _loopTask;
 
     public CallStateMachine Calls { get; }
     public bool IsConnected { get; private set; }
@@ -53,33 +63,53 @@ public sealed class HfpClientV2 : IAsyncDisposable
     {
         await _connectRetry.ExecuteAsync(async token =>
         {
-            _conn = await RfcommConnection.ConnectAsync(bluetoothAddress, RfcommConnection.HfpUuid, token);
-            await HandshakeAsync(token);
+            var conn = await RfcommConnection.ConnectAsync(bluetoothAddress, RfcommConnection.HfpUuid, token);
+            try
+            {
+                await AttachAsync(conn.Stream, token);
+            }
+            catch
+            {
+                await conn.DisposeAsync(); // don't leak a half-handshaken socket into the next retry
+                throw;
+            }
+            _conn = conn;
         }, ct);
+    }
 
+    /// Attach to an already-open duplex stream: run the SLC handshake, then
+    /// start the supervised read loop — both on the same reader. Internal so
+    /// protocol tests exercise the real handshake + loop over a fixture.
+    internal async Task AttachAsync(Stream stream, CancellationToken ct)
+    {
+        _stream = stream;
+        _reader = new StreamReader(stream, Encoding.ASCII, false, 1024, leaveOpen: true);
+        await HandshakeAsync(ct);
         IsConnected = true;
         _loopCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        _ = ReadLoopAsync(_loopCts.Token); // supervised: loop end fires Disconnected
+        _loopTask = ReadLoopAsync(_loopCts.Token); // supervised: loop end fires Disconnected
     }
 
     // The SLC (service level connection) handshake, deliberately minimal:
     // BRSF without codec-negotiation (bit 7 clear — never claim audio),
-    // CIND definition + values, CMER on, CLIP on, CCWA on.
+    // CIND definition + values, CMER on, CLIP on, CCWA on (optional — some
+    // handsets reject call-waiting; an ERROR there must not fail the link).
     private async Task HandshakeAsync(CancellationToken ct)
     {
-        var reader = new StreamReader(_conn!.Stream, Encoding.ASCII, false, 1024, leaveOpen: true);
-
-        async Task<List<string>> Command(string cmd)
+        async Task<List<string>> Command(string cmd, bool acceptError = false)
         {
             await RawWriteAsync(cmd + "\r", ct);
             var lines = new List<string>();
             while (true)
             {
-                var line = await reader.ReadLineAsync(ct) ?? throw new EndOfStreamException("phone closed during handshake");
+                var line = await _reader!.ReadLineAsync(ct) ?? throw new EndOfStreamException("phone closed during handshake");
                 if (line.Length == 0) continue;
                 if (line == "OK") return lines;
                 if (line == "ERROR" || line.StartsWith("+CME ERROR", StringComparison.Ordinal))
+                {
+                    if (acceptError) return lines;
                     throw new InvalidOperationException($"{cmd} -> {line}");
+                }
                 lines.Add(line);
             }
         }
@@ -92,21 +122,19 @@ public sealed class HfpClientV2 : IAsyncDisposable
         await Command("AT+CIND?");
         await Command("AT+CMER=3,0,0,1"); // event reporting on
         await Command("AT+CLIP=1");
-        await Command("AT+CCWA=1");
-        _lastLineAt = DateTimeOffset.UtcNow;
+        await Command("AT+CCWA=1", acceptError: true);
     }
 
     private async Task ReadLoopAsync(CancellationToken ct)
     {
         try
         {
-            var reader = new StreamReader(_conn!.Stream, Encoding.ASCII, false, 1024, leaveOpen: true);
             while (!ct.IsCancellationRequested)
             {
                 // Race the read against the idle-probe window. Never cancel the
                 // read itself (aborting it kills the socket on WinRT); a probe
                 // going unanswered is the liveness verdict.
-                var readTask = reader.ReadLineAsync(ct).AsTask();
+                var readTask = _reader!.ReadLineAsync(ct).AsTask();
                 var winner = await Task.WhenAny(readTask, Task.Delay(ReadIdleProbe, ct));
                 if (winner != readTask)
                 {
@@ -117,7 +145,6 @@ public sealed class HfpClientV2 : IAsyncDisposable
                 }
                 var line = await readTask;
                 if (line == null) throw new EndOfStreamException("phone closed HFP link");
-                _lastLineAt = DateTimeOffset.UtcNow;
                 if (line.Length == 0) continue;
 
                 var evt = _tokenizer.Tokenize(line);
@@ -149,6 +176,7 @@ public sealed class HfpClientV2 : IAsyncDisposable
     }
     public Task AnswerAsync(CancellationToken ct = default) => RawWriteAsync("ATA\r", ct);
     public Task HangUpAsync(CancellationToken ct = default) => RawWriteAsync("AT+CHUP\r", ct);
+    public Task SetMuteAsync(bool mute, CancellationToken ct = default) => RawWriteAsync($"AT+CMUT={(mute ? 1 : 0)}\r", ct);
 
     private static string Sanitize(string number)
     {
@@ -160,14 +188,14 @@ public sealed class HfpClientV2 : IAsyncDisposable
 
     private async Task RawWriteAsync(string text, CancellationToken ct)
     {
-        var conn = _conn ?? throw new InvalidOperationException("not connected");
+        var stream = _stream ?? throw new InvalidOperationException("not connected");
         await _writeLock.WaitAsync(ct);
         try
         {
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
             deadline.CancelAfter(WriteDeadline);
-            await conn.Stream.WriteAsync(Encoding.ASCII.GetBytes(text), deadline.Token);
-            await conn.Stream.FlushAsync(deadline.Token);
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(text), deadline.Token);
+            await stream.FlushAsync(deadline.Token);
         }
         finally { _writeLock.Release(); }
     }
@@ -175,6 +203,11 @@ public sealed class HfpClientV2 : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _loopCts?.Cancel();
+        if (_loopTask is not null)
+        {
+            try { await _loopTask.WaitAsync(TimeSpan.FromSeconds(3)); } catch { }
+        }
+        _reader?.Dispose();
         if (_conn != null) await _conn.DisposeAsync();
         IsConnected = false;
     }

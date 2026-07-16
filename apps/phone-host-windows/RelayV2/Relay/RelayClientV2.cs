@@ -65,23 +65,14 @@ public sealed class RelayClientV2 : IAsyncDisposable
             AuthTokenAsyncFactory = async () => { await EnsureIdTokenAsync(CancellationToken.None); return _idToken; },
         });
 
-        // Live leader watch — push, not poll.
+        // Live leader watch — push, not poll. The streaming library flattens an
+        // object node into ONE EVENT PER PROPERTY (hostId, fencingToken, since
+        // arrive as separate JValue events), so parsing evt.Object directly can
+        // never see the whole record. Any event on the node is treated purely
+        // as a "changed" signal and the full node is refetched atomically.
         _leaderSub = _firebase.Child("phone-relay-v2/leader")
             .AsObservable<JToken>()
-            .Subscribe(evt =>
-            {
-                try
-                {
-                    if (evt.Object is not JObject obj) return;
-                    CurrentLeader = new Leader(
-                        (string?)obj["hostId"] ?? "",
-                        (long?)obj["fencingToken"] ?? 0,
-                        (long?)obj["since"] ?? 0);
-                    _log.LogInformation("leader: {Host} token {Token}{Me}",
-                        CurrentLeader.HostId, CurrentLeader.FencingToken, IAmLeader ? " (me)" : "");
-                }
-                catch (Exception ex) { _log.LogWarning(ex, "leader event parse"); }
-            });
+            .Subscribe(evt => { _ = RefreshLeaderAsync(); });
 
         // Live command watch. Clear-before-dispatch (at-most-once, same
         // deliberate contract as v1) + fencing-token check per command.
@@ -93,20 +84,43 @@ public sealed class RelayClientV2 : IAsyncDisposable
         _log.LogInformation("relay v2 client started (presence heartbeat every {S}s)", HeartbeatEvery.TotalSeconds);
     }
 
+    private async Task RefreshLeaderAsync()
+    {
+        try
+        {
+            var obj = await _firebase!.Child("phone-relay-v2/leader").OnceSingleAsync<JObject?>();
+            var next = obj is null
+                ? null
+                : new Leader((string?)obj["hostId"] ?? "", (long?)obj["fencingToken"] ?? 0, (long?)obj["since"] ?? 0);
+            if (next == CurrentLeader) return;
+            CurrentLeader = next;
+            _log.LogInformation("leader: {Host} token {Token}{Me}",
+                next?.HostId ?? "(none)", next?.FencingToken ?? 0, IAmLeader ? " (me)" : "");
+        }
+        catch (Exception ex) { _log.LogWarning(ex, "leader refresh failed"); }
+    }
+
     private async Task HeartbeatAsync()
     {
         try
         {
+            // Typed PutAsync — the library serializes exactly once. Hand-feeding
+            // it a pre-serialized JSON string risks double-encoding (a string
+            // payload that HAPPENS to be JSON is indistinguishable from a
+            // string value), which would corrupt presence and break election.
             await _firebase!.Child($"phone-relay-v2/presence/{HostId}")
-                .PutAsync(JsonSerializer.Serialize(new
+                .PutAsync(new
                 {
-                    t = new Dictionary<string, string> { [".sv"] = "timestamp" }, // server clock, not ours
+                    t = ServerTimestamp, // server clock, not ours
                     connected = IsPhoneConnected(),
                     quality = LinkQuality(),
-                }));
+                });
         }
         catch (Exception ex) { _log.LogWarning(ex, "presence heartbeat failed"); }
     }
+
+    // RTDB server-value sentinel: the server stamps its own clock on write.
+    private static readonly Dictionary<string, string> ServerTimestamp = new() { [".sv"] = "timestamp" };
 
     private async Task DrainCommandsAsync()
     {
@@ -123,7 +137,7 @@ public sealed class RelayClientV2 : IAsyncDisposable
             };
             if (commands.Count == 0) return;
 
-            await node.PutAsync("null"); // clear BEFORE dispatch — no double execution
+            await node.DeleteAsync(); // clear BEFORE dispatch — no double execution
 
             foreach (var cmd in commands)
             {
@@ -162,6 +176,20 @@ public sealed class RelayClientV2 : IAsyncDisposable
         var res = await _http.SendAsync(req, ct);
         if (!res.IsSuccessStatusCode)
             _log.LogWarning("state push -> HTTP {Status}: {Body}", (int)res.StatusCode, await res.Content.ReadAsStringAsync(ct));
+    }
+
+    /// Push one MMS attachment preview (data: URL) for the web to display.
+    /// The function caps dataUrl at ~1.5MB — callers filter before pushing.
+    public async Task PushMediaAsync(string id, string dataUrl, CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"{_endpoint}?action=pushmedia&hostType={HostId}")
+        {
+            Content = JsonContent.Create(new { id, dataUrl, hostType = HostId }),
+        };
+        req.Headers.Add("X-Relay-Secret", _secret);
+        var res = await _http.SendAsync(req, ct);
+        if (!res.IsSuccessStatusCode)
+            _log.LogWarning("media push {Id} -> HTTP {Status}", id, (int)res.StatusCode);
     }
 
     // ── Auth: per-platform secret -> custom token -> ID token (+refresh) ─────
@@ -227,7 +255,7 @@ public sealed class RelayClientV2 : IAsyncDisposable
         _leaderSub?.Dispose();
         // Graceful release: remove presence NOW so re-election is immediate on
         // clean shutdown (the crash path relies on the 60s staleness window).
-        try { if (_firebase != null) await _firebase.Child($"phone-relay-v2/presence/{HostId}").PutAsync("null"); }
+        try { if (_firebase != null) await _firebase.Child($"phone-relay-v2/presence/{HostId}").DeleteAsync(); }
         catch (Exception ex) { _log.LogInformation(ex, "graceful presence release failed"); }
         _firebase?.Dispose();
     }
