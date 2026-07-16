@@ -18,12 +18,9 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type, X-Relay-Secret, Authorization",
 };
 
-const { FIREBASE_PROJECT_ID, FIREBASE_WEB_API_KEY, getAdminAuth } = require("./_config.cjs");
+const { FIREBASE_PROJECT_ID, FIREBASE_WEB_API_KEY, getAdminAuth, getAdminDatabase } = require("./_config.cjs");
 const FS_BASE = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/phone-relay`;
 const FS_MEDIA_BASE = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/phone-media`;
-// Command mailbox lives in the Realtime Database (not Firestore) so DeskPhone can
-// hold a true SSE push stream on it — zero idle reads, sub-second command delivery.
-const RTDB_COMMANDS_URL = `https://${FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com/phone-relay/commands.json`;
 
 function sendOk(res, body) {
   return res.status(200).set({ ...CORS, "Content-Type": "application/json" }).json(body);
@@ -72,10 +69,15 @@ async function fsSetMedia(docId, dataUrl) {
   }
 }
 
+// Command mailbox lives in the Realtime Database (not Firestore) so DeskPhone can
+// hold a true SSE push stream on it — zero idle reads, sub-second command delivery.
+// database.rules.json locks that path to auth.token.relay_device === true, which
+// DeskPhone's direct SSE/drain calls carry (see RelayService.cs) but this Cloud
+// Function has no such token — it uses the Admin SDK instead, which authenticates
+// via service-account credentials and bypasses the rules entirely.
 async function rtdbGetCommands() {
-  const r = await fetch(RTDB_COMMANDS_URL);
-  if (!r.ok) throw new Error(`RTDB GET commands → HTTP ${r.status}`);
-  const parsed = await r.json();
+  const snap = await getAdminDatabase().ref("phone-relay/commands").get();
+  const parsed = snap.val();
   if (Array.isArray(parsed)) return parsed;
   // RTDB returns an object map when array keys go sparse — normalize back.
   if (parsed && typeof parsed === "object") return Object.values(parsed);
@@ -83,12 +85,7 @@ async function rtdbGetCommands() {
 }
 
 async function rtdbSetCommands(arr) {
-  const r = await fetch(RTDB_COMMANDS_URL, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(arr.length ? arr : null),
-  });
-  if (!r.ok) throw new Error(`RTDB PUT commands → HTTP ${r.status}`);
+  await getAdminDatabase().ref("phone-relay/commands").set(arr.length ? arr : null);
 }
 
 function extractIdToken(req) {

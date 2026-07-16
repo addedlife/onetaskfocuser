@@ -57,6 +57,22 @@ function getAdminAuth() {
   return _auth;
 }
 
+// ── Realtime Database (Admin) ─────────────────────────────────────────────────
+// Admin SDK access bypasses database.rules.json (service-account credentials),
+// which is what server-side Cloud Functions code should use — the RTDB REST
+// endpoint enforces those rules against real Firebase auth tokens, and Cloud
+// Functions has no such token to present. Callers here are already gated by
+// phone-relay.js's own auth checks (Firebase ID token or X-Relay-Secret).
+let _rtdb = null;
+
+function getAdminDatabase() {
+  if (_rtdb) return _rtdb;
+  const app = getAdminApp();
+  const { getDatabase } = require("firebase-admin/database");
+  _rtdb = getDatabase(app, `https://${FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com`);
+  return _rtdb;
+}
+
 // ── RabbiMetrics token verification ───────────────────────────────────────────
 // The rabbimetrics.web.app client (Firebase project rabbi-s-metrics) reuses the
 // ai-proxy gateway. Its ID tokens carry a different audience, so they need an
@@ -109,6 +125,7 @@ module.exports = {
   getAdminApp,
   getAdminDb,
   getAdminAuth,
+  getAdminDatabase,
   RABBI_PROJECT_ID,
   getRabbiAuth,
   googleWorkspaceClientId,
