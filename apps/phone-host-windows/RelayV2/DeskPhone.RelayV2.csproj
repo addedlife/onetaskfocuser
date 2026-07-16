@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- Phone-relay v2 native host — a SEPARATE executable from DeskPhone.exe.
+       Deliberately its own project so the live DeskPhone build stays
+       byte-identical while v2 is proven: this app serves the new local API on
+       port 8766 (never 8765) and talks only to phoneRelayV2 / phone-relay-v2/*
+       cloud paths. Nothing here is reachable from the live app until the
+       explicit rewire step.
+
+       Sdk=Web gives us Kestrel (ASP.NET Core minimal APIs) with no URL-ACL /
+       admin-rights requirement — that constraint is specific to http.sys
+       (HttpListener), which is why the old host hand-rolled a TcpListener
+       HTTP parser. Kestrel is the standard .NET 8 embedded server. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <Platforms>ARM64;x64</Platforms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Unlike the legacy csproj, warnings are errors here: the whole point
+         of v2 is that correctness is enforced by tooling, not comments. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>CA1416</NoWarn>
+    <RootNamespace>DeskPhone.RelayV2</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The test project exercises internal protocol helpers (bMessage
+         builders, parsers) directly — the standard friend-assembly grant. -->
+    <InternalsVisibleTo Include="RelayV2.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Microsoft's officially recommended resilience layer for .NET 8
+         (Polly v8 under the hood): standard pipeline = rate limit, total
+         timeout, retry, circuit breaker. Replaces every hand-tuned
+         magic-number backoff loop in the legacy services. -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="8.10.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <!-- Community RTDB client (REST + SSE streaming, auto-reconnect).
+         NOTE the documented limitation: onDisconnect() is a WebSocket-
+         protocol feature of the official SDKs and is NOT available over
+         REST/SSE — so this host's crash detection relies on the 60s
+         presence-staleness window in the cloud scoring, not server-side
+         connection tracking. The Android host (official SDK) gets true
+         onDisconnect. Graceful shutdown still removes presence immediately. -->
+    <PackageReference Include="FirebaseDatabase.net" Version="5.0.0" />
+  </ItemGroup>
+</Project>
