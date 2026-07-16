@@ -68,8 +68,10 @@ let _rtdb = null;
 function getAdminDatabase() {
   if (_rtdb) return _rtdb;
   const app = getAdminApp();
-  const { getDatabase } = require("firebase-admin/database");
-  _rtdb = getDatabase(app, `https://${FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com`);
+  // getDatabase(app, url) silently ignores the url argument — only
+  // getDatabaseWithUrl(url, app) actually honors an explicit database URL.
+  const { getDatabaseWithUrl } = require("firebase-admin/database");
+  _rtdb = getDatabaseWithUrl(`https://${FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com`, app);
   return _rtdb;
 }
 
