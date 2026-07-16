@@ -20,8 +20,15 @@ deploy_temp.zip
 .netlify/
 .launcher/
 
+# Firebase CLI local cache
+.firebase/
+
 # Firebase Functions secrets (written by CI, never committed)
 functions/.env
+
+# Auto-generated vendored copy of phone-link.js (functions/scripts/sync-phone-link.mjs
+# regenerates this on every predeploy / local run — never hand-edit or commit it)
+functions/phone-relay-v2/vendor/
 
 # Claude Code project files
 .claude/

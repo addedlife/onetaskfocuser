@@ -7,6 +7,22 @@
         ".read": "auth != null && auth.token.relay_device === true",
         ".write": "auth != null && auth.token.relay_device === true"
       }
+    },
+    "phone-relay-v2": {
+      "presence": {
+        "$hostId": {
+          ".read": "auth != null && auth.token.relay_device === true",
+          ".write": "auth != null && auth.token.relay_device === true && auth.token.host_id === $hostId"
+        }
+      },
+      "leader": {
+        ".read": "auth != null && auth.token.relay_device === true",
+        ".write": false
+      },
+      "commands": {
+        ".read": "auth != null && auth.token.relay_device === true",
+        ".write": "auth != null && auth.token.relay_device === true"
+      }
     }
   }
 }

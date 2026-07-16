@@ -78,6 +78,22 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if true;
     }
+    // ── Phone relay v2 (standalone tester build, not yet live) ──────────────
+    // Unlike v1, writes never happen from a client or a host directly — every
+    // write goes through phoneRelayV2's Admin SDK (see functions/phone-relay-v2/
+    // index.js), which authenticates hosts via a per-platform secret before
+    // it ever touches Firestore. That means these paths can be closed for
+    // writes with zero loss of function, closing the gap v1 has (state/owner/
+    // media writes there are `if true`, letting anyone with the public API
+    // key bypass the Cloud Function's own secret check).
+    match /phone-relay-v2/{document=**} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /phone-media-v2/{imageId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
     // Live "which AI lane is serving requests" status (_ai-core.cjs recordAiLaneEvent) —
     // owner-only read for the status chip; only the Function's Admin SDK writes it, so
     // client writes stay fully closed.

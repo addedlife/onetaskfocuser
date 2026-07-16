@@ -7,6 +7,8 @@ const chiefProfile  = require("./chief-profile");
 const googleWorkspace = require("./google-workspace");
 const googleHealth  = require("./google-health");
 const phoneRelay    = require("./phone-relay");
+const phoneRelayV2  = require("./phone-relay-v2");
+const { onPhoneRelayV2PresenceWrite } = require("./phone-relay-v2/onPresenceWrite");
 const mcpHandler    = require("./mcp");
 const googleSearch  = require("./google-search");
 
@@ -17,5 +19,7 @@ exports.chiefProfile    = onRequest({ timeoutSeconds: 30,  memory: "256MiB", reg
 exports.googleWorkspace = onRequest({ timeoutSeconds: 60,  memory: "256MiB", region: "us-central1" }, googleWorkspace);
 exports.googleHealth    = onRequest({ timeoutSeconds: 30,  memory: "256MiB", region: "us-central1" }, googleHealth);
 exports.phoneRelay      = onRequest({ timeoutSeconds: 10,  memory: "128MiB", region: "us-central1" }, phoneRelay);
+exports.phoneRelayV2    = onRequest({ timeoutSeconds: 10,  memory: "128MiB", region: "us-central1" }, phoneRelayV2);
+exports.onPhoneRelayV2PresenceWrite = onPhoneRelayV2PresenceWrite;
 exports.mcp             = onRequest({ timeoutSeconds: 60,  memory: "256MiB", region: "us-central1" }, mcpHandler);
 exports.googleSearch    = onRequest({ timeoutSeconds: 15,  memory: "128MiB", region: "us-central1" }, googleSearch);

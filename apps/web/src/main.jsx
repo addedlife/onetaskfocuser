@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { AuthGate } from './00-auth.jsx';
 import { DeskPhoneWebPanel } from './10-deskphone-web.jsx';
+import { RelayTesterPage } from './11-relay-tester.jsx';
 import { GV_CLEAN } from './08-app-split/ui-tokens.jsx';
 import { registerOfflineShell } from './offline-support.js';
 
@@ -96,6 +97,13 @@ if (standaloneView === 'deskphone' || standaloneView === 'phone') {
   }
 
   root.render(<StandaloneShell />);
+} else if (standaloneView === 'relaytester') {
+  // Standalone GM3 tester for the phone-relay v2 rebuild — see 11-relay-tester.jsx.
+  // Unlike the DeskPhone standalone view above, this one DOES require owner
+  // sign-in (it calls owner-authenticated phoneRelayV2 actions), so it renders
+  // its own auth gate rather than trusting the loopback origin.
+  document.title = 'Phone Relay v2 Tester';
+  root.render(<RelayTesterPage />);
 } else {
   root.render(<AuthGate />);
 }

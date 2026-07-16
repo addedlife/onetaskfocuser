@@ -16,6 +16,8 @@ import { MdSuggestionChip } from '@material/web/chips/suggestion-chip.js';
 import { MdChipSet } from '@material/web/chips/chip-set.js';
 import { MdDivider } from '@material/web/divider/divider.js';
 import { MdCircularProgress } from '@material/web/progress/circular-progress.js';
+import { MdLinearProgress } from '@material/web/progress/linear-progress.js';
+import { MdBadge } from '@material/web/labs/badge/badge.js';
 import { MdOutlinedTextField } from '@material/web/textfield/outlined-text-field.js';
 import { MdSwitch } from '@material/web/switch/switch.js';
 import { MdOutlinedSelect } from '@material/web/select/outlined-select.js';
@@ -55,6 +57,8 @@ export const SuggestionChip  = createComponent({ react: React, tagName: 'md-sugg
 export const ChipSet         = createComponent({ react: React, tagName: 'md-chip-set',          elementClass: MdChipSet });
 export const Divider         = createComponent({ react: React, tagName: 'md-divider',           elementClass: MdDivider });
 export const CircularProgress = createComponent({ react: React, tagName: 'md-circular-progress', elementClass: MdCircularProgress });
+export const LinearProgress  = createComponent({ react: React, tagName: 'md-linear-progress',   elementClass: MdLinearProgress });
+export const Badge           = createComponent({ react: React, tagName: 'md-badge',              elementClass: MdBadge });
 
 // Text field + switch — the two form controls the new UI composers need. Events
 // are mapped so React `onInput`/`onChange` fire from the shadow-DOM elements.

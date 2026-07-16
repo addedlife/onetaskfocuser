@@ -31,6 +31,7 @@
       { "source": "/api/google-workspace",  "function": "googleWorkspace", "region": "us-central1" },
       { "source": "/api/google-health",     "function": "googleHealth",    "region": "us-central1" },
       { "source": "/api/phone-relay",       "function": "phoneRelay",      "region": "us-central1" },
+      { "source": "/api/phone-relay-v2",    "function": "phoneRelayV2",    "region": "us-central1" },
       { "source": "/api/mcp",              "function": "mcp",             "region": "us-central1" },
       { "source": "/api/google-search",     "function": "googleSearch",    "region": "us-central1" },
       { "source": "/mcp",                  "function": "mcp",             "region": "us-central1" },
@@ -40,7 +41,8 @@
   },
   "functions": {
     "source": "functions",
-    "runtime": "nodejs20"
+    "runtime": "nodejs20",
+    "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
   },
   "firestore": {
     "rules": "firestore.rules"
