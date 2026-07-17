@@ -37,6 +37,7 @@ jobs:
         run: |
           echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
           echo "GEMINI_OVERFLOW_01=${{ secrets.GEMINI_OVERFLOW_01 }}" >> .env
+          echo "GEMINI_PAID_01=${{ secrets.GEMINI_PAID_01 }}" >> .env
           echo "PHONE_RELAY_SECRET=${{ secrets.PHONE_RELAY_SECRET }}" >> .env
           echo "PHONE_RELAY_V2_SECRET_WINDOWS=${{ secrets.PHONE_RELAY_V2_SECRET_WINDOWS }}" >> .env
           echo "PHONE_RELAY_V2_SECRET_ANDROID=${{ secrets.PHONE_RELAY_V2_SECRET_ANDROID }}" >> .env

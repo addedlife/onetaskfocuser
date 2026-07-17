@@ -64,6 +64,11 @@ const MODEL_IDS_BY_PROVIDER = {
 const GEMINI_CREDENTIALS = [
   { id: "primary", label: "Gemini Primary", env: "GEMINI_API_KEY" },
   { id: "overflow-01", label: "Gemini Overflow 01", env: "Gemini_Overflow_01" },
+  // Paid Tier-1 lane (project "Shamash Gemini paid lane", billed against the owner's
+  // Google trial-credit billing account, added 7/16). Deliberately LAST: it only serves
+  // once both free lanes are capped, and the same per-lane daily safety cap in
+  // reserveInState applies to it — that cap doubles as the cost bound here.
+  { id: "paid-01", label: "Gemini Paid 01", env: "GEMINI_PAID_01" },
 ];
 
 const geminiLimiterState = globalThis.__shamashGeminiLimiterState || {
@@ -1501,6 +1506,7 @@ function publicGeminiCredentialCatalog() {
 function normalizeGeminiCredential(value) {
   const v = String(value || "").trim().toLowerCase();
   if (v === "overflow" || v === "overflow_01" || v === "gemini_overflow_01") return "overflow-01";
+  if (v === "paid" || v === "paid_01" || v === "gemini_paid_01") return "paid-01";
   if (v === "primary" || v === "gemini" || v === "main") return "primary";
   if (v === "auto" || !v) return "auto";
   return GEMINI_CREDENTIALS.some(credential => credential.id === v) ? v : "auto";
@@ -1751,6 +1757,7 @@ globalThis.__shamashAiLaneState = aiLaneState;
 const AI_LANE_LABELS = {
   "gemini:primary": "Gemini",
   "gemini:overflow-01": "Gemini · overflow",
+  "gemini:paid-01": "Gemini · paid",
   "claude:fallback": "Claude · fallback",
 };
 

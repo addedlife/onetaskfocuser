@@ -402,7 +402,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
           switcher; opening it marks the current leaks seen and clears the badge. */}
       {(() => {
         const laneDot = aiLane.currentLane === 'claude:fallback' ? C.danger
-          : aiLane.currentLane === 'gemini:overflow-01' ? C.warning
+          : (aiLane.currentLane === 'gemini:overflow-01' || aiLane.currentLane === 'gemini:paid-01') ? C.warning
           : null; // primary lane: no dot, nothing to draw attention to
         const hasUnseenLeak = unseenLeaks.length > 0;
         return (
