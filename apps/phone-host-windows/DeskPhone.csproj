@@ -49,6 +49,20 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- RelayV2 is a SEPARATE dormant project (own csproj + tests, its own deps
+         like xunit/ILogger) living inside this folder cone — without these
+         excludes the WPF temp project sweeps its sources into this app's
+         compile and the DeskPhone build fails with 140+ missing-type errors
+         (first tripped 7/17, after the 7/16 v2 M3 native sources landed). -->
+    <Compile Remove="RelayV2\**\*;RelayV2.Tests\**\*" />
+    <Content Remove="RelayV2\**\*;RelayV2.Tests\**\*" />
+    <EmbeddedResource Remove="RelayV2\**\*;RelayV2.Tests\**\*" />
+    <None Remove="RelayV2\**\*;RelayV2.Tests\**\*" />
+    <Page Remove="RelayV2\**\*;RelayV2.Tests\**\*" />
+    <Resource Remove="RelayV2\**\*;RelayV2.Tests\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Keep scratch probes, archives, and ad-hoc exports out of the app build. -->
     <Compile Remove="scratch\**\*;artifacts\**\*;Tools\**\*;Messsages Backup\**\*;backup - before antigrav run -- of net8.0-windows10.0.19041.0\**\*" />
     <Content Remove="scratch\**\*;artifacts\**\*;Tools\**\*;Messsages Backup\**\*;backup - before antigrav run -- of net8.0-windows10.0.19041.0\**\*" />

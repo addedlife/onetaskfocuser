@@ -1,5 +1,11 @@
 [
     {
+        "version":  "b339",
+        "timestamp":  "2026-07-17 18:27:13",
+        "notes":  "Restores remote commands: texts and dial requests sent from the web app stopped reaching this host after the b338 security lockdown - the app claimed Sent but nothing ever went out. The host now signs its cloud mailbox reads the way Firebase actually accepts, so browser and tablet sends flow again.",
+        "devNotes":  "b338\u0027s RTDB mailbox auth attached the minted Firebase ID token as an Authorization: Bearer header on the SSE stream GET, the drain GET, and the clear PUT (AttachRelayAuthAsync). RTDB\u0027s REST API only honors ID tokens as an ?auth= query parameter - a Bearer header is parsed as a Google OAuth2 access token, which this is not, so every one of those calls got HTTP 401 from the moment database.rules.json locked phone-relay/commands down (7/15). Result: zero cloud commands delivered for two days; 13 commands (real outgoing texts) found stranded in the mailbox on 7/17, all shown as Sent by the web UI. Verified live before fixing: same token 401s as a Bearer header and returns 200 with the mailbox contents as ?auth= (python repro against the production RTDB). AttachRelayAuthAsync now rewrites the request URI to append auth=\u003cidToken\u003e; call sites unchanged. Same bug fixed in the Android host\u0027s RelayClient.kt (b12) in the same pass; web side (4.84.1) now waits for the host\u0027s commandResults ack before showing Sent, and phone-relay.js drops commands older than 10 min at delivery time so a healed host can never fire hours-stale sends."
+    },
+    {
         "version":  "b338",
         "timestamp":  "2026-07-15 14:21:47",
         "notes":  "Security fix: the cloud command mailbox that lets you dial/text from a browser was readable and writable by anyone on the internet, signed in or not. DeskPhone now proves who it is before touching that mailbox, so only your real host can read or write it.",

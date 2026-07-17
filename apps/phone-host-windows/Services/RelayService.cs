@@ -313,8 +313,15 @@ public class RelayService : IDisposable
 
     private async Task AttachRelayAuthAsync(HttpRequestMessage req, CancellationToken ct)
     {
+        // RTDB's REST API only honors Firebase ID tokens as an ?auth= query
+        // parameter. An Authorization: Bearer header is parsed as a (wrong-type)
+        // Google OAuth2 access token and the request 401s. b338 shipped the
+        // Bearer form, so from the moment the rules locked down (7/15) every
+        // mailbox read/clear failed silently and no cloud command was delivered.
         var idToken = await GetRelayIdTokenAsync(ct);
-        if (idToken != null) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", idToken);
+        if (idToken == null || req.RequestUri == null) return;
+        var sep = string.IsNullOrEmpty(req.RequestUri.Query) ? "?" : "&";
+        req.RequestUri = new Uri(req.RequestUri.AbsoluteUri + sep + "auth=" + Uri.EscapeDataString(idToken));
     }
 
     private const int DrainStreamHealthyMs = 120_000; // safety sweep behind a live stream
