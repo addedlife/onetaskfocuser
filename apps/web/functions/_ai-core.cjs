@@ -51,6 +51,39 @@ const GEMINI_MODELS = [
   "gemini-2.5-flash-lite",
 ];
 
+// Owner ticket 7/16: each Gemini MODEL has its own independent free daily quota bucket
+// (see GEMINI_FREE_LIMITS above) — a genuinely separate resource, not a copy of the same
+// one. Walking every model before walking credentials turns 2 free projects into up to
+// 2 * (1000+1000+250+180+100+90) = 5,240 free requests/day, no new projects needed.
+// Ordered by descending published rpd (most-available first) so a degrade always lands
+// on the model most likely to still have room.
+const MODEL_FALLBACK_ORDER = [
+  "gemini-3.1-flash-lite",   // rpd 1000
+  "gemini-2.5-flash-lite",   // rpd 1000
+  "gemini-2.5-flash",        // rpd 250
+  "gemini-3-flash-preview",  // rpd 180
+  "gemini-2.5-pro",          // rpd 100
+  "gemini-3.1-pro-preview",  // rpd 90
+];
+
+// Rotates MODEL_FALLBACK_ORDER to start at the job's own requested/default model (so the
+// model a job was tuned for is always tried first), then degrades through the rest in
+// most-available-first order. Unknown/custom model names still get a full ladder, just
+// starting from the front.
+function modelLadderFrom(requestedModel) {
+  const idx = MODEL_FALLBACK_ORDER.indexOf(requestedModel);
+  if (idx === -1) return [requestedModel, ...MODEL_FALLBACK_ORDER];
+  return [...MODEL_FALLBACK_ORDER.slice(idx), ...MODEL_FALLBACK_ORDER.slice(0, idx)];
+}
+
+// Hard ceiling on how long callGemini's whole (credential x model) ladder walk may run.
+// A DAILY-cap 429 returns near-instantly (reserveInState throws before any network call),
+// so walking a dozen already-exhausted combos costs almost nothing — but a per-MINUTE
+// pacing 429 can legitimately wait up to GEMINI_QUEUE_TIMEOUT_MS before giving up. This
+// caps the worst case (everything genuinely contested at once) so the ladder always leaves
+// room for the real generateContent fetch inside the ~26-30s function budget.
+const LADDER_WALL_CLOCK_BUDGET_MS = 18000;
+
 const MODEL_CATALOG = [
   { provider: "gemini", model: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview", tier: "frontier", note: "Advanced reasoning and coding; preview." },
   { provider: "gemini", model: "gemini-3-flash-preview",  label: "Gemini 3 Flash Preview",  tier: "fast",     note: "Frontier multimodal model at lower cost; preview." },
@@ -1655,60 +1688,47 @@ async function callGeminiOnce({ body, prompt, base64, mimeType, model, genConfig
   return { provider: "gemini", model, credential: credential.id, text: extractGeminiText(data), raw: data };
 }
 
-async function callGemini({ body, prompt, base64, mimeType, model, genConfig, credential: preferredCredential, allowQuotaFallback = true }) {
+async function callGemini({ body, prompt, base64, mimeType, model, genConfig, credential: preferredCredential }) {
   const credentials = orderedGeminiCredentials(preferredCredential);
   if (!credentials.length) throw httpError(500, "No Gemini API key configured in Firebase Functions env vars");
 
   const requestBody = normalizeGeminiBody(body || (base64
     ? buildAudioGeminiBody(base64, mimeType, prompt, genConfig)
     : buildTextGeminiBody(prompt, genConfig)));
+  const models = modelLadderFrom(model || DEFAULT_GEMINI_MODEL);
+  const startedAt = Date.now();
   let lastError = null;
 
+  // Walk every model on a credential (each has its own independent daily quota bucket —
+  // see MODEL_FALLBACK_ORDER above) before moving to the next credential lane. Any 429 is
+  // worth trying the next rung, not just ones whose message literally reads like a daily
+  // cap: a per-minute pacing-queue timeout on one (credential, model) pair 429s with a
+  // short retryAfter and a generic "pacing requests" message, and the next rung has its
+  // own independent RPM/RPD budget that was very likely free.
   for (const credential of credentials) {
-    try {
-      return await callGeminiOnce({
-        body: requestBody,
-        prompt,
-        base64,
-        mimeType,
-        model,
-        genConfig,
-        credential,
-      });
-    } catch (e) {
-      lastError = e;
-      // Any 429 is worth trying the next credential lane, not just ones whose message
-      // literally reads like a daily cap. A per-minute pacing-queue timeout on one
-      // credential (reserveGeminiSlot giving up after GEMINI_QUEUE_TIMEOUT_MS) 429s with
-      // a short retryAfter and a generic "pacing requests" message — that used to throw
-      // straight through here without ever trying the overflow credential, which has its
-      // own independent RPM/RPD budget and was very likely free. A burst of traffic on one
-      // model (e.g. research's grounded search sharing the flash-lite lane with the
-      // dashboard-polish job) could fill the primary lane's per-minute slot and silently
-      // fail every caller on it instead of spilling over.
-      if (e.statusCode !== 429) throw e;
-      console.warn(`[AI] Gemini ${credential.id} returned 429 for ${model} (${e.message}); trying next credential lane.`);
+    for (const attemptModel of models) {
+      if (Date.now() - startedAt > LADDER_WALL_CLOCK_BUDGET_MS) {
+        throw lastError || httpError(429, "Gemini gateway is pacing requests across every available model; retry shortly.", 15);
+      }
+      try {
+        return await callGeminiOnce({
+          body: requestBody,
+          prompt,
+          base64,
+          mimeType,
+          model: attemptModel,
+          genConfig,
+          credential,
+        });
+      } catch (e) {
+        lastError = e;
+        if (e.statusCode !== 429) throw e;
+        console.warn(`[AI] Gemini ${credential.id}/${attemptModel} returned 429 (${e.message}); trying next in the ladder.`);
+      }
     }
   }
 
-  if (allowQuotaFallback && model !== QUOTA_FALLBACK_GEMINI_MODEL) {
-    // The fallback model has its own independent quota lane, so there is nothing to wait
-    // out — and a long sleep here overruns the Netlify function budget and turns every
-    // daily-cap event into a Sandbox.Timedout 502. Brief jitter only, to de-thunder herds.
-    await sleep(500 + Math.floor(Math.random() * 1000));
-    return callGemini({
-      body: requestBody,
-      prompt,
-      base64,
-      mimeType,
-      model: QUOTA_FALLBACK_GEMINI_MODEL,
-      genConfig,
-      credential: preferredCredential,
-      allowQuotaFallback: false,
-    });
-  }
-
-  throw lastError || httpError(429, "All Gemini credential lanes reached their daily safety cap.", 3600);
+  throw lastError || httpError(429, "All Gemini credential lanes and models reached their daily safety cap.", 3600);
 }
 
 async function callClaude({ body, prompt, genConfig }) {
@@ -1751,7 +1771,7 @@ async function callClaude({ body, prompt, genConfig }) {
 // fallback) is actually serving requests right now, and why it last switched. Kept
 // cheap: an in-memory cache (mirrors the rate-limiter's globalThis pattern above)
 // means we only touch Firestore when the lane actually changes, not on every call.
-const aiLaneState = globalThis.__shamashAiLaneState || { currentLane: null };
+const aiLaneState = globalThis.__shamashAiLaneState || { currentLane: null, currentModel: null };
 globalThis.__shamashAiLaneState = aiLaneState;
 
 const AI_LANE_LABELS = {
@@ -1768,8 +1788,15 @@ function laneIdFor(result) {
 
 async function recordAiLaneEvent(result, reason = "") {
   const lane = laneIdFor(result);
-  if (lane === aiLaneState.currentLane) return; // no change — skip the Firestore write
+  const laneChanged = lane !== aiLaneState.currentLane;
+  const modelChanged = result.model !== aiLaneState.currentModel;
+  // A pure model hop within the same credential (owner ticket 7/16: the model ladder can
+  // now degrade gemini-3.1-flash-lite -> gemini-2.5-flash without ever changing credential
+  // lane) still needs the live "which model is answering right now" display to update —
+  // only skip the write when NEITHER changed.
+  if (!laneChanged && !modelChanged) return;
   aiLaneState.currentLane = lane;
+  aiLaneState.currentModel = result.model;
 
   const db = firestoreLimiter();
   if (!db) return;
@@ -1781,8 +1808,13 @@ async function recordAiLaneEvent(result, reason = "") {
       const snap = await tx.get(ref);
       const data = snap.exists ? snap.data() : {};
       const recent = Array.isArray(data.recent) ? data.recent : [];
-      recent.push({ lane, label, at: Date.now(), reason: reason || "" });
-      while (recent.length > 15) recent.shift();
+      // "Recent fallovers" history is credential-lane changes only — a model degrade on
+      // the SAME free credential isn't a failover in the sense that list already
+      // communicates to the owner, just a quota-aware model choice.
+      if (laneChanged) {
+        recent.push({ lane, label, at: Date.now(), reason: reason || "" });
+        while (recent.length > 15) recent.shift();
+      }
       tx.set(ref, {
         currentLane: lane,
         label,

@@ -8,7 +8,7 @@ import { MdRipple } from '@material/web/ripple/ripple.js';
 import { MdTextButton } from '@material/web/button/text-button.js';
 import { MdOutlinedSegmentedButton } from '@material/web/labs/segmentedbutton/outlined-segmented-button.js';
 import { MdOutlinedSegmentedButtonSet } from '@material/web/labs/segmentedbuttonset/outlined-segmented-button-set.js';
-import { cleanTheme, DUR, EASE, NC_FONT_STACK, NC_TYPE, RADIUS, suiteIcon } from '../ui-tokens.jsx';
+import { cleanTheme, DUR, EASE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, suiteIcon } from '../ui-tokens.jsx';
 import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
 import { Store, textOnColor } from '../../01-core.js';
 import { MdFilterChip } from '@material/web/chips/filter-chip.js';
@@ -407,7 +407,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
         const hasUnseenLeak = unseenLeaks.length > 0;
         return (
           <div style={{ position: 'relative', width: '100%', flexShrink: 0 }}>
-            <button ref={aiLaneBtnRef} onClick={() => { if (!aiLanePopoverOpen) openAiLanePopover(); setAiLanePopoverOpen(p => !p); markLeaksSeen(); }} title={`AI: ${aiLane.label}${hasUnseenLeak ? ' — possible leak flagged' : ''}`} aria-label={`AI lane: ${aiLane.label}`} style={navBtn(aiLanePopoverOpen)}>
+            <button ref={aiLaneBtnRef} onClick={() => { if (!aiLanePopoverOpen) openAiLanePopover(); setAiLanePopoverOpen(p => !p); markLeaksSeen(); }} title={`AI: ${aiLane.label}${aiLane.model ? ' · ' + aiLane.model : ''}${hasUnseenLeak ? ' — possible leak flagged' : ''}`} aria-label={`AI lane: ${aiLane.label}${aiLane.model ? ', model ' + aiLane.model : ''}`} style={navBtn(aiLanePopoverOpen)}>
               <Ripple />
               <span style={{ position: 'relative', display: 'inline-flex' }}>
                 {suiteIcon('bolt', ic(24))}
@@ -418,13 +418,23 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                   <span style={{ position: 'absolute', top: -3, left: -3, width: 12, height: 12, borderRadius: RADIUS.pill, background: C.danger, color: '#fff', fontSize: 9, fontWeight: 800, lineHeight: '12px', textAlign: 'center', boxShadow: `0 0 0 2px ${C.bg}` }}>!</span>
                 )}
               </span>
-              {displayOpen && aiLane.label}
+              {displayOpen && (
+                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0 }}>
+                  <span>{aiLane.label}</span>
+                  {aiLane.model && (
+                    <span style={{ fontSize: 10, color: C.faint, fontFamily: NC_MONO_STACK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{aiLane.model}</span>
+                  )}
+                </span>
+              )}
             </button>
             {aiLanePopoverOpen && aiLanePopoverPos && createPortal(
               <>
                 <div style={{ position: 'fixed', inset: 0, zIndex: 9100 }} onClick={() => setAiLanePopoverOpen(false)} />
                 <div style={{ position: 'fixed', left: aiLanePopoverPos.left, bottom: aiLanePopoverPos.bottom, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, width: aiLanePopoverPos.width, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', maxHeight: aiLanePopoverPos.maxHeight, overflowY: 'auto', overflowX: 'hidden' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, padding: '8px 12px 4px' }}>AI lane — currently {aiLane.label}</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, padding: '8px 12px 0' }}>AI lane — currently {aiLane.label}</div>
+                  {aiLane.model && (
+                    <div style={{ fontSize: 11, color: C.muted, fontFamily: NC_MONO_STACK, padding: '2px 12px 4px' }}>{aiLane.model}</div>
+                  )}
                   <div style={{ display: 'flex', gap: 10, padding: '2px 12px 9px', fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK }}>
                     <span><b style={{ color: C.text }}>{aiLane.usage.totalToday}</b> today</span>
                     <span><b style={{ color: C.text }}>{aiLane.usage.totalThisHour}</b> this hour</span>
