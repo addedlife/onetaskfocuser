@@ -33,11 +33,11 @@ public sealed class PbapClientV2
 
         // Targeted CONNECT first; bare fallback for handsets that reject the
         // PBAP target header (both observed in production on the legacy stack).
-        var code = await obex.ConnectAsync(PbapTarget, ct);
+        var code = await obex.ConnectAsync(PbapTarget, ct: ct);
         if (code != ObexResponse.Success)
         {
             _log.LogInformation("PBAP targeted CONNECT -> {Code}; retrying bare", code);
-            code = await obex.ConnectAsync(null, ct);
+            code = await obex.ConnectAsync(null, ct: ct);
             if (code != ObexResponse.Success)
                 throw new ObexProtocolException($"PBAP CONNECT failed: {code}");
         }

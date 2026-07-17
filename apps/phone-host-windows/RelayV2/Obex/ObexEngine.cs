@@ -62,10 +62,11 @@ public sealed class ObexEngine
 
     // ── Client role ──────────────────────────────────────────────────────────
 
-    /// OBEX CONNECT with optional Target UUID. Parses the peer's advertised
-    /// max packet size and Who/ConnectionId headers. Tolerates the MediaTek
-    /// short response (no version/flags/maxPacket fields).
-    public async Task<ObexResponse> ConnectAsync(byte[]? targetUuid = null, CancellationToken ct = default)
+    /// OBEX CONNECT with optional Target UUID and app params (MAP passes the
+    /// MASInstanceID here). Parses the peer's advertised max packet size and
+    /// Who/ConnectionId headers. Tolerates the MediaTek short response (no
+    /// version/flags/maxPacket fields).
+    public async Task<ObexResponse> ConnectAsync(byte[]? targetUuid = null, byte[]? appParams = null, CancellationToken ct = default)
     {
         var req = new ObexPacket
         {
@@ -73,6 +74,7 @@ public sealed class ObexEngine
             FixedFields = new byte[] { 0x10, 0x00, 0xFF, 0xFF }, // v1.0, no flags, our max 65535
         };
         if (targetUuid != null) req.AddByteSeq(ObexHeaderId.Target, targetUuid);
+        if (appParams != null) req.AddByteSeq(ObexHeaderId.AppParams, appParams);
         await WritePacketAsync(req, ct);
 
         var resp = await ReadPacketAsync(fixedFieldCount: 4, tolerateShortConnect: true, ct: ct);
@@ -164,7 +166,11 @@ public sealed class ObexEngine
             AttachConnectionId(req);
             if (first)
             {
-                req.AddUnicode(ObexHeaderId.Name, name);
+                // No Name header at all for nameless PUTs (MAP notification
+                // registration) — a zero-length Name header is another of the
+                // empty-header shapes quirky firmware rejects; the legacy
+                // stack's proven form simply omits it.
+                if (name.Length > 0) req.AddUnicode(ObexHeaderId.Name, name);
                 if (type != null) req.AddByteSeq(ObexHeaderId.Type, System.Text.Encoding.ASCII.GetBytes(type + "\0"));
                 if (appParams != null) req.AddByteSeq(ObexHeaderId.AppParams, appParams);
                 first = false;

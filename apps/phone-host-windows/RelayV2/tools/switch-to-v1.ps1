@@ -1,11 +1,13 @@
 # Switch the phone bridge back from the NEW system (RelayV2 tester) to the
-# OLD one (DeskPhone v1). Owner-facing: launched from the Desktop shortcut
-# "Phone - OLD system (back to normal)". Stops v2 first, then starts v1 via
-# its normal Desktop shortcut, and confirms it's answering before declaring
-# success.
+# OLD one (DeskPhone v1 + tablet). Owner-facing: launched from the Desktop
+# shortcut "Phone - OLD system (back to normal)". Gives the tablet back its
+# original standing, stops v2, restarts v1, and confirms it's answering.
 param([switch]$Quiet)
 
 $ErrorActionPreference = 'SilentlyContinue'
+$ownerUrl = 'https://firestore.googleapis.com/v1/projects/onetaskonly-app/databases/(default)/documents/phone-relay/owner'
+$apiKey = 'AIzaSyB5UiDE9s0xjWeYa4OQ1LLJ63EwPVoSLrA'  # public web key; the owner doc is open by design
+$stateDir = Join-Path $env:LOCALAPPDATA 'DeskPhoneRelayV2'
 
 function Say([string]$msg) { Write-Host ("  " + $msg) -ForegroundColor Cyan }
 function Popup([string]$msg, [string]$title) {
@@ -18,7 +20,26 @@ Write-Host ''
 Write-Host '  ===== Switching back to the OLD phone system (DeskPhone) =====' -ForegroundColor Yellow
 Write-Host ''
 
-# Already on the old system? Then there is nothing to do.
+# ── 1. Give the tablet back its original standing (undo the test-time pin) ──
+# Runs FIRST and unconditionally: even if a v2 attempt failed halfway, the
+# pin must not linger and keep the tablet parked.
+$prevFile = Join-Path $stateDir 'prev-preferred.txt'
+if (Test-Path $prevFile) {
+    $prev = (Get-Content $prevFile -Raw).Trim()
+    if (-not $prev) { $prev = 'tablet' }
+    try {
+        $nowMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        $body = '{"fields":{"preferred":{"stringValue":"' + $prev + '"},"preferredAtMs":{"integerValue":"' + $nowMs + '"}}}'
+        Invoke-RestMethod -Method Patch -ContentType 'application/json' -Body $body -TimeoutSec 10 `
+            -Uri "${ownerUrl}?key=$apiKey&updateMask.fieldPaths=preferred&updateMask.fieldPaths=preferredAtMs" | Out-Null
+        Remove-Item $prevFile -Force
+        Say "Tablet given back its normal role (setting restored to '$prev')."
+    } catch {
+        Say "Could not reach the handoff switchboard to un-park the tablet - it may stay idle. Flip the host toggle in the app if needed (its normal setting was '$prev')."
+    }
+}
+
+# Already on the old system with no new system running? Nothing else to do.
 $v1Running = Get-Process -Name 'DeskPhone' -ErrorAction SilentlyContinue
 $v2Running = Get-Process -Name 'DeskPhone.RelayV2' -ErrorAction SilentlyContinue
 if ($v1Running -and -not $v2Running) {
@@ -26,7 +47,7 @@ if ($v1Running -and -not $v2Running) {
     exit 0
 }
 
-# ── 1. Stop the NEW system ───────────────────────────────────────────────────
+# ── 2. Stop the NEW system ───────────────────────────────────────────────────
 if ($v2Running) {
     Say 'Stopping the new system...'
     $v2Running | Stop-Process -Force
@@ -36,7 +57,7 @@ if ($v2Running) {
     Say 'New system is not running.'
 }
 
-# ── 2. Start the OLD system (its own Desktop shortcut is the front door) ────
+# ── 3. Start the OLD system (its own Desktop shortcut is the front door) ────
 if (-not $v1Running) {
     $desktop = [Environment]::GetFolderPath('Desktop')
     $shortcut = Join-Path $desktop 'DeskPhone.lnk'
@@ -62,7 +83,7 @@ if (-not $v1Running) {
     }
 }
 
-# ── 3. Confirm it's answering before declaring victory ───────────────────────
+# ── 4. Confirm it's answering before declaring victory ───────────────────────
 $alive = $false
 foreach ($i in 1..45) {
     Start-Sleep -Seconds 1
@@ -74,7 +95,7 @@ foreach ($i in 1..45) {
 }
 
 if ($alive) {
-    Popup 'You are back on the OLD phone system - everything is as it was.' 'OLD system restored'
+    Popup 'You are back on the OLD phone system, and the tablet has its normal role again - everything is as it was.' 'OLD system restored'
 } else {
     Popup 'The old DeskPhone was started but is not answering yet. Give it a minute; if the phone stays disconnected, open DeskPhone from its usual icon.' 'OLD system starting slowly'
 }

@@ -118,6 +118,35 @@ public class MapSendTests
     }
 }
 
+// The owner's handset ACCEPTED (0xA0) the first draft's "tidied" envelope and
+// then silently never transmitted the SMS — discovered in the first live
+// test. These pins hold both builders to the legacy stack's production-proven
+// bytes: STATUS:UNREAD, no empty N: line in the recipient vCard, ENCODING:8BIT.
+public class BMessageTemplateParityTests
+{
+    [Fact]
+    public void Sms_Envelope_Matches_The_Production_Proven_Template()
+    {
+        var bmsg = MapClientV2.BuildSmsBMessage("+15745550000", "hi");
+        Assert.Contains("STATUS:UNREAD\r\n", bmsg);
+        Assert.Contains("CHARSET:UTF-8\r\nENCODING:8BIT\r\n", bmsg);
+        Assert.DoesNotContain("\r\nN:", bmsg); // the empty-N: line is the silent-drop trigger
+        Assert.Contains("FOLDER:telecom/msg/outbox\r\n", bmsg);
+        Assert.Contains($"LENGTH:{Encoding.UTF8.GetByteCount("BEGIN:MSG\r\nhi\r\nEND:MSG\r\n")}\r\n", bmsg);
+    }
+
+    [Fact]
+    public void Mms_Envelope_Matches_The_Production_Proven_Template()
+    {
+        var payload = MapClientV2.BuildMmsBMessage("+15551234567", "",
+            new[] { new MapAttachment("image/jpeg", "a.jpg", new byte[] { 1 }) });
+        var latin = Encoding.Latin1.GetString(payload);
+        Assert.Contains("STATUS:UNREAD\r\n", latin);
+        Assert.Contains("ENCODING:8BIT\r\n", latin);
+        Assert.DoesNotContain("\r\nN:", latin);
+    }
+}
+
 public class MmsAttachmentTests
 {
     [Fact]

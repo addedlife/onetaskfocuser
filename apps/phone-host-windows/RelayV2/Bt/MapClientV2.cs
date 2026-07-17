@@ -39,7 +39,10 @@ public sealed class MapClientV2 : IAsyncDisposable
     {
         _conn = await RfcommConnection.ConnectAsync(bluetoothAddress, RfcommConnection.MapUuid, ct);
         _obex = new ObexEngine(_conn.Stream);
-        var code = await _obex.ConnectAsync(MasTarget, ct);
+        // MASInstanceID 0 in the CONNECT app-params — part of the legacy
+        // stack's production-proven MAP handshake; some handsets bind the
+        // session to a degraded context without it.
+        var code = await _obex.ConnectAsync(MasTarget, appParams: new byte[] { 0x0F, 0x01, 0x00 }, ct: ct);
         if (code != ObexResponse.Success)
             throw new ObexProtocolException($"MAP CONNECT failed: {code}");
         // Park at telecom/msg once; steady-state operations name the child
@@ -186,20 +189,36 @@ public sealed class MapClientV2 : IAsyncDisposable
             return code == ObexResponse.Success;
         }, ct);
 
+    // BYTE-PARITY RULE: these two builders reproduce the legacy stack's
+    // production-proven envelopes exactly. The first v2 draft "tidied" them
+    // (added an empty N: line, dropped ENCODING:8BIT, STATUS:READ instead of
+    // UNREAD) and the owner's handset ACCEPTED the push with 0xA0 but never
+    // transmitted anything — a silent drop. Quirk knowledge is load-bearing;
+    // do not clean these up again without a real-phone send test.
     internal static string BuildSmsBMessage(string toNumber, string body, string msgType = "SMS_GSM")
     {
-        var sb = new StringBuilder();
-        sb.Append($"BEGIN:BMSG\r\nVERSION:1.0\r\nSTATUS:READ\r\nTYPE:{msgType}\r\nFOLDER:telecom/msg/outbox\r\n");
-        sb.Append("BEGIN:BENV\r\nBEGIN:VCARD\r\nVERSION:2.1\r\nN:\r\n");
-        sb.Append($"TEL:{toNumber}\r\nEND:VCARD\r\n");
-        var payload = body.Replace("\r\n", "\n").Replace("\n", "\r\n");
-        // LENGTH counts the BEGIN:MSG..END:MSG block per spec; vendors accept
-        // small drift but the field must exist.
-        var msgBlock = $"BEGIN:MSG\r\n{payload}\r\nEND:MSG\r\n";
-        sb.Append($"BEGIN:BBODY\r\nCHARSET:UTF-8\r\nLENGTH:{Encoding.UTF8.GetByteCount(msgBlock)}\r\n");
-        sb.Append(msgBlock);
-        sb.Append("END:BBODY\r\nEND:BENV\r\nEND:BMSG\r\n");
-        return sb.ToString();
+        // LENGTH per MAP spec §5.2.2: byte count from "BEGIN:MSG\r\n" through
+        // "END:MSG\r\n" inclusive.
+        var msgBlock = "BEGIN:MSG\r\n" + body + "\r\n" + "END:MSG\r\n";
+        return
+            "BEGIN:BMSG\r\n" +
+            "VERSION:1.0\r\n" +
+            "STATUS:UNREAD\r\n" +
+            $"TYPE:{msgType}\r\n" +
+            "FOLDER:telecom/msg/outbox\r\n" +
+            "BEGIN:BENV\r\n" +
+            "BEGIN:VCARD\r\n" +       // recipient vCard sits INSIDE the BENV (0xC6 otherwise)
+            "VERSION:2.1\r\n" +
+            $"TEL:{toNumber}\r\n" +
+            "END:VCARD\r\n" +
+            "BEGIN:BBODY\r\n" +
+            "CHARSET:UTF-8\r\n" +
+            "ENCODING:8BIT\r\n" +
+            $"LENGTH:{Encoding.UTF8.GetByteCount(msgBlock)}\r\n" +
+            msgBlock +
+            "END:BBODY\r\n" +
+            "END:BENV\r\n" +
+            "END:BMSG\r\n";
     }
 
     // MMS payload: a bMessage envelope whose MSG block is a MIME multipart
@@ -233,10 +252,10 @@ public sealed class MapClientV2 : IAsyncDisposable
         mime.Append($"--{boundary}--\r\n");
 
         var mimeBytes = Encoding.UTF8.GetBytes(mime.ToString());
-        var msgBlockLength = mimeBytes.Length + Encoding.UTF8.GetByteCount("BEGIN:MSG\r\n\r\nEND:MSG\r\n");
+        var msgBlockLength = mimeBytes.Length + Encoding.UTF8.GetByteCount("BEGIN:MSG\r\nEND:MSG\r\n");
         var prefix = Encoding.UTF8.GetBytes(
-            "BEGIN:BMSG\r\nVERSION:1.0\r\nSTATUS:READ\r\nTYPE:MMS\r\nFOLDER:telecom/msg/outbox\r\n" +
-            "BEGIN:BENV\r\nBEGIN:VCARD\r\nVERSION:2.1\r\nN:\r\n" +
+            "BEGIN:BMSG\r\nVERSION:1.0\r\nSTATUS:UNREAD\r\nTYPE:MMS\r\nFOLDER:telecom/msg/outbox\r\n" +
+            "BEGIN:BENV\r\nBEGIN:VCARD\r\nVERSION:2.1\r\n" +
             $"TEL:{toNumber}\r\nEND:VCARD\r\n" +
             $"BEGIN:BBODY\r\nENCODING:8BIT\r\nLENGTH:{msgBlockLength}\r\n" +
             "BEGIN:MSG\r\n");
