@@ -1157,8 +1157,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     try { clearStoredGoogleBrowserToken(); localStorage.removeItem('ot_google_connected'); localStorage.removeItem(GOOGLE_SILENT_REAUTH_LAST_KEY); } catch {}
   }
 
-  async function loadGoogleEmailDetail(messageId) {
-    if (useGoogleServerAuth) return callGoogleWorkspace("gmailMessage", { id: messageId });
+  async function loadGoogleEmailDetail(messageId, sourceAccount = "") {
+    // Route the lookup to the account that actually owns the message — the server
+    // defaults to the primary account, and a secondary account's message id 404s
+    // there as "Requested entity was not found" (owner ticket 7/16).
+    const account = String(sourceAccount || "").trim();
+    if (useGoogleServerAuth) return callGoogleWorkspace("gmailMessage", account ? { id: messageId, account } : { id: messageId });
     if (!googleToken) throw new Error("Reconnect Google to read the full message.");
     const r = await fetchWithTimeout(`https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`, {
       headers: { Authorization: `Bearer ${googleToken}` },

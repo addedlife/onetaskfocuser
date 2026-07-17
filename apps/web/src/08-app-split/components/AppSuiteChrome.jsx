@@ -1,14 +1,16 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { createComponent } from '@lit/react';
 import { MdFab } from '@material/web/fab/fab.js';
 import { MdOutlinedIconButton } from '@material/web/iconbutton/outlined-icon-button.js';
 import { MdDivider } from '@material/web/divider/divider.js';
 import { MdRipple } from '@material/web/ripple/ripple.js';
+import { MdTextButton } from '@material/web/button/text-button.js';
 import { MdOutlinedSegmentedButton } from '@material/web/labs/segmentedbutton/outlined-segmented-button.js';
 import { MdOutlinedSegmentedButtonSet } from '@material/web/labs/segmentedbuttonset/outlined-segmented-button-set.js';
 import { cleanTheme, DUR, EASE, NC_FONT_STACK, NC_TYPE, RADIUS, suiteIcon } from '../ui-tokens.jsx';
 import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
-import { textOnColor } from '../../01-core.js';
+import { Store, textOnColor } from '../../01-core.js';
 import { MdFilterChip } from '@material/web/chips/filter-chip.js';
 import { subscribeOwner, setPreferredHost, ownerIsLive, HOST_LABEL, OWNER_LIVE_WINDOW_MS } from '../phone-host-control.js';
 import { preferredHostId, HANDOFF_GRACE_MS } from '../phone-link.js';
@@ -31,6 +33,7 @@ const SegmentedButtonSet = createComponent({
 });
 const SegmentedButton = createComponent({ react: React, tagName: 'md-outlined-segmented-button', elementClass: MdOutlinedSegmentedButton });
 const FilterChip = createComponent({ react: React, tagName: 'md-filter-chip', elementClass: MdFilterChip });
+const TextButton = createComponent({ react: React, tagName: 'md-text-button', elementClass: MdTextButton });
 
 // Cross-component signaling for the Bug Log rail item, without prop-drilling
 // through App.jsx (which already owns a large prop surface). BugLog.jsx
@@ -66,6 +69,41 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
   // any leak alerts the AI call manager's heuristics flagged (recordAiUsage()).
   const [aiLane, setAiLane] = React.useState({ currentLane: 'gemini:primary', label: 'Gemini', recent: [], usage: { totalToday: 0, totalThisHour: 0, totalThisMonth: 0 }, leaks: [] });
   const [aiLanePopoverOpen, setAiLanePopoverOpen] = React.useState(false);
+  // Owner ticket 7/16: the popover was absolutely positioned inside the rail, so it
+  // clipped under neighboring cards and ran off the top of the screen. It now renders
+  // through a portal at document.body with viewport-clamped fixed coordinates,
+  // computed from the button's rect at open time.
+  const aiLaneBtnRef = React.useRef(null);
+  const [aiLanePopoverPos, setAiLanePopoverPos] = React.useState(null);
+  const openAiLanePopover = () => {
+    const rect = aiLaneBtnRef.current?.getBoundingClientRect() || null;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const width = Math.min(320, vw - 16);
+    let left = rect ? rect.right + 8 : 8;
+    if (left + width > vw - 8) left = Math.max(8, (rect ? rect.left : vw) - width - 8);
+    left = Math.max(8, Math.min(left, vw - width - 8));
+    const bottom = Math.max(8, rect ? vh - rect.bottom : 8);
+    const maxHeight = Math.max(160, Math.min(Math.round(vh * 0.7), vh - bottom - 16));
+    setAiLanePopoverPos({ left, bottom, width, maxHeight });
+  };
+  // Leak entries the owner already filed as buglog tickets (keyed by detectedAt) —
+  // persisted so the button can't create duplicates across sessions.
+  const [ticketedLeaks, setTicketedLeaks] = React.useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('nc_ai_leaks_ticketed') || '[]')); } catch (_) { return new Set(); }
+  });
+  const createLeakTicket = async (leak) => {
+    if (ticketedLeaks.has(leak.detectedAt)) return;
+    const id = await Store.addBug({
+      text: `AI call leak flagged by the call manager: job "${leak.jobId}" — ${leak.reason} Proposed fix: ${leak.proposedFix}`,
+    });
+    if (!id) return;
+    setTicketedLeaks(prev => {
+      const next = new Set(prev);
+      next.add(leak.detectedAt);
+      try { localStorage.setItem('nc_ai_leaks_ticketed', JSON.stringify([...next].slice(-50))); } catch (_) {}
+      return next;
+    });
+  };
   // Which leak timestamps the owner has already opened the popover for — clears the
   // exclamation badge without needing a server round-trip.
   const [seenLeakTimes, setSeenLeakTimes] = React.useState(() => {
@@ -369,7 +407,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
         const hasUnseenLeak = unseenLeaks.length > 0;
         return (
           <div style={{ position: 'relative', width: '100%', flexShrink: 0 }}>
-            <button onClick={() => { setAiLanePopoverOpen(p => !p); markLeaksSeen(); }} title={`AI: ${aiLane.label}${hasUnseenLeak ? ' — possible leak flagged' : ''}`} aria-label={`AI lane: ${aiLane.label}`} style={navBtn(aiLanePopoverOpen)}>
+            <button ref={aiLaneBtnRef} onClick={() => { if (!aiLanePopoverOpen) openAiLanePopover(); setAiLanePopoverOpen(p => !p); markLeaksSeen(); }} title={`AI: ${aiLane.label}${hasUnseenLeak ? ' — possible leak flagged' : ''}`} aria-label={`AI lane: ${aiLane.label}`} style={navBtn(aiLanePopoverOpen)}>
               <Ripple />
               <span style={{ position: 'relative', display: 'inline-flex' }}>
                 {suiteIcon('bolt', ic(24))}
@@ -382,10 +420,10 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
               </span>
               {displayOpen && aiLane.label}
             </button>
-            {aiLanePopoverOpen && (
+            {aiLanePopoverOpen && aiLanePopoverPos && createPortal(
               <>
                 <div style={{ position: 'fixed', inset: 0, zIndex: 9100 }} onClick={() => setAiLanePopoverOpen(false)} />
-                <div style={{ position: 'absolute', left: displayOpen ? 0 : '100%', bottom: 0, marginLeft: displayOpen ? 0 : 8, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, minWidth: 260, maxWidth: 320, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', overflow: 'hidden', maxHeight: '70vh', overflowY: 'auto' }}>
+                <div style={{ position: 'fixed', left: aiLanePopoverPos.left, bottom: aiLanePopoverPos.bottom, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, width: aiLanePopoverPos.width, boxShadow: '0 4px 20px rgba(0,0,0,0.2)', maxHeight: aiLanePopoverPos.maxHeight, overflowY: 'auto', overflowX: 'hidden' }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, padding: '8px 12px 4px' }}>AI lane — currently {aiLane.label}</div>
                   <div style={{ display: 'flex', gap: 10, padding: '2px 12px 9px', fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK }}>
                     <span><b style={{ color: C.text }}>{aiLane.usage.totalToday}</b> today</span>
@@ -400,6 +438,9 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                           <div style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: 600 }}>{leak.jobId}</div>
                           <div style={{ fontSize: 11, color: C.muted, fontFamily: NC_FONT_STACK, marginTop: 2 }}>{leak.reason}</div>
                           <div style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 3, fontStyle: 'italic' }}>{leak.proposedFix}</div>
+                          <TextButton onClick={() => createLeakTicket(leak)} disabled={ticketedLeaks.has(leak.detectedAt)} style={{ marginTop: 4, '--md-text-button-container-height': '28px' }}>
+                            <span>{ticketedLeaks.has(leak.detectedAt) ? 'Ticket created ✓' : 'Create buglog ticket'}</span>
+                          </TextButton>
                         </div>
                       ))}
                     </div>
@@ -419,7 +460,8 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                     ))
                   )}
                 </div>
-              </>
+              </>,
+              document.body
             )}
           </div>
         );

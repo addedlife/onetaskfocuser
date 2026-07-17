@@ -13,6 +13,7 @@ import { cleanTheme, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from 
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { runAIJob } from '../../01-core.js';
 import { shouldRunAndClaim } from '../ai-call-throttle.js';
+import { gmailDeepLink } from '../utils/gmail-links.js';
 
 // Owner ticket 7/15: this used to rerank every 4 min regardless of whether the
 // TaskRiver screen was even open (it's always mounted — see App.jsx), which alone
@@ -301,7 +302,7 @@ export function TaskRiverPanel({
   const act = (it) => {
     if (it.type === 'task') onCompleteTask?.(it.id);
     else if (it.type === 'shaila') onOpenShailos?.();
-    else if (it.type === 'mail') window.open(`https://mail.google.com/mail/u/${encodeURIComponent(it.raw?.sourceAccount || 0)}/#inbox/${it.raw?.id || ''}`, '_blank');
+    else if (it.type === 'mail') window.open(gmailDeepLink(it.raw || {}), '_blank');
     else if (it.type === 'calendar') window.open('https://calendar.google.com/calendar/r', '_blank');
   };
 

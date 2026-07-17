@@ -53,6 +53,12 @@ module.exports = async (req, res) => {
     const result = await processAiPayload(payload);
     return res.status(200).set({ ...cors.headers, "Content-Type": "application/json" }).json(result);
   } catch (e) {
+    // Name the job in the failure log — request logs alone can't say WHICH caller
+    // is hammering a dead gateway (owner ticket 7/16: took Firestore forensics to
+    // trace the storm to dashboard-snapshot).
+    const payload = req.body || {};
+    const jobName = String(payload.job || payload.aiJob || payload.task || "general");
+    console.warn(`[AI] request failed — job=${jobName} status=${e.statusCode || 502}: ${e.message}`);
     const retryAfter = e.retryAfterSeconds ? { "Retry-After": String(e.retryAfterSeconds) } : {};
     return res.status(e.statusCode || 502).set({ ...cors.headers, ...retryAfter, "Content-Type": "application/json" }).json({
       error: e.message || "AI proxy error",

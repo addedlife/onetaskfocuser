@@ -1635,7 +1635,38 @@ function normalizeAiOpts(aiOpts) {
 // (which in turn blocked the whole Calendar+Mail load). Abort past the server budget so a
 // stalled gateway degrades to "no summary" instead of an infinite spinner.
 const AI_PROXY_TIMEOUT_MS = 30000;
+
+// ── AI gateway circuit breaker ───────────────────────────────────────────────
+// Owner ticket 7/16 ("ai calls are dead again"): once every server lane was
+// exhausted the gateway answered 429 + retryAfterSeconds, but callers treated the
+// null result as "try again on the next render" and hammered the dead endpoint
+// every few seconds for hours. Every AI call in the app funnels through
+// callAIProxy, so the breaker lives here: while open, calls short-circuit to null
+// with zero network traffic. Shared across tabs via localStorage; capped at 15
+// minutes so a recovered server (quota reset, new fallback key) gets re-probed.
+const AI_COOLDOWN_STORAGE_KEY = "shamash_ai_proxy_cooldown_until";
+const AI_COOLDOWN_MAX_MS = 15 * 60 * 1000;
+const AI_COOLDOWN_DEFAULT_MS = 2 * 60 * 1000;
+let _aiProxyCooldownUntil = 0;
+
+function aiCooldownUntil() {
+  try {
+    const stored = Number(localStorage.getItem(AI_COOLDOWN_STORAGE_KEY)) || 0;
+    if (stored > _aiProxyCooldownUntil) _aiProxyCooldownUntil = stored;
+  } catch (_) {}
+  return _aiProxyCooldownUntil;
+}
+
+function openAiCooldown(retryAfterSeconds) {
+  const hinted = Number(retryAfterSeconds);
+  const waitMs = Math.min(AI_COOLDOWN_MAX_MS, hinted > 0 ? hinted * 1000 : AI_COOLDOWN_DEFAULT_MS);
+  _aiProxyCooldownUntil = Date.now() + waitMs;
+  try { localStorage.setItem(AI_COOLDOWN_STORAGE_KEY, String(_aiProxyCooldownUntil)); } catch (_) {}
+  console.warn(`[AI] Gateway exhausted — pausing all AI calls for ~${Math.max(1, Math.round(waitMs / 60000))} min.`);
+}
+
 async function callAIProxy(payload, timeoutMs = AI_PROXY_TIMEOUT_MS) {
+  if (Date.now() < aiCooldownUntil()) return null; // breaker open — don't touch the network
   const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
   try {
@@ -1658,6 +1689,10 @@ async function callAIProxy(payload, timeoutMs = AI_PROXY_TIMEOUT_MS) {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || d.error) {
+      // 429 = every server lane is exhausted (the body carries the server's own
+      // retryAfterSeconds). 5xx with an explicit retry hint means the same thing.
+      // Auth/validation errors (400/401/403) must NOT trip the breaker.
+      if (r.status === 429 || (r.status >= 500 && d.retryAfterSeconds)) openAiCooldown(d.retryAfterSeconds);
       console.warn("[AI] Gateway error:", d.error || r.statusText);
       return null;
     }
