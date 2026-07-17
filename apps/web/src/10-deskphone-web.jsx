@@ -16,6 +16,9 @@ const DEFAULT_HOST = "http://127.0.0.1:8765";
 // mailbox. Not used when the page IS the DeskPhone shell (port 8765): there,
 // loopback is the host by definition and the relative /api path wouldn't exist.
 const RELAY_BASE = "/api/phone-relay";
+// How long a queued cloud command may wait for the active host's ack before the
+// UI calls it failed (host drain tick ≈4 s + state push ≈3 s + relay latency).
+const CLOUD_ACK_TIMEOUT_MS = 30000;
 // Liveness windows + status wording come from the shared phone-link.js state
 // machine — this page and the NerveCenter card can no longer disagree.
 const CLOUD_ALLOWED_COMMANDS = new Set([
@@ -6119,6 +6122,25 @@ export function DeskPhoneWebPanel({
     ];
   }, [messages, pendingEchoes, hostOutgoing]);
 
+  // ── Cloud command acknowledgements ────────────────────────────────────────
+  // The active host acknowledges every relayed command by id inside the state
+  // blob it pushes (commandResults) — the same contract the NerveCenter card
+  // already uses. "Sent" on this page must mean the HOST actually ran the
+  // command, not merely that the cloud queued it (owner incident 7/17: sends
+  // showed "Sent" while the mailbox sat undrained for 12 hours and nothing
+  // ever reached the phone).
+  const recentAcksRef = useRef(new Map());   // command id → { ok, error, completedAt }
+  const processCommandResults = useCallback((results) => {
+    if (!Array.isArray(results)) return;
+    results.forEach((r) => {
+      if (!r?.id || recentAcksRef.current.has(r.id)) return;
+      recentAcksRef.current.set(r.id, r);
+      while (recentAcksRef.current.size > 60) {
+        recentAcksRef.current.delete(recentAcksRef.current.keys().next().value);
+      }
+    });
+  }, []);
+
   // Reads the relay state blob (same doc the NerveCenter card reads) — fed by
   // whichever host currently holds the phone: PC DeskPhone or Android tablet.
   const fetchCloudState = useCallback(async () => {
@@ -6179,6 +6201,7 @@ export function DeskPhoneWebPanel({
         const blob = await fetchCloudState();
         cloud = true;
         setRelayStamp(Number(blob?.relayReceivedAt) || 0);
+        processCommandResults(blob?.commandResults);
         Object.assign(nextStatus,   { ok: !!blob?.status, data: blob?.status || null });
         Object.assign(nextMessages, { ok: true, data: blob?.messages || [] });
         Object.assign(nextCalls,    { ok: true, data: blob?.calls || [] });
@@ -6244,7 +6267,7 @@ export function DeskPhoneWebPanel({
         window.setTimeout(refresh, 0);
       }
     }
-  }, [host, onOnlineChange, fetchCloudState]);
+  }, [host, onOnlineChange, fetchCloudState, processCommandResults]);
 
   useEffect(() => {
     refresh();
@@ -6325,7 +6348,40 @@ export function DeskPhoneWebPanel({
       body: JSON.stringify({ path: fullPath }),
     });
     if (!res.ok) throw new Error(`Relay rejected the command (${res.status})`);
+    const queued = await res.json().catch(() => ({}));
+    return queued?.id || null;
   }, []);
+
+  // Poll for the host's ack of a queued cloud command (commandResults in the
+  // state blob). Resolves with the ack ({ ok, error }) or null on timeout —
+  // null means NO host ever drained the command.
+  const waitForCloudAck = useCallback(async (id, timeoutMs) => {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const ack = recentAcksRef.current.get(id);
+      if (ack) return ack;
+      if (Date.now() >= deadline) return null;
+      await new Promise((r) => setTimeout(r, 2500));
+      try { await refresh(); } catch (_) { /* transient — keep polling to deadline */ }
+    }
+  }, [refresh]);
+
+  // Queue a cloud command AND hold for the host's acknowledgement. Success here
+  // means the host really ran it; a missing ack is a hard failure, never a
+  // silent "Sent" (owner incident 7/17).
+  const runCloudCommandConfirmed = useCallback(async (path, payload) => {
+    const cmdId = await runCloudCommand(path, payload);
+    if (!cmdId) {
+      // Relay without command ids (older function) — legacy blind wait.
+      await new Promise((r) => setTimeout(r, 1500));
+      await refresh();
+      return;
+    }
+    const ack = await waitForCloudAck(cmdId, CLOUD_ACK_TIMEOUT_MS);
+    await refresh();
+    if (ack && !ack.ok) throw new Error(ack.error || "Your phone host reported the command failed.");
+    if (!ack) throw new Error("No phone host picked this up — it did NOT run. Check the phone link and retry.");
+  }, [runCloudCommand, waitForCloudAck, refresh]);
 
   const runCommand = useCallback(async (path, label, payload, opts = {}) => {
     // Background mode (sends): no busy overlay, no global error banner — the
@@ -6333,10 +6389,7 @@ export function DeskPhoneWebPanel({
     // sendComposeMessage can flip its echo to Failed.
     if (opts.background) {
       if (viaCloudRef.current) {
-        await runCloudCommand(path, payload);
-        // Give the host a moment to drain + push, then re-read the cloud blob.
-        await new Promise((r) => setTimeout(r, 1500));
-        await refresh();
+        await runCloudCommandConfirmed(path, payload);
       } else {
         await postJson(host, path, payload);
         await refresh();
@@ -6346,9 +6399,7 @@ export function DeskPhoneWebPanel({
     setBusy(label);
     try {
       if (viaCloudRef.current) {
-        await runCloudCommand(path, payload);
-        await new Promise((r) => setTimeout(r, 1500));
-        await refresh();
+        await runCloudCommandConfirmed(path, payload);
       } else {
         await postJson(host, path, payload);
         await refresh();
@@ -6359,7 +6410,7 @@ export function DeskPhoneWebPanel({
     } finally {
       setBusy("");
     }
-  }, [host, refresh, runCloudCommand]);
+  }, [host, refresh, runCloudCommandConfirmed]);
 
   const toggleRail = useCallback(() => {
     setRailCollapsed((current) => {

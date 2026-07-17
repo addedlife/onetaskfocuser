@@ -18,7 +18,10 @@ exports.debugLog        = onRequest({ timeoutSeconds: 10,  memory: "128MiB", reg
 exports.chiefProfile    = onRequest({ timeoutSeconds: 30,  memory: "256MiB", region: "us-central1" }, chiefProfile);
 exports.googleWorkspace = onRequest({ timeoutSeconds: 60,  memory: "256MiB", region: "us-central1" }, googleWorkspace);
 exports.googleHealth    = onRequest({ timeoutSeconds: 30,  memory: "256MiB", region: "us-central1" }, googleHealth);
-exports.phoneRelay      = onRequest({ timeoutSeconds: 10,  memory: "128MiB", region: "us-central1" }, phoneRelay);
+// 256MiB: at 128MiB this function OOM-killed instances mid-push once the state
+// blob passed ~0.5 MB (Cloud Run logged "memory limit exceeded" 7/17) — and the
+// drain step runs AFTER the state write, so command delivery died first.
+exports.phoneRelay      = onRequest({ timeoutSeconds: 10,  memory: "256MiB", region: "us-central1" }, phoneRelay);
 exports.phoneRelayV2    = onRequest({ timeoutSeconds: 10,  memory: "128MiB", region: "us-central1" }, phoneRelayV2);
 exports.onPhoneRelayV2PresenceWrite = onPhoneRelayV2PresenceWrite;
 exports.mcp             = onRequest({ timeoutSeconds: 60,  memory: "256MiB", region: "us-central1" }, mcpHandler);

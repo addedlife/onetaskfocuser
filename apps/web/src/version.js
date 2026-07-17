@@ -10,13 +10,13 @@
 // On your next release: if it's a feat:, do (major).(minor+1).0
 //                        if it's a fix:/style:, do (major).(minor).(patch+1)
 // Full reconstructed history: see CHANGELOG.md.
-export const APP_VERSION = "4.83.0";
+export const APP_VERSION = "4.84.1";
 
 // The "updated" stamp is taken from the real build time (injected by Vite's `define` in
 // vite.config.js as __BUILD_TIME__), so every deploy — including multiple pushes in one
 // day — auto-stamps its own date AND time, with no manual entry. Falls back to this ISO
 // date if the build global isn't present (e.g. unit tests running the raw source).
-export const APP_VERSION_DATE = "2026-07-16";
+export const APP_VERSION_DATE = "2026-07-17";
 const BUILD_TIME = (typeof __BUILD_TIME__ !== "undefined" && __BUILD_TIME__) ? __BUILD_TIME__ : null;
 
 function versionDate() {

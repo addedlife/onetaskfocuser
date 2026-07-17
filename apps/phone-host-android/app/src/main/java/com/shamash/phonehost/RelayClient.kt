@@ -541,23 +541,31 @@ class RelayClient(private val host: HostService) {
         code
     } catch (_: Exception) { -1 }
 
-    // ── Auth-header variants, used only for the RTDB command mailbox ─────
-    private fun httpGetAuthed(url: String, bearer: String?): String? = try {
-        val conn = URL(url).openConnection() as HttpURLConnection
+    // ── Authed variants, used only for the RTDB command mailbox ──────────
+    // RTDB's REST API only honors Firebase ID tokens as an ?auth= query
+    // parameter — an Authorization: Bearer header is parsed as a (wrong-type)
+    // Google OAuth2 access token and the request 401s. b11 shipped the Bearer
+    // form, so from the 7/15 rules lockdown every drainTick read failed
+    // silently and no cloud command reached this host.
+    private fun withRtdbAuth(url: String, idToken: String?): String =
+        if (idToken == null) url
+        else url + (if (url.contains('?')) "&" else "?") + "auth=" +
+            java.net.URLEncoder.encode(idToken, "UTF-8")
+
+    private fun httpGetAuthed(url: String, idToken: String?): String? = try {
+        val conn = URL(withRtdbAuth(url, idToken)).openConnection() as HttpURLConnection
         conn.connectTimeout = HTTP_TIMEOUT_MS
         conn.readTimeout = HTTP_TIMEOUT_MS
-        if (bearer != null) conn.setRequestProperty("Authorization", "Bearer $bearer")
         if (conn.responseCode in 200..299) conn.inputStream.bufferedReader().use { it.readText() } else null
     } catch (_: Exception) { null }
 
-    private fun httpSendAuthed(method: String, url: String, body: String, bearer: String?): Int = try {
-        val conn = URL(url).openConnection() as HttpURLConnection
+    private fun httpSendAuthed(method: String, url: String, body: String, idToken: String?): Int = try {
+        val conn = URL(withRtdbAuth(url, idToken)).openConnection() as HttpURLConnection
         conn.requestMethod = method
         conn.connectTimeout = HTTP_TIMEOUT_MS
         conn.readTimeout = HTTP_TIMEOUT_MS
         conn.doOutput = true
         conn.setRequestProperty("Content-Type", "application/json")
-        if (bearer != null) conn.setRequestProperty("Authorization", "Bearer $bearer")
         conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
         val code = conn.responseCode
         runCatching { (if (code in 200..299) conn.inputStream else conn.errorStream)?.close() }

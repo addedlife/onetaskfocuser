@@ -88,6 +88,26 @@ async function rtdbSetCommands(arr) {
   await getAdminDatabase().ref("phone-relay/commands").set(arr.length ? arr : null);
 }
 
+// Commands that sat undelivered longer than this are dropped at delivery time,
+// never handed to a host — firing a stale /send when a host finally reconnects
+// would text real people hours late (owner incident 7/17: 13 commands,
+// including real replies, stranded 12+ hours while every host's mailbox read
+// was failing auth; delivering them on recovery would have sent duplicates).
+const COMMAND_TTL_MS = 10 * 60 * 1000;
+
+function dropExpiredCommands(all) {
+  const now = Date.now();
+  const fresh = [];
+  const stale = [];
+  for (const c of all) ((now - (Number(c?.queuedAt) || 0)) <= COMMAND_TTL_MS ? fresh : stale).push(c);
+  if (stale.length) {
+    // ids + age only — command paths carry private message text.
+    console.warn(`[phone-relay] dropped ${stale.length} expired command(s): ` +
+      stale.map((c) => `${c?.id || "?"} age=${Math.round((now - (Number(c?.queuedAt) || 0)) / 60000)}m`).join(", "));
+  }
+  return fresh;
+}
+
 function extractIdToken(req) {
   const authHeader = req.headers["authorization"] || "";
   if (!authHeader.startsWith("Bearer ")) return null;
@@ -139,9 +159,14 @@ module.exports = async (req, res) => {
       const pending = await rtdbGetCommands();
       if (pending.length > 0) {
         await rtdbSetCommands([]);
-        commands = pending;
+        commands = dropExpiredCommands(pending);
       }
-    } catch (_) { commands = []; }
+    } catch (e) {
+      // Swallowing this silently hid a dead command channel for days (7/17
+      // incident) — the push must still succeed, but the failure gets logged.
+      console.error("[phone-relay] push-path command drain failed:", e.message);
+      commands = [];
+    }
     return sendOk(res, { ok: true, commands });
   }
 
@@ -187,7 +212,7 @@ module.exports = async (req, res) => {
     try {
       const commands = await rtdbGetCommands();
       if (commands.length > 0) await rtdbSetCommands([]);
-      return sendOk(res, commands);
+      return sendOk(res, dropExpiredCommands(commands));
     } catch (e) {
       return sendErr(res, 500, "Failed to drain commands: " + e.message);
     }

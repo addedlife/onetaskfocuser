@@ -1,18 +1,18 @@
-import java.util.Properties
+﻿import java.util.Properties
 
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
 
-// ── ONE bump point per release ──────────────────────────────────────────────
+// â”€â”€ ONE bump point per release â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // hostBuild drives versionCode/versionName, the launcher label ("Shamash Phone Host b7"),
 // the icon background color (cycles a palette so every build looks different on
-// the home screen — owner ticket: "put a different icon each build so it's
+// the home screen â€” owner ticket: "put a different icon each build so it's
 // recognizable"), and HostService.BUILD_STAMP via BuildConfig.HOST_BUILD.
-val hostBuild = 11
+val hostBuild = 12
 
-// Same shared secret DeskPhone stores as Settings.RelayKey — read from
+// Same shared secret DeskPhone stores as Settings.RelayKey â€” read from
 // local.properties (gitignored, never committed) instead of a per-user
 // settings screen, since this host has no such screen yet. Compiled in as
 // BuildConfig.RELAY_SECRET; RelayClient.kt uses it to mint a short-lived
