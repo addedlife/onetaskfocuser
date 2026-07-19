@@ -1414,11 +1414,21 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // changes — new email, call, task, etc. With the clock included, every bucket rollover
   // changed the key and fired a dashboard-snapshot AI call like a 5-minute metronome
   // (owner ticket jYozknRO, flagged by the leak detector).
+  // Owner ticket gufdsEDT (7/19, flagged by the leak detector at 97 calls/day vs ~32):
+  // two more volatile fields were still churning this key after the clock strip above.
+  // emails[].summary prefers msg.aiSummary, which lands ASYNCHRONOUSLY after the polish
+  // job — every Gmail-push arrival changed the key once for the snippet and again when
+  // its AI summary landed (and Gmail push, 4.87.0, delivers mail one message at a time
+  // where polling used to batch it). calendar[].now/past are clock-derived and flip at
+  // every event boundary. Identity + freshness of each item are already fully covered by
+  // sourceKey/freshnessKey, so dropping these fields loses no real change detection.
   const ncSummaryScanKey = useMemo(() => JSON.stringify({
     ...chiefContext,
     currentTime: undefined,
     localeTime: undefined,
     tasks: (chiefContext.tasks || []).map(({ ageHours, ...rest }) => rest),
+    emails: (chiefContext.emails || []).map(({ summary, ...rest }) => rest),
+    calendar: (chiefContext.calendar || []).map(({ now, past, ...rest }) => rest),
   }), [chiefContext]);
   const taskSuggestionPriorities = useMemo(() =>
     [...(priorities || [])]

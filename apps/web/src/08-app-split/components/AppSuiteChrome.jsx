@@ -606,6 +606,13 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                             {entry.model && (
                               <div style={{ fontSize: 10, color: C.faint, fontFamily: NC_MONO_STACK, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.model}</div>
                             )}
+                            {/* Owner ticket Q81pBGSq: the prompt must be visible without
+                                expanding — a collapsed row that reads as only job+timestamp
+                                hides what the call actually asked. One line, tail-clipped;
+                                the full text stays in the expanded view below. */}
+                            {entry.prompt && (
+                              <div style={{ fontSize: 10, color: C.muted, fontFamily: NC_MONO_STACK, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.prompt}</div>
+                            )}
                           </button>
                           {open && (
                             <div style={{ padding: '0 12px 10px' }}>

@@ -35,7 +35,12 @@ const GEMINI_QUEUE_TIMEOUT_MS = 8000;
 
 const GEMINI_FREE_LIMITS = {
   "gemini-3.1-pro-preview": { rpm: 4, tpm: 250000, rpd: 90 },
-  "gemini-3-flash-preview": { rpm: 8, tpm: 250000, rpd: 180 },
+  // Owner ticket eQ5mY3G5 (7/19): Google's live 429 reads "limit: 20, model:
+  // gemini-3-flash" — the free tier for this model is 20/day now, not the 180 this
+  // table assumed. With 180 here the gateway kept steering fallback traffic into a
+  // lane Google rejects after 20 calls, burning the ladder's wall-clock budget on
+  // guaranteed 429s before reaching lanes with real capacity.
+  "gemini-3-flash-preview": { rpm: 8, tpm: 250000, rpd: 20 },
   "gemini-3.1-flash-lite": { rpm: 15, tpm: 250000, rpd: 1000 },
   "gemini-2.5-pro": { rpm: 5, tpm: 250000, rpd: 100 },
   "gemini-2.5-flash": { rpm: 10, tpm: 250000, rpd: 250 },
@@ -54,16 +59,16 @@ const GEMINI_MODELS = [
 // Owner ticket 7/16: each Gemini MODEL has its own independent free daily quota bucket
 // (see GEMINI_FREE_LIMITS above) — a genuinely separate resource, not a copy of the same
 // one. Walking every model before walking credentials turns 2 free projects into up to
-// 2 * (1000+1000+250+180+100+90) = 5,240 free requests/day, no new projects needed.
+// 2 * (1000+1000+250+100+90+20) = 4,920 free requests/day, no new projects needed.
 // Ordered by descending published rpd (most-available first) so a degrade always lands
 // on the model most likely to still have room.
 const MODEL_FALLBACK_ORDER = [
   "gemini-3.1-flash-lite",   // rpd 1000
   "gemini-2.5-flash-lite",   // rpd 1000
   "gemini-2.5-flash",        // rpd 250
-  "gemini-3-flash-preview",  // rpd 180
   "gemini-2.5-pro",          // rpd 100
   "gemini-3.1-pro-preview",  // rpd 90
+  "gemini-3-flash-preview",  // rpd 20 (Google cut the free tier — see GEMINI_FREE_LIMITS)
 ];
 
 // Rotates MODEL_FALLBACK_ORDER to start at the job's own requested/default model (so the
@@ -2221,8 +2226,13 @@ async function processAiPayload(payload = {}) {
   const result = await (kind === "audio" ? callGemini(common) : callWithFallback(common));
   recordAiUsage(task, result).catch(() => {});
   // Audio calls carry a base64 blob in `common.base64`, never in the prompt, so
-  // logging the prompt here can't accidentally persist audio payloads.
-  recordAiLogEntry({ jobKey: task, prompt: common.prompt, result, elapsedMs: Date.now() - startedMs }).catch(() => {});
+  // logging the prompt here can't accidentally persist audio payloads. Raw-body
+  // calls carry no `prompt` at all — flatten the body's text parts so the live
+  // log shows what was actually sent instead of an empty prompt (owner ticket
+  // Q81pBGSq: "i want the ai prompt that was sent not just the timestamp");
+  // geminiBodyToPrompt renders inline audio parts as "[audio attachment]".
+  const logPrompt = common.prompt || (common.body ? geminiBodyToPrompt(common.body) : "");
+  recordAiLogEntry({ jobKey: task, prompt: logPrompt, result, elapsedMs: Date.now() - startedMs }).catch(() => {});
   return result;
 }
 
