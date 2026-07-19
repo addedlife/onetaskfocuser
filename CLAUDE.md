@@ -22,6 +22,15 @@ being promised in chat and forgotten. Read `BRIEF.txt` and `AGENTS.md` too.
   live Firebase-hosted site.
 - Do NOT leave a verified web fix sitting on a feature branch waiting for separate approval, and
   do NOT ask "should I push this live?" for a normal fix — the answer is yes. Push it.
+- This applies even when the session harness assigned you a `claude/...` working branch: develop
+  there if required, but a verified fix ends with the commits ALSO on `origin/main` (merge or
+  cherry-pick, then push). The owner has explicitly authorized this (2026-07-19) — the feature
+  branch is a workspace, not the destination.
+- The ONE hold: if the concurrent-session check below finds another ACTIVE coding session
+  (live `coding-sessions` entry with a fresh `lastPing`, or uncommitted changes on disk that
+  aren't yours) whose work overlaps, don't push over it — flag it to the owner and ask first.
+  No Firebase tools in the session to run the check (some environments genuinely lack them)?
+  The on-disk `git status` check still applies; if that's clean, push.
 - Exceptions that still require an explicit heads-up first: storage/sync refactors (see
   `HANDOFF.md` §9 — these can wipe live data), schema migrations, secret/permission changes, or
   anything that could be destructive or hard to reverse.
