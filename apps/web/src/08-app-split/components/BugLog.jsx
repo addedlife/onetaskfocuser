@@ -135,7 +135,14 @@ export function BugLog({ T, railVisible = true }) {
   // bug doc. Display-only — the original text stays authoritative (the reader tool and
   // "Copy for coding team" always use b.text). Reuses the deployed polish job; on AI
   // failure the UI just keeps showing a deterministic truncation, so nothing blocks.
-  const summarizedRef = React.useRef(new Set()); // ids attempted this session — no retry loops
+  const summarizedRef = React.useRef(new Set()); // ids attempted this session — no tight retry loops
+  // A failed batch (throttle cooldown, quota, offline) used to leave its ids marked as
+  // "attempted" forever, so an entry edited during an AI outage never got re-summarized
+  // (owner ticket pMfqQ4PY). Now failures un-mark their ids and nudge a bounded retry.
+  const summaryRetryCountRef = React.useRef(0);
+  const summaryRetryTimerRef = React.useRef(null);
+  const [summaryRetryNonce, setSummaryRetryNonce] = React.useState(0);
+  React.useEffect(() => () => { if (summaryRetryTimerRef.current) clearTimeout(summaryRetryTimerRef.current); }, []);
   React.useEffect(() => {
     const pending = bugs.filter(b =>
       b.id && !b.summary && (b.text || '').trim().length > 90 && !summarizedRef.current.has(b.id)
@@ -152,11 +159,20 @@ export function BugLog({ T, railVisible = true }) {
             Store.updateBug(item.id, { summary: item.summary });
           }
         }
+        summaryRetryCountRef.current = 0;
       } catch (e) {
         console.warn('[BugLog] auto-summary failed (display falls back to truncation):', e);
+        pending.forEach(b => summarizedRef.current.delete(b.id));
+        if (summaryRetryCountRef.current < 5 && !summaryRetryTimerRef.current) {
+          summaryRetryCountRef.current += 1;
+          summaryRetryTimerRef.current = setTimeout(() => {
+            summaryRetryTimerRef.current = null;
+            setSummaryRetryNonce(n => n + 1);
+          }, 90 * 1000); // 90s — clears typical ai-throttle cooldowns without hammering
+        }
       }
     })();
-  }, [bugs]);
+  }, [bugs, summaryRetryNonce]);
 
   const unresolvedCount = bugs.filter(b => b.status === 'unresolved').length;
 
@@ -496,6 +512,10 @@ export function BugLog({ T, railVisible = true }) {
                             value={editText}
                             onInput={e => setEditText(e.target.value)}
                             onKeyDown={e => {
+                              // Keep keystrokes inside the textarea: md-list treats bubbled
+                              // Arrow/Home/End keydowns as item navigation, which yanked focus
+                              // to the next card mid-edit (owner ticket qPExl6Yy).
+                              e.stopPropagation();
                               if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
                               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(b.id); }
                             }}
