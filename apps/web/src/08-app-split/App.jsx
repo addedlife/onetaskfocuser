@@ -1121,6 +1121,19 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       Promise.allSettled([calP, mailP]).finally(() => { if (!cancelled) setGoogleLoading(false); });
     };
     load();
+    // Bootstrap the Gmail watch for accounts that were already connected before push
+    // existed. Registering is idempotent (Gmail treats a repeat watch as an extension)
+    // and the nightly job only RENEWS watches it already knows about, so without this
+    // an existing connection would never arm itself. Guarded to once a day per device.
+    try {
+      const ARM_KEY = "shamash_gmail_push_armed_at";
+      const lastArmed = Number(localStorage.getItem(ARM_KEY)) || 0;
+      if (Date.now() - lastArmed > 24 * 60 * 60 * 1000) {
+        callGoogleWorkspace("armGmailPush", {})
+          .then(() => { try { localStorage.setItem(ARM_KEY, String(Date.now())); } catch (_) {} })
+          .catch(e => console.warn("[Google] mail push arm failed:", e?.message));
+      }
+    } catch (_) {}
     const onVisible = () => {
       if (document.visibilityState === "visible") load();
     };
