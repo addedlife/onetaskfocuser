@@ -750,6 +750,7 @@ const Store = {
         userId: firebase.auth().currentUser?.uid || this.uid,
       }));
       console.log("[Store] Added bug:", ref.id);
+      this._syncOpenTickets();
       return ref.id;
     } catch (e) {
       console.warn("[Store] addBug failed:", e);
@@ -767,6 +768,7 @@ const Store = {
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       console.log("[Store] Updated bug:", id, patch);
+      this._syncOpenTickets();
     } catch (e) {
       console.warn("[Store] updateBug failed:", e);
     }
@@ -778,8 +780,41 @@ const Store = {
     try {
       await col.doc(id).delete();
       console.log("[Store] Deleted bug:", id);
+      this._syncOpenTickets();
     } catch (e) {
       console.warn("[Store] deleteBug failed:", e);
+    }
+  },
+
+  // Condensed mirror of all non-resolved tickets at users/{uid}/meta/openTickets.
+  // Exists so a coding session can find open work with one tiny document read
+  // instead of dumping the whole bugs collection (full text + history). Re-built
+  // from a status-filtered query after every bug mutation; mutations are rare
+  // (owner-triggered), so the extra query+write per mutation is negligible.
+  async _syncOpenTickets() {
+    const col = this.bugsCol();
+    if (!col) return;
+    try {
+      const snap = await col.where("status", "in", ["unresolved", "paused", "future"]).get();
+      const items = snap.docs
+        .map(d => {
+          const b = d.data();
+          return {
+            id: d.id,
+            type: b.type || "bug",
+            status: b.status || "unresolved",
+            summary: (b.summary || b.text || "").slice(0, 200),
+            createdAtMs: b.createdAtMs || 0,
+          };
+        })
+        .sort((a, b) => b.createdAtMs - a.createdAtMs);
+      await db.collection("users").doc(this.uid).collection("meta").doc("openTickets").set({
+        items,
+        count: items.length,
+        updatedAtMs: Date.now(),
+      });
+    } catch (e) {
+      console.warn("[Store] _syncOpenTickets failed:", e);
     }
   },
 
@@ -2039,9 +2074,12 @@ async function aiParseShailos(text, aiOpts) {
     .filter(i => i.shaila);
 }
 
-// Generate new calm color schemes via Gemini
-async function aiGenSchemes(aiOpts, existingNames) {
-  const job = await runAIJob("settings.color_schemes.v1", { existingNames }, aiOpts);
+// Generate new color schemes via the AI gateway. `existing` may be a plain array of
+// names (legacy) or {names, bgColors} so the prompt can steer away from existing hues,
+// not just existing names (ticket 1rWQOBmD: same colors kept coming back renamed).
+async function aiGenSchemes(aiOpts, existing) {
+  const ex = Array.isArray(existing) ? { names: existing, bgColors: [] } : (existing || {});
+  const job = await runAIJob("settings.color_schemes.v1", { existingNames: ex.names || [], existingBgColors: ex.bgColors || [] }, aiOpts);
   const items = Array.isArray(job?.output) ? job.output : [];
   if (!items.length) throw new Error("no schemes generated");
   return items

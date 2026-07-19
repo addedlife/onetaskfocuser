@@ -85,6 +85,16 @@ This is intentionally lightweight — a presence/advisory system, not a hard loc
 once a session actually reads this file and follows it; it can't retroactively coordinate with
 a session that started before this section existed.
 
+## Open tickets — cheap read path (STANDING)
+
+To find open bugs/ideas, do NOT dump the whole `users/rabbidanziger/bugs` collection.
+Read the condensed mirror first — one small document:
+`firestore_get_document` on `users/rabbidanziger/meta/openTickets`
+(`items`: non-resolved tickets, newest first, each `{id, type, status, summary, createdAtMs}`).
+Only fetch an individual `bugs/{id}` doc when you need the full text/history of a specific
+ticket. The mirror is rebuilt by the web app on every bug add/status-change/delete
+(`Store._syncOpenTickets` in `apps/web/src/01-core.js`).
+
 ## Versioning (STANDING)
 
 The app version is the single constant in `apps/web/src/version.js`, shown in the left rail.
