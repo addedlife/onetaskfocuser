@@ -1724,10 +1724,16 @@ async function callGemini({ body, prompt, base64, mimeType, model, genConfig, cr
   // short retryAfter and a generic "pacing requests" message, and the next rung has its
   // own independent RPM/RPD budget that was very likely free.
   for (const credential of credentials) {
+    let attemptsOnThisCredential = 0;
     for (const attemptModel of models) {
-      if (Date.now() - startedAt > LADDER_WALL_CLOCK_BUDGET_MS) {
-        throw lastError || httpError(429, "Gemini gateway is pacing requests across every available model; retry shortly.", 15);
-      }
+      // Over-budget handling is per-credential, not a global kill switch: the 7/19
+      // outage happened because the primary lane's four pacing-queued rungs ate the
+      // whole 18s budget and this used to THROW here — so overflow-01 and paid-01
+      // never got a single attempt while holding fresh quota. Now an exhausted budget
+      // only stops walking MORE models on the current credential; every credential
+      // still gets at least its first rung.
+      if (attemptsOnThisCredential > 0 && Date.now() - startedAt > LADDER_WALL_CLOCK_BUDGET_MS) break;
+      attemptsOnThisCredential++;
       try {
         return await callGeminiOnce({
           body: requestBody,

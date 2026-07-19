@@ -17,15 +17,16 @@ import { gmailDeepLink } from '../utils/gmail-links.js';
 
 // Owner ticket 7/15: this used to rerank every 4 min regardless of whether the
 // TaskRiver screen was even open (it's always mounted — see App.jsx), which alone
-// could burn ~300 calls/day for a feature nobody was looking at. New cadence: rank
-// once on app open, again on opening this screen (if it's been a couple minutes),
-// otherwise once an hour in the background. The throttle itself now lives in
-// Firestore (ai-call-throttle.js) instead of localStorage, so it's durable across a
-// remount and shared across every tab/device the same user has open.
+// could burn ~300 calls/day for a feature nobody was looking at. Cadence (owner
+// directive 7/19): rank ONLY while this screen is physically open — once when it
+// opens, and again only via the Re-prioritize button. No background hourly pass and
+// no automatic error retries: the old retry loop bypassed the throttle and, on a
+// quota-exhausted day, re-fired every ~90s until it drained the entire Gemini
+// free-tier daily allowance (the 7/19 retry storm). The claim gate lives in
+// Firestore (ai-call-throttle.js), durable across remounts and shared across every
+// tab/device the same user has open.
 const RANK_THROTTLE_KEY = 'task-river-rank';
-const RANK_MIN_GAP_MS = 60 * 60 * 1000;      // hourly background baseline
-const VISIBLE_MIN_GAP_MS = 2 * 60 * 1000;    // don't force-refresh on rapid tab flips
-const RECHECK_INTERVAL_MS = 5 * 60 * 1000;   // how often to poll the throttle while blocked
+const VISIBLE_MIN_GAP_MS = 2 * 60 * 1000;    // don't re-rank on rapid tab flips
 
 // ── color helpers ───────────────────────────────────────────────────────────
 function hexToRgb(hex) {
@@ -143,92 +144,42 @@ export function TaskRiverPanel({
   // ── AI ranking ─────────────────────────────────────────────────────────────────
   const [aiMeta, setAiMeta] = useState({}); // id -> { score, label, reason }
   const [aiState, setAiState] = useState('idle'); // idle | ranking | ok | error
-  const [retryIn, setRetryIn] = useState(null); // seconds until auto-retry, null = none pending
   const [rankNonce, setRankNonce] = useState(0); // increment to force a fresh rank
   const rankInFlight = useRef(false);
   const lastRankKeyRef = useRef('');
-  const retryTimerRef = useRef(null);
-  const retryCountdownRef = useRef(null);
-  const retryStreakRef = useRef(0);
-  const mountedAtRef = useRef(Date.now());
-  const forcedByUserRef = useRef(false);   // set by reprioritize(); bypasses the throttle entirely
-  const didMountRankRef = useRef(false);   // "run once on app open" fires exactly once
-  const prevVisibleRef = useRef(visible);  // detects the false -> true "opened this screen" transition
+  const forcedByUserRef = useRef(false);   // set by reprioritize(); bypasses the claim gap
+  const prevVisibleRef = useRef(false);    // detects the false -> true "opened this screen" transition
   const watchdogRef = useRef(null);
-  const pendingRecheckRef = useRef(null);
   const rankKey = useMemo(() => items.map(i => i.id).join('|'), [items]);
 
-  function cancelRetry() {
-    if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
-    if (retryCountdownRef.current) { clearInterval(retryCountdownRef.current); retryCountdownRef.current = null; }
-    setRetryIn(null);
-  }
-  function scheduleRetry(delaySec) {
-    cancelRetry();
-    setRetryIn(delaySec);
-    retryCountdownRef.current = setInterval(() => setRetryIn(t => (t === null ? null : Math.max(0, t - 1))), 1000);
-    retryTimerRef.current = setTimeout(() => {
-      clearInterval(retryCountdownRef.current); retryCountdownRef.current = null;
-      retryTimerRef.current = null; setRetryIn(null);
-      lastRankKeyRef.current = ''; setRankNonce(n => n + 1);
-    }, delaySec * 1000);
-  }
-  // Cleanup on unmount
-  useEffect(() => () => { // eslint-disable-line react-hooks/exhaustive-deps
-    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-    if (retryCountdownRef.current) clearInterval(retryCountdownRef.current);
-  }, []);
-
   useEffect(() => {
+    // Ranking fires ONLY while the screen is physically open: once on the open
+    // transition, again only when the user presses Re-prioritize. An error just shows
+    // "AI unavailable" with the Retry button — never an automatic re-fire.
+    if (!visible) { prevVisibleRef.current = false; return undefined; }
+    const justBecameVisible = !prevVisibleRef.current;
+    prevVisibleRef.current = true;
+
     if (!items.length) { setAiState('idle'); return undefined; }
     if (rankInFlight.current) return undefined;
 
-    // Opening this screen always re-evaluates (the Firestore claim below still governs
-    // whether it actually fires) — clears the cache-hit shortcut just for this pass.
-    const justBecameVisible = visible && !prevVisibleRef.current;
-    prevVisibleRef.current = visible;
-    if (justBecameVisible) lastRankKeyRef.current = '';
-
-    if (lastRankKeyRef.current === rankKey && Object.keys(aiMeta).length) { setAiState('ok'); return undefined; }
-    // 4-second startup delay on first call so snapshot.v1 gets the first flash-lite slot.
-    const elapsed = Date.now() - mountedAtRef.current;
-    if (elapsed < 4000 && retryStreakRef.current === 0 && !Object.keys(aiMeta).length) {
-      const t = setTimeout(() => setRankNonce(n => n + 1), 4000 - elapsed);
-      return () => clearTimeout(t);
-    }
-
     const isUserForced = forcedByUserRef.current;
     forcedByUserRef.current = false;
-    const isRetry = retryStreakRef.current > 0;
-    const justMounted = !didMountRankRef.current;
-    if (justMounted) didMountRankRef.current = true;
-    // App just opened, screen just opened, forced, or retrying -> bypass the wait
-    // entirely (still claims the slot, so the shared clock stays honest). Otherwise:
-    // the durable, cross-tab/cross-device hourly gate in ai-call-throttle.js.
-    const effectiveGapMs = (isUserForced || isRetry || justMounted) ? 0
-      : justBecameVisible ? VISIBLE_MIN_GAP_MS
-      : RANK_MIN_GAP_MS;
+    if (!justBecameVisible && !isUserForced) return undefined;
+    if (!isUserForced && lastRankKeyRef.current === rankKey && Object.keys(aiMeta).length) { setAiState('ok'); return undefined; }
 
     let cancelled = false;
-    shouldRunAndClaim(RANK_THROTTLE_KEY, effectiveGapMs).then(allowed => {
+    // The Firestore claim still de-duplicates rapid open/close flips and other open
+    // tabs/devices; a user-forced refresh claims with no minimum gap.
+    shouldRunAndClaim(RANK_THROTTLE_KEY, isUserForced ? 0 : VISIBLE_MIN_GAP_MS).then(allowed => {
       if (cancelled) return;
-      if (!allowed) {
-        pendingRecheckRef.current = setTimeout(() => setRankNonce(n => n + 1), RECHECK_INTERVAL_MS);
-        return;
-      }
-      // Claimed — cancel any waiting countdown and rank now.
-      cancelRetry();
+      if (!allowed) { if (Object.keys(aiMeta).length) setAiState('ok'); return; }
       rankInFlight.current = true;
       setAiState('ranking');
       let settled = false;
       const settle = (state, meta) => {
         if (settled) return; settled = true; rankInFlight.current = false;
-        if (meta) {
-          setAiMeta(meta); lastRankKeyRef.current = rankKey; retryStreakRef.current = 0;
-        } else if (state === 'error') {
-          retryStreakRef.current += 1;
-          scheduleRetry(Math.min(90, 20 * retryStreakRef.current));
-        }
+        if (meta) { setAiMeta(meta); lastRankKeyRef.current = rankKey; }
         setAiState(state);
       };
       watchdogRef.current = setTimeout(() => settle('error'), 29000);
@@ -248,7 +199,6 @@ export function TaskRiverPanel({
     return () => {
       cancelled = true;
       if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
-      if (pendingRecheckRef.current) { clearTimeout(pendingRecheckRef.current); pendingRecheckRef.current = null; }
     };
   }, [rankKey, aiOpts, rankNonce, visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -275,8 +225,6 @@ export function TaskRiverPanel({
   };
   const reprioritize = () => {
     setOrder([]);
-    cancelRetry();
-    retryStreakRef.current = 0;
     forcedByUserRef.current = true;
     lastRankKeyRef.current = '';
     setRankNonce(n => n + 1);
@@ -310,9 +258,7 @@ export function TaskRiverPanel({
     ? `linear-gradient(to bottom, ${view.map((it, i) => `${rgba(it.color, 0.85)} ${(i / Math.max(1, view.length - 1)) * 100}%`).join(', ')})`
     : rgba(COL_SHAILA, 0.4);
 
-  const statusText = retryIn !== null
-    ? `AI restrained — retry in ${retryIn}s`
-    : aiState === 'ranking' ? 'AI prioritizing…'
+  const statusText = aiState === 'ranking' ? 'AI prioritizing…'
     : aiState === 'ok' ? 'AI-prioritized'
     : aiState === 'error' ? 'AI unavailable'
     : '';
@@ -333,16 +279,16 @@ export function TaskRiverPanel({
           full-bleed layout pushed the trailing meta miles from the leading text. */}
       <div style={{ flexShrink: 0, padding: '14px clamp(14px,3vw,32px) 8px', display: 'flex', alignItems: 'baseline', gap: SP.sm, flexWrap: 'wrap', maxWidth: 880, width: '100%', marginInline: 'auto', boxSizing: 'border-box' }}>
         <span style={{ fontSize: 23, fontWeight: 300, letterSpacing: -0.5, color: C.text, fontFamily: NC_FONT_STACK }}>The River</span>
-        <span style={{ fontSize: NC_TYPE.meta, color: (retryIn !== null || aiState === 'error') ? (C.warning || '#C8A84C') : C.muted, fontFamily: NC_FONT_STACK }}>{view.length} items · {statusText}</span>
+        <span style={{ fontSize: NC_TYPE.meta, color: aiState === 'error' ? (C.warning || '#C8A84C') : C.muted, fontFamily: NC_FONT_STACK }}>{view.length} items · {statusText}</span>
         <button onClick={reprioritize}
           title={manual ? 'Reset manual order and re-rank with AI' : 'Force a fresh AI ranking'}
           style={{ marginLeft: 'auto', fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, fontWeight: 500,
-            color: (manual || aiState === 'error' || retryIn !== null) ? '#fff' : C.faint,
-            background: (manual || aiState === 'error' || retryIn !== null) ? rgba(COL_SHAILA, 0.9) : 'transparent',
-            border: `1px solid ${(manual || aiState === 'error' || retryIn !== null) ? rgba(COL_SHAILA, 0.9) : C.divider}`,
+            color: (manual || aiState === 'error') ? '#fff' : C.faint,
+            background: (manual || aiState === 'error') ? rgba(COL_SHAILA, 0.9) : 'transparent',
+            border: `1px solid ${(manual || aiState === 'error') ? rgba(COL_SHAILA, 0.9) : C.divider}`,
             borderRadius: RADIUS.pill, padding: '4px 12px', cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: SP.xs }}>
-          {suiteIcon('refresh', ICON.xs)} {(aiState === 'error' || retryIn !== null) ? 'Retry' : 'Re-prioritize'}
+          {suiteIcon('refresh', ICON.xs)} {aiState === 'error' ? 'Retry' : 'Re-prioritize'}
         </button>
       </div>
 
