@@ -448,7 +448,9 @@ function normalizeEmailInputs(emails = []) {
     subject: cleanString(email.subject, 180),
     from: cleanString(email.from, 140),
     date: cleanString(email.date, 80),
-    body: cleanString(email.body || email.snippet, 380),
+    // 4000, not 380: the client now sends real bodies, and clamping to snippet
+    // length made every bury-the-lede email summarize as its opening pleasantries.
+    body: cleanString(email.body || email.snippet, 4000),
   }));
 }
 
@@ -1118,6 +1120,7 @@ const AI_JOB_REGISTRY = {
     buildPrompt(input = {}) {
       return compactLines([
         "Summarize each email in 1–2 punchy sentences written as if you are the sender speaking directly.",
+        "Summarize the email's REAL point, not its opening lines. Many emails open with pleasantries or praise and only then deliver the actual message (a complaint, a request, a deadline). Read the whole body first, then lead with the core purpose and any action the recipient must take — especially anything with a deadline. Never let a polite opener stand in for the message.",
         "ACCURACY IS THE FIRST RULE. Use ONLY facts literally present in the subject, from, and body fields. Never invent, infer, or embellish facts, times, dates, or rulings that are not stated.",
         "Attribution: the 'from' field is the ONLY person whose voice you may use. Never guess who wrote, initiated, or replied. If the body quotes or forwards someone else, do not present their words as the sender's.",
         "If the body/snippet is too thin to summarize confidently, fall back to a plain factual line built from the subject (e.g. 'Re: <subject> — from <sender name>'). A boring accurate line always beats a fluent guess.",

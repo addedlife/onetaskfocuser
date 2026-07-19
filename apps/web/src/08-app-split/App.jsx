@@ -87,6 +87,47 @@ function preMergeEmailSummaries(msgs) {
   });
 }
 
+// ─── Gmail body extraction for AI summaries ──────────────────────────────────
+// Same decode chain as NerveCenterNext/NerveCenterPanel gmailFullBody. The AI
+// summarizer needs the real body: Gmail's snippet is only the first ~2 lines,
+// so any email that opens with pleasantries and buries the point summarized as
+// the pleasantries (owner report 7/19 — camp email).
+function decodeGmailB64(value) {
+  if (!value) return "";
+  try {
+    const normalized = String(value).replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    const bytes = Uint8Array.from(atob(padded), c => c.charCodeAt(0));
+    return new TextDecoder("utf-8").decode(bytes);
+  } catch { return ""; }
+}
+
+function stripHtmlToText(html) {
+  if (!html) return "";
+  try {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    return (doc.body?.textContent || "").replace(/\s+/g, " ").trim();
+  } catch {
+    return String(html).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  }
+}
+
+function gmailBodyText(message) {
+  const acc = { plain: [], html: [] };
+  const walk = part => {
+    if (!part) return;
+    const mime = String(part.mimeType || "").toLowerCase();
+    const decoded = decodeGmailB64(part.body?.data);
+    if (decoded && mime.includes("text/plain")) acc.plain.push(decoded);
+    if (decoded && mime.includes("text/html")) acc.html.push(stripHtmlToText(decoded));
+    (part.parts || []).forEach(walk);
+  };
+  walk(message?.payload);
+  return (acc.plain.join("\n\n") || acc.html.join("\n\n") || "").replace(/\s+/g, " ").trim();
+}
+
+const EMAIL_SUMMARY_BODY_CHARS = 4000;
+
 function clearStoredGoogleBrowserToken() {
   try {
     localStorage.removeItem('ot_google_token');
@@ -1021,12 +1062,19 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     const needsAI = msgs.filter(m => !cache[emailContentHash(m)]);
     if (needsAI.length === 0) return;
     try {
-      const emails = needsAI.map(m => {
+      // Fetch real bodies for the cache misses — the snippet is only the first ~2
+      // lines, which misrepresents any email that buries its point (owner report
+      // 7/19). Best-effort per message: a failed body fetch falls back to snippet.
+      const bodies = await Promise.allSettled(
+        needsAI.map(m => loadGoogleEmailDetail(m.id, m.sourceAccount).then(gmailBodyText))
+      );
+      const emails = needsAI.map((m, i) => {
         const hdr = name => m?.payload?.headers?.find(h => h.name === name)?.value || "";
         const snip = (m.snippet || "").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim().slice(0, 350);
-        // from/date travel with the snippet so the model can attribute the words to the
+        const full = bodies[i].status === "fulfilled" ? bodies[i].value : "";
+        // from/date travel with the body so the model can attribute the words to the
         // real sender instead of guessing — misattribution was a logged accuracy bug.
-        return { subject: hdr("Subject"), from: hdr("From"), date: hdr("Date"), body: snip };
+        return { subject: hdr("Subject"), from: hdr("From"), date: hdr("Date"), body: (full || snip).slice(0, EMAIL_SUMMARY_BODY_CHARS) };
       });
       const job = await runAIJob("dashboard.email_summaries.v1", { emails }, aiOpts || {});
       const summaries = Array.isArray(job?.output) ? job.output : null;
