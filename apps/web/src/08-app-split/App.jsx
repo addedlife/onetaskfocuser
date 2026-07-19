@@ -52,11 +52,17 @@ const GOOGLE_TOKEN_EXPIRY_SKEW_MS = 60 * 1000;
 const GOOGLE_SILENT_REAUTH_COOLDOWN_MS = 10 * 60 * 1000;
 const GOOGLE_SILENT_REAUTH_LAST_KEY = "ot_google_silent_reauth_last";
 
-// ─── Email summary session cache ─────────────────────────────────────────────
-// Per-email content hash so summaries survive visibility changes + polls within
-// one tab session without ever persisting stale data across page loads.
+// ─── Email summary cache ─────────────────────────────────────────────────────
+// Per-email content hash so summaries survive across tabs, reloads, and browser
+// restarts. localStorage (was sessionStorage): the key is a hash of the email's
+// own content, so a cached entry can never go stale — new content hashes to a
+// new key. sessionStorage threw the whole cache away on every new tab/session
+// and re-summarized the same visible 20 emails, which is exactly the 3.5x
+// email-summary leak the call manager flagged (owner ticket PtEPSmdH, 7/19).
+// Capped at 300 entries, oldest-written evicted first.
 // FNV-1a 32-bit — same algorithm as hashChiefValue.
-const EMAIL_SUMMARY_SESSION_KEY = 'ot_email_summary_v2';
+const EMAIL_SUMMARY_SESSION_KEY = 'ot_email_summary_v3';
+const EMAIL_SUMMARY_CACHE_MAX = 300;
 
 function emailContentHash(m) {
   const subj = m?.payload?.headers?.find(h => h.name === "Subject")?.value || "";
@@ -68,13 +74,27 @@ function emailContentHash(m) {
 }
 
 function readEmailSummarySession() {
-  try { return JSON.parse(sessionStorage.getItem(EMAIL_SUMMARY_SESSION_KEY) || "{}"); } catch { return {}; }
+  // Entries are { s: summary, t: writtenAtMs }; tolerate the old plain-string
+  // shape defensively even though the v3 key change makes it unreachable.
+  try {
+    const raw = JSON.parse(localStorage.getItem(EMAIL_SUMMARY_SESSION_KEY) || "{}");
+    const out = {};
+    for (const [k, v] of Object.entries(raw)) out[k] = typeof v === "string" ? v : v?.s;
+    return out;
+  } catch { return {}; }
 }
 
 function writeEmailSummarySession(patch) {
   try {
-    const prev = readEmailSummarySession();
-    sessionStorage.setItem(EMAIL_SUMMARY_SESSION_KEY, JSON.stringify({ ...prev, ...patch }));
+    const raw = JSON.parse(localStorage.getItem(EMAIL_SUMMARY_SESSION_KEY) || "{}");
+    const now = Date.now();
+    for (const [k, s] of Object.entries(patch)) raw[k] = { s, t: now };
+    const entries = Object.entries(raw);
+    if (entries.length > EMAIL_SUMMARY_CACHE_MAX) {
+      entries.sort((a, b) => (a[1]?.t || 0) - (b[1]?.t || 0));
+      entries.splice(0, entries.length - EMAIL_SUMMARY_CACHE_MAX);
+    }
+    localStorage.setItem(EMAIL_SUMMARY_SESSION_KEY, JSON.stringify(Object.fromEntries(entries)));
   } catch {}
 }
 
