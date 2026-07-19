@@ -1290,6 +1290,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     calendar: (chiefContext.calendar || []).map(({ now, past, ...rest }) => rest),
     phone: chiefContext.phone ? {
       ...chiefContext.phone,
+      // online flips with relay liveness (a flapping relay toggled it every poll and
+      // re-fired the snapshot — owner buglog 7/19); connectivity isn't content.
+      online: undefined,
       status: undefined,
       stale: undefined,
       texts: (chiefContext.phone.texts || []).map(({ time, ...rest }) => rest),

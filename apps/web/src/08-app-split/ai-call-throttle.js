@@ -140,6 +140,33 @@ export async function shouldRunForContentAndClaim(key, contentKey, minGapMs = 0)
   if (_readLocalContentKey(key) === content) return { run: false, cachedResult: null };
 
   const ref = throttleRef(key);
+
+  // Local per-device TIME gate, same as shouldRunAndClaim. This was missing (owner
+  // buglog 7/19: three dashboard.snapshot responses streaming at once, more than one
+  // claim per minute): every path that couldn't reach the Firestore claim — auth not
+  // yet initialized (throttleRef null at app load, one unconditional grant PER MOUNTED
+  // SURFACE), or the transaction throwing — granted a run on every content change with
+  // no time brake at all. With this check, a broken/unavailable Firestore degrades to
+  // at most one call per gap per device, never one per content churn. Adoption of
+  // another surface's already-published answer stays allowed (plain read, no AI call).
+  if (minGapMs > 0) {
+    const gate = _readLocalGate(key);
+    if (now - gate.lastRunAtMs < minGapMs || now < gate.deniedUntilMs) {
+      let cachedResult = null;
+      if (ref) {
+        try {
+          const snap = await ref.get();
+          const data = (snap.exists && snap.data()) || {};
+          if (data.lastContentKey === content && data.lastResult != null) {
+            cachedResult = data.lastResult;
+            _claimLocalContentKey(key, content);
+          }
+        } catch (_) {}
+      }
+      return { run: false, cachedResult };
+    }
+  }
+
   if (!ref) { _claimLocalContentKey(key, content); _claimLocalGate(key, now); return { run: true, cachedResult: null }; }
   try {
     const outcome = await db.runTransaction(async tx => {
