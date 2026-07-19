@@ -6,7 +6,7 @@ import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, En
 import { BulkAdd, TaskBD, BlockedModal, ContextTagPicker, ListManager } from '../05-modals.jsx';
 import { ShelfView, SubtaskGroup } from '../06-shelf.jsx';
 import { SettingsModal } from '../07-settings.jsx';
-import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, listPendingRecordings, PENDING_EVENT, formatPendingAge } from '../09-transcription-pen.js';
+import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, listPendingRecordings, listCloudPenRecordings, ensureLocalPenAudio, downloadPenRecording, sweepExpiredPen, PENDING_EVENT, formatPendingAge } from '../09-transcription-pen.js';
 import { DeskPhoneWebPanel } from '../10-deskphone-web.jsx';
 import { isOfflineShellReady } from '../offline-support.js';
 import { buildDeskPhoneThemeQuery, cleanTheme, DUR, EASE, ELEV, getInitialSuiteView, GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, NC_TYPE, RADIUS, suiteIcon, themeVarsCss, useViewportWidth, Z } from './ui-tokens.jsx';
@@ -348,6 +348,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const [pendingRecordings, setPendingRecordings] = useState([]);
   const [pendingRetryId, setPendingRetryId] = useState(null);
   const [pendingTranscripts, setPendingTranscripts] = useState({});
+  const [cloudPen, setCloudPen] = useState([]);            // account-wide pen entries (Firestore)
+  const [showPenPanel, setShowPenPanel] = useState(false); // Holding Pen browser modal
+  const [penProgress, setPenProgress] = useState('');      // "part 2/4" while a retry runs
   const [networkOffline, setNetworkOffline] = useState(() => typeof navigator !== "undefined" ? !navigator.onLine : false);
   const [offlineShellReady, setOfflineShellReady] = useState(isOfflineShellReady);
   const [offlineNoticeDismissed, setOfflineNoticeDismissed] = useState(false);
@@ -633,6 +636,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     listPendingRecordings()
       .then(setPendingRecordings)
       .catch(() => {});
+    // Cloud copies too — resolves to [] while signed out, so this is always safe.
+    listCloudPenRecordings()
+      .then(setCloudPen)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -640,6 +647,13 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     window.addEventListener(PENDING_EVENT, refreshPendingRecordings);
     return () => window.removeEventListener(PENDING_EVENT, refreshPendingRecordings);
   }, [refreshPendingRecordings]);
+
+  // Once signed in: sweep expired pen entries (10-day retention), then load the
+  // account-wide list. Runs once per session.
+  useEffect(() => {
+    if (!user) return;
+    sweepExpiredPen().catch(() => 0).then(() => refreshPendingRecordings());
+  }, [user, refreshPendingRecordings]);
 
 
   // ─── Auto-aging: nudge stale tasks up one priority tier on load ─────────────
@@ -1595,12 +1609,16 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   async function retryHeldTranscription(rec) {
     if (!aiOpts || pendingRetryId) return;
     setPendingRetryId(rec.id);
+    setPenProgress('');
     try {
+      // Recording made on another device? Pull the cloud audio down first.
+      await ensureLocalPenAudio(rec);
       const txt = await transcribePendingRecording(
         rec.id,
         aiOpts,
         "Transcribe this audio exactly and faithfully. The speaker may use Yeshivish English, Hebrew, Yiddish, and halachic terms. Do not summarize or classify. Return only the transcript.",
-        { maxOutputTokens: 8192 }
+        { maxOutputTokens: 8192 },
+        (done, total) => setPenProgress(total > 1 ? `part ${done}/${total}` : '')
       );
       setPendingTranscripts(p => ({ ...p, [rec.id]: txt }));
       await updatePendingRecordingError(rec.id, "");
@@ -1608,6 +1626,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       await updatePendingRecordingError(rec.id, e.message || String(e)).catch(() => {});
     } finally {
       setPendingRetryId(null);
+      setPenProgress('');
       refreshPendingRecordings();
     }
   }
@@ -1622,6 +1641,23 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     });
     refreshPendingRecordings();
   }
+
+  async function downloadHeldRecording(rec) {
+    try {
+      await downloadPenRecording(rec);
+    } catch(e) {
+      showToast(`Download failed: ${e?.message || e}`, 4000, T.danger);
+    }
+  }
+
+  // One merged Holding Pen view: cloud entries (any device) overlaid with local
+  // ones — local wins on shared fields, cloud contributes storagePath/transcript.
+  const penEntries = useMemo(() => {
+    const map = new Map();
+    for (const c of cloudPen) { if (c?.id) map.set(c.id, { ...c }); }
+    for (const l of pendingRecordings) { if (l?.id) map.set(l.id, { ...(map.get(l.id) || {}), ...l, local: true }); }
+    return Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }, [cloudPen, pendingRecordings]);
 
   const sc = ensureSchemeContrast(SCHEMES[AS?.colorScheme] || AS?.customSchemes?.[AS?.colorScheme] || SCHEMES.claude);
   // Detect dark theme by checking bg luminance
@@ -3588,42 +3624,70 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         }}
       />}
 
-      {pendingRecordings.length > 0 && (
-        <div style={{position:"fixed",right:16,bottom:16,zIndex:Z.nudgeCard,width:"min(380px,calc(100vw - 32px))",background:C.bg,border:`1.5px solid ${C.divider}`,borderRadius:RADIUS.md,boxShadow:ELEV[3],padding:12,fontFamily:NC_FONT_STACK,animation:"ot-fade 0.2s"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
-            <div>
-              <div style={{fontSize:15,fontWeight:500,color:C.text,letterSpacing:0}}>Transcription Holding Pen</div>
-              <div style={{fontSize:13,color:C.faint,marginTop:2}}>Saved audio from any recorder in this app</div>
+      {/* Holding Pen launcher — floating icon with count; recordings + transcripts
+          live behind it for the 10-day retention window, synced to the account. */}
+      {penEntries.length > 0 && !showPenPanel && (
+        <div style={{position:"fixed",right:16,bottom:16,zIndex:Z.nudgeCard,animation:"ot-fade 0.2s"}}>
+          <IconBtn variant="filled" icon="graphic_eq" iconSize={22} size={48} containerColor={C.accent} color="#fff"
+            onClick={()=>setShowPenPanel(true)} aria-label="Open Transcription Holding Pen" title="Recordings & transcripts"/>
+          <span style={{position:"absolute",top:-4,right:-4,minWidth:18,height:18,borderRadius:RADIUS.pill,background:C.danger,color:"#fff",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px",fontFamily:NC_FONT_STACK,pointerEvents:"none"}}>{penEntries.length}</span>
+        </div>
+      )}
+
+      {showPenPanel && (
+        <div style={{position:"fixed",inset:0,zIndex:Z.overlay,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowPenPanel(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:RADIUS.md,boxShadow:ELEV[4],width:"min(600px,100%)",maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",fontFamily:NC_FONT_STACK}}>
+            <div style={{padding:"18px 20px 12px",borderBottom:`1px solid ${C.divider}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+              <div>
+                <div style={{fontSize:16,fontWeight:500,color:C.text}}>Transcription Holding Pen</div>
+                <div style={{fontSize:13,color:C.faint,marginTop:2}}>Recordings & transcripts from every device — kept 10 days, synced to your account</div>
+              </div>
+              <IconBtn icon="close" iconSize={20} size={32} onClick={()=>setShowPenPanel(false)} aria-label="Close"/>
             </div>
-            <span style={{fontSize:12,fontWeight:500,color:C.muted,background:`${C.warning}22`,border:`1px solid ${C.warning}55`,borderRadius:RADIUS.pill,padding:"2px 7px",whiteSpace:"nowrap"}}>{pendingRecordings.length} saved</span>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:300,overflowY:"auto"}}>
-            {pendingRecordings.slice(0,5).map(rec => {
-              const busy = pendingRetryId === rec.id;
-              const transcript = pendingTranscripts[rec.id] || "";
-              const label = rec.label || String(rec.kind || "Recording").replace(/_/g, " ");
-              return (
-                <div key={rec.id} style={{background:C.bgSoft,border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,padding:8}}>
-                  <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center"}}>
-                    <div style={{minWidth:0}}>
-                      <div style={{fontSize:12,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
-                      <div style={{fontSize:12,color:C.faint,marginTop:1}}>{formatPendingAge(rec.createdAt)} · {(rec.size/1024/1024).toFixed(1)} MB</div>
+            <div style={{display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flex:1,padding:"14px 20px 18px"}}>
+              {penEntries.length === 0 && (
+                <div style={{textAlign:"center",padding:"28px 0",color:C.faint,fontSize:14}}>No held recordings. New recordings land here automatically.</div>
+              )}
+              {penEntries.map(rec => {
+                const busy = pendingRetryId === rec.id;
+                const transcript = pendingTranscripts[rec.id] || rec.transcript || "";
+                const label = rec.label || String(rec.kind || "Recording").replace(/_/g, " ");
+                const whereNote = rec.local ? (rec.cloudSynced ? "device + cloud" : "this device only") : "cloud";
+                const statusTxt = busy ? `Transcribing${penProgress ? " " + penProgress : ""}…`
+                  : rec.error ? "Failed" : transcript ? "Transcribed" : "Awaiting transcription";
+                const statusColor = busy ? C.warning : rec.error ? C.danger : transcript ? C.success : C.muted;
+                return (
+                  <div key={rec.id} style={{background:C.bgSoft,border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,padding:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start"}}>
+                      <div style={{minWidth:0}}>
+                        <div style={{fontSize:13,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
+                        <div style={{fontSize:12,color:C.faint,marginTop:1}}>{formatPendingAge(rec.createdAt)} · {((rec.size||0)/1024/1024).toFixed(1)} MB · {whereNote}</div>
+                        <div style={{fontSize:12,color:statusColor,marginTop:2,fontWeight:500}}>{statusTxt}</div>
+                      </div>
+                      <div style={{display:"flex",gap:4,flexShrink:0}}>
+                        <IconBtn icon={busy ? "hourglass_top" : "replay"} iconSize={18} size={32} color={hasAI&&!pendingRetryId?C.accent:C.faint}
+                          onClick={()=>retryHeldTranscription(rec)} disabled={!hasAI || !!pendingRetryId}
+                          aria-label="Transcribe again" title={transcript ? "Re-transcribe" : "Transcribe"}/>
+                        <IconBtn icon="download" iconSize={18} size={32} color={C.muted}
+                          onClick={()=>downloadHeldRecording(rec)} aria-label="Download audio file" title="Download audio"/>
+                        <IconBtn icon="delete" iconSize={18} size={32} color={C.faint}
+                          onClick={()=>deleteHeldTranscription(rec)} disabled={busy} aria-label="Delete recording" title="Delete"/>
+                      </div>
                     </div>
-                    <div style={{display:"flex",gap:6,flexShrink:0}}>
-                      <button onClick={()=>retryHeldTranscription(rec)} disabled={!hasAI || !!pendingRetryId} style={{fontSize:12,padding:"5px 8px",borderRadius:RADIUS.sm,border:"none",background:hasAI&&!pendingRetryId?C.accent:C.divider,color:hasAI&&!pendingRetryId?"#fff":C.faint,cursor:hasAI&&!pendingRetryId?"pointer":"default",fontWeight:500}}>{busy?"Retrying...":"Retry"}</button>
-                      <button onClick={()=>deleteHeldTranscription(rec)} disabled={busy} style={{fontSize:12,padding:"5px 8px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:"none",color:C.faint,cursor:busy?"default":"pointer"}}>Delete</button>
-                    </div>
+                    {rec.error && <div style={{fontSize:12,color:C.danger,marginTop:6,lineHeight:1.35}}>{rec.error}</div>}
+                    {transcript && (
+                      <div style={{marginTop:8}}>
+                        <textarea value={transcript} readOnly rows={4} style={{width:"100%",boxSizing:"border-box",resize:"vertical",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,background:C.bg,color:C.text,fontSize:13,lineHeight:1.45,padding:8,fontFamily:NC_FONT_STACK}}/>
+                        <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} labelSize={12} height={30}
+                          onClick={()=>{navigator.clipboard?.writeText(transcript); showToast("Transcript copied", 2000);}} style={{marginTop:5,width:"100%"}}>
+                          Copy transcript
+                        </ActionBtn>
+                      </div>
+                    )}
                   </div>
-                  {rec.error && <div style={{fontSize:12,color:C.danger,marginTop:6,lineHeight:1.35,maxHeight:38,overflow:"hidden"}}>{rec.error}</div>}
-                  {transcript && (
-                    <div style={{marginTop:7}}>
-                      <textarea value={transcript} readOnly rows={3} style={{width:"100%",boxSizing:"border-box",resize:"vertical",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,background:C.bg,color:C.text,fontSize:13,lineHeight:1.45,padding:8,fontFamily:NC_FONT_STACK}}/>
-                      <button onClick={()=>navigator.clipboard?.writeText(transcript)} style={{marginTop:5,width:"100%",fontSize:12,padding:"5px 8px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bg,color:C.muted,cursor:"pointer",fontWeight:500}}>Copy transcript</button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

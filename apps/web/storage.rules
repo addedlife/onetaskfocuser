@@ -1,0 +1,42 @@
+rules_version = '2';
+// Cloud Storage rules — mirrors the firestore.rules compartment model:
+// data is keyed by canonicalUid = lowercase email prefix, a verified user owns
+// exactly their own prefix, and the owner's two accounts see everything.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isVerifiedSelf(userId) {
+      return isAuthenticated()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string
+        && request.auth.token.email.lower().split('@')[0] == userId;
+    }
+    function isAdmin() {
+      return isAuthenticated()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+          'rabbidanziger@hocsouthbend.com',
+          'ydanziger20@gmail.com'
+        ];
+    }
+
+    // Transcription Holding Pen audio (09-transcription-pen.js): one file per
+    // held recording at pen/{uid}/{recId}.{webm|wav}. 60 MB cap ≈ a 45-minute
+    // opus recording — generous headroom over the 15–20 minute real-world case
+    // without letting the bucket become general file storage.
+    match /pen/{userId}/{fileName} {
+      allow read, delete: if isAdmin() || isVerifiedSelf(userId);
+      allow write: if (isAdmin() || isVerifiedSelf(userId))
+        && request.resource.size < 60 * 1024 * 1024
+        && request.resource.contentType.matches('audio/.*');
+    }
+
+    // Everything else in the bucket: closed.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

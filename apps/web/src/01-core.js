@@ -1760,7 +1760,7 @@ async function runAIJob(job, input={}, aiOpts, options={}) {
     model: opts.model,
     geminiCredential: opts.geminiCredential,
     genConfig: options.genConfig || options,
-  });
+  }, options.timeoutMs);
   return d || null;
 }
 
@@ -1770,14 +1770,17 @@ async function callGemini(gk, prompt, genConfig={}) {
 }
 
 // Unified audio transcription — use this for ALL inline audio calls instead of raw fetch.
-async function callGeminiAudio(gk, base64, mimeType, textPrompt, genConfig={}) {
+// Audio uploads are multi-MB and Gemini takes real time to chew through minutes of speech,
+// so these calls get a much longer timeout than the 30s text default.
+const AUDIO_PROXY_TIMEOUT_MS = 120000;
+async function callGeminiAudio(gk, base64, mimeType, textPrompt, genConfig={}, callOpts={}) {
   const opts = normalizeAiOpts(gk);
   const d = await runAIJob("transcribe.yeshivish.v1", {
     base64,
     mimeType,
     instruction: textPrompt,
     mode: opts.audioTask || "plain",
-  }, opts, { genConfig });
+  }, opts, { genConfig, timeoutMs: callOpts.timeoutMs || AUDIO_PROXY_TIMEOUT_MS });
   return d?.output?.transcript || d?.text || null;
 }
 

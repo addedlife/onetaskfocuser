@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, aiParseConversation, fmtMs, uid } from '../../01-core.js';
-import { deletePendingRecording, savePendingRecording, transcribePendingRecording, updatePendingRecordingError } from '../../09-transcription-pen.js';
+import { savePendingRecording, transcribePendingRecording, updatePendingRecordingError } from '../../09-transcription-pen.js';
 import { cleanTheme, ELEV, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
 import { ActionBtn, IconBtn, List, ListItem } from '../m3.jsx';
 import { probeCallAudioFeed, openCallAudioFeed } from '../call-audio-feed.js';
@@ -16,6 +16,11 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
   const [err, setErr] = useState('');
   const [applying, setApplying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  // While recording/processing the dialog collapses to a floating pill by
+  // default so the whole app stays navigable during a live call. Expand for
+  // the full card (live text preview); the review phase is always full-size.
+  const [minimized, setMinimized] = useState(true);
+  const [procNote, setProcNote] = useState('');
   // Tracks which source the current recording is using ('mic' | 'system' |
   // 'pclink'), so the recording UI and transcription label can reflect it.
   const [source, setSource] = useState(callMode ? 'system' : 'mic');
@@ -198,13 +203,16 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
         try {
           const geminiTranscript = await transcribePendingRecording(
             pending.id, aiOpts,
-            `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew, Aramaic, and Yiddish terminology.\n\nKey terms to recognize correctly:\n- shaila/shaylos/shailah = halachic question | psak/paskening/posek = ruling/decisor\n- Shabbos, Yom Tov, Pesach, Sukkos, Shavuos, Yom Kippur, Rosh Hashana\n- davening, shacharis, mincha, maariv, mussaf, kiddush, havdalah\n- mutar (permitted), assur (forbidden), lechatchila (ideally), bedieved (after the fact)\n- fleishig (meat), milchig (dairy), pareve (neutral), treif (not kosher)\n- bishul (cooking), borer (selecting), melachos (Shabbos forbidden labors)\n- toiveling/toiveled (immersing in mikveh), eruv, niddah\n- kitniyos, chametz, bishul akum, chalav yisrael, pas yisrael\n- safek/safeik (doubt), bittul (nullification), chazaka (presumption)\n- machlokes (dispute), svara (argument), nafka mina (practical difference)\n- d'oraisa (biblical), d'rabbanan (rabbinic), geder (boundary)\n- chatzos (midday/midnight), shkiah (sunset), tzeis (nightfall), bein hashmashos\n- mamash (truly), takeh (really), tachlis (bottom line), nebech (unfortunately)\n- Rashi, Tosafos, Rambam, Ramban, Shulchan Aruch, Mishna Berura\n- shiur/shiurim, kollel, yeshiva, beis medrash, chavrusa, bochur\n- chasuna, sheva brachos, shidduch, simcha, mazel tov, tzedakah\n\nReturn only the verbatim transcript. No summary, no classification, no meta-commentary.`
+            `Transcribe this audio recording exactly verbatim. The speaker uses Yeshivish — Orthodox Jewish English with Hebrew, Aramaic, and Yiddish terminology.\n\nKey terms to recognize correctly:\n- shaila/shaylos/shailah = halachic question | psak/paskening/posek = ruling/decisor\n- Shabbos, Yom Tov, Pesach, Sukkos, Shavuos, Yom Kippur, Rosh Hashana\n- davening, shacharis, mincha, maariv, mussaf, kiddush, havdalah\n- mutar (permitted), assur (forbidden), lechatchila (ideally), bedieved (after the fact)\n- fleishig (meat), milchig (dairy), pareve (neutral), treif (not kosher)\n- bishul (cooking), borer (selecting), melachos (Shabbos forbidden labors)\n- toiveling/toiveled (immersing in mikveh), eruv, niddah\n- kitniyos, chametz, bishul akum, chalav yisrael, pas yisrael\n- safek/safeik (doubt), bittul (nullification), chazaka (presumption)\n- machlokes (dispute), svara (argument), nafka mina (practical difference)\n- d'oraisa (biblical), d'rabbanan (rabbinic), geder (boundary)\n- chatzos (midday/midnight), shkiah (sunset), tzeis (nightfall), bein hashmashos\n- mamash (truly), takeh (really), tachlis (bottom line), nebech (unfortunately)\n- Rashi, Tosafos, Rambam, Ramban, Shulchan Aruch, Mishna Berura\n- shiur/shiurim, kollel, yeshiva, beis medrash, chavrusa, bochur\n- chasuna, sheva brachos, shidduch, simcha, mazel tov, tzedakah\n\nReturn only the verbatim transcript. No summary, no classification, no meta-commentary.`,
+            {},
+            (done, total) => setProcNote(total > 1 ? `Transcribing part ${done} of ${total}…` : 'Transcribing…')
           );
           if (geminiTranscript?.trim()) transcript = geminiTranscript.trim();
         } catch(transcriptErr) {
           // Transcription failed — keep Web Speech fallback if available, otherwise continue with empty
           console.warn('[ConvCapture] Gemini transcription failed, using Web Speech fallback:', transcriptErr.message);
         }
+        setProcNote('Extracting tasks and shailos…');
       }
 
       if (!transcript.trim()) {
@@ -252,7 +260,8 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       add('scheduleItems', parsed.scheduleItems);
       add('reminders', parsed.reminders);
       setItems(allItems);
-      if (pending?.id) await deletePendingRecording(pending.id);
+      // Recording + transcript stay in the Holding Pen for the retention window —
+      // canceling the review must never cost the audio (owner spec 2026-07-19).
       goPhase('review');
     } catch(e) {
       if (typeof pending !== 'undefined' && pending?.id) {
@@ -442,50 +451,88 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
     </div>
   );
 
-  if (phase === 'recording') return (
-    <div style={overlayS} onClick={onClose}>
-      <style>{`@keyframes conv-pulse{0%,100%{opacity:1}50%{opacity:.25}}`}</style>
-      <div style={cardS} onClick={e => e.stopPropagation()}>
-        <div style={{ padding: `${SP.xl} ${SP.xl} ${SP.lg}`, borderBottom: `1px solid ${C.divider}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SP.md }}>
-            <span style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text }}>{source === 'pclink' ? 'Recording Live Call Feed' : source === 'system' ? 'Capturing Screen Audio' : 'Recording Conversation'}</span>
-            <CloseBtn />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, marginBottom: SP.md }}>
-            <div style={{ width: 10, height: 10, borderRadius: RADIUS.pill, background: C.danger, animation: 'conv-pulse 1.4s ease infinite' }}/>
-            <span style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, fontVariantNumeric: 'tabular-nums' }}>{fmtElapsed}</span>
-            <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>{source === 'pclink' ? 'Recording the call straight from the PC link — AI will extract everything' : source === 'system' ? 'Listening to the shared audio — AI will extract everything' : 'Speak freely — AI will extract everything'}</span>
-          </div>
-          {liveText && (
-            <div style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1.5, maxHeight: 72, overflowY: 'auto', background: C.bgSoft, borderRadius: RADIUS.sm, padding: `${SP.sm} ${SP.md}`, border: `1px solid ${C.divider}` }}>
-              {liveText}
-            </div>
-          )}
-          {err && <div style={{ fontSize: NC_TYPE.meta, color: C.danger, fontFamily: NC_FONT_STACK, marginTop: SP.sm }}>{err}</div>}
-        </div>
-        <div style={{ padding: `${SP.lg} ${SP.xl}`, display: 'flex', gap: SP.sm, justifyContent: 'center' }}>
-          <ActionBtn variant="filled" containerColor={C.danger} labelColor="#fff" labelSize={NC_TYPE.body}
-            onClick={stopAndProcess}>
-            Stop &amp; Process
-          </ActionBtn>
-          <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} labelSize={NC_TYPE.body}
-            onClick={onClose}>
-            Cancel
-          </ActionBtn>
-        </div>
-      </div>
-    </div>
-  );
+  // ── Recording + processing: floating pill by default ─────────────────────
+  // No full-screen overlay while capturing — the pill floats above the app so
+  // the owner can navigate freely during a live call. Expand shows the full
+  // card (live text preview); processing shows chunk-by-chunk progress.
+  if (phase === 'recording' || phase === 'processing') {
+    const isRec = phase === 'recording';
+    const cancelRecording = () => {
+      if (!isRec || elapsed < 10 || window.confirm('Discard this recording without saving or processing it?')) onClose();
+    };
 
-  if (phase === 'processing') return (
-    <div style={overlayS}>
-      <div style={{ ...cardS, alignItems: 'center', justifyContent: 'center', padding: `56px ${SP.xl}`, textAlign: 'center' }}>
-        <div style={{ fontSize: 40, marginBottom: SP.lg }}>🎙️</div>
-        <div style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text, marginBottom: SP.sm, fontFamily: NC_FONT_STACK }}>Processing conversation…</div>
-        <div style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>Transcribing and extracting items</div>
+    if (minimized) return (
+      <div style={{ position: 'fixed', right: 16, bottom: 76, zIndex: 9300, display: 'flex', alignItems: 'center', gap: SP.sm, background: C.bg, border: `1.5px solid ${isRec ? C.danger : C.divider}`, borderRadius: RADIUS.pill, boxShadow: ELEV[4], padding: `${SP.sm} ${SP.md}`, fontFamily: NC_FONT_STACK }}>
+        <style>{`@keyframes conv-pulse{0%,100%{opacity:1}50%{opacity:.25}}`}</style>
+        <div style={{ width: 10, height: 10, borderRadius: RADIUS.pill, background: isRec ? C.danger : C.warning, animation: 'conv-pulse 1.4s ease infinite', flexShrink: 0 }}/>
+        <span style={{ fontSize: NC_TYPE.meta, color: C.text, fontVariantNumeric: 'tabular-nums', fontWeight: 500, whiteSpace: 'nowrap' }}>
+          {isRec ? fmtElapsed : (procNote || 'Processing…')}
+        </span>
+        {isRec && (
+          <ActionBtn variant="filled" containerColor={C.danger} labelColor="#fff" labelSize={NC_TYPE.meta} height={30}
+            onClick={stopAndProcess}>
+            Stop
+          </ActionBtn>
+        )}
+        <IconBtn icon="open_in_full" iconSize={ICON.md} size={30} onClick={() => setMinimized(false)} aria-label="Expand recorder" />
       </div>
-    </div>
-  );
+    );
+
+    if (!isRec) return (
+      <div style={overlayS}>
+        <div style={{ ...cardS, alignItems: 'center', justifyContent: 'center', padding: `56px ${SP.xl}`, textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: SP.lg }}>🎙️</div>
+          <div style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text, marginBottom: SP.sm, fontFamily: NC_FONT_STACK }}>Processing conversation…</div>
+          <div style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>{procNote || 'Transcribing and extracting items'}</div>
+          <ActionBtn variant="text" labelColor={C.faint} labelSize={NC_TYPE.meta} onClick={() => setMinimized(true)} style={{ marginTop: SP.lg }}>
+            Keep working — minimize
+          </ActionBtn>
+        </div>
+      </div>
+    );
+
+    return (
+      <div style={overlayS}>
+        <style>{`@keyframes conv-pulse{0%,100%{opacity:1}50%{opacity:.25}}`}</style>
+        <div style={cardS} onClick={e => e.stopPropagation()}>
+          <div style={{ padding: `${SP.xl} ${SP.xl} ${SP.lg}`, borderBottom: `1px solid ${C.divider}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SP.md }}>
+              <span style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text }}>{source === 'pclink' ? 'Recording Live Call Feed' : source === 'system' ? 'Capturing Screen Audio' : 'Recording Conversation'}</span>
+              <div style={{ display: 'flex', gap: SP.xs }}>
+                <IconBtn icon="close_fullscreen" iconSize={ICON.md} size={32} onClick={() => setMinimized(true)} aria-label="Minimize to floating pill" />
+                <IconBtn icon="close" iconSize={ICON.md} size={32} onClick={cancelRecording} aria-label="Discard recording" />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, marginBottom: SP.md }}>
+              <div style={{ width: 10, height: 10, borderRadius: RADIUS.pill, background: C.danger, animation: 'conv-pulse 1.4s ease infinite' }}/>
+              <span style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, fontVariantNumeric: 'tabular-nums' }}>{fmtElapsed}</span>
+              <span style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>{source === 'pclink' ? 'Recording the call straight from the PC link — AI will extract everything' : source === 'system' ? 'Listening to the shared audio — AI will extract everything' : 'Speak freely — AI will extract everything'}</span>
+            </div>
+            {liveText && (
+              <div style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1.5, maxHeight: 72, overflowY: 'auto', background: C.bgSoft, borderRadius: RADIUS.sm, padding: `${SP.sm} ${SP.md}`, border: `1px solid ${C.divider}` }}>
+                {liveText}
+              </div>
+            )}
+            {err && <div style={{ fontSize: NC_TYPE.meta, color: C.danger, fontFamily: NC_FONT_STACK, marginTop: SP.sm }}>{err}</div>}
+          </div>
+          <div style={{ padding: `${SP.lg} ${SP.xl}`, display: 'flex', gap: SP.sm, justifyContent: 'center' }}>
+            <ActionBtn variant="filled" containerColor={C.danger} labelColor="#fff" labelSize={NC_TYPE.body}
+              onClick={stopAndProcess}>
+              Stop &amp; Process
+            </ActionBtn>
+            <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} labelSize={NC_TYPE.body}
+              onClick={() => setMinimized(true)}>
+              Minimize
+            </ActionBtn>
+            <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} labelSize={NC_TYPE.body}
+              onClick={cancelRecording}>
+              Discard
+            </ActionBtn>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Review phase ──────────────────────────────────────────────────────────
   return (
