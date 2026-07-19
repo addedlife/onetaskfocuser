@@ -345,7 +345,6 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     overwhelmThreshold: 7,
     ageThresholds: {...DEF_AGE_THRESHOLDS},
     mrsWWindows: {monThu:{start:"08:30",end:"13:00"}, fri:{start:"08:30",end:"10:00"}},
-    autoOptimize: false,
     currentEnergy: null, // "high" | "low" | null
     fontWeightScale: 400,
     nerveCenterPaneWeights: { tasks: 1, shailos: 1, phone: 1 },

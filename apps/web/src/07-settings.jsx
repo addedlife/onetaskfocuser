@@ -393,16 +393,6 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                   style={{'--md-outlined-text-field-top-space':'6px', '--md-outlined-text-field-bottom-space':'6px'}}/>
               </div>
             </div>
-
-            <div style={{height:1,background:T.brdS,margin:"0 0 14px"}}/>
-
-            <div style={rowSB}>
-              <div>
-                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Hourly auto-optimize</span>
-                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Silent background reprioritize every hour</p>
-              </div>
-              <Switch selected={!!AS.autoOptimize} onChange={()=>setAS(p=>({...p,autoOptimize:!p.autoOptimize}))} style={switchVars} />
-            </div>
           </div>
         )}
 
