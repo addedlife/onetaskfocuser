@@ -71,7 +71,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
   const [aiLanePopoverOpen, setAiLanePopoverOpen] = React.useState(false);
   // Collapsible popover sections (owner ticket yLg0L3HT: the card gets long — fold the
   // detail sections). Leaks start open only because an unseen leak is worth attention.
-  const [aiSectOpen, setAiSectOpen] = React.useState({ leaks: true, fallovers: false, livelog: false });
+  const [aiSectOpen, setAiSectOpen] = React.useState({ leaks: true, archived: false, fallovers: false, livelog: false });
   // Live AI call log (owner ticket 3I7vYdFo): the real prompt/response/model/tokens of
   // recent calls. The listener is only attached while the popover is open — this doc
   // rewrites on EVERY AI call, so an always-on listener would stream the full prompt
@@ -95,30 +95,76 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
     const maxHeight = Math.max(160, Math.min(Math.round(vh * 0.7), vh - bottom - 16));
     setAiLanePopoverPos({ left, bottom, width, maxHeight });
   };
-  // Leak entries the owner already filed as buglog tickets (keyed by detectedAt) —
-  // persisted so the button can't create duplicates across sessions.
+  // Leak entries the owner already filed as buglog tickets, keyed detectedAt →
+  // bug doc id — persisted so the button can't create duplicates across sessions,
+  // and so the card can follow the ticket's lifecycle (owner ticket 7/19: a fixed
+  // leak must be ARCHIVED on the card with its fix note, not sit in the red
+  // "possible leak" list forever). Storage was historically a plain array of
+  // detectedAt stamps (no bug id); those migrate to an empty-id entry — still
+  // dedupe-safe, just can't show a fix note.
   const [ticketedLeaks, setTicketedLeaks] = React.useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('nc_ai_leaks_ticketed') || '[]')); } catch (_) { return new Set(); }
+    try {
+      const raw = JSON.parse(localStorage.getItem('nc_ai_leaks_ticketed') || '{}');
+      if (Array.isArray(raw)) return Object.fromEntries(raw.map(at => [at, '']));
+      return raw && typeof raw === 'object' ? raw : {};
+    } catch (_) { return {}; }
   });
   const createLeakTicket = async (leak) => {
-    if (ticketedLeaks.has(leak.detectedAt)) return;
+    if (ticketedLeaks[leak.detectedAt] !== undefined) return;
     const id = await Store.addBug({
       text: `AI call leak flagged by the call manager: job "${leak.jobId}" — ${leak.reason} Proposed fix: ${leak.proposedFix}`,
     });
     if (!id) return;
     setTicketedLeaks(prev => {
-      const next = new Set(prev);
-      next.add(leak.detectedAt);
-      try { localStorage.setItem('nc_ai_leaks_ticketed', JSON.stringify([...next].slice(-50))); } catch (_) {}
+      const next = { ...prev, [leak.detectedAt]: id };
+      try { localStorage.setItem('nc_ai_leaks_ticketed', JSON.stringify(Object.fromEntries(Object.entries(next).slice(-50)))); } catch (_) {}
       return next;
     });
   };
+  // Fix state of each ticketed leak, keyed detectedAt → { resolved, fixNote }.
+  // Fetched (one small doc read per ticketed leak) each time the popover opens —
+  // no always-on listener, same economy rationale as the live log below.
+  const [leakFixState, setLeakFixState] = React.useState({});
+  React.useEffect(() => {
+    if (!aiLanePopoverOpen) return undefined;
+    const entries = Object.entries(ticketedLeaks).filter(([, bugId]) => bugId);
+    if (!entries.length) return undefined;
+    let cancelled = false;
+    (async () => {
+      const col = Store.bugsCol && Store.bugsCol();
+      if (!col) return;
+      const state = {};
+      await Promise.all(entries.map(async ([detectedAt, bugId]) => {
+        try {
+          const snap = await col.doc(bugId).get();
+          if (!snap.exists) return;
+          const b = snap.data() || {};
+          const notes = Array.isArray(b.notes) ? b.notes : [];
+          const lastNote = notes.length ? String(notes[notes.length - 1].text || '') : '';
+          state[detectedAt] = {
+            resolved: b.status === 'resolved',
+            fixNote: String(b.devNote || '') || lastNote,
+          };
+        } catch (_) {}
+      }));
+      if (!cancelled) setLeakFixState(state);
+    })();
+    return () => { cancelled = true; };
+  }, [aiLanePopoverOpen, ticketedLeaks]);
   // Which leak timestamps the owner has already opened the popover for — clears the
   // exclamation badge without needing a server round-trip.
   const [seenLeakTimes, setSeenLeakTimes] = React.useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem('nc_ai_leaks_seen') || '[]')); } catch (_) { return new Set(); }
   });
-  const unseenLeaks = React.useMemo(() => (aiLane.leaks || []).filter(l => !seenLeakTimes.has(l.detectedAt)), [aiLane.leaks, seenLeakTimes]);
+  // A leak whose linked ticket is resolved is ARCHIVED — it leaves the red list
+  // (and the badge math) and moves to a quiet "fixed" fold with its fix note.
+  const activeLeaks = React.useMemo(
+    () => (aiLane.leaks || []).filter(l => !leakFixState[l.detectedAt]?.resolved),
+    [aiLane.leaks, leakFixState]);
+  const archivedLeaks = React.useMemo(
+    () => (aiLane.leaks || []).filter(l => leakFixState[l.detectedAt]?.resolved),
+    [aiLane.leaks, leakFixState]);
+  const unseenLeaks = React.useMemo(() => activeLeaks.filter(l => !seenLeakTimes.has(l.detectedAt)), [activeLeaks, seenLeakTimes]);
   const markLeaksSeen = () => {
     if (!aiLane.leaks?.length) return;
     setSeenLeakTimes(prev => {
@@ -138,31 +184,24 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
     const unsub = subscribeAiLog(setAiLog);
     return () => { try { unsub && unsub(); } catch (_) {} };
   }, [aiLanePopoverOpen, aiSectOpen.livelog]);
-  // Owner ticket 7/15: picking PC (or Auto, where PC is a candidate host) used to
-  // just fail silently until the owner noticed DeskPhone wasn't running — nothing
-  // ever probed for that or launched it. Whenever the preference wants PC in play
-  // and the PC's presence heartbeat (hosts.windows) isn't fresh, ask App.jsx's
-  // bringDeskPhoneForward to check the local loopback and fire deskphone://open if
-  // needed. Runs for manual "pc" picks AND "auto" (since auto can't ever select a
-  // host that never beacons), and re-fires on every owner snapshot so a slow
-  // DeskPhone launch gets retried instead of only checked once.
-  //
-  // BUG FIXED 7/15 (owner-reported): this doc is shared by every device — the
-  // effect was firing on the Android tablet too, repeatedly asking a browser
-  // that has no idea what "deskphone://" means to open it ("trying to open
-  // another application... unsuccessful", looping every retry). deskphone://open
-  // can only ever be handled by a browser running ON the Windows PC itself, so
-  // this must never fire from a phone/tablet — same rationale as the loopback
-  // probe elsewhere (NerveCenterPhoneSurface.jsx's isMobilePhoneDevice doc).
-  React.useEffect(() => {
+  // Owner ticket 7/19 ("deskphone is autolaunching on its own — a mysterious
+  // black blank screen"): the previous version of this launched DeskPhone from a
+  // background effect — whenever the preference was 'pc' OR 'auto' and the PC's
+  // presence heartbeat looked stale, every open desktop tab silently fired
+  // deskphone://open, re-firing on each owner snapshot (App.jsx rate-limits to
+  // one launch per 45s). Any heartbeat hiccup meant DeskPhone windows appearing
+  // out of nowhere, forever. Launching a native app is now strictly an explicit
+  // owner action: it fires only from ensurePcHostExplicit below (tapping PC in
+  // the host toggle) and the Phone panel's own Launch button — never from a
+  // passive effect. The isMobilePhoneDevice guard stays (7/15 bug): only a
+  // browser on the Windows PC itself can handle deskphone://.
+  const ensurePcHostExplicit = () => {
     if (!onEnsurePcHost) return;
     if (isMobilePhoneDevice()) return;
-    const wantsPc = phoneHost.preferred === 'pc' || phoneHost.preferred === 'auto';
-    if (!wantsPc) return;
     const pcInfo = phoneHost.hosts?.windows;
     const pcBeaconLive = pcInfo?.t && (Date.now() - pcInfo.t) < OWNER_LIVE_WINDOW_MS;
     if (!pcBeaconLive) onEnsurePcHost();
-  }, [phoneHost.preferred, phoneHost.hosts, onEnsurePcHost]);
+  };
   const autoHost = phoneHost.preferred === 'auto';
   const preferredId = preferredHostId(phoneHost.preferred);   // '' in auto mode
   // Honest toggle feedback (owner ticket: "toggle seems to do nothing" / "it
@@ -221,7 +260,9 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
   const flipHost = () => {
     // indexOf(-1) + 1 = 0, so a legacy 'ipad' preference safely re-enters at 'auto'.
     const idx = CYCLE.indexOf(phoneHost.preferred);
-    setPreferredHost(CYCLE[(idx + 1) % CYCLE.length]);
+    const next = CYCLE[(idx + 1) % CYCLE.length];
+    setPreferredHost(next);
+    if (next === 'pc') ensurePcHostExplicit();
   };
 
   const mainApps = [
@@ -462,20 +503,46 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                     <span>Est. spend <b style={{ color: C.text }}>${aiLane.usage.spendTodayUsd < 0.01 && aiLane.usage.spendTodayUsd > 0 ? aiLane.usage.spendTodayUsd.toFixed(4) : aiLane.usage.spendTodayUsd.toFixed(2)}</b> today · <b style={{ color: C.text }}>${aiLane.usage.spendMonthUsd.toFixed(2)}</b> this month</span>
                     <a href="https://console.cloud.google.com/billing?project=onetaskonly-app" target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', color: C.accent, fontSize: 10, textDecoration: 'none', whiteSpace: 'nowrap' }}>actual billing ↗</a>
                   </div>
-                  {aiLane.leaks.length > 0 && (
+                  {activeLeaks.length > 0 && (
                     <div>
                       <button onClick={() => setAiSectOpen(s => ({ ...s, leaks: !s.leaks }))} style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 'none', borderTop: `1px solid ${C.divider}`, cursor: 'pointer', padding: '8px 12px 4px', fontSize: 10, fontWeight: 700, color: C.danger, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
-                        <span style={{ flex: 1 }}>Possible leak ({aiLane.leaks.length})</span>
+                        <span style={{ flex: 1 }}>Possible leak ({activeLeaks.length})</span>
                         {suiteIcon(aiSectOpen.leaks ? 'expand_less' : 'expand_more', 14)}
                       </button>
-                      {aiSectOpen.leaks && [...aiLane.leaks].reverse().map((leak, i) => (
+                      {aiSectOpen.leaks && [...activeLeaks].reverse().map((leak, i) => (
                         <div key={i} style={{ padding: '6px 12px 10px' }}>
                           <div style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: 600 }}>{leak.jobId}</div>
                           <div style={{ fontSize: 11, color: C.muted, fontFamily: NC_FONT_STACK, marginTop: 2 }}>{leak.reason}</div>
                           <div style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 3, fontStyle: 'italic' }}>{leak.proposedFix}</div>
-                          <TextButton onClick={() => createLeakTicket(leak)} disabled={ticketedLeaks.has(leak.detectedAt)} style={{ marginTop: 4, '--md-text-button-container-height': '28px' }}>
-                            <span>{ticketedLeaks.has(leak.detectedAt) ? 'Ticket created ✓' : 'Create buglog ticket'}</span>
+                          <TextButton onClick={() => createLeakTicket(leak)} disabled={ticketedLeaks[leak.detectedAt] !== undefined} style={{ marginTop: 4, '--md-text-button-container-height': '28px' }}>
+                            <span>{ticketedLeaks[leak.detectedAt] !== undefined ? 'Ticket created ✓ — awaiting fix' : 'Create buglog ticket'}</span>
                           </TextButton>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Archived leaks (owner ticket 7/19): a leak whose buglog ticket was
+                      resolved stops being an alarm. It moves down here — quiet, green,
+                      collapsed by default — carrying the ticket's fix note so the card
+                      itself tells the story of what was found and how it was closed. */}
+                  {archivedLeaks.length > 0 && (
+                    <div>
+                      <button onClick={() => setAiSectOpen(s => ({ ...s, archived: !s.archived }))} style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 'none', borderTop: `1px solid ${C.divider}`, cursor: 'pointer', padding: '8px 12px 4px', fontSize: 10, fontWeight: 700, color: C.success, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
+                        <span style={{ flex: 1 }}>Fixed leaks — archived ({archivedLeaks.length})</span>
+                        {suiteIcon(aiSectOpen.archived ? 'expand_less' : 'expand_more', 14)}
+                      </button>
+                      {aiSectOpen.archived && [...archivedLeaks].reverse().map((leak, i) => (
+                        <div key={i} style={{ padding: '6px 12px 10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <span style={{ color: C.success, display: 'inline-flex' }}>{suiteIcon('check_circle', 13)}</span>
+                            <span style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: 600 }}>{leak.jobId}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 2 }}>{leak.reason}</div>
+                          {leakFixState[leak.detectedAt]?.fixNote && (
+                            <div style={{ marginTop: 4, padding: '5px 7px', background: C.bgSoft, borderLeft: `2px solid ${C.success}`, borderRadius: RADIUS.xs, fontSize: 11, lineHeight: 1.45, color: C.muted, fontFamily: NC_FONT_STACK, maxHeight: 130, overflowY: 'auto' }}>
+                              <span style={{ fontWeight: 700, color: C.success }}>Fix: </span>{leakFixState[leak.detectedAt].fixNote}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -487,15 +554,31 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                   {aiSectOpen.fallovers && (aiLane.recent.length === 0 ? (
                     <div style={{ padding: '9px 12px 12px', fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>No fallovers yet — running on Gemini primary.</div>
                   ) : (
-                    [...aiLane.recent].reverse().map((event, i) => (
-                      <div key={i} style={{ padding: '7px 12px', borderTop: `1px solid ${C.divider}` }}>
-                        <div style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: 600 }}>{event.label}</div>
-                        <div style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 1 }}>
-                          {new Date(event.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                          {event.reason ? ` · ${event.reason}` : ''}
+                    // Owner ticket 7/19 ("fallovers don't look like fallovers — they look
+                    // like straight calls"): each event is a lane SWITCH, so say so.
+                    // Falling away from primary is amber (overflow) or red (Claude
+                    // last-resort) with a warning icon and "Fell over: from → to";
+                    // returning to primary is green "Recovered". A neutral row of
+                    // label+timestamp read as just another call — that was the bug.
+                    [...aiLane.recent].reverse().map((event, i, arr) => {
+                      const isPrimary = event.lane === 'gemini:primary';
+                      const tone = isPrimary ? C.success : event.lane === 'claude:fallback' ? C.danger : C.warning;
+                      const prior = arr[i + 1]; // next in reversed order = the lane it came FROM
+                      return (
+                        <div key={i} style={{ padding: '7px 12px', borderTop: `1px solid ${C.divider}`, borderLeft: `3px solid ${tone}` }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <span style={{ color: tone, display: 'inline-flex' }}>{suiteIcon(isPrimary ? 'undo' : 'warning', 13)}</span>
+                            <span style={{ fontSize: NC_TYPE.meta, color: tone, fontFamily: NC_FONT_STACK, fontWeight: 700 }}>
+                              {isPrimary ? 'Recovered' : 'Fell over'}{prior?.label ? `: ${prior.label} → ${event.label}` : ` to ${event.label}`}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 1 }}>
+                            {new Date(event.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                            {event.reason ? ` · ${event.reason}` : ''}
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ))}
                   {/* Live log (owner ticket 3I7vYdFo): the actual prompt/response of
                       recent calls. Rows are click-to-expand — collapsed shows the job,
@@ -608,7 +691,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
               const idx = e?.detail?.index;
               // Any manual pick pins that lane (turning the auto-finder off).
               if (idx === 0) setPreferredHost('tablet');
-              else if (idx === 1) setPreferredHost('pc');
+              else if (idx === 1) { setPreferredHost('pc'); ensurePcHostExplicit(); }
             }}
             aria-label="Which device hosts the phone link"
             style={{

@@ -2556,6 +2556,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           {!isMobileDevice && (
             <IconBtn icon="grid_view" size={28} iconSize={16} color={C.muted} onClick={() => setDesktopLayoutPersist("full")} title="Full panels" aria-label="Full panels" />
           )}
+          {/* Owner ticket UFgySrCag: email + contacts icons on every layout (this is the card-grid chrome). */}
+          <IconBtn icon="mail" size={28} iconSize={16}
+            color={googleToken ? C.muted : C.accent}
+            onClick={googleToken ? () => window.open("https://mail.google.com/mail/u/0/#inbox", "_blank") : onConnectGoogle}
+            title={googleToken ? "Open Gmail" : "Connect Google Mail & Calendar"}
+            aria-label={googleToken ? "Open Gmail" : "Connect Google Mail and Calendar"} />
+          <IconBtn icon="contacts" size={28} iconSize={16} color={C.muted} onClick={onOpenPhone} title="Contacts — open phone view" aria-label="Contacts" />
         </div>
 
         {nextActionBar}
@@ -2821,6 +2828,17 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <IconBtn key={id} icon={icon} size={28} iconSize={16} color={desktopLayout === id ? C.text : C.muted} active={desktopLayout === id} activeBg={C.hover} onClick={() => setDesktopLayoutPersist(id)} title={label} aria-label={label} />
               ))}
               <IconBtn icon={dense ? "density_small" : "density_medium"} size={28} iconSize={16} color={C.muted} onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density" />
+              {/* Owner ticket UFgySrCag ("tablet display must have a connect to email
+                  and contacts icon — ALL nc formats, not just one"): these sit in the
+                  one-row chrome, which every layout renders — accordion, stacked,
+                  card grid and full panel alike. Mail is state-aware: accent-colored
+                  "connect" while Google isn't linked, quiet "open Gmail" once it is. */}
+              <IconBtn icon="mail" size={28} iconSize={16}
+                color={googleToken ? C.muted : C.accent}
+                onClick={googleToken ? () => window.open("https://mail.google.com/mail/u/0/#inbox", "_blank") : onConnectGoogle}
+                title={googleToken ? "Open Gmail" : "Connect Google Mail & Calendar"}
+                aria-label={googleToken ? "Open Gmail" : "Connect Google Mail and Calendar"} />
+              <IconBtn icon="contacts" size={28} iconSize={16} color={C.muted} onClick={onOpenPhone} title="Contacts — open phone view" aria-label="Contacts" />
             </div>
           </div>
           {mobileTimelineOpen && (
@@ -3051,6 +3069,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             {/* Density: compact (aggressively tight rows) vs comfortable */}
             <IconBtn icon={dense ? "density_small" : "density_medium"} size={28} iconSize={15} onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density"
               color={dense ? C.muted : C.faint} active={dense} activeBg={softBorder(C.divider, 0.55)} />
+            <span style={{ width: 1, height: 14, background: C.divider, flexShrink: 0 }} />
+            {/* Owner ticket UFgySrCag: email + contacts icons on every layout (this is the full-panel chrome). */}
+            <IconBtn icon="mail" size={28} iconSize={15}
+              color={googleToken ? C.faint : C.accent}
+              onClick={googleToken ? () => window.open("https://mail.google.com/mail/u/0/#inbox", "_blank") : onConnectGoogle}
+              title={googleToken ? "Open Gmail" : "Connect Google Mail & Calendar"}
+              aria-label={googleToken ? "Open Gmail" : "Connect Google Mail and Calendar"} />
+            <IconBtn icon="contacts" size={28} iconSize={15} color={C.faint} onClick={onOpenPhone} title="Contacts — open phone view" aria-label="Contacts" />
           </div>
         )}
 
