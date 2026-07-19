@@ -2802,6 +2802,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     loadHealthFromFirebase();
   }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Owner ticket wxQ27UVx: a toggle that condenses the detailed queue into a terse,
+  // just-the-facts task list — tight rows, no badge/detail lines. Persisted per device.
+  // MUST live above the `if (!AS) return` early exit: hooks below an early return run on
+  // some renders but not others, which is React error #310 (hook-count mismatch).
+  const [qCondensed, setQCondensed] = useState(() => {
+    try { return localStorage.getItem('ot_queue_condensed') === '1'; } catch (_) { return false; }
+  });
+
   if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:NC_FONT_STACK,color:"#999"}}>Loading...</div>;
 
   // Snoozed tasks leave the NerveCenter feed too — they used to drop in the
@@ -3057,11 +3065,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const commandPageWidth = { width: "100%", maxWidth: 760, minWidth: 0, boxSizing: "border-box" };
   const commandAvailableW = Math.max(0, viewportW - sidebarW);
   const queueCompactRows = commandAvailableW < 720;
-  // Owner ticket wxQ27UVx: a toggle that condenses the detailed queue into a terse,
-  // just-the-facts task list — tight rows, no badge/detail lines. Persisted per device.
-  const [qCondensed, setQCondensed] = useState(() => {
-    try { return localStorage.getItem('ot_queue_condensed') === '1'; } catch (_) { return false; }
-  });
+  // qCondensed state lives up top with the other hooks (above the !AS early return).
   const toggleQCondensed = () => setQCondensed(v => {
     const next = !v;
     try { localStorage.setItem('ot_queue_condensed', next ? '1' : '0'); } catch (_) {}

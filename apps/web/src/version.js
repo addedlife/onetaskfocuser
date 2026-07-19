@@ -10,7 +10,7 @@
 // On your next release: if it's a feat:, do (major).(minor+1).0
 //                        if it's a fix:/style:, do (major).(minor).(patch+1)
 // Full reconstructed history: see CHANGELOG.md.
-export const APP_VERSION = "4.85.0";
+export const APP_VERSION = "4.85.1";
 
 // The "updated" stamp is taken from the real build time (injected by Vite's `define` in
 // vite.config.js as __BUILD_TIME__), so every deploy — including multiple pushes in one
