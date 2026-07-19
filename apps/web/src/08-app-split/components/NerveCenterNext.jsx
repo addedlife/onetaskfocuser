@@ -985,6 +985,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const ncFailStreakRef = useRef(0);   // consecutive failed scans → exponential retry backoff
   const forcedSnapshotRef = useRef(false); // set by retryNcSummary(); bypasses the Firestore throttle
   const pendingSnapshotRecheckRef = useRef(null);
+  const lastSnapshotKeyRef = useRef(undefined); // undefined = not yet hydrated from the localStorage cache
   const [chiefLoading, setChiefLoading] = useState(false);
   const [chiefError, setChiefError] = useState("");
   const [chiefPrompt, setChiefPrompt] = useState("");
@@ -1408,7 +1409,17 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   }), [chiefContext, chiefLearningProfile, sessionSuppressed]);
   const chiefScanKey = useMemo(() => JSON.stringify(chiefScanContext), [chiefScanContext]);
   const chiefFallback = null;
-  const ncSummaryScanKey = useMemo(() => JSON.stringify(chiefContext), [chiefContext]);
+  // Content-only scan key: strips the fields derived from the 5-min timeBucket clock
+  // (currentTime/localeTime/ageHours) so the snapshot effect refires only when real data
+  // changes — new email, call, task, etc. With the clock included, every bucket rollover
+  // changed the key and fired a dashboard-snapshot AI call like a 5-minute metronome
+  // (owner ticket jYozknRO, flagged by the leak detector).
+  const ncSummaryScanKey = useMemo(() => JSON.stringify({
+    ...chiefContext,
+    currentTime: undefined,
+    localeTime: undefined,
+    tasks: (chiefContext.tasks || []).map(({ ageHours, ...rest }) => rest),
+  }), [chiefContext]);
   const taskSuggestionPriorities = useMemo(() =>
     [...(priorities || [])]
       .filter(p => !p.deleted && !p.isShaila && p.id !== "shaila")
@@ -1512,13 +1523,27 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const SESSION_GAP_MS = 5 * 60 * 1000;
     const isForced = forcedSnapshotRef.current;
     forcedSnapshotRef.current = false;
+    // Hydrate the last-run key from the persisted cache once per mount, and restore the
+    // cached result when the data hasn't changed — so a reload/remount costs zero AI calls.
+    if (lastSnapshotKeyRef.current === undefined) {
+      const cached = readStorageJson(SNAPSHOT_CACHE_KEY);
+      lastSnapshotKeyRef.current = cached?.scanKey ?? null;
+      if (cached?.result && cached.scanKey === ncSummaryScanKey) {
+        setNcSummary({ supercrunch: cached.result.supercrunch, signals: cached.result.signals || [] });
+        setTaskSuggestions(cached.result.taskSuggestions || []);
+      }
+    }
+    // Nothing new since the last successful snapshot → no call at all (ticket jYozknRO:
+    // "if for an hour nothing happened, shouldn't fire even once"). Manual rescan bypasses.
+    if (!isForced && ncSummaryScanKey === lastSnapshotKeyRef.current) return undefined;
     let cancelled = false;
     shouldRunAndClaim(SNAPSHOT_THROTTLE_KEY, isForced ? 0 : SESSION_GAP_MS).then(allowed => {
       if (cancelled) return;
       if (!allowed) {
         // Silently deferred — no spinner, current result stays visible. Recheck
         // shortly rather than computing the exact remaining wait, since the claim is
-        // now shared across tabs/devices and could be won by any of them first.
+        // now shared across tabs/devices and could be won by any of them first. The
+        // guard above ends this loop once the pending change has been scanned.
         pendingSnapshotRecheckRef.current = window.setTimeout(() => setNcSummaryRefreshNonce(n => n + 1), 30000);
         return;
       }
@@ -1582,6 +1607,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           setTaskSuggestions(rows);
           writeStorageJson(CHIEF_SUGGESTIONS_CACHE_KEY, { scanKey: ncSummaryScanKey, ts: Date.now(), rows });
           writeStorageJson(SNAPSHOT_CACHE_KEY, { scanKey: scanKeyAtStart, ts: Date.now(), result: { ...summaryPart, taskSuggestions: rows } });
+          lastSnapshotKeyRef.current = scanKeyAtStart;
         })
         .catch(e => {
           ncFailStreakRef.current += 1;
