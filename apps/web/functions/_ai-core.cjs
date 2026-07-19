@@ -1852,6 +1852,30 @@ const LEAK_REGULARITY_MIN_SAMPLES = 6;    // need this many recent calls before 
 const LEAK_REGULARITY_MAX_CV = 0.2;       // coefficient of variation (stddev/mean) below this reads as "clockwork"
 const LEAK_REGULARITY_MAX_INTERVAL_MIN = 90; // ...and only worth flagging if it's firing faster than this
 
+// Estimated list prices, USD per 1M tokens (input/output). These power the rail card's
+// "est. spend" figure — an ESTIMATE from token counts, not a billing-account read (the
+// card links to the GCP billing console for the authoritative number). Unknown models
+// fall back to DEFAULT_TOKEN_PRICING rather than silently costing $0.
+const TOKEN_PRICING_PER_MTOK = {
+  "gemini-3.1-flash-lite":  { in: 0.10, out: 0.40 },
+  "gemini-3-flash-preview": { in: 0.50, out: 3.00 },
+  "gemini-3.1-pro-preview": { in: 2.50, out: 15.00 },
+  "claude-haiku-4-5-20251001": { in: 1.00, out: 5.00 },
+};
+const DEFAULT_TOKEN_PRICING = { in: 0.50, out: 3.00 };
+
+// Pull token counts out of a lane result's raw provider response. Gemini reports
+// usageMetadata.{promptTokenCount,candidatesTokenCount}; Claude reports
+// usage.{input_tokens,output_tokens}. Missing/malformed → zeros (call still counts).
+function tokensFromResult(result) {
+  const raw = result?.raw || {};
+  const gm = raw.usageMetadata;
+  if (gm) return { inTok: Number(gm.promptTokenCount) || 0, outTok: Number(gm.candidatesTokenCount) || 0 };
+  const cu = raw.usage;
+  if (cu) return { inTok: Number(cu.input_tokens) || 0, outTok: Number(cu.output_tokens) || 0 };
+  return { inTok: 0, outTok: 0 };
+}
+
 async function recordAiUsage(jobKey, result) {
   const key = String(jobKey || "").trim() || "general";
   const db = firestoreLimiter();
@@ -1912,6 +1936,17 @@ async function recordAiUsage(jobKey, result) {
         while (leaks.length > AI_USAGE_MAX_LEAKS) leaks.shift();
       }
 
+      // Estimated spend, accumulated per day in USD (owner ticket yLg0L3HT: the card
+      // should show real money, not just call counts). Same trailing-window pruning as
+      // dailyCounts so the doc can't grow without bound.
+      const { inTok, outTok } = tokensFromResult(result);
+      const price = TOKEN_PRICING_PER_MTOK[String(result?.model || "")] || DEFAULT_TOKEN_PRICING;
+      const callUsd = (inTok * price.in + outTok * price.out) / 1e6;
+      const spendDaily = { ...(data.usage?.spend?.dailyUsd || {}) };
+      spendDaily[dayKey] = (Number(spendDaily[dayKey]) || 0) + callUsd;
+      const spendDays = Object.keys(spendDaily).sort();
+      while (spendDays.length > AI_USAGE_MAX_DAYS) delete spendDaily[spendDays.shift()];
+
       const monthPrefix = dayKey.slice(0, 7);
       const hourAgo = nowMs - 60 * 60 * 1000;
       const usage = {
@@ -1920,6 +1955,11 @@ async function recordAiUsage(jobKey, result) {
         totalThisMonth: Object.values(jobs).reduce((sum, j) =>
           sum + Object.entries(j.dailyCounts).filter(([d]) => d.startsWith(monthPrefix)).reduce((s, [, c]) => s + c, 0), 0),
         jobs,
+        spend: {
+          dailyUsd: spendDaily,
+          todayUsd: Number(spendDaily[dayKey]) || 0,
+          monthUsd: Object.entries(spendDaily).filter(([d]) => d.startsWith(monthPrefix)).reduce((s, [, v]) => s + (Number(v) || 0), 0),
+        },
       };
 
       tx.set(ref, { usage, leaks, updatedAt: nowMs }, { merge: true });

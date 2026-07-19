@@ -503,6 +503,13 @@ function addComposeFiles(fileList, setAttachments, onNotice) {
     const room = Math.max(0, MAX_COMPOSE_ATTACHMENTS - current.length);
     const next = files.slice(0, room).map(makeComposeAttachment);
     if (files.length > room) onNotice?.(`Attached ${room}; DeskPhone allows ${MAX_COMPOSE_ATTACHMENTS} at once in the browser.`);
+    // Honesty gate (owner ticket rhylOvqg): attachments ride the phone's Bluetooth MAP
+    // channel, and most phones' MAP servers only truly support SMS push — an MMS push
+    // often gets coerced to a text-only message on the recipient's end. Warn up front
+    // instead of silently degrading; a real fix needs an on-phone sender app.
+    else if (current.length === 0 && next.length) {
+      onNotice?.("Heads-up: this phone's Bluetooth channel may deliver attachments as text-only — if the image must arrive, send it from the phone itself.");
+    }
     return [...current, ...next];
   });
 }

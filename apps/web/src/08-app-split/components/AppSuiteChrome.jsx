@@ -67,8 +67,11 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
   // default; overflow/Claude only ever show up here when Gemini's own quota is
   // genuinely exhausted (_ai-core.cjs recordAiLaneEvent). Also carries usage stats and
   // any leak alerts the AI call manager's heuristics flagged (recordAiUsage()).
-  const [aiLane, setAiLane] = React.useState({ currentLane: 'gemini:primary', label: 'Gemini', recent: [], usage: { totalToday: 0, totalThisHour: 0, totalThisMonth: 0 }, leaks: [] });
+  const [aiLane, setAiLane] = React.useState({ currentLane: 'gemini:primary', label: 'Gemini', recent: [], usage: { totalToday: 0, totalThisHour: 0, totalThisMonth: 0, spendTodayUsd: 0, spendMonthUsd: 0 }, leaks: [] });
   const [aiLanePopoverOpen, setAiLanePopoverOpen] = React.useState(false);
+  // Collapsible popover sections (owner ticket yLg0L3HT: the card gets long — fold the
+  // detail sections). Leaks start open only because an unseen leak is worth attention.
+  const [aiSectOpen, setAiSectOpen] = React.useState({ leaks: true, fallovers: false });
   // Owner ticket 7/16: the popover was absolutely positioned inside the rail, so it
   // clipped under neighboring cards and ran off the top of the screen. It now renders
   // through a portal at document.body with viewport-clamped fixed coordinates,
@@ -435,15 +438,25 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                   {aiLane.model && (
                     <div style={{ fontSize: 11, color: C.muted, fontFamily: NC_MONO_STACK, padding: '2px 12px 4px' }}>{aiLane.model}</div>
                   )}
-                  <div style={{ display: 'flex', gap: 10, padding: '2px 12px 9px', fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK }}>
+                  <div style={{ display: 'flex', gap: 10, padding: '2px 12px 4px', fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK }}>
                     <span><b style={{ color: C.text }}>{aiLane.usage.totalToday}</b> today</span>
                     <span><b style={{ color: C.text }}>{aiLane.usage.totalThisHour}</b> this hour</span>
                     <span><b style={{ color: C.text }}>{aiLane.usage.totalThisMonth}</b> this month</span>
                   </div>
+                  {/* Est. spend from server-side token accounting; the link opens the GCP
+                      billing console — the authoritative "actual spend" for the cloud
+                      account (owner ticket yLg0L3HT). */}
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '0 12px 9px', fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK }}>
+                    <span>Est. spend <b style={{ color: C.text }}>${aiLane.usage.spendTodayUsd < 0.01 && aiLane.usage.spendTodayUsd > 0 ? aiLane.usage.spendTodayUsd.toFixed(4) : aiLane.usage.spendTodayUsd.toFixed(2)}</b> today · <b style={{ color: C.text }}>${aiLane.usage.spendMonthUsd.toFixed(2)}</b> this month</span>
+                    <a href="https://console.cloud.google.com/billing?project=onetaskonly-app" target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', color: C.accent, fontSize: 10, textDecoration: 'none', whiteSpace: 'nowrap' }}>actual billing ↗</a>
+                  </div>
                   {aiLane.leaks.length > 0 && (
                     <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: C.danger, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, padding: '8px 12px 4px', borderTop: `1px solid ${C.divider}` }}>Possible leak</div>
-                      {[...aiLane.leaks].reverse().map((leak, i) => (
+                      <button onClick={() => setAiSectOpen(s => ({ ...s, leaks: !s.leaks }))} style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 'none', borderTop: `1px solid ${C.divider}`, cursor: 'pointer', padding: '8px 12px 4px', fontSize: 10, fontWeight: 700, color: C.danger, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
+                        <span style={{ flex: 1 }}>Possible leak ({aiLane.leaks.length})</span>
+                        {suiteIcon(aiSectOpen.leaks ? 'expand_less' : 'expand_more', 14)}
+                      </button>
+                      {aiSectOpen.leaks && [...aiLane.leaks].reverse().map((leak, i) => (
                         <div key={i} style={{ padding: '6px 12px 10px' }}>
                           <div style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: 600 }}>{leak.jobId}</div>
                           <div style={{ fontSize: 11, color: C.muted, fontFamily: NC_FONT_STACK, marginTop: 2 }}>{leak.reason}</div>
@@ -455,8 +468,11 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                       ))}
                     </div>
                   )}
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, padding: '8px 12px 4px', borderTop: `1px solid ${C.divider}` }}>Recent fallovers</div>
-                  {aiLane.recent.length === 0 ? (
+                  <button onClick={() => setAiSectOpen(s => ({ ...s, fallovers: !s.fallovers }))} style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 'none', borderTop: `1px solid ${C.divider}`, cursor: 'pointer', padding: '8px 12px 4px', fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
+                    <span style={{ flex: 1 }}>Recent fallovers{aiLane.recent.length ? ` (${aiLane.recent.length})` : ''}</span>
+                    {suiteIcon(aiSectOpen.fallovers ? 'expand_less' : 'expand_more', 14)}
+                  </button>
+                  {aiSectOpen.fallovers && (aiLane.recent.length === 0 ? (
                     <div style={{ padding: '9px 12px 12px', fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>No fallovers yet — running on Gemini primary.</div>
                   ) : (
                     [...aiLane.recent].reverse().map((event, i) => (
@@ -468,7 +484,7 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                         </div>
                       </div>
                     ))
-                  )}
+                  ))}
                 </div>
               </>,
               document.body

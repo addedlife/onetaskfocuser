@@ -26,6 +26,10 @@ export function normalizeAiLaneStatus(data) {
     totalToday: Number(rawUsage.totalToday) || 0,
     totalThisHour: Number(rawUsage.totalThisHour) || 0,
     totalThisMonth: Number(rawUsage.totalThisMonth) || 0,
+    // Estimated dollars (server-computed from per-call token counts × list prices);
+    // absent until the first call after the 4.84.5 functions deploy.
+    spendTodayUsd: Number(rawUsage.spend?.todayUsd) || 0,
+    spendMonthUsd: Number(rawUsage.spend?.monthUsd) || 0,
   };
   // Owner ticket 7/15 (AI call manager): leak alerts the recordAiUsage() heuristics in
   // _ai-core.cjs flag — a spike vs. a job's own trailing average, or suspiciously

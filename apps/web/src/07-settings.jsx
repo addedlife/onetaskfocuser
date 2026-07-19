@@ -161,23 +161,29 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
 
   return (
     <div style={{position:"fixed",inset:0,zIndex:8500,background:sTab==="appearance"?"rgba(0,0,0,0.08)":"rgba(0,0,0,0.32)",display:"flex",alignItems:"center",justifyContent:"flex-start",overflowY:"auto",paddingTop:24,paddingRight:24,paddingBottom:24,paddingLeft:Math.max(24,(sidebarW||0)+12),transition:"background 0.3s",fontFamily:NC_FONT_STACK}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:sTab==="appearance"?T.card+"f7":T.card,borderRadius:RADIUS.sm,border:`1px solid ${T.brdS || T.brd}`,padding:"28px 26px",maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:`0 12px 32px rgba(60,64,67,0.22)`,transition:"background 0.3s",fontFamily:NC_FONT_STACK}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:sTab==="appearance"?T.card+"f7":T.card,borderRadius:RADIUS.sm,border:`1px solid ${T.brdS || T.brd}`,padding:0,maxWidth:680,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:`0 12px 32px rgba(60,64,67,0.22)`,transition:"background 0.3s",fontFamily:NC_FONT_STACK}}>
 
-        {/* Header */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <h3 style={{fontSize:22,fontWeight:500,margin:0,fontFamily:NC_FONT_STACK}}>Settings</h3>
-          <IconBtn icon="close" size={40} iconSize={20} color={T.tSoft} onClick={onClose} title="Close" aria-label="Close settings" />
+        {/* Header + tab bar — full-width and sticky, so the title bar spans the whole
+            card and stays put while the settings content scrolls (owner ticket pFQuwQVJ:
+            "header bar is not long enough / streamline the panel"). */}
+        <div style={{position:"sticky",top:0,zIndex:2,background:sTab==="appearance"?T.card+"f7":T.card,padding:"20px 26px 12px",borderBottom:`1px solid ${T.brdS || T.brd}`,transition:"background 0.3s"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <h3 style={{fontSize:22,fontWeight:500,margin:0,fontFamily:NC_FONT_STACK}}>Settings</h3>
+            <IconBtn icon="close" size={40} iconSize={20} color={T.tSoft} onClick={onClose} title="Close" aria-label="Close settings" />
+          </div>
+          {/* Tabs scroll horizontally instead of squeezing — labels never truncate. */}
+          <div style={{display:"flex",gap:6,background:T.bgW,borderRadius:RADIUS.sm,padding:SP.xs,overflowX:"auto"}}>
+            {TABS.map(t => (
+              <ActionBtn key={t.id} variant={sTab===t.id?"tonal":"text"} containerColor={T.card} labelColor={sTab===t.id?T.text:T.tSoft}
+                height={40} labelSize={NC_TYPE.body} onClick={()=>setSTab(t.id)} style={{flex:"1 0 auto"}}>
+                {t.label}
+              </ActionBtn>
+            ))}
+          </div>
         </div>
 
-        {/* Tab bar */}
-        <div style={{display:"flex",gap:6,background:T.bgW,borderRadius:RADIUS.sm,padding:SP.xs,marginBottom:24}}>
-          {TABS.map(t => (
-            <ActionBtn key={t.id} variant={sTab===t.id?"tonal":"text"} containerColor={T.card} labelColor={sTab===t.id?T.text:T.tSoft}
-              height={40} labelSize={NC_TYPE.body} onClick={()=>setSTab(t.id)} style={{flex:1}}>
-              {t.label}
-            </ActionBtn>
-          ))}
-        </div>
+        {/* Scrollable settings content */}
+        <div style={{padding:"20px 26px 28px"}}>
 
         {/* ── QUEUE TAB ── */}
         {sTab === "queue" && (
@@ -573,6 +579,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
           </div>
         )}
 
+        </div>{/* end scrollable settings content */}
       </div>
     </div>
   );

@@ -3057,11 +3057,21 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const commandPageWidth = { width: "100%", maxWidth: 760, minWidth: 0, boxSizing: "border-box" };
   const commandAvailableW = Math.max(0, viewportW - sidebarW);
   const queueCompactRows = commandAvailableW < 720;
+  // Owner ticket wxQ27UVx: a toggle that condenses the detailed queue into a terse,
+  // just-the-facts task list — tight rows, no badge/detail lines. Persisted per device.
+  const [qCondensed, setQCondensed] = useState(() => {
+    try { return localStorage.getItem('ot_queue_condensed') === '1'; } catch (_) { return false; }
+  });
+  const toggleQCondensed = () => setQCondensed(v => {
+    const next = !v;
+    try { localStorage.setItem('ot_queue_condensed', next ? '1' : '0'); } catch (_) {}
+    return next;
+  });
   const queueRowBase = {
     display: "flex",
     alignItems: "center",
     gap: 6,
-    padding: "12px 10px",
+    padding: qCondensed ? "5px 10px" : "12px 10px",
     minWidth: 0,
     maxWidth: "100%",
     boxSizing: "border-box",
@@ -4080,6 +4090,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 )}
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              {/* ▤ Condense — toggles the terse bang-bang list (ticket wxQ27UVx) */}
+              <IconBtn variant="outlined" size={32} icon={qCondensed ? "view_agenda" : "reorder"} iconSize={15} color={qCondensed ? C.accent : C.muted}
+                title={qCondensed ? "Back to detailed list" : "Condense to a terse list"} aria-label={qCondensed ? "Show detailed task list" : "Condense task list"} aria-pressed={qCondensed}
+                onClick={toggleQCondensed}
+                style={{"--md-outlined-icon-button-outline-color":qCondensed ? C.accent : C.divider,"--md-outlined-icon-button-container-shape":RADIUS.sm,flexShrink:0}} />
               {/* ✦ AI Prioritize — direct button */}
               <IconBtn variant="outlined" size={32} title={hasAI ? "AI Prioritize queue" : "Prioritize queue"} aria-label="Prioritize queue"
                 onClick={tasksOptimize} disabled={optLoading}
@@ -4274,10 +4289,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                                 {task.pinned && <span style={{fontSize:10,marginRight:4,color:rowAccent,opacity:isF?1:.5,display:"flex",alignItems:"center"}}>{suiteIcon("push_pin",10)}</span>}
                                 {task.text}
                               </span>
-                              {task.blocked && task.blockedNote && (
+                              {!qCondensed && task.blocked && task.blockedNote && (
                                 <span style={{fontSize:10,fontStyle:"italic",color:textOnPastel(AS.colorScheme, T.text, rowBg),fontFamily:NC_FONT_STACK,opacity:.9,display:"flex",alignItems:"center",gap:4}}>{suiteIcon("pause",10)} {task.blockedNote}</span>
                               )}
-                              {(aged || task.autoAged || task.mrsW || task.blocked || task.energy) && (
+                              {!qCondensed && (aged || task.autoAged || task.mrsW || task.blocked || task.energy) && (
                                 <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:2,opacity:.8}}>
                                   {aged && <AgeBadge task={task} pris={pris} thresholds={AS.ageThresholds} T={T}/>}
                                   {task.autoAged && (
