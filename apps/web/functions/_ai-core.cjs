@@ -1815,6 +1815,12 @@ async function recordAiLaneEvent(result, reason = "") {
         recent.push({ lane, label, at: Date.now(), reason: reason || "" });
         while (recent.length > 15) recent.shift();
       }
+      // merge:true is load-bearing — this doc ALSO holds usage.jobs / leaks written by
+      // recordAiUsage. A plain tx.set (no merge) replaces the whole document and wipes
+      // that usage history, which collapsed the rail card's today/hour/month figures to
+      // one identical number (owner ticket yfCJfy30: the monthly total could never
+      // accumulate past the calls since the last lane change). The model ladder added
+      // 7/16 makes lane/model changes frequent, so this fired constantly.
       tx.set(ref, {
         currentLane: lane,
         label,
@@ -1822,7 +1828,7 @@ async function recordAiLaneEvent(result, reason = "") {
         model: result.model,
         updatedAt: Date.now(),
         recent,
-      });
+      }, { merge: true });
     });
   } catch (e) {
     console.warn("[AI] Failed to record lane status (non-fatal):", e.message);
