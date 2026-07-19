@@ -1680,6 +1680,12 @@ const AI_PROXY_TIMEOUT_MS = 30000;
 // with zero network traffic. Shared across tabs via localStorage; capped at 15
 // minutes so a recovered server (quota reset, new fallback key) gets re-probed.
 const AI_COOLDOWN_STORAGE_KEY = "shamash_ai_proxy_cooldown_until";
+// Owner-selected Gemini credential lane (7/19: "a quick manual prod button to switch
+// lanes"). Set by the AI-lane popover in AppSuiteChrome; empty/absent = auto (server
+// walks primary → overflow → paid). The server honors this as a PREFERENCE — the chosen
+// lane is tried first, the rest still serve as fallbacks — so a stale selection can
+// never strand the app on a dead lane.
+const AI_LANE_PREF_STORAGE_KEY = "shamash_ai_lane_pref";
 const AI_COOLDOWN_MAX_MS = 15 * 60 * 1000;
 const AI_COOLDOWN_DEFAULT_MS = 2 * 60 * 1000;
 let _aiProxyCooldownUntil = 0;
@@ -1702,6 +1708,10 @@ function openAiCooldown(retryAfterSeconds) {
 
 async function callAIProxy(payload, timeoutMs = AI_PROXY_TIMEOUT_MS) {
   if (Date.now() < aiCooldownUntil()) return null; // breaker open — don't touch the network
+  try {
+    const lanePref = localStorage.getItem(AI_LANE_PREF_STORAGE_KEY) || "";
+    if (lanePref && !payload.geminiCredential) payload = { ...payload, geminiCredential: lanePref };
+  } catch (_) {}
   const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
   try {

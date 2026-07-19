@@ -80,6 +80,22 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
   // genuinely exhausted (_ai-core.cjs recordAiLaneEvent). Also carries usage stats and
   // any leak alerts the AI call manager's heuristics flagged (recordAiUsage()).
   const [aiLane, setAiLane] = React.useState({ currentLane: 'gemini:primary', label: 'Gemini', recent: [], usage: { totalToday: 0, totalThisHour: 0, totalThisMonth: 0, spendTodayUsd: 0, spendMonthUsd: 0 }, leaks: [] });
+  // Manual lane override (owner 7/19: "a quick manual prod button to switch lanes").
+  // Stored in localStorage; callAIProxy in 01-core.js attaches it to every request as a
+  // server-side PREFERENCE (chosen lane tried first, others remain fallbacks). Choosing
+  // any lane also clears the client circuit-breaker cooldown so the prod takes effect
+  // immediately instead of waiting out a stale 15-min pause.
+  const [aiLanePref, setAiLanePrefState] = React.useState(() => {
+    try { return localStorage.getItem('shamash_ai_lane_pref') || ''; } catch (_) { return ''; }
+  });
+  const setAiLanePref = (pref) => {
+    setAiLanePrefState(pref);
+    try {
+      if (pref) localStorage.setItem('shamash_ai_lane_pref', pref);
+      else localStorage.removeItem('shamash_ai_lane_pref');
+      localStorage.removeItem('shamash_ai_proxy_cooldown_until');
+    } catch (_) {}
+  };
   const [aiLanePopoverOpen, setAiLanePopoverOpen] = React.useState(false);
   // Collapsible popover sections (owner ticket yLg0L3HT: the card gets long — fold the
   // detail sections). Leaks start open only because an unseen leak is worth attention.
@@ -518,6 +534,29 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '0 12px 9px', fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK }}>
                     <span>Est. spend <b style={{ color: C.text }}>${aiLane.usage.spendTodayUsd < 0.01 && aiLane.usage.spendTodayUsd > 0 ? aiLane.usage.spendTodayUsd.toFixed(4) : aiLane.usage.spendTodayUsd.toFixed(2)}</b> today · <b style={{ color: C.text }}>${aiLane.usage.spendMonthUsd.toFixed(2)}</b> this month</span>
                     <a href="https://console.cloud.google.com/billing?project=onetaskonly-app" target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', color: C.accent, fontSize: 10, textDecoration: 'none', whiteSpace: 'nowrap' }}>actual billing ↗</a>
+                  </div>
+                  {/* Manual lane prod (owner 7/19): pick which credential lane serves FIRST.
+                      A preference, not a hard pin — the other lanes still catch failures. */}
+                  <div style={{ padding: '0 12px 9px' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, paddingBottom: 4 }}>Lane override</div>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {[['', 'Auto'], ['primary', 'Primary'], ['overflow_01', 'Overflow'], ['paid_01', 'Paid']].map(([value, label]) => (
+                        <FilterChip
+                          key={value || 'auto'}
+                          label={label}
+                          selected={aiLanePref === value}
+                          title={value ? `Try the ${label} Gemini lane first (others still serve as fallbacks)` : 'Server picks: primary → overflow → paid'}
+                          onClick={() => setAiLanePref(value)}
+                          style={{
+                            flexShrink: 0,
+                            '--md-filter-chip-container-height': '22px',
+                            '--md-filter-chip-label-text-font': NC_FONT_STACK,
+                            '--md-filter-chip-label-text-size': '11px',
+                            '--md-filter-chip-outline-color': C.divider,
+                          }}
+                        />
+                      ))}
+                    </div>
                   </div>
                   {activeLeaks.length > 0 && (
                     <div>

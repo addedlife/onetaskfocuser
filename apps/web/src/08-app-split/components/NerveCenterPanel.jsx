@@ -1276,11 +1276,25 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // (currentTime/localeTime/ageHours) so the snapshot effect refires only when real data
   // changes — not on every bucket rollover (owner ticket jYozknRO; same fix as
   // NerveCenterNext.jsx).
+  // Clock-field strips kept in lockstep with NerveCenterNext's scan key (7/19): email
+  // aiSummary lands async, calendar now/past flip at boundaries, and phone status/
+  // texts[].time/calls[].time are relative ("12m ago") — all re-fired the snapshot with
+  // zero real change. Both surfaces share the 'dashboard-snapshot' throttle key, so a
+  // leak here burns the same budget.
   const ncSummaryScanKey = useMemo(() => JSON.stringify({
     ...chiefContext,
     currentTime: undefined,
     localeTime: undefined,
     tasks: (chiefContext.tasks || []).map(({ ageHours, ...rest }) => rest),
+    emails: (chiefContext.emails || []).map(({ summary, ...rest }) => rest),
+    calendar: (chiefContext.calendar || []).map(({ now, past, ...rest }) => rest),
+    phone: chiefContext.phone ? {
+      ...chiefContext.phone,
+      status: undefined,
+      stale: undefined,
+      texts: (chiefContext.phone.texts || []).map(({ time, ...rest }) => rest),
+      calls: (chiefContext.phone.calls || []).map(({ time, ...rest }) => rest),
+    } : chiefContext.phone,
   }), [chiefContext]);
   const taskSuggestionPriorities = useMemo(() =>
     [...(priorities || [])]

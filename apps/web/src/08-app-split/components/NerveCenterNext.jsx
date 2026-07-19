@@ -1422,6 +1422,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // where polling used to batch it). calendar[].now/past are clock-derived and flip at
   // every event boundary. Identity + freshness of each item are already fully covered by
   // sourceKey/freshnessKey, so dropping these fields loses no real change detection.
+  // Third clock found 7/19 (leak detector: ~5-min metronome at 641 calls/day): the
+  // phone block. texts[].time / calls[].time are RELATIVE ("12m", "3h") and the offline
+  // status line embeds "last seen Xm ago" — every relay refresh rewrote those strings
+  // and re-fired the snapshot. Identity/freshness of phone activity is captured by
+  // name+preview/kind+unread, so dropping time/status loses no real change detection.
   const ncSummaryScanKey = useMemo(() => JSON.stringify({
     ...chiefContext,
     currentTime: undefined,
@@ -1429,6 +1434,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     tasks: (chiefContext.tasks || []).map(({ ageHours, ...rest }) => rest),
     emails: (chiefContext.emails || []).map(({ summary, ...rest }) => rest),
     calendar: (chiefContext.calendar || []).map(({ now, past, ...rest }) => rest),
+    phone: chiefContext.phone ? {
+      ...chiefContext.phone,
+      status: undefined,
+      stale: undefined,
+      texts: (chiefContext.phone.texts || []).map(({ time, ...rest }) => rest),
+      calls: (chiefContext.phone.calls || []).map(({ time, ...rest }) => rest),
+    } : chiefContext.phone,
   }), [chiefContext]);
   const taskSuggestionPriorities = useMemo(() =>
     [...(priorities || [])]
