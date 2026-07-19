@@ -14,7 +14,7 @@ import { Store, textOnColor } from '../../01-core.js';
 import { MdFilterChip } from '@material/web/chips/filter-chip.js';
 import { subscribeOwner, setPreferredHost, ownerIsLive, HOST_LABEL, OWNER_LIVE_WINDOW_MS } from '../phone-host-control.js';
 import { preferredHostId, HANDOFF_GRACE_MS } from '../phone-link.js';
-import { subscribeAiLaneStatus } from '../ai-lane-status.js';
+import { subscribeAiLaneStatus, subscribeAiLog } from '../ai-lane-status.js';
 import { isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 
 // Real M3 web components — Google's official implementations, not hand-coded lookalikes.
@@ -71,7 +71,13 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
   const [aiLanePopoverOpen, setAiLanePopoverOpen] = React.useState(false);
   // Collapsible popover sections (owner ticket yLg0L3HT: the card gets long — fold the
   // detail sections). Leaks start open only because an unseen leak is worth attention.
-  const [aiSectOpen, setAiSectOpen] = React.useState({ leaks: true, fallovers: false });
+  const [aiSectOpen, setAiSectOpen] = React.useState({ leaks: true, fallovers: false, livelog: false });
+  // Live AI call log (owner ticket 3I7vYdFo): the real prompt/response/model/tokens of
+  // recent calls. The listener is only attached while the popover is open — this doc
+  // rewrites on EVERY AI call, so an always-on listener would stream the full prompt
+  // text to every open tab all day for a panel nobody is looking at.
+  const [aiLog, setAiLog] = React.useState([]);
+  const [expandedLogEntry, setExpandedLogEntry] = React.useState(null);
   // Owner ticket 7/16: the popover was absolutely positioned inside the rail, so it
   // clipped under neighboring cards and ran off the top of the screen. It now renders
   // through a portal at document.body with viewport-clamped fixed coordinates,
@@ -126,6 +132,12 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
     const unsub = subscribeAiLaneStatus(setAiLane);
     return () => { try { unsub && unsub(); } catch (_) {} };
   }, []);
+  // Attach the live-log listener only while the section is actually being viewed.
+  React.useEffect(() => {
+    if (!aiLanePopoverOpen || !aiSectOpen.livelog) return undefined;
+    const unsub = subscribeAiLog(setAiLog);
+    return () => { try { unsub && unsub(); } catch (_) {} };
+  }, [aiLanePopoverOpen, aiSectOpen.livelog]);
   // Owner ticket 7/15: picking PC (or Auto, where PC is a candidate host) used to
   // just fail silently until the owner noticed DeskPhone wasn't running — nothing
   // ever probed for that or launched it. Whenever the preference wants PC in play
@@ -484,6 +496,52 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                         </div>
                       </div>
                     ))
+                  ))}
+                  {/* Live log (owner ticket 3I7vYdFo): the actual prompt/response of
+                      recent calls. Rows are click-to-expand — collapsed shows the job,
+                      model, tokens and cost; expanded shows the real text sent and
+                      returned, with an explicit note when it was truncated. */}
+                  <button onClick={() => setAiSectOpen(s => ({ ...s, livelog: !s.livelog }))} style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 'none', borderTop: `1px solid ${C.divider}`, cursor: 'pointer', padding: '8px 12px 4px', fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
+                    <span style={{ flex: 1 }}>Live log{aiLog.length ? ` (${aiLog.length})` : ''}</span>
+                    {suiteIcon(aiSectOpen.livelog ? 'expand_less' : 'expand_more', 14)}
+                  </button>
+                  {aiSectOpen.livelog && (aiLog.length === 0 ? (
+                    <div style={{ padding: '9px 12px 12px', fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>No calls logged yet — this fills in as the app makes AI calls.</div>
+                  ) : (
+                    aiLog.map((entry, i) => {
+                      const open = expandedLogEntry === entry.at;
+                      return (
+                        <div key={entry.at || i} style={{ borderTop: `1px solid ${C.divider}` }}>
+                          <button onClick={() => setExpandedLogEntry(open ? null : entry.at)} style={{ display: 'block', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '7px 12px', textAlign: 'left' }}>
+                            <div style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.job}</div>
+                            <div style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 1 }}>
+                              {new Date(entry.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })}
+                              {` · ${entry.inTok}→${entry.outTok} tok`}
+                              {entry.usd > 0 ? ` · $${entry.usd < 0.01 ? entry.usd.toFixed(4) : entry.usd.toFixed(2)}` : ''}
+                              {entry.elapsedMs ? ` · ${(entry.elapsedMs / 1000).toFixed(1)}s` : ''}
+                            </div>
+                            {entry.model && (
+                              <div style={{ fontSize: 10, color: C.faint, fontFamily: NC_MONO_STACK, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.model}</div>
+                            )}
+                          </button>
+                          {open && (
+                            <div style={{ padding: '0 12px 10px' }}>
+                              {[
+                                { label: 'Prompt', body: entry.prompt, truncated: entry.promptTruncated, chars: entry.promptChars },
+                                { label: 'Response', body: entry.response, truncated: entry.responseTruncated, chars: entry.responseChars },
+                              ].map(part => (
+                                <div key={part.label} style={{ marginTop: 6 }}>
+                                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, letterSpacing: 1.2, textTransform: 'uppercase', fontFamily: NC_FONT_STACK }}>
+                                    {part.label}{part.truncated ? ` — showing first ${part.body.length} of ${part.chars} chars` : ''}
+                                  </div>
+                                  <pre style={{ margin: '3px 0 0', padding: 7, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, fontSize: 10, lineHeight: 1.45, color: C.muted, fontFamily: NC_MONO_STACK, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 220, overflowY: 'auto' }}>{part.body || '(empty)'}</pre>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   ))}
                 </div>
               </>,

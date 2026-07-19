@@ -67,11 +67,11 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
     if (!settingsHasAI) { setSchemeGenErr("AI server is not configured."); return; }
     setSchemeGenLoading(true); setSchemeGenErr("");
     try {
-      const existing = [
-        ...Object.values(SCHEMES).map(s => s.name),
-        ...Object.values(AS.customSchemes || {}).map(s => s.name),
-      ];
-      const newSchemes = await aiGenSchemes(settingsAiOpts, existing);
+      const existingSchemes = [...Object.values(SCHEMES), ...Object.values(AS.customSchemes || {})];
+      const newSchemes = await aiGenSchemes(settingsAiOpts, {
+        names: existingSchemes.map(s => s.name),
+        bgColors: existingSchemes.map(s => s.bg).filter(Boolean),
+      });
       if (!newSchemes.length) throw new Error("No valid schemes returned.");
       const toAdd = {};
       newSchemes.forEach(s => { toAdd[`custom_${s.id}`] = s; });

@@ -101,5 +101,13 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // Live AI call log (_ai-core.cjs recordAiLogEntry) — the rolling window of recent
+    // prompts/responses behind the rail card's Live log section. This holds actual
+    // prompt text, so owner-only read is load-bearing, not just tidy. Written solely
+    // by the Function's Admin SDK.
+    match /_system/ai-log {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
   }
 }

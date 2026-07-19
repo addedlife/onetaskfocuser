@@ -48,6 +48,46 @@ export function normalizeAiLaneStatus(data) {
   return { currentLane, label, provider: d.provider || 'gemini', model: d.model || '', updatedAt: Number(d.updatedAt) || 0, recent, usage, leaks };
 }
 
+// ── Live AI call log ────────────────────────────────────────────────────────
+// Mirror of _system/ai-log (written by _ai-core.cjs recordAiLogEntry): the last
+// ~25 AI calls with their real prompt, response, model and token counts. Same
+// read-only onSnapshot shape as the lane status above.
+export function normalizeAiLog(data) {
+  const entries = Array.isArray(data?.entries) ? data.entries : [];
+  return entries
+    .filter(e => e && typeof e === 'object')
+    .map(e => ({
+      at: Number(e.at) || 0,
+      job: String(e.job || ''),
+      provider: String(e.provider || ''),
+      model: String(e.model || ''),
+      credential: String(e.credential || ''),
+      inTok: Number(e.inTok) || 0,
+      outTok: Number(e.outTok) || 0,
+      usd: Number(e.usd) || 0,
+      elapsedMs: Number(e.elapsedMs) || 0,
+      prompt: String(e.prompt || ''),
+      response: String(e.response || ''),
+      promptChars: Number(e.promptChars) || 0,
+      responseChars: Number(e.responseChars) || 0,
+      promptTruncated: !!e.promptTruncated,
+      responseTruncated: !!e.responseTruncated,
+    }))
+    .sort((a, b) => b.at - a.at); // newest first for display
+}
+
+export function subscribeAiLog(onUpdate) {
+  const ref = db ? db.collection('_system').doc('ai-log') : null;
+  if (!ref) return () => {};
+  return ref.onSnapshot(
+    snap => {
+      if (snap.metadata && snap.metadata.fromCache) return;
+      onUpdate(normalizeAiLog(snap.exists ? snap.data() : null));
+    },
+    err => { console.warn('[ai-lane-status] log listener error:', err); },
+  );
+}
+
 export function subscribeAiLaneStatus(onUpdate) {
   const ref = statusRef();
   if (!ref) return () => {};

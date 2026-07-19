@@ -1207,7 +1207,13 @@ const AI_JOB_REGISTRY = {
       return compactLines([
         YESHIVISH_SYSTEM,
         "Look at everything on this person's plate and the days ahead, then pick exactly the THREE best things to focus on right now.",
-        "Weigh industry-standard prioritization signals: how long something has waited, stated priority/urgency, and whether an upcoming calendar event (English or Hebrew/Jewish date) makes it more or less time-sensitive (e.g. a shaila or errand tied to an approaching Yom Tov).",
+        "Prioritize like a seasoned executive assistant to a communal rav, weighing signals in roughly this order:",
+        "1. Another person actively waiting — an unanswered shaila or a promised reply outranks solo work of similar urgency; a person waiting is a real cost every hour.",
+        "2. Hard time-sensitivity — an upcoming calendar event (English or Hebrew/Jewish date) whose prep cannot slip, e.g. a shaila or errand tied to an approaching Shabbos/Yom Tov, a drasha or shiur that must be ready by a fixed date.",
+        "3. Stated priority tier, then how long the item has been waiting.",
+        "4. Communal/personal balance — a rav's plate mixes klal responsibilities with his own family and personal life; if the obvious top picks are all communal, check whether a personal or family item is quietly being starved (or vice versa) and let one earn a slot.",
+        "5. Momentum on stalled big items — one small, concrete unblocking step on a large stalled matter often beats another quick errand.",
+        "Pick the three a wise mentor would actually point to right now — not simply the three oldest or the three easiest. Never pick two items that are really the same underlying matter.",
         "Tone is STRICTLY positive and encouraging - never say a thing is overdue, stale, critical, or has been neglected. Frame each pick as a good, doable next move, not a warning.",
         "Do not invent tasks, dates, or facts not present in the data below.",
         `Current time: ${cleanString(input.currentTime, 60)}. Hebrew date: ${cleanString(input.hebrewDate, 40)}.`,
@@ -1232,13 +1238,17 @@ const AI_JOB_REGISTRY = {
     task: "settings-color-schemes",
     output: "json",
     shape: "array",
-    genConfig: { temperature: 0.4, maxOutputTokens: 1800 },
+    genConfig: { temperature: 0.85, maxOutputTokens: 1800 },
     schema: '[{"id":"slug","name":"Name","bg":"#ffffff","bgW":"#ffffff","card":"#ffffff","text":"#111111","tSoft":"#333333","tFaint":"#666666","brd":"#cccccc","brdS":"#dddddd","grad":["#ffffff","#eeeeee","#dddddd"]}]',
     buildPrompt(input = {}) {
+      // Owner ticket 1rWQOBmD: earlier prompt only banned duplicate NAMES, so the model
+      // kept re-serving the same handful of colors under fresh names. Now the existing
+      // background hexes are in the prompt and each run must land in different hue families.
       return compactLines([
-        "Generate 4 calm, relaxing color schemes for a minimal productivity app UI.",
-        `Avoid duplicating existing schemes: ${normalizeStringArray(input.existingNames || [], 80, 80).join(", ")}`,
-        "All colors must be low-saturation and readable. Use valid 6-digit hex strings.",
+        "Generate 4 color schemes for a minimal productivity app UI. Each of the 4 must come from a DIFFERENT contemporary palette family — pick four distinct directions per run from styles like: Nordic frost, warm terracotta/earth, muted jewel tones, desert pastel, deep forest, ink-and-paper, dusk mauve, sea glass, café cream, slate industrial, olive grove, plum twilight.",
+        `Existing scheme names (do not reuse or lightly rename): ${normalizeStringArray(input.existingNames || [], 80, 80).join(", ") || "(none)"}`,
+        `Existing scheme background hexes: ${normalizeStringArray(input.existingBgColors || [], 60, 12).join(", ") || "(none)"}. Every new scheme's bg must sit in a clearly different hue family from ALL of these — never a near-duplicate of an existing palette under a new name.`,
+        "Keep saturation calm and livable, but hues must be genuinely distinct scheme-to-scheme. Contrast is non-negotiable: text vs bg and text vs card must meet WCAG AA (>=4.5:1); tSoft vs bg >=3:1. Use valid 6-digit hex strings.",
         responseJsonInstruction("array", this.schema),
       ]);
     },
@@ -1876,6 +1886,58 @@ function tokensFromResult(result) {
   return { inTok: 0, outTok: 0 };
 }
 
+// ── Live AI call log (owner ticket 3I7vYdFo) ────────────────────────────────
+// A rolling window of the most recent calls with their actual prompt, response,
+// model and token counts, so the rail card can show what the AI is really being
+// asked and what it answers back. Deliberately ONE bounded document rather than a
+// growing collection: the rail already holds a live listener on _system/ai-status,
+// so a sibling doc costs one more listener and can never grow without bound.
+// Prompts/responses are truncated hard — this is an observability window, not an
+// archive, and a full 18k-char transcript prompt would blow the 1MB doc limit.
+const AI_LOG_MAX_ENTRIES = 25;
+const AI_LOG_MAX_PROMPT_CHARS = 4000;
+const AI_LOG_MAX_RESPONSE_CHARS = 4000;
+
+async function recordAiLogEntry({ jobKey, prompt, result, elapsedMs }) {
+  const db = firestoreLimiter();
+  if (!db) return;
+  try {
+    const ref = db.collection("_system").doc("ai-log");
+    const { inTok, outTok } = tokensFromResult(result);
+    const model = String(result?.model || "");
+    const price = TOKEN_PRICING_PER_MTOK[model] || DEFAULT_TOKEN_PRICING;
+    const promptText = String(prompt || "");
+    const responseText = String(result?.text || "");
+    const entry = {
+      at: Date.now(),
+      job: String(jobKey || "general"),
+      provider: String(result?.provider || ""),
+      model,
+      credential: String(result?.credential || ""),
+      inTok,
+      outTok,
+      usd: (inTok * price.in + outTok * price.out) / 1e6,
+      elapsedMs: Number(elapsedMs) || 0,
+      // Flag truncation explicitly so the UI never implies it is showing the
+      // whole prompt when it is not.
+      promptChars: promptText.length,
+      responseChars: responseText.length,
+      prompt: promptText.slice(0, AI_LOG_MAX_PROMPT_CHARS),
+      response: responseText.slice(0, AI_LOG_MAX_RESPONSE_CHARS),
+      promptTruncated: promptText.length > AI_LOG_MAX_PROMPT_CHARS,
+      responseTruncated: responseText.length > AI_LOG_MAX_RESPONSE_CHARS,
+    };
+    await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      const prior = snap.exists && Array.isArray(snap.data().entries) ? snap.data().entries : [];
+      const entries = [...prior, entry].slice(-AI_LOG_MAX_ENTRIES);
+      tx.set(ref, { entries, updatedAt: entry.at }, { merge: true });
+    });
+  } catch (e) {
+    console.warn("[AI] Failed to record live-log entry (non-fatal):", e.message);
+  }
+}
+
 async function recordAiUsage(jobKey, result) {
   const key = String(jobKey || "").trim() || "general";
   const db = firestoreLimiter();
@@ -2155,8 +2217,12 @@ async function processAiPayload(payload = {}) {
     credential: payload.geminiCredential || payload.credential || payload.keyLane,
   };
 
+  const startedMs = Date.now();
   const result = await (kind === "audio" ? callGemini(common) : callWithFallback(common));
   recordAiUsage(task, result).catch(() => {});
+  // Audio calls carry a base64 blob in `common.base64`, never in the prompt, so
+  // logging the prompt here can't accidentally persist audio payloads.
+  recordAiLogEntry({ jobKey: task, prompt: common.prompt, result, elapsedMs: Date.now() - startedMs }).catch(() => {});
   return result;
 }
 
