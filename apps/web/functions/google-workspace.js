@@ -404,7 +404,15 @@ async function disconnect(user, body = {}) {
   return { connected: (await connectedEmails(user)).length > 0, accounts: await connectedEmails(user) };
 }
 
-module.exports = async (req, res) => {
+// Arm Gmail push for every connected account. Required lazily rather than at module
+// load to avoid a require cycle: gmail-push.js pulls accessTokenFor/listAccountDocs
+// back out of this file.
+async function armGmailPush(user) {
+  const { registerWatchesFor } = require("./gmail-push.js");
+  return { watches: await registerWatchesFor(user) };
+}
+
+const handler = async (req, res) => {
   const origin = req.headers.origin || "";
   const headers = corsHeaders(origin, "POST, OPTIONS");
 
@@ -423,8 +431,16 @@ module.exports = async (req, res) => {
     if (action === "createCalendarEvent") return res.status(200).set(headers).json(await createCalendarEvent(user, body));
     if (action === "deleteCalendarEvent") return res.status(200).set(headers).json(await deleteCalendarEvent(user, body));
     if (action === "disconnect")          return res.status(200).set(headers).json(await disconnect(user, body));
+    if (action === "armGmailPush")        return res.status(200).set(headers).json(await armGmailPush(user));
     return res.status(400).set(headers).json({ error: "Unknown Google Workspace action." });
   } catch (error) {
     return res.status(error.statusCode || 500).set(headers).json({ error: error.message || "Google Workspace request failed." });
   }
 };
+
+// The HTTP handler stays the default export (index.js passes it to onRequest), with
+// the token/account helpers hung off it so gmail-push.js can reuse them rather than
+// duplicating the refresh-token dance.
+module.exports = handler;
+module.exports.accessTokenFor = accessTokenFor;
+module.exports.listAccountDocs = listAccountDocs;

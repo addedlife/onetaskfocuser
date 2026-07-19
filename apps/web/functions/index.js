@@ -5,6 +5,7 @@ const appConfig     = require("./app-config");
 const debugLog      = require("./debug-log");
 const chiefProfile  = require("./chief-profile");
 const googleWorkspace = require("./google-workspace");
+const gmailPush     = require("./gmail-push");
 const googleHealth  = require("./google-health");
 const phoneRelay    = require("./phone-relay");
 const phoneRelayV2  = require("./phone-relay-v2");
@@ -17,6 +18,11 @@ exports.appConfig       = onRequest({ timeoutSeconds: 15,  memory: "128MiB", reg
 exports.debugLog        = onRequest({ timeoutSeconds: 10,  memory: "128MiB", region: "us-central1" }, debugLog);
 exports.chiefProfile    = onRequest({ timeoutSeconds: 30,  memory: "256MiB", region: "us-central1" }, chiefProfile);
 exports.googleWorkspace = onRequest({ timeoutSeconds: 60,  memory: "256MiB", region: "us-central1" }, googleWorkspace);
+// Gmail push: a native Pub/Sub trigger + its daily watch renewal (see gmail-push.js).
+// Neither is an HTTP endpoint — Eventarc and Cloud Scheduler authenticate delivery,
+// so there is no public URL to secure.
+exports.onGmailNotification = gmailPush.onGmailNotification;
+exports.renewGmailWatches   = gmailPush.renewGmailWatches;
 exports.googleHealth    = onRequest({ timeoutSeconds: 30,  memory: "256MiB", region: "us-central1" }, googleHealth);
 // 256MiB: at 128MiB this function OOM-killed instances mid-push once the state
 // blob passed ~0.5 MB (Cloud Run logged "memory limit exceeded" 7/17) — and the

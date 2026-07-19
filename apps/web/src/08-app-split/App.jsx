@@ -779,6 +779,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           localStorage.removeItem('ot_google_token_expiry');
         } catch {}
         setGoogleError(null);
+        // Arm Gmail push for the newly connected account(s). Best-effort: if this
+        // fails the app still works, it just falls back to refreshing on focus until
+        // the nightly renewal job registers the watch.
+        callGoogleWorkspace("armGmailPush", {}).catch(e => console.warn("[Google] arming mail push failed:", e?.message));
         await loadGoogleWorkspaceFromServer();
       })
       .catch(e => setGoogleError(e.message || 'Google Workspace connection failed.'))
@@ -811,6 +815,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             try {
               setGoogleLoading(true);
               await callGoogleWorkspace("exchange", { code: resp.code });
+              callGoogleWorkspace("armGmailPush", {}).catch(e => console.warn("[Google] arming mail push failed:", e?.message));
               setGoogleServerConnected(true);
               setGoogleToken(GOOGLE_SERVER_TOKEN);
               setGoogleWasConnected(true);
@@ -1119,12 +1124,33 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     const onVisible = () => {
       if (document.visibilityState === "visible") load();
     };
-    const t = setInterval(load, 5 * 60000);
+    // Owner ticket 7/19 ("new emails should post when they come in"): the 5-minute
+    // interval that used to live here is gone. Gmail now pushes to Pub/Sub the moment
+    // mail lands, a Cloud Function writes a change flag to users/{uid}/pushState/mail,
+    // and this listener reloads on that flag — real push, nothing on a clock. See
+    // functions/gmail-push.js. The flag carries no message content by design; the
+    // actual mail is fetched here, on demand, exactly as before.
+    let unsubPush = null;
+    try {
+      const uid = canonicalUid(firebase.auth().currentUser);
+      if (db && uid) {
+        let seenChangedAt = null;
+        unsubPush = db.collection("users").doc(uid).collection("pushState").doc("mail")
+          .onSnapshot(snap => {
+            if (snap.metadata && snap.metadata.fromCache) return;
+            const changedAt = Number(snap.exists ? snap.data()?.changedAt : 0) || 0;
+            // Skip the initial value — that's the last change from before this mount,
+            // already covered by the load() above. Only fire on genuinely new mail.
+            if (seenChangedAt === null) { seenChangedAt = changedAt; return; }
+            if (changedAt > seenChangedAt) { seenChangedAt = changedAt; load(); }
+          }, err => console.warn("[Google] mail push listener error:", err?.message));
+      }
+    } catch (e) { console.warn("[Google] could not attach mail push listener:", e?.message); }
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", load);
     return () => {
       cancelled = true;
-      clearInterval(t);
+      try { unsubPush && unsubPush(); } catch (_) {}
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", load);
     };

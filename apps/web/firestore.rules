@@ -109,5 +109,12 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // Gmail watch registry (gmail-push.js): maps a mailbox address to the user
+    // compartment it belongs to, so a Pub/Sub notification can be routed. Holds no
+    // mail content, but it does map addresses to accounts — server-only, both ways.
+    // The Admin SDK bypasses rules, so closing this costs the pipeline nothing.
+    match /serverOnlyGmailWatches/{email} {
+      allow read, write: if false;
+    }
   }
 }
