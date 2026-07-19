@@ -6,7 +6,7 @@ import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhone
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthCard } from './HealthCard.jsx';
 import { HealthPage } from './HealthPage.jsx';
-import { shouldRunAndClaim } from '../ai-call-throttle.js';
+import { shouldRunForContentAndClaim, publishContentResult } from '../ai-call-throttle.js';
 import { gmailDeepLink } from '../utils/gmail-links.js';
 
 // Owner ticket 7/15: the 5-min gate on dashboard.snapshot.v1 lived only in an
@@ -1537,9 +1537,21 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // "if for an hour nothing happened, shouldn't fire even once"). Manual rescan bypasses.
     if (!isForced && ncSummaryScanKey === lastSnapshotKeyRef.current) return undefined;
     let cancelled = false;
-    shouldRunAndClaim(SNAPSHOT_THROTTLE_KEY, isForced ? 0 : SESSION_GAP_MS).then(allowed => {
+    shouldRunForContentAndClaim(SNAPSHOT_THROTTLE_KEY, isForced ? '' : ncSummaryScanKey, isForced ? 0 : SESSION_GAP_MS).then(({ run, cachedResult }) => {
       if (cancelled) return;
-      if (!allowed) {
+      if (!run) {
+        // Another surface already scanned this exact content — adopt its result
+        // instead of spending a second call on the identical question (owner ticket
+        // WEmQ43Ks: open tabs must not multiply AI calls).
+        if (cachedResult) {
+          setNcSummary({ supercrunch: cachedResult.supercrunch, signals: cachedResult.signals || [] });
+          setTaskSuggestions(cachedResult.taskSuggestions || []);
+          setNcSummaryLoading(false);
+          setTaskSuggestionsLoading(false);
+          lastSnapshotKeyRef.current = ncSummaryScanKey;
+          writeStorageJson(SNAPSHOT_CACHE_KEY, { scanKey: ncSummaryScanKey, ts: Date.now(), result: cachedResult });
+          return;
+        }
         // Silently deferred — no spinner, current result stays visible. Recheck
         // shortly rather than computing the exact remaining wait, since the claim is
         // now shared across tabs/devices and could be won by any of them first. The
@@ -1607,6 +1619,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           setTaskSuggestions(rows);
           writeStorageJson(CHIEF_SUGGESTIONS_CACHE_KEY, { scanKey: ncSummaryScanKey, ts: Date.now(), rows });
           writeStorageJson(SNAPSHOT_CACHE_KEY, { scanKey: scanKeyAtStart, ts: Date.now(), result: { ...summaryPart, taskSuggestions: rows } });
+          // Share this answer with every other open surface so none of them spends a
+          // second call on the same content (owner ticket WEmQ43Ks).
+          publishContentResult(SNAPSHOT_THROTTLE_KEY, scanKeyAtStart, { ...summaryPart, taskSuggestions: rows });
           lastSnapshotKeyRef.current = scanKeyAtStart;
         })
         .catch(e => {

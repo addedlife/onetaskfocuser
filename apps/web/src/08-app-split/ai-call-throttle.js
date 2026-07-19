@@ -93,6 +93,102 @@ export async function shouldRunAndClaim(key, minGapMs) {
   }
 }
 
+// ── Content-keyed claim (owner ticket WEmQ43Ks) ─────────────────────────────
+// "Multiple displays open — PC tabs, tablet, iPad — should have no bearing on AI
+// calls. If content changes anywhere it fires; if nothing changes it never fires."
+//
+// shouldRunAndClaim above dedupes on TIME, which cannot express that: four devices
+// seeing the same unchanged dashboard would each still run once per gap, and each
+// would run again on the next gap even though nothing had changed. This variant
+// dedupes on CONTENT — the scan key of the data being summarized — so a given state
+// of the world is scanned exactly once no matter how many surfaces are looking at
+// it, and an idle app never calls at all.
+//
+// minGapMs is retained as a secondary cost brake: content that churns rapidly (a
+// burst of incoming texts) still can't fire more than once per gap. Callers keep
+// their own recheck timer, so the pending change is picked up right after.
+const _localContentGate = new Map(); // key → last contentKey this device claimed
+
+function _contentStorageKey(key) { return `shamash_ai_content_${key}`; }
+
+function _readLocalContentKey(key) {
+  if (_localContentGate.has(key)) return _localContentGate.get(key);
+  try {
+    const stored = localStorage.getItem(_contentStorageKey(key));
+    if (stored) { _localContentGate.set(key, stored); return stored; }
+  } catch (_) {}
+  return null;
+}
+
+function _claimLocalContentKey(key, contentKey) {
+  _localContentGate.set(key, contentKey);
+  try { localStorage.setItem(_contentStorageKey(key), contentKey); } catch (_) {}
+}
+
+// Returns { run, cachedResult }. run=true means this surface won the claim and should
+// make the AI call. run=false with a cachedResult means another surface already scanned
+// this exact content — take its answer instead of computing the same thing again. That
+// return shape matters: without it a second device would be correctly denied but would
+// keep retrying forever, since nothing would ever tell it the content had been handled.
+export async function shouldRunForContentAndClaim(key, contentKey, minGapMs = 0) {
+  const content = String(contentKey || '');
+  // A manual/forced refresh passes no content key — fall back to the time-only claim.
+  if (!content) return { run: await shouldRunAndClaim(key, minGapMs), cachedResult: null };
+
+  const now = Date.now();
+  // Cheap local rejection first: this device already scanned exactly this state.
+  if (_readLocalContentKey(key) === content) return { run: false, cachedResult: null };
+
+  const ref = throttleRef(key);
+  if (!ref) { _claimLocalContentKey(key, content); _claimLocalGate(key, now); return { run: true, cachedResult: null }; }
+  try {
+    const outcome = await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      const data = (snap.exists && snap.data()) || {};
+      // Already scanned this exact content on some device — never scan it again,
+      // however long ago that was. This is the whole point of the ticket. Hand back
+      // whatever that run produced so this surface shows the same answer.
+      if (data.lastContentKey === content) {
+        return { run: false, cachedResult: data.lastResult ?? null };
+      }
+      const lastRunAtMs = Number(data.lastRunAtMs) || 0;
+      if (minGapMs > 0 && now - lastRunAtMs < minGapMs) return { run: false, cachedResult: null };
+      tx.set(ref, { lastRunAtMs: now, lastContentKey: content }, { merge: true });
+      return { run: true, cachedResult: null };
+    });
+    if (outcome.run) { _claimLocalContentKey(key, content); _claimLocalGate(key, now); }
+    else {
+      _denyLocalGate(key, now, minGapMs);
+      // Record the content locally when we adopted someone else's result, so this
+      // surface stops re-attempting the same state on every recheck tick.
+      if (outcome.cachedResult != null) _claimLocalContentKey(key, content);
+    }
+    return outcome;
+  } catch (e) {
+    // Same fail-semi-open posture as shouldRunAndClaim: the local content gate above
+    // already passed, so grant this one run and record it locally. A dead Firestore
+    // costs at most one call per content change per device, never a storm.
+    console.warn('[ai-call-throttle] content claim failed; local gate holds:', e.message);
+    _claimLocalContentKey(key, content);
+    _claimLocalGate(key, now);
+    return { run: true, cachedResult: null };
+  }
+}
+
+// Publish the result of a won claim so other surfaces looking at the same content can
+// adopt it instead of spending a second AI call. Best-effort: a failure here only costs
+// a redundant call on another device, never correctness.
+export async function publishContentResult(key, contentKey, result) {
+  const content = String(contentKey || '');
+  const ref = throttleRef(key);
+  if (!content || !ref || result == null) return;
+  try {
+    await ref.set({ lastContentKey: content, lastResult: result, lastResultAtMs: Date.now() }, { merge: true });
+  } catch (e) {
+    console.warn('[ai-call-throttle] result publish failed (non-fatal):', e.message);
+  }
+}
+
 // Read-only peek at when a key last ran, without claiming it — used to decide whether
 // an app-open / became-visible trigger should still bypass the normal gap (e.g. "it's
 // been over 2 minutes since TaskRiver last ranked, refresh now").
