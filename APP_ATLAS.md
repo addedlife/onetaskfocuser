@@ -521,8 +521,9 @@
 
 # PART 15 — SERVERLESS BACKEND  (`apps/web/functions/`, deployed to Firebase)
 
-> `functions/index.js` registers all HTTP endpoints. `backend/functions/` is the
-> DEPRECATED Netlify twin — per memory, the live deploy path is **Firebase only**.
+> `functions/index.js` registers all HTTP endpoints. The old `backend/functions/` Netlify
+> twin was deleted 2026-07-19 (recoverable from git history) — the live deploy path is
+> **Firebase only**.
 
 ### 15.1 `aiProxy` (`ai-proxy.js` + `_ai-core.cjs`) ⬜ **(security-critical)**
 - **plain:** The secure AI gateway. The browser never holds API keys — it calls this, which

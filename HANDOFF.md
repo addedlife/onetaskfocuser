@@ -195,8 +195,9 @@ This is pure protection and low-risk; ship it first.
 - `08-app-split/components/NerveCenterPanel.jsx` — dashboard (mobile `MobileSection`).
 - `offline-support.js` + `public/sw.js` — service worker registration + caching.
 - `apps/shailos/` — the AI Studio Shailos applet (writes shailos to the same project).
-- `apps/web/backend/functions/` — Netlify functions (`_ai-core.cjs` AI brain, `mcp.mjs`,
-  google-*, `phone-relay.mjs`). Open audit items: MCP hardcoded to one user + optional
+- `apps/web/functions/` — live Firebase functions (`_ai-core.cjs` AI brain, `mcp.mjs`,
+  google-*, phone-relay). The old `apps/web/backend/` Netlify twin was deleted 2026-07-19
+  (recoverable from git history). Open audit items: MCP hardcoded to one user + optional
   unauthenticated reads; `debug-log` unauthenticated; relay command validation.
 - `apps/phone-host-windows/` — native C# DeskPhone host. Open: `MapService._seenHandles`
   not reset on reconnect (stale SMS sync); `ControlApiService` binds `0.0.0.0` no auth.
@@ -251,7 +252,7 @@ updates, was burning through the **1,000 RPD** (requests per day) free-tier limi
 ### 13.3 AI model used everywhere
 
 All dashboard jobs use `QUOTA_FALLBACK_GEMINI_MODEL = "gemini-3.1-flash-lite"` (defined
-in `apps/web/backend/functions/_ai-core.cjs` line ~24). This is the free-tier model with
+in `apps/web/functions/_ai-core.cjs` line ~24). This is the free-tier model with
 the highest RPD allowance (1,000/day, 15 RPM). Do NOT change individual jobs to other
 models without understanding cross-job quota contention.
 
@@ -391,7 +392,7 @@ localStorage.removeItem('ot_river_rank_last_run_v1');
 
 ### 13.10 Server infrastructure
 
-- **Netlify Lambda:** `apps/web/backend/functions/ai-proxy.js` + `_ai-core.cjs`
+- **Firebase Functions:** `apps/web/functions/ai-proxy.js` + `_ai-core.cjs`
 - **Function budget:** ~26–30s total execution time per invocation
 - **Gemini quota gate:** Firestore-backed rate limiter (`reserveGeminiSlot`). Shared across
   all Lambda invocations via Firestore. Queue timeout: 8 seconds. If a job waits >8s in

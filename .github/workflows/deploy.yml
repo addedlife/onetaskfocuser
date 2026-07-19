@@ -49,7 +49,9 @@ jobs:
           echo "GOOGLE_HEALTH_CLIENT_SECRET=${{ secrets.GOOGLE_HEALTH_CLIENT_SECRET }}" >> .env
           echo "GOOGLE_SEARCH_API_KEY=${{ secrets.GOOGLE_SEARCH_API_KEY }}" >> .env
           echo "GOOGLE_SEARCH_CSE_ID=${{ secrets.GOOGLE_SEARCH_CSE_ID }}" >> .env
-          echo "BRAVE_SEARCH_API_KEY=${{ secrets.BRAVE_SEARCH_API_KEY }}" >> .env
+          # The GitHub secret is named BRAVE_SEARCH_FOR_SHAILA_RESEARCH (owner created it
+          # under that name 7/19); the functions code reads BRAVE_SEARCH_API_KEY — map here.
+          echo "BRAVE_SEARCH_API_KEY=${{ secrets.BRAVE_SEARCH_FOR_SHAILA_RESEARCH }}" >> .env
           echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> .env
 
       - name: Authenticate to Google Cloud
