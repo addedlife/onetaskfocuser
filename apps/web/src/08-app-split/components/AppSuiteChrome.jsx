@@ -8,6 +8,8 @@ import { MdRipple } from '@material/web/ripple/ripple.js';
 import { MdTextButton } from '@material/web/button/text-button.js';
 import { MdOutlinedSegmentedButton } from '@material/web/labs/segmentedbutton/outlined-segmented-button.js';
 import { MdOutlinedSegmentedButtonSet } from '@material/web/labs/segmentedbuttonset/outlined-segmented-button-set.js';
+import { MdDialog } from '@material/web/dialog/dialog.js';
+import { MdIconButton } from '@material/web/iconbutton/icon-button.js';
 import { cleanTheme, DUR, EASE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, suiteIcon } from '../ui-tokens.jsx';
 import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
 import { Store, textOnColor } from '../../01-core.js';
@@ -34,6 +36,16 @@ const SegmentedButtonSet = createComponent({
 const SegmentedButton = createComponent({ react: React, tagName: 'md-outlined-segmented-button', elementClass: MdOutlinedSegmentedButton });
 const FilterChip = createComponent({ react: React, tagName: 'md-filter-chip', elementClass: MdFilterChip });
 const TextButton = createComponent({ react: React, tagName: 'md-text-button', elementClass: MdTextButton });
+// Modal dialog for the pop-out AI live-log window (owner ticket 7/19: the 320px
+// popover is too cramped to actually read prompts/responses — give it a real
+// window, like the DeskPhone live log). `closed` fires after the M3 close
+// animation so React state stays in sync however the dialog is dismissed
+// (Escape, scrim click, or the Close button).
+const Dialog = createComponent({
+  react: React, tagName: 'md-dialog', elementClass: MdDialog,
+  events: { onClosed: 'closed' },
+});
+const IconButton = createComponent({ react: React, tagName: 'md-icon-button', elementClass: MdIconButton });
 
 // Cross-component signaling for the Bug Log rail item, without prop-drilling
 // through App.jsx (which already owns a large prop surface). BugLog.jsx
@@ -78,6 +90,9 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
   // text to every open tab all day for a panel nobody is looking at.
   const [aiLog, setAiLog] = React.useState([]);
   const [expandedLogEntry, setExpandedLogEntry] = React.useState(null);
+  // Pop-out live-log window (owner ticket 7/19): full prompt/response text in a
+  // real dialog instead of the cramped popover section.
+  const [aiLogWindowOpen, setAiLogWindowOpen] = React.useState(false);
   // Owner ticket 7/16: the popover was absolutely positioned inside the rail, so it
   // clipped under neighboring cards and ran off the top of the screen. It now renders
   // through a portal at document.body with viewport-clamped fixed coordinates,
@@ -180,10 +195,11 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
   }, []);
   // Attach the live-log listener only while the section is actually being viewed.
   React.useEffect(() => {
-    if (!aiLanePopoverOpen || !aiSectOpen.livelog) return undefined;
+    const viewing = (aiLanePopoverOpen && aiSectOpen.livelog) || aiLogWindowOpen;
+    if (!viewing) return undefined;
     const unsub = subscribeAiLog(setAiLog);
     return () => { try { unsub && unsub(); } catch (_) {} };
-  }, [aiLanePopoverOpen, aiSectOpen.livelog]);
+  }, [aiLanePopoverOpen, aiSectOpen.livelog, aiLogWindowOpen]);
   // Owner ticket 7/19 ("deskphone is autolaunching on its own — a mysterious
   // black blank screen"): the previous version of this launched DeskPhone from a
   // background effect — whenever the preference was 'pc' OR 'auto' and the PC's
@@ -584,10 +600,19 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                       recent calls. Rows are click-to-expand — collapsed shows the job,
                       model, tokens and cost; expanded shows the real text sent and
                       returned, with an explicit note when it was truncated. */}
-                  <button onClick={() => setAiSectOpen(s => ({ ...s, livelog: !s.livelog }))} style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 'none', borderTop: `1px solid ${C.divider}`, cursor: 'pointer', padding: '8px 12px 4px', fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
-                    <span style={{ flex: 1 }}>Live log{aiLog.length ? ` (${aiLog.length})` : ''}</span>
-                    {suiteIcon(aiSectOpen.livelog ? 'expand_less' : 'expand_more', 14)}
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', borderTop: `1px solid ${C.divider}` }}>
+                    <button onClick={() => setAiSectOpen(s => ({ ...s, livelog: !s.livelog }))} style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0 4px 12px', fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
+                      <span style={{ flex: 1 }}>Live log{aiLog.length ? ` (${aiLog.length})` : ''}</span>
+                      {suiteIcon(aiSectOpen.livelog ? 'expand_less' : 'expand_more', 14)}
+                    </button>
+                    {/* Pop-out (owner ticket 7/19): open the log in a real window —
+                        the DeskPhone-live-log treatment — instead of squinting at
+                        this 320px column. Closes the popover so the dialog owns
+                        the screen. */}
+                    <IconButton aria-label="Open live log in a window" title="Open in window" onClick={() => { setAiLanePopoverOpen(false); setAiLogWindowOpen(true); }} style={{ '--md-icon-button-icon-size': '16px', width: 32, height: 32, flexShrink: 0, marginRight: 4 }}>
+                      {suiteIcon('open_in_new', 16)}
+                    </IconButton>
+                  </div>
                   {aiSectOpen.livelog && (aiLog.length === 0 ? (
                     <div style={{ padding: '9px 12px 12px', fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>No calls logged yet — this fills in as the app makes AI calls.</div>
                   ) : (
@@ -637,6 +662,62 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
               </>,
               document.body
             )}
+            {/* Pop-out live-log window (owner ticket 7/19). Real md-dialog per the
+                M3 rule. Roomy layout: every entry shows its full prompt and
+                response inline — no click-to-expand — because reading the text is
+                the entire point of popping it out. Keeps updating live while open
+                (the subscribe effect above also watches aiLogWindowOpen). */}
+            <Dialog
+              open={aiLogWindowOpen}
+              onClosed={() => setAiLogWindowOpen(false)}
+              style={{
+                '--md-dialog-container-color': C.bg,
+                'maxWidth': 'min(880px, 96vw)',
+                'minWidth': 'min(880px, 96vw)',
+                'maxHeight': '88vh',
+              }}
+            >
+              <div slot="headline" style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.title, fontWeight: 600, color: C.text }}>
+                <span style={{ color: C.accent, display: 'inline-flex' }}>{suiteIcon('bolt', 20)}</span>
+                <span style={{ flex: 1 }}>AI live log{aiLog.length ? ` — last ${aiLog.length} calls` : ''}</span>
+              </div>
+              <div slot="content" style={{ padding: 0 }}>
+                {aiLog.length === 0 ? (
+                  <div style={{ padding: '16px 4px', fontSize: 13, color: C.faint, fontFamily: NC_FONT_STACK }}>No calls logged yet — this fills in as the app makes AI calls.</div>
+                ) : (
+                  aiLog.map((entry, i) => (
+                    <div key={entry.at || i} style={{ padding: '12px 0', borderTop: i === 0 ? 'none' : `1px solid ${C.divider}` }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, color: C.text, fontFamily: NC_FONT_STACK, fontWeight: 700 }}>{entry.job}</span>
+                        <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK }}>
+                          {new Date(entry.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })}
+                          {` · ${entry.inTok}→${entry.outTok} tok`}
+                          {entry.usd > 0 ? ` · $${entry.usd < 0.01 ? entry.usd.toFixed(4) : entry.usd.toFixed(2)}` : ''}
+                          {entry.elapsedMs ? ` · ${(entry.elapsedMs / 1000).toFixed(1)}s` : ''}
+                        </span>
+                        {entry.model && (
+                          <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_MONO_STACK }}>{entry.model}</span>
+                        )}
+                      </div>
+                      {[
+                        { label: 'Prompt', body: entry.prompt, truncated: entry.promptTruncated, chars: entry.promptChars },
+                        { label: 'Response', body: entry.response, truncated: entry.responseTruncated, chars: entry.responseChars },
+                      ].map(part => (
+                        <div key={part.label} style={{ marginTop: 8 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.2, textTransform: 'uppercase', fontFamily: NC_FONT_STACK }}>
+                            {part.label}{part.truncated ? ` — showing first ${part.body.length} of ${part.chars} chars` : ''}
+                          </div>
+                          <pre style={{ margin: '4px 0 0', padding: 10, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, fontSize: 12, lineHeight: 1.55, color: C.muted, fontFamily: NC_MONO_STACK, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 340, overflowY: 'auto' }}>{part.body || '(empty)'}</pre>
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                )}
+              </div>
+              <div slot="actions">
+                <TextButton onClick={() => setAiLogWindowOpen(false)}><span>Close</span></TextButton>
+              </div>
+            </Dialog>
           </div>
         );
       })()}
