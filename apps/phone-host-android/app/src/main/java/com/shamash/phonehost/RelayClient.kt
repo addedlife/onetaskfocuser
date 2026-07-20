@@ -85,17 +85,40 @@ class RelayClient(private val host: HostService) {
         private const val HTTP_TIMEOUT_MS = 8_000
 
         /** Same freshness rules as DeskPhone: a stale /dial must never ring someone
-         *  in the middle of the night; everything else gets the 10-minute mailbox. */
+         *  in the middle of the night; everything else gets the 10-minute mailbox.
+         *  /send gets its own 2-minute bucket (down from 10): since 4.91.1 the web
+         *  marks an unacked send Failed and cancels it from the mailbox well inside
+         *  that window, so anything older is a ghost the sender already gave up on. */
         private fun commandTtlMs(path: String): Long = when (path) {
             "/dial", "/answer", "/hangup", "/toggle-mute", "/show" -> 45_000L
+            "/send" -> 120_000L
             else -> 600_000L
         }
+
+        private const val DEDUPE_MAX = 200   // remembered command ids / send cids
     }
 
     private val executor = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "relay-client").apply { isDaemon = true }
     }
     private val commandResults = ConcurrentLinkedQueue<JSONObject>()
+
+    // Dedupe guards (defense in depth behind the clear-before-dispatch rule):
+    // a mailbox race — e.g. a host handoff mid-drain, or a clear PUT that fails
+    // after the GET — can hand us the same batch twice. Both maps are bounded
+    // LRU and only ever touched on the single relay-client executor thread.
+    //   executedCommandIds: every relayed command runs at most once per id,
+    //     even if its first attempt failed (retry means a NEW id from the web).
+    //   deliveredSendCids: a /send that reached the phone records its client
+    //     message id; a replay with the same cid is acked as already delivered
+    //     instead of texting the person twice. Failed sends are NOT recorded,
+    //     so a genuine web retry with the same cid still goes through.
+    private val executedCommandIds = object : LinkedHashMap<String, Boolean>(64, 0.75f) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>) = size > DEDUPE_MAX
+    }
+    private val deliveredSendCids = object : LinkedHashMap<String, Boolean>(64, 0.75f) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>) = size > DEDUPE_MAX
+    }
     @Volatile private var lastPushedSignature = ""
     @Volatile private var lastPushAt = 0L
     @Volatile private var lastPushedConnected = false
@@ -281,6 +304,15 @@ class RelayClient(private val host: HostService) {
         val query = parseQuery(if (qmark < 0) "" else rawPath.substring(qmark + 1))
         HostLog.add("[RELAY CMD] $path")
 
+        // Dedupe by command id: a re-read batch must never re-run anything.
+        if (id.isNotBlank()) {
+            if (executedCommandIds.containsKey(id)) {
+                HostLog.add("[RELAY CMD] $path duplicate command id — skipped")
+                return
+            }
+            executedCommandIds[id] = true
+        }
+
         // Same fail-safes as DeskPhone: no timestamp = unprovable freshness = refused;
         // expired call actions are refused rather than ringing someone hours late.
         if (queuedAtMs <= 0) {
@@ -289,6 +321,15 @@ class RelayClient(private val host: HostService) {
         }
         if (System.currentTimeMillis() - queuedAtMs > commandTtlMs(path)) {
             recordResult(id, path, ok = false, error = "expired before the host was online")
+            return
+        }
+
+        // Dedupe /send by client message id: the cid identifies the MESSAGE, so
+        // even a re-queued copy under a fresh command id must not deliver twice.
+        val sendCid = if (path == "/send") query["cid"].orEmpty() else ""
+        if (sendCid.isNotBlank() && deliveredSendCids.containsKey(sendCid)) {
+            HostLog.add("[RELAY CMD] /send duplicate cid — already delivered, skipped")
+            recordResult(id, path, ok = true, error = null)
             return
         }
 
@@ -303,7 +344,10 @@ class RelayClient(private val host: HostService) {
                 recordResult(id, path, ok = false, error = "not supported on the Android host")
             resp.status != 200 || resp.body.contains("\"failed\"") || resp.body.contains("\"error\"") ->
                 recordResult(id, path, ok = false, error = "host returned ${resp.status}")
-            else -> recordResult(id, path, ok = true, error = null)
+            else -> {
+                if (sendCid.isNotBlank()) deliveredSendCids[sendCid] = true
+                recordResult(id, path, ok = true, error = null)
+            }
         }
     }
 

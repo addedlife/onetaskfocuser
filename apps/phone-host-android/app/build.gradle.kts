@@ -10,7 +10,7 @@ plugins {
 // the icon background color (cycles a palette so every build looks different on
 // the home screen â€” owner ticket: "put a different icon each build so it's
 // recognizable"), and HostService.BUILD_STAMP via BuildConfig.HOST_BUILD.
-val hostBuild = 12
+val hostBuild = 13
 
 // Same shared secret DeskPhone stores as Settings.RelayKey â€” read from
 // local.properties (gitignored, never committed) instead of a per-user
