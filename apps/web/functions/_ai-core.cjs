@@ -1026,7 +1026,9 @@ const AI_JOB_REGISTRY = {
     task: "dashboard-snapshot",
     output: "json",
     shape: "object",
-    genConfig: { temperature: 0.1, maxOutputTokens: 1600 },
+    // 1600 tokens truncated real replies mid-string → 422 "invalid JSON even
+    // after repair" (7/20 logs); the schema is wide, give it honest headroom.
+    genConfig: { temperature: 0.1, maxOutputTokens: 3000 },
     schema: '{"supercrunch":"terse comma-separated list of actual items across all sources","signals":[{"area":"Calendar","note":"terse note"}],"taskSuggestions":[{"text":"task to create","priorityId":"priority_id","source":"Calendar|Mail","sourceKey":"","freshnessKey":"","actionType":"reply|call|confirm|prepare|schedule|send|pay|register|follow_up","sourceTitle":"source item","reason":"why taskable"}]}',
     buildPrompt(input = {}) {
       const context = normalizeChiefContext(input.context || input);
@@ -1138,7 +1140,7 @@ const AI_JOB_REGISTRY = {
     task: "dashboard-polish",
     output: "json",
     shape: "array",
-    genConfig: { temperature: 0, maxOutputTokens: 900 },
+    genConfig: { temperature: 0, maxOutputTokens: 2000 }, // was 900 — truncated mid-JSON under real item counts (7/20 422s)
     schema: '[{"id":"same id","summary":"polished display text"}]',
     buildPrompt(input = {}) {
       return compactLines([
@@ -1209,7 +1211,7 @@ const AI_JOB_REGISTRY = {
     task: "focus-suggestions",
     output: "json",
     shape: "array",
-    genConfig: { temperature: 0.3, maxOutputTokens: 500 },
+    genConfig: { temperature: 0.3, maxOutputTokens: 1200 }, // was 500 — truncated mid-JSON → 422s (7/20 logs)
     schema: '["one clear, positive-only sentence naming a specific task/shaila and why it is a good one to do now"]',
     buildPrompt(input = {}) {
       return compactLines([
@@ -1401,11 +1403,17 @@ const AI_JOB_REGISTRY = {
     model: QUOTA_FALLBACK_GEMINI_MODEL,
     task: "shaila-answer-summary",
     output: "text",
-    genConfig: { temperature: 0.1, maxOutputTokens: 40 },
+    genConfig: { temperature: 0.1, maxOutputTokens: 64 },
     buildPrompt(input = {}) {
+      // Owner ticket 7/20: the old "4-6 words" budget forced the model to
+      // collapse case-split rulings into one ("beged assur, other gifts
+      // lechatchila wait" came out as a blanket "bedieved mutar, lechatchila
+      // wait" — inverting the din for clothing). Accuracy outranks brevity.
       return compactLines([
         YESHIVISH_SYSTEM,
-        "Summarize this halachic answer in 4-6 words. Start with the ruling. Preserve key terms like mutar, assur, bedieved, lechatchila.",
+        "Summarize this halachic answer in at most 12 words. Start with the ruling.",
+        "If the ruling differs by case (e.g. one item assur, another mutar), state EACH case's ruling with its subject — never collapse different cases into one blanket ruling.",
+        "Never invert or soften a ruling: if something is assur, say assur. Preserve key terms like mutar, assur, bedieved, lechatchila, and the subject nouns (e.g. beged).",
         `Answer: ${truncateText(input.answerText || input.answer, 1000)}`,
         "Return only the summary.",
       ]);
@@ -1679,9 +1687,12 @@ async function callGeminiOnce({ body, prompt, base64, mimeType, model, genConfig
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${credential.key}`;
   const controller = new AbortController();
-  // Must stay inside the ~30s Netlify function budget (together with the queue wait):
-  // a hung upstream otherwise dies as Sandbox.Timedout instead of a clean retryable error.
-  const fetchTimeout = setTimeout(() => controller.abort(), 20000);
+  // 45s: aiProxy runs on Firebase Functions with timeoutSeconds:300 — the old
+  // 20s abort was a leftover Netlify ~30s-budget constraint and was killing
+  // slow-but-successful Gemini calls under load (7/20 logs: repeated 504s on
+  // dashboard jobs that succeed on retry). Still bounded so a truly hung
+  // upstream dies as a clean retryable 504, not a runaway request.
+  const fetchTimeout = setTimeout(() => controller.abort(), 45000);
   let r;
   try {
     r = await fetch(url, {
@@ -1691,7 +1702,7 @@ async function callGeminiOnce({ body, prompt, base64, mimeType, model, genConfig
       signal: controller.signal,
     });
   } catch (e) {
-    if (e?.name === "AbortError") throw httpError(504, "Gemini upstream timed out after 20s; retry shortly.", 15);
+    if (e?.name === "AbortError") throw httpError(504, "Gemini upstream timed out after 45s; retry shortly.", 15);
     throw e;
   } finally {
     clearTimeout(fetchTimeout);

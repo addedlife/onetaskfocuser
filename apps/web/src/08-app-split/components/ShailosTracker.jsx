@@ -138,7 +138,7 @@ function ResearchReport({ text, C }) {
           </p>
           {data.engine === 'sefaria' && (
             <p style={{ fontSize: 11, color: C.warning || C.faint, padding: '0 20px 10px', lineHeight: 1.6, margin: 0, fontFamily: NC_FONT_STACK }}>
-              ⚠ Google Search isn't configured, so this pass only searched Sefaria's own library — which barely digitizes contemporary teshuvos. Results skew toward Gemara/Rishonim; for psak-level contemporary sources, add the two Google Search secrets (see docs/ops/AI_CLOUD_INSPECTION_2026-07.md §5).
+              ⚠ Web search didn't answer on this pass, so it only searched Sefaria's own library — which barely digitizes contemporary teshuvos. Results skew toward Gemara/Rishonim; re-run the research to retry web coverage for psak-level contemporary sources.
             </p>
           )}
           {data.sources?.length > 0 && (<><SectionLabel>Sources</SectionLabel>{data.sources.map((s, i) => <Row key={i} label={s.label} url={s.url} summary={s.summary} />)}</>)}

@@ -137,12 +137,14 @@ class HfpClient(private val log: (String) -> Unit = { HostLog.add(it) }) {
             if (idleMs < 30_000) continue
             // During a call the generic probe stays off (AT+NREC during audio
             // confuses some firmware) — but a lost +CIEV call=0 used to leave a
-            // phantom "active call" on screen forever. After 60 s of URC silence
+            // phantom "active call" on screen forever. After 30 s of URC silence
             // ask the phone for its real call list instead: AT+CLCC is the
             // standard carkit in-call status poll. A reply with no +CLCC rows
-            // means the call already ended — clear it.
+            // means the call already ended — clear it. (Was 60 s; owner ticket
+            // 7/17: a call that ended on the handset lingered as live far too
+            // long — every CLCC reply resets lastTrafficAt, so this is in
+            // effect a ~30 s poll for the whole phantom window.)
             if (currentCall.status != CallStatus.Idle) {
-                if (idleMs < 60_000) continue
                 try {
                     clccSawCall = false
                     log("[keepalive] active-call check — AT+CLCC")

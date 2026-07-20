@@ -182,13 +182,17 @@ async function searchWeb(query) {
   const results = (data.results || []).filter(
     (res) => res.link?.startsWith("http") && !res.link?.toLowerCase().endsWith(".pdf")
   );
-  // "sefaria" means Google Custom Search is unconfigured/exhausted and this
-  // query only searched Sefaria's own text index — which barely digitizes
-  // contemporary teshuvos, so results skew classical (owner ticket: "sefaria
-  // fallback gives rishonim and gemaras... won't help with psak"). Callers
-  // track this per-query so the UI can say so honestly instead of presenting
-  // a classical-only result set as full research coverage.
-  return { results, engine: data.engine === "google" ? "google" : "sefaria" };
+  // "sefaria" means no real web engine answered and this query only searched
+  // Sefaria's own text index — which barely digitizes contemporary teshuvos,
+  // so results skew classical (owner ticket: "sefaria fallback gives rishonim
+  // and gemaras... won't help with psak"). Callers track this per-query so the
+  // UI can say so honestly instead of presenting a classical-only result set
+  // as full research coverage. Both "google" and "brave" count as real web
+  // coverage — the backend moved to Brave (7/19) and only reporting "google"
+  // here made every Brave pass render the stale "Search isn't configured"
+  // warning on top of live web results (owner ticket 7/20).
+  const engine = data.engine === "google" || data.engine === "brave" ? data.engine : "sefaria";
+  return { results, engine };
 }
 
 // Generate up to 3 search queries approaching the shaila from different angles
@@ -207,12 +211,12 @@ function fallbackLabel(link, title) {
 export async function performResearch(user, shaila) {
   const queries = await buildSearchQueries(user, shaila);
 
-  // Track which engine actually answered each query — "google" means real web
-  // coverage ran; if EVERY query fell back to "sefaria", the result set is
-  // classical-library-only and the UI should say so (see `engine` below).
-  let sawGoogle = false;
+  // Track which engine actually answered each query — "google"/"brave" mean
+  // real web coverage ran; if EVERY query fell back to "sefaria", the result
+  // set is classical-library-only and the UI should say so (see `engine` below).
+  let webEngine = "";
   let sawSefaria = false;
-  const recordEngine = (engine) => { if (engine === "google") sawGoogle = true; else sawSefaria = true; };
+  const recordEngine = (engine) => { if (engine !== "sefaria") webEngine = engine; else sawSefaria = true; };
 
   // Keep the real failure — "no results" must never mask a broken search backend.
   const searchErrors = [];
@@ -288,10 +292,10 @@ export async function performResearch(user, shaila) {
     url: buildSeferiaDeepLink(s.name, s.location) || buildSeferiaSearchLink(s.name, s.location),
   }));
 
-  // "sefaria" only when NOTHING used Google this run — an honest flag so the
-  // UI can explain why the sources skew classical instead of silently
-  // presenting a Sefaria-only pass as full research coverage.
-  const engine = sawGoogle ? "google" : (sawSefaria ? "sefaria" : "unknown");
+  // "sefaria" only when NO web engine (Google or Brave) answered this run —
+  // an honest flag so the UI can explain why the sources skew classical
+  // instead of silently presenting a Sefaria-only pass as full coverage.
+  const engine = webEngine || (sawSefaria ? "sefaria" : "unknown");
 
   return { queries, sources, seforim, engine };
 }

@@ -2184,7 +2184,10 @@ async function aiParseBrainDump(text, pris, aiOpts) {
 
 
 async function aiSummarizeAnswer(answerText, aiOpts) {
-  const job = await runAIJob("shaila.answer_summary.v1", { answerText }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 24 } });
+  // No genConfig override: the job's own budget (64 tokens) governs. The old
+  // 24-token cap here silently re-strangled the summary after the job was
+  // widened for case-split rulings (beged assur vs lechatchila wait).
+  const job = await runAIJob("shaila.answer_summary.v1", { answerText }, aiOpts);
   return job?.text?.trim().replace(/^["'`]+|["'`]+$/g, "") || "";
 }
 
