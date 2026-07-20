@@ -131,8 +131,40 @@ public class RelayService : IDisposable
         // /show joins the short bucket: raising the PC window hours after the tap
         // would be a poltergeist, not a feature.
         "/dial" or "/answer" or "/hangup" or "/toggle-mute" or "/show" => TimeSpan.FromSeconds(45),
+        // /send: 2 minutes, down from 10 — since 4.91.1 the web marks an unacked
+        // send Failed and cancels it from the mailbox well inside this window, so
+        // anything older is a ghost the sender already gave up on.
+        "/send" => TimeSpan.FromSeconds(120),
         _ => TimeSpan.FromMinutes(10),
     };
+
+    // Dedupe guards (defense in depth behind the clear-before-dispatch rule): a
+    // mailbox race — the SSE trigger and the safety-net poll draining the same
+    // batch, a host handoff mid-drain, or a clear PUT that fails after the GET —
+    // can hand us the same commands twice. Both sets are bounded FIFO; commands
+    // dispatch on parallel Task.Run threads, so all access goes through _dedupeLock.
+    //   _executedCommandIds: every relayed command runs at most once per id, even
+    //     if its first attempt failed (a retry means a NEW id from the web).
+    //   _deliveredSendCids: a /send that reached the phone records its client
+    //     message id; a replay with the same cid is acked as already delivered
+    //     instead of texting the person twice. Failed sends are NOT recorded, so
+    //     a genuine web retry reusing the cid still goes through.
+    private const int DedupeMax = 200;
+    private readonly object          _dedupeLock          = new();
+    private readonly HashSet<string> _executedCommandIds  = new();
+    private readonly Queue<string>   _executedCommandOrder = new();
+    private readonly HashSet<string> _deliveredSendCids   = new();
+    private readonly Queue<string>   _deliveredSendOrder  = new();
+
+    /// <summary>Adds key to the bounded set; returns false if it was already there.
+    /// Caller must hold _dedupeLock.</summary>
+    private static bool MarkOnce(HashSet<string> set, Queue<string> order, string key)
+    {
+        if (!set.Add(key)) return false;
+        order.Enqueue(key);
+        while (order.Count > DedupeMax && order.TryDequeue(out var oldest)) set.Remove(oldest);
+        return true;
+    }
 
     public void Configure(string relayKey, string? relayUrl)
     {
@@ -626,6 +658,19 @@ public class RelayService : IDisposable
         {
             LogLine?.Invoke($"[RELAY CMD] {path}");
 
+            // Dedupe by command id: a re-read batch must never re-run anything.
+            if (!string.IsNullOrWhiteSpace(commandId))
+            {
+                lock (_dedupeLock)
+                {
+                    if (!MarkOnce(_executedCommandIds, _executedCommandOrder, commandId))
+                    {
+                        LogLine?.Invoke($"[RELAY CMD] {path} duplicate command id — skipped");
+                        return;
+                    }
+                }
+            }
+
             // Fail-safe: a command with no parseable queuedAt cannot prove freshness.
             // The mailbox holds entries queued while the PC was offline — for DAYS when
             // the drain was broken (b322) — and executing an unverifiable /dial or /send
@@ -680,11 +725,26 @@ public class RelayService : IDisposable
                     }
                     else
                     {
-                        ok = await Send(to, body, string.IsNullOrWhiteSpace(cid) ? null : cid);
-                        if (!ok) error = "phone link rejected the send — kept as Failed in DeskPhone for retry";
-                        LogLine?.Invoke(ok
-                            ? $"[RELAY CMD] send delivered to phone ({to})"
-                            : $"[RELAY CMD] send FAILED on phone link ({to}) — kept as Failed in DeskPhone for retry");
+                        // Dedupe by client message id: the cid identifies the MESSAGE,
+                        // so even a re-queued copy under a fresh command id must not
+                        // deliver twice. Acked ok — the send already happened.
+                        bool duplicateCid = false;
+                        if (!string.IsNullOrWhiteSpace(cid))
+                            lock (_dedupeLock) duplicateCid = _deliveredSendCids.Contains(cid);
+                        if (duplicateCid)
+                        {
+                            LogLine?.Invoke($"[RELAY CMD] send duplicate cid — already delivered, skipped ({to})");
+                        }
+                        else
+                        {
+                            ok = await Send(to, body, string.IsNullOrWhiteSpace(cid) ? null : cid);
+                            if (ok && !string.IsNullOrWhiteSpace(cid))
+                                lock (_dedupeLock) MarkOnce(_deliveredSendCids, _deliveredSendOrder, cid);
+                            if (!ok) error = "phone link rejected the send — kept as Failed in DeskPhone for retry";
+                            LogLine?.Invoke(ok
+                                ? $"[RELAY CMD] send delivered to phone ({to})"
+                                : $"[RELAY CMD] send FAILED on phone link ({to}) — kept as Failed in DeskPhone for retry");
+                        }
                     }
                     break;
                 case "/refresh":

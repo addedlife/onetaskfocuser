@@ -1,5 +1,11 @@
 [
     {
+        "version":  "b340",
+        "timestamp":  "2026-07-20 13:13:45",
+        "notes":  "Safety net against double texts: even if the cloud command mailbox hands this host the same send twice (a rare timing race), the message now goes out exactly once. Stale queued texts also expire after 2 minutes instead of 10, so a text you gave up on can never fire late.",
+        "devNotes":  "Part C of the 4.91.1 BT-relay hardening (web-side cancel + atomic mailbox shipped 7/20; this is the host-side defense in depth). DispatchCommandsFromString runs each command on its own Task.Run, and DrainMailboxOnceAsync is reachable concurrently from the SSE trigger and the safety-net poll — if the clear PUT loses a race (or fails after the GET), the same batch dispatches twice. Two bounded (200-entry FIFO) dedupe sets under one lock in ExecuteCommandAsync: _executedCommandIds skips any command id already run (retries get a NEW id from the web), and _deliveredSendCids skips a /send whose client message id already reached the phone even under a fresh command id, acking it ok=already-delivered. Failed sends are not recorded so a genuine cid-reusing retry still goes through. CommandTtl(/send) drops 10min→120s: since 4.91.1 the web marks an unacked send Failed and cancels it from the mailbox well inside that window. Identical changes in the Android host\u0027s RelayClient.kt (b13, single-threaded executor so plain LinkedHashMap LRUs, no lock)."
+    },
+    {
         "version":  "b339",
         "timestamp":  "2026-07-17 18:27:13",
         "notes":  "Restores remote commands: texts and dial requests sent from the web app stopped reaching this host after the b338 security lockdown - the app claimed Sent but nothing ever went out. The host now signs its cloud mailbox reads the way Firebase actually accepts, so browser and tablet sends flow again.",
