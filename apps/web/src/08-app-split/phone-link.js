@@ -289,14 +289,23 @@ function messagePeerKey(m) {
 // then fuzzily (same body + same peer-or-unknown + close timestamp) so the
 // SAME SMS seen under two hosts' different id schemes never doubles up.
 export function mergeMessageFeeds(prev, next) {
-  const nextArr = Array.isArray(next) ? next : [];
+  const rawNext = Array.isArray(next) ? next : [];
+  // Same-id dedupe INSIDE the incoming host list first: a host that executed a
+  // retried command stamped the same client id (cid) on two separate sends and
+  // the blob carried both (owner data 7/19 — two entries with id psms-…-1
+  // rendered as duplicate bubbles). First occurrence wins.
+  const ids = new Set();
+  const nextArr = rawNext.filter(m => {
+    const id = messageIdKey(m);
+    if (!id) return true;
+    if (ids.has(id)) return false;
+    ids.add(id);
+    return true;
+  });
   const prevArr = Array.isArray(prev) ? prev : [];
   if (!prevArr.length) return nextArr;
-  const ids = new Set();
   const fuzzy = [];   // { body, peer, at }
   for (const m of nextArr) {
-    const id = messageIdKey(m);
-    if (id) ids.add(id);
     fuzzy.push({ body: messageBodyKey(m), peer: messagePeerKey(m), at: feedTimeMs(m) });
   }
   const retained = prevArr.filter(m => {

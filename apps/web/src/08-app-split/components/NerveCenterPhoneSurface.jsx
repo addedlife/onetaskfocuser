@@ -692,7 +692,34 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           return false;
         }
         if (!ack) {
-          fail("No confirmation from the phone host. The command will expire if the phone link stays offline.");
+          // No ack in 25 s. WITHDRAW the command before reporting failure —
+          // "failed" must mean it can never fire later. Before 4.91.1 the
+          // command stayed queued for up to 10 minutes, so a host reconnecting
+          // inside that window sent every "failed" retry too (owner incident
+          // 7/19: four /send commands queued 8:05–8:13 PM all fired at 8:14).
+          let withdrawn = false;
+          try {
+            const cRes = await fetch(`${RELAY_BASE}?action=cancel`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...cmdAuthHeaders },
+              body: JSON.stringify({ id: queued.id }),
+            });
+            const cd = await cRes.json().catch(() => ({}));
+            withdrawn = !!(cRes.ok && cd?.removed);
+          } catch { /* cancel unreachable — fall through to the honest-unknown path */ }
+          if (withdrawn) {
+            fail("The phone host is offline — this was NOT sent and won't fire later. Retry when the link is back.");
+            return false;
+          }
+          // Not in the mailbox = a host already took it and may be mid-send.
+          // Never claim failure while that's possible — wait out a slow ack.
+          const lateAck = await waitForAck(queued.id, 65000);
+          await refresh();
+          if (lateAck && lateAck.ok) {
+            if (!opts.background) setError("");
+            return true;
+          }
+          fail(lateAck?.error || "Couldn't confirm the phone host ran this. Check the thread before resending.");
           return false;
         }
         if (!opts.background) setError("");

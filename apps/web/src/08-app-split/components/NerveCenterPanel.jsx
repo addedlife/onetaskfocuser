@@ -1399,7 +1399,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     // Wait for AI config before scanning; show spinner while it's still loading.
     if (!aiOpts) { if (aiConfigLoading) setNcSummaryLoading(true); return undefined; }
 
-    const SESSION_GAP_MS = 5 * 60 * 1000;
+    // 15 min (was 5) — keep in lockstep with NerveCenterNext; see the note there.
+    const SESSION_GAP_MS = 15 * 60 * 1000;
     const isForced = forcedSnapshotRef.current;
     forcedSnapshotRef.current = false;
     // Hydrate the last-run key from the persisted cache once per mount, and restore the

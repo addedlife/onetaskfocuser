@@ -6373,9 +6373,28 @@ export function DeskPhoneWebPanel({
     }
   }, [refresh]);
 
+  // Withdraw a queued cloud command from the relay mailbox. Returns true only
+  // when it was still queued (= no host ever saw it); false means a host
+  // already took it and may be mid-run.
+  const cancelCloudCommand = useCallback(async (cmdId) => {
+    const authUser = firebase.auth?.().currentUser;
+    if (!authUser) return false;
+    const token = await authUser.getIdToken();
+    const res = await fetch(`${RELAY_BASE}?action=cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: cmdId }),
+    });
+    if (!res.ok) return false;
+    const d = await res.json().catch(() => ({}));
+    return !!d?.removed;
+  }, []);
+
   // Queue a cloud command AND hold for the host's acknowledgement. Success here
   // means the host really ran it; a missing ack is a hard failure, never a
-  // silent "Sent" (owner incident 7/17).
+  // silent "Sent" (owner incident 7/17). On timeout the command is WITHDRAWN
+  // from the mailbox first, so "failed" can never fire later when a host
+  // reconnects (owner incident 7/19 — duplicate texts on reconnect).
   const runCloudCommandConfirmed = useCallback(async (path, payload) => {
     const cmdId = await runCloudCommand(path, payload);
     if (!cmdId) {
@@ -6387,8 +6406,19 @@ export function DeskPhoneWebPanel({
     const ack = await waitForCloudAck(cmdId, CLOUD_ACK_TIMEOUT_MS);
     await refresh();
     if (ack && !ack.ok) throw new Error(ack.error || "Your phone host reported the command failed.");
-    if (!ack) throw new Error("No phone host picked this up — it did NOT run. Check the phone link and retry.");
-  }, [runCloudCommand, waitForCloudAck, refresh]);
+    if (!ack) {
+      let withdrawn = false;
+      try { withdrawn = await cancelCloudCommand(cmdId); } catch { /* honest-unknown path below */ }
+      if (withdrawn) throw new Error("No phone host picked this up — it was withdrawn and did NOT run. Retry when the link is back.");
+      // A host already drained it and may be mid-run — wait out a slow ack
+      // rather than reporting a failure that could become a duplicate send.
+      const lateAck = await waitForCloudAck(cmdId, 65000);
+      await refresh();
+      if (lateAck && lateAck.ok) return;
+      if (lateAck) throw new Error(lateAck.error || "Your phone host reported the command failed.");
+      throw new Error("Couldn't confirm your phone host ran this. Check the thread before resending.");
+    }
+  }, [runCloudCommand, waitForCloudAck, cancelCloudCommand, refresh]);
 
   const runCommand = useCallback(async (path, label, payload, opts = {}) => {
     // Background mode (sends): no busy overlay, no global error banner — the

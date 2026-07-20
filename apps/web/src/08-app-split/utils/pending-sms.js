@@ -153,26 +153,52 @@ export function reconcilePendingSms(outgoing) {
 // dropped when a CONFIRMED outgoing copy with the same body exists within the
 // skew window. Confirmed copies always win; nothing confirmed is ever hidden.
 //
+// Second collapse layer (owner data 7/19: EVERY send showed doubled): a host
+// copy whose id is the composer's own echo id ("psms-…" — the cid the /send
+// command carried) is the host's provisional record of the send, not the
+// phone's truth. The phone's sent-folder copy arrives later under a real MAP
+// handle and the host never reconciles the two, so the blob carries both
+// forever. When a confirmed REAL-id copy of the same text exists in the skew
+// window, the provisional copy is dropped — the phone's own record wins, and a
+// genuine double-send (two real handles) still shows as two.
+//
 // `items` is any list; the accessors adapt it:
 //   groupKey(item)  — conversation key (peer number)
 //   bodyKey(item)   — smsBodyKey of the text
 //   timeMs(item)    — message timestamp ms (0 = unknown)
 //   isOutgoing(item), isPending(item)
+function isProvisionalHostId(id) {
+  return /^psms-/.test(String(id || ''));
+}
+
 export function collapseHostDoubles(items, { groupKey, bodyKey, timeMs, isOutgoing, isPending }) {
-  const confirmed = new Map(); // `${group}|${body}` → [timeMs]
+  const idOf = item => item?.id ?? item?.Id ?? '';
+  const confirmedAll = new Map();  // `${group}|${body}` → [timeMs] — any confirmed copy
+  const confirmedReal = new Map(); // same, but real (non-provisional) ids only
   items.forEach(item => {
     if (!isOutgoing(item) || isPending(item)) return;
     const k = `${groupKey(item)}|${bodyKey(item)}`;
-    const arr = confirmed.get(k) || [];
-    arr.push(timeMs(item) || 0);
-    confirmed.set(k, arr);
-  });
-  if (confirmed.size === 0) return items;
-  return items.filter(item => {
-    if (!isOutgoing(item) || !isPending(item)) return true;
-    const times = confirmed.get(`${groupKey(item)}|${bodyKey(item)}`);
-    if (!times) return true;
     const t = timeMs(item) || 0;
-    return !times.some(ct => !t || !ct || Math.abs(ct - t) <= MATCH_SKEW_MS);
+    const all = confirmedAll.get(k) || [];
+    all.push(t);
+    confirmedAll.set(k, all);
+    if (!isProvisionalHostId(idOf(item))) {
+      const real = confirmedReal.get(k) || [];
+      real.push(t);
+      confirmedReal.set(k, real);
+    }
+  });
+  if (confirmedAll.size === 0) return items;
+  const covered = (map, item) => {
+    const times = map.get(`${groupKey(item)}|${bodyKey(item)}`);
+    if (!times) return false;
+    const t = timeMs(item) || 0;
+    return times.some(ct => !t || !ct || Math.abs(ct - t) <= MATCH_SKEW_MS);
+  };
+  return items.filter(item => {
+    if (!isOutgoing(item)) return true;
+    if (isPending(item)) return !covered(confirmedAll, item);
+    if (isProvisionalHostId(idOf(item))) return !covered(confirmedReal, item);
+    return true;
   });
 }

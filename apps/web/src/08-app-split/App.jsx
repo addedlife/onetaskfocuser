@@ -29,6 +29,7 @@ const UI_NEXT = (() => {
   catch { return true; }
 })();
 import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack, shailaText, shailaCreatedAt, shailaField } from './utils/shailosQueue.js';
+import { shouldRunForContentAndClaim, publishContentResult, releaseContentClaim } from './ai-call-throttle.js';
 import { createComponent } from '@lit/react';
 import { MdIconButton } from '@material/web/iconbutton/icon-button.js';
 import { MdOutlinedIconButton } from '@material/web/iconbutton/outlined-icon-button.js';
@@ -97,6 +98,13 @@ function writeEmailSummarySession(patch) {
     localStorage.setItem(EMAIL_SUMMARY_SESSION_KEY, JSON.stringify(Object.fromEntries(entries)));
   } catch {}
 }
+
+// Same-tab latch for the email summarizer: the cross-tab/device gate is the
+// content-keyed claim in applyEmailSummaries (ai-call-throttle), but two rapid
+// refresh triggers in ONE tab (mount + focus + Gmail push flag) could still
+// open concurrent claim transactions before either records a local result.
+// One latch per distinct miss-set closes that window.
+let emailSummaryFlightKey = null;
 
 function preMergeEmailSummaries(msgs) {
   if (!Array.isArray(msgs) || msgs.length === 0) return msgs;
@@ -1095,7 +1103,31 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     const cache = readEmailSummarySession();
     const needsAI = msgs.filter(m => !cache[emailContentHash(m)]);
     if (needsAI.length === 0) return;
+    // ONE summarizer call per distinct set of uncached emails, across every
+    // tab AND device (owner ticket 7/19: three near-concurrent summarizer
+    // calls — the cache is per-device localStorage, so PC + tablet + iPad each
+    // re-summarized the same inbox). The content-keyed claim already used by
+    // the dashboard snapshot arbitrates; losers adopt the winner's published
+    // summaries instead of paying for their own call.
+    const contentKey = needsAI.map(m => emailContentHash(m)).sort().join('.');
+    if (emailSummaryFlightKey === contentKey) return;
+    emailSummaryFlightKey = contentKey;
     try {
+      const { run, cachedResult } = await shouldRunForContentAndClaim('email-summaries', contentKey, 2 * 60 * 1000);
+      if (!run) {
+        if (cachedResult && typeof cachedResult === 'object') {
+          writeEmailSummarySession(cachedResult);
+          setGmailMessages(prev => Array.isArray(prev)
+            ? prev.map(m => {
+                const s = cachedResult[emailContentHash(m)];
+                return (s && !m.aiSummary) ? { ...m, aiSummary: s } : m;
+              })
+            : prev);
+        }
+        // No published result yet = the winner is mid-call; the next refresh
+        // (focus / Gmail push) adopts it. No retry loop — lean by design.
+        return;
+      }
       // Fetch real bodies for the cache misses — the snippet is only the first ~2
       // lines, which misrepresents any email that buries its point (owner report
       // 7/19). Best-effort per message: a failed body fetch falls back to snippet.
@@ -1124,11 +1156,20 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       });
       if (!byId.size) return;
       writeEmailSummarySession(newCache);
+      // Publish hash-keyed summaries so the OTHER tabs/devices that lost the
+      // claim adopt these instead of paying for their own call.
+      publishContentResult('email-summaries', contentKey, newCache);
       setGmailMessages(prev => Array.isArray(prev)
         ? prev.map(m => byId.has(m.id) ? { ...m, aiSummary: byId.get(m.id) } : m)
         : prev);
     } catch (e) {
       console.warn('[Google] AI email summary failed:', e.message);
+      // The call never produced summaries — release the claim so a later
+      // refresh may retry, instead of these emails staying unsummarized until
+      // the inbox changes.
+      releaseContentClaim('email-summaries', contentKey);
+    } finally {
+      if (emailSummaryFlightKey === contentKey) emailSummaryFlightKey = null;
     }
   }
 

@@ -75,17 +75,48 @@ async function fsSetMedia(docId, dataUrl) {
 // DeskPhone's direct SSE/drain calls carry (see RelayService.cs) but this Cloud
 // Function has no such token — it uses the Admin SDK instead, which authenticates
 // via service-account credentials and bypasses the rules entirely.
-async function rtdbGetCommands() {
-  const snap = await getAdminDatabase().ref("phone-relay/commands").get();
-  const parsed = snap.val();
+function normalizeCommands(parsed) {
   if (Array.isArray(parsed)) return parsed;
   // RTDB returns an object map when array keys go sparse — normalize back.
   if (parsed && typeof parsed === "object") return Object.values(parsed);
   return [];
 }
 
-async function rtdbSetCommands(arr) {
-  await getAdminDatabase().ref("phone-relay/commands").set(arr.length ? arr : null);
+function commandsRef() {
+  return getAdminDatabase().ref("phone-relay/commands");
+}
+
+// All mailbox mutations run as RTDB transactions (atomic read-modify-write).
+// The old read-then-set pattern had real races: a command queued between
+// another caller's read and write was silently wiped, and two hosts pushing
+// at once could BOTH receive the same commands — a duplicate-send vector
+// (flagged in the 7/19 relay hardening audit).
+async function rtdbAppendCommand(cmd) {
+  await commandsRef().transaction((curr) => {
+    const arr = normalizeCommands(curr);
+    arr.push(cmd);
+    return arr.slice(-50);
+  });
+}
+
+async function rtdbTakeAllCommands() {
+  let taken = [];
+  await commandsRef().transaction((curr) => {
+    taken = normalizeCommands(curr);
+    return null;
+  });
+  return taken;
+}
+
+async function rtdbRemoveCommand(id) {
+  let removed = false;
+  await commandsRef().transaction((curr) => {
+    const arr = normalizeCommands(curr);
+    const remaining = arr.filter((c) => c?.id !== id);
+    removed = remaining.length !== arr.length;
+    return remaining.length ? remaining : null;
+  });
+  return removed;
 }
 
 // Commands that sat undelivered longer than this are dropped at delivery time,
@@ -156,11 +187,8 @@ module.exports = async (req, res) => {
     catch (e) { return sendErr(res, 500, "Failed to write state: " + e.message); }
     let commands = [];
     try {
-      const pending = await rtdbGetCommands();
-      if (pending.length > 0) {
-        await rtdbSetCommands([]);
-        commands = dropExpiredCommands(pending);
-      }
+      const pending = await rtdbTakeAllCommands();
+      if (pending.length > 0) commands = dropExpiredCommands(pending);
     } catch (e) {
       // Swallowing this silently hid a dead command channel for days (7/17
       // incident) — the push must still succeed, but the failure gets logged.
@@ -197,12 +225,36 @@ module.exports = async (req, res) => {
     cmd.id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     cmd.queuedAt = Date.now();
     try {
-      const existing = await rtdbGetCommands();
-      existing.push(cmd);
-      await rtdbSetCommands(existing.slice(-50));
+      await rtdbAppendCommand(cmd);
       return sendOk(res, { ok: true, id: cmd.id });
     } catch (e) {
       return sendErr(res, 500, "Failed to queue command: " + e.message);
+    }
+  }
+
+  // ── POST cancel (webapp → cloud, Firebase auth required) ─────────────────
+  // The webapp gives up waiting for a command ack after ~25 s and tells the
+  // user it failed — but the command itself used to stay live in the mailbox
+  // for its full TTL (10 min for /send), so a host reconnecting inside that
+  // window fired every "failed" send anyway (owner incident 7/19: four /send
+  // commands queued 8:05–8:13 PM all executed at 8:14 PM — real duplicate
+  // texts). Cancel removes the command so a "failed" verdict is a guarantee.
+  // `removed: false` tells the caller a host already took it (may be mid-send).
+  if (action === "cancel" && method === "POST") {
+    const idToken = extractIdToken(req);
+    if (!idToken) return sendErr(res, 401, "Firebase ID token required — sign in to cancel commands");
+    try { await fsGet("state", idToken); }
+    catch (e) {
+      if (e.message === "auth:token_invalid") return sendErr(res, 401, "Invalid or expired sign-in — sign in again");
+      return sendErr(res, 401, "Could not verify sign-in");
+    }
+    const id = String((req.body || {}).id || "");
+    if (!id) return sendErr(res, 400, "missing id");
+    try {
+      const removed = await rtdbRemoveCommand(id);
+      return sendOk(res, { ok: true, removed });
+    } catch (e) {
+      return sendErr(res, 500, "Failed to cancel command: " + e.message);
     }
   }
 
@@ -210,8 +262,7 @@ module.exports = async (req, res) => {
   if (action === "drain" && method === "GET") {
     if (!secret || incoming !== secret) return sendErr(res, 401, "unauthorized");
     try {
-      const commands = await rtdbGetCommands();
-      if (commands.length > 0) await rtdbSetCommands([]);
+      const commands = await rtdbTakeAllCommands();
       return sendOk(res, dropExpiredCommands(commands));
     } catch (e) {
       return sendErr(res, 500, "Failed to drain commands: " + e.message);

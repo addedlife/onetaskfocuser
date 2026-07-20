@@ -180,7 +180,10 @@ export async function shouldRunForContentAndClaim(key, contentKey, minGapMs = 0)
       }
       const lastRunAtMs = Number(data.lastRunAtMs) || 0;
       if (minGapMs > 0 && now - lastRunAtMs < minGapMs) return { run: false, cachedResult: null };
-      tx.set(ref, { lastRunAtMs: now, lastContentKey: content }, { merge: true });
+      // Clear lastResult with the claim: it belongs to the PREVIOUS content key,
+      // and leaving it meant a surface losing the race mid-call could adopt a
+      // stale answer as if it were computed for the new content.
+      tx.set(ref, { lastRunAtMs: now, lastContentKey: content, lastResult: null }, { merge: true });
       return { run: true, cachedResult: null };
     });
     if (outcome.run) { _claimLocalContentKey(key, content); _claimLocalGate(key, now); }
@@ -213,6 +216,34 @@ export async function publishContentResult(key, contentKey, result) {
     await ref.set({ lastContentKey: content, lastResult: result, lastResultAtMs: Date.now() }, { merge: true });
   } catch (e) {
     console.warn('[ai-call-throttle] result publish failed (non-fatal):', e.message);
+  }
+}
+
+// Undo a won content claim whose AI call FAILED (no result to publish). Without
+// this, the content stays marked as scanned forever and every surface skips it
+// until the underlying data changes — for slow-moving content (an inbox) that
+// can mean hours with no summaries after one transient gateway error. Only
+// releases while no result has been published for this content, so it can never
+// wipe a successful run's answer.
+export async function releaseContentClaim(key, contentKey) {
+  const content = String(contentKey || '');
+  if (!content) return;
+  if (_readLocalContentKey(key) === content) {
+    _localContentGate.delete(key);
+    try { localStorage.removeItem(_contentStorageKey(key)); } catch (_) {}
+  }
+  const ref = throttleRef(key);
+  if (!ref) return;
+  try {
+    await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      const data = (snap.exists && snap.data()) || {};
+      if (data.lastContentKey === content && data.lastResult == null) {
+        tx.set(ref, { lastContentKey: null }, { merge: true });
+      }
+    });
+  } catch (e) {
+    console.warn('[ai-call-throttle] claim release failed (non-fatal):', e.message);
   }
 }
 
