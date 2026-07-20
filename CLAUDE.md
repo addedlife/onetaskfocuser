@@ -104,6 +104,19 @@ Only fetch an individual `bugs/{id}` doc when you need the full text/history of 
 ticket. The mirror is rebuilt by the web app on every bug add/status-change/delete
 (`Store._syncOpenTickets` in `apps/web/src/01-core.js`).
 
+## Buglog re-check before ending (STANDING)
+
+The owner adds bugs WHILE sessions run. The buglog is a live queue, not a snapshot:
+- **Before ending any session that did buglog work** (a sweep, a ticket fix, or anything the
+  owner might file follow-up bugs about), re-read `users/rabbidanziger/meta/openTickets` and
+  handle or at least triage any entry newer than your session start. Don't declare a sweep
+  complete off the copy you pulled an hour ago.
+- On **long sessions**, re-check at natural pauses (e.g. while a build runs) too.
+- The mirror rebuilds only on app-side changes, so it can be stale in BOTH directions:
+  it may list tickets you already resolved by direct Firestore write (rebuilds on the
+  owner's next add/change), and a fresh owner add rebuilds it from live data mid-session.
+  Compare `createdAtMs` against your session start to spot genuinely new entries.
+
 ## Versioning (STANDING)
 
 The app version is the single constant in `apps/web/src/version.js`, shown in the left rail.

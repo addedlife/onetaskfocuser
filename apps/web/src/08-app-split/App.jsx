@@ -3002,9 +3002,20 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const allSwitchboardTasks = AS ? AS.lists.flatMap(l => l.tasks || []) : tasks;
   const switchboardShailaList = buildNerveShailaRows(allSwitchboardTasks, pris, shailosSnapshot);
   const shailaOpenCount = switchboardShailaList.length;
+  // Dedupe by normalized text: the same shaila can exist as several completed
+  // task copies (owner ticket 7/20 — the contractor shaila showed 4× in
+  // "Recently resolved"). Newest copy wins (list is already sorted desc).
+  const seenCompletedShailaKeys = new Set();
   const switchboardShailaCompleted = compT
     .filter(t => isNerveTaskShailaWork(t, pris) && t.completed)
     .sort((a, b) => (b.completedAt || b.createdAt || 0) - (a.completedAt || a.createdAt || 0))
+    .filter(t => {
+      const key = String(t.text || "").trim().toLowerCase().replace(/\s+/g, " ");
+      if (!key) return true;
+      if (seenCompletedShailaKeys.has(key)) return false;
+      seenCompletedShailaKeys.add(key);
+      return true;
+    })
     .slice(0, 5);
   const shellHidden = !!(zen && curT);
   // The rail is collapsible/expandable on every screen size. It defaults collapsed on
