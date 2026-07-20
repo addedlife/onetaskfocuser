@@ -202,6 +202,15 @@ public class HfpService : IAsyncDisposable
         // URC from the phone. It is handled in HandleUrcLineAsync below.
     }
 
+    // In-call phantom check (port of the Android host's keepalive CLCC poll):
+    // a lost +CIEV call=0 used to leave a phantom "active call" on screen
+    // forever, and the keepalive skipped probing entirely during calls. AT+CLCC
+    // is the standard carkit in-call status poll — replies are serialized on
+    // the AT channel, so the first OK/ERROR after the probe terminates it; if
+    // no +CLCC row arrived by then, the phone has no calls and we clear ours.
+    private volatile bool _clccSawCall;
+    private DateTime _clccProbeUtc = DateTime.MinValue;
+
     // ── Continuous read loop ──────────────────────────────────────────────────
     private async Task ReadLoopAsync(CancellationToken ct)
     {
@@ -225,13 +234,22 @@ public class HfpService : IAsyncDisposable
                 if (winner != pendingRead)
                 {
                     // 30 s passed with no URC from the phone.
-                    // Skip the AT probe during an active call — the SCO audio channel
-                    // proves the link is alive, and AT commands sent while the phone is
-                    // processing audio can confuse some firmware, causing spurious drops.
+                    // During a call the generic AT+NREC probe stays off (AT commands
+                    // during audio confuse some firmware) — but a call that ended on
+                    // the handset without a clean call=0 must not linger as live
+                    // (owner ticket 7/17: hangup clicks on an already-dead call).
+                    // AT+CLCC is safe in-call; the verdict lands in HandleUrcLineAsync
+                    // when the probe's OK arrives.
                     if (CurrentCall.Status != CallStatus.Idle)
                     {
-                        AtLogLine?.Invoke("[keepalive] skipped — call in progress");
-                        continue;
+                        _clccSawCall  = false;
+                        _clccProbeUtc = DateTime.UtcNow;
+                        AtLogLine?.Invoke("[keepalive] active-call check — AT+CLCC");
+                        await SendAsync("AT+CLCC", ct);
+                        var clccReply = await Task.WhenAny(pendingRead, Task.Delay(TimeSpan.FromSeconds(10), ct));
+                        if (clccReply != pendingRead && !ct.IsCancellationRequested)
+                            throw new IOException("in-call CLCC probe got no reply within 10 s — link presumed dead");
+                        continue;   // reply arrived; consume it at the top of the loop
                     }
                     AtLogLine?.Invoke("[keepalive] 30 s idle — probing HFP link with AT+NREC=0");
                     await SendAsync("AT+NREC=0", ct);
@@ -346,6 +364,27 @@ public class HfpService : IAsyncDisposable
             if (!int.TryParse(parts[1].Trim(), out int val)) return;
             if (_indicators.TryGetValue(idx, out var name))
                 HandleIndicator(name, val);
+            return;
+        }
+
+        // ── Active-call check replies (see the keepalive CLCC probe) ──
+        if (line.StartsWith("+CLCC:"))
+        {
+            _clccSawCall = true;
+            return;
+        }
+        if ((line == "OK" || line == "ERROR") && _clccProbeUtc != DateTime.MinValue)
+        {
+            // AT replies are serialized, so the first OK/ERROR after the probe is
+            // its terminator. The 15 s staleness guard keeps an ancient probe
+            // stamp from ever hijacking some later command's OK.
+            var probeFresh = DateTime.UtcNow - _clccProbeUtc < TimeSpan.FromSeconds(15);
+            _clccProbeUtc = DateTime.MinValue;
+            if (probeFresh && !_clccSawCall && CurrentCall.Status != CallStatus.Idle)
+            {
+                AtLogLine?.Invoke("[keepalive] phone reports no calls — clearing phantom active call");
+                ForceIdleFromCurrentState();
+            }
             return;
         }
 

@@ -1,5 +1,11 @@
 [
     {
+        "version":  "b341",
+        "timestamp":  "2026-07-20 13:21:15",
+        "notes":  "A call that ends on the phone itself can no longer linger on screen as a live call: during any quiet stretch of a call, DeskPhone now asks the phone for its real call list and clears the call if the phone says there is none. Fixes stuck hangup buttons pressed against an already-dead call.",
+        "devNotes":  "Owner ticket 0M23WoHOPJ7qvyHKn73w (7/17): a long call ended on the handset stayed live in the UI and repeated /hangup relay commands were no-ops. Root cause: ReadLoopAsync\u0027s 30s-idle keepalive skipped ALL probing while CurrentCall.Status != Idle, so a lost/never-sent +CIEV call=0 (or a half-open RFCOMM socket mid-call) left a phantom active call forever - there was no in-call liveness check at all. Port of the Android host\u0027s HfpClient keepalive CLCC poll (which shipped earlier and is why the tablet path recovers): on 30s of URC silence during a non-Idle call, send AT+CLCC (safe in-call, standard carkit status poll). Replies are serialized on the AT channel, so HandleUrcLineAsync treats the first OK/ERROR after the probe as its terminator: +CLCC rows set _clccSawCall; terminator with no rows and a fresh (\u003c15s) probe stamp means the phone has no calls - ForceIdleFromCurrentState() clears the phantom (which also lets MainViewModel record the call into history with the right duration). No reply within 10s throws to trigger the normal reconnect path. Android b13 also tightened its version of this check from 60s to 30s of silence in the same pass."
+    },
+    {
         "version":  "b340",
         "timestamp":  "2026-07-20 13:13:45",
         "notes":  "Safety net against double texts: even if the cloud command mailbox hands this host the same send twice (a rare timing race), the message now goes out exactly once. Stale queued texts also expire after 2 minutes instead of 10, so a text you gave up on can never fire late.",
