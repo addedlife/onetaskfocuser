@@ -14,20 +14,16 @@ import { ActionBtn, IconBtn } from './m3.jsx';
 import { AppSuiteChrome } from './components/AppSuiteChrome.jsx';
 import { DeskPhoneSuitePanel, SuiteShailosPanel } from './components/SuitePanels.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './components/NerveCenterPhoneSurface.jsx';
-import { compactNerveSummary, nerveSummarySource, NerveCenterPanel } from './components/NerveCenterPanel.jsx';
+import { compactNerveSummary, NerveCenter } from './components/NerveCenter.jsx';
 import { TaskRiverPanel } from './components/TaskRiverPanel.jsx';
 import { ConvCapture } from './components/ConvCapture.jsx';
 import { BugLog } from './components/BugLog.jsx';
-import { NerveCenterPanel as NerveCenterNext } from './components/NerveCenterNext.jsx';
 
-// The reimagined Material 3 NerveCenter (NerveCenterNext) is now the DEFAULT
-// surface. The old NerveCenterPanel is retained only as an escape hatch behind
-// `?ui=legacy` in case a regression needs a fast fallback while it's fixed.
-// Read once at module load.
-const UI_NEXT = (() => {
-  try { return new URLSearchParams(window.location.search).get('ui') !== 'legacy'; }
-  catch { return true; }
-})();
+// ONE NerveCenter surface (7/21/26). The "Next" / "legacy" split is gone: the M3
+// surface was already the default for the nervecenter view and already carried
+// full chief + health page implementations, so the old NerveCenterPanel.jsx (and
+// its `?ui=legacy` escape hatch) was deleted rather than kept as a stale twin.
+// `?ncproto=1` inside NerveCenter.jsx is a live experiment, unrelated to this.
 import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack, shailaText, shailaCreatedAt, shailaField } from './utils/shailosQueue.js';
 import { shouldRunForContentAndClaim, publishContentResult, releaseContentClaim } from './ai-call-throttle.js';
 import { createComponent } from '@lit/react';
@@ -116,7 +112,7 @@ function preMergeEmailSummaries(msgs) {
 }
 
 // ─── Gmail body extraction for AI summaries ──────────────────────────────────
-// Same decode chain as NerveCenterNext/NerveCenterPanel gmailFullBody. The AI
+// Same decode chain as NerveCenter's gmailFullBody. The AI
 // summarizer needs the real body: Gmail's snippet is only the first ~2 lines,
 // so any email that opens with pleasantries and buries the point summarized as
 // the pleasantries (owner report 7/19 — camp email).
@@ -1630,7 +1626,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     : (availableProviders[0] || selectedProvider);
   const aiAvailable = availMap ? availableProviders.length > 0 : serverKeyAvailable;
   const selectedModel = AS?.aiModel || aiConfig?.model || aiConfig?.textModel || "";
-  // Memoized on its primitive parts: aiOpts is an effect dependency in NerveCenterPanel
+  // Memoized on its primitive parts: aiOpts is an effect dependency in NerveCenter
   // and elsewhere, and App re-renders every second for the clock — a fresh object literal
   // here re-ran every consumer effect once per second.
   const hasAS = !!AS;
@@ -3866,13 +3862,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         />
       )}
 
-      {!shellHidden && (suiteView === "nervecenter" || suiteView === "chief" || suiteView === "health") && (() => {
-        // ?ui=next swaps in the reimagined M3 NerveCenter for the nervecenter view
-        // only; chief/health full pages stay on the legacy surface for now. Same
-        // props either way — pure view-layer swap, backend wiring untouched.
-        const NerveSurface = (UI_NEXT && suiteView === "nervecenter") ? NerveCenterNext : NerveCenterPanel;
-        return (
-        <NerveSurface
+      {!shellHidden && (suiteView === "nervecenter" || suiteView === "chief" || suiteView === "health") && (
+        // One surface for all three views. `chiefPage` / `healthPage` below tell it
+        // which one to render; backend wiring is identical either way.
+        <NerveCenter
           T={T}
           user={user}
           sections={switchboardSections}
@@ -3948,8 +3941,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           onSaveHealthData={saveHealthDataToFirebase}
           onSyncHealth={syncHealthNow}
         />
-        );
-      })()}
+      )}
 
       {!shellHidden && (
         <TaskRiverPanel

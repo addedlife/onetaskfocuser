@@ -876,7 +876,7 @@ const agendaNowBarRef = el => {
 };
 
 // Mobile "nerve center" accordion section. Hoisted to module scope (NOT defined inside
-// NerveCenterPanel) so its component identity stays stable across renders — otherwise the
+// NerveCenter) so its component identity stays stable across renders — otherwise the
 // per-second clock re-render recreated the function, remounting every section and dropping
 // in-flight taps/keystrokes. Sections collapse to a full-summary preview line; multiple may
 // stay open. When expanded the content scrolls internally so the page stays bounded.
@@ -1178,7 +1178,7 @@ function MoreRow({ count, open = false, label = "more", onClick, C }) {
   );
 }
 
-function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
+function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
   const viewportW = useViewportWidth();
   const [healthCardVisible, setHealthCardVisible] = useState(() => {
     try { return localStorage.getItem("nc_health_card_visible") !== "0"; } catch { return true; }
@@ -2378,8 +2378,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // container. Active (composer open for that priority) gets a soft tint ring.
   // (Now expressed directly via IconBtn's active/activeBg props at each call site.)
 
-  // "More Actions" drawer retired (owner ticket 7/13) — the sections prop and
-  // the actionsOpen/actionCategoryId plumbing stay only for the legacy ?ui=legacy panel.
+  // "More Actions" drawer retired (owner ticket 7/13). The sections prop and the
+  // actionsOpen/actionCategoryId plumbing are now inert — they were kept for the
+  // old ?ui=legacy panel, which is gone as of 7/21. Safe to strip separately.
 
   const addDraft = (priorityOverride = taskPriority, opts = {}) => {
     const text = taskDraft.trim();
@@ -4495,4 +4496,4 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   );
 }
 
-export { nerveSummarySource, compactNerveSummary, nerveDisplaySummary, NerveCenterPanel };
+export { nerveSummarySource, compactNerveSummary, nerveDisplaySummary, NerveCenter };
