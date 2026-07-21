@@ -58,6 +58,72 @@ export const NC_TYPE = {
   line:    "var(--shp-line-base)",   // line-height alias (1.3)
 };
 
+// ─── M3 type scale ────────────────────────────────────────────────────────────
+// The fifteen Material 3 roles, as ready-to-spread style objects. Prefer these
+// over NC_TYPE for anything new: NC_TYPE is four sizes standing in for fifteen
+// roles, and it carries no line-height or weight, so callers kept inventing both.
+//
+//   <span style={M3_TYPE.bodyLarge}>…</span>
+//
+// M3's floor is labelSmall at 11px; bodySmall at 12px is the smallest role
+// intended for reading. Anything under 12px in this app is off the scale and is
+// what the GM3 sweep is removing.
+// Line height and size both come from the CSS vars, so a role only needs its
+// token name plus the weight and tracking the M3 spec assigns it.
+const role = (token, weight, tracking = '0') => ({
+  fontSize: `var(--md-sys-typescale-${token}-size)`,
+  lineHeight: `var(--md-sys-typescale-${token}-line-height)`,
+  fontWeight: weight,
+  letterSpacing: tracking,
+  fontFamily: NC_FONT_STACK,
+});
+
+export const M3_TYPE = {
+  displayLarge:   role('display-large', 400, '-0.25px'),
+  displayMedium:  role('display-medium', 400),
+  displaySmall:   role('display-small', 400),
+  headlineLarge:  role('headline-large', 400),
+  headlineMedium: role('headline-medium', 400),
+  headlineSmall:  role('headline-small', 400),
+  titleLarge:     role('title-large', 400),
+  titleMedium:    role('title-medium', 500, '0.15px'),
+  titleSmall:     role('title-small', 500, '0.1px'),
+  bodyLarge:      role('body-large', 400, '0.5px'),
+  bodyMedium:     role('body-medium', 400, '0.25px'),
+  bodySmall:      role('body-small', 400, '0.4px'),
+  labelLarge:     role('label-large', 500, '0.1px'),
+  labelMedium:    role('label-medium', 500, '0.5px'),
+  labelSmall:     role('label-small', 500, '0.5px'),
+};
+
+// ─── M3 motion ────────────────────────────────────────────────────────────────
+// Durations and easings as var() references, mirroring the --md-sys-motion-*
+// tokens in :root. DUR/EASE below are kept as the app's older shorthand.
+export const M3_DUR = {
+  short1: 'var(--md-sys-motion-duration-short1)',
+  short2: 'var(--md-sys-motion-duration-short2)',
+  short3: 'var(--md-sys-motion-duration-short3)',
+  short4: 'var(--md-sys-motion-duration-short4)',
+  medium1: 'var(--md-sys-motion-duration-medium1)',
+  medium2: 'var(--md-sys-motion-duration-medium2)',
+  medium3: 'var(--md-sys-motion-duration-medium3)',
+  medium4: 'var(--md-sys-motion-duration-medium4)',
+  long1: 'var(--md-sys-motion-duration-long1)',
+  long2: 'var(--md-sys-motion-duration-long2)',
+};
+export const M3_EASE = {
+  linear:              'var(--md-sys-motion-easing-linear)',
+  standard:            'var(--md-sys-motion-easing-standard)',
+  standardDecelerate:  'var(--md-sys-motion-easing-standard-decelerate)',
+  standardAccelerate:  'var(--md-sys-motion-easing-standard-accelerate)',
+  emphasized:          'var(--md-sys-motion-easing-emphasized)',
+  emphasizedDecelerate:'var(--md-sys-motion-easing-emphasized-decelerate)',
+  emphasizedAccelerate:'var(--md-sys-motion-easing-emphasized-accelerate)',
+  springFast:          'var(--md-sys-motion-spring-fast)',
+  spring:              'var(--md-sys-motion-spring-default)',
+  springSlow:          'var(--md-sys-motion-spring-slow)',
+};
+
 // ─── Z-index layering ─────────────────────────────────────────────────────────
 // Kept as JS numbers: fixed overlays are often outside the app root and must
 // resolve without CSS custom property inheritance.
@@ -166,6 +232,80 @@ export function useViewportWidth() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
   return width;
+}
+
+// ─── M3 window size classes ───────────────────────────────────────────────────
+// Material 3 classifies a window on BOTH axes, and an app always has two classes
+// at once — one for width, one for height. The app previously had width-ish
+// breakpoints only, at invented values (760 / 980 / 1120 / 1500), and no height
+// awareness at all beyond one hand-rolled scale factor in the nav rail.
+//
+// That gap is the whole reason the dashboard is hard to get right: the standing
+// "one screen, no page scroll" constraint is a HEIGHT constraint, and it was
+// being solved with width tooling. A small landscape screen is medium/expanded
+// WIDTH but COMPACT height — Google's own guidance says two-pane layouts are
+// impractical there — while a large portrait display is the mirror image, with
+// vertical room the app never used.
+//
+// Breakpoints are the M3 values, not approximations:
+//   width   compact <600 · medium 600–839 · expanded 840–1199 · large 1200–1599 · xlarge >=1600
+//   height  compact <480 · medium 480–899 · expanded >=900
+//
+// `available` lets a caller pass the width it actually owns (viewport minus the
+// nav rail, say) rather than the raw window — M3 classifies the WINDOW the app
+// is laid out in, which for a pane inside chrome is not window.innerWidth.
+export const WIDTH_CLASS = { COMPACT: 'compact', MEDIUM: 'medium', EXPANDED: 'expanded', LARGE: 'large', XLARGE: 'xlarge' };
+export const HEIGHT_CLASS = { COMPACT: 'compact', MEDIUM: 'medium', EXPANDED: 'expanded' };
+
+export function widthClassOf(w) {
+  if (w < 600) return WIDTH_CLASS.COMPACT;
+  if (w < 840) return WIDTH_CLASS.MEDIUM;
+  if (w < 1200) return WIDTH_CLASS.EXPANDED;
+  if (w < 1600) return WIDTH_CLASS.LARGE;
+  return WIDTH_CLASS.XLARGE;
+}
+export function heightClassOf(h) {
+  if (h < 480) return HEIGHT_CLASS.COMPACT;
+  if (h < 900) return HEIGHT_CLASS.MEDIUM;
+  return HEIGHT_CLASS.EXPANDED;
+}
+
+export function useWindowSizeClass(available = null) {
+  const [size, setSize] = useState(() => (
+    typeof window === "undefined"
+      ? { w: 1440, h: 900 }
+      : { w: window.innerWidth, h: window.innerHeight }
+  ));
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const on = () => setSize({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", on);
+    // Orientation changes on a tablet cross a size class without ever firing a
+    // plain resize on some Android WebViews, which is exactly the small-landscape
+    // <-> tall-portrait swap this hook exists to catch.
+    window.addEventListener("orientationchange", on);
+    return () => {
+      window.removeEventListener("resize", on);
+      window.removeEventListener("orientationchange", on);
+    };
+  }, []);
+
+  const w = available != null ? available : size.w;
+  const width = widthClassOf(w);
+  const height = heightClassOf(size.h);
+  return {
+    width,
+    height,
+    w,
+    h: size.h,
+    // Convenience predicates for the cases the app actually branches on.
+    isCompactWidth: width === WIDTH_CLASS.COMPACT,
+    isCompactHeight: height === HEIGHT_CLASS.COMPACT,
+    isExpandedHeight: height === HEIGHT_CLASS.EXPANDED,
+    // M3: at compact height there is not enough vertical room for a two-pane
+    // layout regardless of how wide the window is.
+    allowsTwoPane: width !== WIDTH_CLASS.COMPACT && height !== HEIGHT_CLASS.COMPACT,
+  };
 }
 
 export const NC_GLOBAL_CSS = `
@@ -314,6 +454,103 @@ export const NC_GLOBAL_CSS = `
   --md-sys-color-shadow:                   #000000;
   --md-sys-color-scrim:                    #000000;
   --md-sys-color-surface-tint:             var(--shp-color-accent, #00796B);
+
+  /* ── M3 type scale ─────────────────────────────────────────────────────────
+     The fifteen Material 3 typescale roles. @material/web components read these
+     from --md-sys-typescale-*; until now only the TYPEFACE was bridged, so every
+     component ran M3's stock Roboto metrics next to app text on a different
+     scale. The app's own four sizes (--shp-type-*) are kept as aliases below and
+     map onto the matching roles, so existing callers are unaffected.
+
+     Sizes are in px rather than rem deliberately: the app's :root font-size is
+     untouched by the user and index.html applies a global reset, so px here is
+     predictable and matches what the M3 spec quotes in sp/dp. */
+  --md-sys-typescale-display-large-size:     57px;
+  --md-sys-typescale-display-large-line-height: 64px;
+  --md-sys-typescale-display-large-weight:   400;
+  --md-sys-typescale-display-medium-size:    45px;
+  --md-sys-typescale-display-medium-line-height: 52px;
+  --md-sys-typescale-display-medium-weight:  400;
+  --md-sys-typescale-display-small-size:     36px;
+  --md-sys-typescale-display-small-line-height: 44px;
+  --md-sys-typescale-display-small-weight:   400;
+
+  --md-sys-typescale-headline-large-size:    32px;
+  --md-sys-typescale-headline-large-line-height: 40px;
+  --md-sys-typescale-headline-large-weight:  400;
+  --md-sys-typescale-headline-medium-size:   28px;
+  --md-sys-typescale-headline-medium-line-height: 36px;
+  --md-sys-typescale-headline-medium-weight: 400;
+  --md-sys-typescale-headline-small-size:    24px;
+  --md-sys-typescale-headline-small-line-height: 32px;
+  --md-sys-typescale-headline-small-weight:  400;
+
+  --md-sys-typescale-title-large-size:       22px;
+  --md-sys-typescale-title-large-line-height: 28px;
+  --md-sys-typescale-title-large-weight:     400;
+  --md-sys-typescale-title-medium-size:      16px;
+  --md-sys-typescale-title-medium-line-height: 24px;
+  --md-sys-typescale-title-medium-weight:    500;
+  --md-sys-typescale-title-small-size:       14px;
+  --md-sys-typescale-title-small-line-height: 20px;
+  --md-sys-typescale-title-small-weight:     500;
+
+  --md-sys-typescale-body-large-size:        16px;
+  --md-sys-typescale-body-large-line-height: 24px;
+  --md-sys-typescale-body-large-weight:      400;
+  --md-sys-typescale-body-medium-size:       14px;
+  --md-sys-typescale-body-medium-line-height: 20px;
+  --md-sys-typescale-body-medium-weight:     400;
+  --md-sys-typescale-body-small-size:        12px;
+  --md-sys-typescale-body-small-line-height: 16px;
+  --md-sys-typescale-body-small-weight:      400;
+
+  --md-sys-typescale-label-large-size:       14px;
+  --md-sys-typescale-label-large-line-height: 20px;
+  --md-sys-typescale-label-large-weight:     500;
+  --md-sys-typescale-label-medium-size:      12px;
+  --md-sys-typescale-label-medium-line-height: 16px;
+  --md-sys-typescale-label-medium-weight:    500;
+  --md-sys-typescale-label-small-size:       11px;
+  --md-sys-typescale-label-small-line-height: 16px;
+  --md-sys-typescale-label-small-weight:     500;
+
+  /* ── M3 motion ─────────────────────────────────────────────────────────────
+     Durations and easing curves as Material 3 defines them. The app previously
+     had three ad-hoc durations and two easings; ~58 call sites ignored even
+     those and inlined their own. These are what @material/web reads, and what
+     the TRANSITION token below is built from.
+
+     The emphasized curves are the M3 signature — they are NOT the 2014-era
+     cubic-bezier(0.4, 0, 0.2, 1) that several call sites still use. */
+  --md-sys-motion-duration-short1:      50ms;
+  --md-sys-motion-duration-short2:     100ms;
+  --md-sys-motion-duration-short3:     150ms;
+  --md-sys-motion-duration-short4:     200ms;
+  --md-sys-motion-duration-medium1:    250ms;
+  --md-sys-motion-duration-medium2:    300ms;
+  --md-sys-motion-duration-medium3:    350ms;
+  --md-sys-motion-duration-medium4:    400ms;
+  --md-sys-motion-duration-long1:      450ms;
+  --md-sys-motion-duration-long2:      500ms;
+  --md-sys-motion-duration-long3:      550ms;
+  --md-sys-motion-duration-long4:      600ms;
+
+  --md-sys-motion-easing-linear:                 cubic-bezier(0, 0, 1, 1);
+  --md-sys-motion-easing-standard:               cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-standard-decelerate:    cubic-bezier(0, 0, 0, 1);
+  --md-sys-motion-easing-standard-accelerate:    cubic-bezier(0.3, 0, 1, 1);
+  --md-sys-motion-easing-emphasized:             cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-emphasized-decelerate:  cubic-bezier(0.05, 0.7, 0.1, 1);
+  --md-sys-motion-easing-emphasized-accelerate:  cubic-bezier(0.3, 0, 0.8, 0.15);
+
+  /* M3 Expressive spatial springs, as CSS linear() approximations. A real spring
+     has no fixed duration, so these are sampled curves — close enough for the
+     transform/opacity work the app does, and they read as springy rather than
+     as an ease. Pair with the matching duration. */
+  --md-sys-motion-spring-fast:    linear(0, 0.26 9%, 0.74 21%, 1.00 31%, 1.06 41%, 1.03 55%, 0.99 72%, 1);
+  --md-sys-motion-spring-default: linear(0, 0.18 8%, 0.63 20%, 0.94 31%, 1.06 42%, 1.04 56%, 0.99 75%, 1);
+  --md-sys-motion-spring-slow:    linear(0, 0.12 10%, 0.45 24%, 0.83 38%, 1.02 50%, 1.05 64%, 0.99 84%, 1);
 
   /* M3 shape scale → ShamashPro radius scale */
   --md-sys-shape-corner-none:        0;
