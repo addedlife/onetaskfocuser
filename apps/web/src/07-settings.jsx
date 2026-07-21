@@ -169,7 +169,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
         <div style={{position:"sticky",top:0,zIndex:2,background:sTab==="appearance"?T.card+"f7":T.card,padding:"20px 26px 12px",borderBottom:`1px solid ${T.brdS || T.brd}`,transition:"background 0.3s"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <h3 style={{fontSize:22,fontWeight:500,margin:0,fontFamily:NC_FONT_STACK}}>Settings</h3>
-            <IconBtn icon="close" size={40} iconSize={20} color={T.tSoft} onClick={onClose} title="Close" aria-label="Close settings" />
+            <IconBtn icon="close" iconSize={20} color={T.tSoft} onClick={onClose} title="Close" aria-label="Close settings" />
           </div>
           {/* Tabs scroll horizontally instead of squeezing — labels never truncate. */}
           <div style={{display:"flex",gap:6,background:T.bgW,borderRadius:RADIUS.sm,padding:SP.xs,overflowX:"auto"}}>
@@ -229,7 +229,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 return (
                 <div key={k} style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
                   <ActionBtn variant="tonal" {...schemeBtnProps(k, v, true)} onClick={()=>setAS(p=>({...p,colorScheme:k}))}>{v.name}</ActionBtn>
-                  <IconBtn icon="close" size={22} iconSize={12} color={v.tSoft || T.tSoft}
+                  <IconBtn icon="close" iconSize={12} color={v.tSoft || T.tSoft}
                     onClick={e=>{e.stopPropagation();setAS(p=>{const c={...(p.customSchemes||{})};delete c[k];return {...p,customSchemes:c,colorScheme:p.colorScheme===k?"claude":p.colorScheme};});}}
                     style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",opacity:0.6}} title="Remove theme" aria-label="Remove theme" />
                 </div>);
@@ -307,7 +307,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                   ) : (
                     <span style={{fontSize:settingsType.body,fontFamily:"system-ui"}}>{p.label}{p.isShaila?" ⚡":""}</span>
                   )}
-                  {p.id !== "shaila" && p.id !== BEFORE_SHAVUOS_PRIORITY_ID && ap.length > 1 && <IconBtn icon="close" size={22} iconSize={12} color={T.tFaint} onClick={()=>remPri(p.id)} title="Remove priority" aria-label="Remove priority" />}
+                  {p.id !== "shaila" && p.id !== BEFORE_SHAVUOS_PRIORITY_ID && ap.length > 1 && <IconBtn icon="close" iconSize={12} color={T.tFaint} onClick={()=>remPri(p.id)} title="Remove priority" aria-label="Remove priority" />}
                 </div>
               ))}
             </div>

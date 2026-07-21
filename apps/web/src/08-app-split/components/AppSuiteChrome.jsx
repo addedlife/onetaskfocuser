@@ -10,7 +10,7 @@ import { MdOutlinedSegmentedButton } from '@material/web/labs/segmentedbutton/ou
 import { MdOutlinedSegmentedButtonSet } from '@material/web/labs/segmentedbuttonset/outlined-segmented-button-set.js';
 import { MdDialog } from '@material/web/dialog/dialog.js';
 import { MdIconButton } from '@material/web/iconbutton/icon-button.js';
-import { cleanTheme, DUR, EASE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, suiteIcon } from '../ui-tokens.jsx';
+import { cleanTheme, DUR, EASE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, suiteIcon, M3_MIN_TARGET } from '../ui-tokens.jsx';
 import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
 import { Store, textOnColor } from '../../01-core.js';
 import { MdFilterChip } from '@material/web/chips/filter-chip.js';
@@ -330,8 +330,17 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
   const s = Math.max(0.5, Math.min(1, railH / NATURAL));
   const px = v => Math.round(v * s);
   const ic = v => Math.max(13, Math.round(v * s));
-  const BTN_H = Math.max(40, px(40));  // M3 minimum touch target: 40dp
-  const FZ = Math.max(11, px(14));
+  // M3 minimum touch target is 48dp, not 40. The previous line here asserted 40dp
+  // in a comment and enforced it in code; that single wrong number is what seeded
+  // the app-wide drift — IconBtn defaulted to 40, gvIconButton was 40x40, and call
+  // sites shrank from there to 32, 28, 26, 22. The rail scales itself down on short
+  // windows (see `s` above), so the floor has to be a hard Math.max, not a scaled
+  // value, or a short screen quietly reintroduces an illegal target.
+  const BTN_H = Math.max(M3_MIN_TARGET, px(48));
+  // Rail labels are label-large (14px) and must not scale below M3's smallest
+  // defined role. 11px was label-small; 12px is the readable floor the runtime
+  // audit enforces.
+  const FZ = Math.max(12, px(14));
   const GAP = Math.max(2, px(4));
 
   const rawNow = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());

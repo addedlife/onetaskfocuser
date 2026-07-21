@@ -666,12 +666,12 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
         <span style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.danger, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', ...font }}>
           ● REC {fmtRecSecs(fieldRecSecs)}
         </span>
-        <IconBtn variant="filled" icon="stop" size={28} iconSize={15} containerColor={C.danger} color="#fff"
+        <IconBtn variant="filled" icon="stop" iconSize={15} containerColor={C.danger} color="#fff"
           onClick={() => toggleFieldRecording(field)} title="Stop recording" aria-label="Stop recording" />
       </span>
     );
     return (
-      <IconBtn icon="radio_button_checked" size={28} iconSize={17} color={C.danger}
+      <IconBtn icon="radio_button_checked" iconSize={17} color={C.danger}
         onClick={() => toggleFieldRecording(field)} disabled={!!fieldRec || !!fieldBusy}
         title="Record into this box" aria-label="Record into this box" />
     );
@@ -751,7 +751,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
           <div style={banner(C.danger)}>
             {suiteIcon('error', 16)}
             <span style={{ flex: 1 }}>{error}</span>
-            <IconBtn icon="close" size={24} iconSize={13} color={C.danger} onClick={() => setError(null)} title="Dismiss" aria-label="Dismiss error" />
+            <IconBtn icon="close" iconSize={13} color={C.danger} onClick={() => setError(null)} title="Dismiss" aria-label="Dismiss error" />
           </div>
         )}
         {isProcessing && (
@@ -787,7 +787,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                     <ActionBtn variant="tonal" icon={busy ? 'progress_activity' : 'refresh'} iconSize={13} height={28} labelSize={NC_TYPE.small}
                       containerColor={C.bgSoft} labelColor={C.text}
                       onClick={() => processPendingRecording(rec.id)} disabled={isProcessing} title="Retry transcription">Retry</ActionBtn>
-                    <IconBtn icon="delete" size={28} iconSize={14} color={C.faint}
+                    <IconBtn icon="delete" iconSize={14} color={C.faint}
                       onClick={() => deleteHeldRecording(rec.id)} disabled={busy} title="Delete recording" aria-label="Delete recording" />
                   </div>
                 );
@@ -850,7 +850,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
                       {isResearching(shaila.id) && <Spin size={14} color={C.accent} />}
                       {!isResearching(shaila.id) && shaila.researchReport && (
-                        <IconBtn icon="science" size={24} iconSize={14} color={C.accent} title="View research"
+                        <IconBtn icon="science" iconSize={14} color={C.accent} title="View research"
                           aria-label="View research"
                           onClick={(e) => { e.stopPropagation(); setSelectedShaila(shaila); scrollToResearch(); }} />
                       )}
@@ -885,7 +885,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                         value={selectedShaila.synopsis || ''}
                         onChange={(e) => setSelectedShaila({ ...selectedShaila, synopsis: e.target.value })}
                         onBlur={fieldBlur} aria-label="Synopsis" />
-                      <IconBtn icon="refresh" size={24} iconSize={13}
+                      <IconBtn icon="refresh" iconSize={13}
                         color={isGeneratingSynopsis === selectedShaila.id ? C.accent : C.faint}
                         onClick={() => handleRegenerateSynopsis(selectedShaila)}
                         disabled={isGeneratingSynopsis === selectedShaila.id}
@@ -906,10 +906,10 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                       <>
                         {isResearching(selectedShaila.id)
                           ? <span style={{ width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Spin size={15} color={C.accent} /></span>
-                          : <IconBtn icon="science" size={30} iconSize={15} color={C.muted} onClick={() => handleResearch(selectedShaila)} title="Research this shaila" aria-label="Research this shaila" />}
-                        <IconBtn icon="content_copy" size={30} iconSize={14} color={C.muted}
+                          : <IconBtn icon="science" iconSize={15} color={C.muted} onClick={() => handleResearch(selectedShaila)} title="Research this shaila" aria-label="Research this shaila" />}
+                        <IconBtn icon="content_copy" iconSize={14} color={C.muted}
                           onClick={() => copyToClipboard(formatShailaForCopy(selectedShaila))} title="Copy to clipboard" aria-label="Copy to clipboard" />
-                        <IconBtn icon="delete" size={30} iconSize={15} color={C.muted}
+                        <IconBtn icon="delete" iconSize={15} color={C.muted}
                           onClick={() => deleteShaila(selectedShaila.id)} title="Delete shaila" aria-label="Delete shaila" />
                       </>
                     ) : (

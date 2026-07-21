@@ -246,7 +246,7 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "18px 20px 14px", borderBottom: `1px solid ${C.divider}` }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Connect Health Data</span>
-          <IconBtn icon="close" size={28} iconSize={16} color={C.muted} onClick={onClose} title="Close" aria-label="Close" />
+          <IconBtn icon="close" iconSize={16} color={C.muted} onClick={onClose} title="Close" aria-label="Close" />
         </div>
 
         <div style={{ padding: "18px 20px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -468,7 +468,7 @@ export function HealthPage({
         borderBottom: `1px solid ${C.divider}`,
         background: C.bg,
       }}>
-        <IconBtn icon="close" size={32} iconSize={18} color={C.muted} onClick={onClose} title="Close" aria-label="Close Health" style={{ flexShrink: 0 }} />
+        <IconBtn icon="close" iconSize={18} color={C.muted} onClick={onClose} title="Close" aria-label="Close Health" style={{ flexShrink: 0 }} />
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
           <span className="material-symbols-rounded" style={{ fontSize: 22, color: "#EA4335" }}>favorite</span>

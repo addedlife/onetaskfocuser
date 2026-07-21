@@ -103,27 +103,47 @@ export const Slider = createComponent({
   events: { onInput: 'input', onChange: 'change' },
 });
 
-// DENSE_LIST_VARS — NerveCenter's tuned md-list-item density. M3's stock two-line
-// row is 72px; that's far too tall for a dashboard. These tokens crush it to a
-// dense-but-breathing ~52px (comfortable) / ~40px (compact) while keeping real M3
-// ripple, focus ring, and slot layout. Pass via `style` on <List> (tokens inherit
-// into each <ListItem>). Colours come in from the caller (theme C.*).
-export function denseListVars({ dense = false, primary, secondary, trailing, hover } = {}) {
+// denseListVars — md-list-item density, within the M3 floor.
+//
+// The previous version crushed rows to 34px with 13.5px labels. That is below
+// Material 3 on both counts at once: 48dp is the minimum touch target, and a list
+// item's label is body-large at 16sp. A dashboard row is a tap target like any
+// other, and 34px is not one.
+//
+// M3 provides density LEVELS precisely so a data-dense surface can stay compliant
+// while staying dense, so that is the mechanism used here rather than an
+// exemption. Two levels, and neither goes under the 48dp floor:
+//
+//   comfortable  56 / 72 px   M3 default. For tall windows (expanded height).
+//   compact      48 / 64 px   M3 density -2. The floor, not below it.
+//
+// Type is IDENTICAL in both — only spacing tightens. That is the owner's standing
+// rule (density is not smaller text) and it happens to match M3, which varies
+// container height by density level and never the type scale.
+//
+// `dense: true` is kept as the legacy spelling of `density: 'compact'` so the
+// ~20 existing call sites keep working; prefer passing `density` directly, and
+// prefer deriving it from the window height class (see useWindowSizeClass) rather
+// than hardcoding, so a small landscape screen compacts automatically and a tall
+// portrait one breathes.
+export function denseListVars({ dense = false, density = null, primary, secondary, trailing, hover } = {}) {
+  const compact = density ? density === 'compact' : dense;
   return {
-    '--md-list-item-two-line-container-height': dense ? '40px' : '52px',
-    '--md-list-item-one-line-container-height': dense ? '34px' : '44px',
-    '--md-list-item-top-space': dense ? '3px' : '6px',
-    '--md-list-item-bottom-space': dense ? '3px' : '6px',
-    '--md-list-item-leading-space': '12px',
-    '--md-list-item-trailing-space': '12px',
-    // Compact tightens SPACING only — font sizes stay identical to comfortable so
-    // dense mode never reads as "tiny text" (owner rule: density ≠ smaller type).
-    '--md-list-item-label-text-size': '13.5px',
-    '--md-list-item-label-text-line-height': dense ? '16px' : '17px',
+    '--md-list-item-two-line-container-height': compact ? '64px' : '72px',
+    '--md-list-item-one-line-container-height': compact ? '48px' : '56px',
+    '--md-list-item-top-space': compact ? '6px' : '8px',
+    '--md-list-item-bottom-space': compact ? '6px' : '8px',
+    '--md-list-item-leading-space': compact ? '14px' : '16px',
+    '--md-list-item-trailing-space': compact ? '8px' : '12px',
+    // M3 list item type: label = body-large 16sp, supporting = body-medium 14sp.
+    '--md-list-item-label-text-size': '16px',
+    '--md-list-item-label-text-line-height': '21px',
     '--md-list-item-label-text-weight': '500',
-    '--md-list-item-supporting-text-size': '12px',
-    '--md-list-item-supporting-text-line-height': dense ? '14px' : '15px',
-    '--md-list-item-trailing-supporting-text-size': '11.5px',
+    '--md-list-item-supporting-text-size': '14px',
+    '--md-list-item-supporting-text-line-height': compact ? '18px' : '20px',
+    // label-medium rather than M3's label-small (11sp) for trailing metadata:
+    // 12px is the floor the runtime audit enforces for anything meant to be read.
+    '--md-list-item-trailing-supporting-text-size': '12px',
     ...(primary ? { '--md-list-item-label-text-color': primary } : {}),
     ...(secondary ? { '--md-list-item-supporting-text-color': secondary, '--md-list-item-trailing-supporting-text-color': secondary, '--md-list-item-leading-icon-color': secondary, '--md-list-item-trailing-icon-color': secondary } : {}),
     ...(trailing ? { '--md-list-item-trailing-supporting-text-color': trailing } : {}),
@@ -155,15 +175,28 @@ const ACTION_VARIANTS = {
 //   variant     standard | filled | tonal | outlined
 //   active+activeBg  persistent selected tint (standard buttons have no container
 //                    color token, so the active state paints the host directly)
+// M3 MINIMUM TOUCH TARGET IS 48dp. It is not 40. A comment in AppSuiteChrome
+// asserting "M3 minimum touch target: 40dp" is what seeded the app-wide drift —
+// this default was 40, gvIconButton was 40x40, and call sites then shrank from
+// there to 32, 28, 26, 22. Of 156 icon-button instances at the 2026-07-21 audit,
+// three were 44px or larger.
+//
+// `size` is clamped up to 48 rather than merely defaulting to it, so an existing
+// call site passing size={26} still lands on a legal target. Pass `iconSize` to
+// keep a glyph visually small inside a full-size target — that is how M3 does a
+// "small" icon button: the GLYPH shrinks, the target does not.
+const M3_MIN_TARGET = 48;
+
 export function IconBtn({
-  icon, iconSize = 18, size = 40, color, variant = 'standard',
+  icon, iconSize = 20, size = M3_MIN_TARGET, color, variant = 'standard',
   active = false, activeBg, containerColor,
   title, 'aria-label': ariaLabel, style, children, ...rest
 }) {
   const [Comp, prefix] = ICON_VARIANTS[variant] || ICON_VARIANTS.standard;
   // iconSize may be a number (px) or a token string like var(--shp-icon-md).
   const iconCss = typeof iconSize === 'number' ? `${iconSize}px` : iconSize;
-  const sizeCss = typeof size === 'number' ? `${size}px` : size;
+  const target = typeof size === 'number' ? Math.max(M3_MIN_TARGET, size) : size;
+  const sizeCss = typeof target === 'number' ? `${target}px` : target;
   const vars = { '--md-icon-button-icon-size': iconCss };
   if (variant === 'standard') {
     vars['--md-icon-button-state-layer-width'] = sizeCss;
@@ -198,7 +231,13 @@ export function ActionBtn({
 }) {
   const [Comp, p] = ACTION_VARIANTS[variant] || ACTION_VARIANTS.text;
   const vars = {};
-  if (height != null) vars[`${p}-container-height`] = `${height}px`;
+  // Same 48dp floor as IconBtn. M3's own button container is 40dp and meets the
+  // target through an expanded touch area, but @material/web only ships that
+  // expansion on some variants, and the injected !important sheet that used to
+  // paper over this in NerveCenter matched md-icon-button ONLY — so all 25
+  // ActionBtn instances on that surface stayed at 40 regardless. Clamping here
+  // is what makes the fix uniform instead of per-surface.
+  if (height != null) vars[`${p}-container-height`] = `${Math.max(M3_MIN_TARGET, height)}px`;
   if (labelSize != null) vars[`${p}-label-text-size`] = typeof labelSize === 'number' ? `${labelSize}px` : labelSize;
   if (containerColor && (variant === 'filled' || variant === 'tonal')) vars[`${p}-container-color`] = containerColor;
   if (labelColor) {

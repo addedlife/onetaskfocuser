@@ -19,7 +19,7 @@ function SuiteShailosPanel({ T, action, onClose, sidebarW = 0, user = null, onRe
             <div style={{ fontSize: NC_TYPE.body, color: C.faint, fontFamily: NC_FONT_STACK }}>Questions, answers, and follow-up</div>
           </div>
         </div>
-        <IconBtn variant="tonal" icon="close" iconSize={ICON.lg} size={36}
+        <IconBtn variant="tonal" icon="close" iconSize={ICON.lg}
           color={C.muted} containerColor={C.bgSoft} onClick={onClose} title="Back to tasks" />
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
@@ -153,9 +153,9 @@ function DeskPhoneSuitePanel({ T, onOnlineChange, schemeId = "claude", onLaunch,
             title={status ? "Dock DeskPhone" : "Open DeskPhone"}>{status ? "Dock" : "Open"}</ActionBtn>
           <ActionBtn variant="filled" icon="fit_screen" iconSize={ICON.md} height={36}
             onClick={syncStage} disabled={!!busy} title="Move DeskPhone to the dock position">Position</ActionBtn>
-          <IconBtn variant="tonal" icon="close_fullscreen" iconSize={ICON.md} size={36}
+          <IconBtn variant="tonal" icon="close_fullscreen" iconSize={ICON.md}
             containerColor={C.bgSoft} onClick={() => releaseStage()} disabled={!!busy} title="Release DeskPhone sizing" />
-          <IconBtn variant="tonal" icon="refresh" iconSize={ICON.md} size={36}
+          <IconBtn variant="tonal" icon="refresh" iconSize={ICON.md}
             containerColor={C.bgSoft} onClick={refresh} title="Refresh status" />
         </div>
       </div>

@@ -1142,7 +1142,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
           {suiteIcon("sms", 14)}
           <span style={{ fontSize: 13, color: C.muted, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{selected.name || selected.number}</span>
-          <IconBtn icon="close" size={32} iconSize={14} color={C.muted} onClick={closeCompose} title="Close" aria-label="Close" />
+          <IconBtn icon="close" iconSize={14} color={C.muted} onClick={closeCompose} title="Close" aria-label="Close" />
         </div>
       )}
       {(!composeIsNew || selected) && (
@@ -1248,7 +1248,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         <PhoneIconBtn icon="mic" onClick={onRecordConversation} title="Record anything — tasks, shailos, notes, got-backs" aria-label="Record" />
         {/* Record active call */}
         {isOnCall && (
-          <IconBtn variant="filled" icon="fiber_manual_record" size={36} iconSize={14} color="#fff" containerColor={C.danger}
+          <IconBtn variant="filled" icon="fiber_manual_record" iconSize={14} color="#fff" containerColor={C.danger}
             onClick={onRecordCall} title="Record this call and extract tasks/shailos" aria-label="Record this call" />
         )}
         {/* New message button */}
@@ -1271,7 +1271,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
               onKeyDown={e => e.key === "Enter" && dial()}
               placeholder="Name or number"
               style={{ width: "100%", height: 40, boxSizing: "border-box", padding: "0 46px 0 32px", borderRadius: RADIUS.pill, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: NC_TYPE.body, fontWeight: 400, outline: "none" }} />
-            <IconBtn variant="filled" icon="call" size={32} iconSize={14}
+            <IconBtn variant="filled" icon="call" iconSize={14}
               color={number.trim() ? "#fff" : C.faint}
               containerColor={number.trim() ? C.success : "transparent"}
               onClick={dial} disabled={!number.trim() || !!busy} title="Call" aria-label="Call"
@@ -1323,7 +1323,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                       <span slot="headline" style={{ fontWeight: isUnread ? 600 : 450, color: C.text, whiteSpace: "normal", wordBreak: "break-word", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{preview || thread._name}</span>
                       {preview && <span slot="supporting-text" style={{ color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread._name}</span>}
                       {time && <span slot="trailing-supporting-text" style={{ color: C.muted }}>{time}</span>}
-                      <span slot="end"><IconBtn icon="more_horiz" size={32} iconSize={17} color={C.muted} title="Show actions" aria-label="Show actions" onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionId); }} /></span>
+                      <span slot="end"><IconBtn icon="more_horiz" iconSize={17} color={C.muted} title="Show actions" aria-label="Show actions" onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionId); }} /></span>
                     </ListItem>
                   );
                 }
@@ -1469,9 +1469,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                       {time && <span slot="trailing-supporting-text" style={{ color: C.muted }}>{time}</span>}
                       <span slot="end" style={{ display: "flex", alignItems: "center", gap: 2 }}>
                         {isMissed && mKey && (resolved
-                          ? <IconBtn icon="undo" size={32} iconSize={16} color={C.muted} title="Reopen missed call" aria-label="Reopen missed call" onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, false); }} />
-                          : <IconBtn icon="check_circle" size={32} iconSize={17} color={C.success} title="Mark resolved" aria-label="Mark resolved" onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, true); }} />)}
-                        <IconBtn icon="more_horiz" size={32} iconSize={17} color={C.muted} title="Show actions" aria-label="Show actions" onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionId); }} />
+                          ? <IconBtn icon="undo" iconSize={16} color={C.muted} title="Reopen missed call" aria-label="Reopen missed call" onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, false); }} />
+                          : <IconBtn icon="check_circle" iconSize={17} color={C.success} title="Mark resolved" aria-label="Mark resolved" onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, true); }} />)}
+                        <IconBtn icon="more_horiz" iconSize={17} color={C.muted} title="Show actions" aria-label="Show actions" onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionId); }} />
                       </span>
                     </ListItem>
                   );

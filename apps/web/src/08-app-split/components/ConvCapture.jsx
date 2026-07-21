@@ -364,7 +364,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
   const overlayS = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: SP.lg };
   const cardS    = { background: C.bg, borderRadius: RADIUS.md, maxWidth: 560, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: ELEV[4], fontFamily: 'inherit' };
   const CloseBtn = () => (
-    <IconBtn icon="close" iconSize={ICON.md} size={32} onClick={onClose} aria-label="Close" />
+    <IconBtn icon="close" iconSize={ICON.md} onClick={onClose} aria-label="Close" />
   );
 
   // ── Choose source: mic vs. another screen's audio ─────────────────────────
@@ -474,7 +474,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
             Stop
           </ActionBtn>
         )}
-        <IconBtn icon="open_in_full" iconSize={ICON.md} size={30} onClick={() => setMinimized(false)} aria-label="Expand recorder" />
+        <IconBtn icon="open_in_full" iconSize={ICON.md} onClick={() => setMinimized(false)} aria-label="Expand recorder" />
       </div>
     );
 
@@ -499,8 +499,8 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SP.md }}>
               <span style={{ fontSize: NC_TYPE.title, fontWeight: 500, color: C.text }}>{source === 'pclink' ? 'Recording Live Call Feed' : source === 'system' ? 'Capturing Screen Audio' : 'Recording Conversation'}</span>
               <div style={{ display: 'flex', gap: SP.xs }}>
-                <IconBtn icon="close_fullscreen" iconSize={ICON.md} size={32} onClick={() => setMinimized(true)} aria-label="Minimize to floating pill" />
-                <IconBtn icon="close" iconSize={ICON.md} size={32} onClick={cancelRecording} aria-label="Discard recording" />
+                <IconBtn icon="close_fullscreen" iconSize={ICON.md} onClick={() => setMinimized(true)} aria-label="Minimize to floating pill" />
+                <IconBtn icon="close" iconSize={ICON.md} onClick={cancelRecording} aria-label="Discard recording" />
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, marginBottom: SP.md }}>

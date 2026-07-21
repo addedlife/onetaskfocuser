@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, Store, textOnColor } from '../../01-core.js';
-import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BRD, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, ncSmallIconBtnStyle, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
+import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BRD, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth, useWindowSizeClass } from '../ui-tokens.jsx';
 import { ActionBtn, IconBtn, List, ListItem, TextButton, OutlinedButton, CircularProgress, denseListVars, OutlinedSelect, SelectOption } from '../m3.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
@@ -145,21 +145,13 @@ function calendarRatingOf(evt, ratings) {
   const raw = key ? Number(ratings?.[key]) : NaN;
   return (raw === 1 || raw === 2 || raw === 3) ? raw : 2; // unrated behaves as medium
 }
-if (typeof document !== "undefined") {
-  const feedStyle = document.createElement("style");
-  feedStyle.textContent = [
-    // 48dp touch targets. IconBtn writes its size inline, so !important is the
-    // only way to lift every control at once without touching 40 call sites.
-    '[data-nc-feed] md-icon-button{width:48px!important;height:48px!important;}',
-    '[data-nc-feed] md-icon-button .material-symbols-rounded{font-size:22px!important;}',
-    // M3 list metrics: readable type, real row height. An element-level rule beats
-    // the inherited density tokens set on the container.
-    // 48dp rows (M3 minimum touch target) rather than the 56dp comfortable size:
-    // on a no-scroll screen every pixel buys another visible item.
-    '[data-nc-feed] md-list-item{--md-list-item-label-text-size:16px;--md-list-item-label-text-line-height:21px;--md-list-item-supporting-text-size:13.5px;--md-list-item-supporting-text-line-height:18px;--md-list-item-trailing-supporting-text-size:13px;--md-list-item-one-line-container-height:48px;--md-list-item-two-line-container-height:64px;--md-list-item-top-space:5px;--md-list-item-bottom-space:5px;--md-list-item-leading-space:14px;--md-list-item-trailing-space:6px;}',
-  ].join('\n');
-  document.head.appendChild(feedStyle);
-}
+// The injected !important stylesheet that used to sit here is gone. It lifted
+// md-icon-button to 48dp and md-list-item to M3 metrics, but only inside
+// [data-nc-feed] and only for md-icon-button — so the 25 ActionBtn instances on
+// this surface stayed at 40dp, and every other surface in the app stayed
+// non-compliant entirely. Both are now fixed at the source (IconBtn/ActionBtn
+// clamp to M3_MIN_TARGET, denseListVars emits M3 row metrics), which makes the
+// override redundant here and correct everywhere.
 
 // useFitRows — measure a list container and report how many WHOLE rows fit in it.
 // This is what actually stops a row bleeding over the card edge: a hardcoded cap
@@ -920,7 +912,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
         {primaryBtn}
         {menuItems?.length > 0 && (
           <div style={{ position: "relative", flexShrink: 0 }}>
-            <IconBtn icon="more_vert" size={26} iconSize={15} color={C.faint} onClick={e => { e.stopPropagation(); onMenuToggle(id); }} aria-label={`${title} menu`} />
+            <IconBtn icon="more_vert" iconSize={15} color={C.faint} onClick={e => { e.stopPropagation(); onMenuToggle(id); }} aria-label={`${title} menu`} />
 
             {menuOpen && (
               <>
@@ -1023,7 +1015,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
             <span style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, margin: "3px 4px 0 0" }}>{headerActions}</span>
           )}
           {onToggleExpand && onOpen && (
-            <IconBtn icon="open_in_new" size={24} iconSize={12} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} style={{ margin: "5px 4px 0 0" }} />
+            <IconBtn icon="open_in_new" iconSize={12} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} style={{ margin: "5px 4px 0 0" }} />
           )}
         </div>
       ) : (
@@ -1062,7 +1054,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
             <span style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, marginRight: 2 }}>{headerActions}</span>
           )}
           {onToggleExpand && onOpen && (
-            <IconBtn icon="open_in_new" size={26} iconSize={13} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} style={{ marginRight: 4 }} />
+            <IconBtn icon="open_in_new" iconSize={13} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} style={{ marginRight: 4 }} />
           )}
         </div>
       )}
@@ -1138,6 +1130,10 @@ function MoreRow({ count, open = false, label = "more", onClick, C }) {
 
 function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
   const viewportW = useViewportWidth();
+  // M3 window size class on both axes. Height is what drives row density (see
+  // densityPref below); width still comes from `availableW` further down, which
+  // subtracts the nav rail.
+  const sizeClass = useWindowSizeClass();
   const [healthCardVisible, setHealthCardVisible] = useState(() => {
     try { return localStorage.getItem("nc_health_card_visible") !== "0"; } catch { return true; }
   });
@@ -1257,13 +1253,34 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   // an older build coerces to the nearest surviving layout.
   const [desktopLayout, setDesktopLayout] = useState(() => { try { const v = localStorage.getItem("nc_desktop_layout") || "full"; return v === "accordion" ? "full" : v; } catch { return "full"; } });
   const setDesktopLayoutPersist = val => { setDesktopLayout(val); try { localStorage.setItem("nc_desktop_layout", val); } catch {} };
-  // Row density for the mobile lists: "comfortable" (default) or "compact" (tighter padding,
-  // more rows on screen — Gmail-style). Persisted.
-  const [mobileDensity, setMobileDensity] = useState(() => { try { return localStorage.getItem("nc_mobile_density") || "compact"; } catch { return "compact"; } });
-  const toggleMobileDensity = () => setMobileDensity(prev => { const next = prev === "compact" ? "comfortable" : "compact"; try { localStorage.setItem("nc_mobile_density", next); } catch {} return next; });
-  // Hoisted so EVERY layout (full panel, boxes, accordion) can honor compact density — not
-  // just the boxes view. "compact" = aggressively tight rows; "comfortable" = relaxed.
-  const dense = mobileDensity === "compact";
+  // Row density. Default is "auto", which follows the M3 HEIGHT window size class
+  // rather than a stored preference:
+  //
+  //   expanded height (>=900dp, e.g. a large display in portrait)  -> comfortable
+  //   medium / compact height (a laptop, or a tablet in landscape) -> compact
+  //
+  // This is what resolves the long-standing tension between the standing
+  // "one screen, no page scroll" rule and GM3 row metrics. The constraint is
+  // about HEIGHT, so density is now decided by height instead of by a manual
+  // switch the owner has to remember to flip per device. Neither level goes below
+  // the 48dp touch-target floor — compact is M3 density -2, not "smaller".
+  //
+  // "compact"/"comfortable" remain as explicit overrides that stick; the toggle
+  // cycles auto -> compact -> comfortable -> auto.
+  const [densityPref, setDensityPref] = useState(() => { try { return localStorage.getItem("nc_mobile_density") || "auto"; } catch { return "auto"; } });
+  const toggleMobileDensity = () => setDensityPref(prev => {
+    const next = prev === "auto" ? "compact" : prev === "compact" ? "comfortable" : "auto";
+    try { localStorage.setItem("nc_mobile_density", next); } catch {}
+    return next;
+  });
+  // Hoisted so EVERY layout (full panel, boxes, accordion) honors the same density.
+  const dense = densityPref === "auto" ? !sizeClass.isExpandedHeight : densityPref === "compact";
+  // The control shows what mode it is IN, and its tooltip says what is actually
+  // being applied — "Auto" alone would leave the owner guessing which way it went.
+  const densityIcon = densityPref === "auto" ? "auto_awesome_motion" : dense ? "density_small" : "density_medium";
+  const densityLabel = densityPref === "auto"
+    ? `Row density: auto — ${dense ? "compact" : "comfortable"} on this screen`
+    : `Row density: ${densityPref}`;
   const [phoneActivitySummary, setPhoneActivitySummary] = useState({ online: false, status: "DeskPhone offline", unreadTexts: 0, missedCalls: 0, voicemailCount: 0, texts: [], calls: [] });
   const phoneActivitySigRef = useRef("");
   const [phoneStatusSummary, setPhoneStatusSummary] = useState({ online: false, tone: "offline", label: "DeskPhone offline", voicemailCount: 0 });
@@ -1358,7 +1375,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   // it used to exist only in the desktop card strip (owner ticket HwhngHW).
   const googleAcctMenuEl = googleToken && googleAccounts.length >= 1 ? (
     <div style={{ position: "relative" }}>
-      <IconBtn icon="manage_accounts" size={28} iconSize={16}
+      <IconBtn icon="manage_accounts" iconSize={16}
         color={googleAcctMenuOpen ? C.accent : C.muted}
         title={`Account: ${googleAccountFilter === "all" ? "Both" : googleAccountFilter}`}
         onClick={() => setGoogleAcctMenuOpen(p => !p)} />
@@ -1454,7 +1471,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   const ncHeader = { minHeight: 44, padding: `${SP.md} ${SP.md} ${SP.sm}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: SP.sm };
   const ncTitle = { fontSize: 16.5, fontWeight: 650, letterSpacing: "-0.01em", color: C.text, fontFamily: NC_FONT_STACK, lineHeight: LINE.tight };
   const ncSectionIcon = (accent = C.accent) => ({ width: 30, height: 30, borderRadius: RADIUS.md, background: hexToRgba(accent || C.accent, 0.16), color: accent || C.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
-  const ncSmallIconButton = (active = false, accent = C.muted) => ncSmallIconBtnStyle(active, accent, C);
   const phoneStatusColor = phoneStatusSummary.tone === "incoming" ? C.success : phoneStatusSummary.tone === "call" ? C.warning : phoneStatusSummary.online ? C.success : C.faint;
   const rawNowDate = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());
   const nowDate = Number.isFinite(rawNowDate.getTime()) ? rawNowDate : new Date();
@@ -2472,7 +2488,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             ? (ncSummary?.supercrunch || "")
             : ncSummaryStatusPill}
         </span>
-        <IconBtn icon="autorenew" size={24} iconSize={13} color={C.faint}
+        <IconBtn icon="autorenew" iconSize={13} color={C.faint}
           onClick={retryNcSummary} disabled={ncSummaryLoading}
           title="Refresh summary" aria-label="Refresh summary"
           style={{ flexShrink: 0, opacity: ncSummaryLoading ? 0.4 : 1, ...(ncSummaryLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }} />
@@ -2485,7 +2501,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: C.accent, marginRight: 6 }}>{chiefRefreshNonce > 0 ? "Re-suggested:" : "Suggested now:"}</span>
             {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
           </span>
-          <IconBtn icon="autorenew" size={24} iconSize={14} color={chiefLoading ? C.faint : C.accent}
+          <IconBtn icon="autorenew" iconSize={14} color={chiefLoading ? C.faint : C.accent}
             onClick={() => setChiefRefreshNonce(n => n + 1)} disabled={chiefLoading}
             title="Suggest something else" aria-label="Suggest something else"
             style={{ flexShrink: 0, opacity: chiefLoading ? 0.4 : 1, ...(chiefLoading ? { animation: "ot-spin 0.8s linear infinite" } : {}) }} />
@@ -2586,8 +2602,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               {chiefLoading && <div title="Scanning" style={{ width: 14, height: 14, borderRadius: "50%", border: `2px solid ${activeChiefTone}`, borderTopColor: "transparent", animation: "ot-spin 0.8s linear infinite" }} />}
-              <IconBtn icon="refresh" size={38} iconSize={17} color={C.text} onClick={() => setChiefRefreshNonce(n => n + 1)} title="Refresh Chief scan" aria-label="Refresh Chief scan" />
-              <IconBtn icon="close" size={38} iconSize={17} color={C.muted} onClick={onCloseChiefPage} title="Back to NerveCenter" aria-label="Back to NerveCenter" />
+              <IconBtn icon="refresh" iconSize={17} color={C.text} onClick={() => setChiefRefreshNonce(n => n + 1)} title="Refresh Chief scan" aria-label="Refresh Chief scan" />
+              <IconBtn icon="close" iconSize={17} color={C.muted} onClick={onCloseChiefPage} title="Back to NerveCenter" aria-label="Back to NerveCenter" />
             </div>
           </header>
 
@@ -2683,7 +2699,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                     </SelectOption>
                   ))}
                 </OutlinedSelect>
-                <IconBtn variant="filled" icon="add" size={38} iconSize={16}
+                <IconBtn variant="filled" icon="add" iconSize={16}
                   color={chiefTaskDraft.trim() ? "#fff" : C.faint}
                   containerColor={chiefTaskDraft.trim() ? (chiefPri.color || C.accent) : "transparent"}
                   onClick={createChiefNextTask} disabled={!chiefTaskDraft.trim()} title="Create task" aria-label="Create task"
@@ -2739,9 +2755,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                             </SelectOption>
                           ))}
                         </OutlinedSelect>
-                        <IconBtn icon="close" size={30} iconSize={13} color={C.faint}
+                        <IconBtn icon="close" iconSize={13} color={C.faint}
                           onClick={() => dismissTaskSuggestion(row)} title="Dismiss suggestion" aria-label="Dismiss suggestion" />
-                        <IconBtn variant="filled" icon="add" size={30} iconSize={14}
+                        <IconBtn variant="filled" icon="add" iconSize={14}
                           color={row.text.trim() ? "#fff" : C.faint}
                           containerColor={row.text.trim() ? (pri.color || C.accent) : "transparent"}
                           onClick={() => createTaskSuggestion(row)} disabled={!row.text.trim()} title="Create task" aria-label="Create task" />
@@ -2774,7 +2790,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             <form onSubmit={e => { e.preventDefault(); submitChiefPrompt(); }} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 40px", gap: 8, padding: 12, borderTop: `1px solid ${C.divider}` }}>
               <textarea ref={chiefPromptRef} value={chiefPrompt} rows={2} onChange={e => setChiefPrompt(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitChiefPrompt(); } }} placeholder="Respond, correct, or ask for the next move"
                 style={{ minWidth: 0, minHeight: 46, maxHeight: 140, borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "9px 10px", fontSize: NC_TYPE.control, lineHeight: 1.35, fontFamily: NC_FONT_STACK, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
-              <IconBtn variant="filled" type="submit" icon={chiefDialogueLoading ? "hourglass_top" : "send"} size={44} iconSize={16}
+              <IconBtn variant="filled" type="submit" icon={chiefDialogueLoading ? "hourglass_top" : "send"} iconSize={16}
                 color={chiefPrompt.trim() && !chiefDialogueLoading ? "#fff" : C.faint}
                 containerColor={chiefPrompt.trim() && !chiefDialogueLoading ? C.accent : "transparent"}
                 disabled={!chiefPrompt.trim() || chiefDialogueLoading} title="Ask Chief" aria-label="Ask Chief"
@@ -2801,9 +2817,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 <textarea value={chiefProfileDraft} onChange={e => setChiefProfileDraft(e.target.value)} rows={7}
                   style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, background: C.bgSoft, color: C.text, padding: "9px 10px", fontSize: NC_TYPE.control, lineHeight: 1.4, fontFamily: NC_FONT_STACK, resize: "vertical", outline: "none" }} />
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                  <IconBtn icon="undo" size={34} iconSize={14} color={C.faint}
+                  <IconBtn icon="undo" iconSize={14} color={C.faint}
                     onClick={() => setChiefProfileDraft(markdownFromChiefProfile(chiefProfile))} title="Reset profile draft" aria-label="Reset profile draft" />
-                  <IconBtn variant="filled" icon={chiefProfileSaving ? "hourglass_top" : "save"} size={34} iconSize={15}
+                  <IconBtn variant="filled" icon={chiefProfileSaving ? "hourglass_top" : "save"} iconSize={15}
                     color={!chiefProfileSaving ? "#fff" : C.faint}
                     containerColor={!chiefProfileSaving ? C.accent : "transparent"}
                     onClick={saveChiefProfileDraft} disabled={!onSaveChiefProfileMarkdown || chiefProfileSaving} title="Save Chief profile" aria-label="Save Chief profile" />
@@ -2906,17 +2922,17 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           <span style={{ fontSize:19, fontWeight:400, color:C.text, fontFamily:NC_MONO_STACK, fontVariantNumeric:"tabular-nums", letterSpacing:0 }}>{clockParts.timeMain}</span>
           <span style={{ fontSize:11, color:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>{nowDate.toLocaleDateString([], { weekday:"short", month:"short", day:"numeric" })}</span>
           <span style={{ flex:1, minWidth:0 }} />
-          <IconBtn icon={dense ? "density_medium" : "density_small"} size={28} iconSize={16} color={C.muted} onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density" />
+          <IconBtn icon={densityIcon} iconSize={16} color={C.muted} onClick={toggleMobileDensity} title={densityLabel} aria-label={densityLabel} />
           {!isMobileDevice && (
-            <IconBtn icon="grid_view" size={28} iconSize={16} color={C.muted} onClick={() => setDesktopLayoutPersist("full")} title="Full panels" aria-label="Full panels" />
+            <IconBtn icon="grid_view" iconSize={16} color={C.muted} onClick={() => setDesktopLayoutPersist("full")} title="Full panels" aria-label="Full panels" />
           )}
           {/* Owner ticket UFgySrCag: email + contacts icons on every layout (this is the card-grid chrome). */}
-          <IconBtn icon="mail" size={28} iconSize={16}
+          <IconBtn icon="mail" iconSize={16}
             color={googleToken ? C.muted : C.accent}
             onClick={googleToken ? () => window.open("https://mail.google.com/mail/u/0/#inbox", "_blank") : onConnectGoogle}
             title={googleToken ? "Open Gmail" : "Connect Google Mail & Calendar"}
             aria-label={googleToken ? "Open Gmail" : "Connect Google Mail and Calendar"} />
-          <IconBtn icon="contacts" size={28} iconSize={16} color={C.muted} onClick={onOpenPhone} title="Contacts — open phone view" aria-label="Contacts" />
+          <IconBtn icon="contacts" iconSize={16} color={C.muted} onClick={onOpenPhone} title="Contacts — open phone view" aria-label="Contacts" />
         </div>
 
         {nextActionBar}
@@ -2946,7 +2962,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                one" — was its own <div> above the list, doubling the header height). */
             headerActions={<>
               {googleAcctMenuEl}
-              <IconBtn icon="refresh" size={26} iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh mail" aria-label="Refresh mail" />
+              <IconBtn icon="refresh" iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh mail" aria-label="Refresh mail" />
             </>}
             hero={heroMail ? showHero(
               <HeroItem C={C} accent={CAT_MAIL}
@@ -2977,7 +2993,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   <span slot="headline" style={{ color:C.text, fontWeight:450, whiteSpace:"normal", wordBreak:"break-word", ...(exp ? {} : { display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }) }}>{snip}</span>
                   <span slot="supporting-text" style={{ color:C.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{exp && subj && subj !== snip ? `${from} — ${subj}` : from}</span>
                   <span slot="trailing-supporting-text" style={{ color:C.faint, whiteSpace:"nowrap" }}>{date}</span>
-                  <span slot="end"><IconBtn icon="open_in_new" size={28} iconSize={14} color={C.faint} title="Open in Gmail" href={gmailDeepLink(msg)} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} /></span>
+                  <span slot="end"><IconBtn icon="open_in_new" iconSize={14} color={C.faint} title="Open in Gmail" href={gmailDeepLink(msg)} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} /></span>
                 </ListItem>
               );
             })}
@@ -3024,8 +3040,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                     onKeyDown={e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addDraft(taskPriority,{mrsW:taskComposerMrsW});} if(e.key==="Escape"){setTaskComposerOpen(false);setTaskDraft("");} }}
                     placeholder="New task"
                     style={{ width:"100%", minWidth:0, height:34, maxHeight:88, boxSizing:"border-box", borderRadius:RADIUS.sm, border:`1px solid ${activePriColor}`, background:C.bgSoft, color:C.text, padding:"7px 10px", fontSize:ncType.body, fontFamily:NC_FONT_STACK, outline:"none", resize:"none", overflowY:"hidden" }} />
-                  <IconBtn variant="filled" icon="check" size={32} iconSize={15} containerColor={activePriColor} color="#fff" disabled={!taskDraft.trim()} onClick={() => addDraft(taskPriority,{mrsW:taskComposerMrsW})} title="Save task" aria-label="Save task" />
-                  <IconBtn icon="close" size={32} iconSize={14} color={C.muted} onClick={() => {setTaskComposerOpen(false);setTaskDraft("");}} title="Cancel" aria-label="Cancel" />
+                  <IconBtn variant="filled" icon="check" iconSize={15} containerColor={activePriColor} color="#fff" disabled={!taskDraft.trim()} onClick={() => addDraft(taskPriority,{mrsW:taskComposerMrsW})} title="Save task" aria-label="Save task" />
+                  <IconBtn icon="close" iconSize={14} color={C.muted} onClick={() => {setTaskComposerOpen(false);setTaskDraft("");}} title="Cancel" aria-label="Cancel" />
                 </div>
               </div>
             )}
@@ -3103,9 +3119,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                rows when they need only one"). */
             headerActions={<>
               {googleAcctMenuEl}
-              <IconBtn icon="refresh" size={26} iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh calendar" aria-label="Refresh calendar" />
-              <IconBtn icon="schedule" size={26} iconSize={14} color={calCardView==="timeline"?C.text:C.muted} active={calCardView==="timeline"} activeBg={C.hover} onClick={()=>setCalCardView("timeline")} title="Live time" aria-label="Live time view" />
-              <IconBtn icon="view_agenda" size={26} iconSize={14} color={calCardView==="agenda"?C.text:C.muted} active={calCardView==="agenda"} activeBg={C.hover} onClick={()=>setCalCardView("agenda")} title="Agenda" aria-label="Agenda view" />
+              <IconBtn icon="refresh" iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh calendar" aria-label="Refresh calendar" />
+              <IconBtn icon="schedule" iconSize={14} color={calCardView==="timeline"?C.text:C.muted} active={calCardView==="timeline"} activeBg={C.hover} onClick={()=>setCalCardView("timeline")} title="Live time" aria-label="Live time view" />
+              <IconBtn icon="view_agenda" iconSize={14} color={calCardView==="agenda"?C.text:C.muted} active={calCardView==="agenda"} activeBg={C.hover} onClick={()=>setCalCardView("agenda")} title="Agenda" aria-label="Agenda view" />
             </>}
             hero={heroCalRow ? showHero(
               <HeroItem C={C} accent={GCAL_COLORS[heroCalRow.evt?.colorId] || C.warning}
@@ -3271,20 +3287,20 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
               {/* Card-grid icon tracks its real orientation: columns wide, rows narrow. */}
               {!isMobileDevice && [{ id:"boxes", icon: availableW >= 1500 ? "view_column" : "table_rows", label:"Card grid" }, { id:"full", icon:"grid_view", label:"Full panel" }].map(({ id, icon, label }) => (
-                <IconBtn key={id} icon={icon} size={28} iconSize={16} color={desktopLayout === id ? C.text : C.muted} active={desktopLayout === id} activeBg={C.hover} onClick={() => setDesktopLayoutPersist(id)} title={label} aria-label={label} />
+                <IconBtn key={id} icon={icon} iconSize={16} color={desktopLayout === id ? C.text : C.muted} active={desktopLayout === id} activeBg={C.hover} onClick={() => setDesktopLayoutPersist(id)} title={label} aria-label={label} />
               ))}
-              <IconBtn icon={dense ? "density_small" : "density_medium"} size={28} iconSize={16} color={C.muted} onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density" />
+              <IconBtn icon={densityIcon} iconSize={16} color={C.muted} onClick={toggleMobileDensity} title={densityLabel} aria-label={densityLabel} />
               {/* Owner ticket UFgySrCag ("tablet display must have a connect to email
                   and contacts icon — ALL nc formats, not just one"): these sit in the
                   one-row chrome, which every layout renders — accordion, stacked,
                   card grid and full panel alike. Mail is state-aware: accent-colored
                   "connect" while Google isn't linked, quiet "open Gmail" once it is. */}
-              <IconBtn icon="mail" size={28} iconSize={16}
+              <IconBtn icon="mail" iconSize={16}
                 color={googleToken ? C.muted : C.accent}
                 onClick={googleToken ? () => window.open("https://mail.google.com/mail/u/0/#inbox", "_blank") : onConnectGoogle}
                 title={googleToken ? "Open Gmail" : "Connect Google Mail & Calendar"}
                 aria-label={googleToken ? "Open Gmail" : "Connect Google Mail and Calendar"} />
-              <IconBtn icon="contacts" size={28} iconSize={16} color={C.muted} onClick={onOpenPhone} title="Contacts — open phone view" aria-label="Contacts" />
+              <IconBtn icon="contacts" iconSize={16} color={C.muted} onClick={onOpenPhone} title="Contacts — open phone view" aria-label="Contacts" />
             </div>
           </div>
           {mobileTimelineOpen && (
@@ -3307,7 +3323,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
 
           {/* Tasks — collapsible; open the section when the composer is invoked so it shows. */}
           <MobileSection {...sectionCtx} id="tasks" icon="rule" title="Tasks" accentColor={C.accent} count={primaryTaskQueue.length} preview={tasksPreview}
-            primaryBtn={<IconBtn icon="add" size={26} iconSize={14} color={C.muted} onClick={() => { setMobileExpanded(prev => new Set(prev).add("tasks")); openTaskComposer(taskPriority); }} title="Add task" aria-label="Add task" />}
+            primaryBtn={<IconBtn icon="add" iconSize={14} color={C.muted} onClick={() => { setMobileExpanded(prev => new Set(prev).add("tasks")); openTaskComposer(taskPriority); }} title="Add task" aria-label="Add task" />}
             menuItems={[
               { icon: "list_alt",    label: "Open full queue", run: onOpenQueue },
               { icon: "local_drink", label: "Zen mode",        run: onOpenZen },
@@ -3332,8 +3348,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                     onKeyDown={e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addDraft(taskPriority,{mrsW:taskComposerMrsW});} if(e.key==="Escape"){setTaskComposerOpen(false);setTaskDraft("");} }}
                     placeholder="New task"
                     style={{ width:"100%",minWidth:0,height:34,maxHeight:88,boxSizing:"border-box",borderRadius:RADIUS.sm,border:`1px solid ${activePriColor}`,background:C.bgSoft,color:C.text,padding:"7px 10px",fontSize:ncType.body,fontFamily:NC_FONT_STACK,outline:"none",resize:"none",overflowY:"hidden" }} />
-                  <IconBtn variant="filled" icon="check" size={32} iconSize={15} containerColor={activePriColor} color="#fff" disabled={!taskDraft.trim()} onClick={() => addDraft(taskPriority,{mrsW:taskComposerMrsW})} title="Save task" aria-label="Save task" />
-                  <IconBtn icon="close" size={32} iconSize={14} color={C.muted} onClick={() => {setTaskComposerOpen(false);setTaskDraft("");}} title="Cancel" aria-label="Cancel" />
+                  <IconBtn variant="filled" icon="check" iconSize={15} containerColor={activePriColor} color="#fff" disabled={!taskDraft.trim()} onClick={() => addDraft(taskPriority,{mrsW:taskComposerMrsW})} title="Save task" aria-label="Save task" />
+                  <IconBtn icon="close" iconSize={14} color={C.muted} onClick={() => {setTaskComposerOpen(false);setTaskDraft("");}} title="Cancel" aria-label="Cancel" />
                 </div>
               </div>
             )}
@@ -3491,7 +3507,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           {/* Shailos */}
           <MobileSection {...sectionCtx} id="shailos" icon="question_mark" title="Shailos" accentColor={GOLD} count={visibleShailos.length}
             preview={signalNote("Shailos")}
-            primaryBtn={<IconBtn icon="add" size={26} iconSize={14} color={GOLD} onClick={onOpenShailaAdd} title="Add shaila" aria-label="Add shaila" />}
+            primaryBtn={<IconBtn icon="add" iconSize={14} color={GOLD} onClick={onOpenShailaAdd} title="Add shaila" aria-label="Add shaila" />}
             menuItems={[{ icon: "open_in_full", label: "Open Shailos", run: onOpenShailos }]}
             hero={heroShaila ? showHero(
               <HeroItem C={C} accent={GOLD}
@@ -3575,22 +3591,22 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 { id: "boxes", icon: availableW >= 1500 ? "view_column" : "table_rows", title: "Card grid view" },
                 { id: "full",  icon: "grid_view", title: "Full panel view" },
               ].map(({ id, icon, title }) => (
-                <IconBtn key={id} icon={icon} size={28} iconSize={15} onClick={() => setDesktopLayoutPersist(id)} title={title} aria-label={title}
+                <IconBtn key={id} icon={icon} iconSize={15} onClick={() => setDesktopLayoutPersist(id)} title={title} aria-label={title}
                   color={desktopLayout === id ? C.muted : C.faint} active={desktopLayout === id} activeBg={softBorder(C.divider, 0.55)} />
               ))}
             </div>
             <span style={{ width: 1, height: 14, background: C.divider, flexShrink: 0 }} />
             {/* Density: compact (aggressively tight rows) vs comfortable */}
-            <IconBtn icon={dense ? "density_small" : "density_medium"} size={28} iconSize={15} onClick={toggleMobileDensity} title={dense ? "Comfortable rows" : "Compact rows"} aria-label="Toggle row density"
+            <IconBtn icon={densityIcon} iconSize={15} onClick={toggleMobileDensity} title={densityLabel} aria-label={densityLabel}
               color={dense ? C.muted : C.faint} active={dense} activeBg={softBorder(C.divider, 0.55)} />
             <span style={{ width: 1, height: 14, background: C.divider, flexShrink: 0 }} />
             {/* Owner ticket UFgySrCag: email + contacts icons on every layout (this is the full-panel chrome). */}
-            <IconBtn icon="mail" size={28} iconSize={15}
+            <IconBtn icon="mail" iconSize={15}
               color={googleToken ? C.faint : C.accent}
               onClick={googleToken ? () => window.open("https://mail.google.com/mail/u/0/#inbox", "_blank") : onConnectGoogle}
               title={googleToken ? "Open Gmail" : "Connect Google Mail & Calendar"}
               aria-label={googleToken ? "Open Gmail" : "Connect Google Mail and Calendar"} />
-            <IconBtn icon="contacts" size={28} iconSize={15} color={C.faint} onClick={onOpenPhone} title="Contacts — open phone view" aria-label="Contacts" />
+            <IconBtn icon="contacts" iconSize={15} color={C.faint} onClick={onOpenPhone} title="Contacts — open phone view" aria-label="Contacts" />
           </div>
         )}
 
@@ -3625,7 +3641,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   {ncCorePills.map(p => {
                     const active = taskPriority === p.id;
                     return (
-                      <IconBtn key={p.id} icon="check" size={24} iconSize={16} color={p.color}
+                      <IconBtn key={p.id} icon="check" iconSize={16} color={p.color}
                         active={active && taskComposerOpen && !taskComposerMrsW} activeBg={softBg(p.color, 0.2)}
                         onClick={() => openTaskComposer(p.id)}
                         title={`Add ${p.ncLabel} task`} aria-label={`Add ${p.ncLabel} task`} aria-expanded={taskComposerOpen && active && !taskComposerMrsW}
@@ -3633,15 +3649,15 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                     );
                   })}
                   {onAddMrsWTask && (
-                    <IconBtn icon="check" size={24} iconSize={16} color="#4F9B6B"
+                    <IconBtn icon="check" iconSize={16} color="#4F9B6B"
                       active={taskComposerOpen && taskComposerMrsW} activeBg={softBg("#4F9B6B", 0.2)}
                       onClick={() => openTaskComposer(taskPriority, { mrsW: true })}
                       title="Add Mrs W task" aria-label="Add Mrs W task" aria-expanded={taskComposerOpen && taskComposerMrsW}
                       style={{ opacity: (taskComposerOpen && taskComposerMrsW) ? 1 : 0.9 }} />
                   )}
                   <span style={{ width: 1, height: 13, background: C.divider, margin: "0 3px", flexShrink: 0 }} />
-                  {onOpenZen && <IconBtn icon="local_drink" size={26} iconSize={14} color={C.muted} onClick={onOpenZen} title="Zen mode" aria-label="Zen mode" />}
-                  <IconBtn icon="list_alt" size={26} iconSize={14} color={C.muted} onClick={onOpenQueue} title="Open full task queue" aria-label="Open full task queue" />
+                  {onOpenZen && <IconBtn icon="local_drink" iconSize={14} color={C.muted} onClick={onOpenZen} title="Zen mode" aria-label="Zen mode" />}
+                  <IconBtn icon="list_alt" iconSize={14} color={C.muted} onClick={onOpenQueue} title="Open full task queue" aria-label="Open full task queue" />
                 </div>
               </div>
               {taskComposerOpen && (
@@ -3651,8 +3667,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(taskPriority, { mrsW: taskComposerMrsW }); } if (e.key === "Escape") { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); } }}
                     placeholder={taskComposerMrsW ? "Mrs W task" : `${priorities.find(p => p.id === taskPriority)?.ncLabel || "Task"} task`}
                     style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`, background: C.bgSoft, color: C.text, padding: "7px 10px", fontSize: ncType.meta, fontWeight: 400, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
-                  <IconBtn variant="filled" icon="check" size={30} iconSize={15} containerColor={taskComposerMrsW ? "#A8D8B9" : activePriColor} color={taskComposerMrsW ? "#123D25" : textOnColor(activePriColor)} disabled={!taskDraft.trim()} onClick={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })} title="Save task" aria-label="Save task" />
-                  <IconBtn icon="close" size={30} iconSize={14} color={C.muted} onClick={() => { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); }} title="Cancel" aria-label="Cancel task entry" />
+                  <IconBtn variant="filled" icon="check" iconSize={15} containerColor={taskComposerMrsW ? "#A8D8B9" : activePriColor} color={taskComposerMrsW ? "#123D25" : textOnColor(activePriColor)} disabled={!taskDraft.trim()} onClick={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })} title="Save task" aria-label="Save task" />
+                  <IconBtn icon="close" iconSize={14} color={C.muted} onClick={() => { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); }} title="Cancel" aria-label="Cancel task entry" />
                 </div>
               )}
             </div>
@@ -3672,8 +3688,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                       onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addDraft(taskPriority, { mrsW: taskComposerMrsW }); } if (e.key === "Escape") { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); } }}
                       placeholder={`${priorities.find(p => p.id === taskPriority)?.ncLabel || "Task"} task`}
                       style={{ width: "100%", minWidth: 0, height: 34, maxHeight: 88, boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${activePriColor}`, background: C.bgSoft, color: C.text, padding: "7px 10px", fontSize: ncType.body, fontFamily: NC_FONT_STACK, outline: "none", resize: "none", overflowY: "hidden", lineHeight: ncType.line }} />
-                    <IconBtn variant="filled" icon="check" size={32} iconSize={15} containerColor={activePriColor} color={textOnColor(activePriColor)} disabled={!taskDraft.trim()} onClick={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })} title="Save" aria-label="Save task" />
-                    <IconBtn icon="close" size={32} iconSize={14} color={C.muted} onClick={() => { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); }} title="Cancel" aria-label="Cancel" />
+                    <IconBtn variant="filled" icon="check" iconSize={15} containerColor={activePriColor} color={textOnColor(activePriColor)} disabled={!taskDraft.trim()} onClick={() => addDraft(taskPriority, { mrsW: taskComposerMrsW })} title="Save" aria-label="Save task" />
+                    <IconBtn icon="close" iconSize={14} color={C.muted} onClick={() => { setTaskComposerOpen(false); setTaskDraft(""); setTaskComposerMrsW(false); }} title="Cancel" aria-label="Cancel" />
                   </div>
                 </div>
               ) : (
@@ -3880,7 +3896,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           const Spinner = ({ size = 15, color }) => (
             <CircularProgress indeterminate aria-label="Loading" style={{ "--md-circular-progress-size": `${size}px`, "--md-circular-progress-active-indicator-color": color || C.muted, width: size, height: size, display: "inline-block", verticalAlign: "middle" }} />
           );
-          const CardAction = ({ icon, iconSize = 18, ...rest }) => <IconBtn icon={icon} size={28} iconSize={iconSize} color={C.muted} {...rest} />;
+          const CardAction = ({ icon, iconSize = 18, ...rest }) => <IconBtn icon={icon} iconSize={iconSize} color={C.muted} {...rest} />;
           const cardHeader = (icon, title, accent, actions) => isFocus ? null : (
             <div style={{ ...ncHeader, gap: 6 }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -3961,7 +3977,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   <span style={{ fontSize: NC_TYPE.meta, color: C.warning, fontFamily: NC_FONT_STACK, flex: 1 }}>{googleError}</span>
                   <ActionBtn variant="outlined" outlineColor={accentBlue} labelColor={accentBlue} labelSize={NC_TYPE.meta}
                     onClick={onConnectGoogle} style={{ flexShrink: 0 }}>Retry</ActionBtn>
-                  <IconBtn icon="close" size={26} iconSize={ICON.sm} color={C.muted} onClick={onDisconnectGoogle} title="Disconnect" aria-label="Disconnect" />
+                  <IconBtn icon="close" iconSize={ICON.sm} color={C.muted} onClick={onDisconnectGoogle} title="Disconnect" aria-label="Disconnect" />
                 </div>
               )}
 
@@ -4248,7 +4264,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                       {clockTimelineOpen ? "▲ timeline" : "▼ timeline"}
                     </ActionBtn>
                     <IconBtn className="nc-hover-actions" onClick={e => { e.stopPropagation(); setClockMenuPos({ x: e.clientX, y: e.clientY }); }}
-                      title="Change clock style" size={20} iconSize={NC_TYPE.body} color={C.faint}
+                      title="Change clock style" iconSize={NC_TYPE.body} color={C.faint}
                       style={{ position: "absolute", top: 5, right: 5, borderRadius: RADIUS.xs }}>
                       ···
                     </IconBtn>

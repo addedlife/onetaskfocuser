@@ -3690,7 +3690,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 <div style={{fontSize:16,fontWeight:500,color:C.text}}>Transcription Holding Pen</div>
                 <div style={{fontSize:13,color:C.faint,marginTop:2}}>Recordings & transcripts from every device — kept 10 days, synced to your account</div>
               </div>
-              <IconBtn icon="close" iconSize={20} size={32} onClick={()=>setShowPenPanel(false)} aria-label="Close"/>
+              <IconBtn icon="close" iconSize={20} onClick={()=>setShowPenPanel(false)} aria-label="Close"/>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flex:1,padding:"14px 20px 18px"}}>
               {penEntries.length === 0 && (
@@ -3713,12 +3713,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                         <div style={{fontSize:12,color:statusColor,marginTop:2,fontWeight:500}}>{statusTxt}</div>
                       </div>
                       <div style={{display:"flex",gap:4,flexShrink:0}}>
-                        <IconBtn icon={busy ? "hourglass_top" : "replay"} iconSize={18} size={32} color={hasAI&&!pendingRetryId?C.accent:C.faint}
+                        <IconBtn icon={busy ? "hourglass_top" : "replay"} iconSize={18} color={hasAI&&!pendingRetryId?C.accent:C.faint}
                           onClick={()=>retryHeldTranscription(rec)} disabled={!hasAI || !!pendingRetryId}
                           aria-label="Transcribe again" title={transcript ? "Re-transcribe" : "Transcribe"}/>
-                        <IconBtn icon="download" iconSize={18} size={32} color={C.muted}
+                        <IconBtn icon="download" iconSize={18} color={C.muted}
                           onClick={()=>downloadHeldRecording(rec)} aria-label="Download audio file" title="Download audio"/>
-                        <IconBtn icon="delete" iconSize={18} size={32} color={C.faint}
+                        <IconBtn icon="delete" iconSize={18} color={C.faint}
                           onClick={()=>deleteHeldTranscription(rec)} disabled={busy} aria-label="Delete recording" title="Delete"/>
                       </div>
                     </div>
@@ -4309,12 +4309,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
               {/* ▤ Condense — toggles the terse bang-bang list (ticket wxQ27UVx) */}
-              <IconBtn variant="outlined" size={32} icon={qCondensed ? "view_agenda" : "reorder"} iconSize={15} color={qCondensed ? C.accent : C.muted}
+              <IconBtn variant="outlined" icon={qCondensed ? "view_agenda" : "reorder"} iconSize={15} color={qCondensed ? C.accent : C.muted}
                 title={qCondensed ? "Back to detailed list" : "Condense to a terse list"} aria-label={qCondensed ? "Show detailed task list" : "Condense task list"} aria-pressed={qCondensed}
                 onClick={toggleQCondensed}
                 style={{"--md-outlined-icon-button-outline-color":qCondensed ? C.accent : C.divider,"--md-outlined-icon-button-container-shape":RADIUS.sm,flexShrink:0}} />
               {/* ✦ AI Prioritize — direct button */}
-              <IconBtn variant="outlined" size={32} title={hasAI ? "AI Prioritize queue" : "Prioritize queue"} aria-label="Prioritize queue"
+              <IconBtn variant="outlined" title={hasAI ? "AI Prioritize queue" : "Prioritize queue"} aria-label="Prioritize queue"
                 onClick={tasksOptimize} disabled={optLoading}
                 style={{"--md-outlined-icon-button-outline-color":C.divider,"--md-outlined-icon-button-container-shape":RADIUS.sm,opacity:optLoading?0.5:1,flexShrink:0}}>
                 {optLoading
@@ -4322,7 +4322,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   : <IC.Sparkle s={14} c={C.muted}/>}
               </IconBtn>
               {/* ⚙ Settings — consolidated gear */}
-              <IconBtn variant="outlined" size={32} title="Settings" aria-label="Settings"
+              <IconBtn variant="outlined" title="Settings" aria-label="Settings"
                 onClick={()=>{setSettingsInitialTab("queue"); setShowSet(true);}}
                 style={{"--md-outlined-icon-button-outline-color":C.divider,"--md-outlined-icon-button-container-shape":RADIUS.sm,flexShrink:0}}>
                 <IC.Gear s={15} c={C.muted}/>
@@ -4339,7 +4339,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 style={{width:"100%",padding:"9px 14px",paddingRight:searchQ?36:14,fontSize:13,border:`1px solid ${C.divider}`,borderRadius:RADIUS.md,outline:"none",background:C.bgSoft,color:C.text,fontFamily:NC_FONT_STACK}}
               />
               {searchQ && (
-                <IconBtn icon="close" size={26} iconSize={14} color={C.faint} title="Clear search" aria-label="Clear search"
+                <IconBtn icon="close" iconSize={14} color={C.faint} title="Clear search" aria-label="Clear search"
                   onClick={()=>setSearchQ("")} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)"}} />
               )}
             </div>
@@ -4377,7 +4377,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                     style={{width:34,height:34,borderRadius:RADIUS.sm,border:`1.5px solid ${qAddPin?C.accent:C.divider}`,background:qAddPin?`${C.accent}18`:C.bgSoft,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",color:qAddPin?C.accent:C.muted}}>
                     {suiteIcon("push_pin",16)}
                   </button>
-                  <IconBtn variant="filled" type="submit" size={34} title="Add task" aria-label="Add task"
+                  <IconBtn variant="filled" type="submit" title="Add task" aria-label="Add task"
                     containerColor={gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color}
                     style={{"--md-filled-icon-button-container-shape":RADIUS.sm,flexShrink:0}}>
                     <IC.Plus s={14} c={textOnColor(gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color)}/>
@@ -4434,14 +4434,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                             })()}
                             <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.7}}/>
                             <div style={queueActionRail}>
-                              <IconBtn size={22} title="Complete next step" aria-label="Complete next step" onClick={e=>{e.stopPropagation();compTask(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></IconBtn>
-                              {AS.legacyCompleteUI && <IconBtn size={22} title="Legacy complete (no timestamp)" aria-label="Legacy complete" onClick={e=>{e.stopPropagation();legacyCompTask(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></IconBtn>}
-                              <IconBtn size={22} title="To top" aria-label="Move to top" onClick={e=>{e.stopPropagation();moveTop(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={rowSoft}/></IconBtn>
-                              <IconBtn size={22} title="Change priority" aria-label="Change priority" onClick={e=>{e.stopPropagation();setChgPri(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={rowSoft}/></IconBtn>
-                              <IconBtn icon="add_circle" size={22} iconSize={12} color={rowSoft} title="Add step" aria-label="Add step" onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.add(task.parentTask);return n;});setGroupAdding(task.parentTask);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity} />
-                              <IconBtn size={22} title="Delete group" aria-label="Delete group" onClick={e=>{e.stopPropagation();gSteps.forEach(s=>delTask(s.id));}} style={{opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={rowSoft}/></IconBtn>
+                              <IconBtn title="Complete next step" aria-label="Complete next step" onClick={e=>{e.stopPropagation();compTask(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></IconBtn>
+                              {AS.legacyCompleteUI && <IconBtn title="Legacy complete (no timestamp)" aria-label="Legacy complete" onClick={e=>{e.stopPropagation();legacyCompTask(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></IconBtn>}
+                              <IconBtn title="To top" aria-label="Move to top" onClick={e=>{e.stopPropagation();moveTop(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={rowSoft}/></IconBtn>
+                              <IconBtn title="Change priority" aria-label="Change priority" onClick={e=>{e.stopPropagation();setChgPri(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={rowSoft}/></IconBtn>
+                              <IconBtn icon="add_circle" iconSize={12} color={rowSoft} title="Add step" aria-label="Add step" onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.add(task.parentTask);return n;});setGroupAdding(task.parentTask);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity} />
+                              <IconBtn title="Delete group" aria-label="Delete group" onClick={e=>{e.stopPropagation();gSteps.forEach(s=>delTask(s.id));}} style={{opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={rowSoft}/></IconBtn>
                               {/* THE one extra icon — expand/collapse steps */}
-                              <IconBtn size={22} title={isOpen?"Hide steps":"Show steps"} aria-label={isOpen?"Hide steps":"Show steps"} onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;});}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Chev d={isOpen?"up":"down"} s={12} c={rowSoft}/></IconBtn>
+                              <IconBtn title={isOpen?"Hide steps":"Show steps"} aria-label={isOpen?"Hide steps":"Show steps"} onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;});}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Chev d={isOpen?"up":"down"} s={12} c={rowSoft}/></IconBtn>
                             </div>
                           </div>
                           {/* Subtle progress bar */}
@@ -4467,7 +4467,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                                   const pillStatus = st.gotBackToAsker ? "got_back" : researchDone ? "have_answer" : "researching";
                                   return <ShailaMiniPill status={pillStatus} shailaNum={shailaNum} onToggle={()=>handleShailaGotBack(st.id, !st.gotBackToAsker)}/>;
                                 })()}
-                                <IconBtn size={22} title="Delete step" aria-label="Delete step" onClick={e=>{e.stopPropagation();delTask(st.id);}} style={{opacity:.3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.3}><IC.Trash s={11} c={C.faint}/></IconBtn>
+                                <IconBtn title="Delete step" aria-label="Delete step" onClick={e=>{e.stopPropagation();delTask(st.id);}} style={{opacity:.3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.3}><IC.Trash s={11} c={C.faint}/></IconBtn>
                               </div>
                             ))}
                             {gDone > 0 && <div style={{padding:"3px 10px 3px 28px",fontSize:10,color:C.faint,fontFamily:NC_FONT_STACK,borderBottom:`1px solid ${C.divider}`,display:"flex",alignItems:"center",gap:4}}>{gDone} step{gDone!==1?"s":""} completed {suiteIcon("done",10)}</div>}
@@ -4528,15 +4528,15 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                           )}
                           <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.7}}/>
                           <div draggable={false} onPointerDown={e=>e.stopPropagation()} style={queueActionRail}>
-                            <IconBtn size={22} title="Mark done" aria-label="Mark done" onClick={e=>{e.stopPropagation();compTask(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></IconBtn>
-                            {AS.legacyCompleteUI && <IconBtn size={22} title="Legacy complete (no timestamp)" aria-label="Legacy complete" onClick={e=>{e.stopPropagation();legacyCompTask(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></IconBtn>}
-                            <IconBtn size={22} title="Top" aria-label="Move to top" onClick={e=>{e.stopPropagation();moveTop(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={_qSoft}/></IconBtn>
-                            {task.pinned && <IconBtn icon="location_on" size={22} iconSize={10} color={_qSoft} title="Unpin" aria-label="Unpin" onClick={e=>{e.stopPropagation();unpinTask(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity} />}
-                            <IconBtn size={22} title="Change priority" aria-label="Change priority" onClick={e=>{e.stopPropagation();setChgPri(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={_qSoft}/></IconBtn>
-                            <IconBtn size={22} title="Shatter with AI" aria-label="Shatter with AI" onClick={e=>{e.stopPropagation();setShowBD(task);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Split s={12} c={_qSoft}/></IconBtn>
-                            <IconBtn icon="arrow_forward" size={22} iconSize={12} color={_qSoft} title="Suggest first step with AI" aria-label="Suggest first step" disabled={!hasAI} onClick={e=>{e.stopPropagation();openFirstStep(task);}} style={{opacity:hasAI?rowActionOpacity:.15}} onMouseEnter={e=>{if(hasAI)e.currentTarget.style.opacity=1;}} onMouseLeave={e=>e.currentTarget.style.opacity=hasAI?rowActionOpacity:.15} />
-                            <IconBtn icon="add_circle" size={22} iconSize={12} color={_qSoft} title="Add subtasks manually" aria-label="Add subtasks" onClick={e=>{e.stopPropagation();startManualGroup(task);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity} />
-                            <IconBtn size={22} title="Delete" aria-label="Delete" onClick={e=>{e.stopPropagation();delTask(task.id);}} style={{opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={_qSoft}/></IconBtn>
+                            <IconBtn title="Mark done" aria-label="Mark done" onClick={e=>{e.stopPropagation();compTask(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></IconBtn>
+                            {AS.legacyCompleteUI && <IconBtn title="Legacy complete (no timestamp)" aria-label="Legacy complete" onClick={e=>{e.stopPropagation();legacyCompTask(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></IconBtn>}
+                            <IconBtn title="Top" aria-label="Move to top" onClick={e=>{e.stopPropagation();moveTop(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={_qSoft}/></IconBtn>
+                            {task.pinned && <IconBtn icon="location_on" iconSize={10} color={_qSoft} title="Unpin" aria-label="Unpin" onClick={e=>{e.stopPropagation();unpinTask(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity} />}
+                            <IconBtn title="Change priority" aria-label="Change priority" onClick={e=>{e.stopPropagation();setChgPri(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={_qSoft}/></IconBtn>
+                            <IconBtn title="Shatter with AI" aria-label="Shatter with AI" onClick={e=>{e.stopPropagation();setShowBD(task);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Split s={12} c={_qSoft}/></IconBtn>
+                            <IconBtn icon="arrow_forward" iconSize={12} color={_qSoft} title="Suggest first step with AI" aria-label="Suggest first step" disabled={!hasAI} onClick={e=>{e.stopPropagation();openFirstStep(task);}} style={{opacity:hasAI?rowActionOpacity:.15}} onMouseEnter={e=>{if(hasAI)e.currentTarget.style.opacity=1;}} onMouseLeave={e=>e.currentTarget.style.opacity=hasAI?rowActionOpacity:.15} />
+                            <IconBtn icon="add_circle" iconSize={12} color={_qSoft} title="Add subtasks manually" aria-label="Add subtasks" onClick={e=>{e.stopPropagation();startManualGroup(task);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity} />
+                            <IconBtn title="Delete" aria-label="Delete" onClick={e=>{e.stopPropagation();delTask(task.id);}} style={{opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={_qSoft}/></IconBtn>
                           </div>
                         </div>
                       );

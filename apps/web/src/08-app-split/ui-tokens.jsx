@@ -817,28 +817,17 @@ export const cleanTheme = (theme = {}) => ({
   warning:   theme.warning || GV_CLEAN.warning,
 });
 
-export const gvIconButton = (overrides = {}, C = GV_CLEAN) => ({
-  width: 40,
-  height: 40,
-  borderRadius: RADIUS.pill,
-  border: "none",
-  background: "transparent",
-  color: C.muted,
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0,
-  ...overrides,
-  // index.html sets button{min-height:36px} globally; min-height beats height, so
-  // without an inline minHeight any icon button shorter than 36px silently renders
-  // at 36px and props row heights open.
-  minHeight: overrides.minHeight ?? overrides.height ?? 40,
-});
+// M3 minimum touch target. See the matching constant in m3.jsx — this was 40,
+// which is the wrong number and is where much of the app's sub-48 drift came from.
+export const M3_MIN_TARGET = 48;
 
-// gvTextButton + cleanToolbarButton were removed in M3 Phase A — every call site
-// now renders a real @material/web button via <ActionBtn> in m3.jsx. gvIconButton
-// remains until the icon-button slice converts its call sites.
+// gvIconButton, gvTextButton and cleanToolbarButton are all gone now: every call
+// site renders a real @material/web control via <IconBtn>/<ActionBtn> in m3.jsx.
+// gvIconButton was the last survivor and its 40x40 default was one of the two
+// places the sub-48 drift originated (the other being the "M3 minimum touch
+// target: 40dp" comment in AppSuiteChrome). Hand-rolled button geometry does not
+// come back — the M3 component rule in CLAUDE.md covers it, and the GM3 lint rule
+// enforces it.
 
 export function buildDeskPhoneThemeQuery(palette, theme = {}) {
   const qs = new URLSearchParams({ palette });
@@ -864,46 +853,8 @@ export function getInitialSuiteView() {
   }
 }
 
-// ─── NerveCenter Section Header Styles ───────────────────────────────────────
-// Shared style functions for the three primary panel headers (Tasks/Shailos/Phone).
-// Logic lives here so all three headers are guaranteed identical and design
-// decisions — divider, padding, icon size — have a single source of truth.
-export const ncSectionHeaderStyle = (C, overrides = {}) => ({
-  minHeight: 30,
-  padding: "3px 10px",
-  borderBottom: `1px solid ${C.divider}`,
-  flexShrink: 0,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: SP.sm,
-  ...overrides,
-});
-
-export const ncSectionTitleStyle = (C) => ({
-  fontSize: NC_TYPE.title,
-  fontWeight: "var(--nc-font-weight-strong, 500)",
-  color: C.text,
-  fontFamily: NC_FONT_STACK,
-  lineHeight: LINE.tight,
-});
-
-export const ncSectionIconStyle = (accent, C) => ({
-  width: 26,
-  height: 26,
-  borderRadius: RADIUS.md,
-  background: "transparent",
-  color: accent || C.accent,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0,
-});
-
-export const ncSmallIconBtnStyle = (active = false, accent, C) => gvIconButton({
-  width: 26,
-  height: 26,
-  background: active ? C.hover : "transparent",
-  color: active ? (accent || C.muted) : C.muted,
-  minHeight: 26,
-}, C);
+// The four ncSection* / ncSmallIconBtn helpers that lived here are gone. They
+// emitted 26x26 icon buttons, 26x26 icon chips and a 30px header row — all below
+// the 48dp M3 touch-target floor — and by the time the GM3 sweep reached them
+// every call site had already moved on, so they were dead code shipping illegal
+// geometry. Section headers now use the M3 list/card primitives directly.
