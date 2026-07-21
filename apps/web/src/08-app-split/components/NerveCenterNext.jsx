@@ -756,7 +756,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
     ? { flex: "1 1 0", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }
     : { maxHeight: "min(52vh, 460px)", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" };
   return (
-    <div style={{ background: C.bg, borderRadius: 16, overflow: "hidden",
+    <div style={{ background: NC_PROTO ? `color-mix(in srgb, ${C.bg} 94%, ${accentColor || C.accent} 6%)` : C.bg, borderRadius: 16, overflow: "hidden",
       ...(fullHeight ? { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 } : {}) }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px 4px 10px", minHeight: 28 }}>
         <ListItem type="button"
@@ -1282,7 +1282,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   // lives only in its icon puck. The accent parameter is kept so call sites stay
   // stable, but it no longer tints the card background.
   const tintedPanel = (_accent = C.accent) => (
-    { background: C.bg, borderRadius: 20, display: "flex", flexDirection: "column", minHeight: isTablet && !isStacked ? 420 : 0, overflow: "hidden", boxShadow: "none" }
+    // Calm-rows v2: a whisper of the section color in the surface (M3 tonal
+    // container differentiation); pre-proto keeps the single neutral surface.
+    { background: NC_PROTO ? `color-mix(in srgb, ${C.bg} 95%, ${_accent || C.accent} 5%)` : C.bg, borderRadius: 20, display: "flex", flexDirection: "column", minHeight: isTablet && !isStacked ? 420 : 0, overflow: "hidden", boxShadow: "none" }
   );
   const ncPanel = tintedPanel(C.accent); // default; overridden per-section below
   const ncScrollPane = { overflow: "auto", flex: "1 1 auto", minHeight: 0, overscrollBehavior: "contain", scrollbarGutter: "stable", ...(isStacked ? { touchAction: "pan-y" } : {}) };
@@ -3078,8 +3080,16 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </div>
               </div>
             )}
+            {NC_PROTO && heroTask && (
+              <HeroItem C={C} accent={gP(priorities, heroTask.priority)?.color || C.accent}
+                title={nerveDisplaySummary(heroTask, "Untitled task")}
+                meta={gP(priorities, heroTask.priority)?.label || ""}
+                onClick={() => toggleRow("sec-tasks")} />
+            )}
             {topTasks.length === 0 && !taskComposerOpen && <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK }}>No open tasks.</div>}
-            {(NC_PROTO && !expandedRows.has("sec-tasks") ? topTasks.slice(0, NC_PROTO_CAP) : topTasks).map((t, ti) => {
+            {(NC_PROTO
+              ? (expandedRows.has("sec-tasks") ? topTasks.filter(t => t.id !== heroTask?.id) : topTasks.filter(t => t.id !== heroTask?.id).slice(0, NC_PROTO_LIST_CAP))
+              : topTasks).map((t, ti) => {
               const pri = gP(priorities, t.priority);
               const priColor = pri?.color || C.accent || "#7EB0DE";
               const isEditing = editingTaskId === t.id;
@@ -3097,7 +3107,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               }
               return (
                 <ListItem key={t.id} data-nc-task-row="true" type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
-                  <span slot="start" style={{ width: dense?6:8,height: dense?6:8,borderRadius:RADIUS.pill,background:priColor }} />
+                  <span slot="start" style={{ width: NC_PROTO?7:(dense?6:8),height: NC_PROTO?7:(dense?6:8),borderRadius:RADIUS.pill,background:priColor }} />
                   <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>{nerveDisplaySummary(t,"Untitled task")}</span>
                   <span slot="end" style={{ display:"flex", gap:2 }}>
                     <IconBtn icon="check" size={dense?26:32} iconSize={dense?13:15} color={C.success} title="Done" aria-label="Mark done" onClick={e => { e.stopPropagation(); onCompleteTask?.(t.id); }} />
@@ -3106,8 +3116,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </ListItem>
               );
             })}
-            {NC_PROTO && (topTasks.length > NC_PROTO_CAP || expandedRows.has("sec-tasks")) && (
-              <MoreRow C={C} open={expandedRows.has("sec-tasks")} count={Math.max(0, topTasks.length - NC_PROTO_CAP)} onClick={() => toggleRow("sec-tasks")} />
+            {NC_PROTO && (topTasks.filter(t => t.id !== heroTask?.id).length > NC_PROTO_LIST_CAP || expandedRows.has("sec-tasks")) && (
+              <MoreRow C={C} open={expandedRows.has("sec-tasks")} count={Math.max(0, topTasks.filter(t => t.id !== heroTask?.id).length - NC_PROTO_LIST_CAP)} onClick={() => toggleRow("sec-tasks")} />
             )}
             {hiddenMobileTasks > 0 && (
               <ActionBtn variant="text" labelColor={C.faint} labelSize={ncType.meta} onClick={onOpenQueue}
@@ -3129,6 +3139,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 { icon: "link_off",    label: "Disconnect",           run: onDisconnectGoogle },
               ]}
             >
+              {NC_PROTO && heroCalRow && (
+                <HeroItem C={C} accent={GCAL_COLORS[heroCalRow.evt?.colorId] || C.warning}
+                  title={heroCalRow.evt?.summary || "(no title)"}
+                  meta={heroCalRow.now ? `Now · ${heroCalRow.label}` : heroCalRow.tomorrow ? `Tomorrow · ${heroCalRow.label}` : heroCalRow.label}
+                  onClick={() => toggleRow("sec-cal")} />
+              )}
               {!calendarEvents ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,display:"flex",gap:8,alignItems:"center",borderTop:`1px solid ${C.divider}` }}>
                   <div style={{width:10,height:10,borderRadius:"50%",border:`2px solid ${C.faint}`,borderTopColor:"transparent",animation:"ot-spin 0.8s linear infinite"}} /> Loading…
@@ -3142,6 +3158,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const rowOpacity = NC_PROTO && row.routine && !row.now ? 0.55 : 1;
                 const item = (
                   <>
+                    {NC_PROTO && <span slot="start" style={{ width:7, height:7, borderRadius:RADIUS.pill, background:GCAL_COLORS[row.evt?.colorId] || C.warning, flexShrink:0 }} />}
                     <span slot="headline" style={{ color: lifted?C.text:C.muted, fontWeight:lifted?600:500, wordBreak:"break-word" }}>{row.evt?.summary||"(no title)"}</span>
                     <span slot="trailing-supporting-text" style={{ color:row.now?C.accent:C.faint, fontWeight:row.now?700:500, whiteSpace:"nowrap" }}>{row.now?"Now":timeLabel}</span>
                   </>
@@ -3178,9 +3195,17 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 ...googleAcctMenuItems,
               ]}
             >
+              {NC_PROTO && heroMail && (
+                <HeroItem C={C} accent={CAT_MAIL}
+                  title={heroMail.aiSummary || decodeSnipM(heroMail.snippet) || gmailHdr(heroMail,"Subject") || "(no subject)"}
+                  meta={[fmtFromM(gmailHdr(heroMail,"From")), fmtRelShort(gmailHdr(heroMail,"Date"))].filter(Boolean).join(" · ")}
+                  onClick={() => window.open(gmailDeepLink(heroMail), "_blank")} />
+              )}
               {!gmailMessages || gmailMessages.length === 0 ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Inbox clear.</div>
-              ) : (NC_PROTO && !expandedRows.has("sec-mail") ? gmailMessages.slice(0, NC_PROTO_CAP) : gmailMessages.slice(0,40)).map((msg,i) => {
+              ) : (NC_PROTO
+                ? (expandedRows.has("sec-mail") ? gmailMessages.filter(m => m.id !== heroMail?.id).slice(0,40) : gmailMessages.filter(m => m.id !== heroMail?.id).slice(0, NC_PROTO_LIST_CAP))
+                : gmailMessages.slice(0,40)).map((msg,i) => {
                 const subj = gmailHdr(msg,"Subject")||"(no subject)";
                 const from = fmtFromM(gmailHdr(msg,"From"));
                 const date = fmtTimeM(gmailHdr(msg,"Date"));
@@ -3188,6 +3213,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 const rowVars = NC_PROTO && !mailIsUnread(msg) ? NC_PROTO_DIM : {};
                 return (
                   <ListItem key={msg.id||i} type="link" href={url} target="_blank" style={{ borderRadius: RADIUS.sm, ...rowVars }}>
+                    {NC_PROTO && <span slot="start" style={{ width: 7, height: 7, borderRadius: RADIUS.pill, background: mailIsUnread(msg) ? CAT_MAIL : "transparent", flexShrink: 0 }} />}
                     {/* Body summary headlines; sender rides the smaller supporting line. */}
                     <span slot="headline" style={{ color:C.text, fontWeight:450, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden", whiteSpace:"normal", wordBreak:"break-word" }}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
                     <span slot="supporting-text" style={{ color:C.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{from}</span>
@@ -3195,8 +3221,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   </ListItem>
                 );
               })}
-              {NC_PROTO && (gmailMessages?.length || 0) > NC_PROTO_CAP && (
-                <MoreRow C={C} open={expandedRows.has("sec-mail")} count={gmailMessages.length - NC_PROTO_CAP} onClick={() => toggleRow("sec-mail")} />
+              {NC_PROTO && (gmailMessages || []).filter(m => m.id !== heroMail?.id).length > NC_PROTO_LIST_CAP && (
+                <MoreRow C={C} open={expandedRows.has("sec-mail")} count={(gmailMessages || []).filter(m => m.id !== heroMail?.id).length - NC_PROTO_LIST_CAP} onClick={() => toggleRow("sec-mail")} />
               )}
             </MobileSection>
           )}
@@ -3207,21 +3233,29 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             primaryBtn={<IconBtn icon="add" size={26} iconSize={14} color={GOLD} onClick={onOpenShailaAdd} title="Add shaila" aria-label="Add shaila" />}
             menuItems={[{ icon: "open_in_full", label: "Open Shailos", run: onOpenShailos }]}
           >
+            {NC_PROTO && heroShaila && (
+              <HeroItem C={C} accent={GOLD}
+                title={nerveDisplaySummary(heroShaila, "Open shaila")}
+                meta={(heroShaila.status === "get_back" || heroShaila.isGetBackStep) ? "waiting to reply" : "pending answer"}
+                onClick={onOpenShailos} />
+            )}
             {visibleShailos.length === 0 ? (
               <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>No pending shailos.</div>
-            ) : (NC_PROTO && !expandedRows.has("sec-shailos") ? visibleShailos.slice(0, NC_PROTO_CAP) : visibleShailos.slice(0,40)).map((s, si) => {
+            ) : (NC_PROTO
+              ? (expandedRows.has("sec-shailos") ? visibleShailos.filter(s => s.id !== heroShaila?.id).slice(0,40) : visibleShailos.filter(s => s.id !== heroShaila?.id).slice(0, NC_PROTO_LIST_CAP))
+              : visibleShailos.slice(0,40)).map((s, si) => {
               const text = nerveDisplaySummary(s,"Open shaila");
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
               return (
                 <ListItem key={s.id} type="button" onClick={onOpenShailos} style={{ borderRadius: RADIUS.sm }}>
-                  <span slot="start" style={{ width: dense?6:8, height: dense?6:8, borderRadius:RADIUS.pill, background:GOLD }} />
+                  <span slot="start" style={{ width: NC_PROTO?7:(dense?6:8), height: NC_PROTO?7:(dense?6:8), borderRadius:RADIUS.pill, background:GOLD }} />
                   <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>{text}</span>
                   {!dense && <span slot="supporting-text" style={{ color:GOLD, fontWeight:500 }}>{isGetBack?"waiting to reply":"pending answer"}</span>}
                 </ListItem>
               );
             })}
-            {NC_PROTO && (visibleShailos.length > NC_PROTO_CAP || expandedRows.has("sec-shailos")) && (
-              <MoreRow C={C} open={expandedRows.has("sec-shailos")} count={Math.max(0, visibleShailos.length - NC_PROTO_CAP)} onClick={() => toggleRow("sec-shailos")} />
+            {NC_PROTO && (visibleShailos.filter(s => s.id !== heroShaila?.id).length > NC_PROTO_LIST_CAP || expandedRows.has("sec-shailos")) && (
+              <MoreRow C={C} open={expandedRows.has("sec-shailos")} count={Math.max(0, visibleShailos.filter(s => s.id !== heroShaila?.id).length - NC_PROTO_LIST_CAP)} onClick={() => toggleRow("sec-shailos")} />
             )}
             {visibleShailos.length > 40 && (
               <ActionBtn variant="text" labelColor={C.faint} labelSize={ncType.meta} onClick={onOpenShailos}
@@ -3236,6 +3270,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             preview={signalNote("Phone")}
             menuItems={[{ icon: "open_in_full", label: "Open phone view", run: onOpenPhone }]}
           >
+            {NC_PROTO && heroPhone && (
+              <HeroItem C={C} accent={CAT_PHONE} title={heroPhone.title} meta={heroPhone.meta} onClick={onOpenPhone} />
+            )}
             {/* Real height so the phone surface's flex:1 activity feed (texts + calls) gets
                 space — a plain block wrapper collapsed it to zero, so calls never showed. */}
             <div style={{ padding: dense?"2px 12px 8px":"4px 12px 10px", borderTop: `1px solid ${C.divider}`, height: 380, boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
@@ -3356,6 +3393,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             </div>
             )}
             <div style={ncTaskBody}>
+              {NC_PROTO && !isStacked && heroTask && (
+                <HeroItem C={C} accent={gP(priorities, heroTask.priority)?.color || C.accent}
+                  title={nerveDisplaySummary(heroTask, "Untitled task")}
+                  meta={gP(priorities, heroTask.priority)?.label || ""}
+                  onClick={() => setShowAllTasks(v => !v)} />
+              )}
               {isStacked && (taskComposerOpen ? (
                 <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 32px 32px", gap: 6, alignItems: "start" }}>
@@ -3376,7 +3419,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </ActionBtn>
               ))}
               <div ref={taskListRef} style={{ ...ncTaskList, ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }) }}>
-              {primaryTasks.length ? primaryTasks.map((t, ti) => {
+              {primaryTasks.length ? primaryTasks.filter(t => !NC_PROTO || isStacked || t.id !== heroTask?.id).map((t, ti) => {
                 const pri = gP(priorities, t.priority);
                 const priColor = pri?.color || C.accent || "#7EB0DE";
                 const isEditing = editingTaskId === t.id;
@@ -3400,7 +3443,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 return (
                   <div key={t.id} data-nc-task-row="true" className="nc-action-row">
                     <ListItem type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
-                      <span slot="start" style={{ width: dense?6:8, height: dense?6:8, borderRadius: RADIUS.pill, background: priColor }} />
+                      <span slot="start" style={{ width: NC_PROTO?7:(dense?6:8), height: NC_PROTO?7:(dense?6:8), borderRadius: RADIUS.pill, background: priColor }} />
                       <span slot="headline" style={{ color: C.text, fontWeight: 500, wordBreak: "break-word" }}>{displayText}</span>
                       {touchLayout && (
                         <span slot="end"><IconBtn icon="more_horiz" size={dense?30:36} iconSize={dense?16:18} color={C.muted} title={actionsOpen ? "Hide actions" : "Show actions"} active={actionsOpen} activeBg={C.hover} onClick={e => { e.stopPropagation(); setOpenTaskActionsId(actionsOpen ? null : t.id); }} /></span>
@@ -3447,25 +3490,33 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <ActionBtn variant="text" icon="open_in_full" iconSize={15} labelColor={GOLD} onClick={onOpenShailos}>Open</ActionBtn>
               </div>
             </div>
+            {NC_PROTO && !isStacked && heroShaila && (
+              <HeroItem C={C} accent={GOLD}
+                title={nerveDisplaySummary(heroShaila, "Open shaila")}
+                meta={(heroShaila.status === "get_back" || heroShaila.isGetBackStep) ? "waiting to reply" : "pending answer"}
+                onClick={onOpenShailos} />
+            )}
             <div style={{ ...ncScrollPane, ...denseListVars({ dense, primary: C.text, secondary: GOLD, hover: GOLD }) }}>
-              {/* Active shailos — open + pending get-back. Calm-rows: rest at
-                  NC_PROTO_CAP with a "+N more" reveal; first row is the hero. */}
-              {visibleShailos.length ? (NC_PROTO && !expandedRows.has("desk-shailos") ? visibleShailos.slice(0, NC_PROTO_CAP) : visibleShailos).map((s, idx) => {
+              {/* Active shailos — open + pending get-back. Calm-rows v2: the hero
+                  block above carries the top item; the list rests at 3 more. */}
+              {visibleShailos.length ? (NC_PROTO
+                ? (expandedRows.has("desk-shailos") ? visibleShailos.filter(s => s.id !== heroShaila?.id) : visibleShailos.filter(s => s.id !== heroShaila?.id).slice(0, NC_PROTO_LIST_CAP))
+                : visibleShailos).map((s, idx) => {
                 const text = nerveDisplaySummary(s, "Open shaila");
                 const isGetBack = s.status === "get_back" || !!s.isGetBackStep;
                 const chipLabel = isGetBack ? "Get back" : "Answer";
                 const chipBg = isGetBack ? "rgba(201,146,60,0.22)" : "rgba(201,146,60,0.10)";
                 return (
                   <ListItem key={s.id} type="button" onClick={onOpenShailos} style={{ borderRadius: RADIUS.sm }}>
-                    <span slot="start" style={{ width: dense?6:8, height: dense?6:8, borderRadius: RADIUS.pill, background: GOLD }} />
+                    <span slot="start" style={{ width: NC_PROTO?7:(dense?6:8), height: NC_PROTO?7:(dense?6:8), borderRadius: RADIUS.pill, background: GOLD }} />
                     <span slot="headline" style={{ color: C.text, fontWeight: 500, wordBreak: "break-word" }}>{text}</span>
                     {!dense && <span slot="supporting-text" style={{ color: GOLD, display: "inline-flex", alignItems: "center", gap: 4 }}>{suiteIcon(isGetBack ? "schedule" : "search", 12)} {isGetBack ? "waiting to reply" : "pending answer"}</span>}
                     <span slot="trailing-supporting-text" style={{ fontSize: ncType.small, fontWeight: 500, color: GOLD, background: chipBg, border: `1px solid ${GOLD_BRD}`, borderRadius: RADIUS.pill, padding: "2px 7px", whiteSpace: "nowrap" }}>{chipLabel}</span>
                   </ListItem>
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No pending shailos.</div>}
-              {NC_PROTO && (visibleShailos.length > NC_PROTO_CAP || expandedRows.has("desk-shailos")) && (
-                <MoreRow C={C} open={expandedRows.has("desk-shailos")} count={Math.max(0, visibleShailos.length - NC_PROTO_CAP)} onClick={() => toggleRow("desk-shailos")} />
+              {NC_PROTO && (visibleShailos.filter(s => s.id !== heroShaila?.id).length > NC_PROTO_LIST_CAP || expandedRows.has("desk-shailos")) && (
+                <MoreRow C={C} open={expandedRows.has("desk-shailos")} count={Math.max(0, visibleShailos.filter(s => s.id !== heroShaila?.id).length - NC_PROTO_LIST_CAP)} onClick={() => toggleRow("desk-shailos")} />
               )}
 
               {/* Recently completed shailos */}
@@ -3551,7 +3602,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           // stays in the icon puck, never the card background).
           const isFocus = ncViewMode === "focus";
           const tintedCard = (_accent) => (
-            { background: C.bgSoft, borderRadius: isFocus ? RADIUS.xs : RADIUS.md, flex: isStacked ? "1 1 0" : 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }
+            // Calm-rows v2: same whisper-tint language as the three main panels.
+            { background: NC_PROTO ? `color-mix(in srgb, ${C.bgSoft} 95%, ${_accent || C.accent} 5%)` : C.bgSoft, borderRadius: isFocus ? RADIUS.xs : RADIUS.md, flex: isStacked ? "1 1 0" : 1, minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }
           );
           const cardWrap = tintedCard(CAT_MAIL); // overridden per-card inline
           // Unified card header — same language as the Tasks/Shailos/Phone panels
@@ -3692,8 +3744,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                             const barColor = GCAL_COLORS[row.evt?.colorId] || C.warning;
                             const content = (
                               <>
-                                {/* GM3 vertical accent bar — event's calendar color */}
-                                <span slot="start" style={{ width: 4, height: 24, borderRadius: RADIUS.pill, background: barColor, opacity: row.past ? 0.4 : 1 }} />
+                                {/* v2 uniform leading: same 7px dot metric as every card;
+                                    pre-proto keeps the GCal-style vertical bar. */}
+                                <span slot="start" style={NC_PROTO
+                                  ? { width: 7, height: 7, borderRadius: RADIUS.pill, background: barColor, opacity: row.past ? 0.4 : 1 }
+                                  : { width: 4, height: 24, borderRadius: RADIUS.pill, background: barColor, opacity: row.past ? 0.4 : 1 }} />
                                 <span slot="headline" style={{ color: row.now ? C.text : row.past ? C.faint : C.muted, fontWeight: row.now ? 600 : 400, opacity: row.past ? 0.65 : 1 }}>{row.evt?.summary || "(no title)"}</span>
                                 <span slot="trailing-supporting-text" style={{ color: row.now ? nowLineColor : C.faint, fontWeight: row.now ? 700 : 400, whiteSpace: "nowrap" }}>{row.now ? "Now" : timeLabel}</span>
                               </>
@@ -3955,8 +4010,23 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       <p style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, margin: "12px 0", textAlign: "center" }}>Inbox zero 🎉</p>
                     ) : (
                       <>
+                      {NC_PROTO && heroMail && (
+                        <HeroItem C={C} accent={CAT_MAIL}
+                          title={heroMail.aiSummary || decodeSnippet(heroMail.snippet) || gmailHeader(heroMail, 'Subject') || "(no subject)"}
+                          meta={[fmtFrom(gmailHeader(heroMail, 'From')), fmtRelShort(gmailHeader(heroMail, 'Date'))].filter(Boolean).join(" · ")}
+                          onClick={() => selectedEmailId === heroMail.id ? setSelectedEmailId(null) : handleEmailSelect(heroMail)} />
+                      )}
+                      {/* Hero message body — the hero lives outside the list, so its
+                          tap-to-read detail renders right under the block. */}
+                      {NC_PROTO && heroMail && selectedEmailId === heroMail.id && (
+                        <div style={{ margin: "0 12px 8px", padding: "8px 10px", borderRadius: RADIUS.sm, background: C.bg, fontSize: NC_TYPE.meta, lineHeight: 1.5, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: 200, overflowY: "auto", fontFamily: NC_FONT_STACK, flexShrink: 0 }}>
+                          {emailDetailLoadingId === heroMail.id ? "Loading…" : (emailDetails[heroMail.id]?.fullBody || decodeSnippet(heroMail.snippet || "") || "No message body available.")}
+                        </div>
+                      )}
                       <List style={cardListStyle}>
-                      {(NC_PROTO && !expandedRows.has("desk-mail") ? gmailMessages.slice(0, NC_PROTO_CAP) : gmailMessages).map((msg, i) => {
+                      {(NC_PROTO
+                        ? (expandedRows.has("desk-mail") ? gmailMessages.filter(m => m.id !== heroMail?.id) : gmailMessages.filter(m => m.id !== heroMail?.id).slice(0, NC_PROTO_LIST_CAP))
+                        : gmailMessages).map((msg, i) => {
                       const subject = gmailHeader(msg, 'Subject') || '(no subject)';
                       const from = fmtFrom(gmailHeader(msg, 'From'));
                       const date = fmtTime(gmailHeader(msg, 'Date'));
@@ -3979,6 +4049,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                           onMouseLeave={() => { clearTimeout(hoverTimerRef.current); setHoverEmail(null); }}
                         >
                           {selected && <div slot="container" style={{ background: C.bgSoft, borderRadius: RADIUS.sm }} />}
+                          {/* Uniform leading: same 7px dot metric as every other card's rows. */}
+                          {NC_PROTO && <span slot="start" style={{ width: 7, height: 7, borderRadius: RADIUS.pill, background: mailIsUnread(msg) ? CAT_MAIL : "transparent", flexShrink: 0 }} />}
                           <span slot="headline" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: C.text, fontWeight: 600 }}>{from}</span>
                           <span slot="supporting-text" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", whiteSpace: "normal", wordBreak: "break-word", color: C.muted }}>{msg.aiSummary || decodeSnippet(msg.snippet) || subject}</span>
                           <span slot="trailing-supporting-text" style={{ color: C.faint, whiteSpace: "nowrap" }}>{date}</span>
@@ -4012,8 +4084,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       );
                     })}
                     </List>
-                    {NC_PROTO && (gmailMessages.length > NC_PROTO_CAP || expandedRows.has("desk-mail")) && (
-                      <MoreRow C={C} open={expandedRows.has("desk-mail")} count={Math.max(0, gmailMessages.length - NC_PROTO_CAP)} onClick={() => toggleRow("desk-mail")} />
+                    {NC_PROTO && (gmailMessages.filter(m => m.id !== heroMail?.id).length > NC_PROTO_LIST_CAP || expandedRows.has("desk-mail")) && (
+                      <MoreRow C={C} open={expandedRows.has("desk-mail")} count={Math.max(0, gmailMessages.filter(m => m.id !== heroMail?.id).length - NC_PROTO_LIST_CAP)} onClick={() => toggleRow("desk-mail")} />
                     )}
                     </>
                     )}
