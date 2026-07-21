@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, textOnColor } from '../../01-core.js';
+import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, Store, textOnColor } from '../../01-core.js';
 import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BG, GOLD_BRD, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, ncSectionHeaderStyle, ncSectionIconStyle, ncSectionTitleStyle, ncSmallIconBtnStyle, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
 import { ActionBtn, IconBtn, List, ListItem, TextButton, OutlinedButton, AssistChip, FilterChip, ChipSet, Divider, CircularProgress, denseListVars, OutlinedSelect, SelectOption } from '../m3.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
@@ -119,11 +119,37 @@ const mailIsUnread = msg => Array.isArray(msg?.labelIds) ? msg.labelIds.includes
 // nothing is hidden or forgotten), and each card renders the whole rows that fit
 // its allocation — no clipped row, no dead gap.
 const NC_FEED_2COL = 840;      // M3 expanded breakpoint → second column
-// Damped proportional weight: busier cards get more room, but a 45-item card
-// can't starve a 3-item one. sqrt damping + hard clamp to [1, 3].
-function ncCardWeight(count) {
-  const n = Math.max(0, Number(count) || 0);
-  return Math.max(1, Math.min(3, 1 + Math.sqrt(n) / 2.6));
+// ── v7: NEEDS-ACTION SELECTION ──────────────────────────────────────────────
+// Every list here is permanently full (mail capped at ~20, tasks/shailos deep,
+// calendar dense), so total counts and volume-weighted card heights carry no
+// information — both are removed. The only lever that matters is SELECTION:
+// which few items earn the visible rows. Each card now surfaces what is waiting
+// on the owner, not what merely arrived last.
+//   mail      unread first
+//   phone     needs-callback / unread
+//   tasks     highest-weight priorities first
+//   shailos   waiting-to-reply first (someone is waiting on a reply)
+//   calendar  by owner-assigned importance (see calendarRatingKey)
+// Each selector degrades to plain recency when nothing is flagged, so a card is
+// never emptier than it used to be.
+
+// Stable key for the calendar importance pool: the recurring series id when
+// present (so one rating covers every occurrence), else the normalized title.
+function calendarRatingKey(evt) {
+  const series = String(evt?.recurringEventId || "").trim();
+  if (series) return `r:${series}`;
+  const title = String(evt?.summary || "").toLowerCase().replace(/\s+/g, " ").trim();
+  return title ? `t:${title}` : "";
+}
+const CAL_IMPORTANCE = {
+  1: { icon: "priority_high", label: "High — must remember" },
+  2: { icon: "drag_handle",   label: "Medium" },
+  3: { icon: "low_priority",  label: "FYI only" },
+};
+function calendarRatingOf(evt, ratings) {
+  const key = calendarRatingKey(evt);
+  const raw = key ? Number(ratings?.[key]) : NaN;
+  return (raw === 1 || raw === 2 || raw === 3) ? raw : 2; // unrated behaves as medium
 }
 if (NC_PROTO && typeof document !== "undefined") {
   const feedStyle = document.createElement("style");
@@ -1264,7 +1290,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const [mobileTimelineOpen, setMobileTimelineOpen] = useState(false); // mobile hero timeline reveal
   // Card-grid ("boxes") calendar box: "agenda" (compact upcoming list) or "timeline" (the
   // Google-Calendar-style live-time day grid, same as the full-panel card). Persisted.
-  const [calCardView, setCalCardView] = useState(() => { try { return localStorage.getItem("nc_cal_card_view") || "timeline"; } catch { return "timeline"; } });
+  // v7: the prototype defaults to Agenda — that is where the per-event importance
+  // control lives and where importance ordering is visible. Timeline is one tap away.
+  const [calCardView, setCalCardView] = useState(() => { try { return localStorage.getItem("nc_cal_card_view") || (NC_PROTO ? "agenda" : "timeline"); } catch { return NC_PROTO ? "agenda" : "timeline"; } });
   const toggleCalCardView = () => setCalCardView(prev => { const next = prev === "timeline" ? "agenda" : "timeline"; try { localStorage.setItem("nc_cal_card_view", next); } catch {} return next; });
   // Accordion mode is retired (owner: unused, extra). Mobile always gets the 5-card
   // grid; desktop is "full" (3-column) or "boxes". A persisted "accordion" pref from
@@ -1611,6 +1639,52 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // ── Calendar importance pool (owner-assigned, persisted in Firestore) ──────
+  const [calRatings, setCalRatings] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    Store.loadCalendarRatings().then(r => { if (!cancelled) setCalRatings(r || {}); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.uid]);
+  const rateCalendarEvent = useCallback((evt, rating) => {
+    const key = calendarRatingKey(evt);
+    if (!key) return;
+    setCalRatings(prev => ({ ...prev, [key]: rating })); // optimistic
+    Store.setCalendarRating(key, rating);
+  }, []);
+  // Cycle 1 → 2 → 3 → 1 on tap.
+  const cycleCalendarRating = useCallback((evt) => {
+    const next = (calendarRatingOf(evt, calRatings) % 3) + 1;
+    rateCalendarEvent(evt, next);
+  }, [calRatings, rateCalendarEvent]);
+
+  // ── Needs-action ordering (v7) ─────────────────────────────────────────────
+  // Stable sorts: flagged items rise, everything else keeps its natural order,
+  // so a card never loses items — it just leads with what is waiting on you.
+  const actionMail = useMemo(() => {
+    const rows = [...(gmailMessages || [])];
+    return rows.sort((a, b) => (mailIsUnread(b) ? 1 : 0) - (mailIsUnread(a) ? 1 : 0));
+  }, [gmailMessages]);
+  const actionTasks = useMemo(() => {
+    const w = t => Number((priorities.find(p => p.id === t.priority) || {}).weight || 0);
+    return [...primaryTaskQueue].sort((a, b) => w(b) - w(a));
+  }, [primaryTaskQueue, priorities]);
+  const actionShailos = useMemo(() => {
+    const waiting = s => (s.status === "get_back" || s.isGetBackStep) ? 1 : 0;
+    return [...visibleShailos].sort((a, b) => waiting(b) - waiting(a));
+  }, [visibleShailos]);
+  // Calendar keeps the REAL day (routine included) but leads with what the owner
+  // rated as mattering; FYI-rated events sink rather than disappear.
+  const actionCalendar = useMemo(() => {
+    const rows = calendarRows.filter(r => !r.past);
+    return [...rows].sort((a, b) => {
+      if (a.now !== b.now) return a.now ? -1 : 1;
+      const ra = calendarRatingOf(a.evt, calRatings), rb = calendarRatingOf(b.evt, calRatings);
+      if (ra !== rb) return ra - rb;
+      return a.startMs - b.startMs;
+    });
+  }, [calendarRows, calRatings]);
+
   // ── Calm-rows v2: auto-prioritized "most important item" per card ──────────
   // Each card leads with its hero (rendered by HeroItem); the list below excludes
   // it. Selection rules: Tasks = highest priority weight; Mail = newest unread,
@@ -2820,15 +2894,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       collapsed: NC_PROTO ? false : (!boxesFiveCol && !!expandedBoxId && expandedBoxId !== id),
       onToggleExpand: () => setExpandedBoxId(prev => prev === id ? null : id),
     });
-    // Screen share per card, damped so the busiest card can't starve the others.
-    const feedCounts = {
-      mail: (gmailMessages || []).length,
-      phone: Number(phoneActivitySummary?.unreadTexts || 0) + Number(phoneActivitySummary?.missedCalls || 0) + (phoneActivitySummary?.texts || []).length,
-      tasks: primaryTaskQueue.length,
-      shailos: visibleShailos.length,
-      calendar: calendarRows.filter(r => !r.past).length,
-    };
-    const feedWeights = Object.fromEntries(BOX_ORDER.map(id => [id, ncCardWeight(feedCounts[id])]));
+    // v7: no volume weighting and no total-count chips. Every list here is always
+    // full, so both were constant noise. Cards get an equal share and earn their
+    // rows through SELECTION instead.
+    const feedCounts = { mail: 0, phone: 0, tasks: 0, shailos: 0, calendar: 0 };
+    const feedWeights = Object.fromEntries(BOX_ORDER.map(id => [id, 1]));
     const boxRows = expandedBoxId
       ? BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,1fr)" : "min-content").join(" ")
       : "repeat(5, minmax(0,1fr))";
@@ -2934,7 +3004,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 onClick={() => setExpandedBoxId(prev => prev === "mail" ? null : "mail")} />
             ) : null}>
             {fitRows => {
-            const mailRest = NC_PROTO && heroOk ? (gmailMessages || []).filter(m => m.id !== heroMail?.id) : (gmailMessages || []);
+            const mailSrc = NC_PROTO ? actionMail : (gmailMessages || []);
+            const mailRest = NC_PROTO && heroOk ? mailSrc.filter(m => m.id !== heroMail?.id) : mailSrc;
             const mailCut = NC_PROTO ? fitSlice(mailRest, fitRows, expandedBoxId === "mail") : { shown: mailRest, hidden: 0 };
             return (<>
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : mailCut.shown.map((msg,i) => {
@@ -2990,7 +3061,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 onClick={() => setExpandedBoxId(prev => prev === "tasks" ? null : "tasks")} />
             ) : null}>
             {fitRows => {
-            const taskRest = NC_PROTO && heroOk ? primaryTaskQueue.filter(t => t.id !== heroTask?.id) : primaryTaskQueue;
+            const taskSrc = NC_PROTO ? actionTasks : primaryTaskQueue;
+            const taskRest = NC_PROTO && heroOk ? taskSrc.filter(t => t.id !== heroTask?.id) : taskSrc;
             const taskCut = NC_PROTO ? fitSlice(taskRest, fitRows, expandedBoxId === "tasks") : { shown: taskRest, hidden: 0 };
             return (<>
             {taskComposerOpen && (
@@ -3050,7 +3122,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 onClick={() => setExpandedBoxId(prev => prev === "shailos" ? null : "shailos")} />
             ) : null}>
             {fitRows => {
-            const shailaRest = NC_PROTO && heroOk ? visibleShailos.filter(s => s.id !== heroShaila?.id) : visibleShailos;
+            const shailaSrc = NC_PROTO ? actionShailos : visibleShailos;
+            const shailaRest = NC_PROTO && heroOk ? shailaSrc.filter(s => s.id !== heroShaila?.id) : shailaSrc;
             const shailaCut = NC_PROTO ? fitSlice(shailaRest, fitRows, expandedBoxId === "shailos") : { shown: shailaRest, hidden: 0 };
             return (<>
             {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : shailaCut.shown.map((s, si) => {
@@ -3112,7 +3185,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   {calendarRows.filter(r => !r.tomorrow).length === 0 && calendarRows.filter(r => r.tomorrow).length === 0 ? emptyMsg("No events today.") : (() => {
                     const cardListStyle = { ...denseListVars({ dense: true, primary: C.text, secondary: C.muted, hover: C.text }), padding: 0, background: "transparent" };
                     const pastRows     = calendarRows.filter(r => r.past && !r.tomorrow);
-                    const upRows       = calendarRows.filter(r => !r.past && !r.tomorrow);
+                    // v7: importance-ordered (owner ratings) instead of clock order.
+                    const upRows       = NC_PROTO ? actionCalendar.filter(r => !r.tomorrow) : calendarRows.filter(r => !r.past && !r.tomorrow);
                     const tomorrowRows = calendarRows.filter(r => r.tomorrow);
                     const nlc = C.success || C.accent || "#1A9E78";
                     const NowBar = (
@@ -3130,6 +3204,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     const mkItem = (row) => {
                       const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
                       const barColor = GCAL_COLORS[row.evt?.colorId] || C.warning;
+                      const rating = calendarRatingOf(row.evt, calRatings);
+                      const rateBtn = NC_PROTO ? (
+                        <IconBtn slot="end" icon={CAL_IMPORTANCE[rating].icon} size={48} iconSize={20}
+                          color={rating === 1 ? C.danger : rating === 3 ? C.faint : C.muted}
+                          title={`Importance: ${CAL_IMPORTANCE[rating].label} — tap to change`}
+                          aria-label={`Importance ${rating}, ${CAL_IMPORTANCE[rating].label}. Tap to change.`}
+                          onClick={e => { e.stopPropagation(); e.preventDefault(); cycleCalendarRating(row.evt); }} />
+                      ) : null;
                       const item = (
                         <>
                           {/* v2 uniform leading: same 7px dot metric as every card; the
@@ -3139,10 +3221,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                             : { width:4, height:24, borderRadius:RADIUS.pill, background:barColor, opacity:row.past?0.4:1 }} />
                           <span slot="headline" style={{ color:row.now?C.text:row.past?C.faint:C.muted, fontWeight:row.now?600:500, wordBreak:"break-word" }}>{row.evt?.summary||"(no title)"}</span>
                           <span slot="trailing-supporting-text" style={{ color:row.now?C.accent:C.faint, fontWeight:row.now?700:500, whiteSpace:"nowrap" }}>{row.now?"Now":timeLabel}</span>
+                          {rateBtn}
                         </>
                       );
-                      // Calm-rows: routine events (davening etc.) whisper so specials stand out.
-                      const rowOpacity = row.past ? 0.65 : (NC_PROTO && row.routine && !row.now ? 0.55 : 1);
+                      // v7: the real day still shows (routine included); FYI-rated
+                      // events recede instead of being hidden.
+                      const rowOpacity = row.past ? 0.65 : (NC_PROTO ? (rating === 3 ? 0.5 : 1) : 1);
                       return row.evt?.htmlLink
                         ? <ListItem key={row.evt?.id||row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius:RADIUS.sm, opacity:rowOpacity }}>{item}</ListItem>
                         : <ListItem key={row.evt?.id||row.index} type="text" style={{ borderRadius:RADIUS.sm, opacity:rowOpacity }}>{item}</ListItem>;

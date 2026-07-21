@@ -598,6 +598,43 @@ const Store = {
   settingsDoc() { return db && this.uid ? db.collection("users").doc(this.uid).collection("config").doc("settings") : null; },
   metaDoc()     { return db && this.uid ? db.collection("users").doc(this.uid).collection("config").doc("meta") : null; },
 
+  // ── Calendar importance pool ────────────────────────────────────────────
+  // One doc: users/{uid}/meta/calendarRatings = { ratings: { key: 1|2|3 } }.
+  // 1 = high (must remember), 2 = medium, 3 = FYI only. Keyed by the RECURRING
+  // series id when there is one, else the normalized title — so rating a daily
+  // seder once keeps that rating for every future occurrence. That accumulation
+  // is what lets the dashboard pick which events earn the visible rows while
+  // still showing the real day.
+  calendarRatingsDoc() { return db && this.uid ? db.collection("users").doc(this.uid).collection("meta").doc("calendarRatings") : null; },
+
+  async loadCalendarRatings() {
+    const ref = this.calendarRatingsDoc();
+    if (!ref) return {};
+    try {
+      const snap = await ref.get();
+      const data = snap.exists ? snap.data() : null;
+      return (data && typeof data.ratings === "object" && data.ratings) || {};
+    } catch (e) {
+      console.warn("[Store] loadCalendarRatings failed:", e);
+      return {};
+    }
+  },
+
+  async setCalendarRating(key, rating) {
+    const ref = this.calendarRatingsDoc();
+    if (!ref || !key) return false;
+    try {
+      await ref.set({
+        ratings: { [key]: Number(rating) || 2 },
+        updatedAtMs: Date.now(),
+      }, { merge: true });
+      return true;
+    } catch (e) {
+      console.warn("[Store] setCalendarRating failed:", e);
+      return false;
+    }
+  },
+
   // ── Shaila ↔ Task bidirectional sync ──
   // Returns { newTasks: [...], completedTaskIds: [...] }
   //
