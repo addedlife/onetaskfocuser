@@ -1,4 +1,15 @@
 import React, { useEffect, useState } from 'react';
+// Material 3 colour science, from Google's own package — the same code that backs
+// Material Theme Builder.
+//
+// Imported from the package root, not leaf paths: v0.4's `exports` map exposes
+// only ".", so a deep import like `.../hct/hct.js` is blocked by Node resolution
+// and fails the Vite build. The root barrel in turn re-exports scheme modules
+// that use EXTENSIONLESS internal imports, which plain `node` cannot resolve
+// either — but Vite/Rollup can, since extension probing is part of their default
+// resolver. Net effect: this import works in the app, and any standalone Node
+// script that needs these functions has to reach into the files directly.
+import { Hct, TonalPalette, argbFromHex, hexFromArgb } from '@material/material-color-utilities';
 
 // ─── ShamashPro Design Token System ──────────────────────────────────────────
 // All layout, motion, and typographic tokens live as CSS custom properties on
@@ -716,51 +727,50 @@ md-text-button[trailing-icon] { padding-inline: 16px 12px; }
 `;
 
 // ─── Accent derivation (M3 secondary + tertiary) ────────────────────────────
-// The 8 themes define a single `primary` accent. Material 3 wants three accent
-// families. Rather than hand-author 8×8 colors (or mirror primary), we derive:
-//   secondary = same hue, ~half saturation  → a muted companion (M3's intent)
-//   tertiary  = hue + 60°, slightly muted    → a distinct complementary accent
-// from the one primary, so every theme gets harmonious, distinct accents for
-// free. Container tones are then derived in CSS via color-mix (see :root).
-function _hexToHsl(hex) {
-  let h = (hex || '').replace('#', '');
-  if (h.length === 3) h = h.split('').map(c => c + c).join('');
-  const r = parseInt(h.slice(0, 2), 16) / 255, g = parseInt(h.slice(2, 4), 16) / 255, b = parseInt(h.slice(4, 6), 16) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
-  let hue = 0, s = 0;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r: hue = (g - b) / d + (g < b ? 6 : 0); break;
-      case g: hue = (b - r) / d + 2; break;
-      default: hue = (r - g) / d + 4;
-    }
-    hue /= 6;
-  }
-  return { h: hue * 360, s, l };
-}
-function _hslToHex(h, s, l) {
-  h = (((h % 360) + 360) % 360) / 360;
-  const f = (p, q, t) => { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1 / 6) return p + (q - p) * 6 * t; if (t < 1 / 2) return q; if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p; };
-  let r, g, b;
-  if (s === 0) { r = g = b = l; }
-  else { const q = l < 0.5 ? l * (1 + s) : l + s - l * s; const p = 2 * l - q; r = f(p, q, h + 1 / 3); g = f(p, q, h); b = f(p, q, h - 1 / 3); }
-  const to = v => Math.round(v * 255).toString(16).padStart(2, '0');
-  return `#${to(r)}${to(g)}${to(b)}`.toUpperCase();
-}
+// The themes each define a single `primary` accent; Material 3 wants three accent
+// families. They are derived from that one seed so a theme never has to
+// hand-author a full palette. The hand-rolled HSL pair that used to do this
+// (_hexToHsl / _hslToHex) is gone — see deriveAccents below for why.
 // White or near-black for text on a given fill, by perceived luminance.
 function _onColor(hex) {
   const h = (hex || '').replace('#', '');
   const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
   return (r * 299 + g * 587 + b * 114) / 1000 < 140 ? '#FFFFFF' : '#1A1A1A';
 }
-export function deriveAccents(primaryHex) {
+// Official Material 3 derivation, via Google's own material-color-utilities.
+//
+// This replaced a hand-rolled HSL approximation (hue + 60 degrees, saturation x
+// 0.45) that had no notion of perceptual tone and therefore no contrast
+// guarantee. Measured across the app's themes, that version produced anything
+// from 15.1:1 (googleVoice tertiary, so dark it read as near-black) to 3.49:1
+// (claude tertiary, which fails WCAG AA for text) — for what is nominally the
+// same role. M3 works in HCT instead: pick the hue, pick a chroma, then request a
+// TONE, and tone maps directly to lightness, so every theme's secondary and
+// tertiary land on the same contrast footing (~6.5:1 light, ~1.7:1 dark).
+//
+// Tone 40 for light themes and 80 for dark is what M3 specifies for the
+// secondary/tertiary key colours.
+// Perceived luminance of a hex, used to tell a dark theme from a light one.
+function _isDarkHex(hex) {
+  const h = (hex || '').replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(h)) return false;
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 < 140;
+}
+
+export function deriveAccents(primaryHex, dark = false) {
   const clean = (primaryHex || '').replace('#', '');
   const safe = /^[0-9a-f]{6}$/i.test(clean) ? `#${clean}` : GV_CLEAN.accent;
-  const { h, s, l } = _hexToHsl(safe);
-  const secondary = _hslToHex(h, Math.max(0, s * 0.45), l);
-  const tertiary = _hslToHex(h + 60, Math.max(0.18, Math.min(s * 0.85, 0.7)), l);
+  const hct = Hct.fromInt(argbFromHex(safe));
+  const tone = dark ? 80 : 40;
+  // Chroma floors keep a near-grey seed from producing two indistinguishable
+  // accents; M3's own schemes do the same.
+  const secondary = hexFromArgb(
+    TonalPalette.fromHueAndChroma(hct.hue, Math.max(hct.chroma / 3, 16)).tone(tone),
+  );
+  const tertiary = hexFromArgb(
+    TonalPalette.fromHueAndChroma(hct.hue + 60, Math.max(hct.chroma / 2, 24)).tone(tone),
+  );
   return { secondary, onSecondary: _onColor(secondary), tertiary, onTertiary: _onColor(tertiary) };
 }
 
@@ -775,7 +785,11 @@ export function deriveAccents(primaryHex) {
 // when absent, the M3 *-container roles fall back to their color-mix derivation.
 export function themeVarsCss(T = {}) {
   const accent = T.primary || T.accent || GV_CLEAN.accent;
-  const { secondary, onSecondary, tertiary, onTertiary } = deriveAccents(accent);
+  // Dark themes want tone 80 for the accent families, light themes tone 40.
+  // Decide from the theme's own background luminance rather than a flag, so a new
+  // theme gets the right treatment without having to remember to declare it.
+  const isDark = _isDarkHex(T.bg || T.card || GV_CLEAN.bg);
+  const { secondary, onSecondary, tertiary, onTertiary } = deriveAccents(accent, isDark);
   const decl = [
     `--shp-color-secondary:${secondary}`,
     `--shp-color-on-secondary:${onSecondary}`,
