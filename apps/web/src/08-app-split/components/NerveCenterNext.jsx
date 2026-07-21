@@ -65,6 +65,33 @@ function softBorder(color, alpha) {
 const MIN_COLLAPSED_TASKS = 5;
 const TIMELINE_PX_HR = 60; // 60 px/hour in the daily timeline — Google Calendar day-view density
 
+// ── "Calm rows" prototype — ?ncproto=1 to enable, ?ncproto=0 to disable ──────
+// Opt-in declutter experiment (owner 7/21: cards read as "a sea of line items").
+// Three techniques, all reversible and OFF by default so the live app is unchanged:
+//   cap    — each card rests at NC_PROTO_CAP rows + a quiet "+N more" reveal
+//   hero   — the first (most urgent) row per card renders one type step larger
+//   dim    — routine/already-handled rows (read mail, routine calendar events)
+//            drop to ~55% so the few real signals carry the card
+// The flag persists in localStorage so it survives reloads on the test device.
+const NC_PROTO = (() => {
+  try {
+    const p = new URLSearchParams(window.location.search).get("ncproto");
+    if (p === "1") { localStorage.setItem("nc_proto", "1"); return true; }
+    if (p === "0") { localStorage.removeItem("nc_proto"); return false; }
+    return localStorage.getItem("nc_proto") === "1";
+  } catch { return false; }
+})();
+const NC_PROTO_CAP = 4; // hero + 3 quiet rows per resting card
+// One type step up for the hero row — md-list-item tokens, so it inherits M3 slots.
+const NC_PROTO_HERO_VARS = {
+  '--md-list-item-label-text-size': '15.5px',
+  '--md-list-item-label-text-line-height': '20px',
+  '--md-list-item-label-text-weight': '600',
+};
+const NC_PROTO_DIM = { opacity: 0.55 };
+// Gmail metadata responses carry labelIds; fail open (full contrast) if absent.
+const mailIsUnread = msg => Array.isArray(msg?.labelIds) ? msg.labelIds.includes("UNREAD") : true;
+
 // SweepBar — rAF-driven sweep indicator for clock faces.
 // Runs at 60fps via requestAnimationFrame; no state updates, no CSS animation tricks.
 // duration: full cycle in seconds. getOffset(): fractional seconds into the cycle (with ms).
@@ -917,6 +944,20 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
   );
 }
 
+// MoreRow — the quiet "+N more" reveal under a capped list (calm-rows prototype).
+// One full-width text button; expanding is always one tap, so no information is lost.
+function MoreRow({ count, open = false, label = "more", onClick, C }) {
+  return (
+    <ActionBtn variant="text" icon={open ? "expand_less" : "expand_more"} iconSize={13}
+      labelColor={C.faint} labelSize={NC_TYPE.meta} onClick={onClick}
+      title={open ? `Hide ${label}` : `Show ${count} ${label}`}
+      aria-label={open ? `Hide ${label}` : `Show ${count} ${label}`}
+      style={{ width: "100%" }}>
+      {open ? `Hide ${label}` : `+${count} ${label}`}
+    </ActionBtn>
+  );
+}
+
 function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
   const viewportW = useViewportWidth();
   const [healthCardVisible, setHealthCardVisible] = useState(() => {
@@ -1276,8 +1317,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     };
   }, [primaryTaskQueue.length, showAllTasks, taskComposerOpen, touchLayout]);
   const collapsedTaskLimit = Math.min(primaryTaskQueue.length, Math.max(MIN_COLLAPSED_TASKS, autoTaskLimit));
-  const hiddenTaskCount = Math.max(0, primaryTaskQueue.length - collapsedTaskLimit);
-  const primaryTasks = (isStacked || showAllTasks) ? primaryTaskQueue : primaryTaskQueue.slice(0, collapsedTaskLimit);
+  // Calm-rows prototype: the desktop pane rests at NC_PROTO_CAP rows regardless of
+  // how many the auto-fit measurement says would fit; "+N more" reveals the rest.
+  const effectiveTaskLimit = NC_PROTO ? Math.min(collapsedTaskLimit, NC_PROTO_CAP) : collapsedTaskLimit;
+  const hiddenTaskCount = Math.max(0, primaryTaskQueue.length - effectiveTaskLimit);
+  const primaryTasks = (isStacked || showAllTasks) ? primaryTaskQueue : primaryTaskQueue.slice(0, effectiveTaskLimit);
   const visibleShailos = shailos.filter(Boolean);
   const timeBucket = Math.floor(nowMs / CHIEF_TIME_BUCKET_MS);
   const calendarMinuteKey = Math.floor(nowMs / 60000);
@@ -2614,15 +2658,17 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               {googleAcctMenuEl}
               <IconBtn icon="refresh" size={26} iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh mail" aria-label="Refresh mail" />
             </>}>
-            {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : gmailMessages.map((msg,i) => {
+            {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : (NC_PROTO && expandedBoxId !== "mail" ? gmailMessages.slice(0, NC_PROTO_CAP) : gmailMessages).map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
               const from = fmtFromM(gmailHdr(msg,"From"));
               const date = fmtRelM(gmailHdr(msg,"Date"));
               const snip = msg.aiSummary||decodeSnipM(msg.snippet)||subj;
               const rk = `mail-${msg.id||i}`;
               const exp = expandedRows.has(rk);
+              // Calm-rows: newest message is the hero; read mail whispers.
+              const rowVars = NC_PROTO ? { ...(i === 0 ? NC_PROTO_HERO_VARS : {}), ...(!mailIsUnread(msg) && !exp ? NC_PROTO_DIM : {}) } : {};
               return (
-                <ListItem key={msg.id||i} type="button" onClick={()=>toggleRow(rk)} style={{ borderRadius: RADIUS.sm }}>
+                <ListItem key={msg.id||i} type="button" onClick={()=>toggleRow(rk)} style={{ borderRadius: RADIUS.sm, ...rowVars }}>
                   {/* Body summary is the read target (full headline size); sender rides the
                       smaller supporting line — buglog "need a magnifier" ticket. */}
                   <span slot="headline" style={{ color:C.text, fontWeight:450, whiteSpace:"normal", wordBreak:"break-word", ...(exp ? {} : { display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }) }}>{snip}</span>
@@ -2632,6 +2678,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </ListItem>
               );
             })}
+            {NC_PROTO && expandedBoxId !== "mail" && (gmailMessages?.length || 0) > NC_PROTO_CAP && (
+              <MoreRow C={C} count={gmailMessages.length - NC_PROTO_CAP} onClick={() => setExpandedBoxId("mail")} />
+            )}
           </MobileBox>
 
           {/* Phone */}
@@ -2660,7 +2709,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </div>
               </div>
             )}
-            {primaryTaskQueue.length === 0 && !taskComposerOpen ? emptyMsg("No open tasks.") : primaryTaskQueue.map(t => {
+            {primaryTaskQueue.length === 0 && !taskComposerOpen ? emptyMsg("No open tasks.") : (NC_PROTO && expandedBoxId !== "tasks" ? primaryTaskQueue.slice(0, NC_PROTO_CAP) : primaryTaskQueue).map((t, ti) => {
               const pri = gP(priorities, t.priority);
               const priColor = pri?.color || C.accent || "#7EB0DE";
               const isEditing = editingTaskId === t.id;
@@ -2677,7 +2726,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 );
               }
               return (
-                <ListItem key={t.id} type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
+                <ListItem key={t.id} type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm, ...(NC_PROTO && ti === 0 ? NC_PROTO_HERO_VARS : {}) }}>
                   <span slot="start" style={{ width: dense?6:8, height: dense?6:8, borderRadius:RADIUS.pill, background:priColor }} />
                   <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>{nerveDisplaySummary(t,"Untitled task")}</span>
                   <span slot="end" style={{ display:"flex", gap:2 }}>
@@ -2687,22 +2736,28 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </ListItem>
               );
             })}
+            {NC_PROTO && expandedBoxId !== "tasks" && primaryTaskQueue.length > NC_PROTO_CAP && (
+              <MoreRow C={C} count={primaryTaskQueue.length - NC_PROTO_CAP} onClick={() => setExpandedBoxId("tasks")} />
+            )}
           </MobileBox>
 
           {/* Shailos */}
           <MobileBox {...boxCtx} {...boxProps("shailos")} icon="question_mark" title="Shailos" accentColor={GOLD} summary={cardSummary("Shailos")} style={cardStyle} dense={dense}
             onOpen={onOpenShailos}>
-            {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : visibleShailos.map(s => {
+            {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : (NC_PROTO && expandedBoxId !== "shailos" ? visibleShailos.slice(0, NC_PROTO_CAP) : visibleShailos).map((s, si) => {
               const text = nerveDisplaySummary(s,"Open shaila");
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
               return (
-                <ListItem key={s.id} type="button" onClick={onOpenShailos} style={{ borderRadius: RADIUS.sm }}>
+                <ListItem key={s.id} type="button" onClick={onOpenShailos} style={{ borderRadius: RADIUS.sm, ...(NC_PROTO && si === 0 ? NC_PROTO_HERO_VARS : {}) }}>
                   <span slot="start" style={{ width: dense?6:8, height: dense?6:8, borderRadius:RADIUS.pill, background:GOLD }} />
                   <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>{text}</span>
                   {!dense && <span slot="supporting-text" style={{ color:GOLD, fontWeight:500 }}>{isGetBack?"waiting to reply":"pending answer"}</span>}
                 </ListItem>
               );
             })}
+            {NC_PROTO && expandedBoxId !== "shailos" && visibleShailos.length > NC_PROTO_CAP && (
+              <MoreRow C={C} count={visibleShailos.length - NC_PROTO_CAP} onClick={() => setExpandedBoxId("shailos")} />
+            )}
           </MobileBox>
 
           {/* Calendar */}
@@ -2766,13 +2821,21 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                           <span slot="trailing-supporting-text" style={{ color:row.now?C.accent:C.faint, fontWeight:row.now?700:500, whiteSpace:"nowrap" }}>{row.now?"Now":timeLabel}</span>
                         </>
                       );
+                      // Calm-rows: routine events (davening etc.) whisper so specials stand out.
+                      const rowOpacity = row.past ? 0.65 : (NC_PROTO && row.routine && !row.now ? 0.55 : 1);
                       return row.evt?.htmlLink
-                        ? <ListItem key={row.evt?.id||row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius:RADIUS.sm, opacity:row.past?0.65:1 }}>{item}</ListItem>
-                        : <ListItem key={row.evt?.id||row.index} type="text" style={{ borderRadius:RADIUS.sm, opacity:row.past?0.65:1 }}>{item}</ListItem>;
+                        ? <ListItem key={row.evt?.id||row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius:RADIUS.sm, opacity:rowOpacity }}>{item}</ListItem>
+                        : <ListItem key={row.evt?.id||row.index} type="text" style={{ borderRadius:RADIUS.sm, opacity:rowOpacity }}>{item}</ListItem>;
                     };
                     return (
                       <>
-                        {pastRows.length > 0 && <List style={cardListStyle}>{pastRows.map(mkItem)}</List>}
+                        {/* Calm-rows: the morning's finished events collapse to one line. */}
+                        {pastRows.length > 0 && (NC_PROTO && !expandedRows.has("cal-past")
+                          ? <MoreRow C={C} count={pastRows.length} label="earlier" onClick={() => toggleRow("cal-past")} />
+                          : <>
+                              {NC_PROTO && <MoreRow C={C} open label="earlier" count={pastRows.length} onClick={() => toggleRow("cal-past")} />}
+                              <List style={cardListStyle}>{pastRows.map(mkItem)}</List>
+                            </>)}
                         {NowBar}
                         {upRows.length > 0 && <List style={cardListStyle}>{upRows.map(mkItem)}</List>}
                         {tomorrowRows.length > 0 && <>{TomorrowBar}<List style={cardListStyle}>{tomorrowRows.map(mkItem)}</List></>}
@@ -2910,7 +2973,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               </div>
             )}
             {topTasks.length === 0 && !taskComposerOpen && <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK }}>No open tasks.</div>}
-            {topTasks.map(t => {
+            {(NC_PROTO && !expandedRows.has("sec-tasks") ? topTasks.slice(0, NC_PROTO_CAP) : topTasks).map((t, ti) => {
               const pri = gP(priorities, t.priority);
               const priColor = pri?.color || C.accent || "#7EB0DE";
               const isEditing = editingTaskId === t.id;
@@ -2927,7 +2990,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 );
               }
               return (
-                <ListItem key={t.id} data-nc-task-row="true" type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
+                <ListItem key={t.id} data-nc-task-row="true" type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm, ...(NC_PROTO && ti === 0 ? NC_PROTO_HERO_VARS : {}) }}>
                   <span slot="start" style={{ width: dense?6:8,height: dense?6:8,borderRadius:RADIUS.pill,background:priColor }} />
                   <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>{nerveDisplaySummary(t,"Untitled task")}</span>
                   <span slot="end" style={{ display:"flex", gap:2 }}>
@@ -2937,6 +3000,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </ListItem>
               );
             })}
+            {NC_PROTO && (topTasks.length > NC_PROTO_CAP || expandedRows.has("sec-tasks")) && (
+              <MoreRow C={C} open={expandedRows.has("sec-tasks")} count={Math.max(0, topTasks.length - NC_PROTO_CAP)} onClick={() => toggleRow("sec-tasks")} />
+            )}
             {hiddenMobileTasks > 0 && (
               <ActionBtn variant="text" labelColor={C.faint} labelSize={ncType.meta} onClick={onOpenQueue}
                 style={{ width:"100%", borderTop:`1px solid ${C.divider}` }}>
@@ -2963,9 +3029,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </div>
               ) : calendarRows.filter(r=>!r.past).length === 0 ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Nothing upcoming today.</div>
-              ) : calendarRows.filter(r=>!r.past).slice(0,40).map(row => {
+              ) : (NC_PROTO && !expandedRows.has("sec-cal") ? calendarRows.filter(r=>!r.past).slice(0, NC_PROTO_CAP + 1) : calendarRows.filter(r=>!r.past).slice(0,40)).map(row => {
                 const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
                 const lifted = row.now || row.special;
+                // Calm-rows: routine events (davening etc.) whisper so specials stand out.
+                const rowOpacity = NC_PROTO && row.routine && !row.now ? 0.55 : 1;
                 const item = (
                   <>
                     <span slot="headline" style={{ color: lifted?C.text:C.muted, fontWeight:lifted?600:500, wordBreak:"break-word" }}>{row.evt?.summary||"(no title)"}</span>
@@ -2973,9 +3041,12 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   </>
                 );
                 return row.evt?.htmlLink
-                  ? <ListItem key={row.evt?.id||row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.sm }}>{item}</ListItem>
-                  : <ListItem key={row.evt?.id||row.index} type="text" style={{ borderRadius: RADIUS.sm }}>{item}</ListItem>;
+                  ? <ListItem key={row.evt?.id||row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.sm, opacity: rowOpacity }}>{item}</ListItem>
+                  : <ListItem key={row.evt?.id||row.index} type="text" style={{ borderRadius: RADIUS.sm, opacity: rowOpacity }}>{item}</ListItem>;
               })}
+              {NC_PROTO && calendarEvents && (calendarRows.filter(r=>!r.past).length > NC_PROTO_CAP + 1 || expandedRows.has("sec-cal")) && (
+                <MoreRow C={C} open={expandedRows.has("sec-cal")} count={Math.max(0, calendarRows.filter(r=>!r.past).length - (NC_PROTO_CAP + 1))} onClick={() => toggleRow("sec-cal")} />
+              )}
               {showAddEvent && (
                 <div style={{ padding:"10px 12px",borderTop:`1px solid ${C.divider}` }}>
                   <textarea autoFocus value={addEventText} onChange={e=>setAddEventText(e.target.value)} rows={2} placeholder='e.g. "Call David Mon at 3pm"'
@@ -3003,13 +3074,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             >
               {!gmailMessages || gmailMessages.length === 0 ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Inbox clear.</div>
-              ) : gmailMessages.slice(0,40).map((msg,i) => {
+              ) : (NC_PROTO && !expandedRows.has("sec-mail") ? gmailMessages.slice(0, NC_PROTO_CAP) : gmailMessages.slice(0,40)).map((msg,i) => {
                 const subj = gmailHdr(msg,"Subject")||"(no subject)";
                 const from = fmtFromM(gmailHdr(msg,"From"));
                 const date = fmtTimeM(gmailHdr(msg,"Date"));
                 const url  = gmailDeepLink(msg);
+                const rowVars = NC_PROTO ? { ...(i === 0 ? NC_PROTO_HERO_VARS : {}), ...(!mailIsUnread(msg) ? NC_PROTO_DIM : {}) } : {};
                 return (
-                  <ListItem key={msg.id||i} type="link" href={url} target="_blank" style={{ borderRadius: RADIUS.sm }}>
+                  <ListItem key={msg.id||i} type="link" href={url} target="_blank" style={{ borderRadius: RADIUS.sm, ...rowVars }}>
                     {/* Body summary headlines; sender rides the smaller supporting line. */}
                     <span slot="headline" style={{ color:C.text, fontWeight:450, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden", whiteSpace:"normal", wordBreak:"break-word" }}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
                     <span slot="supporting-text" style={{ color:C.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{from}</span>
@@ -3017,6 +3089,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   </ListItem>
                 );
               })}
+              {NC_PROTO && (gmailMessages?.length || 0) > NC_PROTO_CAP && (
+                <MoreRow C={C} open={expandedRows.has("sec-mail")} count={gmailMessages.length - NC_PROTO_CAP} onClick={() => toggleRow("sec-mail")} />
+              )}
             </MobileSection>
           )}
 
@@ -3028,17 +3103,20 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           >
             {visibleShailos.length === 0 ? (
               <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>No pending shailos.</div>
-            ) : visibleShailos.slice(0,40).map(s => {
+            ) : (NC_PROTO && !expandedRows.has("sec-shailos") ? visibleShailos.slice(0, NC_PROTO_CAP) : visibleShailos.slice(0,40)).map((s, si) => {
               const text = nerveDisplaySummary(s,"Open shaila");
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
               return (
-                <ListItem key={s.id} type="button" onClick={onOpenShailos} style={{ borderRadius: RADIUS.sm }}>
+                <ListItem key={s.id} type="button" onClick={onOpenShailos} style={{ borderRadius: RADIUS.sm, ...(NC_PROTO && si === 0 ? NC_PROTO_HERO_VARS : {}) }}>
                   <span slot="start" style={{ width: dense?6:8, height: dense?6:8, borderRadius:RADIUS.pill, background:GOLD }} />
                   <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>{text}</span>
                   {!dense && <span slot="supporting-text" style={{ color:GOLD, fontWeight:500 }}>{isGetBack?"waiting to reply":"pending answer"}</span>}
                 </ListItem>
               );
             })}
+            {NC_PROTO && (visibleShailos.length > NC_PROTO_CAP || expandedRows.has("sec-shailos")) && (
+              <MoreRow C={C} open={expandedRows.has("sec-shailos")} count={Math.max(0, visibleShailos.length - NC_PROTO_CAP)} onClick={() => toggleRow("sec-shailos")} />
+            )}
             {visibleShailos.length > 40 && (
               <ActionBtn variant="text" labelColor={C.faint} labelSize={ncType.meta} onClick={onOpenShailos}
                 style={{ width:"100%", borderTop:`1px solid ${C.divider}` }}>
@@ -3192,12 +3270,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </ActionBtn>
               ))}
               <div ref={taskListRef} style={{ ...ncTaskList, ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }) }}>
-              {primaryTasks.length ? primaryTasks.map(t => {
+              {primaryTasks.length ? primaryTasks.map((t, ti) => {
                 const pri = gP(priorities, t.priority);
                 const priColor = pri?.color || C.accent || "#7EB0DE";
                 const isEditing = editingTaskId === t.id;
                 const actionsOpen = openTaskActionsId === t.id;
                 const displayText = nerveDisplaySummary(t, "Untitled task");
+                const heroVars = NC_PROTO && ti === 0 ? NC_PROTO_HERO_VARS : null;
                 // Editing → inline textarea (unchanged behavior). Otherwise a genuine
                 // md-list-item; hover Done/Delete stay a light-DOM sibling inside the
                 // position:relative .nc-action-row wrapper (avoids shadow-DOM slotting).
@@ -3215,7 +3294,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 }
                 return (
                   <div key={t.id} data-nc-task-row="true" className="nc-action-row">
-                    <ListItem type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
+                    <ListItem type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm, ...(heroVars || {}) }}>
                       <span slot="start" style={{ width: dense?6:8, height: dense?6:8, borderRadius: RADIUS.pill, background: priColor }} />
                       <span slot="headline" style={{ color: C.text, fontWeight: 500, wordBreak: "break-word" }}>{displayText}</span>
                       {touchLayout && (
@@ -3238,7 +3317,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No open tasks.</div>}
               </div>
-              {!isStacked && (showAllTasks || primaryTaskQueue.length > collapsedTaskLimit) && primaryTaskQueue.length > MIN_COLLAPSED_TASKS && (
+              {!isStacked && (showAllTasks || hiddenTaskCount > 0) && (NC_PROTO || primaryTaskQueue.length > MIN_COLLAPSED_TASKS) && (
                 <TextButton ref={taskMoreButtonRef} onClick={() => setShowAllTasks(v => !v)} title={showAllTasks ? "Show fewer tasks" : `Show ${hiddenTaskCount} more tasks`} aria-label={showAllTasks ? "Show fewer tasks" : `Show ${hiddenTaskCount} more tasks`}
                   style={{ width: "100%", height: 24, flex: "0 0 24px", borderTop: `1px solid ${C.divider}`,
                     '--md-text-button-container-height': '24px', '--md-text-button-label-text-color': C.faint, '--md-text-button-label-text-size': '11px', flexShrink: 0 }}>
@@ -3264,14 +3343,15 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               </div>
             </div>
             <div style={{ ...ncScrollPane, ...denseListVars({ dense, primary: C.text, secondary: GOLD, hover: GOLD }) }}>
-              {/* Active shailos — open + pending get-back */}
-              {visibleShailos.length ? visibleShailos.map((s, idx) => {
+              {/* Active shailos — open + pending get-back. Calm-rows: rest at
+                  NC_PROTO_CAP with a "+N more" reveal; first row is the hero. */}
+              {visibleShailos.length ? (NC_PROTO && !expandedRows.has("desk-shailos") ? visibleShailos.slice(0, NC_PROTO_CAP) : visibleShailos).map((s, idx) => {
                 const text = nerveDisplaySummary(s, "Open shaila");
                 const isGetBack = s.status === "get_back" || !!s.isGetBackStep;
                 const chipLabel = isGetBack ? "Get back" : "Answer";
                 const chipBg = isGetBack ? "rgba(201,146,60,0.22)" : "rgba(201,146,60,0.10)";
                 return (
-                  <ListItem key={s.id} type="button" onClick={onOpenShailos} style={{ borderRadius: RADIUS.sm }}>
+                  <ListItem key={s.id} type="button" onClick={onOpenShailos} style={{ borderRadius: RADIUS.sm, ...(NC_PROTO && idx === 0 ? NC_PROTO_HERO_VARS : {}) }}>
                     <span slot="start" style={{ width: dense?6:8, height: dense?6:8, borderRadius: RADIUS.pill, background: GOLD }} />
                     <span slot="headline" style={{ color: C.text, fontWeight: 500, wordBreak: "break-word" }}>{text}</span>
                     {!dense && <span slot="supporting-text" style={{ color: GOLD, display: "inline-flex", alignItems: "center", gap: 4 }}>{suiteIcon(isGetBack ? "schedule" : "search", 12)} {isGetBack ? "waiting to reply" : "pending answer"}</span>}
@@ -3279,6 +3359,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   </ListItem>
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No pending shailos.</div>}
+              {NC_PROTO && (visibleShailos.length > NC_PROTO_CAP || expandedRows.has("desk-shailos")) && (
+                <MoreRow C={C} open={expandedRows.has("desk-shailos")} count={Math.max(0, visibleShailos.length - NC_PROTO_CAP)} onClick={() => toggleRow("desk-shailos")} />
+              )}
 
               {/* Recently completed shailos */}
               {shailosCompleted.length > 0 && (
@@ -3510,9 +3593,11 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                                 <span slot="trailing-supporting-text" style={{ color: row.now ? nowLineColor : C.faint, fontWeight: row.now ? 700 : 400, whiteSpace: "nowrap" }}>{row.now ? "Now" : timeLabel}</span>
                               </>
                             );
+                            // Calm-rows: routine events (davening etc.) whisper so specials stand out.
+                            const rowOpacity = row.past ? 0.7 : (NC_PROTO && row.routine && !row.now ? 0.55 : 1);
                             return row.evt?.htmlLink
-                              ? <ListItem key={row.evt?.id || row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.xs, opacity: row.past ? 0.7 : 1 }}>{content}</ListItem>
-                              : <ListItem key={row.evt?.id || row.index} type="text" style={{ borderRadius: RADIUS.xs, opacity: row.past ? 0.7 : 1 }}>{content}</ListItem>;
+                              ? <ListItem key={row.evt?.id || row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.xs, opacity: rowOpacity }}>{content}</ListItem>
+                              : <ListItem key={row.evt?.id || row.index} type="text" style={{ borderRadius: RADIUS.xs, opacity: rowOpacity }}>{content}</ListItem>;
                           };
                           const NowBar = (
                             <div ref={agendaNowBarRef} style={{ display: "grid", gridTemplateColumns: "44px minmax(0,1fr)", gap: 8, alignItems: "center", padding: "4px 0", margin: "0 2px" }}>
@@ -3535,7 +3620,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                                   <div style={{ padding: "8px 12px", fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, textAlign: "center" }}>No events today</div>
                                 ) : (
                                   <>
-                                    {pastRows.length > 0 && <List style={agendaListVars}>{pastRows.map(mkAgendaItem)}</List>}
+                                    {/* Calm-rows: the morning's finished events collapse to one line. */}
+                                    {pastRows.length > 0 && (NC_PROTO && !expandedRows.has("desk-cal-past")
+                                      ? <MoreRow C={C} count={pastRows.length} label="earlier" onClick={() => toggleRow("desk-cal-past")} />
+                                      : <>
+                                          {NC_PROTO && <MoreRow C={C} open label="earlier" count={pastRows.length} onClick={() => toggleRow("desk-cal-past")} />}
+                                          <List style={agendaListVars}>{pastRows.map(mkAgendaItem)}</List>
+                                        </>)}
                                     {NowBar}
                                     {upcomingRows.length > 0 && <List style={agendaListVars}>{upcomingRows.map(mkAgendaItem)}</List>}
                                     {tomorrowRows.length > 0 && <>{TomorrowBar}<List style={agendaListVars}>{tomorrowRows.map(mkAgendaItem)}</List></>}
@@ -3758,17 +3849,20 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                     ) : gmailMessages.length === 0 ? (
                       <p style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, margin: "12px 0", textAlign: "center" }}>Inbox zero 🎉</p>
                     ) : (
+                      <>
                       <List style={cardListStyle}>
-                      {gmailMessages.map((msg, i) => {
+                      {(NC_PROTO && !expandedRows.has("desk-mail") ? gmailMessages.slice(0, NC_PROTO_CAP) : gmailMessages).map((msg, i) => {
                       const subject = gmailHeader(msg, 'Subject') || '(no subject)';
                       const from = fmtFrom(gmailHeader(msg, 'From'));
                       const date = fmtTime(gmailHeader(msg, 'Date'));
                       const url = gmailDeepLink(msg);
                       const selected = selectedEmailId === msg.id;
+                      // Calm-rows: read mail whispers (dim), the newest row is the hero.
+                      const rowVars = NC_PROTO ? { ...(i === 0 ? NC_PROTO_HERO_VARS : {}), ...(!mailIsUnread(msg) && !selected ? NC_PROTO_DIM : {}) } : {};
                       return (
                         <React.Fragment key={msg.id || i}>
                         <ListItem type="button" onClick={() => handleEmailSelect(msg)}
-                          style={{ borderRadius: RADIUS.sm }}
+                          style={{ borderRadius: RADIUS.sm, ...rowVars }}
                           onMouseEnter={e => {
                             clearTimeout(hoverTimerRef.current);
                             const host = e.currentTarget;
@@ -3813,6 +3907,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       );
                     })}
                     </List>
+                    {NC_PROTO && (gmailMessages.length > NC_PROTO_CAP || expandedRows.has("desk-mail")) && (
+                      <MoreRow C={C} open={expandedRows.has("desk-mail")} count={Math.max(0, gmailMessages.length - NC_PROTO_CAP)} onClick={() => toggleRow("desk-mail")} />
+                    )}
+                    </>
                     )}
                   </div>
                 </div>
