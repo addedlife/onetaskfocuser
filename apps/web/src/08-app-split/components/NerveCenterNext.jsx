@@ -68,7 +68,7 @@ const TIMELINE_PX_HR = 60; // 60 px/hour in the daily timeline — Google Calend
 // ── "Calm rows" prototype — ?ncproto=1 to enable, ?ncproto=0 to disable ──────
 // Opt-in declutter experiment (owner 7/21: cards read as "a sea of line items").
 // Three techniques, all reversible and OFF by default so the live app is unchanged:
-//   cap    — each card rests at NC_PROTO_CAP rows + a quiet "+N more" reveal
+//   cap    — each card rests at an adaptive row count + a quiet "+N more" reveal
 //   hero   — the first (most urgent) row per card renders one type step larger
 //   dim    — routine/already-handled rows (read mail, routine calendar events)
 //            drop to ~55% so the few real signals carry the card
@@ -81,24 +81,18 @@ const NC_PROTO = (() => {
     return localStorage.getItem("nc_proto") === "1";
   } catch { return false; }
 })();
-const NC_PROTO_CAP = 4;      // rows per resting card when there is no hero block
-const NC_PROTO_LIST_CAP = 3; // rows under a hero block (hero + 3 = same resting height)
+// Resting-card row cap under the emphasized top row. v3 (owner 7/21): shallow
+// tablet-portrait cards only fit a couple rows, so the resting cap adapts to the
+// card's shape (see ncProtoCap) — never enough rows to overflow and clip at rest.
+const NC_PROTO_ROWS = 3; // default rows under the emphasized top row (tall panes)
 const NC_PROTO_DIM = { opacity: 0.55 };
-// v2 (owner 7/21): the "random bigger first row" is gone. Each card instead leads
-// with a HeroItem — its auto-prioritized most important item in a tonal block.
+// ncProtoCap(short): short/shallow cards (tablet-portrait rows, stacked) fit ~2
+// rows under the top item without overflowing; tall panes (desktop, wide columns)
+// fit more. Keeping the resting list within the card is what makes it settle
+// cleanly on the padded edge with no half-row and no scroll-snap needed.
+const ncProtoCap = short => (short ? 2 : NC_PROTO_ROWS);
 // Gmail metadata responses carry labelIds; fail open (full contrast) if absent.
 const mailIsUnread = msg => Array.isArray(msg?.labelIds) ? msg.labelIds.includes("UNREAD") : true;
-
-// Card lists settle on clean row boundaries: proximity snap only nudges the
-// scroll when it comes to rest NEAR a row edge — normal flick physics stay
-// untouched (no mandatory-snap jerk), but a stop never leaves a row sliced in
-// half at the card edge. Injected only under the prototype flag; the
-// [data-nc-snap] attribute is inert without this stylesheet.
-if (NC_PROTO && typeof document !== "undefined") {
-  const snapStyle = document.createElement("style");
-  snapStyle.textContent = "[data-nc-snap]{scroll-snap-type:y proximity;scroll-padding-block:4px 8px;}[data-nc-snap]>*{scroll-snap-align:start;}";
-  document.head.appendChild(snapStyle);
-}
 
 // SweepBar — rAF-driven sweep indicator for clock faces.
 // Runs at 60fps via requestAnimationFrame; no state updates, no CSS animation tricks.
@@ -823,8 +817,8 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
       </div>
       {/* Preview shown inline in the header — no second body row needed. */}
       {keepMounted
-        ? <div data-nc-snap="true" style={expanded ? scrollStyle : { display: "none" }}>{children}</div>
-        : (expanded && <div data-nc-snap="true" style={scrollStyle}>{children}</div>)}
+        ? <div style={expanded ? scrollStyle : { display: "none" }}>{children}</div>
+        : (expanded && <div style={scrollStyle}>{children}</div>)}
     </div>
   );
 }
@@ -945,7 +939,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
           )}
         </div>
       )}
-      <div ref={scrollRef} onScroll={measure} data-nc-snap="true"
+      <div ref={scrollRef} onScroll={measure}
         style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", ...(NC_PROTO ? { paddingBottom: 8 } : {}), ...(collapsed ? { display: "none" } : {}) }}>
         {children}
       </div>
@@ -969,23 +963,29 @@ function fmtRelShort(raw) {
   } catch { return ""; }
 }
 
-// HeroItem — the card's single most-important item as a GM3 "primary block":
-// a tonal container (accent at ~10%), title at emphasis weight, one meta line.
-// Hierarchy comes from this ONE emphasized element per card, per M3 guidance —
-// not from inflating an arbitrary list row. Tapping it expands the card.
+// HeroItem — the card's most-important item, rendered as an EMPHASIZED FLUSH ROW
+// (v3, owner 7/21: the rounded tinted pill read as a section header, not as
+// content). Same left-dot metric and inset as every list row, a faint full-bleed
+// accent wash, and bolder title text — so it reads as "the top row, highlighted",
+// continuous with the rows below it, not a separate header block. Tapping opens.
 function HeroItem({ title, meta, accent, C, onClick }) {
   if (!title) return null;
+  const a = accent || C.accent;
   return (
     <div role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
       onKeyDown={onClick ? e => { if (e.key === "Enter") onClick(); } : undefined}
       style={{
-        margin: "6px 10px 4px", padding: "9px 12px", borderRadius: 12, flexShrink: 0,
-        background: softBg(accent || C.accent, 0.10),
+        display: "flex", alignItems: "flex-start", gap: 10, flexShrink: 0,
+        padding: "7px 12px",
+        background: softBg(a, 0.07),
+        boxShadow: `inset 3px 0 0 ${a}`,
         cursor: onClick ? "pointer" : "default",
       }}>
-      <div style={{ fontFamily: NC_FONT_STACK, fontSize: 15.5, fontWeight: 600, lineHeight: 1.3, color: C.text, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word" }}>{title}</div>
-      {meta && <div style={{ marginTop: 2, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.small, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meta}</div>}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontFamily: NC_FONT_STACK, fontSize: 14, fontWeight: 650, lineHeight: 1.3, color: C.text, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word" }}>{title}</div>
+        {meta && <div style={{ marginTop: 1, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.small, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meta}</div>}
+      </div>
     </div>
   );
 }
@@ -1274,6 +1274,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
   const isStacked = availableW < 760;
   const isTablet = !isStacked && availableW < 1120;
   const touchLayout = isStacked || isTablet;
+  // Adaptive resting cap: shallow cards (tablet-portrait rows, stacked) fit ~2
+  // rows under the emphasized top row; tall panes (desktop, wide columns) fit 3.
+  // Evaluated once per render, so it carries the right value into whichever layout
+  // branch renders this pass.
+  const protoCap = NC_PROTO
+    ? ncProtoCap(availableW < 1500 && (isStacked || isMobileDevice || desktopLayout === "boxes"))
+    : NC_PROTO_ROWS;
   const paneW = {
     tasks: Math.max(0.55, Number(paneWeights?.tasks || 1)),
     shailos: Math.max(0.55, Number(paneWeights?.shailos || 1)),
@@ -1365,9 +1372,10 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     };
   }, [primaryTaskQueue.length, showAllTasks, taskComposerOpen, touchLayout]);
   const collapsedTaskLimit = Math.min(primaryTaskQueue.length, Math.max(MIN_COLLAPSED_TASKS, autoTaskLimit));
-  // Calm-rows prototype: the desktop pane rests at NC_PROTO_CAP rows regardless of
-  // how many the auto-fit measurement says would fit; "+N more" reveals the rest.
-  const effectiveTaskLimit = NC_PROTO ? Math.min(collapsedTaskLimit, NC_PROTO_CAP) : collapsedTaskLimit;
+  // Calm-rows prototype: the tall desktop Tasks pane keeps its measured auto-fit
+  // (fills the column, never clips — the pane is full height); the emphasized top
+  // row is rendered separately and excluded from this list.
+  const effectiveTaskLimit = collapsedTaskLimit;
   const hiddenTaskCount = Math.max(0, primaryTaskQueue.length - effectiveTaskLimit);
   const primaryTasks = (isStacked || showAllTasks) ? primaryTaskQueue : primaryTaskQueue.slice(0, effectiveTaskLimit);
   const visibleShailos = shailos.filter(Boolean);
@@ -2745,7 +2753,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 onClick={() => setExpandedBoxId(prev => prev === "mail" ? null : "mail")} />
             )}
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : (NC_PROTO
-              ? (expandedBoxId === "mail" ? gmailMessages.filter(m => m.id !== heroMail?.id) : gmailMessages.filter(m => m.id !== heroMail?.id).slice(0, NC_PROTO_LIST_CAP))
+              ? (expandedBoxId === "mail" ? gmailMessages.filter(m => m.id !== heroMail?.id) : gmailMessages.filter(m => m.id !== heroMail?.id).slice(0, protoCap))
               : gmailMessages).map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
               const from = fmtFromM(gmailHdr(msg,"From"));
@@ -2768,8 +2776,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </ListItem>
               );
             })}
-            {NC_PROTO && expandedBoxId !== "mail" && (gmailMessages || []).filter(m => m.id !== heroMail?.id).length > NC_PROTO_LIST_CAP && (
-              <MoreRow C={C} count={(gmailMessages || []).filter(m => m.id !== heroMail?.id).length - NC_PROTO_LIST_CAP} onClick={() => setExpandedBoxId("mail")} />
+            {NC_PROTO && expandedBoxId !== "mail" && (gmailMessages || []).filter(m => m.id !== heroMail?.id).length > protoCap && (
+              <MoreRow C={C} count={(gmailMessages || []).filter(m => m.id !== heroMail?.id).length - protoCap} onClick={() => setExpandedBoxId("mail")} />
             )}
           </MobileBox>
 
@@ -2810,7 +2818,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 onClick={() => setExpandedBoxId(prev => prev === "tasks" ? null : "tasks")} />
             )}
             {primaryTaskQueue.length === 0 && !taskComposerOpen ? emptyMsg("No open tasks.") : (NC_PROTO
-              ? (expandedBoxId === "tasks" ? primaryTaskQueue.filter(t => t.id !== heroTask?.id) : primaryTaskQueue.filter(t => t.id !== heroTask?.id).slice(0, NC_PROTO_LIST_CAP))
+              ? (expandedBoxId === "tasks" ? primaryTaskQueue.filter(t => t.id !== heroTask?.id) : primaryTaskQueue.filter(t => t.id !== heroTask?.id).slice(0, protoCap))
               : primaryTaskQueue).map((t, ti) => {
               const pri = gP(priorities, t.priority);
               const priColor = pri?.color || C.accent || "#7EB0DE";
@@ -2838,8 +2846,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </ListItem>
               );
             })}
-            {NC_PROTO && expandedBoxId !== "tasks" && primaryTaskQueue.filter(t => t.id !== heroTask?.id).length > NC_PROTO_LIST_CAP && (
-              <MoreRow C={C} count={primaryTaskQueue.filter(t => t.id !== heroTask?.id).length - NC_PROTO_LIST_CAP} onClick={() => setExpandedBoxId("tasks")} />
+            {NC_PROTO && expandedBoxId !== "tasks" && primaryTaskQueue.filter(t => t.id !== heroTask?.id).length > protoCap && (
+              <MoreRow C={C} count={primaryTaskQueue.filter(t => t.id !== heroTask?.id).length - protoCap} onClick={() => setExpandedBoxId("tasks")} />
             )}
           </MobileBox>
 
@@ -2853,7 +2861,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 onClick={() => setExpandedBoxId(prev => prev === "shailos" ? null : "shailos")} />
             )}
             {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : (NC_PROTO
-              ? (expandedBoxId === "shailos" ? visibleShailos.filter(s => s.id !== heroShaila?.id) : visibleShailos.filter(s => s.id !== heroShaila?.id).slice(0, NC_PROTO_LIST_CAP))
+              ? (expandedBoxId === "shailos" ? visibleShailos.filter(s => s.id !== heroShaila?.id) : visibleShailos.filter(s => s.id !== heroShaila?.id).slice(0, protoCap))
               : visibleShailos).map((s, si) => {
               const text = nerveDisplaySummary(s,"Open shaila");
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
@@ -2865,8 +2873,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </ListItem>
               );
             })}
-            {NC_PROTO && expandedBoxId !== "shailos" && visibleShailos.filter(s => s.id !== heroShaila?.id).length > NC_PROTO_LIST_CAP && (
-              <MoreRow C={C} count={visibleShailos.filter(s => s.id !== heroShaila?.id).length - NC_PROTO_LIST_CAP} onClick={() => setExpandedBoxId("shailos")} />
+            {NC_PROTO && expandedBoxId !== "shailos" && visibleShailos.filter(s => s.id !== heroShaila?.id).length > protoCap && (
+              <MoreRow C={C} count={visibleShailos.filter(s => s.id !== heroShaila?.id).length - protoCap} onClick={() => setExpandedBoxId("shailos")} />
             )}
           </MobileBox>
 
@@ -3099,7 +3107,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             )}
             {topTasks.length === 0 && !taskComposerOpen && <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK }}>No open tasks.</div>}
             {(NC_PROTO
-              ? (expandedRows.has("sec-tasks") ? topTasks.filter(t => t.id !== heroTask?.id) : topTasks.filter(t => t.id !== heroTask?.id).slice(0, NC_PROTO_LIST_CAP))
+              ? (expandedRows.has("sec-tasks") ? topTasks.filter(t => t.id !== heroTask?.id) : topTasks.filter(t => t.id !== heroTask?.id).slice(0, protoCap))
               : topTasks).map((t, ti) => {
               const pri = gP(priorities, t.priority);
               const priColor = pri?.color || C.accent || "#7EB0DE";
@@ -3127,8 +3135,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </ListItem>
               );
             })}
-            {NC_PROTO && (topTasks.filter(t => t.id !== heroTask?.id).length > NC_PROTO_LIST_CAP || expandedRows.has("sec-tasks")) && (
-              <MoreRow C={C} open={expandedRows.has("sec-tasks")} count={Math.max(0, topTasks.filter(t => t.id !== heroTask?.id).length - NC_PROTO_LIST_CAP)} onClick={() => toggleRow("sec-tasks")} />
+            {NC_PROTO && (topTasks.filter(t => t.id !== heroTask?.id).length > protoCap || expandedRows.has("sec-tasks")) && (
+              <MoreRow C={C} open={expandedRows.has("sec-tasks")} count={Math.max(0, topTasks.filter(t => t.id !== heroTask?.id).length - protoCap)} onClick={() => toggleRow("sec-tasks")} />
             )}
             {hiddenMobileTasks > 0 && (
               <ActionBtn variant="text" labelColor={C.faint} labelSize={ncType.meta} onClick={onOpenQueue}
@@ -3162,7 +3170,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </div>
               ) : calendarRows.filter(r=>!r.past).length === 0 ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Nothing upcoming today.</div>
-              ) : (NC_PROTO && !expandedRows.has("sec-cal") ? calendarRows.filter(r=>!r.past).slice(0, NC_PROTO_CAP + 1) : calendarRows.filter(r=>!r.past).slice(0,40)).map(row => {
+              ) : (NC_PROTO && !expandedRows.has("sec-cal") ? calendarRows.filter(r=>!r.past).slice(0, protoCap + 1) : calendarRows.filter(r=>!r.past).slice(0,40)).map(row => {
                 const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
                 const lifted = row.now || row.special;
                 // Calm-rows: routine events (davening etc.) whisper so specials stand out.
@@ -3178,8 +3186,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   ? <ListItem key={row.evt?.id||row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.sm, opacity: rowOpacity }}>{item}</ListItem>
                   : <ListItem key={row.evt?.id||row.index} type="text" style={{ borderRadius: RADIUS.sm, opacity: rowOpacity }}>{item}</ListItem>;
               })}
-              {NC_PROTO && calendarEvents && (calendarRows.filter(r=>!r.past).length > NC_PROTO_CAP + 1 || expandedRows.has("sec-cal")) && (
-                <MoreRow C={C} open={expandedRows.has("sec-cal")} count={Math.max(0, calendarRows.filter(r=>!r.past).length - (NC_PROTO_CAP + 1))} onClick={() => toggleRow("sec-cal")} />
+              {NC_PROTO && calendarEvents && (calendarRows.filter(r=>!r.past).length > protoCap + 1 || expandedRows.has("sec-cal")) && (
+                <MoreRow C={C} open={expandedRows.has("sec-cal")} count={Math.max(0, calendarRows.filter(r=>!r.past).length - (protoCap + 1))} onClick={() => toggleRow("sec-cal")} />
               )}
               {showAddEvent && (
                 <div style={{ padding:"10px 12px",borderTop:`1px solid ${C.divider}` }}>
@@ -3215,7 +3223,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               {!gmailMessages || gmailMessages.length === 0 ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Inbox clear.</div>
               ) : (NC_PROTO
-                ? (expandedRows.has("sec-mail") ? gmailMessages.filter(m => m.id !== heroMail?.id).slice(0,40) : gmailMessages.filter(m => m.id !== heroMail?.id).slice(0, NC_PROTO_LIST_CAP))
+                ? (expandedRows.has("sec-mail") ? gmailMessages.filter(m => m.id !== heroMail?.id).slice(0,40) : gmailMessages.filter(m => m.id !== heroMail?.id).slice(0, protoCap))
                 : gmailMessages.slice(0,40)).map((msg,i) => {
                 const subj = gmailHdr(msg,"Subject")||"(no subject)";
                 const from = fmtFromM(gmailHdr(msg,"From"));
@@ -3232,8 +3240,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   </ListItem>
                 );
               })}
-              {NC_PROTO && (gmailMessages || []).filter(m => m.id !== heroMail?.id).length > NC_PROTO_LIST_CAP && (
-                <MoreRow C={C} open={expandedRows.has("sec-mail")} count={(gmailMessages || []).filter(m => m.id !== heroMail?.id).length - NC_PROTO_LIST_CAP} onClick={() => toggleRow("sec-mail")} />
+              {NC_PROTO && (gmailMessages || []).filter(m => m.id !== heroMail?.id).length > protoCap && (
+                <MoreRow C={C} open={expandedRows.has("sec-mail")} count={(gmailMessages || []).filter(m => m.id !== heroMail?.id).length - protoCap} onClick={() => toggleRow("sec-mail")} />
               )}
             </MobileSection>
           )}
@@ -3253,7 +3261,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             {visibleShailos.length === 0 ? (
               <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>No pending shailos.</div>
             ) : (NC_PROTO
-              ? (expandedRows.has("sec-shailos") ? visibleShailos.filter(s => s.id !== heroShaila?.id).slice(0,40) : visibleShailos.filter(s => s.id !== heroShaila?.id).slice(0, NC_PROTO_LIST_CAP))
+              ? (expandedRows.has("sec-shailos") ? visibleShailos.filter(s => s.id !== heroShaila?.id).slice(0,40) : visibleShailos.filter(s => s.id !== heroShaila?.id).slice(0, protoCap))
               : visibleShailos.slice(0,40)).map((s, si) => {
               const text = nerveDisplaySummary(s,"Open shaila");
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
@@ -3265,8 +3273,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 </ListItem>
               );
             })}
-            {NC_PROTO && (visibleShailos.filter(s => s.id !== heroShaila?.id).length > NC_PROTO_LIST_CAP || expandedRows.has("sec-shailos")) && (
-              <MoreRow C={C} open={expandedRows.has("sec-shailos")} count={Math.max(0, visibleShailos.filter(s => s.id !== heroShaila?.id).length - NC_PROTO_LIST_CAP)} onClick={() => toggleRow("sec-shailos")} />
+            {NC_PROTO && (visibleShailos.filter(s => s.id !== heroShaila?.id).length > protoCap || expandedRows.has("sec-shailos")) && (
+              <MoreRow C={C} open={expandedRows.has("sec-shailos")} count={Math.max(0, visibleShailos.filter(s => s.id !== heroShaila?.id).length - protoCap)} onClick={() => toggleRow("sec-shailos")} />
             )}
             {visibleShailos.length > 40 && (
               <ActionBtn variant="text" labelColor={C.faint} labelSize={ncType.meta} onClick={onOpenShailos}
@@ -3511,7 +3519,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
               {/* Active shailos — open + pending get-back. Calm-rows v2: the hero
                   block above carries the top item; the list rests at 3 more. */}
               {visibleShailos.length ? (NC_PROTO
-                ? (expandedRows.has("desk-shailos") ? visibleShailos.filter(s => s.id !== heroShaila?.id) : visibleShailos.filter(s => s.id !== heroShaila?.id).slice(0, NC_PROTO_LIST_CAP))
+                ? (expandedRows.has("desk-shailos") ? visibleShailos.filter(s => s.id !== heroShaila?.id) : visibleShailos.filter(s => s.id !== heroShaila?.id).slice(0, protoCap))
                 : visibleShailos).map((s, idx) => {
                 const text = nerveDisplaySummary(s, "Open shaila");
                 const isGetBack = s.status === "get_back" || !!s.isGetBackStep;
@@ -3526,8 +3534,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                   </ListItem>
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No pending shailos.</div>}
-              {NC_PROTO && (visibleShailos.filter(s => s.id !== heroShaila?.id).length > NC_PROTO_LIST_CAP || expandedRows.has("desk-shailos")) && (
-                <MoreRow C={C} open={expandedRows.has("desk-shailos")} count={Math.max(0, visibleShailos.filter(s => s.id !== heroShaila?.id).length - NC_PROTO_LIST_CAP)} onClick={() => toggleRow("desk-shailos")} />
+              {NC_PROTO && (visibleShailos.filter(s => s.id !== heroShaila?.id).length > protoCap || expandedRows.has("desk-shailos")) && (
+                <MoreRow C={C} open={expandedRows.has("desk-shailos")} count={Math.max(0, visibleShailos.filter(s => s.id !== heroShaila?.id).length - protoCap)} onClick={() => toggleRow("desk-shailos")} />
               )}
 
               {/* Recently completed shailos */}
@@ -4036,7 +4044,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       )}
                       <List style={cardListStyle}>
                       {(NC_PROTO
-                        ? (expandedRows.has("desk-mail") ? gmailMessages.filter(m => m.id !== heroMail?.id) : gmailMessages.filter(m => m.id !== heroMail?.id).slice(0, NC_PROTO_LIST_CAP))
+                        ? (expandedRows.has("desk-mail") ? gmailMessages.filter(m => m.id !== heroMail?.id) : gmailMessages.filter(m => m.id !== heroMail?.id).slice(0, protoCap))
                         : gmailMessages).map((msg, i) => {
                       const subject = gmailHeader(msg, 'Subject') || '(no subject)';
                       const from = fmtFrom(gmailHeader(msg, 'From'));
@@ -4095,8 +4103,8 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                       );
                     })}
                     </List>
-                    {NC_PROTO && (gmailMessages.filter(m => m.id !== heroMail?.id).length > NC_PROTO_LIST_CAP || expandedRows.has("desk-mail")) && (
-                      <MoreRow C={C} open={expandedRows.has("desk-mail")} count={Math.max(0, gmailMessages.filter(m => m.id !== heroMail?.id).length - NC_PROTO_LIST_CAP)} onClick={() => toggleRow("desk-mail")} />
+                    {NC_PROTO && (gmailMessages.filter(m => m.id !== heroMail?.id).length > protoCap || expandedRows.has("desk-mail")) && (
+                      <MoreRow C={C} open={expandedRows.has("desk-mail")} count={Math.max(0, gmailMessages.filter(m => m.id !== heroMail?.id).length - protoCap)} onClick={() => toggleRow("desk-mail")} />
                     )}
                     </>
                     )}
