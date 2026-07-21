@@ -109,8 +109,22 @@ const mailIsUnread = msg => Array.isArray(msg?.labelIds) ? msg.labelIds.includes
 //   touch targets        48x48dp minimum, 8dp apart
 //   list item text       16sp headline (body-large), 14sp supporting
 //   list item height     56dp one-line / 76dp two-line
-const NC_FEED_ROWS = 4;        // items per card at rest; "show all" expands in place
+// v6 correction (owner, 7/21): a scrolling feed BREAKS this product. NerveCenter's
+// whole premise is at-a-glance — all five categories on one screen, nothing pushed
+// below a fold to be forgotten. So the page does NOT scroll. What was actually
+// wrong was never the fixed screen; it was dividing that screen EQUALLY. A card
+// holding 45 tasks and one holding 2 shailos got the same space.
+// Now the fixed screen height is allocated PROPORTIONALLY to how much each
+// category is carrying, every card still shows a live total in its header (so
+// nothing is hidden or forgotten), and each card renders the whole rows that fit
+// its allocation — no clipped row, no dead gap.
 const NC_FEED_2COL = 840;      // M3 expanded breakpoint → second column
+// Damped proportional weight: busier cards get more room, but a 45-item card
+// can't starve a 3-item one. sqrt damping + hard clamp to [1, 3].
+function ncCardWeight(count) {
+  const n = Math.max(0, Number(count) || 0);
+  return Math.max(1, Math.min(3, 1 + Math.sqrt(n) / 2.6));
+}
 if (NC_PROTO && typeof document !== "undefined") {
   const feedStyle = document.createElement("style");
   feedStyle.textContent = [
@@ -120,7 +134,9 @@ if (NC_PROTO && typeof document !== "undefined") {
     '[data-nc-feed] md-icon-button .material-symbols-rounded{font-size:22px!important;}',
     // M3 list metrics: readable type, real row height. An element-level rule beats
     // the inherited density tokens set on the container.
-    '[data-nc-feed] md-list-item{--md-list-item-label-text-size:16px;--md-list-item-label-text-line-height:22px;--md-list-item-supporting-text-size:14px;--md-list-item-supporting-text-line-height:19px;--md-list-item-trailing-supporting-text-size:13px;--md-list-item-one-line-container-height:56px;--md-list-item-two-line-container-height:76px;--md-list-item-top-space:8px;--md-list-item-bottom-space:8px;--md-list-item-leading-space:16px;--md-list-item-trailing-space:8px;}',
+    // 48dp rows (M3 minimum touch target) rather than the 56dp comfortable size:
+    // on a no-scroll screen every pixel buys another visible item.
+    '[data-nc-feed] md-list-item{--md-list-item-label-text-size:16px;--md-list-item-label-text-line-height:21px;--md-list-item-supporting-text-size:13.5px;--md-list-item-supporting-text-line-height:18px;--md-list-item-trailing-supporting-text-size:13px;--md-list-item-one-line-container-height:48px;--md-list-item-two-line-container-height:64px;--md-list-item-top-space:5px;--md-list-item-bottom-space:5px;--md-list-item-leading-space:14px;--md-list-item-trailing-space:6px;}',
   ].join('\n');
   document.head.appendChild(feedStyle);
 }
@@ -929,7 +945,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
 // When onToggleExpand is provided the header tap toggles expand instead of opening the full
 // surface; onOpen moves to a small trailing open_in_new button. collapsed=true renders the
 // header only (content hidden via display:none so embedded pollers — Phone — keep running).
-function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, stickyHeader = false, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, hero = null }) {
+function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, stickyHeader = false, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, hero = null, count = null }) {
   const [scrolled, setScrolled] = useState(false);
   const [fade, setFade] = useState(false); // more content below → show a bottom fade so the
   const scrollRef = useRef(null);          // last (partial) row dissolves instead of hard-cutting
@@ -965,10 +981,9 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
     obs.observe(el);
     return () => obs.disconnect();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  // Feed mode sizes cards by content, so there is no fitting to do — the card
-  // shows NC_FEED_ROWS items and "show all" grows it in the page flow.
-  const measuredFit = useFitRows(scrollRef, { enabled: false, watch: `${dense}|${expanded}` });
-  const fitRows = NC_PROTO ? (expanded ? 9999 : NC_FEED_ROWS) : measuredFit;
+  // The card owns a fixed slice of the screen, so it renders exactly the whole
+  // rows that fit that slice — no clipped row, no dead gap, and no page scroll.
+  const fitRows = useFitRows(scrollRef, { enabled: NC_PROTO && !collapsed, watch: `${dense}|${expanded}|${count}` });
 
   // stickyHeader: always-visible header row with icon chip + title + summary line.
   // While card-expanded (or header-only collapsed) the header must stay reachable,
@@ -984,7 +999,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
       style={{ position: "relative", background: NC_PROTO ? `color-mix(in srgb, ${C.bg} 94%, ${accentColor || C.accent} 6%)` : C.bg, borderRadius: NC_PROTO ? 20 : 16, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden",
         // Feed card: height comes from content. No fixed fifth, so no clipped row
         // and no dead gap under a short card.
-        ...(NC_PROTO ? { height: "auto", minHeight: 0 } : { minHeight: 0 }), ...style }}>
+        minHeight: 0, ...style }}>
       {stickyHeader ? (
         // Sticky header: never collapses. Shows icon chip + title label + summary on separate line.
         // With onToggleExpand (5-column card grid) the header tap expands this column and
@@ -1044,7 +1059,14 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
             <span slot="start" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: NC_PROTO ? 24 : (dense ? 16 : 22), height: NC_PROTO ? 24 : (dense ? 16 : 22), color: NC_PROTO ? (accentColor || C.accent) : C.muted, flexShrink: 0 }}>{suiteIcon(icon, NC_PROTO ? 22 : (dense ? 13 : 16))}</span>
             {NC_PROTO
               ? <>
-                  <div slot="headline" style={{ fontSize: 16, fontWeight: 650, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
+                  <div slot="headline" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style={{ fontSize: 16, fontWeight: 650, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
+                    {/* Live total — the guarantee that nothing is hidden or forgotten
+                        even when only the first few rows fit on screen. */}
+                    {count > 0 && (
+                      <span style={{ flexShrink: 0, minWidth: 22, height: 20, padding: "0 7px", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: RADIUS.pill, background: softBg(accentColor || C.accent, 0.18), color: accentColor || C.accent, fontFamily: NC_FONT_STACK, fontSize: 12.5, fontWeight: 700, lineHeight: 1 }}>{count}</span>
+                    )}
+                  </div>
                   {summary && <div slot="supporting-text" style={{ fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{summary}</div>}
                 </>
               : <div slot="headline" style={{ fontSize: NC_TYPE.small, fontWeight: 400, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{summary}</div>}
@@ -1063,8 +1085,8 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
       {!collapsed && hero}
       <div ref={scrollRef} onScroll={measure}
         style={NC_PROTO
-          // Feed: the PAGE scrolls, never the card. Content is fully laid out.
-          ? { flex: "0 0 auto", overflow: "visible", paddingBottom: 8, ...(collapsed ? { display: "none" } : {}) }
+          // Exactly the rows that fit are rendered, so this never needs to scroll.
+          ? { flex: 1, minHeight: 0, overflow: "hidden", paddingBottom: 4, ...(collapsed ? { display: "none" } : {}) }
           : { flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", ...(collapsed ? { display: "none" } : {}) }}>
         {typeof children === "function" ? children(fitRows) : children}
       </div>
@@ -2798,9 +2820,15 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
       collapsed: NC_PROTO ? false : (!boxesFiveCol && !!expandedBoxId && expandedBoxId !== id),
       onToggleExpand: () => setExpandedBoxId(prev => prev === id ? null : id),
     });
-    // Cards whose content fills its parent (phone surface, calendar timeline) need
-    // an explicit height once the card itself is content-sized.
-    const feedPaneH = 360;
+    // Screen share per card, damped so the busiest card can't starve the others.
+    const feedCounts = {
+      mail: (gmailMessages || []).length,
+      phone: Number(phoneActivitySummary?.unreadTexts || 0) + Number(phoneActivitySummary?.missedCalls || 0) + (phoneActivitySummary?.texts || []).length,
+      tasks: primaryTaskQueue.length,
+      shailos: visibleShailos.length,
+      calendar: calendarRows.filter(r => !r.past).length,
+    };
+    const feedWeights = Object.fromEntries(BOX_ORDER.map(id => [id, ncCardWeight(feedCounts[id])]));
     const boxRows = expandedBoxId
       ? BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,1fr)" : "min-content").join(" ")
       : "repeat(5, minmax(0,1fr))";
@@ -2874,21 +2902,23 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
         {/* GM3 grid rhythm: real gutters between cards (tighter when dense, but still
             breathing) — tone + space do the separation, matching the full-panel view. */}
         <div style={NC_PROTO ? {
-            // M3 feed: the PAGE scrolls; cards are content-sized rows in a 1- or
-            // 2-column grid chosen by the M3 expanded breakpoint.
-            flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
-            WebkitOverflowScrolling: "touch", overscrollBehavior: "contain",
-            display: "grid", gap: 12, marginTop: 10, alignContent: "start",
+            // One screen, no page scroll: all five categories always visible.
+            // Rows are weighted by content so a busy card gets more of the screen
+            // than a quiet one — the equal fifths were the real bug.
+            flex: 1, minHeight: 0, overflow: "hidden",
+            display: "grid", gap: 10, marginTop: 8,
             gridTemplateColumns: availableW >= NC_FEED_2COL ? "repeat(2, minmax(0,1fr))" : "1fr",
-            gridAutoRows: "min-content",
-            paddingBottom: "calc(16px + env(safe-area-inset-bottom,0px))",
+            gridTemplateRows: expandedBoxId
+              ? BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,4fr)" : "min-content").join(" ")
+              : BOX_ORDER.map(id => `minmax(0, ${feedWeights[id]}fr)`).join(" "),
+            paddingBottom: "calc(6px + env(safe-area-inset-bottom,0px))",
           } : { flex:1, minHeight:0, gap: dense?8:14, marginTop:10, display:"grid", overflow:"hidden",
           ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }),
           gridTemplateColumns: boxesFiveCol ? boxCols : "1fr",
           gridTemplateRows:    boxesFiveCol ? "1fr" : boxRows }}>
 
           {/* Mail */}
-          <MobileBox {...boxCtx} {...boxProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} summary={cardSummary("Mail")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} {...boxProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} count={feedCounts.mail} summary={cardSummary("Mail")} style={cardStyle} dense={dense}
             onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}
             /* Account picker + refresh ride the card's own header row instead of a second
                toolbar row underneath it (owner ticket 7/14: "two rows when they need only
@@ -2937,7 +2967,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Phone */}
-          <MobileBox {...boxCtx} {...boxProps("phone")} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} summary={cardSummary("Phone")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} {...boxProps("phone")} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} count={feedCounts.phone} summary={cardSummary("Phone")} style={cardStyle} dense={dense}
             statusDot={phoneDotColor} onOpen={onOpenPhone}
             hero={NC_PROTO && heroPhone ? showHero(
               <HeroItem C={C} accent={CAT_PHONE} title={heroPhone.title} meta={heroPhone.meta}
@@ -2945,13 +2975,13 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             ) : null}>
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
-            <div style={{ display:"flex", flexDirection:"column", height: NC_PROTO ? (expandedBoxId === "phone" ? 560 : feedPaneH) : "100%", minHeight:0, padding: NC_PROTO ? "0 8px 8px" : (dense ? "1px 8px 4px" : "4px 10px 8px"), boxSizing:"border-box" }}>
+            <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0, padding: NC_PROTO ? "0 8px 6px" : (dense ? "1px 8px 4px" : "4px 10px 8px"), boxSizing:"border-box" }}>
               <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact dense={dense} onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </MobileBox>
 
           {/* Tasks */}
-          <MobileBox {...boxCtx} {...boxProps("tasks")} icon="rule" title="Tasks" accentColor={C.accent} summary={cardSummary("Tasks")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} {...boxProps("tasks")} icon="rule" title="Tasks" accentColor={C.accent} count={feedCounts.tasks} summary={cardSummary("Tasks")} style={cardStyle} dense={dense}
             onOpen={onOpenQueue}
             hero={NC_PROTO && heroTask ? showHero(
               <HeroItem C={C} accent={gP(priorities, heroTask.priority)?.color || C.accent}
@@ -3011,7 +3041,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Shailos */}
-          <MobileBox {...boxCtx} {...boxProps("shailos")} icon="question_mark" title="Shailos" accentColor={GOLD} summary={cardSummary("Shailos")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} {...boxProps("shailos")} icon="question_mark" title="Shailos" accentColor={GOLD} count={feedCounts.shailos} summary={cardSummary("Shailos")} style={cardStyle} dense={dense}
             onOpen={onOpenShailos}
             hero={NC_PROTO && heroShaila ? showHero(
               <HeroItem C={C} accent={GOLD}
@@ -3042,7 +3072,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
           </MobileBox>
 
           {/* Calendar */}
-          <MobileBox {...boxCtx} {...boxProps("calendar")} icon="calendar_today" title="Calendar" accentColor={C.warning} summary={cardSummary("Calendar")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} {...boxProps("calendar")} icon="calendar_today" title="Calendar" accentColor={C.warning} count={feedCounts.calendar} summary={cardSummary("Calendar")} style={cardStyle} dense={dense}
             onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}
             /* Account picker + refresh + Agenda/Live-time toggle ride the card's own header
                row instead of a second toolbar row underneath it (owner ticket 7/14: "two
@@ -3060,7 +3090,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 onClick={() => setExpandedBoxId(prev => prev === "calendar" ? null : "calendar")} />
             ) : null}>
             {/* Fill the box as a flex column so the timeline's internal scroll bounds correctly. */}
-            <div style={{ display:"flex", flexDirection:"column", height: NC_PROTO ? (expandedBoxId === "calendar" ? 620 : feedPaneH) : "100%", minHeight:0 }}>
+            <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0 }}>
               {showAddEvent && (
                 <div style={{ padding:"10px 12px", borderBottom:`1px solid ${C.divider}`, flexShrink:0 }}>
                   <textarea autoFocus value={addEventText} onChange={e=>setAddEventText(e.target.value)} rows={2} placeholder='e.g. "Call David Mon at 3pm"'
