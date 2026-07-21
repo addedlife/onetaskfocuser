@@ -20,6 +20,15 @@ jobs:
         working-directory: apps/web
         run: npm ci
 
+      # GM3 conformance ratchet. Counts Material 3 lint violations and fails only
+      # if the count went UP against .gm3-baseline.json. Existing violations are
+      # allowed through (there were 1386 at the 2026-07-21 audit); the point is
+      # that the number can only go down. Run `npm run gm3:update` after landing
+      # fixes to lock the gain in. See CLAUDE.md § GM3 conformance.
+      - name: GM3 ratchet
+        working-directory: apps/web
+        run: npm run gm3
+
       - name: Build frontend
         working-directory: apps/web
         env:

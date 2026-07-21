@@ -8,7 +8,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint src/*.js src/*.jsx",
+    "lint": "node scripts/lint.mjs",
+    "gm3": "node scripts/gm3-ratchet.mjs",
+    "gm3:update": "node scripts/gm3-ratchet.mjs --update",
     "test:phone": "node --test tests/*.test.mjs"
   },
   "dependencies": {

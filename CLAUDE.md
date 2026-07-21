@@ -4,6 +4,38 @@ Claude Code loads this file automatically at the start of every session in this 
 It is the durable home for owner preferences, so they survive across sessions instead of
 being promised in chat and forgotten. Read `BRIEF.txt` and `AGENTS.md` too.
 
+## How work is delivered (STANDING — no phases, no gates)
+
+**The owner does not work in phases.** Never structure a body of work as "Phase 1 / Phase 2 /
+Phase 3, approve each before the next." Do not ask permission to continue partway through.
+
+- Produce **one ordered worklist**, hardest-blocking item first. Then work it top to bottom,
+  steadily, without stopping to check in between items.
+- **Push after every logical package point** — a coherent unit of work that builds and is
+  verified, per the Release policy below. Not after every file, not once at the very end.
+  A worklist of 12 items might be 4 or 5 pushes.
+- The only legitimate stop is a genuine decision only the owner can make (a product tradeoff, a
+  destructive/irreversible action, a blocked credential). Ask that question ONCE, up front,
+  before starting — not as a mid-stream gate.
+- Ordering rule: anything that **prevents regression** (lint, tests, enforcement tooling) goes
+  near the FRONT of the list, not the end. Otherwise later items silently undo earlier ones.
+
+### "Done" means done — no flag-gated completions
+
+A fix hidden behind an opt-in flag, a URL parameter, or a `localStorage` key that defaults to
+off is **not shipped**, and a commit message must never describe it as if it were. This has
+actually happened: `4.96.0` was titled "48dp targets, 16sp rows" while the entire block sat
+inside `if (NC_PROTO && …)` — an `?ncproto=1` opt-in, off by default — so production kept the
+34px rows and 13.5px type the commit claimed to have fixed, for three more releases.
+
+- Fix at the **source**, not the call site. If a shared token/helper (`m3.jsx` `denseListVars`,
+  `ui-tokens.jsx` `gvIconButton`) is the thing that's wrong, change it there. Patching one
+  surface while the shared definition still emits the bad value fixes nothing app-wide.
+- If a change genuinely must ship dark, say so plainly in the commit body and in chat, and say
+  what flips it on. Never let the subject line imply it's live.
+- Verification claims must match what was actually verified. "So no control is left minuscule"
+  is false when it's scoped to one flag on one surface.
+
 ## Release policy (STANDING — do not skip)
 
 **Always push live after a verified good fix.** The owner has standing authorization for this.
@@ -137,6 +169,46 @@ because it counts every matching commit ever instead of resetting. Just look at 
 
 Full reconstructed version history (back through the pre-Pro-4 era) lives in
 [`CHANGELOG.md`](CHANGELOG.md).
+
+## GM3 conformance — the ratchet (STANDING)
+
+The M3 component rule below covers COMPONENTS ONLY. It passed for months while the
+app failed Material 3 on layout, type scale, touch targets, motion and state layers —
+the 2026-07-21 audit scored the web app **48% (275/600)** across all eight dimensions,
+with accessibility at 1.3/5 and layout at 1.6/5. The full standard is now GM3, not
+"use the right component."
+
+**Enforcement is automated. Do not hand-audit this again.**
+
+- `npm run gm3` counts every GM3 lint violation and compares it to
+  `apps/web/.gm3-baseline.json`. The count may go DOWN freely; if it goes UP the
+  command exits non-zero. It runs in `.github/workflows/deploy.yml` before the
+  build, so a regression fails the deploy.
+- `npm run gm3:update` re-snapshots the baseline. **Every worklist item that
+  removes violations must end with a `gm3:update` in the same commit** — otherwise
+  the gain isn't locked in and the number can silently climb back.
+- The rules live in `apps/web/.eslintrc.cjs` as `no-restricted-syntax` selectors:
+  literal font sizes, hardcoded font stacks, literal corner radii, `transition:
+  all`, hex colour literals, and raw `<button>`/`<input>`/`<select>`/`<textarea>`.
+  They are **warnings**, not errors — 1386 pre-existing violations would break the
+  build on day one. The ratchet is what gives them teeth.
+- `ui-tokens.jsx` and `01-core.js` are exempt from the hex-colour rule only. They
+  are the palette source of truth; everything else must reference them.
+- Runtime counterpart: open the app with `?uiaudit=1` and call `uiAudit.report()`
+  (or `uiAudit.score()`). It measures what is ACTUALLY drawn and flags anything
+  below the M3 floor — 48dp touch targets, 12px minimum type.
+
+**Two environment traps that made the old tooling silently report clean:**
+
+1. ESLint 8 walks UP from the working directory for an `eslint.config.js` and flips
+   the whole run to flat-config mode if it finds one **anywhere, including outside
+   the repo**. A stray Vite starter config at `C:\Users\<user>\eslint.config.js`
+   did exactly that — `.eslintrc` was discarded and every source file reported "no
+   matching configuration", i.e. zero problems. Always go through `npm run lint` /
+   `npm run gm3`, which pin `ESLINT_USE_FLAT_CONFIG=false`. Never invoke `npx
+   eslint` bare and trust the result.
+2. The old lint script was `eslint src/*.js src/*.jsx` — top level only. Nothing
+   under `src/08-app-split/`, which is most of the app, was ever linted.
 
 ## M3 component rule (STANDING — hard constraint, no exceptions)
 
