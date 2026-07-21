@@ -89,6 +89,17 @@ const NC_PROTO_DIM = { opacity: 0.55 };
 // Gmail metadata responses carry labelIds; fail open (full contrast) if absent.
 const mailIsUnread = msg => Array.isArray(msg?.labelIds) ? msg.labelIds.includes("UNREAD") : true;
 
+// Card lists settle on clean row boundaries: proximity snap only nudges the
+// scroll when it comes to rest NEAR a row edge — normal flick physics stay
+// untouched (no mandatory-snap jerk), but a stop never leaves a row sliced in
+// half at the card edge. Injected only under the prototype flag; the
+// [data-nc-snap] attribute is inert without this stylesheet.
+if (NC_PROTO && typeof document !== "undefined") {
+  const snapStyle = document.createElement("style");
+  snapStyle.textContent = "[data-nc-snap]{scroll-snap-type:y proximity;scroll-padding-block:4px 8px;}[data-nc-snap]>*{scroll-snap-align:start;}";
+  document.head.appendChild(snapStyle);
+}
+
 // SweepBar — rAF-driven sweep indicator for clock faces.
 // Runs at 60fps via requestAnimationFrame; no state updates, no CSS animation tricks.
 // duration: full cycle in seconds. getOffset(): fractional seconds into the cycle (with ms).
@@ -812,8 +823,8 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
       </div>
       {/* Preview shown inline in the header — no second body row needed. */}
       {keepMounted
-        ? <div style={expanded ? scrollStyle : { display: "none" }}>{children}</div>
-        : (expanded && <div style={scrollStyle}>{children}</div>)}
+        ? <div data-nc-snap="true" style={expanded ? scrollStyle : { display: "none" }}>{children}</div>
+        : (expanded && <div data-nc-snap="true" style={scrollStyle}>{children}</div>)}
     </div>
   );
 }
@@ -934,7 +945,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
           )}
         </div>
       )}
-      <div ref={scrollRef} onScroll={measure}
+      <div ref={scrollRef} onScroll={measure} data-nc-snap="true"
         style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", ...(NC_PROTO ? { paddingBottom: 8 } : {}), ...(collapsed ? { display: "none" } : {}) }}>
         {children}
       </div>
