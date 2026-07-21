@@ -77,6 +77,15 @@ module.exports = {
   rules: {
     'no-undef': 'off',
     'no-unused-vars': 'warn',
+    // Without these two, ESLint has no idea that `<IconBtn/>` counts as using the
+    // `IconBtn` binding, so no-unused-vars reports every imported component and
+    // every locally-defined component as dead. That produced ~60 false positives
+    // in NerveCenter.jsx alone — enough noise to make the whole lint run
+    // untrustworthy, which is a large part of how the GM3 drift went unnoticed.
+    // Enabled individually rather than via plugin:react/recommended, which would
+    // also switch on prop-types and a long tail of unrelated rules.
+    'react/jsx-uses-vars': 'error',
+    'react/jsx-uses-react': 'error',
     'react-hooks/rules-of-hooks': 'error',
     'react-hooks/exhaustive-deps': 'warn',
     'no-restricted-syntax': ['warn', ...ALL_RULES],

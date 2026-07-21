@@ -110,11 +110,18 @@ export const SP = {
 };
 
 // ─── Shape Scale ──────────────────────────────────────────────────────────────
-// xs=chips/badges  sm=buttons/inputs/rows  md=cards/panels  pill=full-round
+// Maps 1:1 onto the M3 shape scale (see --md-sys-shape-corner-* in :root below):
+//   xs=4 chips/badges · sm=8 buttons/inputs/rows · md=12 cards/panels
+//   lg=16 hero cards · xl=28 sheets/dialogs · pill=full-round
+// lg and xl were defined as CSS vars but NOT exported here, so JS callers had no
+// way to reach them and hardcoded instead — kit.jsx invented 24/16/14px and
+// NerveCenter used bare 20px card corners, none of them on the M3 scale.
 export const RADIUS = {
   xs:   "var(--shp-radius-xs)",
   sm:   "var(--shp-radius-sm)",
   md:   "var(--shp-radius-md)",
+  lg:   "var(--shp-radius-lg)",
+  xl:   "var(--shp-radius-xl)",
   pill: "var(--shp-radius-pill)",
 };
 

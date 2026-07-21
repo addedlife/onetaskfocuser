@@ -1,10 +1,10 @@
 {
-  "total": 1386,
+  "total": 1378,
   "byRule": {
     "no hex color literals": 345,
     "no hardcoded font stacks": 236,
     "no literal font sizes": 428,
-    "no literal corner radii above 2px": 45,
+    "no literal corner radii above 2px": 37,
     "use ActionBtn / IconBtn from m3": 236,
     "use TextField from m3": 32,
     "use TextField / Checkbox / Switch / Slider from m3": 51,
