@@ -290,7 +290,7 @@ function TimelineFace({ nowDate, C, base = null, openMenu = null, compact = fals
   const mb = compact ? 7 : 9;
   const bars = rows.map(({ lbl, val, frac, col, op, dur, vw }) => (
     <div key={lbl} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: mb, minWidth: 0 }}>
-      <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, letterSpacing: 0.3, fontFamily: NC_FONT_STACK, width: 38, textAlign: "right", flexShrink: 0, textTransform: "uppercase", lineHeight: 1 }}>{lbl}</span>
+      <span style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.faint, letterSpacing: 0.3, fontFamily: NC_FONT_STACK, width: 38, textAlign: "right", flexShrink: 0, textTransform: "uppercase", lineHeight: 1 }}>{lbl}</span>
       <div style={{ flex: 1, height: 2, borderRadius: 1, background: C.hover, overflow: "hidden", position: "relative", minWidth: 0 }}>
         {dur ? (
           <SweepBar duration={dur} baseOpacity={op} getOffset={tlSweepOff}
@@ -299,13 +299,13 @@ function TimelineFace({ nowDate, C, base = null, openMenu = null, compact = fals
           <div style={{ height: "100%", width: `${frac * 100}%`, borderRadius: 1, background: col, opacity: op, transition: "width 3s ease" }} />
         )}
       </div>
-      <span style={{ fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, width: vw, flexShrink: 0, textAlign: "right", letterSpacing: 0.2, lineHeight: 1 }}>{val}</span>
+      <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, width: vw, flexShrink: 0, textAlign: "right", letterSpacing: 0.2, lineHeight: 1 }}>{val}</span>
     </div>
   ));
   if (compact) return <>{bars}</>;
   return (
     <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, background: C.bg, padding: "16px 10px 14px", alignItems: "stretch", gap: 0 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 14, textAlign: "center" }}>
+      <div style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 14, textAlign: "center" }}>
         {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
       </div>
       {bars}
@@ -816,11 +816,11 @@ function CalendarTimeline({ calendarRows, nowDate, C, scrollRef, nowLineRef }) {
                     overflow: "hidden", cursor: row.evt.htmlLink ? "pointer" : "default",
                     padding: height >= 34 ? "4px 8px" : "2px 8px", boxSizing: "border-box", opacity: row.past ? 0.6 : 1,
                   }}>
-                  <div style={{ fontSize: 11, fontWeight: row.now ? 700 : 600, color: ink, fontFamily: NC_FONT_STACK, lineHeight: 1.25, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                  <div style={{ fontSize: NC_TYPE.small, fontWeight: row.now ? 700 : 600, color: ink, fontFamily: NC_FONT_STACK, lineHeight: 1.25, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                     {row.evt.summary || "(no title)"}
                   </div>
                   {height >= 34 && (
-                    <div style={{ fontSize: 10, color: ink, opacity: 0.8, fontFamily: NC_FONT_STACK, lineHeight: 1.25, marginTop: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: NC_TYPE.small, color: ink, opacity: 0.8, fontFamily: NC_FONT_STACK, lineHeight: 1.25, marginTop: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
                       {row.label}
                     </div>
                   )}
@@ -830,13 +830,13 @@ function CalendarTimeline({ calendarRows, nowDate, C, scrollRef, nowLineRef }) {
           </div>
           {/* Hour labels */}
           {Array.from({ length: 24 }, (_, h) => h > 0 && (
-            <span key={h} style={{ position: "absolute", top: h * TIMELINE_PX_HR, left: 0, width: LABEL_W - 4, textAlign: "right", transform: "translateY(-50%)", fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1, pointerEvents: "none", fontVariantNumeric: "tabular-nums" }}>
+            <span key={h} style={{ position: "absolute", top: h * TIMELINE_PX_HR, left: 0, width: LABEL_W - 4, textAlign: "right", transform: "translateY(-50%)", fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1, pointerEvents: "none", fontVariantNumeric: "tabular-nums" }}>
               {h < 12 ? `${h}a` : h === 12 ? "12p" : `${h - 12}p`}
             </span>
           ))}
           {/* Now-line — style.top driven by rAF each frame; JSX top:0 never changes so React never resets it */}
           <div ref={nowLineRef} style={{ position: "absolute", left: 0, right: 0, top: 0, zIndex: 3, pointerEvents: "none", display: "flex", alignItems: "center" }}>
-            <span style={{ width: LABEL_W - 4, textAlign: "right", fontSize: 9, color: nowLineColor, fontWeight: 700, fontFamily: NC_FONT_STACK, flexShrink: 0, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{nowTimeLabel}</span>
+            <span style={{ width: LABEL_W - 4, textAlign: "right", fontSize: NC_TYPE.small, color: nowLineColor, fontWeight: 700, fontFamily: NC_FONT_STACK, flexShrink: 0, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{nowTimeLabel}</span>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: nowLineColor, flexShrink: 0 }} />
             <div style={{ flex: 1, height: 2, background: nowLineColor, borderRadius: 1 }} />
           </div>
@@ -897,7 +897,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
           <span slot="start" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, color: C.muted, flexShrink: 0 }}>{suiteIcon(icon, 16)}</span>
           <div slot="headline" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <span style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, flexShrink: 0, letterSpacing: 0 }}>{title}</span>
-            {count > 0 && <span style={{ fontSize: 11, fontWeight: 500, color: C.faint, fontFamily: NC_MONO_STACK, background: C.hover, borderRadius: RADIUS.pill, padding: "1px 6px", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{count}</span>}
+            {count > 0 && <span style={{ fontSize: NC_TYPE.small, fontWeight: 500, color: C.faint, fontFamily: NC_MONO_STACK, background: C.hover, borderRadius: RADIUS.pill, padding: "1px 6px", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{count}</span>}
             {preview != null && preview !== "" && (
               // Small single-line caption next to the title — visible in every layout (incl. the
               // always-expanded mobile sections), kept to one line so it never pushes card
@@ -1039,14 +1039,14 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
             <span slot="start" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, color: accentColor || C.accent, flexShrink: 0 }}>{suiteIcon(icon, 22)}</span>
             {<>
                   <div slot="headline" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                    <span style={{ fontSize: 16, fontWeight: 650, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
+                    <span style={{ fontSize: NC_TYPE.title, fontWeight: 650, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
                     {/* Live total — the guarantee that nothing is hidden or forgotten
                         even when only the first few rows fit on screen. */}
                     {count > 0 && (
-                      <span style={{ flexShrink: 0, minWidth: 22, height: 20, padding: "0 7px", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: RADIUS.pill, background: softBg(accentColor || C.accent, 0.18), color: accentColor || C.accent, fontFamily: NC_FONT_STACK, fontSize: 12.5, fontWeight: 700, lineHeight: 1 }}>{count}</span>
+                      <span style={{ flexShrink: 0, minWidth: 22, height: 20, padding: "0 7px", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: RADIUS.pill, background: softBg(accentColor || C.accent, 0.18), color: accentColor || C.accent, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.meta, fontWeight: 700, lineHeight: 1 }}>{count}</span>
                     )}
                   </div>
-                  {summary && <div slot="supporting-text" style={{ fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{summary}</div>}
+                  {summary && <div slot="supporting-text" style={{ fontSize: NC_TYPE.body, color: C.muted, fontFamily: NC_FONT_STACK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{summary}</div>}
                 </>}
             {onToggleExpand && <span slot="end" style={{ display: "flex", color: C.faint, flexShrink: 0 }}>{suiteIcon(expanded ? "close_fullscreen" : "expand_content", 12)}</span>}
           </ListItem>
@@ -1106,7 +1106,7 @@ function HeroItem({ title, meta, accent, C, onClick }) {
         cursor: onClick ? "pointer" : "default",
       }}>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontFamily: NC_FONT_STACK, fontSize: 14, fontWeight: 650, lineHeight: 1.3, color: C.text, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word" }}>{title}</div>
+        <div style={{ fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.body, fontWeight: 650, lineHeight: 1.3, color: C.text, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word" }}>{title}</div>
         {meta && <div style={{ marginTop: 1, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.small, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meta}</div>}
       </div>
     </div>
@@ -1383,7 +1383,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
         <>
           <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={() => setGoogleAcctMenuOpen(false)} />
           <div style={{ position: "absolute", right: 0, top: 30, zIndex: 9101, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, minWidth: 200, boxShadow: ELEV[3], overflow: "hidden" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "8px 12px 4px" }}>Account</div>
+            <div style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "8px 12px 4px" }}>Account</div>
             {[...googleAccounts.map(em => ({ key: em, label: em })), ...(googleAccounts.length > 1 ? [{ key: "all", label: "Both accounts" }] : [])].map(opt => {
               const active = opt.key === "all" ? googleAccountFilter === "all" : googleAccountFilter === opt.key;
               return (
@@ -1469,7 +1469,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   // title typography, and a tonal rounded icon "puck" carrying each section's
   // accent. This flows to every section header on the surface at once.
   const ncHeader = { minHeight: 44, padding: `${SP.md} ${SP.md} ${SP.sm}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: SP.sm };
-  const ncTitle = { fontSize: 16.5, fontWeight: 650, letterSpacing: "-0.01em", color: C.text, fontFamily: NC_FONT_STACK, lineHeight: LINE.tight };
+  const ncTitle = { fontSize: NC_TYPE.title, fontWeight: 650, letterSpacing: "-0.01em", color: C.text, fontFamily: NC_FONT_STACK, lineHeight: LINE.tight };
   const ncSectionIcon = (accent = C.accent) => ({ width: 30, height: 30, borderRadius: RADIUS.md, background: hexToRgba(accent || C.accent, 0.16), color: accent || C.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 });
   const phoneStatusColor = phoneStatusSummary.tone === "incoming" ? C.success : phoneStatusSummary.tone === "call" ? C.warning : phoneStatusSummary.online ? C.success : C.faint;
   const rawNowDate = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());
@@ -2497,8 +2497,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
       {activeChiefTaskText && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 6px 5px 10px", background: hexToRgba(C.accent, 0.055) || C.bgSoft, borderTop: `1px solid ${C.divider}` }}>
           <span style={{ display: "flex", color: C.accent, flexShrink: 0 }}>{suiteIcon("bolt", 15)}</span>
-          <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.3, wordBreak: "break-word" }}>
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: C.accent, marginRight: 6 }}>{chiefRefreshNonce > 0 ? "Re-suggested:" : "Suggested now:"}</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.3, wordBreak: "break-word" }}>
+            <span style={{ fontSize: NC_TYPE.small, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: C.accent, marginRight: 6 }}>{chiefRefreshNonce > 0 ? "Re-suggested:" : "Suggested now:"}</span>
             {streamNext}{streamNext.length < activeChiefTaskText.length && <span style={{ opacity: 0.45 }}>▋</span>}
           </span>
           <IconBtn icon="autorenew" iconSize={14} color={chiefLoading ? C.faint : C.accent}
@@ -2621,7 +2621,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               {activeChiefBrief.signals?.length > 0 && (
                 <div style={{ display: "grid", gap:8, borderTop: activeChiefBrief.brief ? `1px solid ${C.divider}` : "none", paddingTop: activeChiefBrief.brief ? 12 : 0 }}>
                   {activeChiefBrief.signals.map((sig, i) => (
-                    <div key={i} style={{ display: "grid", gridTemplateColumns: "80px minmax(0,1fr)", gap: 10, fontSize: 15, fontFamily: NC_FONT_STACK, lineHeight: 1.45 }}>
+                    <div key={i} style={{ display: "grid", gridTemplateColumns: "80px minmax(0,1fr)", gap: 10, fontSize: NC_TYPE.title, fontFamily: NC_FONT_STACK, lineHeight: 1.45 }}>
                       <span style={{ color: C.faint, fontWeight: 700, fontSize: NC_TYPE.meta, textTransform: "uppercase", letterSpacing: "0.04em", paddingTop: 2 }}>{sig.area}</span>
                       <span style={{ color: C.muted }}>{sig.note}</span>
                     </div>
@@ -2920,7 +2920,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             old dedicated selector row while keeping every control a single tap ── */}
         <div style={{ display:"flex", alignItems:"center", gap:8, padding:"0 2px 2px", flexShrink:0, minWidth:0 }}>
           <span style={{ fontSize:19, fontWeight:400, color:C.text, fontFamily:NC_MONO_STACK, fontVariantNumeric:"tabular-nums", letterSpacing:0 }}>{clockParts.timeMain}</span>
-          <span style={{ fontSize:11, color:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>{nowDate.toLocaleDateString([], { weekday:"short", month:"short", day:"numeric" })}</span>
+          <span style={{ fontSize:NC_TYPE.small, color:C.faint, fontFamily:NC_FONT_STACK, whiteSpace:"nowrap" }}>{nowDate.toLocaleDateString([], { weekday:"short", month:"short", day:"numeric" })}</span>
           <span style={{ flex:1, minWidth:0 }} />
           <IconBtn icon={densityIcon} iconSize={16} color={C.muted} onClick={toggleMobileDensity} title={densityLabel} aria-label={densityLabel} />
           {!isMobileDevice && (
@@ -3280,7 +3280,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               }}>
               <div slot="headline" style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
                 <span style={{ fontSize: 22, fontWeight: 400, color: C.text, fontFamily: NC_MONO_STACK, fontVariantNumeric: "tabular-nums", letterSpacing: 0 }}>{clockParts.timeMain}</span>
-                <span style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK }}>{nowDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
+                <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK }}>{nowDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
               </div>
               <span slot="end" style={{ alignSelf: "center", color: C.faint, display: "flex", transform: mobileTimelineOpen ? "rotate(90deg)" : "none", transition: "transform 0.18s" }}>{suiteIcon("chevron_right", 14)}</span>
             </ListItem>
@@ -3750,7 +3750,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 <TextButton ref={taskMoreButtonRef} onClick={() => setShowAllTasks(v => !v)} title={showAllTasks ? "Show fewer tasks" : `Show ${hiddenTaskCount} more tasks`} aria-label={showAllTasks ? "Show fewer tasks" : `Show ${hiddenTaskCount} more tasks`}
                   style={{ width: "100%", height: 24, flex: "0 0 24px", borderTop: `1px solid ${C.divider}`,
                     '--md-text-button-container-height': '24px', '--md-text-button-label-text-color': C.faint, '--md-text-button-label-text-size': '11px', flexShrink: 0 }}>
-                  <span slot="icon" className="material-symbols-rounded" style={{ fontSize: 12 }}>{showAllTasks ? "expand_less" : "expand_more"}</span>
+                  <span slot="icon" className="material-symbols-rounded" style={{ fontSize: NC_TYPE.meta }}>{showAllTasks ? "expand_less" : "expand_more"}</span>
                   {!showAllTasks && <span>+{hiddenTaskCount} more</span>}
                 </TextButton>
               )}
@@ -3831,7 +3831,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                 <span style={ncSectionIcon(CAT_PHONE)}>{suiteIcon("phone_in_talk", 16)}</span>
                 <span style={ncTitle}>Phone</span>
-                <span title={phoneStatusSummary.label} style={{ display: "inline-flex", alignItems: "center", gap:6, minWidth: 0, color: phoneStatusColor, fontSize: 12, fontWeight: 500 }}>
+                <span title={phoneStatusSummary.label} style={{ display: "inline-flex", alignItems: "center", gap:6, minWidth: 0, color: phoneStatusColor, fontSize: NC_TYPE.meta, fontWeight: 500 }}>
                   <span style={{ width: 7, height: 7, borderRadius: RADIUS.pill, background: phoneStatusColor, flexShrink: 0 }} />
                   {(phoneStatusSummary.tone === "incoming" || phoneStatusSummary.tone === "call") && (
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 150 }}>{phoneStatusSummary.label}</span>
@@ -4055,7 +4055,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                           const todayRows = [...pastRows, ...upcomingRows];
                           return (
                             <div style={{ flex: "1 1 0", minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", margin: "6px 8px 8px 8px", borderRadius: RADIUS.md, background: C.bg, overflow: "hidden" }}>
-                              <div style={{ flexShrink: 0, padding: "6px 12px 2px", fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK }}>Agenda</div>
+                              <div style={{ flexShrink: 0, padding: "6px 12px 2px", fontSize: NC_TYPE.small, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK }}>Agenda</div>
                               <div data-agenda-scroll="true" style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
                                 {todayRows.length === 0 && tomorrowRows.length === 0 ? (
                                   <div style={{ padding: "8px 12px", fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, textAlign: "center" }}>No events today</div>
@@ -4127,12 +4127,12 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 const faces = {
                   digital: (
                     <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, borderTop: `2px solid ${C.accent}`, background: C.bg, padding: "18px 8px 10px" }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 14 }}>
+                      <div style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 14 }}>
                         {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric" })}
                       </div>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 5, lineHeight: 1 }}>
                         <span style={{ fontSize: 38, fontWeight: 300, color: C.text, letterSpacing: -1 }}>{timeDigits}</span>
-                        {timePeriod && <span style={{ fontSize: 14, fontWeight: 600, color: C.muted, letterSpacing: 0.5 }}>{timePeriod}</span>}
+                        {timePeriod && <span style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.muted, letterSpacing: 0.5 }}>{timePeriod}</span>}
                       </div>
                       {secBar}
                     </div>
@@ -4157,10 +4157,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                         <SvgSweepHand x1="50" y1="14" x2="50" y2="58" pivotX={50} pivotY={50} duration={60} stroke={C.faint} strokeWidth={0.8} opacity={0.18} />
                         <circle cx="50" cy="50" r="3" fill={C.accent} />
                       </svg>
-                      <div style={{ fontSize: 15, fontWeight: 300, color: C.text, letterSpacing: -0.5, lineHeight: 1, fontVariantNumeric: "tabular-nums", fontFamily: clockFF }}>
+                      <div style={{ fontSize: NC_TYPE.title, fontWeight: 300, color: C.text, letterSpacing: -0.5, lineHeight: 1, fontVariantNumeric: "tabular-nums", fontFamily: clockFF }}>
                         {clockParts.timeMain}
                       </div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginTop: 2 }}>
+                      <div style={{ fontSize: NC_TYPE.small, fontWeight: 600, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginTop: 2 }}>
                         {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric" })}
                       </div>
                     </div>
@@ -4173,29 +4173,29 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                             ? <span key={i} style={{ fontSize: 24, fontWeight: 300, color: C.faint, lineHeight: 1, paddingBottom: 6 }}>:</span>
                             : <span key={i} style={{ fontSize: 30, fontWeight: 700, lineHeight: 1, color: C.text, background: C.hover, borderRadius: RADIUS.sm, padding: "8px 6px", minWidth: 34, textAlign: "center", display: "inline-flex", justifyContent: "center" }}>{ch}</span>
                         ))}
-                        {timePeriod && <span style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginLeft: 2, alignSelf: "flex-end", paddingBottom: 8 }}>{timePeriod}</span>}
+                        {timePeriod && <span style={{ fontSize: NC_TYPE.meta, fontWeight: 600, color: C.muted, marginLeft: 2, alignSelf: "flex-end", paddingBottom: 8 }}>{timePeriod}</span>}
                       </div>
                       {secBar}
                     </div>
                   ),
                   verbose: (
                     <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, borderLeft: `3px solid ${C.accent}`, background: C.bg, padding: "14px 10px 10px", alignItems: "flex-start" }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1, marginBottom: 3 }}>
+                      <div style={{ fontSize: NC_TYPE.meta, fontWeight: 700, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1, marginBottom: 3 }}>
                         {nowDate.toLocaleDateString([], { weekday: "long" })}
                       </div>
-                      <div style={{ fontSize: 11, fontWeight: 400, color: C.faint, fontFamily: NC_FONT_STACK, marginBottom: 10 }}>
+                      <div style={{ fontSize: NC_TYPE.small, fontWeight: 400, color: C.faint, fontFamily: NC_FONT_STACK, marginBottom: 10 }}>
                         {nowDate.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" })}
                       </div>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, lineHeight: 1, marginBottom: 4 }}>
                         <span style={{ fontSize: 34, fontWeight: 300, color: C.text, letterSpacing: -0.5 }}>{timeDigits}</span>
-                        {timePeriod && <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{timePeriod}</span>}
+                        {timePeriod && <span style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.muted }}>{timePeriod}</span>}
                       </div>
                       {secBar}
                     </div>
                   ),
                   word: (
                     <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, background: C.bg, padding: "18px 10px 10px", gap: 0 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 10 }}>
+                      <div style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.faint, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 10 }}>
                         {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric" })}
                       </div>
                       <div style={{ fontSize: 18, fontWeight: 700, color: C.text, letterSpacing: 1.5, textTransform: "uppercase", lineHeight: 1.25, textAlign: "center", fontFamily: NC_FONT_STACK }}>{wL1}</div>
@@ -4230,19 +4230,19 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                           </>);
                         })()}
                       </svg>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginTop: 2 }}>
+                      <div style={{ fontSize: NC_TYPE.small, fontWeight: 600, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginTop: 2 }}>
                         {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric" })}
                       </div>
                     </div>
                   ),
                   neon: (
                     <div aria-label="Current time" onContextMenu={openMenu} style={{ ...base, border: `1px solid ${C.divider}`, background: C.bg, padding: "16px 8px 10px", gap: 4 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 10 }}>
+                      <div style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.muted, letterSpacing: 2, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 10 }}>
                         {nowDate.toLocaleDateString([], { weekday: "short" })} · {nowDate.toLocaleDateString([], { month: "short", day: "numeric" })}
                       </div>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, lineHeight: 1 }}>
                         <span style={{ fontSize: 40, fontWeight: 700, color: C.accent, letterSpacing: -1, textShadow: `0 0 14px ${C.accent}70, 0 0 30px ${C.accent}38` }}>{timeDigits}</span>
-                        {timePeriod && <span style={{ fontSize: 14, fontWeight: 700, color: C.accent, opacity: 0.72, textShadow: `0 0 10px ${C.accent}55` }}>{timePeriod}</span>}
+                        {timePeriod && <span style={{ fontSize: NC_TYPE.body, fontWeight: 700, color: C.accent, opacity: 0.72, textShadow: `0 0 10px ${C.accent}55` }}>{timePeriod}</span>}
                       </div>
                       {secBar}
                     </div>
@@ -4413,7 +4413,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               <>
                 <div style={{ position: "fixed", inset: 0, zIndex: 9090 }} onClick={() => setClockMenuPos(null)} />
                 <div onMouseDown={e => e.stopPropagation()} style={{ position: "fixed", left: Math.min(clockMenuPos.x, window.innerWidth - 212), top: Math.min(clockMenuPos.y, window.innerHeight - 460), zIndex: 9091, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md, padding: 6, minWidth: 200, maxHeight: "min(455px, 85vh)", overflowY: "auto", boxShadow: ELEV[3], display: "flex", flexDirection: "column", gap: 2 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "6px 8px 4px" }}>Clock Style</div>
+                  <div style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: NC_FONT_STACK, padding: "6px 8px 4px" }}>Clock Style</div>
                   {[
                     { id: "digital", label: "Digital",  desc: "Date + time + seconds bar"  },
                     { id: "minimal", label: "Minimal",  desc: "Time only, ultra clean"      },
@@ -4433,7 +4433,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                           ...denseListVars({ dense: true }),
                         }}>
                         <div slot="headline" style={{ fontSize: NC_TYPE.control, fontWeight: active ? 600 : 400, color: active ? C.text : C.muted, fontFamily: NC_FONT_STACK }}>{opt.label}</div>
-                        <div slot="supporting-text" style={{ fontSize: 10, color: C.faint, fontFamily: NC_FONT_STACK }}>{opt.desc}</div>
+                        <div slot="supporting-text" style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK }}>{opt.desc}</div>
                       </ListItem>
                     );
                   })}

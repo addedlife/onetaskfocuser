@@ -1,5 +1,5 @@
 import React from 'react';
-import { suiteIcon, NC_FONT_STACK, SP, ELEV, RADIUS, TRANSITION } from '../../08-app-split/ui-tokens.jsx';
+import { suiteIcon, NC_FONT_STACK, SP, ELEV, RADIUS, TRANSITION, NC_TYPE } from '../../08-app-split/ui-tokens.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 09-next design kit — the shared Material 3 (Expressive) visual language for the
@@ -59,7 +59,7 @@ export function CountPill({ children, color, C, tone = 'soft' }) {
         minWidth: 20, height: 20, padding: '0 7px',
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         borderRadius: RADIUS.pill,
-        fontFamily: FONT, fontSize: 11.5, fontWeight: 700, lineHeight: 1,
+        fontFamily: FONT, fontSize: NC_TYPE.small, fontWeight: 700, lineHeight: 1,
         background: solid ? (color || C.accent) : tonal(color || C.muted, 0.16),
         color: solid ? '#fff' : (color || C.muted),
       }}
@@ -103,7 +103,7 @@ export function Card({
           <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, minWidth: 0, flex: 1 }}>
             {title && (
               <h2 style={{
-                margin: 0, fontFamily: FONT, fontSize: 15, fontWeight: 650,
+                margin: 0, fontFamily: FONT, fontSize: NC_TYPE.title, fontWeight: 650,
                 letterSpacing: '-0.01em', color: C.text,
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               }}>{title}</h2>
@@ -130,7 +130,7 @@ export function EmptyState({ icon = 'inbox', text, C }) {
       color: C.faint, textAlign: 'center', minHeight: 88,
     }}>
       <span style={{ opacity: 0.7 }}>{suiteIcon(icon, 26)}</span>
-      <span style={{ fontFamily: FONT, fontSize: 12.5 }}>{text}</span>
+      <span style={{ fontFamily: FONT, fontSize: NC_TYPE.meta }}>{text}</span>
     </div>
   );
 }

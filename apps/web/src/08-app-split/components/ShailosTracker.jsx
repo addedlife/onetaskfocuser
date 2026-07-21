@@ -116,7 +116,7 @@ function ResearchReport({ text, C }) {
   }, [text]);
   const Row = ({ label, url, summary }) => (
     <div style={{ display: 'flex', gap: 12, padding: summary ? '12px 20px' : '10px 20px', borderTop: `1px solid ${C.divider}`, alignItems: 'flex-start' }}>
-      <span style={{ color: tint(C.accent, '66'), fontSize: 9, marginTop: 4, flexShrink: 0, userSelect: 'none' }}>●</span>
+      <span style={{ color: tint(C.accent, '66'), fontSize: NC_TYPE.small, marginTop: 4, flexShrink: 0, userSelect: 'none' }}>●</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <a href={url} target="_blank" rel="noopener noreferrer"
           style={{ fontWeight: 600, color: C.accent, textDecoration: 'underline', textUnderlineOffset: 3, textDecorationColor: tint(C.accent, '44'), fontSize: NC_TYPE.control, lineHeight: 1.4, fontFamily: NC_FONT_STACK, wordBreak: 'break-word' }}>{label}</a>
@@ -126,18 +126,18 @@ function ResearchReport({ text, C }) {
   );
   const SectionLabel = ({ children }) => (
     <div style={{ padding: '14px 20px 6px', borderTop: `1px solid ${C.divider}`, marginTop: 4 }}>
-      <span style={{ fontSize: 10, fontWeight: 800, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: NC_FONT_STACK }}>{children}</span>
+      <span style={{ fontSize: NC_TYPE.small, fontWeight: 800, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: NC_FONT_STACK }}>{children}</span>
     </div>
   );
   return (
     <div style={{ background: C.bg, borderRadius: RADIUS.md, border: `1px solid ${C.divider}`, overflow: 'hidden', paddingBottom: 8 }}>
       {data ? (
         <>
-          <p style={{ fontSize: 11, color: C.faint, padding: '14px 20px 6px', lineHeight: 1.6, margin: 0, fontFamily: NC_FONT_STACK }}>
+          <p style={{ fontSize: NC_TYPE.small, color: C.faint, padding: '14px 20px 6px', lineHeight: 1.6, margin: 0, fontFamily: NC_FONT_STACK }}>
             Searched: {(data.queries || []).join(' · ')}
           </p>
           {data.engine === 'sefaria' && (
-            <p style={{ fontSize: 11, color: C.warning || C.faint, padding: '0 20px 10px', lineHeight: 1.6, margin: 0, fontFamily: NC_FONT_STACK }}>
+            <p style={{ fontSize: NC_TYPE.small, color: C.warning || C.faint, padding: '0 20px 10px', lineHeight: 1.6, margin: 0, fontFamily: NC_FONT_STACK }}>
               ⚠ Web search didn't answer on this pass, so it only searched Sefaria's own library — which barely digitizes contemporary teshuvos. Results skew toward Gemara/Rishonim; re-run the research to retry web coverage for psak-level contemporary sources.
             </p>
           )}
@@ -622,7 +622,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
   // ── Shared style bits (theme-token fallbacks — no M3 equivalent) ───────────
   const font = { fontFamily: NC_FONT_STACK };
   const banner = (color) => ({ background: tint(color, '14'), border: `1px solid ${tint(color, '40')}`, color, padding: '10px 14px', borderRadius: RADIUS.sm, display: 'flex', alignItems: 'center', gap: 10, fontSize: NC_TYPE.meta, ...font });
-  const sectionLabel = { fontSize: 10, fontWeight: 800, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.1em', ...font };
+  const sectionLabel = { fontSize: NC_TYPE.small, fontWeight: 800, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.1em', ...font };
   // Borderless inline-edit fields (date/synopsis/asker) — an inline-edit
   // pattern with no @material/web equivalent; tokens only.
   const inlineEdit = { background: 'transparent', border: 'none', outline: 'none', color: C.text, padding: 0, width: '100%', boxSizing: 'border-box', ...font };
@@ -632,7 +632,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
   const statusChip = (s, draft = false) => {
     const m = draft ? { label: 'Draft', color: C.faint } : statusMeta(s);
     return (
-      <span style={{ padding: '2px 8px', borderRadius: RADIUS.xs, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', background: tint(m.color, '1E'), color: m.color, whiteSpace: 'nowrap', ...font }}>{m.label}</span>
+      <span style={{ padding: '2px 8px', borderRadius: RADIUS.xs, fontSize: NC_TYPE.small, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', background: tint(m.color, '1E'), color: m.color, whiteSpace: 'nowrap', ...font }}>{m.label}</span>
     );
   };
   const gotBackChip = (shaila, { small = false } = {}) => {
@@ -695,7 +695,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
         <div style={{ maxWidth: 420, color: C.muted, fontSize: NC_TYPE.meta, lineHeight: 1.6, ...font }}>
           <p style={{ color: C.text, fontWeight: 700, fontSize: NC_TYPE.body }}>Couldn't identify your account</p>
           <p>You're signed in, but this session carried no email address, so the app can't tell which data folder is yours.</p>
-          <div style={{ background: C.bgSoft, borderRadius: RADIUS.sm, padding: 10, fontSize: 11, wordBreak: 'break-all' }}>
+          <div style={{ background: C.bgSoft, borderRadius: RADIUS.sm, padding: 10, fontSize: NC_TYPE.small, wordBreak: 'break-all' }}>
             <div>User ID: {user.uid || '(none)'}</div>
             <div>Email: {user.email || '(none)'}</div>
           </div>
@@ -736,7 +736,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
           <TextField placeholder="Search shailos…" value={searchQuery}
             onInput={(e) => setSearchQuery(e.target.value)}
             style={{ width: wide ? 240 : '100%', '--md-outlined-text-field-container-shape': RADIUS.sm, '--md-outlined-text-field-top-space': '6px', '--md-outlined-text-field-bottom-space': '6px' }}>
-            <span slot="leading-icon" className="material-symbols-rounded" style={{ fontSize: 16 }}>search</span>
+            <span slot="leading-icon" className="material-symbols-rounded" style={{ fontSize: NC_TYPE.title }}>search</span>
           </TextField>
         </div>
 
@@ -769,7 +769,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                 <div style={{ fontSize: NC_TYPE.meta, fontWeight: 700, color: C.text }}>Transcription holding pen</div>
                 <div style={{ fontSize: NC_TYPE.small, color: C.muted, marginTop: 2 }}>Audio stays here until transcription succeeds — a failed AI call never loses the recording.</div>
               </div>
-              <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: C.warning, background: tint(C.warning, '22'), padding: '2px 8px', borderRadius: RADIUS.pill, whiteSpace: 'nowrap' }}>{pendingRecordings.length} saved</span>
+              <span style={{ fontSize: NC_TYPE.small, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: C.warning, background: tint(C.warning, '22'), padding: '2px 8px', borderRadius: RADIUS.pill, whiteSpace: 'nowrap' }}>{pendingRecordings.length} saved</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {pendingRecordings.map((rec) => {
@@ -836,15 +836,15 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                         {shaila.synopsis || shaila.content}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                        <span style={{ fontSize: 10, color: C.faint, whiteSpace: 'nowrap' }}>{shortDate(shaila.date)}</span>
-                        <span style={{ fontSize: 10, color: C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shaila.askerName}</span>
+                        <span style={{ fontSize: NC_TYPE.small, color: C.faint, whiteSpace: 'nowrap' }}>{shortDate(shaila.date)}</span>
+                        <span style={{ fontSize: NC_TYPE.small, color: C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shaila.askerName}</span>
                       </div>
                       {(shaila.status === 'answered' || shaila.status === 'got_back') && shaila.answer?.trim() && (() => {
                         const snippet = shaila.answerSummary?.trim() || (() => {
                           const words = (shaila.answer || '').trim().split(/\s+/).filter(Boolean);
                           return words.slice(0, 6).join(' ') + (words.length > 6 ? '…' : '');
                         })();
-                        return <div style={{ fontSize: 10, fontStyle: 'italic', color: shaila.status === 'got_back' ? C.success : GOLD, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>{snippet}</div>;
+                        return <div style={{ fontSize: NC_TYPE.small, fontStyle: 'italic', color: shaila.status === 'got_back' ? C.success : GOLD, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>{snippet}</div>;
                       })()}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
@@ -874,7 +874,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                       {!selectedShaila._manualDraft && selectedShaila.status !== 'pending' && gotBackChip(selectedShaila)}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <input style={{ ...inlineEdit, fontSize: 10, color: C.faint, fontFamily: NC_MONO_STACK, width: 130 }}
+                      <input style={{ ...inlineEdit, fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_MONO_STACK, width: 130 }}
                         value={selectedShaila.date || ''}
                         onChange={(e) => setSelectedShaila({ ...selectedShaila, date: e.target.value })}
                         onBlur={fieldBlur} aria-label="Date" />

@@ -30,7 +30,12 @@
 // 12px is M3 body-small, the smallest size any body text role is defined at.
 const A11Y_MIN = {
   touchTarget: 48,
-  fontSize: 12,
+  // 11px is label-small, the smallest role Material 3 actually defines. An
+  // earlier draft of this file used 12 (body-small), which is the smallest role
+  // meant for READING — but enforcing 12 would have flagged legitimate
+  // label-small metadata as a violation. Follow the spec rather than inventing a
+  // stricter floor: anything under 11 is off the M3 scale entirely.
+  fontSize: 11,
 };
 
 // Per-kind structural expectations, on top of the universal floor above.

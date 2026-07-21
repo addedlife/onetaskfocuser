@@ -41,11 +41,11 @@ function ShelfView({allComp, compT, pris, T, onDel, onUncomp, onClone}) {
             >
               {/* F5: real task text */}
               <p style={{fontSize:NC_TYPE.meta,color:_sc,lineHeight:1.45,margin:0,fontFamily:NC_FONT_STACK,opacity:.95,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:5,WebkitBoxOrient:"vertical"}}>
-                {t.goodEnough && <span style={{fontSize:9,marginRight:4,opacity:.7}}>≈</span>}
+                {t.goodEnough && <span style={{fontSize:NC_TYPE.small,marginRight:4,opacity:.7}}>≈</span>}
                 {t.text}
               </p>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
-                <span style={{fontSize:9,color:_sc50,fontFamily:NC_FONT_STACK}}>{t.completedAt?new Date(t.completedAt).toLocaleDateString():""}</span>
+                <span style={{fontSize:NC_TYPE.small,color:_sc50,fontFamily:NC_FONT_STACK}}>{t.completedAt?new Date(t.completedAt).toLocaleDateString():""}</span>
                 <TaskActionsShelf t={t} onUncomp={onUncomp} onClone={onClone} onDel={onDel} iconColor={_sc}/>
               </div>
             </div>
@@ -79,7 +79,7 @@ function ShelfView({allComp, compT, pris, T, onDel, onUncomp, onClone}) {
                     transform:`rotate(${rot}deg)`, transition:"all 0.3s",
                     padding:"6px 8px", overflow:"hidden"
                   }}>
-                    <p style={{fontSize:9,color:_mc,margin:0,fontFamily:NC_FONT_STACK,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{t.text}</p>
+                    <p style={{fontSize:NC_TYPE.small,color:_mc,margin:0,fontFamily:NC_FONT_STACK,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{t.text}</p>
                   </div>
                 );
               })}
@@ -98,7 +98,7 @@ function ShelfView({allComp, compT, pris, T, onDel, onUncomp, onClone}) {
                     <div key={t.id} style={{display:"flex",alignItems:"center",gap:SP.sm,padding:"8px 14px",borderTop:`1px solid ${T.brdS}`}}>
                       <div style={{width:10,height:10,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.6}}/>
                       <span style={{flex:1,fontSize:NC_TYPE.meta,color:T.tFaint,textDecoration:"line-through"}}>
-                        {t.goodEnough && <span title="Good enough" style={{marginRight:4,fontSize:9,opacity:.7}}>≈</span>}
+                        {t.goodEnough && <span title="Good enough" style={{marginRight:4,fontSize:NC_TYPE.small,opacity:.7}}>≈</span>}
                         {t.text}
                       </span>
                       <button onClick={()=>onUncomp(t.id)} title="Return" style={{background:"none",border:"none",cursor:"pointer",padding:2,opacity:.4}}><IC.Undo s={11} c={T.tSoft}/></button>
@@ -208,7 +208,7 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
                 ) : (
                   <span onClick={()=>startEdit(st)} style={{flex:1,fontSize:NC_TYPE.meta,color:isMatch?T.text:T.tSoft,cursor:"text",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:isMatch?500:400}}
                     title="Click to edit">
-                    {st.stepIndex && <span style={{fontSize:10,color:T.tFaint,marginRight:4,fontFamily:NC_FONT_STACK}}>#{st.stepIndex}</span>}
+                    {st.stepIndex && <span style={{fontSize:NC_TYPE.small,color:T.tFaint,marginRight:4,fontFamily:NC_FONT_STACK}}>#{st.stepIndex}</span>}
                     {st.text}
                   </span>
                 )}
@@ -244,7 +244,7 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
             );
           })}
           {doneSteps.length > 0 && (
-            <div style={{padding:"4px 12px 4px 20px",fontSize:10,color:T.tFaint,fontFamily:NC_FONT_STACK}}>{doneSteps.length} crystal{doneSteps.length!==1?"s":""} completed</div>
+            <div style={{padding:"4px 12px 4px 20px",fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK}}>{doneSteps.length} crystal{doneSteps.length!==1?"s":""} completed</div>
           )}
           {/* Add new crystal */}
           {adding ? (
@@ -261,8 +261,8 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
             </button>
           )}
           <div style={{display:"flex",gap:6,padding:"6px 12px 4px"}}>
-            <button onClick={()=>onMoveTop(steps[0]?.id)} style={{flex:1,padding:"5px 8px",borderRadius:RADIUS.sm,border:`1px solid ${pri.color}50`,background:pBg(pri.color),cursor:"pointer",fontSize:10,fontWeight:600,fontFamily:NC_FONT_STACK,color:pri.color}}>↑ Next crystal to top</button>
-            <button onClick={e=>{if(e.altKey) steps.forEach(s=>onLegacyComp?.(s.id)); else steps.forEach(s=>onComp(s.id));}} style={{flex:1,padding:"5px 8px",borderRadius:RADIUS.sm,border:"none",background:pri.color+"20",cursor:"pointer",fontSize:10,fontWeight:600,fontFamily:NC_FONT_STACK,color:pri.color}}>✓ All done</button>
+            <button onClick={()=>onMoveTop(steps[0]?.id)} style={{flex:1,padding:"5px 8px",borderRadius:RADIUS.sm,border:`1px solid ${pri.color}50`,background:pBg(pri.color),cursor:"pointer",fontSize:NC_TYPE.small,fontWeight:600,fontFamily:NC_FONT_STACK,color:pri.color}}>↑ Next crystal to top</button>
+            <button onClick={e=>{if(e.altKey) steps.forEach(s=>onLegacyComp?.(s.id)); else steps.forEach(s=>onComp(s.id));}} style={{flex:1,padding:"5px 8px",borderRadius:RADIUS.sm,border:"none",background:pri.color+"20",cursor:"pointer",fontSize:NC_TYPE.small,fontWeight:600,fontFamily:NC_FONT_STACK,color:pri.color}}>✓ All done</button>
           </div>
         </div>
       )}

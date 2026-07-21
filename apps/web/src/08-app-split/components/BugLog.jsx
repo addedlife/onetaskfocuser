@@ -386,7 +386,7 @@ export function BugLog({ T, railVisible = true }) {
             <span style={{
               position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, padding: '0 4px',
               borderRadius: RADIUS.pill, background: C.danger, color: '#fff',
-              fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: NC_TYPE.small, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontFamily: NC_FONT_STACK, pointerEvents: 'none',
             }}>{unresolvedCount}</span>
           )}

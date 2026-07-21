@@ -21,7 +21,7 @@ import firebase from 'firebase/compat/app';
 import { App } from './08-app-split/index.jsx';
 import { DiagnosticsOverlay } from './diagnostics.jsx';
 import { ActionBtn, OutlinedButton, Checkbox } from './08-app-split/m3.jsx';
-import { NC_FONT_STACK } from './08-app-split/ui-tokens.jsx';
+import { NC_FONT_STACK, NC_TYPE } from './08-app-split/ui-tokens.jsx';
 
 const _AUTH_STAY_SIGNED_IN_KEY = "ot_auth_stay_signed_in";
 const _AUTH_LAST_UID_KEY       = "ot_last_uid";
@@ -173,9 +173,9 @@ class AppErrorBoundary extends React.Component {
     if (this.state.error) {
       return (
         <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"100vh", padding:24, background:"#EDE5D8", fontFamily:NC_FONT_STACK }}>
-          <p style={{ fontSize:16, color:"#3D3633", marginBottom:16, textAlign:"center" }}>Something went wrong. Tap to reload.</p>
+          <p style={{ fontSize:NC_TYPE.title, color:"#3D3633", marginBottom:16, textAlign:"center" }}>Something went wrong. Tap to reload.</p>
           <ActionBtn variant="filled" containerColor="#3D3633" labelColor="#EDE5D8" onClick={() => window.location.reload()}>Reload</ActionBtn>
-          <pre style={{ marginTop:16, fontSize:11, color:"#7E6858", maxWidth:360, overflow:"auto", whiteSpace:"pre-wrap" }}>{String(this.state.error)}</pre>
+          <pre style={{ marginTop:16, fontSize:NC_TYPE.small, color:"#7E6858", maxWidth:360, overflow:"auto", whiteSpace:"pre-wrap" }}>{String(this.state.error)}</pre>
         </div>
       );
     }
@@ -306,10 +306,10 @@ function LoginScreen({ onLogin, initialError = "" }) {
         <div style={{ textAlign:"center", marginBottom:28 }}>
           <div style={{ fontSize:36, lineHeight:1, marginBottom:10 }}>◎</div>
           <h1 style={{ fontSize:22, fontWeight:700, color:S.text, fontFamily:NC_FONT_STACK, margin:0, letterSpacing:0.5 }}>Shamash Pro 4</h1>
-          <p style={{ fontSize:12, color:S.tFaint, marginTop:5, fontFamily:NC_FONT_STACK }}>Sign in to continue</p>
+          <p style={{ fontSize:NC_TYPE.meta, color:S.tFaint, marginTop:5, fontFamily:NC_FONT_STACK }}>Sign in to continue</p>
         </div>
 
-        <label style={{ display:"flex", alignItems:"center", gap:9, margin:"0 0 18px", color:S.tSoft, fontSize:12, lineHeight:1.35, cursor:"pointer", userSelect:"none" }}>
+        <label style={{ display:"flex", alignItems:"center", gap:9, margin:"0 0 18px", color:S.tSoft, fontSize:NC_TYPE.meta, lineHeight:1.35, cursor:"pointer", userSelect:"none" }}>
           <Checkbox
             checked={staySignedIn}
             onChange={e => setStaySignedIn(e.target.checked)}
@@ -319,7 +319,7 @@ function LoginScreen({ onLogin, initialError = "" }) {
         </label>
 
         {err && (
-          <p style={{ fontSize:12, color:"#C94040", marginBottom:14, lineHeight:1.5, fontFamily:NC_FONT_STACK }}>{err}</p>
+          <p style={{ fontSize:NC_TYPE.meta, color:"#C94040", marginBottom:14, lineHeight:1.5, fontFamily:NC_FONT_STACK }}>{err}</p>
         )}
 
         {/* Google Sign-In */}

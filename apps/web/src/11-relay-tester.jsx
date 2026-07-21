@@ -21,7 +21,7 @@ import {
   FilledButton, OutlinedButton, TextField, List, ListItem, Divider,
   ChipSet, AssistChip, LinearProgress, Badge, ActionBtn,
 } from './08-app-split/m3.jsx';
-import { GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, RADIUS, SP, ELEV, TRANSITION, themeVarsCss, NC_MONO_STACK } from './08-app-split/ui-tokens.jsx';
+import { GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, RADIUS, SP, ELEV, TRANSITION, themeVarsCss, NC_MONO_STACK, NC_TYPE } from './08-app-split/ui-tokens.jsx';
 import { HOST_LABEL, BT_CAPABLE_HOSTS } from './08-app-split/phone-link.js';
 
 const FIREBASE_CONFIG = {
@@ -113,10 +113,10 @@ function SignInScreen() {
       minHeight: '100vh', background: C.bg, fontFamily: NC_FONT_STACK, gap: SP.md, padding: SP.lg,
     }}>
       <h1 style={{ color: C.text, fontSize: 20, margin: 0 }}>Phone Relay v2 — Tester</h1>
-      <p style={{ color: C.muted, fontSize: 13, maxWidth: 360, textAlign: 'center', margin: 0 }}>
+      <p style={{ color: C.muted, fontSize: NC_TYPE.body, maxWidth: 360, textAlign: 'center', margin: 0 }}>
         Owner sign-in required — this page reads/writes only phone-relay-v2 test data.
       </p>
-      {err && <p style={{ color: C.danger || '#C94040', fontSize: 12 }}>{err}</p>}
+      {err && <p style={{ color: C.danger || '#C94040', fontSize: NC_TYPE.meta }}>{err}</p>}
       <FilledButton onClick={signIn} disabled={busy}>
         <span>{busy ? 'Signing in…' : 'Continue with Google'}</span>
       </FilledButton>
@@ -224,7 +224,7 @@ export function RelayTesterPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h1 style={{ fontSize: 20, margin: 0 }}>Phone Relay v2 — Standalone Tester</h1>
-          <p style={{ fontSize: 12, color: C.muted, margin: '4px 0 0' }}>
+          <p style={{ fontSize: NC_TYPE.meta, color: C.muted, margin: '4px 0 0' }}>
             Signed in as {user.email} · polling every {POLL_MS / 1000}s · touches only phone-relay-v2/* data
           </p>
         </div>
@@ -233,23 +233,23 @@ export function RelayTesterPage() {
 
       {diagErr && (
         <Card style={{ borderColor: C.danger || '#C94040' }}>
-          <span style={{ color: C.danger || '#C94040', fontSize: 13 }}>diagnostics error: {diagErr}</span>
+          <span style={{ color: C.danger || '#C94040', fontSize: NC_TYPE.body }}>diagnostics error: {diagErr}</span>
         </Card>
       )}
 
       <Card>
-        <h2 style={{ fontSize: 14, margin: '0 0 8px' }}>Leader (fencing-token arbitration)</h2>
+        <h2 style={{ fontSize: NC_TYPE.body, margin: '0 0 8px' }}>Leader (fencing-token arbitration)</h2>
         {leader ? (
           <ChipSet>
             <AssistChip label={`host: ${HOST_LABEL[leader.hostId] || leader.hostId || '(none)'}`} />
             <AssistChip label={`fencing token: ${leader.fencingToken}`} />
             <AssistChip label={`held since: ${ageLabel(now - Number(leader.since || 0))}`} />
           </ChipSet>
-        ) : <span style={{ color: C.muted, fontSize: 13 }}>No leader elected yet — start a mock host.</span>}
+        ) : <span style={{ color: C.muted, fontSize: NC_TYPE.body }}>No leader elected yet — start a mock host.</span>}
       </Card>
 
       <Card>
-        <h2 style={{ fontSize: 14, margin: '0 0 8px' }}>Host presence</h2>
+        <h2 style={{ fontSize: NC_TYPE.body, margin: '0 0 8px' }}>Host presence</h2>
         <List>
           {BT_CAPABLE_HOSTS.map((hostId) => (
             <PresenceRow key={hostId} hostId={hostId} entry={presence[hostId]} isLeader={leader?.hostId === hostId} now={now} />
@@ -259,7 +259,7 @@ export function RelayTesterPage() {
 
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', gap: SP.sm, marginBottom: 8 }}>
-          <h2 style={{ fontSize: 14, margin: 0 }}>Send command</h2>
+          <h2 style={{ fontSize: NC_TYPE.body, margin: 0 }}>Send command</h2>
           {pending.length > 0 && <Badge>{String(pending.length)}</Badge>}
         </div>
         <div style={{ display: 'flex', gap: SP.sm, alignItems: 'center' }}>
@@ -279,9 +279,9 @@ export function RelayTesterPage() {
       </Card>
 
       <Card>
-        <h2 style={{ fontSize: 14, margin: '0 0 8px' }}>Handoff trace</h2>
+        <h2 style={{ fontSize: NC_TYPE.body, margin: '0 0 8px' }}>Handoff trace</h2>
         {handoffs.length === 0
-          ? <span style={{ color: C.muted, fontSize: 13 }}>No handoffs observed yet.</span>
+          ? <span style={{ color: C.muted, fontSize: NC_TYPE.body }}>No handoffs observed yet.</span>
           : (
             <List>
               {handoffs.map((h, i) => (
@@ -295,10 +295,10 @@ export function RelayTesterPage() {
       </Card>
 
       <Card>
-        <h2 style={{ fontSize: 14, margin: '0 0 8px' }}>Raw request/response log</h2>
+        <h2 style={{ fontSize: NC_TYPE.body, margin: '0 0 8px' }}>Raw request/response log</h2>
         <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
           {log.map((entry, i) => (
-            <div key={i} style={{ fontSize: 11, fontFamily: NC_MONO_STACK, color: entry.ok ? C.muted : (C.danger || '#C94040') }}>
+            <div key={i} style={{ fontSize: NC_TYPE.small, fontFamily: NC_MONO_STACK, color: entry.ok ? C.muted : (C.danger || '#C94040') }}>
               {ageLabel(now - entry.at)} · {entry.action} · HTTP {entry.status} · {entry.ms}ms
               {entry.detail ? ` · ${JSON.stringify(entry.detail)}` : ''}
             </div>
@@ -307,8 +307,8 @@ export function RelayTesterPage() {
       </Card>
 
       <Card>
-        <h2 style={{ fontSize: 14, margin: '0 0 8px' }}>How to drive this without hardware</h2>
-        <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, margin: 0 }}>
+        <h2 style={{ fontSize: NC_TYPE.body, margin: '0 0 8px' }}>How to drive this without hardware</h2>
+        <p style={{ fontSize: NC_TYPE.meta, color: C.muted, lineHeight: 1.6, margin: 0 }}>
           In two terminals: <code>node scripts/relay-tester-mock-host.mjs --host=windows --secret=…</code> and{' '}
           <code>--host=android --secret=…</code>. Ctrl+C one to see a graceful handoff; <code>kill -9</code> its
           process (or close the terminal) to see the unclean-disconnect path — presence clears itself within

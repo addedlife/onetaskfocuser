@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { cleanYT, aiParseShailos, runAIJob, uid, textOnColor } from './01-core.js';
 import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, webmToWavBase64 } from './09-transcription-pen.js';
-import { NC_FONT_STACK } from './08-app-split/ui-tokens.jsx';
+import { NC_FONT_STACK, NC_TYPE } from './08-app-split/ui-tokens.jsx';
 // VoiceInput: Web Speech (live preview) + MediaRecorder run together.
 // Web Speech starts first to get mic priority; MediaRecorder starts 300ms later.
 //
@@ -253,7 +253,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
     aiOpts ? (
       <button onClick={parseAsShailos} disabled={shailaLoading} style={{
         width:"100%", marginTop:6, padding:"8px",
-        fontSize:12, fontWeight:600, background:"none",
+        fontSize:NC_TYPE.meta, fontWeight:600, background:"none",
         color:"#C8A84C", border:"1px solid #C8A84C60",
         borderRadius:8, cursor:"pointer", fontFamily:NC_FONT_STACK,
         opacity: shailaLoading ? 0.6 : 1,
@@ -282,7 +282,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
       width: "100%", boxSizing: "border-box",
       background: T.bgW, color: T.text,
       border: `1px solid ${T.brd}`, borderRadius: 8,
-      padding: "8px 10px", fontSize: 14,
+      padding: "8px 10px", fontSize: NC_TYPE.body,
       fontFamily: NC_FONT_STACK, lineHeight: 1.55,
       resize: "vertical", outline: "none",
     }} />
@@ -291,7 +291,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
   const useBtn = (bg) => (
     <button onClick={() => useText(editText)} disabled={!editText.trim()} style={{
       width: "100%", marginTop: 8, padding: "10px",
-      fontSize: 13, fontWeight: 700, fontFamily: NC_FONT_STACK,
+      fontSize: NC_TYPE.body, fontWeight: 700, fontFamily: NC_FONT_STACK,
       background: editText.trim() ? bg : "transparent",
       color: editText.trim() ? textOnColor(bg) : T.tFaint,
       border: `1px solid ${bg}`, borderRadius: 10,
@@ -301,7 +301,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
   );
 
   const errLine = err
-    ? <p style={{ margin: "8px 0 0", fontSize: 11, color: T.danger }}>{err}</p>
+    ? <p style={{ margin: "8px 0 0", fontSize: NC_TYPE.small, color: T.danger }}>{err}</p>
     : null;
 
   const closeBtn = (
@@ -312,28 +312,28 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
   if (phase === "recording") return (
     <div style={shell(color)} data-voice-panel="true">
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-        <span style={{ fontSize:10, color:T.danger, fontWeight:800, letterSpacing:1.2 }}>🔴 LISTENING</span>
+        <span style={{ fontSize:NC_TYPE.small, color:T.danger, fontWeight:800, letterSpacing:1.2 }}>🔴 LISTENING</span>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
           {aiOpts && (
             <button onClick={() => { shailaAutoFiredRef.current = false; setShailaMode(true); stopRec(); }} title="Stop and parse as shailos" style={{
               background:"#C8A84C", color:"#fff",
               border: "1.5px solid #C8A84C80", borderRadius:7,
-              padding:"3px 9px", fontSize:13, cursor:"pointer",
+              padding:"3px 9px", fontSize:NC_TYPE.body, cursor:"pointer",
               fontFamily:NC_FONT_STACK, fontWeight:700, lineHeight:1,
               transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",
             }}>✡</button>
           )}
           {closeBtn}
-          <button onClick={stopRec} style={{ background:T.danger, color:"#fff", border:"none", borderRadius:7, padding:"5px 16px", fontSize:11, cursor:"pointer", fontWeight:700 }}>STOP</button>
+          <button onClick={stopRec} style={{ background:T.danger, color:"#fff", border:"none", borderRadius:7, padding:"5px 16px", fontSize:NC_TYPE.small, cursor:"pointer", fontWeight:700 }}>STOP</button>
         </div>
       </div>
       <div style={{
         minHeight:56, padding:"10px 12px", borderRadius:9,
         background:T.bgW, border:`1px solid ${T.brd}`,
-        fontSize:14, color: liveText ? T.text : T.tFaint,
+        fontSize:NC_TYPE.body, color: liveText ? T.text : T.tFaint,
         fontFamily:NC_FONT_STACK, lineHeight:1.55, wordBreak:"break-word",
       }}>
-        {liveText || <span style={{ fontSize:12, fontStyle:"italic" }}>Speak now…</span>}
+        {liveText || <span style={{ fontSize:NC_TYPE.meta, fontStyle:"italic" }}>Speak now…</span>}
       </div>
       {errLine}
     </div>
@@ -344,15 +344,15 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
     <div style={shell(color)} data-voice-panel="true">
       <div style={{ textAlign:"center", padding:"18px 0 20px" }}>
         <div style={{ width:28, height:28, border:`3px solid ${T.brd}`, borderTopColor:color, borderRadius:"50%", animation:"ot-spin 0.8s linear infinite", margin:"0 auto 14px" }} />
-        <p style={{ margin:0, fontSize:13, color:T.tSoft, fontWeight:600, fontFamily:NC_FONT_STACK }}>{geminiStatus || "Transcribing..."}</p>
-        <p style={{ margin:"6px 0 0", fontSize:11, color:T.tFaint, fontFamily:NC_FONT_STACK }}>Central AI gateway</p>
+        <p style={{ margin:0, fontSize:NC_TYPE.body, color:T.tSoft, fontWeight:600, fontFamily:NC_FONT_STACK }}>{geminiStatus || "Transcribing..."}</p>
+        <p style={{ margin:"6px 0 0", fontSize:NC_TYPE.small, color:T.tFaint, fontFamily:NC_FONT_STACK }}>Central AI gateway</p>
       </div>
       {editText.trim() && (
-        <div style={{ padding:"8px 12px", borderRadius:9, background:T.bgW, border:`1px solid ${T.brd}`, fontSize:12, color:T.tFaint, fontFamily:NC_FONT_STACK, lineHeight:1.5, marginBottom:8, maxHeight:60, overflow:"hidden", opacity:0.7 }}>
+        <div style={{ padding:"8px 12px", borderRadius:9, background:T.bgW, border:`1px solid ${T.brd}`, fontSize:NC_TYPE.meta, color:T.tFaint, fontFamily:NC_FONT_STACK, lineHeight:1.5, marginBottom:8, maxHeight:60, overflow:"hidden", opacity:0.7 }}>
           {editText.slice(0, 120)}{editText.length > 120 ? "…" : ""}
         </div>
       )}
-      <button onClick={() => goPhase("reviewing")} style={{ width:"100%", padding:"7px", fontSize:11, background:"none", color:T.tFaint, border:`1px solid ${T.brd}`, borderRadius:8, cursor:"pointer", fontFamily:NC_FONT_STACK }}>
+      <button onClick={() => goPhase("reviewing")} style={{ width:"100%", padding:"7px", fontSize:NC_TYPE.small, background:"none", color:T.tFaint, border:`1px solid ${T.brd}`, borderRadius:8, cursor:"pointer", fontFamily:NC_FONT_STACK }}>
         Skip — use browser result
       </button>
       {errLine}
@@ -365,21 +365,21 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
       {answerDetectLoading && (
         <div style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", background:T.bgW, borderRadius:8, border:`1px solid ${T.brd}` }}>
           <div style={{ width:10, height:10, border:`2px solid ${T.brd}`, borderTopColor:"#C8A84C", borderRadius:"50%", animation:"ot-spin 0.8s linear infinite", flexShrink:0 }}/>
-          <span style={{ fontSize:11, color:T.tFaint, fontFamily:NC_FONT_STACK }}>Checking for answers to existing shailos…</span>
+          <span style={{ fontSize:NC_TYPE.small, color:T.tFaint, fontFamily:NC_FONT_STACK }}>Checking for answers to existing shailos…</span>
         </div>
       )}
       {detectedAnswers.filter(x => x.approved !== false).map((match, i) => (
         <div key={match.id || i} style={{ background:"#C8A84C0E", borderRadius:8, padding:"8px 10px", borderLeft:"3px solid #C8A84C", marginTop:4 }}>
-          <div style={{ fontSize:10, fontWeight:700, color:"#C8A84C", fontFamily:NC_FONT_STACK, marginBottom:2 }}>Answers existing shailo:</div>
-          <div style={{ fontSize:12, fontFamily:NC_FONT_STACK, color:T.text, marginBottom:3, lineHeight:1.4 }}>{match.shaila}</div>
-          <div style={{ fontSize:11, fontFamily:NC_FONT_STACK, color:T.tSoft, marginBottom:6, lineHeight:1.4 }}>{match.answer}</div>
+          <div style={{ fontSize:NC_TYPE.small, fontWeight:700, color:"#C8A84C", fontFamily:NC_FONT_STACK, marginBottom:2 }}>Answers existing shailo:</div>
+          <div style={{ fontSize:NC_TYPE.meta, fontFamily:NC_FONT_STACK, color:T.text, marginBottom:3, lineHeight:1.4 }}>{match.shaila}</div>
+          <div style={{ fontSize:NC_TYPE.small, fontFamily:NC_FONT_STACK, color:T.tSoft, marginBottom:6, lineHeight:1.4 }}>{match.answer}</div>
           <div style={{ display:"flex", gap:6 }}>
             <button onClick={() => {
               if (onExistingShailaAnswers) onExistingShailaAnswers(match.id, match.answer);
               setDetectedAnswers(p => p.map((x, j) => j===i ? {...x, approved:false} : x));
-            }} style={{ flex:1, padding:"4px 8px", borderRadius:6, border:"none", background:"#C8A84C", color:"#fff", cursor:"pointer", fontSize:11, fontWeight:700, fontFamily:NC_FONT_STACK }}>✓ Save answer</button>
+            }} style={{ flex:1, padding:"4px 8px", borderRadius:6, border:"none", background:"#C8A84C", color:"#fff", cursor:"pointer", fontSize:NC_TYPE.small, fontWeight:700, fontFamily:NC_FONT_STACK }}>✓ Save answer</button>
             <button onClick={() => setDetectedAnswers(p => p.map((x, j) => j===i ? {...x, approved:false} : x))}
-              style={{ padding:"4px 8px", borderRadius:6, border:`1px solid ${T.brd}`, background:"none", color:T.tFaint, cursor:"pointer", fontSize:11, fontFamily:NC_FONT_STACK }}>Skip</button>
+              style={{ padding:"4px 8px", borderRadius:6, border:`1px solid ${T.brd}`, background:"none", color:T.tFaint, cursor:"pointer", fontSize:NC_TYPE.small, fontFamily:NC_FONT_STACK }}>Skip</button>
           </div>
         </div>
       ))}
@@ -390,7 +390,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
   if (phase === "reviewing") return (
     <div style={shell(T.brd)} data-voice-panel="true">
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-        <span style={{ fontSize:10, color:T.tFaint, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase" }}>
+        <span style={{ fontSize:NC_TYPE.small, color:T.tFaint, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase" }}>
           {aiOpts ? "AI transcript" : "Browser transcript"}
         </span>
         {closeBtn}
@@ -407,7 +407,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
   if (phase === "shaila_review") return (
     <div style={{...shell("#C8A84C"), maxHeight:"80vh", display:"flex", flexDirection:"column"}} data-voice-panel="true">
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, flexShrink:0 }}>
-        <span style={{ fontSize:11, color:"#C8A84C", fontWeight:700, letterSpacing:1 }}>✡ {parsedShailas.length} SHAILO{parsedShailas.length!==1?"S":""} DETECTED</span>
+        <span style={{ fontSize:NC_TYPE.small, color:"#C8A84C", fontWeight:700, letterSpacing:1 }}>✡ {parsedShailas.length} SHAILO{parsedShailas.length!==1?"S":""} DETECTED</span>
         {closeBtn}
       </div>
       <div style={{ flex:1, overflowY:"auto", display:"flex", flexDirection:"column", gap:10, marginBottom:10 }}>
@@ -415,25 +415,25 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
         {answerDetectLoading && (
           <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px", background:T.bgW, borderRadius:10, border:`1px solid ${T.brd}` }}>
             <div style={{ width:12, height:12, border:`2px solid ${T.brd}`, borderTopColor:"#C8A84C", borderRadius:"50%", animation:"ot-spin 0.8s linear infinite", flexShrink:0 }}/>
-            <span style={{ fontSize:11, color:T.tFaint, fontFamily:NC_FONT_STACK }}>Checking for answers to existing shailos…</span>
+            <span style={{ fontSize:NC_TYPE.small, color:T.tFaint, fontFamily:NC_FONT_STACK }}>Checking for answers to existing shailos…</span>
           </div>
         )}
         {detectedAnswers.length > 0 && (
           <div style={{ background:"#C8A84C14", borderRadius:10, border:"1px solid #C8A84C50", padding:"8px 10px", display:"flex", flexDirection:"column", gap:8 }}>
-            <div style={{ fontSize:10, fontWeight:800, color:"#C8A84C", letterSpacing:1.2, marginBottom:2 }}>POSSIBLE ANSWERS TO EXISTING SHAILOS</div>
+            <div style={{ fontSize:NC_TYPE.small, fontWeight:800, color:"#C8A84C", letterSpacing:1.2, marginBottom:2 }}>POSSIBLE ANSWERS TO EXISTING SHAILOS</div>
             {detectedAnswers.filter(x => x.approved !== false).map((match, i) => (
               <div key={match.id || i} style={{ background:T.bgW, borderRadius:8, padding:"8px 10px", borderLeft:"3px solid #C8A84C" }}>
-                <div style={{ fontSize:11, color:T.tSoft, fontFamily:NC_FONT_STACK, marginBottom:3 }}>Answers existing shailo:</div>
-                <div style={{ fontSize:12, fontFamily:NC_FONT_STACK, color:T.text, marginBottom:4, lineHeight:1.4 }}>{match.shaila}</div>
-                <div style={{ fontSize:10, fontWeight:700, color:"#C8A84C", letterSpacing:1, marginBottom:2 }}>ANSWER FOUND:</div>
-                <div style={{ fontSize:12, fontFamily:NC_FONT_STACK, color:T.tSoft, marginBottom:8, lineHeight:1.4 }}>{match.answer}</div>
+                <div style={{ fontSize:NC_TYPE.small, color:T.tSoft, fontFamily:NC_FONT_STACK, marginBottom:3 }}>Answers existing shailo:</div>
+                <div style={{ fontSize:NC_TYPE.meta, fontFamily:NC_FONT_STACK, color:T.text, marginBottom:4, lineHeight:1.4 }}>{match.shaila}</div>
+                <div style={{ fontSize:NC_TYPE.small, fontWeight:700, color:"#C8A84C", letterSpacing:1, marginBottom:2 }}>ANSWER FOUND:</div>
+                <div style={{ fontSize:NC_TYPE.meta, fontFamily:NC_FONT_STACK, color:T.tSoft, marginBottom:8, lineHeight:1.4 }}>{match.answer}</div>
                 <div style={{ display:"flex", gap:6 }}>
                   <button onClick={() => {
                     if (onExistingShailaAnswers) onExistingShailaAnswers(match.id, match.answer);
                     setDetectedAnswers(p => p.map((x, j) => j===i ? {...x, approved:false} : x));
-                  }} style={{ flex:1, padding:"5px 8px", borderRadius:7, border:"none", background:"#C8A84C", color:"#fff", cursor:"pointer", fontSize:11, fontWeight:700, fontFamily:NC_FONT_STACK }}>✓ Yes, save this answer</button>
+                  }} style={{ flex:1, padding:"5px 8px", borderRadius:7, border:"none", background:"#C8A84C", color:"#fff", cursor:"pointer", fontSize:NC_TYPE.small, fontWeight:700, fontFamily:NC_FONT_STACK }}>✓ Yes, save this answer</button>
                   <button onClick={() => setDetectedAnswers(p => p.map((x, j) => j===i ? {...x, approved:false} : x))}
-                    style={{ padding:"5px 8px", borderRadius:7, border:`1px solid ${T.brd}`, background:"none", color:T.tFaint, cursor:"pointer", fontSize:11, fontFamily:NC_FONT_STACK }}>Skip</button>
+                    style={{ padding:"5px 8px", borderRadius:7, border:`1px solid ${T.brd}`, background:"none", color:T.tFaint, cursor:"pointer", fontSize:NC_TYPE.small, fontFamily:NC_FONT_STACK }}>Skip</button>
                 </div>
               </div>
             ))}
@@ -445,35 +445,35 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
               value={item.shaila}
               onChange={e => setParsedShailas(p => p.map((x,j) => j===i ? {...x, shaila:e.target.value} : x))}
               rows={2}
-              style={{ width:"100%", boxSizing:"border-box", fontSize:13, fontFamily:NC_FONT_STACK, border:"none", background:"transparent", color:T.text, resize:"vertical", outline:"none", lineHeight:1.55 }}
+              style={{ width:"100%", boxSizing:"border-box", fontSize:NC_TYPE.body, fontFamily:NC_FONT_STACK, border:"none", background:"transparent", color:T.text, resize:"vertical", outline:"none", lineHeight:1.55 }}
             />
             {item.answer !== null && (
               <div style={{ borderTop:`1px solid ${T.brd}`, marginTop:6, paddingTop:6 }}>
-                <div style={{ fontSize:10, color:"#C8A84C", fontWeight:800, letterSpacing:1.2, marginBottom:3 }}>ANSWER</div>
+                <div style={{ fontSize:NC_TYPE.small, color:"#C8A84C", fontWeight:800, letterSpacing:1.2, marginBottom:3 }}>ANSWER</div>
                 <textarea
                   value={item.answer || ""}
                   onChange={e => setParsedShailas(p => p.map((x,j) => j===i ? {...x, answer:e.target.value} : x))}
                   rows={2}
-                  style={{ width:"100%", boxSizing:"border-box", fontSize:12, fontFamily:NC_FONT_STACK, border:"none", background:"transparent", color:T.tSoft, resize:"vertical", outline:"none", lineHeight:1.55 }}
+                  style={{ width:"100%", boxSizing:"border-box", fontSize:NC_TYPE.meta, fontFamily:NC_FONT_STACK, border:"none", background:"transparent", color:T.tSoft, resize:"vertical", outline:"none", lineHeight:1.55 }}
                 />
               </div>
             )}
             {item.answer === null && (
               <button onClick={() => setParsedShailas(p => p.map((x,j) => j===i ? {...x, answer:""} : x))}
-                style={{ marginTop:4, fontSize:10, color:T.tFaint, background:"none", border:`1px solid ${T.brd}`, borderRadius:6, padding:"2px 8px", cursor:"pointer", fontFamily:NC_FONT_STACK }}>
+                style={{ marginTop:4, fontSize:NC_TYPE.small, color:T.tFaint, background:"none", border:`1px solid ${T.brd}`, borderRadius:6, padding:"2px 8px", cursor:"pointer", fontFamily:NC_FONT_STACK }}>
                 + add answer
               </button>
             )}
             <div style={{ display:"flex", gap:8, marginTop:6 }}>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:10, color:T.tFaint, fontWeight:700, letterSpacing:1, marginBottom:2 }}>ASKED BY</div>
+                <div style={{ fontSize:NC_TYPE.small, color:T.tFaint, fontWeight:700, letterSpacing:1, marginBottom:2 }}>ASKED BY</div>
                 <input value={item.askedBy || ""} onChange={e => setParsedShailas(p => p.map((x,j) => j===i ? {...x, askedBy:e.target.value} : x))}
-                  placeholder="Name…" style={{ width:"100%", boxSizing:"border-box", fontSize:11, fontFamily:NC_FONT_STACK, border:`1px solid ${T.brd}`, borderRadius:6, padding:"3px 7px", background:T.bgW, color:T.text, outline:"none" }} />
+                  placeholder="Name…" style={{ width:"100%", boxSizing:"border-box", fontSize:NC_TYPE.small, fontFamily:NC_FONT_STACK, border:`1px solid ${T.brd}`, borderRadius:6, padding:"3px 7px", background:T.bgW, color:T.text, outline:"none" }} />
               </div>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:10, color:T.tFaint, fontWeight:700, letterSpacing:1, marginBottom:2 }}>ANSWERED BY</div>
+                <div style={{ fontSize:NC_TYPE.small, color:T.tFaint, fontWeight:700, letterSpacing:1, marginBottom:2 }}>ANSWERED BY</div>
                 <input value={item.answeredBy || ""} onChange={e => setParsedShailas(p => p.map((x,j) => j===i ? {...x, answeredBy:e.target.value} : x))}
-                  placeholder="Name…" style={{ width:"100%", boxSizing:"border-box", fontSize:11, fontFamily:NC_FONT_STACK, border:`1px solid ${T.brd}`, borderRadius:6, padding:"3px 7px", background:T.bgW, color:T.text, outline:"none" }} />
+                  placeholder="Name…" style={{ width:"100%", boxSizing:"border-box", fontSize:NC_TYPE.small, fontFamily:NC_FONT_STACK, border:`1px solid ${T.brd}`, borderRadius:6, padding:"3px 7px", background:T.bgW, color:T.text, outline:"none" }} />
               </div>
             </div>
           </div>
@@ -481,12 +481,12 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
       </div>
       <div style={{ flexShrink:0, display:"flex", flexDirection:"column", gap:6 }}>
         <button onClick={() => { if (onAddShailos) onAddShailos(parsedShailas); cleanup(); onClose(); }} style={{
-          width:"100%", padding:"10px", fontSize:13, fontWeight:700,
+          width:"100%", padding:"10px", fontSize:NC_TYPE.body, fontWeight:700,
           background:"#C8A84C", color:textOnColor("#C8A84C"),
           border:"none", borderRadius:10, cursor:"pointer", fontFamily:NC_FONT_STACK,
         }}>+ Add {parsedShailas.length} shailo{parsedShailas.length!==1?"s":""}</button>
         <button onClick={() => goPhase("reviewing")} style={{
-          width:"100%", padding:"7px", fontSize:11, background:"none",
+          width:"100%", padding:"7px", fontSize:NC_TYPE.small, background:"none",
           color:T.tFaint, border:`1px solid ${T.brd}`, borderRadius:8, cursor:"pointer", fontFamily:NC_FONT_STACK,
         }}>← Back</button>
       </div>

@@ -40,7 +40,7 @@ function HRLine({ series, color, height = 38 }) {
         <polyline points={coords} fill="none" stroke={color} strokeWidth={1.5}
           strokeLinecap="round" strokeLinejoin="round" opacity={0.7} />
       </svg>
-      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: NC_FONT_STACK, fontSize: 9, opacity: 0.45 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.small, opacity: 0.45 }}>
         <span>{low}</span><span style={{ opacity: 0.5 }}>bpm</span><span>{high}</span>
       </div>
     </div>
@@ -51,11 +51,11 @@ function HRLine({ series, color, height = 38 }) {
 function MetricSection({ label, rows, C }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
-      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1 }}>{label}</span>
+      <span style={{ fontSize: NC_TYPE.small, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1 }}>{label}</span>
       {rows.map(([period, val], i) => (
         <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-          <span style={{ fontSize: 9.5, color: C.faint, fontFamily: NC_FONT_STACK, minWidth: 10, lineHeight: 1.5 }}>{period}</span>
-          <span style={{ fontSize: 12.5, fontWeight: i === 0 ? 600 : 400, color: i === 0 ? C.text : C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.4, whiteSpace: "nowrap" }}>{val}</span>
+          <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, minWidth: 10, lineHeight: 1.5 }}>{period}</span>
+          <span style={{ fontSize: NC_TYPE.meta, fontWeight: i === 0 ? 600 : 400, color: i === 0 ? C.text : C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.4, whiteSpace: "nowrap" }}>{val}</span>
         </div>
       ))}
     </div>
@@ -118,10 +118,10 @@ export function HealthCard({
 
         {/* Label + status */}
         <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 56, flexShrink: 0, paddingRight: 14, borderRight: `1px solid ${C.divider}`, marginRight: 14, paddingTop: 2 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0.3 }}>Health</span>
+          <span style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.muted, fontFamily: NC_FONT_STACK, letterSpacing: 0.3 }}>Health</span>
           <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: connected ? "#34A853" : C.faint, flexShrink: 0 }} />
-            <span style={{ fontSize: 9, color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1.3 }}>
+            <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1.3 }}>
               {connected ? (healthConfig?.oauthType === "google" ? "google" : data.source || "live") : "demo"}
             </span>
           </div>
@@ -171,7 +171,7 @@ export function HealthCard({
 
         {/* Heart Rate — line graph */}
         <div style={{ flex: 1.4, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 }}>
-          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1 }}>
+          <span style={{ fontSize: NC_TYPE.small, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: C.faint, fontFamily: NC_FONT_STACK, lineHeight: 1 }}>
             Pulse{hrNow != null ? ` · ${hrNow} bpm` : ""}
           </span>
           <div style={{ marginTop: 2 }}>

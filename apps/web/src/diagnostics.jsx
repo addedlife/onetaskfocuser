@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { Store } from './01-core.js';
-import { NC_FONT_STACK, NC_MONO_STACK } from './08-app-split/ui-tokens.jsx';
+import { NC_FONT_STACK, NC_MONO_STACK, NC_TYPE } from './08-app-split/ui-tokens.jsx';
 
 const BUILD_COMMIT = (typeof __BUILD_COMMIT__ !== 'undefined') ? __BUILD_COMMIT__ : 'dev';
 const BUILD_TIME = (typeof __BUILD_TIME__ !== 'undefined') ? __BUILD_TIME__ : 'dev';
@@ -37,7 +37,7 @@ export function DiagnosticsOverlay() {
   const staleServer = !d.lastServerSyncTs || (Date.now() - d.lastServerSyncTs > 120000);
 
   const row = (k, v, warn) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '6px 0', borderBottom: '1px solid #2a2a2a', fontSize: 13 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '6px 0', borderBottom: '1px solid #2a2a2a', fontSize: NC_TYPE.body }}>
       <span style={{ color: '#99a' }}>{k}</span>
       <span style={{ color: warn ? '#ff6b6b' : '#cfead0', fontFamily: NC_MONO_STACK, textAlign: 'right', wordBreak: 'break-all' }}>{v}</span>
     </div>
@@ -45,7 +45,7 @@ export function DiagnosticsOverlay() {
 
   const btn = (label, fn, bg) => (
     <button onClick={fn} disabled={!!busy}
-      style={{ flex: 1, padding: '12px 8px', borderRadius: 8, border: 'none', background: bg || '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
+      style={{ flex: 1, padding: '12px 8px', borderRadius: 8, border: 'none', background: bg || '#2563eb', color: '#fff', fontSize: NC_TYPE.body, fontWeight: 600, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}>
       {label}
     </button>
   );
@@ -54,8 +54,8 @@ export function DiagnosticsOverlay() {
     <div style={{ position: 'fixed', inset: 0, zIndex: 2147483647, background: 'rgba(0,0,0,0.94)', color: '#eee', overflow: 'auto', padding: 18, fontFamily: NC_FONT_STACK, WebkitOverflowScrolling: 'touch' }}>
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <strong style={{ fontSize: 16 }}>Diagnostics</strong>
-          <a href="/" style={{ color: '#9cf', fontSize: 14, textDecoration: 'none' }}>Close ✕</a>
+          <strong style={{ fontSize: NC_TYPE.title }}>Diagnostics</strong>
+          <a href="/" style={{ color: '#9cf', fontSize: NC_TYPE.body, textDecoration: 'none' }}>Close ✕</a>
         </div>
 
         <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: 10, padding: '6px 14px', marginBottom: 14 }}>
@@ -71,16 +71,16 @@ export function DiagnosticsOverlay() {
           {row('SW controlling page', swControlling ? 'yes' : 'NO', !swControlling)}
         </div>
 
-        {busy && <div style={{ color: '#9cf', fontSize: 13, marginBottom: 10 }}>{busy}</div>}
+        {busy && <div style={{ color: '#9cf', fontSize: NC_TYPE.body, marginBottom: 10 }}>{busy}</div>}
 
         {probe && (
-          <div style={{ background: '#141414', border: '1px solid #3a3a3a', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, lineHeight: 1.5, color: probe.startsWith('REACHABLE') ? '#cfead0' : '#ffb4b4', fontFamily: NC_MONO_STACK, wordBreak: 'break-word' }}>
+          <div style={{ background: '#141414', border: '1px solid #3a3a3a', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: NC_TYPE.body, lineHeight: 1.5, color: probe.startsWith('REACHABLE') ? '#cfead0' : '#ffb4b4', fontFamily: NC_MONO_STACK, wordBreak: 'break-word' }}>
             {probe}
           </div>
         )}
 
         {authLines && (
-          <div style={{ background: '#141414', border: '1px solid #3a3a3a', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 12, lineHeight: 1.6, color: '#cfead0', fontFamily: NC_MONO_STACK, wordBreak: 'break-all' }}>
+          <div style={{ background: '#141414', border: '1px solid #3a3a3a', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: NC_TYPE.meta, lineHeight: 1.6, color: '#cfead0', fontFamily: NC_MONO_STACK, wordBreak: 'break-all' }}>
             {authLines.map((l, i) => (
               <div key={i} style={{ color: l.includes('mismatch') || l.includes('false') ? '#ffb4b4' : '#cfead0' }}>{l}</div>
             ))}
@@ -123,7 +123,7 @@ export function DiagnosticsOverlay() {
           }, '#b91c1c')}
         </div>
 
-        <p style={{ color: '#7a7a88', fontSize: 12, marginTop: 16, lineHeight: 1.55 }}>
+        <p style={{ color: '#7a7a88', fontSize: NC_TYPE.meta, marginTop: 16, lineHeight: 1.55 }}>
           If <b>Build time</b> is older than the latest deploy, this device is running stale
           code — tap the red full-reset button. If <b>Latest snapshot</b> is FROM CACHE and
           <b> Last server sync</b> is old or “never”, the device isn’t reaching Firestore —

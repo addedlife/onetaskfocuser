@@ -3483,7 +3483,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       )}
 
       {networkOffline && !offlineNoticeDismissed && (
-        <div style={{position:"fixed",top:0,left:0,right:0,zIndex:Z.systemBarTop,background:"#245E73",color:"#fff",padding:"12px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",fontFamily:NC_FONT_STACK,fontSize:13,gap:12}}>
+        <div style={{position:"fixed",top:0,left:0,right:0,zIndex:Z.systemBarTop,background:"#245E73",color:"#fff",padding:"12px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",fontFamily:NC_FONT_STACK,fontSize:NC_TYPE.body,gap:12}}>
           <span>{offlineShellReady ? "Offline mode: the app is open from this device. Changes save here and sync to Firebase when internet returns." : "Offline mode: changes save on this device. Open the app once online to finish offline startup setup."}</span>
           <button onClick={()=>setOfflineNoticeDismissed(true)} style={{padding:"6px 14px",borderRadius:RADIUS.sm,background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",cursor:"pointer",fontSize:NC_TYPE.small,color:"#fff",flexShrink:0}}>Dismiss</button>
         </div>
@@ -3507,7 +3507,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       {justStartId && jsMinimized && (
         <div onClick={()=>setJsMinimized(false)} style={{position:"fixed",bottom:16,right:16,zIndex:Z.docked,background:curT?gP(pris,curT.priority).color:C.faint,borderRadius:RADIUS.md,padding:"6px 12px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",boxShadow:"0 2px 12px rgba(0,0,0,0.2)",animation:"ot-fade 0.2s"}}>
           <IC.Timer s={12} c="#fff"/>
-          <span style={{fontSize:13,color:"#fff",fontFamily:NC_FONT_STACK,fontWeight:500}}>Just Start</span>
+          <span style={{fontSize:NC_TYPE.body,color:"#fff",fontFamily:NC_FONT_STACK,fontWeight:500}}>Just Start</span>
         </div>
       )}
       {/* Voice input — root level so it survives tab switches */}
@@ -3647,7 +3647,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
             {/* All fixed */}
             {shailaReconcile.missingTasks.length === 0 && shailaReconcile.missingShailos.length === 0 && shailaReconcile.statusMismatches.length === 0 && (
-              <p style={{textAlign:"center",fontSize:14,color:C.muted,fontFamily:NC_FONT_STACK,margin:"20px 0",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("check_circle",16)} All synced!</p>
+              <p style={{textAlign:"center",fontSize:NC_TYPE.body,color:C.muted,fontFamily:NC_FONT_STACK,margin:"20px 0",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{suiteIcon("check_circle",16)} All synced!</p>
             )}
           </div>
         </div>
@@ -3678,7 +3678,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         <div style={{position:"fixed",right:16,bottom:16,zIndex:Z.nudgeCard,animation:"ot-fade 0.2s"}}>
           <IconBtn variant="filled" icon="graphic_eq" iconSize={22} size={48} containerColor={C.accent} color="#fff"
             onClick={()=>setShowPenPanel(true)} aria-label="Open Transcription Holding Pen" title="Recordings & transcripts"/>
-          <span style={{position:"absolute",top:-4,right:-4,minWidth:18,height:18,borderRadius:RADIUS.pill,background:C.danger,color:"#fff",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px",fontFamily:NC_FONT_STACK,pointerEvents:"none"}}>{penEntries.length}</span>
+          <span style={{position:"absolute",top:-4,right:-4,minWidth:18,height:18,borderRadius:RADIUS.pill,background:C.danger,color:"#fff",fontSize:NC_TYPE.small,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px",fontFamily:NC_FONT_STACK,pointerEvents:"none"}}>{penEntries.length}</span>
         </div>
       )}
 
@@ -3687,14 +3687,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:RADIUS.md,boxShadow:ELEV[4],width:"min(600px,100%)",maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",fontFamily:NC_FONT_STACK}}>
             <div style={{padding:"18px 20px 12px",borderBottom:`1px solid ${C.divider}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
               <div>
-                <div style={{fontSize:16,fontWeight:500,color:C.text}}>Transcription Holding Pen</div>
-                <div style={{fontSize:13,color:C.faint,marginTop:2}}>Recordings & transcripts from every device — kept 10 days, synced to your account</div>
+                <div style={{fontSize:NC_TYPE.title,fontWeight:500,color:C.text}}>Transcription Holding Pen</div>
+                <div style={{fontSize:NC_TYPE.body,color:C.faint,marginTop:2}}>Recordings & transcripts from every device — kept 10 days, synced to your account</div>
               </div>
               <IconBtn icon="close" iconSize={20} onClick={()=>setShowPenPanel(false)} aria-label="Close"/>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flex:1,padding:"14px 20px 18px"}}>
               {penEntries.length === 0 && (
-                <div style={{textAlign:"center",padding:"28px 0",color:C.faint,fontSize:14}}>No held recordings. New recordings land here automatically.</div>
+                <div style={{textAlign:"center",padding:"28px 0",color:C.faint,fontSize:NC_TYPE.body}}>No held recordings. New recordings land here automatically.</div>
               )}
               {penEntries.map(rec => {
                 const busy = pendingRetryId === rec.id;
@@ -3708,9 +3708,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   <div key={rec.id} style={{background:C.bgSoft,border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,padding:10}}>
                     <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start"}}>
                       <div style={{minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
-                        <div style={{fontSize:12,color:C.faint,marginTop:1}}>{formatPendingAge(rec.createdAt)} · {((rec.size||0)/1024/1024).toFixed(1)} MB · {whereNote}</div>
-                        <div style={{fontSize:12,color:statusColor,marginTop:2,fontWeight:500}}>{statusTxt}</div>
+                        <div style={{fontSize:NC_TYPE.body,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
+                        <div style={{fontSize:NC_TYPE.meta,color:C.faint,marginTop:1}}>{formatPendingAge(rec.createdAt)} · {((rec.size||0)/1024/1024).toFixed(1)} MB · {whereNote}</div>
+                        <div style={{fontSize:NC_TYPE.meta,color:statusColor,marginTop:2,fontWeight:500}}>{statusTxt}</div>
                       </div>
                       <div style={{display:"flex",gap:4,flexShrink:0}}>
                         <IconBtn icon={busy ? "hourglass_top" : "replay"} iconSize={18} color={hasAI&&!pendingRetryId?C.accent:C.faint}
@@ -3722,10 +3722,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                           onClick={()=>deleteHeldTranscription(rec)} disabled={busy} aria-label="Delete recording" title="Delete"/>
                       </div>
                     </div>
-                    {rec.error && <div style={{fontSize:12,color:C.danger,marginTop:6,lineHeight:1.35}}>{rec.error}</div>}
+                    {rec.error && <div style={{fontSize:NC_TYPE.meta,color:C.danger,marginTop:6,lineHeight:1.35}}>{rec.error}</div>}
                     {transcript && (
                       <div style={{marginTop:8}}>
-                        <textarea value={transcript} readOnly rows={4} style={{width:"100%",boxSizing:"border-box",resize:"vertical",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,background:C.bg,color:C.text,fontSize:13,lineHeight:1.45,padding:8,fontFamily:NC_FONT_STACK}}/>
+                        <textarea value={transcript} readOnly rows={4} style={{width:"100%",boxSizing:"border-box",resize:"vertical",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,background:C.bg,color:C.text,fontSize:NC_TYPE.body,lineHeight:1.45,padding:8,fontFamily:NC_FONT_STACK}}/>
                         <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} labelSize={12} height={30}
                           onClick={()=>{navigator.clipboard?.writeText(transcript); showToast("Transcript copied", 2000);}} style={{marginTop:5,width:"100%"}}>
                           Copy transcript
@@ -3743,8 +3743,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       {/* Blocked resume nudge */}
       {blockedResume && actT.find(t=>t.id===blockedResume) && (
         <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",background:C.bg,border:`1.5px solid ${C.divider}`,borderRadius:RADIUS.md,padding:"12px 16px",boxShadow:ELEV[3],zIndex:Z.modal,maxWidth:340,width:"90%",animation:"ot-fade 0.3s"}}>
-          <p style={{fontSize:13,fontWeight:600,margin:"0 0 4px",fontFamily:NC_FONT_STACK}}>Ready to try again?</p>
-          <p style={{fontSize:12,color:C.muted,margin:"0 0 10px",fontFamily:NC_FONT_STACK}}>{actT.find(t=>t.id===blockedResume)?.text}</p>
+          <p style={{fontSize:NC_TYPE.body,fontWeight:600,margin:"0 0 4px",fontFamily:NC_FONT_STACK}}>Ready to try again?</p>
+          <p style={{fontSize:NC_TYPE.meta,color:C.muted,margin:"0 0 10px",fontFamily:NC_FONT_STACK}}>{actT.find(t=>t.id===blockedResume)?.text}</p>
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>{
               // Snooze: push blockedUntil forward by the same duration originally chosen
@@ -3753,8 +3753,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               uT(ts=>ts.map(t=>t.id===blockedResume?{...t,blockedUntil:Date.now()+dur}:t));
               if(blockedTmr.current[blockedResume]){clearTimeout(blockedTmr.current[blockedResume]);delete blockedTmr.current[blockedResume];}
               setBlockedResume(null);
-            }} style={{flex:1,padding:"7px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:"none",cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,color:C.muted}}>Later</button>
-            <button onClick={()=>resumeBlocked(blockedResume)} style={{flex:1,padding:"7px",borderRadius:RADIUS.sm,border:"none",background:ap[0]?.color,color:textOnColor(ap[0]?.color||C.accent),cursor:"pointer",fontSize:13,fontFamily:NC_FONT_STACK,fontWeight:500}}>Resume</button>
+            }} style={{flex:1,padding:"7px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:"none",cursor:"pointer",fontSize:NC_TYPE.body,fontFamily:NC_FONT_STACK,color:C.muted}}>Later</button>
+            <button onClick={()=>resumeBlocked(blockedResume)} style={{flex:1,padding:"7px",borderRadius:RADIUS.sm,border:"none",background:ap[0]?.color,color:textOnColor(ap[0]?.color||C.accent),cursor:"pointer",fontSize:NC_TYPE.body,fontFamily:NC_FONT_STACK,fontWeight:500}}>Resume</button>
           </div>
         </div>
       )}
@@ -3766,18 +3766,18 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             {chgPriIsSubtask && (
               <div style={{display:"flex",gap:6,marginBottom:14,background:C.bgSoft,borderRadius:RADIUS.sm,padding:4}}>
                 {[{v:'one',label:'This step only'},{v:'group',label:'All remaining steps'}].map(opt => (
-                  <button key={opt.v} onClick={()=>setChgPriScope(opt.v)} style={{flex:1,padding:"6px 0",borderRadius:RADIUS.sm,border:"none",background:chgPriScope===opt.v?C.bg:"transparent",fontWeight:chgPriScope===opt.v?500:400,color:chgPriScope===opt.v?C.text:C.faint,fontSize:13,cursor:"pointer",fontFamily:NC_FONT_STACK,boxShadow:chgPriScope===opt.v?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>
+                  <button key={opt.v} onClick={()=>setChgPriScope(opt.v)} style={{flex:1,padding:"6px 0",borderRadius:RADIUS.sm,border:"none",background:chgPriScope===opt.v?C.bg:"transparent",fontWeight:chgPriScope===opt.v?500:400,color:chgPriScope===opt.v?C.text:C.faint,fontSize:NC_TYPE.body,cursor:"pointer",fontFamily:NC_FONT_STACK,boxShadow:chgPriScope===opt.v?"0 1px 4px rgba(0,0,0,0.1)":"none"}}>
                     {opt.label}
                   </button>
                 ))}
               </div>
             )}
-            <p style={{fontSize:13,fontWeight:600,margin:"0 0 14px",fontFamily:NC_FONT_STACK}}>
+            <p style={{fontSize:NC_TYPE.body,fontWeight:600,margin:"0 0 14px",fontFamily:NC_FONT_STACK}}>
               {chgPriIsSubtask && chgPriScope==='group' ? 'Change all remaining steps:' : 'Change priority:'}
             </p>
             <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
               {ap.map(p => (
-                <button key={p.id} onClick={()=>chgPriority(chgPri,p.id,chgPriIsSubtask?chgPriScope:'one')} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:RADIUS.sm,border:`2px solid ${p.color}`,background:pBg(p.color),cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:NC_FONT_STACK,color:textOnPastel(AS.colorScheme,T.text,pBg(p.color))}}>
+                <button key={p.id} onClick={()=>chgPriority(chgPri,p.id,chgPriIsSubtask?chgPriScope:'one')} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:RADIUS.sm,border:`2px solid ${p.color}`,background:pBg(p.color),cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,color:textOnPastel(AS.colorScheme,T.text,pBg(p.color))}}>
                   <div style={{width:12,height:12,borderRadius:"50%",background:p.color}}/>{p.label}
                 </button>
               ))}
@@ -3805,7 +3805,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         <div style={{position:"fixed",top:"50%",left:"50%",zIndex:Z.celebration,pointerEvents:"none",animation:"ot-streak 2.6s forwards",textAlign:"center",fontFamily:NC_FONT_STACK}}>
           <div style={{fontSize:40,marginBottom:6,display:"flex",alignItems:"center",justifyContent:"center",color:T.text}}>{suiteIcon("whatshot",48)}</div>
           <div style={{fontSize:22,fontWeight:700,color:C.text,textShadow:"0 2px 12px rgba(0,0,0,0.12)"}}>On a roll!</div>
-          <div style={{fontSize:13,color:C.muted,marginTop:4}}>{todayCompCount} done today</div>
+          <div style={{fontSize:NC_TYPE.body,color:C.muted,marginTop:4}}>{todayCompCount} done today</div>
         </div>
       )}
 
@@ -3983,7 +3983,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexShrink: 0 }}>
                 <button onClick={()=>openCommandView("focus")} title="Back"
                   style={{ width: 36, height: 36, borderRadius: RADIUS.pill, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>←</button>
-                <span style={{ fontWeight: 600, fontSize: 16, color: T.text }}>Phone</span>
+                <span style={{ fontWeight: 600, fontSize: NC_TYPE.title, color: T.text }}>Phone</span>
               </div>
               <NerveCenterPhoneSurface
                 T={T}
@@ -4028,7 +4028,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       <span style={{fontSize:CK,fontFamily:NC_FONT_STACK,fontWeight:300,color:C.muted,letterSpacing:3,lineHeight:1,display:"block"}}>
                         {clockTime.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}
                       </span>
-                      {todayCompCount > 0 && <span style={{fontSize:11,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.faint,letterSpacing:.3,display:"flex",alignItems:"center",gap:4}}>{suiteIcon("done",11)} {todayCompCount} today</span>}
+                      {todayCompCount > 0 && <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.faint,letterSpacing:.3,display:"flex",alignItems:"center",gap:4}}>{suiteIcon("done",11)} {todayCompCount} today</span>}
                     </div>
                     <div style={{display:"flex",alignItems:"center",gap:4}}>
                       {AS.legacyCompleteUI && <IconButton onClick={()=>legacyCompTask(curT.id)} title="Legacy complete (no timestamp)" style={{opacity:.35}}><IC.Clock s={CK-4} c={cardColor0}/></IconButton>}
@@ -4068,8 +4068,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       {showRip && <Ripple color={_fc}/>}
                       {/* Completion flash overlay */}
                       {compFlash && <div style={{position:"absolute",inset:0,borderRadius:"inherit",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10,animation:"ot-comp-flash 0.6s forwards",pointerEvents:"none",background:cardColor}}><span style={{fontSize:72,color:_fc,lineHeight:1,display:"flex",alignItems:"center"}}>{suiteIcon("done",72)}</span></div>}
-                      <span style={{fontSize:11,color:_fc50,fontFamily:NC_FONT_STACK,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase"}}>{cp.label}</span>
-                      {curT.mrsW && <span style={{fontSize:11,color:_fc40,fontFamily:NC_FONT_STACK,fontWeight:600,letterSpacing:.5}}>Mrs. W</span>}
+                      <span style={{fontSize:NC_TYPE.small,color:_fc50,fontFamily:NC_FONT_STACK,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase"}}>{cp.label}</span>
+                      {curT.mrsW && <span style={{fontSize:NC_TYPE.small,color:_fc40,fontFamily:NC_FONT_STACK,fontWeight:600,letterSpacing:.5}}>Mrs. W</span>}
                       {editId === curT.id ? (
                         <div style={{display:"flex",gap:8,width:"100%"}} onFocus={pauseZ} onBlur={resumeZ}>
                           <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(curT.id);if(e.key==="Escape")setEditId(null);}} style={{flex:1,fontSize:"clamp(16px,3vw,22px)",fontFamily:NC_FONT_STACK,border:`2px solid ${_fcBrd}`,borderRadius:RADIUS.md,padding:"10px 16px",outline:"none",color:_fc,background:_fcBgL}}/>
@@ -4079,12 +4079,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                         <div onClick={()=>startEd(curT)} style={{cursor:"text",maxHeight:"100%",overflow:"hidden",width:"100%"}}>
                           <AutoFitText text={curT.text} maxSize={Math.min(48,window.innerWidth*0.08)} minSize={16} color={_fc} style={{maxHeight:"clamp(70px,18vh,200px)"}}/>
                           {curT.parentTask && <p style={{fontSize:"clamp(10px,1.5vw,13px)",color:_fc50,marginTop:8,fontFamily:NC_FONT_STACK}}>Step {curT.stepIndex||1} of {curT.totalSteps||"?"} of {curT.parentTask}</p>}
-                          {curT.blockedNote && <p style={{fontSize:10,color:_fc40,marginTop:4,fontFamily:NC_FONT_STACK,fontStyle:"italic"}}>Blocked: {curT.blockedNote}</p>}
+                          {curT.blockedNote && <p style={{fontSize:NC_TYPE.small,color:_fc40,marginTop:4,fontFamily:NC_FONT_STACK,fontStyle:"italic"}}>Blocked: {curT.blockedNote}</p>}
                           {(() => {
                             if (!curT.createdAt) return null;
                             const d = Math.floor(getTaskAgeHours(curT) / 24);
                             if (d < 1) return null;
-                            return <p style={{fontSize:10,color:_fc40,marginTop:4,fontFamily:NC_FONT_STACK,fontWeight:500,letterSpacing:.3}}>{d === 1 ? "since yesterday" : `${d} days waiting`}</p>;
+                            return <p style={{fontSize:NC_TYPE.small,color:_fc40,marginTop:4,fontFamily:NC_FONT_STACK,fontWeight:500,letterSpacing:.3}}>{d === 1 ? "since yesterday" : `${d} days waiting`}</p>;
                           })()}
                         </div>
                       )}
@@ -4136,7 +4136,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                         onMouseLeave={e=>{const m=e.currentTarget.querySelector(".mic-btn");if(m)m.style.opacity=a?1:0;}}>
                         <button className="mic-btn" onClick={()=>{setSelPri(p.id);setShowVoice(true);}} title="Voice input" style={{width:30,height:30,border:"none",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:a?1:0,transition:"opacity 0.2s",marginBottom:8,flexShrink:0}}><IC.Mic s={16} c={C.muted}/></button>
                         <button onClick={()=>setSelPri(a?null:p.id)} title={p.label} style={{width:sz,height:sz,borderRadius:"50%",background:clr,border:a?`3px solid ${softBorderC}`:"3px solid transparent",cursor:"pointer",transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",boxShadow:glowShadow,flexShrink:0}}/>
-                        <span style={{fontSize:12,color:C.faint,fontFamily:NC_FONT_STACK,fontWeight:600,textAlign:"center",marginTop:10,letterSpacing:.3}}>{p.isShaila?"Shaila":p.label}</span>
+                        <span style={{fontSize:NC_TYPE.meta,color:C.faint,fontFamily:NC_FONT_STACK,fontWeight:600,textAlign:"center",marginTop:10,letterSpacing:.3}}>{p.isShaila?"Shaila":p.label}</span>
                       </div>
                     );
                   })}
@@ -4153,7 +4153,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                           onMouseLeave={e=>{const m=e.currentTarget.querySelector(".mic-btn");if(m)m.style.opacity=a?1:0;}}>
                           <button className="mic-btn" onClick={()=>{setSelPri(p.id);setShowVoice(true);}} title="Voice input" style={{width:22,height:22,border:"none",background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:a?1:0,transition:"opacity 0.2s",marginBottom:6,flexShrink:0}}><IC.Mic s={12} c={C.muted}/></button>
                           <button onClick={()=>setSelPri(a?null:p.id)} title={p.label} style={{width:a?"clamp(40px,6vw,52px)":"clamp(32px,5vw,44px)",height:a?"clamp(40px,6vw,52px)":"clamp(32px,5vw,44px)",borderRadius:"50%",background:p.color,border:a?`2px solid ${softBorderC}`:"2px solid transparent",cursor:"pointer",transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease",boxShadow:a?`0 4px 16px ${p.color}60`:`0 2px 8px ${p.color}25`,flexShrink:0}}/>
-                          <span style={{fontSize:10,color:C.faint,fontFamily:NC_FONT_STACK,fontWeight:600,textAlign:"center",marginTop:7,letterSpacing:.3}}>{p.label}</span>
+                          <span style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,fontWeight:600,textAlign:"center",marginTop:7,letterSpacing:.3}}>{p.label}</span>
                         </div>
                       );
                     })}
@@ -4166,7 +4166,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   <div data-input-area="true" style={{width:"100%",animation:"ot-fade 0.2s"}}>
                     <form onSubmit={addTask} style={{display:"flex",gap:8,alignItems:"flex-end"}}>
                       <textarea ref={inRef} value={newTask} onChange={e=>{setNewTask(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";}} placeholder={selPri==="shaila"?"Who + what shaila?":ph} autoFocus onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addTask(e);}if(e.key==="Escape"){setSelPri(null);setNewTask("");setPinOnAdd(false);}}} rows={1} style={{flex:1,padding:"clamp(10px,1.5vw,14px) clamp(12px,2vw,18px)",fontSize:"clamp(14px,2vw,16px)",border:`2px solid ${gP(pris,selPri).color}`,borderRadius:RADIUS.md,outline:"none",background:C.bg,color:C.text,fontFamily:NC_FONT_STACK,resize:"none",overflow:"hidden",minHeight:44,lineHeight:1.4}}/>
-                      <button type="button" onClick={()=>setEntryEnergy(e=>e===null?"high":e==="high"?"low":null)} title={entryEnergy?`Energy: ${entryEnergy}`:"Set energy"} style={{width:40,height:40,borderRadius:RADIUS.pill,border:`1.5px solid ${entryEnergy?C.accent:C.divider}`,background:entryEnergy==="high"?`${C.accent}18`:entryEnergy==="low"?`${C.muted}18`:C.bgSoft,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}>
+                      <button type="button" onClick={()=>setEntryEnergy(e=>e===null?"high":e==="high"?"low":null)} title={entryEnergy?`Energy: ${entryEnergy}`:"Set energy"} style={{width:40,height:40,borderRadius:RADIUS.pill,border:`1.5px solid ${entryEnergy?C.accent:C.divider}`,background:entryEnergy==="high"?`${C.accent}18`:entryEnergy==="low"?`${C.muted}18`:C.bgSoft,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:NC_TYPE.title,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}>
                         {entryEnergy==="high"?"⚡":entryEnergy==="low"?"🌊":"·"}
                       </button>
                       {/* Owner ticket: pin to top right from the entry box instead of adding
@@ -4198,10 +4198,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               const spinnerIcon = <div style={{width:14,height:14,borderRadius:"50%",border:`2px solid ${C.muted}`,borderTopColor:"transparent",animation:"ot-spin 0.7s linear infinite"}}/>;
               const menuSections = [
                 ...(curT ? [{ cat: "Current Task", items: [
-                  {icon:<span style={{fontSize:14,lineHeight:1,color:C.muted,fontFamily:NC_FONT_STACK}}>≈</span>, label:"Good enough", action:()=>goodEnoughTask(curT.id)},
+                  {icon:<span style={{fontSize:NC_TYPE.body,lineHeight:1,color:C.muted,fontFamily:NC_FONT_STACK}}>≈</span>, label:"Good enough", action:()=>goodEnoughTask(curT.id)},
                   {icon:<IC.Pause s={14} c={C.muted}/>, label:"Mark blocked", action:()=>setBlockedModal(curT)},
                   {icon:<IC.PriC s={14} c={C.muted}/>, label:"Change priority", action:()=>setChgPri(curT.id)},
-                  ...(curT?.parentTask ? [{icon:<span style={{fontSize:12,lineHeight:1,color:C.muted}}>{suiteIcon("nature",14)}</span>, label:"Park rest", action:()=>parkRestOfGroup(curT)}] : []),
+                  ...(curT?.parentTask ? [{icon:<span style={{fontSize:NC_TYPE.meta,lineHeight:1,color:C.muted}}>{suiteIcon("nature",14)}</span>, label:"Park rest", action:()=>parkRestOfGroup(curT)}] : []),
                   {icon:<IC.Trash s={14} c="#C06060"/>, label:"Delete", action:()=>delTask(curT.id)},
                 ]}] : []),
                 { cat: "Navigate", items: [
@@ -4273,9 +4273,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           <>
             <header style={{...commandPageWidth,textAlign:"center",paddingTop:40,paddingBottom:4,flexShrink:0}}>
               <h1 style={{fontSize:22,fontWeight:600,margin:0}}>Shamash Pro 4</h1>
-              <p style={{color:C.faint,fontSize:13,margin:"4px 0 0",fontStyle:"italic"}}>{gG()} — {dateStr}</p>
+              <p style={{color:C.faint,fontSize:NC_TYPE.body,margin:"4px 0 0",fontStyle:"italic"}}>{gG()} — {dateStr}</p>
               <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
-                <span style={{fontSize:11,color:C.faint,fontFamily:NC_FONT_STACK}}>@{user?.displayName || user?.email?.split("@")[0] || ""}</span>
+                <span style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK}}>@{user?.displayName || user?.email?.split("@")[0] || ""}</span>
               </div>
             </header>
             <div style={{...commandPageWidth,display:"flex",gap:4,marginTop:16,background:C.bgSoft,borderRadius:RADIUS.pill,padding:4,flexShrink:0,position:"relative"}}>
@@ -4294,15 +4294,15 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             {/* Queue header: task count + energy indicator + overflow menu */}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:13,fontWeight:600,fontFamily:NC_FONT_STACK,color:C.muted}}>{effectiveCount} task{effectiveCount!==1?"s":""}</span>
+                <span style={{fontSize:NC_TYPE.body,fontWeight:600,fontFamily:NC_FONT_STACK,color:C.muted}}>{effectiveCount} task{effectiveCount!==1?"s":""}</span>
                 {curEnergy && (
-                  <span style={{fontSize:10,fontFamily:NC_FONT_STACK,padding:"2px 8px",borderRadius:RADIUS.sm,border:`1px solid ${curEnergy==="high"?C.accent:C.divider}`,color:curEnergy==="high"?C.text:C.muted,fontWeight:600}}>
+                  <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,padding:"2px 8px",borderRadius:RADIUS.sm,border:`1px solid ${curEnergy==="high"?C.accent:C.divider}`,color:curEnergy==="high"?C.text:C.muted,fontWeight:600}}>
                     {curEnergy==="high"?"⚡ High energy":"🌊 Low energy"}
-                    <button onClick={()=>setAS(p=>({...p,currentEnergy:null}))} style={{marginLeft:4,background:"none",border:"none",cursor:"pointer",fontSize:11,color:C.faint,padding:0,lineHeight:1,display:"flex",alignItems:"center"}}>{suiteIcon("close",11)}</button>
+                    <button onClick={()=>setAS(p=>({...p,currentEnergy:null}))} style={{marginLeft:4,background:"none",border:"none",cursor:"pointer",fontSize:NC_TYPE.small,color:C.faint,padding:0,lineHeight:1,display:"flex",alignItems:"center"}}>{suiteIcon("close",11)}</button>
                   </span>
                 )}
                 {effectiveCount > overwhelmThreshold && (
-                  <span style={{fontSize:10,fontFamily:NC_FONT_STACK,padding:"2px 8px",borderRadius:RADIUS.sm,background:focusModeActive?`${C.warning}40`:"transparent",border:`1px solid ${focusModeActive?C.warning+"80":C.divider}`,color:focusModeActive?C.text:C.muted,fontWeight:600,cursor:"pointer"}} onClick={()=>setFocusModeActive(f=>!f)}>
+                  <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,padding:"2px 8px",borderRadius:RADIUS.sm,background:focusModeActive?`${C.warning}40`:"transparent",border:`1px solid ${focusModeActive?C.warning+"80":C.divider}`,color:focusModeActive?C.text:C.muted,fontWeight:600,cursor:"pointer"}} onClick={()=>setFocusModeActive(f=>!f)}>
                     😶 {focusModeActive ? "Focus mode on" : "Focus mode"}
                   </span>
                 )}
@@ -4336,7 +4336,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 value={searchQ}
                 onChange={e=>setSearchQ(e.target.value)}
                 placeholder="Search tasks..."
-                style={{width:"100%",padding:"9px 14px",paddingRight:searchQ?36:14,fontSize:13,border:`1px solid ${C.divider}`,borderRadius:RADIUS.md,outline:"none",background:C.bgSoft,color:C.text,fontFamily:NC_FONT_STACK}}
+                style={{width:"100%",padding:"9px 14px",paddingRight:searchQ?36:14,fontSize:NC_TYPE.body,border:`1px solid ${C.divider}`,borderRadius:RADIUS.md,outline:"none",background:C.bgSoft,color:C.text,fontFamily:NC_FONT_STACK}}
               />
               {searchQ && (
                 <IconBtn icon="close" iconSize={14} color={C.faint} title="Clear search" aria-label="Clear search"
@@ -4348,7 +4348,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             <div style={{marginBottom:14,background:C.bg,border:`1px solid ${C.divider}`,borderRadius:RADIUS.md,padding:"8px 10px",display:"flex",flexDirection:"column",gap:8}}>
               {/* Priority pills */}
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                <span style={{fontSize:10,color:C.faint,fontFamily:NC_FONT_STACK,flexShrink:0}}>Add:</span>
+                <span style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,flexShrink:0}}>Add:</span>
                 {[...ap].sort((a,b)=>{
                   const ab = !a.id.startsWith('pri_'), bb = !b.id.startsWith('pri_');
                   if (ab !== bb) return bb - ab; // built-ins first
@@ -4371,7 +4371,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   <input autoFocus value={qAddText} onChange={e=>setQAddText(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Escape"){setQAddPri(null);setQAddText("");setQAddPin(false);}}}
                     placeholder={qAddPri==="shaila"?"Who + what shaila?":"What needs doing?"}
-                    style={{flex:1,minWidth:0,padding:"7px 12px",fontSize:13,border:`1.5px solid ${gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color}`,borderRadius:RADIUS.sm,outline:"none",background:C.bgSoft,color:C.text,fontFamily:NC_FONT_STACK}}/>
+                    style={{flex:1,minWidth:0,padding:"7px 12px",fontSize:NC_TYPE.body,border:`1.5px solid ${gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color}`,borderRadius:RADIUS.sm,outline:"none",background:C.bgSoft,color:C.text,fontFamily:NC_FONT_STACK}}/>
                   {/* Owner ticket: pin to top right from the entry box. */}
                   <button type="button" onClick={()=>setQAddPin(p=>!p)} title={qAddPin?"Will pin to top of queue":"Pin to top of queue"} aria-pressed={qAddPin}
                     style={{width:34,height:34,borderRadius:RADIUS.sm,border:`1.5px solid ${qAddPin?C.accent:C.divider}`,background:qAddPin?`${C.accent}18`:C.bgSoft,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",color:qAddPin?C.accent:C.muted}}>
@@ -4418,12 +4418,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                           <div draggable onDragStart={()=>setDragId(task.id)} onDragOver={e=>e.preventDefault()} onDrop={()=>handleDrop(task.id)}
                             style={{...queueRowBase,borderBottom:`1px solid ${C.divider}`,borderLeft:`3px solid ${tp.color}`,background:rowBg,cursor:"grab"}}>
                             <span style={{cursor:"grab",padding:"2px",opacity:isF ? .75 : .35,flexShrink:0}}><IC.Grab s={12} c={rowSoft}/></span>
-                            <span style={{width:20,height:20,borderRadius:"50%",background:isF?tp.color:"transparent",border:isF?"none":`1.5px solid ${C.faint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:isF?textOnColor(tp.color):C.faint,fontWeight:600,fontFamily:NC_FONT_STACK,flexShrink:0}}>
+                            <span style={{width:20,height:20,borderRadius:"50%",background:isF?tp.color:"transparent",border:isF?"none":`1.5px solid ${C.faint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:NC_TYPE.small,color:isF?textOnColor(tp.color):C.faint,fontWeight:600,fontFamily:NC_FONT_STACK,flexShrink:0}}>
                               {dispPos}
                             </span>
                             <span onClick={()=>setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;})}
-                              style={{flex:1,minWidth:0,fontSize:14,cursor:"pointer",fontWeight:isF?500:400,color:rowText,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
-                              {task.shailaId && shailaNumberMap[task.shailaId] && <span style={{fontSize:10,color:rowAccent,fontWeight:700,fontFamily:NC_FONT_STACK,marginRight:5}}>#{shailaNumberMap[task.shailaId]}</span>}
+                              style={{flex:1,minWidth:0,fontSize:NC_TYPE.body,cursor:"pointer",fontWeight:isF?500:400,color:rowText,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
+                              {task.shailaId && shailaNumberMap[task.shailaId] && <span style={{fontSize:NC_TYPE.small,color:rowAccent,fontWeight:700,fontFamily:NC_FONT_STACK,marginRight:5}}>#{shailaNumberMap[task.shailaId]}</span>}
                               {task.parentTask}
                             </span>
                             {task.shailaId && (() => {
@@ -4452,10 +4452,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                               <div key={st.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px 7px 28px",borderBottom:`1px solid ${C.divider}`,background:"transparent",minWidth:0,maxWidth:"100%",boxSizing:"border-box"}}>
                                 <button onClick={e=>{e.stopPropagation();compTask(st.id);}} style={{width:18,height:18,borderRadius:"50%",border:`1.5px solid ${tp.color}`,background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} title="Complete step"><IC.Check s={10} c={tp.color}/></button>
                                 {editId === st.id ? (
-                                  <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(st.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(st.id)} style={{flex:1,minWidth:0,fontSize:13,fontFamily:NC_FONT_STACK,border:`1px solid ${tp.color}80`,borderRadius:6,padding:"3px 7px",outline:"none",color:C.text,background:C.bgSoft}}/>
+                                  <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(st.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(st.id)} style={{flex:1,minWidth:0,fontSize:NC_TYPE.body,fontFamily:NC_FONT_STACK,border:`1px solid ${tp.color}80`,borderRadius:6,padding:"3px 7px",outline:"none",color:C.text,background:C.bgSoft}}/>
                                 ) : (
-                                  <span onClick={()=>startEd(st)} style={{flex:1,minWidth:0,fontSize:13,color:C.muted,cursor:"text",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
-                                    {st.stepIndex && <span style={{fontSize:10,color:C.faint,marginRight:4,fontFamily:NC_FONT_STACK}}>#{st.stepIndex}</span>}{st.text}
+                                  <span onClick={()=>startEd(st)} style={{flex:1,minWidth:0,fontSize:NC_TYPE.body,color:C.muted,cursor:"text",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
+                                    {st.stepIndex && <span style={{fontSize:NC_TYPE.small,color:C.faint,marginRight:4,fontFamily:NC_FONT_STACK}}>#{st.stepIndex}</span>}{st.text}
                                   </span>
                                 )}
                                 {/* Mini got-back pill on the "Get back to asker" step */}
@@ -4470,13 +4470,13 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                                 <IconBtn title="Delete step" aria-label="Delete step" onClick={e=>{e.stopPropagation();delTask(st.id);}} style={{opacity:.3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.3}><IC.Trash s={11} c={C.faint}/></IconBtn>
                               </div>
                             ))}
-                            {gDone > 0 && <div style={{padding:"3px 10px 3px 28px",fontSize:10,color:C.faint,fontFamily:NC_FONT_STACK,borderBottom:`1px solid ${C.divider}`,display:"flex",alignItems:"center",gap:4}}>{gDone} step{gDone!==1?"s":""} completed {suiteIcon("done",10)}</div>}
+                            {gDone > 0 && <div style={{padding:"3px 10px 3px 28px",fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,borderBottom:`1px solid ${C.divider}`,display:"flex",alignItems:"center",gap:4}}>{gDone} step{gDone!==1?"s":""} completed {suiteIcon("done",10)}</div>}
                             {isAddingHere && (
                               <div style={{display:"flex",gap:6,padding:"6px 10px 6px 28px",alignItems:"center",borderBottom:`1px solid ${C.divider}`}}>
                                 <input autoFocus placeholder="New step…"
                                   onKeyDown={e=>{const tx=e.target.value.trim();if(e.key==="Enter"&&tx){addSubtask(task.parentTask,tx);e.target.value="";setGroupAdding(null);}if(e.key==="Escape")setGroupAdding(null);}}
                                   onBlur={e=>{const tx=e.target.value.trim();if(tx)addSubtask(task.parentTask,tx);setGroupAdding(null);}}
-                                  style={{flex:1,fontSize:13,fontFamily:NC_FONT_STACK,border:`1px solid ${tp.color}80`,borderRadius:RADIUS.sm,padding:"5px 10px",outline:"none",background:C.bgSoft,color:T.text}}/>
+                                  style={{flex:1,fontSize:NC_TYPE.body,fontFamily:NC_FONT_STACK,border:`1px solid ${tp.color}80`,borderRadius:RADIUS.sm,padding:"5px 10px",outline:"none",background:C.bgSoft,color:T.text}}/>
                               </div>
                             )}
                           </>}
@@ -4498,25 +4498,25 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       return (
                         <div key={task.id} draggable onDragStart={()=>setDragId(task.id)} onDragOver={e=>e.preventDefault()} onDrop={()=>handleDrop(task.id)} style={{...queueRowBase,borderBottom:`1px solid ${C.divider}`,borderLeft:`3px solid ${tp.color}`,background:rowBg,cursor:"grab",opacity:task.blocked ? .82 : 1}}>
                           <span style={{cursor:"grab",padding:"2px",opacity:isF ? .75 : .35,flexShrink:0}}><IC.Grab s={12} c={_qSoft}/></span>
-                          <span style={{width:20,height:20,borderRadius:"50%",background:isF?tp.color:"transparent",border:isF?"none":`1.5px solid ${C.faint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:isF?textOnColor(tp.color):C.faint,fontWeight:600,fontFamily:NC_FONT_STACK,flexShrink:0}}>{dispPos}</span>
+                          <span style={{width:20,height:20,borderRadius:"50%",background:isF?tp.color:"transparent",border:isF?"none":`1.5px solid ${C.faint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:NC_TYPE.small,color:isF?textOnColor(tp.color):C.faint,fontWeight:600,fontFamily:NC_FONT_STACK,flexShrink:0}}>{dispPos}</span>
                           {editId === task.id ? (
-                            <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(task.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(task.id)} style={{flex:1,minWidth:0,fontSize:14,fontFamily:NC_FONT_STACK,border:`1px solid ${tp.color}80`,borderRadius:RADIUS.sm,padding:"4px 8px",outline:"none",color:textOnPastel(AS.colorScheme, T.text, pBg(tp.color)),background:pBg(tp.color)}}/>
+                            <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(task.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(task.id)} style={{flex:1,minWidth:0,fontSize:NC_TYPE.body,fontFamily:NC_FONT_STACK,border:`1px solid ${tp.color}80`,borderRadius:RADIUS.sm,padding:"4px 8px",outline:"none",color:textOnPastel(AS.colorScheme, T.text, pBg(tp.color)),background:pBg(tp.color)}}/>
                           ) : (
                             <div style={{flex:1,display:"flex",flexDirection:"column",gap:4,minWidth:0}}>
-                              <span onClick={()=>startEd(task)} style={{fontSize:14,cursor:"text",fontWeight:isF?500:400,color:_qText,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
-                                {task.pinned && <span style={{fontSize:10,marginRight:4,color:rowAccent,opacity:isF?1:.5,display:"flex",alignItems:"center"}}>{suiteIcon("push_pin",10)}</span>}
+                              <span onClick={()=>startEd(task)} style={{fontSize:NC_TYPE.body,cursor:"text",fontWeight:isF?500:400,color:_qText,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
+                                {task.pinned && <span style={{fontSize:NC_TYPE.small,marginRight:4,color:rowAccent,opacity:isF?1:.5,display:"flex",alignItems:"center"}}>{suiteIcon("push_pin",10)}</span>}
                                 {task.text}
                               </span>
                               {!qCondensed && task.blocked && task.blockedNote && (
-                                <span style={{fontSize:10,fontStyle:"italic",color:textOnPastel(AS.colorScheme, T.text, rowBg),fontFamily:NC_FONT_STACK,opacity:.9,display:"flex",alignItems:"center",gap:4}}>{suiteIcon("pause",10)} {task.blockedNote}</span>
+                                <span style={{fontSize:NC_TYPE.small,fontStyle:"italic",color:textOnPastel(AS.colorScheme, T.text, rowBg),fontFamily:NC_FONT_STACK,opacity:.9,display:"flex",alignItems:"center",gap:4}}>{suiteIcon("pause",10)} {task.blockedNote}</span>
                               )}
                               {!qCondensed && (aged || task.autoAged || task.mrsW || task.blocked || task.energy) && (
                                 <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:2,opacity:.8}}>
                                   {aged && <AgeBadge task={task} pris={pris} thresholds={AS.ageThresholds} T={T}/>}
                                   {task.autoAged && (
-                                    <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,fontFamily:NC_FONT_STACK,padding:"1px 6px 1px 5px",borderRadius:6,background:`${C.accent}18`,border:`1px solid ${C.accent}60`,color:C.accent,fontWeight:600,lineHeight:1.4}}>
+                                    <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,padding:"1px 6px 1px 5px",borderRadius:6,background:`${C.accent}18`,border:`1px solid ${C.accent}60`,color:C.accent,fontWeight:600,lineHeight:1.4}}>
                                       ↑ {task.agedFromLabel||"3"}
-                                      <button onClick={e=>{e.stopPropagation();undoAging(task.id);}} title="Undo nudge" style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:`${C.accent}80`,padding:0,lineHeight:1,marginLeft:1,display:"flex",alignItems:"center"}}>{suiteIcon("close",10)}</button>
+                                      <button onClick={e=>{e.stopPropagation();undoAging(task.id);}} title="Undo nudge" style={{background:"none",border:"none",cursor:"pointer",fontSize:NC_TYPE.small,color:`${C.accent}80`,padding:0,lineHeight:1,marginLeft:1,display:"flex",alignItems:"center"}}>{suiteIcon("close",10)}</button>
                                     </span>
                                   )}
                                   {task.energy && <EnergyBadge energy={task.energy} T={T}/>}
@@ -4545,13 +4545,13 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 })()}
               </div>
             ) : (
-              <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"40px 20px",border:`1px solid ${C.divider}`,textAlign:"center",boxShadow:T.shadow}}><p style={{color:C.faint,fontSize:14,margin:0}}>{searchQ.trim()?"No tasks match your search":"No tasks in queue"}</p></div>
+              <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"40px 20px",border:`1px solid ${C.divider}`,textAlign:"center",boxShadow:T.shadow}}><p style={{color:C.faint,fontSize:NC_TYPE.body,margin:0}}>{searchQ.trim()?"No tasks match your search":"No tasks in queue"}</p></div>
             )}
 
             {/* Snoozed tasks — faded at bottom of queue */}
             {snoozedT.length > 0 && (
               <div style={{marginTop:16,opacity:0.55}}>
-                <p style={{fontSize:10,fontWeight:700,letterSpacing:1.5,color:C.faint,fontFamily:NC_FONT_STACK,margin:"0 0 8px 4px",textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>{suiteIcon("bedtime",10)} Sleeping</p>
+                <p style={{fontSize:NC_TYPE.small,fontWeight:700,letterSpacing:1.5,color:C.faint,fontFamily:NC_FONT_STACK,margin:"0 0 8px 4px",textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>{suiteIcon("bedtime",10)} Sleeping</p>
                 <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,overflow:"hidden",boxShadow:T.shadow}}>
                   {snoozedT.map((t, i) => {
                     const d = new Date(t.snoozedUntil);
@@ -4564,11 +4564,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<snoozedT.length-1?`1px solid ${C.divider}`:"none"}}>
                         <div style={{width:8,height:8,borderRadius:"50%",background:cp.isShaila?"#C8A84C":cp.color,flexShrink:0,opacity:0.6}}/>
                         <div style={{flex:1,minWidth:0}}>
-                          <p style={{margin:0,fontSize:12,color:C.muted,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.text}</p>
-                          <p style={{margin:"2px 0 0",fontSize:10,color:C.faint,fontFamily:NC_FONT_STACK}}>wakes {wakeLabel}</p>
+                          <p style={{margin:0,fontSize:NC_TYPE.meta,color:C.muted,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.text}</p>
+                          <p style={{margin:"2px 0 0",fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK}}>wakes {wakeLabel}</p>
                         </div>
                         <button onClick={()=>wakeTask(t.id)}
-                          style={{flexShrink:0,padding:"4px 10px",fontSize:10,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.muted,background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,cursor:"pointer",whiteSpace:"nowrap"}}
+                          style={{flexShrink:0,padding:"4px 10px",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.muted,background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,cursor:"pointer",whiteSpace:"nowrap"}}
                           onMouseEnter={e=>{e.currentTarget.style.borderColor=C.divider;e.currentTarget.style.color=C.text;}}
                           onMouseLeave={e=>{e.currentTarget.style.borderColor=C.divider;e.currentTarget.style.color=C.muted;}}>
                           ↑ Wake now
@@ -4593,11 +4593,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             {hasAI && (
               <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,padding:"18px 20px",marginBottom:18,boxShadow:T.shadow}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                  <h3 style={{fontSize:10,fontWeight:700,color:C.faint,margin:0,fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5,display:"flex",alignItems:"center",gap:6}}>{suiteIcon("star_rate",10)} AI Coach Insight</h3>
+                  <h3 style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.faint,margin:0,fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5,display:"flex",alignItems:"center",gap:6}}>{suiteIcon("star_rate",10)} AI Coach Insight</h3>
                   <button
                     onClick={genAiInsight}
                     disabled={aiInsightLoading || !metrics}
-                    style={{fontSize:10,fontFamily:NC_FONT_STACK,fontWeight:600,padding:"4px 10px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,cursor:metrics?("pointer"):"default",color:C.muted,opacity:aiInsightLoading ? .5 : 1}}
+                    style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,padding:"4px 10px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,cursor:metrics?("pointer"):"default",color:C.muted,opacity:aiInsightLoading ? .5 : 1}}
                   >
                     {aiInsightLoading ? "Thinking..." : aiInsight ? "↻ Refresh" : "Generate"}
                   </button>
@@ -4605,7 +4605,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 {aiInsightLoading && (
                   <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0"}}>
                     <span style={{display:"inline-block",width:14,height:14,borderRadius:"50%",border:`2px solid ${C.muted}`,borderTopColor:"transparent",animation:"ot-spin 0.8s linear infinite"}}/>
-                    <span style={{fontSize:12,color:C.faint,fontFamily:NC_FONT_STACK}}>Analyzing your data...</span>
+                    <span style={{fontSize:NC_TYPE.meta,color:C.faint,fontFamily:NC_FONT_STACK}}>Analyzing your data...</span>
                   </div>
                 )}
                 {aiInsight && !aiInsightLoading && (() => {
@@ -4613,29 +4613,29 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   const bullets = lines.filter(l => l.startsWith('•'));
                   const takeawayLine = lines.find(l => l.toUpperCase().startsWith('TAKEAWAY:'));
                   if (bullets.length === 0) {
-                    return <p style={{fontSize:13,lineHeight:1.65,color:C.text,margin:"0 0 12px"}}>{aiInsight}</p>;
+                    return <p style={{fontSize:NC_TYPE.body,lineHeight:1.65,color:C.text,margin:"0 0 12px"}}>{aiInsight}</p>;
                   }
                   return (
                     <div style={{marginBottom:12}}>
                       <ul style={{margin:"0 0 10px",padding:0,listStyle:"none"}}>
                         {bullets.map((b,i) => (
-                          <li key={i} style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:13,lineHeight:1.6,color:C.text,marginBottom:5}}>
-                            <span style={{color:C.muted,marginTop:3,flexShrink:0,fontSize:10}}>●</span>
+                          <li key={i} style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:NC_TYPE.body,lineHeight:1.6,color:C.text,marginBottom:5}}>
+                            <span style={{color:C.muted,marginTop:3,flexShrink:0,fontSize:NC_TYPE.small}}>●</span>
                             <span>{b.replace(/^•\s*/,'')}</span>
                           </li>
                         ))}
                       </ul>
                       {takeawayLine && (
                         <div style={{borderTop:`1px solid ${C.divider}`,paddingTop:10,marginTop:2,display:"flex",gap:8,alignItems:"flex-start"}}>
-                          <span style={{fontSize:10,fontWeight:700,color:C.faint,fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.2,paddingTop:3,flexShrink:0,whiteSpace:"nowrap"}}>Key Takeaway</span>
-                          <span style={{fontSize:13,fontWeight:600,color:C.text,lineHeight:1.5}}>{takeawayLine.replace(/^TAKEAWAY:\s*/i,'')}</span>
+                          <span style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.faint,fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.2,paddingTop:3,flexShrink:0,whiteSpace:"nowrap"}}>Key Takeaway</span>
+                          <span style={{fontSize:NC_TYPE.body,fontWeight:600,color:C.text,lineHeight:1.5}}>{takeawayLine.replace(/^TAKEAWAY:\s*/i,'')}</span>
                         </div>
                       )}
                     </div>
                   );
                 })()}
                 {!aiInsight && !aiInsightLoading && (
-                  <p style={{fontSize:13,color:C.faint,margin:0,fontFamily:NC_FONT_STACK}}>{metrics ? "Tap Generate for a personalized insight based on your task history." : "Complete tasks to enable personalized insights."}</p>
+                  <p style={{fontSize:NC_TYPE.body,color:C.faint,margin:0,fontFamily:NC_FONT_STACK}}>{metrics ? "Tap Generate for a personalized insight based on your task history." : "Complete tasks to enable personalized insights."}</p>
                 )}
 
                 {/* Quick analysis buttons */}
@@ -4647,14 +4647,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       ["Productivity trends","What are my productivity trends over time?"],
                       ["Recommendations","Based on all my data, what should I focus on?"]
                     ].map(([label, prompt]) => (
-                      <button key={label} onClick={()=>{setAiChatOpen(true);sendAiChat(prompt);}} style={{padding:"5px 10px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,fontSize:11,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.muted,cursor:"pointer"}}>{label}</button>
+                      <button key={label} onClick={()=>{setAiChatOpen(true);sendAiChat(prompt);}} style={{padding:"5px 10px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.muted,cursor:"pointer"}}>{label}</button>
                     ))}
                   </div>
                 )}
 
                 {/* Chat toggle */}
                 {metrics && (
-                  <button onClick={()=>setAiChatOpen(o=>!o)} style={{width:"100%",padding:"6px",fontSize:10,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.muted,background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,cursor:"pointer",marginTop:4}}>
+                  <button onClick={()=>setAiChatOpen(o=>!o)} style={{width:"100%",padding:"6px",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,color:C.muted,background:"none",border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,cursor:"pointer",marginTop:4}}>
                     {aiChatOpen ? "Close chat ▲" : "Ask questions about my data ▼"}
                   </button>
                 )}
@@ -4666,7 +4666,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                     <div ref={chatBoxRef} style={{maxHeight:300,overflowY:"auto",marginBottom:8}}>
                       {(aiChatHistory.length > 60 ? aiChatHistory.slice(-60) : aiChatHistory).map((m, i) => (
                         <div key={i} style={{marginBottom:8,display:"flex",flexDirection:"column",alignItems:m.role==="user"?"flex-end":"flex-start"}}>
-                          <div style={{maxWidth:"85%",padding:"8px 12px",borderRadius:m.role==="user"?"12px 12px 2px 12px":"12px 12px 12px 2px",background:m.role==="user"?C.text:C.bgSoft,color:m.role==="user"?(T.bg||"#fff"):C.text,fontSize:13,lineHeight:1.5,fontFamily:m.role==="user"?"system-ui":"inherit"}}>
+                          <div style={{maxWidth:"85%",padding:"8px 12px",borderRadius:m.role==="user"?"12px 12px 2px 12px":"12px 12px 12px 2px",background:m.role==="user"?C.text:C.bgSoft,color:m.role==="user"?(T.bg||"#fff"):C.text,fontSize:NC_TYPE.body,lineHeight:1.5,fontFamily:m.role==="user"?"system-ui":"inherit"}}>
                             {m.text}
                           </div>
                         </div>
@@ -4674,7 +4674,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       {aiChatLoading && (
                         <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 0"}}>
                           <span style={{display:"inline-block",width:12,height:12,borderRadius:"50%",border:`2px solid ${C.muted}`,borderTopColor:"transparent",animation:"ot-spin 0.8s linear infinite"}}/>
-                          <span style={{fontSize:12,color:C.faint,fontFamily:NC_FONT_STACK}}>Analyzing...</span>
+                          <span style={{fontSize:NC_TYPE.meta,color:C.faint,fontFamily:NC_FONT_STACK}}>Analyzing...</span>
                         </div>
                       )}
                       <div ref={chatEndRef}/>
@@ -4686,9 +4686,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                         onChange={e=>setAiChatInput(e.target.value)}
                         onKeyDown={e=>{if(e.key==="Enter"&&aiChatInput.trim())sendAiChat(aiChatInput);}}
                         placeholder="Ask about your patterns, times, priorities..."
-                        style={{flex:1,padding:"8px 12px",fontSize:13,border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,outline:"none",background:C.bgSoft,color:C.text,fontFamily:NC_FONT_STACK}}
+                        style={{flex:1,padding:"8px 12px",fontSize:NC_TYPE.body,border:`1px solid ${C.divider}`,borderRadius:RADIUS.sm,outline:"none",background:C.bgSoft,color:C.text,fontFamily:NC_FONT_STACK}}
                       />
-                      <button onClick={()=>aiChatInput.trim()&&sendAiChat(aiChatInput)} disabled={aiChatLoading||!aiChatInput.trim()} style={{padding:"8px 14px",borderRadius:RADIUS.sm,border:"none",background:C.accent,color:"#fff",fontSize:12,fontWeight:700,fontFamily:NC_FONT_STACK,cursor:"pointer",opacity:aiChatLoading||!aiChatInput.trim()?.4:1}}>Send</button>
+                      <button onClick={()=>aiChatInput.trim()&&sendAiChat(aiChatInput)} disabled={aiChatLoading||!aiChatInput.trim()} style={{padding:"8px 14px",borderRadius:RADIUS.sm,border:"none",background:C.accent,color:"#fff",fontSize:NC_TYPE.meta,fontWeight:700,fontFamily:NC_FONT_STACK,cursor:"pointer",opacity:aiChatLoading||!aiChatInput.trim()?.4:1}}>Send</button>
                     </div>
                   </div>
                 )}
@@ -4758,9 +4758,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       {paths.map((p,i) => (
                         <div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
                           <div style={{width:9,height:9,borderRadius:"50%",background:p.color,flexShrink:0}}/>
-                          <span style={{fontSize:11,fontFamily:NC_FONT_STACK,flex:1,color:C.muted}}>{p.label}</span>
-                          <span style={{fontSize:11,fontWeight:600,fontFamily:NC_FONT_STACK,color:T.text}}>{p.n}</span>
-                          <span style={{fontSize:10,color:C.faint,fontFamily:NC_FONT_STACK}}>{Math.round(p.n/total*100)}%</span>
+                          <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,flex:1,color:C.muted}}>{p.label}</span>
+                          <span style={{fontSize:NC_TYPE.small,fontWeight:600,fontFamily:NC_FONT_STACK,color:T.text}}>{p.n}</span>
+                          <span style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK}}>{Math.round(p.n/total*100)}%</span>
                         </div>
                       ))}
                     </div>
@@ -4812,7 +4812,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
               return (
                 <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,padding:"18px 20px",marginBottom:18,boxShadow:T.shadow}}>
-                  <h3 style={{fontSize:10,fontWeight:700,color:C.faint,margin:"0 0 14px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>Activity</h3>
+                  <h3 style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.faint,margin:"0 0 14px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>Activity</h3>
 
                   {/* Range tabs */}
                   <div style={{display:"flex",gap:4,marginBottom:16}}>
@@ -4821,7 +4821,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                         style={{padding:"4px 10px",borderRadius:RADIUS.sm,border:`1px solid ${chartRange===k?C.accent:C.divider}`,
                           background:chartRange===k?C.accent:"transparent",
                           color:chartRange===k?"#fff":C.muted,
-                          fontSize:10,fontFamily:NC_FONT_STACK,fontWeight:600,cursor:"pointer"}}>
+                          fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,cursor:"pointer"}}>
                         {lbl}
                       </button>
                     ))}
@@ -4830,8 +4830,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   {/* Bar chart */}
                   <div style={{marginBottom:4}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
-                      <span style={{fontSize:11,fontFamily:NC_FONT_STACK,color:C.muted}}>{rd.sub}</span>
-                      <span style={{fontSize:18,fontWeight:700,color:C.text,fontFamily:NC_FONT_STACK}}>{total} <span style={{fontSize:11,fontWeight:400,color:C.faint}}>done</span></span>
+                      <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:C.muted}}>{rd.sub}</span>
+                      <span style={{fontSize:18,fontWeight:700,color:C.text,fontFamily:NC_FONT_STACK}}>{total} <span style={{fontSize:NC_TYPE.small,fontWeight:400,color:C.faint}}>done</span></span>
                     </div>
                     <BarChart bars={rd.bars} accentColor={accentColor}/>
                   </div>
@@ -4840,7 +4840,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   <div style={{borderTop:`1px solid ${C.divider}`,margin:"18px 0"}}/>
 
                   {/* Priority donut */}
-                  <h3 style={{fontSize:10,fontWeight:700,color:C.faint,margin:"0 0 14px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>By Priority</h3>
+                  <h3 style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.faint,margin:"0 0 14px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>By Priority</h3>
                   <DonutChart slices={chartData.donut}/>
 
                   {/* Divider */}
@@ -4853,7 +4853,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                         style={{padding:"4px 10px",borderRadius:RADIUS.sm,border:`1px solid ${chartSecondary===k?C.accent:C.divider}`,
                           background:chartSecondary===k?C.accent:"transparent",
                           color:chartSecondary===k?"#fff":C.muted,
-                          fontSize:10,fontFamily:NC_FONT_STACK,fontWeight:600,cursor:"pointer"}}>
+                          fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,cursor:"pointer"}}>
                         {lbl}
                       </button>
                     ))}
@@ -4864,8 +4864,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                     return (
                       <div>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
-                          <span style={{fontSize:11,fontFamily:NC_FONT_STACK,color:C.muted}}>all-time, by day of week</span>
-                          <span style={{fontSize:11,color:C.faint,fontFamily:NC_FONT_STACK}}>peak: {peak.label} ({peak.n})</span>
+                          <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:C.muted}}>all-time, by day of week</span>
+                          <span style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK}}>peak: {peak.label} ({peak.n})</span>
                         </div>
                         <BarChart bars={chartData.dow} accentColor={accentColor}/>
                       </div>
@@ -4877,10 +4877,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                     return (
                       <div>
                         <div style={{marginBottom:8}}>
-                          <span style={{fontSize:11,fontFamily:NC_FONT_STACK,color:C.muted}}>how quickly tasks get done (creation → completion)</span>
+                          <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:C.muted}}>how quickly tasks get done (creation → completion)</span>
                         </div>
                         <BarChart bars={chartData.speedBuckets.map(b=>({...b,label:b.label}))} accentColor={T.success}/>
-                        {maxB.n>0 && <p style={{fontSize:11,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:8,marginBottom:0}}>Most tasks finish {maxB.label} after being created.</p>}
+                        {maxB.n>0 && <p style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:8,marginBottom:0}}>Most tasks finish {maxB.label} after being created.</p>}
                       </div>
                     );
                   })()}
@@ -4888,7 +4888,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   {chartSecondary === 'trend' && (
                     <div>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
-                        <span style={{fontSize:11,fontFamily:NC_FONT_STACK,color:C.muted}}>daily completions, last 30 days</span>
+                        <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:C.muted}}>daily completions, last 30 days</span>
                       </div>
                       <AreaChart points={chartData.trend30} accentColor={accentColor}/>
                     </div>
@@ -4897,8 +4897,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   {chartSecondary === 'cumulative' && (
                     <div>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
-                        <span style={{fontSize:11,fontFamily:NC_FONT_STACK,color:C.muted}}>total tasks completed, last 90 days</span>
-                        <span style={{fontSize:18,fontWeight:700,color:C.text,fontFamily:NC_FONT_STACK}}>{chartData.cum90[chartData.cum90.length-1]?.n} <span style={{fontSize:11,fontWeight:400,color:C.faint}}>total</span></span>
+                        <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:C.muted}}>total tasks completed, last 90 days</span>
+                        <span style={{fontSize:18,fontWeight:700,color:C.text,fontFamily:NC_FONT_STACK}}>{chartData.cum90[chartData.cum90.length-1]?.n} <span style={{fontSize:NC_TYPE.small,fontWeight:400,color:C.faint}}>total</span></span>
                       </div>
                       <AreaChart points={chartData.cum90} accentColor={C.accent} showLabels={true}/>
                     </div>
@@ -4909,40 +4909,40 @@ function App({ user, onSignOut, onSessionLostAccess }) {
 
             {/* ── Tip Carousel ── */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <h2 style={{fontSize:16,fontWeight:600,margin:0}}>Tips</h2>
-              <span style={{fontSize:10,color:C.faint,fontFamily:NC_FONT_STACK}}>{tipCarouselIdx+1} / {tipCarouselList.length}</span>
+              <h2 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:0}}>Tips</h2>
+              <span style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK}}>{tipCarouselIdx+1} / {tipCarouselList.length}</span>
             </div>
 
             {/* Category filter pills */}
             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
               {TIP_CATS.map(cat => (
-                <button key={cat} onClick={()=>setTipCat(cat)} style={{padding:"4px 12px",borderRadius:RADIUS.sm,border:`1px solid ${tipCat===cat?C.accent:C.divider}`,background:tipCat===cat?C.accent:"transparent",color:tipCat===cat?"#fff":C.muted,fontSize:10,fontFamily:NC_FONT_STACK,fontWeight:600,cursor:"pointer"}}>{cat}</button>
+                <button key={cat} onClick={()=>setTipCat(cat)} style={{padding:"4px 12px",borderRadius:RADIUS.sm,border:`1px solid ${tipCat===cat?C.accent:C.divider}`,background:tipCat===cat?C.accent:"transparent",color:tipCat===cat?"#fff":C.muted,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:600,cursor:"pointer"}}>{cat}</button>
               ))}
             </div>
 
             {/* Single tip card */}
             <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,padding:"22px 20px",marginBottom:10,minHeight:120,animation:"ot-fade 0.2s",position:"relative"}}>
-              <p style={{fontSize:15,lineHeight:1.65,color:C.text,margin:"0 0 14px"}}>{tipCarouselItem.t}</p>
+              <p style={{fontSize:NC_TYPE.title,lineHeight:1.65,color:C.text,margin:"0 0 14px"}}>{tipCarouselItem.t}</p>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   {tipCarouselItem.s ? (
-                    <a href={`https://www.google.com/search?q=${encodeURIComponent(tipCarouselItem.s + " " + tipCarouselItem.t.slice(0,40))}`} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:C.muted,fontFamily:NC_FONT_STACK,fontStyle:"italic",textDecoration:"underline",textDecorationColor:C.divider}}>
+                    <a href={`https://www.google.com/search?q=${encodeURIComponent(tipCarouselItem.s + " " + tipCarouselItem.t.slice(0,40))}`} target="_blank" rel="noopener noreferrer" style={{fontSize:NC_TYPE.small,color:C.muted,fontFamily:NC_FONT_STACK,fontStyle:"italic",textDecoration:"underline",textDecorationColor:C.divider}}>
                       {tipCarouselItem.s}
                     </a>
                   ) : (
-                    <span style={{fontSize:11,color:C.faint,fontFamily:NC_FONT_STACK,fontStyle:"italic"}}>{tipCarouselItem.s}</span>
+                    <span style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,fontStyle:"italic"}}>{tipCarouselItem.s}</span>
                   )}
-                  <span style={{background:C.bgSoft,borderRadius:4,padding:"1px 6px",fontSize:11,fontFamily:NC_FONT_STACK,fontWeight:700,color:C.faint,border:`1px solid ${C.divider}`}}>{tipCarouselItem.cat}</span>
+                  <span style={{background:C.bgSoft,borderRadius:4,padding:"1px 6px",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,fontWeight:700,color:C.faint,border:`1px solid ${C.divider}`}}>{tipCarouselItem.cat}</span>
                 </div>
                 <div style={{display:"flex",gap:6}}>
                   <button
                     onClick={()=>setTipViewIdx(i=>(i-1+tipCarouselList.length)%tipCarouselList.length)}
-                    style={{padding:"6px 14px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,cursor:"pointer",fontSize:13,color:C.muted,fontFamily:NC_FONT_STACK,lineHeight:1}}
+                    style={{padding:"6px 14px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,cursor:"pointer",fontSize:NC_TYPE.body,color:C.muted,fontFamily:NC_FONT_STACK,lineHeight:1}}
                     title="Previous tip"
                   >←</button>
                   <button
                     onClick={()=>setTipViewIdx(i=>(i+1)%tipCarouselList.length)}
-                    style={{padding:"6px 14px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,cursor:"pointer",fontSize:13,color:C.muted,fontFamily:NC_FONT_STACK,lineHeight:1}}
+                    style={{padding:"6px 14px",borderRadius:RADIUS.sm,border:`1px solid ${C.divider}`,background:C.bgSoft,cursor:"pointer",fontSize:NC_TYPE.body,color:C.muted,fontFamily:NC_FONT_STACK,lineHeight:1}}
                     title="Next tip"
                   >→</button>
                 </div>
@@ -4952,54 +4952,54 @@ function App({ user, onSignOut, onSessionLostAccess }) {
             {/* ── Stats (collapsible) ── */}
             {metrics ? (
               <details style={{marginTop:24}} open={false}>
-                <summary style={{fontSize:13,fontWeight:600,fontFamily:NC_FONT_STACK,cursor:"pointer",color:C.muted,listStyle:"none",display:"flex",alignItems:"center",gap:6,marginBottom:12,userSelect:"none"}}>
-                  <span style={{fontSize:10,opacity:.6}}>▶</span> Your stats
+                <summary style={{fontSize:NC_TYPE.body,fontWeight:600,fontFamily:NC_FONT_STACK,cursor:"pointer",color:C.muted,listStyle:"none",display:"flex",alignItems:"center",gap:6,marginBottom:12,userSelect:"none"}}>
+                  <span style={{fontSize:NC_TYPE.small,opacity:.6}}>▶</span> Your stats
                 </summary>
                 <div style={{paddingTop:8}}>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:600}}>{metrics.total}</div><div style={{fontSize:11,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Completed</div><div style={{fontSize:11,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Total tasks you've finished</div></div>
-                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:600}}>{metrics.avg}</div><div style={{fontSize:11,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Avg time</div><div style={{fontSize:11,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Average time from creation to done</div></div>
-                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:600}}>{metrics.sk}d</div><div style={{fontSize:11,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Streak</div><div style={{fontSize:11,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Consecutive days with completions</div></div>
-                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:15,fontWeight:600}}>{metrics.pT||"—"}</div><div style={{fontSize:11,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Peak hour</div><div style={{fontSize:11,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Your most productive time of day</div></div>
+                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:600}}>{metrics.total}</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Completed</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Total tasks you've finished</div></div>
+                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:600}}>{metrics.avg}</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Avg time</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Average time from creation to done</div></div>
+                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:28,fontWeight:600}}>{metrics.sk}d</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Streak</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Consecutive days with completions</div></div>
+                    <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"16px",border:`1px solid ${C.divider}`,textAlign:"center"}}><div style={{fontSize:NC_TYPE.title,fontWeight:600}}>{metrics.pT||"—"}</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:2}}>Peak hour</div><div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,marginTop:4,opacity:.7}}>Your most productive time of day</div></div>
                   </div>
                   {metrics.goodEnoughCount > 0 && (
                     <div style={{background:pBg(T.success),borderRadius:RADIUS.md,padding:"12px 16px",border:`1px solid ${T.success}40`,marginBottom:14,display:"flex",gap:10,alignItems:"center"}}>
                       <IC.GoodEnough s={16} c={C.success}/>
-                      <div><p style={{fontSize:12,fontWeight:600,margin:0,color:C.success,fontFamily:NC_FONT_STACK}}>{metrics.goodEnoughCount} "good enough" completions</p><p style={{fontSize:11,color:C.success,margin:0,fontFamily:NC_FONT_STACK}}>That's pragmatic productivity at its finest.</p></div>
+                      <div><p style={{fontSize:NC_TYPE.meta,fontWeight:600,margin:0,color:C.success,fontFamily:NC_FONT_STACK}}>{metrics.goodEnoughCount} "good enough" completions</p><p style={{fontSize:NC_TYPE.small,color:C.success,margin:0,fontFamily:NC_FONT_STACK}}>That's pragmatic productivity at its finest.</p></div>
                     </div>
                   )}
                   <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,padding:16,marginBottom:14}}>
-                    <h3 style={{fontSize:10,fontWeight:700,color:C.faint,margin:"0 0 12px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>By Priority</h3>
+                    <h3 style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.faint,margin:"0 0 12px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>By Priority</h3>
                     {metrics.pS.map(p => (
                       <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:`1px solid ${C.divider}`}}>
                         <div style={{width:10,height:10,borderRadius:"50%",background:p.c,flexShrink:0}}/>
-                        <span style={{flex:1,fontSize:13,fontFamily:NC_FONT_STACK,fontWeight:500}}>{p.l}</span>
-                        <span style={{fontSize:12,color:C.muted,fontFamily:NC_FONT_STACK}}>{p.n} done</span>
-                        <span style={{fontSize:12,color:C.muted,fontFamily:NC_FONT_STACK,minWidth:60,textAlign:"right"}}>avg {p.a}</span>
+                        <span style={{flex:1,fontSize:NC_TYPE.body,fontFamily:NC_FONT_STACK,fontWeight:500}}>{p.l}</span>
+                        <span style={{fontSize:NC_TYPE.meta,color:C.muted,fontFamily:NC_FONT_STACK}}>{p.n} done</span>
+                        <span style={{fontSize:NC_TYPE.meta,color:C.muted,fontFamily:NC_FONT_STACK,minWidth:60,textAlign:"right"}}>avg {p.a}</span>
                       </div>
                     ))}
                   </div>
                   {/* Pattern insights (rule-based) */}
                   {advice.length > 0 && (
                     <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,padding:16,marginBottom:14}}>
-                      <h3 style={{fontSize:10,fontWeight:700,color:C.faint,margin:"0 0 12px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>Patterns</h3>
-                      {advice.map((a,i) => <p key={i} style={{fontSize:13,lineHeight:1.6,margin:i<advice.length-1?"0 0 10px":0,padding:"9px 11px",background:C.bgSoft,borderRadius:RADIUS.sm,fontFamily:NC_FONT_STACK}}>{a}</p>)}
+                      <h3 style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.faint,margin:"0 0 12px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>Patterns</h3>
+                      {advice.map((a,i) => <p key={i} style={{fontSize:NC_TYPE.body,lineHeight:1.6,margin:i<advice.length-1?"0 0 10px":0,padding:"9px 11px",background:C.bgSoft,borderRadius:RADIUS.sm,fontFamily:NC_FONT_STACK}}>{a}</p>)}
                     </div>
                   )}
                   <div style={{background:C.bg,borderRadius:RADIUS.md,border:`1px solid ${C.divider}`,overflow:"hidden",marginBottom:32}}>
-                    <h3 style={{fontSize:10,fontWeight:700,color:C.faint,margin:0,padding:"12px 14px 8px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>Completion Log</h3>
+                    <h3 style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.faint,margin:0,padding:"12px 14px 8px",fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1.5}}>Completion Log</h3>
                     <div style={{maxHeight:280,overflowY:"auto"}}>
                       {metrics.cL.map(t => {
                         const tp = gP(pris, t.priority);
                         return (
                           <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderTop:`1px solid ${C.divider}`}}>
                             <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0}}/>
-                            <span style={{flex:1,fontSize:13,color:C.muted}}>
-                              {t.goodEnough&&<span style={{fontSize:11,marginRight:4,opacity:.6}}>≈</span>}
+                            <span style={{flex:1,fontSize:NC_TYPE.body,color:C.muted}}>
+                              {t.goodEnough&&<span style={{fontSize:NC_TYPE.small,marginRight:4,opacity:.6}}>≈</span>}
                               {t.text}
                             </span>
                             <button onClick={()=>cloneTask(t)} title="Clone as new task" style={{background:"none",border:"none",cursor:"pointer",padding:4,opacity:.35,flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.35}><IC.Clone s={12} c={C.faint}/></button>
-                            <div style={{fontSize:10,color:C.faint,fontFamily:NC_FONT_STACK,textAlign:"right",flexShrink:0}}>
+                            <div style={{fontSize:NC_TYPE.small,color:C.faint,fontFamily:NC_FONT_STACK,textAlign:"right",flexShrink:0}}>
                               <div>{new Date(t.createdAt).toLocaleDateString()}</div>
                               <div>→ {new Date(t.completedAt).toLocaleDateString()}</div>
                             </div>
@@ -5011,12 +5011,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 </div>
               </details>
             ) : (
-              <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"24px 20px",border:`1px solid ${C.divider}`,textAlign:"center",marginBottom:32}}><p style={{color:C.faint,fontSize:14,margin:0}}>Complete tasks to see your stats</p></div>
+              <div style={{background:C.bg,borderRadius:RADIUS.md,padding:"24px 20px",border:`1px solid ${C.divider}`,textAlign:"center",marginBottom:32}}><p style={{color:C.faint,fontSize:NC_TYPE.body,margin:0}}>Complete tasks to see your stats</p></div>
             )}
           </div>
         )}
 
-        {tab !== "focus" && <footer style={{textAlign:"center",padding:"20px 0 36px",borderTop:`1px solid ${C.divider}`,marginTop:16,flexShrink:0}}><p style={{color:C.faint,fontSize:12,fontStyle:"italic",margin:0}}>One thing at a time.</p></footer>}
+        {tab !== "focus" && <footer style={{textAlign:"center",padding:"20px 0 36px",borderTop:`1px solid ${C.divider}`,marginTop:16,flexShrink:0}}><p style={{color:C.faint,fontSize:NC_TYPE.meta,fontStyle:"italic",margin:0}}>One thing at a time.</p></footer>}
       </div>
 
     </div>

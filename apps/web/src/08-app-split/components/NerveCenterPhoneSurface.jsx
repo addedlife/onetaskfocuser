@@ -209,7 +209,7 @@ function PhoneMmsImage({ attachment, C }) {
     return <img src={src} alt="" loading="lazy"
       style={{ maxWidth: "100%", maxHeight: 280, borderRadius: RADIUS.xs, marginTop: 4, display: "block", objectFit: "contain" }} />;
   }
-  return <div style={{ fontSize: 12, color: C.faint, padding: "4px 0", display: "flex", alignItems: "center", gap: 4 }}>
+  return <div style={{ fontSize: NC_TYPE.meta, color: C.faint, padding: "4px 0", display: "flex", alignItems: "center", gap: 4 }}>
     {suiteIcon("image", 14)} {failed ? "image unavailable" : "loading image…"}
   </div>;
 }
@@ -1141,7 +1141,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       {selected && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
           {suiteIcon("sms", 14)}
-          <span style={{ fontSize: 13, color: C.muted, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{selected.name || selected.number}</span>
+          <span style={{ fontSize: NC_TYPE.body, color: C.muted, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{selected.name || selected.number}</span>
           <IconBtn icon="close" iconSize={14} color={C.muted} onClick={closeCompose} title="Close" aria-label="Close" />
         </div>
       )}
@@ -1535,7 +1535,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       {/* ?phonediag=1 — raw state-machine readout so a "the indicator is lying"
           report takes minutes to diagnose instead of guesswork. Debug-only. */}
       {phoneDiag && !compact && !dense && (
-        <pre style={{ position: "fixed", right: 8, bottom: 8, zIndex: 9999, maxWidth: 360, maxHeight: "45vh", overflow: "auto", background: "rgba(0,0,0,0.85)", color: "#7CFC9A", fontSize: 10, lineHeight: 1.35, padding: 8, borderRadius: 6, margin: 0 }}>
+        <pre style={{ position: "fixed", right: 8, bottom: 8, zIndex: 9999, maxWidth: 360, maxHeight: "45vh", overflow: "auto", background: "rgba(0,0,0,0.85)", color: "#7CFC9A", fontSize: NC_TYPE.small, lineHeight: 1.35, padding: 8, borderRadius: 6, margin: 0 }}>
           {JSON.stringify({
             transport: "relay",
             link,

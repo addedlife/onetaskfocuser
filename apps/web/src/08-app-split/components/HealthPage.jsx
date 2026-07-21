@@ -167,9 +167,9 @@ function MetricCard({ metricKey, values, todayVal, period, C }) {
             background: `${m.color}18`,
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
           }}>
-            <span className="material-symbols-rounded" style={{ fontSize: 16, color: m.color }}>{m.icon}</span>
+            <span className="material-symbols-rounded" style={{ fontSize: NC_TYPE.title, color: m.color }}>{m.icon}</span>
           </div>
-          <span style={{ fontSize: 13, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK }}>{m.label}</span>
+          <span style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK }}>{m.label}</span>
         </div>
         {change !== null && (
           <span style={{
@@ -199,13 +199,13 @@ function MetricCard({ metricKey, values, todayVal, period, C }) {
           <div style={{ fontSize: 28, fontWeight: 800, color: m.color, fontFamily: NC_FONT_STACK, lineHeight: 1.1, letterSpacing: -0.5 }}>
             {period === "day" ? displayToday : displayAvg}
           </div>
-          <div style={{ fontSize: 11, color: C.muted, fontFamily: NC_FONT_STACK, marginTop: 3 }}>
+          <div style={{ fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK, marginTop: 3 }}>
             {period === "day"
               ? (hasGoal ? `Goal: ${m.key === "sleep" ? formatSleep(m.goal) : Number(m.goal).toLocaleString()} ${m.unit}`.trim() : "Today")
               : `Avg ${period}`}
           </div>
           {m.unit && period !== "day" && (
-            <div style={{ fontSize: 11, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 1 }}>
+            <div style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 1 }}>
               {m.unit}
             </div>
           )}
@@ -219,8 +219,8 @@ function MetricCard({ metricKey, values, todayVal, period, C }) {
             <MiniBarChart values={nums} color={m.color} height={48} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 9.5, color: C.faint, fontFamily: NC_FONT_STACK }}>{values[0]?.date?.slice(5) || ""}</span>
-            <span style={{ fontSize: 9.5, color: C.faint, fontFamily: NC_FONT_STACK }}>{values[values.length - 1]?.date?.slice(5) || "Today"}</span>
+            <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK }}>{values[0]?.date?.slice(5) || ""}</span>
+            <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK }}>{values[values.length - 1]?.date?.slice(5) || "Today"}</span>
           </div>
         </div>
       )}
@@ -245,7 +245,7 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "18px 20px 14px", borderBottom: `1px solid ${C.divider}` }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Connect Health Data</span>
+          <span style={{ fontSize: NC_TYPE.title, fontWeight: 700, color: C.text }}>Connect Health Data</span>
           <IconBtn icon="close" iconSize={16} color={C.muted} onClick={onClose} title="Close" aria-label="Close" />
         </div>
 
@@ -264,22 +264,22 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Google Health</span>
-                <span style={{ fontSize: 9.5, fontWeight: 600, padding: "1px 7px", borderRadius: RADIUS.sm,
+                <span style={{ fontSize: NC_TYPE.body, fontWeight: 700, color: C.text }}>Google Health</span>
+                <span style={{ fontSize: NC_TYPE.small, fontWeight: 600, padding: "1px 7px", borderRadius: RADIUS.sm,
                   background: googleHealthLinked ? `${C.success || "#34A853"}20` : `${C.accent}18`,
                   color: googleHealthLinked ? C.success || "#34A853" : C.accent }}>
                   {googleHealthLinked ? "Connected" : "Recommended"}
                 </span>
               </div>
               {connectError ? (
-                <div style={{ fontSize: 12, color: C.danger || "#EA4335", lineHeight: 1.4, fontWeight: 500 }}>
+                <div style={{ fontSize: NC_TYPE.meta, color: C.danger || "#EA4335", lineHeight: 1.4, fontWeight: 500 }}>
                   {connectError}
                   {connectError.includes("not set") && (
                     <span style={{ color: C.muted, fontWeight: 400 }}>{" "}— follow the Setup Guide on this page.</span>
                   )}
                 </div>
               ) : (
-                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>
+                <div style={{ fontSize: NC_TYPE.meta, color: C.muted, lineHeight: 1.4 }}>
                   Steps, heart rate, sleep &amp; weight from Google Health / Wear OS.
                 </div>
               )}
@@ -298,8 +298,8 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
             padding: "10px 14px", border: `1px solid ${C.divider}`, borderRadius: 10 }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 1 }}>Manual entry</div>
-              <div style={{ fontSize: 11.5, color: C.muted }}>Log today's values yourself</div>
+              <div style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, marginBottom: 1 }}>Manual entry</div>
+              <div style={{ fontSize: NC_TYPE.small, color: C.muted }}>Log today's values yourself</div>
             </div>
             <ActionBtn variant="outlined" outlineColor={C.divider} labelColor={C.muted} height={30} labelSize={12}
               onClick={onClose}>
@@ -310,7 +310,7 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
           {/* Other sources — collapsible */}
           <TextButton onClick={() => setShowOther(v => !v)} style={{ width: "100%",
             '--md-text-button-label-text-color': C.faint, '--md-text-button-label-text-size': '12px' }}>
-            <span slot="icon" className="material-symbols-rounded" style={{ fontSize: 14,
+            <span slot="icon" className="material-symbols-rounded" style={{ fontSize: NC_TYPE.body,
               transition: "transform 0.15s", transform: showOther ? "rotate(180deg)" : "none" }}>
               expand_more
             </span>
@@ -319,7 +319,7 @@ function ConnectModal({ C, onClose, onStartGoogleHealth, googleHealthLinked, con
 
           {showOther && (
             <div style={{ border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, padding: "12px 14px",
-              background: C.bgSoft || C.bg, fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
+              background: C.bgSoft || C.bg, fontSize: NC_TYPE.meta, color: C.muted, lineHeight: 1.65 }}>
               <strong style={{ color: C.text }}>Apple Health:</strong>{" "}
               iOS-native, not accessible from the web. Install "Health Auto Export" on iPhone and point it at this app's Firebase endpoint, or use Manual entry.
             </div>
@@ -339,12 +339,12 @@ function ManualEntryModal({ C, onClose, onSave }) {
 
   const field = (label, value, set, placeholder) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 11.5, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK }}>{label}</label>
+      <label style={{ fontSize: NC_TYPE.small, fontWeight: 600, color: C.muted, fontFamily: NC_FONT_STACK }}>{label}</label>
       <input type="number" value={value} onChange={e => set(e.target.value)} placeholder={placeholder}
         style={{
           height: 36, borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`,
           background: C.bgSoft || C.bg, color: C.text, fontFamily: NC_FONT_STACK,
-          fontSize: 13, padding: "0 11px", outline: "none", boxSizing: "border-box", width: "100%",
+          fontSize: NC_TYPE.body, padding: "0 11px", outline: "none", boxSizing: "border-box", width: "100%",
         }}
       />
     </div>
@@ -372,7 +372,7 @@ function ManualEntryModal({ C, onClose, onSave }) {
         boxShadow: ELEV[4], padding: "20px 22px",
         fontFamily: NC_FONT_STACK,
       }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 16 }}>Log Today's Data</div>
+        <div style={{ fontSize: NC_TYPE.title, fontWeight: 700, color: C.text, marginBottom: 16 }}>Log Today's Data</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {field("Steps",            steps,     setSteps,  "e.g. 7500")}
           {field("Heart Rate (bpm)", heartRate, setHR,     "e.g. 72")}
@@ -473,8 +473,8 @@ export function HealthPage({
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
           <span className="material-symbols-rounded" style={{ fontSize: 22, color: "#EA4335" }}>favorite</span>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, lineHeight: 1.2 }}>Health</div>
-            <div style={{ fontSize: 11, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ fontSize: NC_TYPE.title, fontWeight: 700, color: C.text, lineHeight: 1.2 }}>Health</div>
+            <div style={{ fontSize: NC_TYPE.small, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
               <div style={{ width: 5, height: 5, borderRadius: RADIUS.pill, background: connected ? "#34A853" : C.faint, flexShrink: 0 }} />
               {sourceLabel}
               {isDemo && " · connect a source to see live data"}
@@ -527,8 +527,8 @@ export function HealthPage({
             padding: "10px 14px", borderRadius: RADIUS.sm, marginBottom: 18,
             background: `${C.accent}10`, border: `1px solid ${C.accent}30`,
           }}>
-            <span className="material-symbols-rounded" style={{ fontSize: 16, color: C.accent }}>info</span>
-            <span style={{ fontSize: 12, color: C.text, fontFamily: NC_FONT_STACK }}>
+            <span className="material-symbols-rounded" style={{ fontSize: NC_TYPE.title, color: C.accent }}>info</span>
+            <span style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK }}>
               Showing demo data. Use <strong>Connect</strong> above to link Google Health.
             </span>
           </div>
@@ -541,8 +541,8 @@ export function HealthPage({
             padding: "10px 14px", borderRadius: RADIUS.sm, marginBottom: 18,
             background: `${C.success || "#34A853"}10`, border: `1px solid ${C.success || "#34A853"}30`,
           }}>
-            <span className="material-symbols-rounded" style={{ fontSize: 16, color: C.success || "#34A853" }}>check_circle</span>
-            <span style={{ fontSize: 12, color: C.text, fontFamily: NC_FONT_STACK }}>
+            <span className="material-symbols-rounded" style={{ fontSize: NC_TYPE.title, color: C.success || "#34A853" }}>check_circle</span>
+            <span style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK }}>
               Google Health connected — hit <strong>Sync</strong> to pull your first data.
             </span>
             <ActionBtn variant="outlined" outlineColor={C.success || "#34A853"} labelColor={C.success || "#34A853"}
@@ -582,14 +582,14 @@ export function HealthPage({
                       )}
                     </svg>
                     <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span className="material-symbols-rounded" style={{ fontSize: 14, color: m.color }}>{m.icon}</span>
+                      <span className="material-symbols-rounded" style={{ fontSize: NC_TYPE.body, color: m.color }}>{m.icon}</span>
                     </div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: m.color, fontFamily: NC_FONT_STACK, lineHeight: 1.2 }}>
+                    <div style={{ fontSize: NC_TYPE.body, fontWeight: 700, color: m.color, fontFamily: NC_FONT_STACK, lineHeight: 1.2 }}>
                       {fmtVal(key, val ?? (isDemo ? DEMO_DAY[0][key] : null))}
                     </div>
-                    <div style={{ fontSize: 10.5, color: C.muted, fontFamily: NC_FONT_STACK }}>
+                    <div style={{ fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK }}>
                       {m.label}{pct !== null ? ` · ${pct}%` : ""}
                     </div>
                   </div>
@@ -623,7 +623,7 @@ export function HealthPage({
         {/* Setup instructions — only when not connected */}
         {!connected && (
           <div style={{ marginTop: 28 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 12 }}>
+            <div style={{ fontSize: NC_TYPE.meta, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", fontFamily: NC_FONT_STACK, marginBottom: 12 }}>
               Setup Guide
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -655,8 +655,8 @@ export function HealthPage({
         {onSetHealthCardVisible && (
           <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${C.divider}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK }}>Show on NerveCenter</div>
-              <div style={{ fontSize: 11.5, color: C.muted, fontFamily: NC_FONT_STACK, marginTop: 2 }}>Display a compact health strip in the NerveCenter dashboard</div>
+              <div style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK }}>Show on NerveCenter</div>
+              <div style={{ fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK, marginTop: 2 }}>Display a compact health strip in the NerveCenter dashboard</div>
             </div>
             <Switch selected={healthCardVisible} onChange={() => onSetHealthCardVisible(!healthCardVisible)}
               style={{ '--md-switch-selected-track-color': C.accent, '--md-switch-selected-hover-track-color': C.accent,
@@ -730,10 +730,10 @@ function SetupStep({ num, color, title, steps, C }) {
         <div style={{
           width: 22, height: 22, borderRadius: RADIUS.pill, background: `${color}18`,
           display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0, fontSize: 11, fontWeight: 700, color, fontFamily: NC_FONT_STACK,
+          flexShrink: 0, fontSize: NC_TYPE.small, fontWeight: 700, color, fontFamily: NC_FONT_STACK,
         }}>{num}</div>
-        <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK }}>{title}</span>
-        <span slot="icon" className="material-symbols-rounded" style={{ fontSize: 16, color: C.faint }}>
+        <span style={{ flex: 1, fontSize: NC_TYPE.meta, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK }}>{title}</span>
+        <span slot="icon" className="material-symbols-rounded" style={{ fontSize: NC_TYPE.title, color: C.faint }}>
           {open ? "expand_less" : "expand_more"}
         </span>
       </TextButton>
@@ -741,7 +741,7 @@ function SetupStep({ num, color, title, steps, C }) {
         <div style={{ padding: "0 14px 14px 46px", borderTop: `1px solid ${C.divider}` }}>
           <ol style={{ margin: "10px 0 0", padding: "0 0 0 16px", display: "flex", flexDirection: "column", gap: 5 }}>
             {steps.map((s, i) => (
-              <li key={i} style={{ fontSize: 12, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.55 }}>{s}</li>
+              <li key={i} style={{ fontSize: NC_TYPE.meta, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.55 }}>{s}</li>
             ))}
           </ol>
         </div>

@@ -70,7 +70,7 @@ function BulkAdd({pris, T, onAddAll, onClose}) {
           <button onClick={()=>setPm(true)} style={{width:"100%",padding:10,borderRadius:RADIUS.sm,border:`1px dashed ${T.brd}`,background:"transparent",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,color:T.tSoft,marginBottom:12}}>Paste a list</button>
         )}
         <div style={{display:"grid",gridTemplateColumns:"auto 1fr 32px",gap:"6px 8px",alignItems:"center",marginBottom:16}}>
-          <span style={{fontSize:10,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:700}}>Pri</span><span style={{fontSize:10,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:700}}>Task</span><span/>
+          <span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:700}}>Pri</span><span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,fontWeight:700}}>Task</span><span/>
           {rows.map(row => (
             <React.Fragment key={row.id}>
               <select value={row.pri} onChange={e=>setRows(r=>r.map(x=>x.id===row.id?{...x,pri:e.target.value}:x))} style={{padding:"7px 4px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,outline:"none"}}>
@@ -193,7 +193,7 @@ function TaskBD({task, pris, T, onConfirm, onClose, aiOpts}) {
               <div key={st.id} style={{display:"flex",alignItems:"center",gap:SP.sm,padding:"8px 0",borderBottom:`1px solid ${T.brdS}`}}>
                 <button onClick={()=>setSubs(s=>s.map(x=>x.id===st.id?{...x,on:!x.on}:x))} style={{width:20,height:20,borderRadius:RADIUS.xs,border:`1.5px solid ${st.on?pris[0]?.color:T.brd}`,background:st.on?pris[0]?.color:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{st.on&&<IC.Check s={12} c="#fff"/>}</button>
                 <input value={st.text} onChange={e=>setSubs(s=>s.map(x=>x.id===st.id?{...x,text:e.target.value}:x))} style={{flex:1,fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,border:"none",outline:"none",background:"transparent",color:st.on?T.text:T.tFaint,textDecoration:st.on?"none":"line-through"}}/>
-                <span style={{fontSize:10,color:T.tFaint,fontFamily:NC_FONT_STACK}}>#{i+1}</span>
+                <span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK}}>#{i+1}</span>
               </div>
             ))}
           </div>
@@ -249,7 +249,7 @@ function BlockedModal({task, T, pris, onBlock, onClose}) {
   return (
     <div style={{position:"fixed",inset:0,zIndex:9200,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",animation:"ot-fade 0.2s"}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div onClick={e=>e.stopPropagation()} style={{background:T.card,borderRadius:RADIUS.md,padding:"24px 20px",maxWidth:400,width:"90%",boxShadow:ELEV[4]}}>
-        <h3 style={{fontSize:15,fontWeight:600,margin:"0 0 6px",display:"flex",alignItems:"center",gap:SP.sm}}><IC.Pause s={16} c={T.text}/>Mark as Blocked</h3>
+        <h3 style={{fontSize:NC_TYPE.title,fontWeight:600,margin:"0 0 6px",display:"flex",alignItems:"center",gap:SP.sm}}><IC.Pause s={16} c={T.text}/>Mark as Blocked</h3>
         <p style={{fontSize:NC_TYPE.meta,color:T.tSoft,fontFamily:NC_FONT_STACK,margin:"0 0 14px"}}>Task moves to the bottom. You'll get a nudge after the selected time asking if it's still blocked.</p>
         <div style={{background:pBg(p.color),borderRadius:RADIUS.sm,padding:"10px 12px",marginBottom:14,border:`1px solid ${p.color}40`}}>
           <p style={{fontSize:NC_TYPE.meta,margin:0,color:T.text}}>{task.text}</p>
@@ -359,7 +359,7 @@ function ListManager({AS, setAS, T, onClose}) {
               <div style={{flex:1}}><span style={{fontSize:NC_TYPE.body,fontWeight:l.id===AS.activeListId?600:400,fontFamily:NC_FONT_STACK}}>{l.name}</span><span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK,marginLeft:8}}>{act} pending · {comp} done</span></div>
               <button onClick={()=>renList(l.id)} title="Rename" style={{background:"none",border:"none",cursor:"pointer",padding:SP.xs,opacity:.5}}><span style={{fontSize:NC_TYPE.meta}}>✏️</span></button>
               {mergeFrom===l.id?(<span style={{fontSize:NC_TYPE.small,color:T.tSoft,fontFamily:NC_FONT_STACK}}>Select target ↓</span>):(<button onClick={()=>setMergeFrom(l.id)} title="Merge into..." style={{background:"none",border:"none",cursor:"pointer",padding:SP.xs,opacity:.5}}><IC.Merge s={13} c={T.tSoft}/></button>)}
-              {mergeFrom&&mergeFrom!==l.id&&(<button onClick={()=>{mergeList(mergeFrom,l.id);setMergeFrom(null);}} style={{padding:"4px 8px",borderRadius:RADIUS.sm,border:"none",background:"#4CAF50",color:"#fff",cursor:"pointer",fontSize:10,fontWeight:600,fontFamily:NC_FONT_STACK}}>Merge here</button>)}
+              {mergeFrom&&mergeFrom!==l.id&&(<button onClick={()=>{mergeList(mergeFrom,l.id);setMergeFrom(null);}} style={{padding:"4px 8px",borderRadius:RADIUS.sm,border:"none",background:"#4CAF50",color:"#fff",cursor:"pointer",fontSize:NC_TYPE.small,fontWeight:600,fontFamily:NC_FONT_STACK}}>Merge here</button>)}
               <button onClick={()=>downloadList([l.id])} title="Download" style={{background:"none",border:"none",cursor:"pointer",padding:SP.xs,opacity:.5}}><IC.Download s={13} c={T.tSoft}/></button>
               {lists.length>1&&<button onClick={()=>delList(l.id)} title="Delete" style={{background:"none",border:"none",cursor:"pointer",padding:SP.xs,opacity:.4}}><IC.Trash s={13} c={T.tFaint}/></button>}
             </div>
