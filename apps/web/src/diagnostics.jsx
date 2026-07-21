@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { Store } from './01-core.js';
+import { NC_FONT_STACK, NC_MONO_STACK } from './08-app-split/ui-tokens.jsx';
 
 const BUILD_COMMIT = (typeof __BUILD_COMMIT__ !== 'undefined') ? __BUILD_COMMIT__ : 'dev';
 const BUILD_TIME = (typeof __BUILD_TIME__ !== 'undefined') ? __BUILD_TIME__ : 'dev';
@@ -38,7 +39,7 @@ export function DiagnosticsOverlay() {
   const row = (k, v, warn) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '6px 0', borderBottom: '1px solid #2a2a2a', fontSize: 13 }}>
       <span style={{ color: '#99a' }}>{k}</span>
-      <span style={{ color: warn ? '#ff6b6b' : '#cfead0', fontFamily: 'monospace', textAlign: 'right', wordBreak: 'break-all' }}>{v}</span>
+      <span style={{ color: warn ? '#ff6b6b' : '#cfead0', fontFamily: NC_MONO_STACK, textAlign: 'right', wordBreak: 'break-all' }}>{v}</span>
     </div>
   );
 
@@ -50,7 +51,7 @@ export function DiagnosticsOverlay() {
   );
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 2147483647, background: 'rgba(0,0,0,0.94)', color: '#eee', overflow: 'auto', padding: 18, fontFamily: 'system-ui, -apple-system, sans-serif', WebkitOverflowScrolling: 'touch' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 2147483647, background: 'rgba(0,0,0,0.94)', color: '#eee', overflow: 'auto', padding: 18, fontFamily: NC_FONT_STACK, WebkitOverflowScrolling: 'touch' }}>
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <strong style={{ fontSize: 16 }}>Diagnostics</strong>
@@ -73,13 +74,13 @@ export function DiagnosticsOverlay() {
         {busy && <div style={{ color: '#9cf', fontSize: 13, marginBottom: 10 }}>{busy}</div>}
 
         {probe && (
-          <div style={{ background: '#141414', border: '1px solid #3a3a3a', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, lineHeight: 1.5, color: probe.startsWith('REACHABLE') ? '#cfead0' : '#ffb4b4', fontFamily: 'monospace', wordBreak: 'break-word' }}>
+          <div style={{ background: '#141414', border: '1px solid #3a3a3a', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 13, lineHeight: 1.5, color: probe.startsWith('REACHABLE') ? '#cfead0' : '#ffb4b4', fontFamily: NC_MONO_STACK, wordBreak: 'break-word' }}>
             {probe}
           </div>
         )}
 
         {authLines && (
-          <div style={{ background: '#141414', border: '1px solid #3a3a3a', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 12, lineHeight: 1.6, color: '#cfead0', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+          <div style={{ background: '#141414', border: '1px solid #3a3a3a', borderRadius: 10, padding: '10px 14px', marginBottom: 10, fontSize: 12, lineHeight: 1.6, color: '#cfead0', fontFamily: NC_MONO_STACK, wordBreak: 'break-all' }}>
             {authLines.map((l, i) => (
               <div key={i} style={{ color: l.includes('mismatch') || l.includes('false') ? '#ffb4b4' : '#cfead0' }}>{l}</div>
             ))}

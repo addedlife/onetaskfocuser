@@ -24,7 +24,10 @@ const TOKEN_RULES = [
     message: 'GM3: no literal font sizes. Use an M3 typescale role from NC_TYPE / ui-tokens.jsx.',
   },
   {
-    selector: "Property[key.name='fontFamily'][value.type='Literal']",
+    // `inherit` is excluded: it names no typeface, it defers to the token already
+    // set higher up, and flagging it would push callers toward hardcoding a stack
+    // — the opposite of the point.
+    selector: "Property[key.name='fontFamily'][value.type='Literal'][value.value!='inherit']",
     message: 'GM3: no hardcoded font stacks. Use NC_FONT_STACK / NC_MONO_STACK from ui-tokens.jsx.',
   },
   {

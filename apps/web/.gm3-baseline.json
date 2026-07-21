@@ -1,8 +1,7 @@
 {
-  "total": 1378,
+  "total": 1142,
   "byRule": {
     "no hex color literals": 345,
-    "no hardcoded font stacks": 236,
     "no literal font sizes": 428,
     "no literal corner radii above 2px": 37,
     "use ActionBtn / IconBtn from m3": 236,

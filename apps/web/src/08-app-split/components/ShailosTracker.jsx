@@ -9,7 +9,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import firebase from 'firebase/compat/app';
 import { db } from '../../01-core.js';
-import { cleanTheme, ELEV, GOLD, NC_FONT_STACK, NC_TYPE, RADIUS, suiteIcon, useViewportWidth, Z } from '../ui-tokens.jsx';
+import { cleanTheme, ELEV, GOLD, NC_FONT_STACK, NC_TYPE, RADIUS, suiteIcon, useViewportWidth, Z, NC_MONO_STACK } from '../ui-tokens.jsx';
 import { ActionBtn, AssistChip, ChipSet, CircularProgress, FilterChip, IconBtn, TextField } from '../m3.jsx';
 import {
   findPotentialMatches, generateAnswerSummary, generateSynopsis,
@@ -874,7 +874,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                       {!selectedShaila._manualDraft && selectedShaila.status !== 'pending' && gotBackChip(selectedShaila)}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <input style={{ ...inlineEdit, fontSize: 10, color: C.faint, fontFamily: 'ui-monospace, monospace', width: 130 }}
+                      <input style={{ ...inlineEdit, fontSize: 10, color: C.faint, fontFamily: NC_MONO_STACK, width: 130 }}
                         value={selectedShaila.date || ''}
                         onChange={(e) => setSelectedShaila({ ...selectedShaila, date: e.target.value })}
                         onBlur={fieldBlur} aria-label="Date" />

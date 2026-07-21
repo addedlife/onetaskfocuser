@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { IC } from './02-icons.jsx';
 import { gP, textOnColor, _lum, pBg } from './01-core.js';
 import { ShailaMiniPill } from './04-components.jsx';
-import { NC_TYPE, RADIUS, SP } from './08-app-split/ui-tokens.jsx';
+import { NC_TYPE, RADIUS, SP, NC_FONT_STACK } from './08-app-split/ui-tokens.jsx';
 
 // TaskActions: defined OUTSIDE ShelfView (B13 fix) - used in fanned view
 const TaskActionsShelf = ({t, onUncomp, onClone, onDel, iconColor}) => {
@@ -40,19 +40,19 @@ function ShelfView({allComp, compT, pris, T, onDel, onUncomp, onClone}) {
               onMouseLeave={e=>e.currentTarget.style.transform=`rotate(${rot}deg)`}
             >
               {/* F5: real task text */}
-              <p style={{fontSize:NC_TYPE.meta,color:_sc,lineHeight:1.45,margin:0,fontFamily:"Georgia,serif",opacity:.95,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:5,WebkitBoxOrient:"vertical"}}>
+              <p style={{fontSize:NC_TYPE.meta,color:_sc,lineHeight:1.45,margin:0,fontFamily:NC_FONT_STACK,opacity:.95,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:5,WebkitBoxOrient:"vertical"}}>
                 {t.goodEnough && <span style={{fontSize:9,marginRight:4,opacity:.7}}>≈</span>}
                 {t.text}
               </p>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
-                <span style={{fontSize:9,color:_sc50,fontFamily:"system-ui"}}>{t.completedAt?new Date(t.completedAt).toLocaleDateString():""}</span>
+                <span style={{fontSize:9,color:_sc50,fontFamily:NC_FONT_STACK}}>{t.completedAt?new Date(t.completedAt).toLocaleDateString():""}</span>
                 <TaskActionsShelf t={t} onUncomp={onUncomp} onClone={onClone} onDel={onDel} iconColor={_sc}/>
               </div>
             </div>
           );
         })}
       </div>
-      <button onClick={e=>{e.stopPropagation();setFanned(false);}} style={{position:"fixed",top:20,right:20,background:"rgba(255,255,255,0.9)",border:"none",borderRadius:RADIUS.md,padding:"8px 16px",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:"system-ui",zIndex:9000}}>Close</button>
+      <button onClick={e=>{e.stopPropagation();setFanned(false);}} style={{position:"fixed",top:20,right:20,background:"rgba(255,255,255,0.9)",border:"none",borderRadius:RADIUS.md,padding:"8px 16px",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,zIndex:9000}}>Close</button>
     </div>
   );
 
@@ -79,18 +79,18 @@ function ShelfView({allComp, compT, pris, T, onDel, onUncomp, onClone}) {
                     transform:`rotate(${rot}deg)`, transition:"all 0.3s",
                     padding:"6px 8px", overflow:"hidden"
                   }}>
-                    <p style={{fontSize:9,color:_mc,margin:0,fontFamily:"Georgia,serif",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{t.text}</p>
+                    <p style={{fontSize:9,color:_mc,margin:0,fontFamily:NC_FONT_STACK,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{t.text}</p>
                   </div>
                 );
               })}
             </div>
-            <span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:"system-ui"}}>{n} done — tap to browse</span>
+            <span style={{fontSize:NC_TYPE.small,color:T.tFaint,fontFamily:NC_FONT_STACK}}>{n} done — tap to browse</span>
           </div>
 
           {/* Current list completed tasks */}
           {compT.length > 0 && (
             <div style={{marginTop:16,background:T.card,borderRadius:RADIUS.md,border:`1px solid ${T.brd}`,overflow:"hidden",boxShadow:T.shadow,textAlign:"left"}}>
-              <h4 style={{fontSize:NC_TYPE.small,fontWeight:700,color:T.tFaint,padding:"12px 14px 8px",margin:0,fontFamily:"system-ui",textTransform:"uppercase",letterSpacing:1}}>This list ({compT.length})</h4>
+              <h4 style={{fontSize:NC_TYPE.small,fontWeight:700,color:T.tFaint,padding:"12px 14px 8px",margin:0,fontFamily:NC_FONT_STACK,textTransform:"uppercase",letterSpacing:1}}>This list ({compT.length})</h4>
               <div style={{maxHeight:260,overflowY:"auto"}}>
                 {compT.map(t => {
                   const tp = gP(pris, t.priority);
@@ -172,7 +172,7 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
         <span style={{width:20,height:20,borderRadius:"50%",border:`1.5px solid ${T.tFaint}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           <IC.Split s={9} c={T.tFaint}/>
         </span>
-        <span style={{flex:1,fontSize:NC_TYPE.body,fontWeight:400,color:T.tSoft,fontFamily:"Georgia,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{parentTask}</span>
+        <span style={{flex:1,fontSize:NC_TYPE.body,fontWeight:400,color:T.tSoft,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{parentTask}</span>
         <div style={{width:8,height:8,borderRadius:"50%",background:pri.color,flexShrink:0,opacity:.7}}/>
         <IC.Chev d={open?"up":"down"} s={12} c={T.tSoft}/>
       </div>
@@ -204,11 +204,11 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
                   <input ref={editRef} value={editTx} onChange={e=>setEditTx(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Enter")saveEdit(st.id);if(e.key==="Escape")setEditId(null);}}
                     onBlur={()=>saveEdit(st.id)}
-                    style={{flex:1,fontSize:NC_TYPE.meta,fontFamily:"Georgia,serif",border:`1px solid ${pri.color}80`,borderRadius:RADIUS.sm,padding:"3px 7px",outline:"none",color:T.text,background:T.bgW}}/>
+                    style={{flex:1,fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,border:`1px solid ${pri.color}80`,borderRadius:RADIUS.sm,padding:"3px 7px",outline:"none",color:T.text,background:T.bgW}}/>
                 ) : (
                   <span onClick={()=>startEdit(st)} style={{flex:1,fontSize:NC_TYPE.meta,color:isMatch?T.text:T.tSoft,cursor:"text",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:isMatch?500:400}}
                     title="Click to edit">
-                    {st.stepIndex && <span style={{fontSize:10,color:T.tFaint,marginRight:4,fontFamily:"system-ui"}}>#{st.stepIndex}</span>}
+                    {st.stepIndex && <span style={{fontSize:10,color:T.tFaint,marginRight:4,fontFamily:NC_FONT_STACK}}>#{st.stepIndex}</span>}
                     {st.text}
                   </span>
                 )}
@@ -244,7 +244,7 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
             );
           })}
           {doneSteps.length > 0 && (
-            <div style={{padding:"4px 12px 4px 20px",fontSize:10,color:T.tFaint,fontFamily:"system-ui"}}>{doneSteps.length} crystal{doneSteps.length!==1?"s":""} completed</div>
+            <div style={{padding:"4px 12px 4px 20px",fontSize:10,color:T.tFaint,fontFamily:NC_FONT_STACK}}>{doneSteps.length} crystal{doneSteps.length!==1?"s":""} completed</div>
           )}
           {/* Add new crystal */}
           {adding ? (
@@ -252,17 +252,17 @@ function SubtaskGroup({parentTask, tasks, pris, T, onMoveTop, onComp, onDel, onE
               <input ref={addRef} value={addTx} onChange={e=>setAddTx(e.target.value)} placeholder="New step…" autoFocus
                 onKeyDown={e=>{if(e.key==="Enter")submitAdd();if(e.key==="Escape"){setAdding(false);setAddTx("");}}}
                 onBlur={()=>{if(!addTx.trim())setAdding(false);}}
-                style={{flex:1,fontSize:NC_TYPE.meta,fontFamily:"Georgia,serif",border:`1px solid ${pri.color}80`,borderRadius:RADIUS.sm,padding:"5px 10px",outline:"none",background:T.bgW,color:T.text}}/>
-              <button onClick={submitAdd} disabled={!addTx.trim()} style={{background:pri.color,border:"none",borderRadius:RADIUS.sm,padding:"5px 10px",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:"system-ui",color:textOnColor(pri.color),opacity:addTx.trim()?1:.4}}>Add</button>
+                style={{flex:1,fontSize:NC_TYPE.meta,fontFamily:NC_FONT_STACK,border:`1px solid ${pri.color}80`,borderRadius:RADIUS.sm,padding:"5px 10px",outline:"none",background:T.bgW,color:T.text}}/>
+              <button onClick={submitAdd} disabled={!addTx.trim()} style={{background:pri.color,border:"none",borderRadius:RADIUS.sm,padding:"5px 10px",cursor:"pointer",fontSize:NC_TYPE.meta,fontWeight:600,fontFamily:NC_FONT_STACK,color:textOnColor(pri.color),opacity:addTx.trim()?1:.4}}>Add</button>
             </div>
           ) : (
-            <button onClick={()=>setAdding(true)} style={{width:"100%",textAlign:"left",padding:"5px 12px 5px 20px",background:"none",border:"none",cursor:"pointer",fontSize:NC_TYPE.small,fontFamily:"system-ui",color:pri.color,opacity:.7,display:"flex",alignItems:"center",gap:SP.xs}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.7}>
+            <button onClick={()=>setAdding(true)} style={{width:"100%",textAlign:"left",padding:"5px 12px 5px 20px",background:"none",border:"none",cursor:"pointer",fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:pri.color,opacity:.7,display:"flex",alignItems:"center",gap:SP.xs}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=.7}>
               <IC.Plus s={10} c={pri.color}/> Add step
             </button>
           )}
           <div style={{display:"flex",gap:6,padding:"6px 12px 4px"}}>
-            <button onClick={()=>onMoveTop(steps[0]?.id)} style={{flex:1,padding:"5px 8px",borderRadius:RADIUS.sm,border:`1px solid ${pri.color}50`,background:pBg(pri.color),cursor:"pointer",fontSize:10,fontWeight:600,fontFamily:"system-ui",color:pri.color}}>↑ Next crystal to top</button>
-            <button onClick={e=>{if(e.altKey) steps.forEach(s=>onLegacyComp?.(s.id)); else steps.forEach(s=>onComp(s.id));}} style={{flex:1,padding:"5px 8px",borderRadius:RADIUS.sm,border:"none",background:pri.color+"20",cursor:"pointer",fontSize:10,fontWeight:600,fontFamily:"system-ui",color:pri.color}}>✓ All done</button>
+            <button onClick={()=>onMoveTop(steps[0]?.id)} style={{flex:1,padding:"5px 8px",borderRadius:RADIUS.sm,border:`1px solid ${pri.color}50`,background:pBg(pri.color),cursor:"pointer",fontSize:10,fontWeight:600,fontFamily:NC_FONT_STACK,color:pri.color}}>↑ Next crystal to top</button>
+            <button onClick={e=>{if(e.altKey) steps.forEach(s=>onLegacyComp?.(s.id)); else steps.forEach(s=>onComp(s.id));}} style={{flex:1,padding:"5px 8px",borderRadius:RADIUS.sm,border:"none",background:pri.color+"20",cursor:"pointer",fontSize:10,fontWeight:600,fontFamily:NC_FONT_STACK,color:pri.color}}>✓ All done</button>
           </div>
         </div>
       )}

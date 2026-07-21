@@ -3582,7 +3582,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 <div style={{maxHeight:240,overflowY:"auto"}}>
                 {shailaReconcile.missingTasks.map(s => (
                   <div key={s.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",background:C.bgSoft,borderRadius:RADIUS.sm,marginBottom:4}}>
-                    <span style={{fontSize:NC_TYPE.meta,color:C.text,fontFamily:"Georgia,serif",flex:1,marginRight:8}}>{s.synopsis || s.content?.substring(0,60) || "Shaila"}</span>
+                    <span style={{fontSize:NC_TYPE.meta,color:C.text,fontFamily:NC_FONT_STACK,flex:1,marginRight:8}}>{s.synopsis || s.content?.substring(0,60) || "Shaila"}</span>
                     <div style={{display:"flex",gap:4,flexShrink:0}}>
                       <button onClick={()=>{
                         const parentText = s.synopsis||s.content||s.parsedShaila||"New shaila";
@@ -3612,7 +3612,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 <p style={{fontSize:NC_TYPE.small,fontWeight:700,color:C.muted,margin:"0 0 8px",fontFamily:NC_FONT_STACK}}>In task queue, no transcriber record:</p>
                 {shailaReconcile.missingShailos.map(t => (
                   <div key={t.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",background:C.bgSoft,borderRadius:RADIUS.sm,marginBottom:4}}>
-                    <span style={{fontSize:NC_TYPE.meta,color:C.text,fontFamily:"Georgia,serif",flex:1,marginRight:8}}>{t.text?.substring(0,60)}</span>
+                    <span style={{fontSize:NC_TYPE.meta,color:C.text,fontFamily:NC_FONT_STACK,flex:1,marginRight:8}}>{t.text?.substring(0,60)}</span>
                     <button onClick={()=>{
                       Store.createShailaFromTask(t).then(shailaId=>{
                         if(shailaId) uT(ts=>ts.map(x=>x.id===t.id?{...x,shailaId}:x));
@@ -3632,7 +3632,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 {shailaReconcile.statusMismatches.map(m => (
                   <div key={m.task.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 10px",background:C.bgSoft,borderRadius:RADIUS.sm,marginBottom:4}}>
                     <div style={{flex:1,marginRight:8}}>
-                      <span style={{fontSize:NC_TYPE.meta,color:C.text,fontFamily:"Georgia,serif"}}>{m.task.text?.substring(0,50)}</span>
+                      <span style={{fontSize:NC_TYPE.meta,color:C.text,fontFamily:NC_FONT_STACK}}>{m.task.text?.substring(0,50)}</span>
                       <span style={{fontSize:NC_TYPE.meta,color:C.faint,fontFamily:NC_FONT_STACK,marginLeft:6}}>— answered in transcriber, still active in queue</span>
                     </div>
                     <button onClick={()=>{
@@ -4072,7 +4072,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       {curT.mrsW && <span style={{fontSize:11,color:_fc40,fontFamily:NC_FONT_STACK,fontWeight:600,letterSpacing:.5}}>Mrs. W</span>}
                       {editId === curT.id ? (
                         <div style={{display:"flex",gap:8,width:"100%"}} onFocus={pauseZ} onBlur={resumeZ}>
-                          <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(curT.id);if(e.key==="Escape")setEditId(null);}} style={{flex:1,fontSize:"clamp(16px,3vw,22px)",fontFamily:"Georgia,serif",border:`2px solid ${_fcBrd}`,borderRadius:RADIUS.md,padding:"10px 16px",outline:"none",color:_fc,background:_fcBgL}}/>
+                          <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(curT.id);if(e.key==="Escape")setEditId(null);}} style={{flex:1,fontSize:"clamp(16px,3vw,22px)",fontFamily:NC_FONT_STACK,border:`2px solid ${_fcBrd}`,borderRadius:RADIUS.md,padding:"10px 16px",outline:"none",color:_fc,background:_fcBgL}}/>
                           <FilledButton onClick={()=>saveEd(curT.id)} style={{"--md-filled-button-container-color":_fcBg,"--md-filled-button-label-text-color":_fc}}>Save</FilledButton>
                         </div>
                       ) : (
@@ -4165,7 +4165,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 {selPri && (
                   <div data-input-area="true" style={{width:"100%",animation:"ot-fade 0.2s"}}>
                     <form onSubmit={addTask} style={{display:"flex",gap:8,alignItems:"flex-end"}}>
-                      <textarea ref={inRef} value={newTask} onChange={e=>{setNewTask(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";}} placeholder={selPri==="shaila"?"Who + what shaila?":ph} autoFocus onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addTask(e);}if(e.key==="Escape"){setSelPri(null);setNewTask("");setPinOnAdd(false);}}} rows={1} style={{flex:1,padding:"clamp(10px,1.5vw,14px) clamp(12px,2vw,18px)",fontSize:"clamp(14px,2vw,16px)",border:`2px solid ${gP(pris,selPri).color}`,borderRadius:RADIUS.md,outline:"none",background:C.bg,color:C.text,fontFamily:"Georgia,serif",resize:"none",overflow:"hidden",minHeight:44,lineHeight:1.4}}/>
+                      <textarea ref={inRef} value={newTask} onChange={e=>{setNewTask(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";}} placeholder={selPri==="shaila"?"Who + what shaila?":ph} autoFocus onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addTask(e);}if(e.key==="Escape"){setSelPri(null);setNewTask("");setPinOnAdd(false);}}} rows={1} style={{flex:1,padding:"clamp(10px,1.5vw,14px) clamp(12px,2vw,18px)",fontSize:"clamp(14px,2vw,16px)",border:`2px solid ${gP(pris,selPri).color}`,borderRadius:RADIUS.md,outline:"none",background:C.bg,color:C.text,fontFamily:NC_FONT_STACK,resize:"none",overflow:"hidden",minHeight:44,lineHeight:1.4}}/>
                       <button type="button" onClick={()=>setEntryEnergy(e=>e===null?"high":e==="high"?"low":null)} title={entryEnergy?`Energy: ${entryEnergy}`:"Set energy"} style={{width:40,height:40,borderRadius:RADIUS.pill,border:`1.5px solid ${entryEnergy?C.accent:C.divider}`,background:entryEnergy==="high"?`${C.accent}18`:entryEnergy==="low"?`${C.muted}18`:C.bgSoft,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,transition:"background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .2s ease,transform .12s ease,opacity .2s ease"}}>
                         {entryEnergy==="high"?"⚡":entryEnergy==="low"?"🌊":"·"}
                       </button>
@@ -4198,7 +4198,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
               const spinnerIcon = <div style={{width:14,height:14,borderRadius:"50%",border:`2px solid ${C.muted}`,borderTopColor:"transparent",animation:"ot-spin 0.7s linear infinite"}}/>;
               const menuSections = [
                 ...(curT ? [{ cat: "Current Task", items: [
-                  {icon:<span style={{fontSize:14,lineHeight:1,color:C.muted,fontFamily:"Georgia,serif"}}>≈</span>, label:"Good enough", action:()=>goodEnoughTask(curT.id)},
+                  {icon:<span style={{fontSize:14,lineHeight:1,color:C.muted,fontFamily:NC_FONT_STACK}}>≈</span>, label:"Good enough", action:()=>goodEnoughTask(curT.id)},
                   {icon:<IC.Pause s={14} c={C.muted}/>, label:"Mark blocked", action:()=>setBlockedModal(curT)},
                   {icon:<IC.PriC s={14} c={C.muted}/>, label:"Change priority", action:()=>setChgPri(curT.id)},
                   ...(curT?.parentTask ? [{icon:<span style={{fontSize:12,lineHeight:1,color:C.muted}}>{suiteIcon("nature",14)}</span>, label:"Park rest", action:()=>parkRestOfGroup(curT)}] : []),
@@ -4371,7 +4371,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                   <input autoFocus value={qAddText} onChange={e=>setQAddText(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Escape"){setQAddPri(null);setQAddText("");setQAddPin(false);}}}
                     placeholder={qAddPri==="shaila"?"Who + what shaila?":"What needs doing?"}
-                    style={{flex:1,minWidth:0,padding:"7px 12px",fontSize:13,border:`1.5px solid ${gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color}`,borderRadius:RADIUS.sm,outline:"none",background:C.bgSoft,color:C.text,fontFamily:"Georgia,serif"}}/>
+                    style={{flex:1,minWidth:0,padding:"7px 12px",fontSize:13,border:`1.5px solid ${gP(pris,qAddPri).isShaila?"#C8A84C":gP(pris,qAddPri).color}`,borderRadius:RADIUS.sm,outline:"none",background:C.bgSoft,color:C.text,fontFamily:NC_FONT_STACK}}/>
                   {/* Owner ticket: pin to top right from the entry box. */}
                   <button type="button" onClick={()=>setQAddPin(p=>!p)} title={qAddPin?"Will pin to top of queue":"Pin to top of queue"} aria-pressed={qAddPin}
                     style={{width:34,height:34,borderRadius:RADIUS.sm,border:`1.5px solid ${qAddPin?C.accent:C.divider}`,background:qAddPin?`${C.accent}18`:C.bgSoft,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",color:qAddPin?C.accent:C.muted}}>
@@ -4422,7 +4422,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                               {dispPos}
                             </span>
                             <span onClick={()=>setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;})}
-                              style={{flex:1,minWidth:0,fontSize:14,cursor:"pointer",fontWeight:isF?500:400,color:rowText,fontFamily:"Georgia,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
+                              style={{flex:1,minWidth:0,fontSize:14,cursor:"pointer",fontWeight:isF?500:400,color:rowText,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
                               {task.shailaId && shailaNumberMap[task.shailaId] && <span style={{fontSize:10,color:rowAccent,fontWeight:700,fontFamily:NC_FONT_STACK,marginRight:5}}>#{shailaNumberMap[task.shailaId]}</span>}
                               {task.parentTask}
                             </span>
@@ -4452,7 +4452,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                               <div key={st.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px 7px 28px",borderBottom:`1px solid ${C.divider}`,background:"transparent",minWidth:0,maxWidth:"100%",boxSizing:"border-box"}}>
                                 <button onClick={e=>{e.stopPropagation();compTask(st.id);}} style={{width:18,height:18,borderRadius:"50%",border:`1.5px solid ${tp.color}`,background:"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} title="Complete step"><IC.Check s={10} c={tp.color}/></button>
                                 {editId === st.id ? (
-                                  <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(st.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(st.id)} style={{flex:1,minWidth:0,fontSize:13,fontFamily:"Georgia,serif",border:`1px solid ${tp.color}80`,borderRadius:6,padding:"3px 7px",outline:"none",color:C.text,background:C.bgSoft}}/>
+                                  <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(st.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(st.id)} style={{flex:1,minWidth:0,fontSize:13,fontFamily:NC_FONT_STACK,border:`1px solid ${tp.color}80`,borderRadius:6,padding:"3px 7px",outline:"none",color:C.text,background:C.bgSoft}}/>
                                 ) : (
                                   <span onClick={()=>startEd(st)} style={{flex:1,minWidth:0,fontSize:13,color:C.muted,cursor:"text",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
                                     {st.stepIndex && <span style={{fontSize:10,color:C.faint,marginRight:4,fontFamily:NC_FONT_STACK}}>#{st.stepIndex}</span>}{st.text}
@@ -4476,7 +4476,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                                 <input autoFocus placeholder="New step…"
                                   onKeyDown={e=>{const tx=e.target.value.trim();if(e.key==="Enter"&&tx){addSubtask(task.parentTask,tx);e.target.value="";setGroupAdding(null);}if(e.key==="Escape")setGroupAdding(null);}}
                                   onBlur={e=>{const tx=e.target.value.trim();if(tx)addSubtask(task.parentTask,tx);setGroupAdding(null);}}
-                                  style={{flex:1,fontSize:13,fontFamily:"Georgia,serif",border:`1px solid ${tp.color}80`,borderRadius:RADIUS.sm,padding:"5px 10px",outline:"none",background:C.bgSoft,color:T.text}}/>
+                                  style={{flex:1,fontSize:13,fontFamily:NC_FONT_STACK,border:`1px solid ${tp.color}80`,borderRadius:RADIUS.sm,padding:"5px 10px",outline:"none",background:C.bgSoft,color:T.text}}/>
                               </div>
                             )}
                           </>}
@@ -4500,7 +4500,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                           <span style={{cursor:"grab",padding:"2px",opacity:isF ? .75 : .35,flexShrink:0}}><IC.Grab s={12} c={_qSoft}/></span>
                           <span style={{width:20,height:20,borderRadius:"50%",background:isF?tp.color:"transparent",border:isF?"none":`1.5px solid ${C.faint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:isF?textOnColor(tp.color):C.faint,fontWeight:600,fontFamily:NC_FONT_STACK,flexShrink:0}}>{dispPos}</span>
                           {editId === task.id ? (
-                            <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(task.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(task.id)} style={{flex:1,minWidth:0,fontSize:14,fontFamily:"Georgia,serif",border:`1px solid ${tp.color}80`,borderRadius:RADIUS.sm,padding:"4px 8px",outline:"none",color:textOnPastel(AS.colorScheme, T.text, pBg(tp.color)),background:pBg(tp.color)}}/>
+                            <input ref={edRef} value={editTx} onChange={e=>setEditTx(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveEd(task.id);if(e.key==="Escape")setEditId(null);}} onBlur={()=>saveEd(task.id)} style={{flex:1,minWidth:0,fontSize:14,fontFamily:NC_FONT_STACK,border:`1px solid ${tp.color}80`,borderRadius:RADIUS.sm,padding:"4px 8px",outline:"none",color:textOnPastel(AS.colorScheme, T.text, pBg(tp.color)),background:pBg(tp.color)}}/>
                           ) : (
                             <div style={{flex:1,display:"flex",flexDirection:"column",gap:4,minWidth:0}}>
                               <span onClick={()=>startEd(task)} style={{fontSize:14,cursor:"text",fontWeight:isF?500:400,color:_qText,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",overflowWrap:"anywhere"}}>
@@ -4564,7 +4564,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                       <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<snoozedT.length-1?`1px solid ${C.divider}`:"none"}}>
                         <div style={{width:8,height:8,borderRadius:"50%",background:cp.isShaila?"#C8A84C":cp.color,flexShrink:0,opacity:0.6}}/>
                         <div style={{flex:1,minWidth:0}}>
-                          <p style={{margin:0,fontSize:12,color:C.muted,fontFamily:"Georgia,serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.text}</p>
+                          <p style={{margin:0,fontSize:12,color:C.muted,fontFamily:NC_FONT_STACK,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.text}</p>
                           <p style={{margin:"2px 0 0",fontSize:10,color:C.faint,fontFamily:NC_FONT_STACK}}>wakes {wakeLabel}</p>
                         </div>
                         <button onClick={()=>wakeTask(t.id)}

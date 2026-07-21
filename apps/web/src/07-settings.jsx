@@ -3,10 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { Store, aiGenSchemes, uid, DEF_AGE_THRESHOLDS, DEF_PRI, BEFORE_SHAVUOS_PRIORITY_ID, SCHEMES, ensureSchemeContrast } from './01-core.js';
 import { PriEditor } from './04-components.jsx';
-import { NC_TYPE, RADIUS, SP } from './08-app-split/ui-tokens.jsx';
+import { NC_TYPE, RADIUS, SP, NC_FONT_STACK, NC_MONO_STACK } from './08-app-split/ui-tokens.jsx';
 import { ActionBtn, IconBtn, Switch, TextField, Slider } from './08-app-split/m3.jsx';
 
-const NC_FONT_STACK = '"Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
 
 function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   curEnergy, onSetEnergy, focusModeActive, onToggleFocusMode,
@@ -208,8 +207,8 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               <div style={{height:1,background:T.brdS,margin:"10px 0 14px"}}/>
               <div style={rowSB}>
                 <div>
-                  <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Focus mode</span>
-                  <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Show only top {overwhelmThreshold} tasks (queue has {effectiveCount})</p>
+                  <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK,color:T.text}}>Focus mode</span>
+                  <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:0,lineHeight:settingsType.line}}>Show only top {overwhelmThreshold} tasks (queue has {effectiveCount})</p>
                 </div>
                 <Switch selected={focusModeActive} onChange={onToggleFocusMode} style={switchVars} />
               </div>
@@ -250,20 +249,20 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                   Clear generated ({Object.keys(AS.customSchemes || {}).length})
                 </ActionBtn>
               )}
-              {schemeGenErr && <span style={{fontSize:settingsType.help,color:T.danger,fontFamily:"system-ui",lineHeight:settingsType.line}}>{schemeGenErr}</span>}
+              {schemeGenErr && <span style={{fontSize:settingsType.help,color:T.danger,fontFamily:NC_FONT_STACK,lineHeight:settingsType.line}}>{schemeGenErr}</span>}
             </div>
             <div style={{height:1,background:T.brdS,margin:"18px 0 14px"}}/>
             <h4 style={sh}>Readability</h4>
             <div style={{display:"grid",gap:SP.sm,marginBottom:16}}>
               <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:SP.md}}>
-                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text,fontWeight:500}}>Font weight</span>
-                <span style={{fontSize:settingsType.help,fontFamily:"system-ui",color:T.tFaint}}>{AS.fontWeightScale || 400}</span>
+                <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK,color:T.text,fontWeight:500}}>Font weight</span>
+                <span style={{fontSize:settingsType.help,fontFamily:NC_FONT_STACK,color:T.tFaint}}>{AS.fontWeightScale || 400}</span>
               </div>
               <Slider min={340} max={520} step={20} value={AS.fontWeightScale || 400}
                 onInput={e=>setAS(p=>({...p,fontWeightScale:Number(e.target.value)}))}
                 style={{width:"100%", '--md-slider-handle-color':T.primary || T.text, '--md-slider-active-track-color':T.primary || T.text}}
               />
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui"}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK}}>
                 <span>lighter</span>
                 <span style={{fontWeight:AS.fontWeightScale || 400,color:T.text}}>sample text</span>
                 <span>heavier</span>
@@ -273,8 +272,8 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             <h4 style={sh}>DeskPhone Link</h4>
             <div style={{...rowSB,alignItems:"flex-start",marginBottom:10}}>
               <div style={{paddingRight:12}}>
-                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text,fontWeight:500}}>Link DeskPhone to this app's theme</span>
-                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"4px 0 0",lineHeight:settingsType.line}}>When on, Shamash Pro 4 pushes its active color scheme to DeskPhone. DeskPhone must also allow this in its Appearance settings.</p>
+                <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK,color:T.text,fontWeight:500}}>Link DeskPhone to this app's theme</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"4px 0 0",lineHeight:settingsType.line}}>When on, Shamash Pro 4 pushes its active color scheme to DeskPhone. DeskPhone must also allow this in its Appearance settings.</p>
               </div>
               <Switch selected={deskPhoneThemeSync} onChange={onToggleDeskPhoneThemeSync} title={deskPhoneThemeSync ? "DeskPhone theme sync is on" : "DeskPhone theme sync is off"} style={switchVars} />
             </div>
@@ -283,7 +282,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 onClick={handleDeskPhoneThemeRefresh} disabled={!deskPhoneThemeSync || deskPhoneSyncBusy} style={{border:`1px solid ${T.brd}`}}>
                 {deskPhoneSyncBusy ? "Refreshing..." : "Refresh sync"}
               </ActionBtn>
-              <span style={{fontSize:settingsType.help,color:deskPhoneOnline?"#2E7D32":T.tFaint,fontFamily:"system-ui",lineHeight:settingsType.line}}>
+              <span style={{fontSize:settingsType.help,color:deskPhoneOnline?"#2E7D32":T.tFaint,fontFamily:NC_FONT_STACK,lineHeight:settingsType.line}}>
                 {deskPhoneSyncNote || (deskPhoneOnline ? "DeskPhone linked." : "DeskPhone not confirmed.")}
               </span>
             </div>
@@ -305,7 +304,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                       style={{width:150, '--md-outlined-text-field-outline-color':`${p.color}66`, '--md-outlined-text-field-top-space':'2px', '--md-outlined-text-field-bottom-space':'2px'}}
                     />
                   ) : (
-                    <span style={{fontSize:settingsType.body,fontFamily:"system-ui"}}>{p.label}{p.isShaila?" ⚡":""}</span>
+                    <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK}}>{p.label}{p.isShaila?" ⚡":""}</span>
                   )}
                   {p.id !== "shaila" && p.id !== BEFORE_SHAVUOS_PRIORITY_ID && ap.length > 1 && <IconBtn icon="close" iconSize={12} color={T.tFaint} onClick={()=>remPri(p.id)} title="Remove priority" aria-label="Remove priority" />}
                 </div>
@@ -318,17 +317,17 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             <div style={{height:1,background:T.brdS,margin:"16px 0"}}/>
 
             <h4 style={sh}>Task Age Thresholds</h4>
-            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 12px",lineHeight:settingsType.line}}>Show age indicator after this many hours:</p>
+            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 12px",lineHeight:settingsType.line}}>Show age indicator after this many hours:</p>
             {ap.map(p => (
               <div key={p.id} style={{display:"flex",alignItems:"center",gap:SP.md,marginBottom:10,minHeight:40}}>
                 <div style={{width:10,height:10,borderRadius:"50%",background:p.color,flexShrink:0}}/>
-                <span style={{flex:1,fontSize:settingsType.body,fontFamily:"system-ui"}}>{p.label}</span>
+                <span style={{flex:1,fontSize:settingsType.body,fontFamily:NC_FONT_STACK}}>{p.label}</span>
                 <TextField type="number" min={1} max={720}
                   value={ageThresholds[p.id] ?? DEF_AGE_THRESHOLDS[p.id] ?? 72}
                   onInput={e=>setAS(prev=>({...prev,ageThresholds:{...(prev.ageThresholds||DEF_AGE_THRESHOLDS),[p.id]:parseInt(e.target.value)||24}}))}
                   style={{width:76, textAlign:'right', '--md-outlined-text-field-top-space':'6px', '--md-outlined-text-field-bottom-space':'6px'}}
                 />
-                <span style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",width:24}}>h</span>
+                <span style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,width:24}}>h</span>
               </div>
             ))}
 
@@ -336,26 +335,26 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
 
             <div style={rowSB}>
               <div>
-                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Overwhelm threshold</span>
-                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Collapse queue above this count</p>
+                <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK,color:T.text}}>Overwhelm threshold</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:0,lineHeight:settingsType.line}}>Collapse queue above this count</p>
               </div>
-              <select value={AS.overwhelmThreshold||7} onChange={e=>setAS(p=>({...p,overwhelmThreshold:parseInt(e.target.value)}))} style={{minHeight:40,padding:"6px 10px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:settingsType.control,fontFamily:"system-ui",outline:"none"}}>
+              <select value={AS.overwhelmThreshold||7} onChange={e=>setAS(p=>({...p,overwhelmThreshold:parseInt(e.target.value)}))} style={{minHeight:40,padding:"6px 10px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,background:T.bgW,color:T.text,fontSize:settingsType.control,fontFamily:NC_FONT_STACK,outline:"none"}}>
                 {[5,6,7,8,10,15,20].map(n=><option key={n} value={n}>{n} tasks</option>)}
               </select>
             </div>
 
             <div style={rowSB}>
               <div>
-                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Completion sound</span>
-                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Chime + haptic when task done</p>
+                <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK,color:T.text}}>Completion sound</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:0,lineHeight:settingsType.line}}>Chime + haptic when task done</p>
               </div>
               <Switch selected={!!AS.completionSound} onChange={()=>setAS(p=>({...p,completionSound:!p.completionSound}))} style={switchVars} />
             </div>
 
             <div style={rowSB}>
               <div>
-                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Legacy Complete UI</span>
-                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Dedicated icon for completions without timestamps</p>
+                <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK,color:T.text}}>Legacy Complete UI</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:0,lineHeight:settingsType.line}}>Dedicated icon for completions without timestamps</p>
               </div>
               <Switch selected={!!AS.legacyCompleteUI} onChange={()=>setAS(p=>({...p,legacyCompleteUI:!p.legacyCompleteUI}))} style={switchVars} />
             </div>
@@ -366,10 +365,10 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
         {sTab === "schedule" && (
           <div>
             <h4 style={sh}>Mrs. W Time Windows</h4>
-            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 16px",lineHeight:settingsType.line}}>High-priority window (outside = lowest priority)</p>
+            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 16px",lineHeight:settingsType.line}}>High-priority window (outside = lowest priority)</p>
 
             <div style={{marginBottom:12}}>
-              <span style={{fontSize:settingsType.help,fontFamily:"system-ui",color:T.tSoft,display:"block",marginBottom:8}}>Mon–Thu:</span>
+              <span style={{fontSize:settingsType.help,fontFamily:NC_FONT_STACK,color:T.tSoft,display:"block",marginBottom:8}}>Mon–Thu:</span>
               <div style={{display:"flex",gap:10,alignItems:"center"}}>
                 <TextField type="time" value={mrsWWindows.monThu.start}
                   onInput={e=>setAS(p=>({...p,mrsWWindows:{...mrsWWindows,monThu:{...mrsWWindows.monThu,start:e.target.value}}}))}
@@ -382,7 +381,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
             </div>
 
             <div style={{marginBottom:20}}>
-              <span style={{fontSize:settingsType.help,fontFamily:"system-ui",color:T.tSoft,display:"block",marginBottom:8}}>Friday:</span>
+              <span style={{fontSize:settingsType.help,fontFamily:NC_FONT_STACK,color:T.tSoft,display:"block",marginBottom:8}}>Friday:</span>
               <div style={{display:"flex",gap:10,alignItems:"center"}}>
                 <TextField type="time" value={mrsWWindows.fri.start}
                   onInput={e=>setAS(p=>({...p,mrsWWindows:{...mrsWWindows,fri:{...mrsWWindows.fri,start:e.target.value}}}))}
@@ -401,14 +400,14 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
           <div>
             <h4 style={sh}>AI Model</h4>
             <div style={{marginBottom:16}}>
-              <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",fontWeight:500,display:"block",marginBottom:6}}>Model</label>
+              <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:NC_FONT_STACK,fontWeight:500,display:"block",marginBottom:6}}>Model</label>
               <select
                 value={selectedModelKey}
                 onChange={e=>{
                   const [provider, model] = e.target.value.split(":");
                   setAS(p=>({...p,aiProvider:provider || "",aiModel:model || ""}));
                 }}
-                style={{width:"100%",minHeight:42,padding:"8px 12px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,outline:"none",fontSize:settingsType.control,fontFamily:"system-ui",background:T.bgW,color:T.text,boxSizing:"border-box"}}
+                style={{width:"100%",minHeight:42,padding:"8px 12px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,outline:"none",fontSize:settingsType.control,fontFamily:NC_FONT_STACK,background:T.bgW,color:T.text,boxSizing:"border-box"}}
               >
                 <option value="">Server default ({aiConfig?.provider || "auto"} / {aiConfig?.model || aiConfig?.textModel || "auto"})</option>
                 {["frontier","fast","budget"].map(tier => (
@@ -422,17 +421,17 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                   </optgroup>
                 ))}
               </select>
-              <p style={{fontSize:settingsType.help,color:selectedProviderOnline?T.tFaint:T.danger,fontFamily:"system-ui",margin:"8px 0 0",lineHeight:settingsType.line}}>
+              <p style={{fontSize:settingsType.help,color:selectedProviderOnline?T.tFaint:T.danger,fontFamily:NC_FONT_STACK,margin:"8px 0 0",lineHeight:settingsType.line}}>
                 Gateway: {settingsHasAI ? `${selectedProvider} ${selectedProviderOnline ? "online" : "key missing"}` : "not configured"}
               </p>
             </div>
             {selectedProvider === "gemini" && (
               <div style={{marginBottom:16}}>
-                <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",fontWeight:500,display:"block",marginBottom:6}}>Gemini key lane</label>
+                <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:NC_FONT_STACK,fontWeight:500,display:"block",marginBottom:6}}>Gemini key lane</label>
                 <select
                   value={selectedGeminiCredential}
                   onChange={e=>setAS(p=>({...p,aiGeminiCredential:e.target.value}))}
-                  style={{width:"100%",minHeight:42,padding:"8px 12px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,outline:"none",fontSize:settingsType.control,fontFamily:"system-ui",background:T.bgW,color:T.text,boxSizing:"border-box"}}
+                  style={{width:"100%",minHeight:42,padding:"8px 12px",borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,outline:"none",fontSize:settingsType.control,fontFamily:NC_FONT_STACK,background:T.bgW,color:T.text,boxSizing:"border-box"}}
                 >
                   <option value="auto">Auto failover</option>
                   {geminiCredentialLanes.map(lane => (
@@ -441,7 +440,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                     </option>
                   ))}
                 </select>
-                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"8px 0 0",lineHeight:settingsType.line}}>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"8px 0 0",lineHeight:settingsType.line}}>
                   Daily quota failover uses the next available Gemini lane.
                 </p>
               </div>
@@ -449,7 +448,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
 
             <div style={{height:1,background:T.brdS,margin:"0 0 16px"}}/>
             <h4 style={{...sh, color:T.tSoft, margin:"0 0 10px"}}>Backup</h4>
-            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 12px",lineHeight:settingsType.line}}>
+            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 12px",lineHeight:settingsType.line}}>
               Auto-backups save weekly to your selected folder. Without a folder, reloads use cloud/local recovery and do not create Downloads files.
             </p>
             <ActionBtn variant="outlined" outlineColor={backupFolderInfo.set ? "#4caf50" : T.brd}
@@ -467,7 +466,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                     ? "Choose backup folder..."
                     : "Folder backup unavailable in this browser"}
             </ActionBtn>
-            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 16px",lineHeight:settingsType.line}}>
+            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 16px",lineHeight:settingsType.line}}>
               {backupFolderInfo.set
                 ? (backupFolderInfo.permission === "granted" ? "Automatic weekly backups can write there silently." : "Chrome/Edge may ask once before writing there again.")
                 : "Manual Backup still asks where to save."}
@@ -483,7 +482,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                   onClick={()=>{onClose();onSignOut();}} style={{width:"100%",marginBottom:10,'--md-outlined-button-label-text-weight':'600'}}>
                   Switch Google account…
                 </ActionBtn>
-                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 16px",lineHeight:settingsType.line}}>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 16px",lineHeight:settingsType.line}}>
                   Signs out here and returns to the sign-in screen, where you can pick a different Google account.
                 </p>
                 <ActionBtn variant="outlined" outlineColor={T.brd} labelColor={T.tSoft} height={44} labelSize={settingsType.control}
@@ -499,33 +498,33 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
         {sTab === "google" && (
           <div>
             <h4 style={sh}>Google Calendar & Gmail</h4>
-            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 16px",lineHeight:settingsType.line}}>
+            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 16px",lineHeight:settingsType.line}}>
               Shows today's calendar events and important unread emails on your launchpad. Requires a Google OAuth Client ID — takes ~5 minutes to set up.
             </p>
             <div style={{background:T.bgW,borderRadius:RADIUS.sm,border:`1px solid ${T.brd}`,padding:"14px 16px",marginBottom:16}}>
-              <p style={{fontSize:settingsType.help,fontWeight:500,color:T.tSoft,fontFamily:"system-ui",margin:"0 0 10px"}}>One-time setup:</p>
-              <ol style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,paddingLeft:18,lineHeight:1.8}}>
+              <p style={{fontSize:settingsType.help,fontWeight:500,color:T.tSoft,fontFamily:NC_FONT_STACK,margin:"0 0 10px"}}>One-time setup:</p>
+              <ol style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:0,paddingLeft:18,lineHeight:1.8}}>
                 <li>Go to <span style={{fontWeight:700}}>console.cloud.google.com</span> → select your project</li>
                 <li>APIs & Services → Enable <span style={{fontWeight:700}}>Google Calendar API</span> + <span style={{fontWeight:700}}>Gmail API</span></li>
                 <li>Credentials → Create → OAuth 2.0 Client ID → Web Application</li>
-                <li>Add origins: <span style={{fontFamily:"monospace",background:T.card,padding:"1px 4px",borderRadius:3}}>https://onetaskonly-app.firebaseapp.com</span></li>
+                <li>Add origins: <span style={{fontFamily:NC_MONO_STACK,background:T.card,padding:"1px 4px",borderRadius:3}}>https://onetaskonly-app.firebaseapp.com</span></li>
                 <li>Copy the Client ID and paste below</li>
               </ol>
             </div>
             <div style={{marginBottom:16}}>
-              <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",fontWeight:500,display:"block",marginBottom:6}}>OAuth 2.0 Client ID</label>
+              <label style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:NC_FONT_STACK,fontWeight:500,display:"block",marginBottom:6}}>OAuth 2.0 Client ID</label>
               <TextField
                 value={AS.googleClientId||""}
                 onInput={e=>setAS(p=>({...p,googleClientId:e.target.value.trim()}))}
                 placeholder="1234567890-abc….apps.googleusercontent.com"
                 style={{width:"100%", '--md-outlined-text-field-input-text-font':"monospace", '--md-outlined-text-field-input-text-size':`${NC_TYPE.meta}px`}}
               />
-              <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",marginTop:6,lineHeight:settingsType.line}}>Stored only in your account — never sent to any server.</p>
+              <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:6,lineHeight:settingsType.line}}>Stored only in your account — never sent to any server.</p>
             </div>
             {AS.googleClientId && (
               <div style={{padding:"12px 14px",borderRadius:RADIUS.sm,border:`1px solid #4CAF5040`,background:"rgba(76,175,80,0.06)",display:"flex",gap:10,alignItems:"center"}}>
                 <span style={{fontSize:NC_TYPE.body}}>✓</span>
-                <span style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:"system-ui",lineHeight:settingsType.line}}>Client ID saved. Go to your launchpad and tap <strong>Connect Google</strong> to authorize.</span>
+                <span style={{fontSize:settingsType.help,color:T.tSoft,fontFamily:NC_FONT_STACK,lineHeight:settingsType.line}}>Client ID saved. Go to your launchpad and tap <strong>Connect Google</strong> to authorize.</span>
               </div>
             )}
           </div>
@@ -535,14 +534,14 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
         {sTab === "features" && (
           <div>
             <h4 style={sh}>Experimental Features</h4>
-            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:"0 0 20px",lineHeight:settingsType.line}}>
+            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 20px",lineHeight:settingsType.line}}>
               These features are paused or experimental. Toggle them on to re-enable.
             </p>
 
             <div style={rowSB}>
               <div>
-                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>AI move-up popup</span>
-                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>When AI suggests moving a task above your pinned items, show a confirmation dialog</p>
+                <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK,color:T.text}}>AI move-up popup</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:0,lineHeight:settingsType.line}}>When AI suggests moving a task above your pinned items, show a confirmation dialog</p>
               </div>
               <Switch selected={AS.features?.moveUpPopup===true} onChange={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,moveUpPopup:!ft.moveUpPopup}};})} style={switchVars} />
             </div>
@@ -551,8 +550,8 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
 
             <div style={rowSB}>
               <div>
-                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Chief of Staff</span>
-                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>AI-powered chief of staff — shows in the sidebar under Experimental</p>
+                <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK,color:T.text}}>Chief of Staff</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:0,lineHeight:settingsType.line}}>AI-powered chief of staff — shows in the sidebar under Experimental</p>
               </div>
               <Switch selected={AS.features?.chief===true} onChange={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,chief:!ft.chief}};})} style={switchVars} />
             </div>
@@ -561,8 +560,8 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
 
             <div style={rowSB}>
               <div>
-                <span style={{fontSize:settingsType.body,fontFamily:"system-ui",color:T.text}}>Health</span>
-                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:"system-ui",margin:0,lineHeight:settingsType.line}}>Health tracking and wellness features — shows in the sidebar under Experimental</p>
+                <span style={{fontSize:settingsType.body,fontFamily:NC_FONT_STACK,color:T.text}}>Health</span>
+                <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:0,lineHeight:settingsType.line}}>Health tracking and wellness features — shows in the sidebar under Experimental</p>
               </div>
               <Switch selected={AS.features?.health===true} onChange={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,health:!ft.health}};})} style={switchVars} />
             </div>

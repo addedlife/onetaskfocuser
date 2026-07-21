@@ -1130,7 +1130,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             onBlur={() => setTimeout(() => setComposeFocused(false), 160)}
             placeholder="Search contact or enter number..."
             autoFocus
-            style={{ width: "100%", height: 36, boxSizing: "border-box", padding: `0 ${SP.md}`, borderRadius: RADIUS.pill, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: NC_TYPE.body, fontWeight: 400, outline: "none" }} />
+            style={{ width: "100%", height: 36, boxSizing: "border-box", padding: `0 ${SP.md}`, borderRadius: RADIUS.pill, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.body, fontWeight: 400, outline: "none" }} />
           {composeFocused && suggestions.length > 0 && (
             <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 300 }}>
               <SuggestionList onPick={s => { setSelected({ name: s.name, number: s.num }); setNumber(s.num); setComposeSearch(s.name); setComposeIsNew(false); }} />
@@ -1150,7 +1150,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           <textarea ref={composeBodyRef} value={body} onChange={e => setBody(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendSms(); } }}
             placeholder="Message..." rows={2}
-            style={{ boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, padding: `${SP.sm} ${SP.md}`, fontSize: NC_TYPE.body, fontFamily: "system-ui", resize: "none", outline: "none", width: "100%" }} />
+            style={{ boxSizing: "border-box", borderRadius: RADIUS.sm, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, padding: `${SP.sm} ${SP.md}`, fontSize: NC_TYPE.body, fontFamily: NC_FONT_STACK, resize: "none", outline: "none", width: "100%" }} />
           <button onClick={sendSms} disabled={!body.trim() || !!busy || (!selected && !number.trim())}
             style={{ width: 40, height: 40, borderRadius: RADIUS.pill, border: "none", background: body.trim() ? C.accent : "transparent", color: body.trim() ? "#fff" : C.faint, cursor: body.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: `background ${DUR.fast} ${EASE.standard}`, flexShrink: 0 }}>
             {suiteIcon("send", 16)}
@@ -1270,7 +1270,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
               onBlur={() => setTimeout(() => setInputFocused(false), 160)}
               onKeyDown={e => e.key === "Enter" && dial()}
               placeholder="Name or number"
-              style={{ width: "100%", height: 40, boxSizing: "border-box", padding: "0 46px 0 32px", borderRadius: RADIUS.pill, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: "system-ui", fontSize: NC_TYPE.body, fontWeight: 400, outline: "none" }} />
+              style={{ width: "100%", height: 40, boxSizing: "border-box", padding: "0 46px 0 32px", borderRadius: RADIUS.pill, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.body, fontWeight: 400, outline: "none" }} />
             <IconBtn variant="filled" icon="call" iconSize={14}
               color={number.trim() ? "#fff" : C.faint}
               containerColor={number.trim() ? C.success : "transparent"}
@@ -1285,7 +1285,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 4 }}>
             {DIALER_KEYS.map(k => (
               <button key={k} onClick={() => setNumber(prev => prev + k)}
-                style={{ height: 40, borderRadius: RADIUS.xs, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, cursor: "pointer", fontSize: NC_TYPE.title, fontWeight: 400, fontFamily: "system-ui" }}>
+                style={{ height: 40, borderRadius: RADIUS.xs, border: `1px solid ${C.divider}`, background: C.bg, color: C.text, cursor: "pointer", fontSize: NC_TYPE.title, fontWeight: 400, fontFamily: NC_FONT_STACK }}>
                 {k}
               </button>
             ))}

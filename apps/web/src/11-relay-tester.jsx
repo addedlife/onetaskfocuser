@@ -21,7 +21,7 @@ import {
   FilledButton, OutlinedButton, TextField, List, ListItem, Divider,
   ChipSet, AssistChip, LinearProgress, Badge, ActionBtn,
 } from './08-app-split/m3.jsx';
-import { GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, RADIUS, SP, ELEV, TRANSITION, themeVarsCss } from './08-app-split/ui-tokens.jsx';
+import { GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, RADIUS, SP, ELEV, TRANSITION, themeVarsCss, NC_MONO_STACK } from './08-app-split/ui-tokens.jsx';
 import { HOST_LABEL, BT_CAPABLE_HOSTS } from './08-app-split/phone-link.js';
 
 const FIREBASE_CONFIG = {
@@ -298,7 +298,7 @@ export function RelayTesterPage() {
         <h2 style={{ fontSize: 14, margin: '0 0 8px' }}>Raw request/response log</h2>
         <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
           {log.map((entry, i) => (
-            <div key={i} style={{ fontSize: 11, fontFamily: 'ui-monospace, monospace', color: entry.ok ? C.muted : (C.danger || '#C94040') }}>
+            <div key={i} style={{ fontSize: 11, fontFamily: NC_MONO_STACK, color: entry.ok ? C.muted : (C.danger || '#C94040') }}>
               {ageLabel(now - entry.at)} · {entry.action} · HTTP {entry.status} · {entry.ms}ms
               {entry.detail ? ` · ${JSON.stringify(entry.detail)}` : ''}
             </div>
