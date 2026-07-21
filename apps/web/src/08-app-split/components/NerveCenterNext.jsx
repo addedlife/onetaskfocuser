@@ -94,6 +94,37 @@ const ncProtoCap = short => (short ? 2 : NC_PROTO_ROWS);
 // Gmail metadata responses carry labelIds; fail open (full contrast) if absent.
 const mailIsUnread = msg => Array.isArray(msg?.labelIds) ? msg.labelIds.includes("UNREAD") : true;
 
+// ── M3 FEED LAYOUT (calm-rows v5) ───────────────────────────────────────────
+// Research basis (m3.material.io): a dashboard of heterogeneous content is the
+// "feed" canonical layout — a configurable grid of cards in a SCROLLING page,
+// where each card is sized by its own content. The previous design forced five
+// equal-height cards into one screen, which is why a card holding 45 tasks and a
+// card holding 2 got identical space: two rows shown and a dead gap beneath.
+// Feed mode removes fixed card heights entirely, so there is nothing to clip and
+// nothing to waste — and no row-fitting arithmetic at all.
+//
+// M3 numbers applied here (not invented):
+//   window size classes  compact <600 / medium 600-839 / expanded 840-1199
+//                        → 1 column below 840dp, 2 columns at/above it
+//   touch targets        48x48dp minimum, 8dp apart
+//   list item text       16sp headline (body-large), 14sp supporting
+//   list item height     56dp one-line / 76dp two-line
+const NC_FEED_ROWS = 4;        // items per card at rest; "show all" expands in place
+const NC_FEED_2COL = 840;      // M3 expanded breakpoint → second column
+if (NC_PROTO && typeof document !== "undefined") {
+  const feedStyle = document.createElement("style");
+  feedStyle.textContent = [
+    // 48dp touch targets. IconBtn writes its size inline, so !important is the
+    // only way to lift every control at once without touching 40 call sites.
+    '[data-nc-feed] md-icon-button{width:48px!important;height:48px!important;}',
+    '[data-nc-feed] md-icon-button .material-symbols-rounded{font-size:22px!important;}',
+    // M3 list metrics: readable type, real row height. An element-level rule beats
+    // the inherited density tokens set on the container.
+    '[data-nc-feed] md-list-item{--md-list-item-label-text-size:16px;--md-list-item-label-text-line-height:22px;--md-list-item-supporting-text-size:14px;--md-list-item-supporting-text-line-height:19px;--md-list-item-trailing-supporting-text-size:13px;--md-list-item-one-line-container-height:56px;--md-list-item-two-line-container-height:76px;--md-list-item-top-space:8px;--md-list-item-bottom-space:8px;--md-list-item-leading-space:16px;--md-list-item-trailing-space:8px;}',
+  ].join('\n');
+  document.head.appendChild(feedStyle);
+}
+
 // useFitRows — measure a list container and report how many WHOLE rows fit in it.
 // This is what actually stops a row bleeding over the card edge: a hardcoded cap
 // can never be right across every card height, orientation and density, so the
@@ -934,8 +965,10 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
     obs.observe(el);
     return () => obs.disconnect();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  // Whole rows that fit this card right now (density + card height aware).
-  const fitRows = useFitRows(scrollRef, { enabled: NC_PROTO && !collapsed, watch: `${dense}|${expanded}` });
+  // Feed mode sizes cards by content, so there is no fitting to do — the card
+  // shows NC_FEED_ROWS items and "show all" grows it in the page flow.
+  const measuredFit = useFitRows(scrollRef, { enabled: false, watch: `${dense}|${expanded}` });
+  const fitRows = NC_PROTO ? (expanded ? 9999 : NC_FEED_ROWS) : measuredFit;
 
   // stickyHeader: always-visible header row with icon chip + title + summary line.
   // While card-expanded (or header-only collapsed) the header must stay reachable,
@@ -947,7 +980,11 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
     // Calm-rows v2: each card gets a whisper of its category color mixed into the
     // surface (M3 tonal container differentiation) so the five cards read as five
     // distinct surfaces without any harsh color.
-    <div style={{ position: "relative", background: NC_PROTO ? `color-mix(in srgb, ${C.bg} 94%, ${accentColor || C.accent} 6%)` : C.bg, borderRadius: 16, display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0, overflow: "hidden", ...style }}>
+    <div data-nc-feed={NC_PROTO ? "true" : undefined}
+      style={{ position: "relative", background: NC_PROTO ? `color-mix(in srgb, ${C.bg} 94%, ${accentColor || C.accent} 6%)` : C.bg, borderRadius: NC_PROTO ? 20 : 16, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden",
+        // Feed card: height comes from content. No fixed fifth, so no clipped row
+        // and no dead gap under a short card.
+        ...(NC_PROTO ? { height: "auto", minHeight: 0 } : { minHeight: 0 }), ...style }}>
       {stickyHeader ? (
         // Sticky header: never collapses. Shows icon chip + title label + summary on separate line.
         // With onToggleExpand (5-column card grid) the header tap expands this column and
@@ -985,19 +1022,32 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
         // list no longer overflows, the collapse-on-scroll never fires, so a 56px
         // comfortable header would permanently eat a third of a short card and leave
         // a one-row slat (owner, iPad). Thin + always visible beats fat + frozen.
-        <div style={{ display: "flex", alignItems: "center", width: "100%", flexShrink: 0, minWidth: 0, maxHeight: headerCollapsed ? 0 : ((dense || NC_PROTO) ? 22 : 56), opacity: headerCollapsed ? 0 : 1, overflow: "hidden", pointerEvents: headerCollapsed ? "none" : "auto", transition: "max-height 0.2s ease, opacity 0.15s ease" }}>
+        // Feed mode: a real M3 card header — 48dp tall, titled, tappable. The old
+        // 22px sliver was both unreadable and an illegal touch target.
+        <div style={{ display: "flex", alignItems: "center", width: "100%", flexShrink: 0, minWidth: 0, maxHeight: NC_PROTO ? "none" : (headerCollapsed ? 0 : (dense ? 22 : 56)), opacity: (!NC_PROTO && headerCollapsed) ? 0 : 1, overflow: "hidden", pointerEvents: (!NC_PROTO && headerCollapsed) ? "none" : "auto", transition: "max-height 0.2s ease, opacity 0.15s ease" }}>
           <ListItem type="button" onClick={onToggleExpand || onOpen} title={title} aria-label={title} aria-expanded={onToggleExpand ? expanded : undefined}
-            style={{
+            style={NC_PROTO ? {
+              flex: 1, minWidth: 0, cursor: (onToggleExpand || onOpen) ? "pointer" : "default",
+              '--md-list-item-one-line-container-height': '48px',
+              '--md-list-item-two-line-container-height': '56px',
+              '--md-list-item-top-space': '6px', '--md-list-item-bottom-space': '6px',
+              '--md-list-item-leading-space': '16px', '--md-list-item-trailing-space': '8px',
+            } : {
               flex: 1, minWidth: 0, cursor: (onToggleExpand || onOpen) ? "pointer" : "default",
               ...denseListVars({ dense: true }),
-              '--md-list-item-one-line-container-height': (dense || NC_PROTO) ? '16px' : '22px',
-              '--md-list-item-top-space': headerCollapsed ? '0px' : ((dense || NC_PROTO) ? '2px' : '7px'),
-              '--md-list-item-bottom-space': headerCollapsed ? '0px' : ((dense || NC_PROTO) ? '2px' : '6px'),
-              '--md-list-item-leading-space': headerCollapsed ? '10px' : ((dense || NC_PROTO) ? '9px' : '11px'),
-              '--md-list-item-trailing-space': headerCollapsed ? '10px' : ((dense || NC_PROTO) ? '9px' : '11px'),
+              '--md-list-item-one-line-container-height': dense ? '16px' : '22px',
+              '--md-list-item-top-space': headerCollapsed ? '0px' : (dense ? '2px' : '7px'),
+              '--md-list-item-bottom-space': headerCollapsed ? '0px' : (dense ? '2px' : '6px'),
+              '--md-list-item-leading-space': headerCollapsed ? '10px' : (dense ? '9px' : '11px'),
+              '--md-list-item-trailing-space': headerCollapsed ? '10px' : (dense ? '9px' : '11px'),
             }}>
-            <span slot="start" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: (dense || NC_PROTO) ? 16 : 22, height: (dense || NC_PROTO) ? 16 : 22, color: C.muted, flexShrink: 0 }}>{suiteIcon(icon, (dense || NC_PROTO) ? 13 : 16)}</span>
-            <div slot="headline" style={{ fontSize: NC_TYPE.small, fontWeight: 400, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{summary}</div>
+            <span slot="start" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: NC_PROTO ? 24 : (dense ? 16 : 22), height: NC_PROTO ? 24 : (dense ? 16 : 22), color: NC_PROTO ? (accentColor || C.accent) : C.muted, flexShrink: 0 }}>{suiteIcon(icon, NC_PROTO ? 22 : (dense ? 13 : 16))}</span>
+            {NC_PROTO
+              ? <>
+                  <div slot="headline" style={{ fontSize: 16, fontWeight: 650, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
+                  {summary && <div slot="supporting-text" style={{ fontSize: 13, color: C.muted, fontFamily: NC_FONT_STACK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{summary}</div>}
+                </>
+              : <div slot="headline" style={{ fontSize: NC_TYPE.small, fontWeight: 400, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{summary}</div>}
             {onToggleExpand && <span slot="end" style={{ display: "flex", color: C.faint, flexShrink: 0 }}>{suiteIcon(expanded ? "close_fullscreen" : "expand_content", 12)}</span>}
           </ListItem>
           {headerActions && (
@@ -1012,7 +1062,10 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
           therefore the whole-rows measurement below — is exact. */}
       {!collapsed && hero}
       <div ref={scrollRef} onScroll={measure}
-        style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", ...(NC_PROTO ? { paddingTop: 6, paddingBottom: 6 } : {}), ...(collapsed ? { display: "none" } : {}) }}>
+        style={NC_PROTO
+          // Feed: the PAGE scrolls, never the card. Content is fully laid out.
+          ? { flex: "0 0 auto", overflow: "visible", paddingBottom: 8, ...(collapsed ? { display: "none" } : {}) }
+          : { flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", ...(collapsed ? { display: "none" } : {}) }}>
         {typeof children === "function" ? children(fitRows) : children}
       </div>
       {/* v2: no gradient scrim — M3 clips scrolling lists cleanly at the padded
@@ -1066,12 +1119,13 @@ function HeroItem({ title, meta, accent, C, onClick }) {
 // One full-width text button; expanding is always one tap, so no information is lost.
 function MoreRow({ count, open = false, label = "more", onClick, C }) {
   return (
-    <ActionBtn variant="text" icon={open ? "expand_less" : "expand_more"} iconSize={13}
-      labelColor={C.faint} labelSize={NC_TYPE.meta} onClick={onClick}
+    <ActionBtn variant="text" icon={open ? "expand_less" : "expand_more"} iconSize={NC_PROTO ? 20 : 13}
+      labelColor={NC_PROTO ? C.accent : C.faint} labelSize={NC_PROTO ? 15 : NC_TYPE.meta}
+      height={NC_PROTO ? 48 : undefined} onClick={onClick}
       title={open ? `Hide ${label}` : `Show ${count} ${label}`}
       aria-label={open ? `Hide ${label}` : `Show ${count} ${label}`}
       style={{ width: "100%" }}>
-      {open ? `Hide ${label}` : `+${count} ${label}`}
+      {open ? `Show less` : `Show all ${count} ${label === "more" ? "" : label}`.trim()}
     </ActionBtn>
   );
 }
@@ -2739,10 +2793,14 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
     const BOX_ORDER = ["mail", "phone", "tasks", "shailos", "calendar"];
     const boxProps = id => ({
       expanded: expandedBoxId === id,
-      // Only rows-mode hides content; squished columns keep rendering (narrow).
-      collapsed: !boxesFiveCol && !!expandedBoxId && expandedBoxId !== id,
+      // Feed mode never hides a sibling card — the page scrolls, so every card
+      // stays readable and "expanded" simply means this card shows all its items.
+      collapsed: NC_PROTO ? false : (!boxesFiveCol && !!expandedBoxId && expandedBoxId !== id),
       onToggleExpand: () => setExpandedBoxId(prev => prev === id ? null : id),
     });
+    // Cards whose content fills its parent (phone surface, calendar timeline) need
+    // an explicit height once the card itself is content-sized.
+    const feedPaneH = 360;
     const boxRows = expandedBoxId
       ? BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,1fr)" : "min-content").join(" ")
       : "repeat(5, minmax(0,1fr))";
@@ -2815,7 +2873,16 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             <  1000 px: 5 rows stacked, each 1/5 height — all cards always visible. */}
         {/* GM3 grid rhythm: real gutters between cards (tighter when dense, but still
             breathing) — tone + space do the separation, matching the full-panel view. */}
-        <div style={{ flex:1, minHeight:0, gap: dense?8:14, marginTop:10, display:"grid", overflow:"hidden",
+        <div style={NC_PROTO ? {
+            // M3 feed: the PAGE scrolls; cards are content-sized rows in a 1- or
+            // 2-column grid chosen by the M3 expanded breakpoint.
+            flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden",
+            WebkitOverflowScrolling: "touch", overscrollBehavior: "contain",
+            display: "grid", gap: 12, marginTop: 10, alignContent: "start",
+            gridTemplateColumns: availableW >= NC_FEED_2COL ? "repeat(2, minmax(0,1fr))" : "1fr",
+            gridAutoRows: "min-content",
+            paddingBottom: "calc(16px + env(safe-area-inset-bottom,0px))",
+          } : { flex:1, minHeight:0, gap: dense?8:14, marginTop:10, display:"grid", overflow:"hidden",
           ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }),
           gridTemplateColumns: boxesFiveCol ? boxCols : "1fr",
           gridTemplateRows:    boxesFiveCol ? "1fr" : boxRows }}>
@@ -2878,7 +2945,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
             ) : null}>
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
-            <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0, padding: dense ? "1px 8px 4px" : "4px 10px 8px", boxSizing:"border-box" }}>
+            <div style={{ display:"flex", flexDirection:"column", height: NC_PROTO ? (expandedBoxId === "phone" ? 560 : feedPaneH) : "100%", minHeight:0, padding: NC_PROTO ? "0 8px 8px" : (dense ? "1px 8px 4px" : "4px 10px 8px"), boxSizing:"border-box" }}>
               <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact dense={dense} onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </MobileBox>
@@ -2929,9 +2996,9 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 <ListItem key={t.id} type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
                   <span slot="start" style={{ width: NC_PROTO?7:(dense?6:8), height: NC_PROTO?7:(dense?6:8), borderRadius:RADIUS.pill, background:priColor }} />
                   <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>{nerveDisplaySummary(t,"Untitled task")}</span>
-                  <span slot="end" style={{ display:"flex", gap:2 }}>
-                    <IconBtn icon="check" size={dense?24:30} iconSize={dense?13:15} color={C.success} title="Done" aria-label="Mark done" onClick={e => { e.stopPropagation(); onCompleteTask?.(t.id); }} />
-                    <IconBtn icon="close" size={dense?24:30} iconSize={dense?12:14} color={C.danger} title="Delete" aria-label="Delete task" onClick={e => { e.stopPropagation(); onDeleteTask?.(t.id); }} />
+                  <span slot="end" style={{ display:"flex", gap: NC_PROTO ? 4 : 2 }}>
+                    <IconBtn icon="check" size={NC_PROTO?48:(dense?24:30)} iconSize={NC_PROTO?22:(dense?13:15)} color={C.success} title="Done" aria-label="Mark done" onClick={e => { e.stopPropagation(); onCompleteTask?.(t.id); }} />
+                    <IconBtn icon="close" size={NC_PROTO?48:(dense?24:30)} iconSize={NC_PROTO?20:(dense?12:14)} color={C.danger} title="Delete" aria-label="Delete task" onClick={e => { e.stopPropagation(); onDeleteTask?.(t.id); }} />
                   </span>
                 </ListItem>
               );
@@ -2993,7 +3060,7 @@ function NerveCenterPanel({ T, user = null, sections = [], tasks = [], shailos =
                 onClick={() => setExpandedBoxId(prev => prev === "calendar" ? null : "calendar")} />
             ) : null}>
             {/* Fill the box as a flex column so the timeline's internal scroll bounds correctly. */}
-            <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0 }}>
+            <div style={{ display:"flex", flexDirection:"column", height: NC_PROTO ? (expandedBoxId === "calendar" ? 620 : feedPaneH) : "100%", minHeight:0 }}>
               {showAddEvent && (
                 <div style={{ padding:"10px 12px", borderBottom:`1px solid ${C.divider}`, flexShrink:0 }}>
                   <textarea autoFocus value={addEventText} onChange={e=>setAddEventText(e.target.value)} rows={2} placeholder='e.g. "Call David Mon at 3pm"'
