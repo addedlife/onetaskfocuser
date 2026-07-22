@@ -514,6 +514,52 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
     }
   };
 
+  // ── Bulk re-summarize (owner ticket zmhk3Ds) ────────────────────────────────
+  // Rewrites the ANSWER SUMMARY only — the line that rides the shaila chip. The
+  // owner was explicit on 7/22: "just the answer summary that goes on the shaila
+  // chip, not the whole shaila or the shaila summary." So the update touches
+  // answerSummary and nothing else; content, parsedShaila and synopsis are left
+  // exactly as they are.
+  //
+  // Runs one shaila at a time with a gap between calls. This job is the same one
+  // the AI call manager flagged at 10.5x normal (ticket FpbwpXD), so a bulk pass
+  // firing N calls at once is precisely the shape that trips the leak detector and
+  // burns a lane's quota. Slow and serial is correct here.
+  const [bulkSummary, setBulkSummary] = useState(null); // {done, total, failed} | null
+  const bulkCancelRef = useRef(false);
+
+  const resummarizeAllAnswers = async () => {
+    if (bulkSummary) { bulkCancelRef.current = true; return; }   // second click = cancel
+    const targets = shailos.filter(s => (s.answer || '').trim());
+    if (!targets.length) { setError('No answered shailos to re-summarize.'); return; }
+    if (!window.confirm(
+      `Re-summarize the answer line on ${targets.length} shaila${targets.length === 1 ? '' : 's'}?\n\n` +
+      `This rewrites only the short answer summary shown on the chip. The shaila text, ` +
+      `synopsis and answer are not touched.\n\nIt makes ${targets.length} AI calls, one at a time.`
+    )) return;
+
+    bulkCancelRef.current = false;
+    setBulkSummary({ done: 0, total: targets.length, failed: 0 });
+    let done = 0, failed = 0;
+    for (const s of targets) {
+      if (bulkCancelRef.current) break;
+      try {
+        const summary = await generateAnswerSummary(user, s.answer);
+        if (summary) {
+          await shailosCol().doc(s.id).update({ answerSummary: summary, updatedAt: Ts() });
+          // Keep the throttle's content cache in step, so the next ordinary save of
+          // this shaila adopts this result instead of paying for it again.
+          publishContentResult(`shaila-answer-summary-${s.id}`, answerContentKey((s.answer || '').trim()), summary);
+        } else { failed++; }
+      } catch { failed++; }
+      done++;
+      setBulkSummary({ done, total: targets.length, failed });
+      await new Promise(r => setTimeout(r, 1200));
+    }
+    setBulkSummary(null);
+    if (failed) setError(`Re-summarized ${done - failed} of ${targets.length}; ${failed} failed (they keep their old summary).`);
+  };
+
   const handleResearch = async (shaila) => {
     if (researchingSetRef.current.has(shaila.id)) return;
     researchingSetRef.current.add(shaila.id);
@@ -854,8 +900,19 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
               <span style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 {suiteIcon('description', 15)} Recent shailos
               </span>
-              <ActionBtn variant="text" icon="content_copy" iconSize={12} height={26} labelSize={NC_TYPE.small} labelColor={C.accent}
-                onClick={copyAllShailos} title="Copy all filtered shailos to the clipboard">Copy all</ActionBtn>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                {/* Rewrites the chip's answer line only — see resummarizeAllAnswers. */}
+                <ActionBtn variant="text" icon={bulkSummary ? 'progress_activity' : 'auto_awesome'} iconSize={12} height={26}
+                  labelSize={NC_TYPE.small} labelColor={bulkSummary ? C.warning : C.accent}
+                  onClick={resummarizeAllAnswers}
+                  title={bulkSummary
+                    ? 'Re-summarizing — click to stop after the current one'
+                    : 'Re-summarize the answer line on every answered shaila (chip summary only)'}>
+                  {bulkSummary ? `${bulkSummary.done}/${bulkSummary.total}` : 'Re-summarize'}
+                </ActionBtn>
+                <ActionBtn variant="text" icon="content_copy" iconSize={12} height={26} labelSize={NC_TYPE.small} labelColor={C.accent}
+                  onClick={copyAllShailos} title="Copy all filtered shailos to the clipboard">Copy all</ActionBtn>
+              </span>
             </div>
             <ChipSet>
               {[['all', 'All'], ['pending', 'Researching'], ['answered', 'Have Answer'], ['got_back', 'Got Back']].map(([f, lbl]) => (
