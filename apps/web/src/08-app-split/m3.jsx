@@ -24,6 +24,13 @@ import { MdOutlinedSelect } from '@material/web/select/outlined-select.js';
 import { MdSelectOption } from '@material/web/select/select-option.js';
 import { MdCheckbox } from '@material/web/checkbox/checkbox.js';
 import { MdSlider } from '@material/web/slider/slider.js';
+import { MdFab } from '@material/web/fab/fab.js';
+import { MdMenu } from '@material/web/menu/menu.js';
+import { MdMenuItem } from '@material/web/menu/menu-item.js';
+import { MdDialog } from '@material/web/dialog/dialog.js';
+import { MdRipple } from '@material/web/ripple/ripple.js';
+import { MdOutlinedSegmentedButton } from '@material/web/labs/segmentedbutton/outlined-segmented-button.js';
+import { MdOutlinedSegmentedButtonSet } from '@material/web/labs/segmentedbuttonset/outlined-segmented-button-set.js';
 
 // ─── Shared @material/web button layer ───────────────────────────────────────
 // Single home for the real Google Material 3 button + icon-button components,
@@ -102,6 +109,25 @@ export const Slider = createComponent({
   elementClass: MdSlider,
   events: { onInput: 'input', onChange: 'change' },
 });
+
+// ─── FAB, menu, dialog, ripple, segmented buttons ─────────────────────────────
+// Formerly re-wrapped per-file in AppSuiteChrome.jsx and BugLog.jsx; hoisted here
+// so every surface shares the one wrapper (the CLAUDE.md "no per-file re-wrapping"
+// rule now actually holds — a design-system swap edits this file, not N copies).
+export const Fab = createComponent({ react: React, tagName: 'md-fab', elementClass: MdFab });
+// `closed` fires after the M3 close animation on both menu and dialog, so React
+// state stays in sync however they're dismissed (Escape, scrim click, item pick).
+export const Menu     = createComponent({ react: React, tagName: 'md-menu',      elementClass: MdMenu,     events: { onClosed: 'closed' } });
+export const MenuItem = createComponent({ react: React, tagName: 'md-menu-item', elementClass: MdMenuItem });
+export const Dialog   = createComponent({ react: React, tagName: 'md-dialog',    elementClass: MdDialog,   events: { onClosed: 'closed' } });
+export const Ripple   = createComponent({ react: React, tagName: 'md-ripple',    elementClass: MdRipple });
+// Segmented button (labs, single-select): M3's control for 2–5 mutually exclusive
+// choices (e.g. which host holds the phone).
+export const SegmentedButtonSet = createComponent({
+  react: React, tagName: 'md-outlined-segmented-button-set', elementClass: MdOutlinedSegmentedButtonSet,
+  events: { onSelection: 'segmented-button-set-selection' },
+});
+export const SegmentedButton = createComponent({ react: React, tagName: 'md-outlined-segmented-button', elementClass: MdOutlinedSegmentedButton });
 
 // denseListVars — md-list-item density, within the M3 floor.
 //

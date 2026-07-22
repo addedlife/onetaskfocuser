@@ -26,23 +26,7 @@ import { BugLog } from './components/BugLog.jsx';
 // `?ncproto=1` inside NerveCenter.jsx is a live experiment, unrelated to this.
 import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack, shailaText, shailaCreatedAt, shailaField } from './utils/shailosQueue.js';
 import { shouldRunForContentAndClaim, publishContentResult, releaseContentClaim } from './ai-call-throttle.js';
-import { createComponent } from '@lit/react';
-import { MdIconButton } from '@material/web/iconbutton/icon-button.js';
-import { MdOutlinedIconButton } from '@material/web/iconbutton/outlined-icon-button.js';
-import { MdFilledIconButton } from '@material/web/iconbutton/filled-icon-button.js';
-import { MdFilledButton } from '@material/web/button/filled-button.js';
-import { MdOutlinedButton } from '@material/web/button/outlined-button.js';
-import { MdList } from '@material/web/list/list.js';
-import { MdListItem } from '@material/web/list/list-item.js';
-import { MdAssistChip } from '@material/web/chips/assist-chip.js';
-const IconButton         = createComponent({ react: React, tagName: 'md-icon-button',          elementClass: MdIconButton });
-const OutlinedIconButton = createComponent({ react: React, tagName: 'md-outlined-icon-button', elementClass: MdOutlinedIconButton });
-const FilledIconButton   = createComponent({ react: React, tagName: 'md-filled-icon-button',   elementClass: MdFilledIconButton });
-const FilledButton       = createComponent({ react: React, tagName: 'md-filled-button',        elementClass: MdFilledButton });
-const OutlinedButton     = createComponent({ react: React, tagName: 'md-outlined-button',      elementClass: MdOutlinedButton });
-const List               = createComponent({ react: React, tagName: 'md-list',                 elementClass: MdList });
-const ListItem           = createComponent({ react: React, tagName: 'md-list-item',            elementClass: MdListItem });
-const AssistChip         = createComponent({ react: React, tagName: 'md-assist-chip',          elementClass: MdAssistChip });
+import { IconButton, OutlinedIconButton, FilledIconButton, FilledButton, OutlinedButton, List, ListItem, AssistChip } from './m3.jsx';
 
 const GOOGLE_SERVER_TOKEN = "__server_google_workspace__";
 const GOOGLE_TOKEN_EXPIRY_SKEW_MS = 60 * 1000;

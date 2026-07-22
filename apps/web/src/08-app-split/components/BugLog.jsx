@@ -1,37 +1,12 @@
 import React from 'react';
-import { createComponent } from '@lit/react';
-import { MdFab } from '@material/web/fab/fab.js';
-import { MdOutlinedTextField } from '@material/web/textfield/outlined-text-field.js';
-import { MdOutlinedSelect } from '@material/web/select/outlined-select.js';
-import { MdSelectOption } from '@material/web/select/select-option.js';
-import { MdFilledButton } from '@material/web/button/filled-button.js';
-import { MdTextButton } from '@material/web/button/text-button.js';
-import { MdIconButton } from '@material/web/iconbutton/icon-button.js';
-import { MdList } from '@material/web/list/list.js';
-import { MdListItem } from '@material/web/list/list-item.js';
-import { MdChipSet } from '@material/web/chips/chip-set.js';
-import { MdFilterChip } from '@material/web/chips/filter-chip.js';
-import { MdMenu } from '@material/web/menu/menu.js';
-import { MdMenuItem } from '@material/web/menu/menu-item.js';
-import { MdDivider } from '@material/web/divider/divider.js';
 import { Store, textOnColor, runAIJob } from '../../01-core.js';
 import { cleanTheme, GOLD, CAT_MAIL, NC_FONT_STACK, NC_TYPE, RADIUS, SP, ELEV, TRANSITION, Z } from '../ui-tokens.jsx';
-
-// Real M3 web components — same createComponent bridge as AppSuiteChrome.jsx.
-const Fab               = createComponent({ react: React, tagName: 'md-fab',                elementClass: MdFab });
-const OutlinedTextField = createComponent({ react: React, tagName: 'md-outlined-text-field', elementClass: MdOutlinedTextField, events: { onInput: 'input' } });
-const OutlinedSelect    = createComponent({ react: React, tagName: 'md-outlined-select',    elementClass: MdOutlinedSelect,    events: { onChange: 'change' } });
-const SelectOption      = createComponent({ react: React, tagName: 'md-select-option',      elementClass: MdSelectOption });
-const FilledButton      = createComponent({ react: React, tagName: 'md-filled-button',      elementClass: MdFilledButton });
-const TextButton        = createComponent({ react: React, tagName: 'md-text-button',        elementClass: MdTextButton });
-const IconButton        = createComponent({ react: React, tagName: 'md-icon-button',        elementClass: MdIconButton });
-const List              = createComponent({ react: React, tagName: 'md-list',               elementClass: MdList });
-const ListItem          = createComponent({ react: React, tagName: 'md-list-item',          elementClass: MdListItem });
-const ChipSet           = createComponent({ react: React, tagName: 'md-chip-set',           elementClass: MdChipSet });
-const FilterChip        = createComponent({ react: React, tagName: 'md-filter-chip',        elementClass: MdFilterChip });
-const Menu              = createComponent({ react: React, tagName: 'md-menu',               elementClass: MdMenu,              events: { onClosed: 'closed' } });
-const MenuItem          = createComponent({ react: React, tagName: 'md-menu-item',          elementClass: MdMenuItem });
-const Divider           = createComponent({ react: React, tagName: 'md-divider',            elementClass: MdDivider });
+// Real M3 web components — the shared wrappers from m3.jsx (single home, no
+// per-file re-wrapping). TextField is the outlined variant.
+import {
+  Fab, TextField as OutlinedTextField, OutlinedSelect, SelectOption, FilledButton,
+  TextButton, IconButton, List, ListItem, ChipSet, FilterChip, Menu, MenuItem, Divider,
+} from '../m3.jsx';
 
 // Cross-component signaling with the rail's Bug Log item (AppSuiteChrome.jsx) —
 // keeps this widget self-contained without prop-drilling through App.jsx.

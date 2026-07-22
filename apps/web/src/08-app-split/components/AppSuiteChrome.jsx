@@ -1,51 +1,21 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { createComponent } from '@lit/react';
-import { MdFab } from '@material/web/fab/fab.js';
-import { MdOutlinedIconButton } from '@material/web/iconbutton/outlined-icon-button.js';
-import { MdDivider } from '@material/web/divider/divider.js';
-import { MdRipple } from '@material/web/ripple/ripple.js';
-import { MdTextButton } from '@material/web/button/text-button.js';
-import { MdOutlinedSegmentedButton } from '@material/web/labs/segmentedbutton/outlined-segmented-button.js';
-import { MdOutlinedSegmentedButtonSet } from '@material/web/labs/segmentedbuttonset/outlined-segmented-button-set.js';
-import { MdDialog } from '@material/web/dialog/dialog.js';
-import { MdIconButton } from '@material/web/iconbutton/icon-button.js';
 import { cleanTheme, DUR, EASE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, suiteIcon, M3_MIN_TARGET } from '../ui-tokens.jsx';
 import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
 import { Store, textOnColor } from '../../01-core.js';
-import { MdFilterChip } from '@material/web/chips/filter-chip.js';
 import { subscribeOwner, setPreferredHost, ownerIsLive, HOST_LABEL, OWNER_LIVE_WINDOW_MS } from '../phone-host-control.js';
 import { preferredHostId, HANDOFF_GRACE_MS } from '../phone-link.js';
 import { subscribeAiLaneStatus, subscribeAiLog } from '../ai-lane-status.js';
 import { isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 
-// Real M3 web components — Google's official implementations, not hand-coded lookalikes.
-// md-navigation-rail is not yet in @material/web v2.4; nav items stay hand-coded with
-// <md-ripple> for M3-quality press feedback. Swap in md-navigation-rail-item when shipped.
-const Fab = createComponent({ react: React, tagName: 'md-fab', elementClass: MdFab });
-const OutlinedIconButton = createComponent({ react: React, tagName: 'md-outlined-icon-button', elementClass: MdOutlinedIconButton });
-const Divider = createComponent({ react: React, tagName: 'md-divider', elementClass: MdDivider });
-const Ripple = createComponent({ react: React, tagName: 'md-ripple', elementClass: MdRipple });
-// Segmented button (labs, single-select): M3's control for 2–5 mutually exclusive
-// choices — the right semantics for picking WHICH host holds the phone, where the
-// old md-switch wrongly read as an on/off state.
-const SegmentedButtonSet = createComponent({
-  react: React, tagName: 'md-outlined-segmented-button-set', elementClass: MdOutlinedSegmentedButtonSet,
-  events: { onSelection: 'segmented-button-set-selection' },
-});
-const SegmentedButton = createComponent({ react: React, tagName: 'md-outlined-segmented-button', elementClass: MdOutlinedSegmentedButton });
-const FilterChip = createComponent({ react: React, tagName: 'md-filter-chip', elementClass: MdFilterChip });
-const TextButton = createComponent({ react: React, tagName: 'md-text-button', elementClass: MdTextButton });
-// Modal dialog for the pop-out AI live-log window (owner ticket 7/19: the 320px
-// popover is too cramped to actually read prompts/responses — give it a real
-// window, like the DeskPhone live log). `closed` fires after the M3 close
-// animation so React state stays in sync however the dialog is dismissed
-// (Escape, scrim click, or the Close button).
-const Dialog = createComponent({
-  react: React, tagName: 'md-dialog', elementClass: MdDialog,
-  events: { onClosed: 'closed' },
-});
-const IconButton = createComponent({ react: React, tagName: 'md-icon-button', elementClass: MdIconButton });
+// Real M3 web components — the shared wrappers from m3.jsx (single home, no
+// per-file re-wrapping). md-navigation-rail is not yet in @material/web v2.4;
+// nav items stay hand-coded with <md-ripple> for M3-quality press feedback.
+// Swap in md-navigation-rail-item when shipped.
+import {
+  Fab, OutlinedIconButton, Divider, Ripple, SegmentedButtonSet, SegmentedButton,
+  FilterChip, TextButton, Dialog, IconButton,
+} from '../m3.jsx';
 
 // Cross-component signaling for the Bug Log rail item, without prop-drilling
 // through App.jsx (which already owns a large prop surface). BugLog.jsx

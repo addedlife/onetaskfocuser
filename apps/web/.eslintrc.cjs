@@ -92,6 +92,17 @@ module.exports = {
     'react-hooks/rules-of-hooks': 'error',
     'react-hooks/exhaustive-deps': 'warn',
     'no-restricted-syntax': ['warn', ...ALL_RULES],
+    // Single point of control for the design system: m3.jsx is the ONLY file
+    // allowed to import @material/web. Everything else consumes its wrappers, so
+    // a component-library swap (or theme overhaul) edits one file, not N copies.
+    // The 2026-07-22 sweep removed the four files that had grown their own
+    // wrapper blocks; this rule (counted by the gm3 ratchet) keeps it that way.
+    'no-restricted-imports': ['warn', {
+      patterns: [{
+        group: ['@material/web/*'],
+        message: 'GM3: import the shared wrapper from m3.jsx instead — only m3.jsx may import @material/web directly.',
+      }],
+    }],
   },
   overrides: [
     {
@@ -100,6 +111,11 @@ module.exports = {
       // hex values to parse. Every other GM3 rule still applies.
       files: ['src/08-app-split/ui-tokens.jsx', 'src/01-core.js'],
       rules: { 'no-restricted-syntax': ['warn', ...RULES_WITHOUT_COLOR] },
+    },
+    {
+      // The one sanctioned home for @material/web imports (see rule above).
+      files: ['src/08-app-split/m3.jsx'],
+      rules: { 'no-restricted-imports': 'off' },
     },
   ],
   parserOptions: {

@@ -5,19 +5,7 @@ import { IC } from './02-icons.jsx';
 import { isTaskAged, getTaskAgeHours, gP, pBg, textOnColor, _lum, priText, runAIJob, uid, db, Store, DEF_PRI, PALETTE, cleanYT, aiDetectShailaAnswers } from './01-core.js';
 import { getShabbosWindow, getCachedLocation, requestLocation } from './shabbos.js';
 import { ELEV, NC_FONT_STACK, NC_TYPE, RADIUS, SP } from './08-app-split/ui-tokens.jsx';
-import { createComponent } from '@lit/react';
-import { MdFilledButton } from '@material/web/button/filled-button.js';
-import { MdOutlinedButton } from '@material/web/button/outlined-button.js';
-import { MdTextButton } from '@material/web/button/text-button.js';
-import { MdFilledTonalButton } from '@material/web/button/filled-tonal-button.js';
-import { MdFilterChip } from '@material/web/chips/filter-chip.js';
-import { MdChipSet } from '@material/web/chips/chip-set.js';
-const FilledButton   = createComponent({ react: React, tagName: 'md-filled-button',       elementClass: MdFilledButton });
-const OutlinedButton = createComponent({ react: React, tagName: 'md-outlined-button',     elementClass: MdOutlinedButton });
-const TextButton     = createComponent({ react: React, tagName: 'md-text-button',         elementClass: MdTextButton });
-const TonalButton    = createComponent({ react: React, tagName: 'md-filled-tonal-button', elementClass: MdFilledTonalButton });
-const FilterChip     = createComponent({ react: React, tagName: 'md-filter-chip',         elementClass: MdFilterChip });
-const ChipSet        = createComponent({ react: React, tagName: 'md-chip-set',            elementClass: MdChipSet });
+import { FilledButton, OutlinedButton, TextButton, TonalButton, FilterChip, ChipSet } from './08-app-split/m3.jsx';
 
 function Ripple({color}) {
   return <div style={{position:"absolute",inset:0,zIndex:0,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>
