@@ -16,7 +16,7 @@ $dst      = Join-Path $env:USERPROFILE '.claude\hooks\backseat'
 $settings = Join-Path $env:USERPROFILE '.claude\settings.json'
 
 New-Item -ItemType Directory -Path $dst -Force | Out-Null
-foreach ($f in 'lib.sh', 'start.sh', 'drain.sh', 'stop.sh', 'end.sh', 'window.ps1') {
+foreach ($f in 'lib.sh', 'start.sh', 'drain.sh', 'stop.sh', 'end.sh', 'window.ps1', 'sweep.ps1') {
   Copy-Item (Join-Path $src $f) (Join-Path $dst $f) -Force
 }
 Write-Host "copied scripts -> $dst"

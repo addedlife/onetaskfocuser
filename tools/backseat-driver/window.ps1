@@ -223,7 +223,7 @@ $SendBtn.Add_MouseLeftButtonUp({ Send-Note })
 # DragBar, whose handler calls DragMove() — that captures the mouse and enters a modal
 # drag loop, so the matching MouseUp never arrives and the × silently does nothing.
 $CloseBtn.Add_MouseLeftButtonDown({ $_.Handled = $true })
-$CloseBtn.Add_MouseLeftButtonUp({ $_.Handled = $true; $win.Close() })
+$CloseBtn.Add_MouseLeftButtonUp({ $_.Handled = $true; Write-Life 'closed by user (x)'; $win.Close() })
 $CloseBtn.Add_MouseEnter({
   $CloseBtn.Background   = $BrushOf['#FF3A2A2C']
   $CloseGlyph.Foreground = $BrushOf['#FFE06C75']
@@ -286,6 +286,19 @@ function Test-SessionOnScreen {
 $script:Ticks   = 0
 $script:Missing = 0
 
+# Every path that can end this window records why. A window that vanishes with no
+# explanation is otherwise indistinguishable from one that crashed.
+function Write-Life {
+  param([string]$Reason)
+  try {
+    [System.IO.File]::AppendAllText(
+      (Join-Path $Root 'window-life.log'),
+      ('[{0}] tick {1}: {2}{3}' -f (Get-Date -Format 'HH:mm:ss'), $script:Ticks, $Reason, [Environment]::NewLine),
+      $Utf8)
+  } catch { }
+}
+Write-Life "opened (pid $PID)"
+
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromSeconds(1)
 # An unhandled exception inside a WPF dispatcher callback terminates the process
@@ -296,16 +309,16 @@ $timer.Add_Tick({
  try {
   $script:Ticks++
 
-  if (Test-Path $DeadPath) { $timer.Stop(); $win.Close(); return }
+  if (Test-Path $DeadPath) { Write-Life 'dead marker present'; $timer.Stop(); $win.Close(); return }
 
   # Liveness and focus are polled every other tick; both touch the filesystem.
   if ($script:Ticks % 2 -eq 0) {
     $alive = Test-SessionAlive
-    if ($alive -eq $false) { $timer.Stop(); $win.Close(); return }
+    if ($alive -eq $false) { Write-Life 'session process is gone'; $timer.Stop(); $win.Close(); return }
     if ($null -eq $alive) {
       # Tolerate a short indeterminate window at startup, then treat it as gone.
       $script:Missing++
-      if ($script:Missing -gt 30) { $timer.Stop(); $win.Close(); return }
+      if ($script:Missing -gt 30) { Write-Life 'no session entry for 60s'; $timer.Stop(); $win.Close(); return }
     } else {
       $script:Missing = 0
     }
