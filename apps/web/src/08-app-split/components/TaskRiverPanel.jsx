@@ -130,7 +130,7 @@ export function TaskRiverPanel({
   T, tasks = [], shailos = [], calendarEvents = null, gmailMessages = null,
   priorities = [], aiOpts = null, sidebarW = 64, topOffset = 0, clockTime,
   visible = true,
-  onCompleteTask, onOpenTasks, onOpenShailos, onOpenPhone,
+  onCompleteTask, onDeleteTask, onOpenTasks, onOpenShailos, onOpenPhone,
 }) {
   const C = cleanTheme(T);
   const now = clockTime instanceof Date ? clockTime : new Date(clockTime || Date.now());
@@ -247,11 +247,39 @@ export function TaskRiverPanel({
     window.addEventListener('touchmove', mv, { passive: false });
     window.addEventListener('touchend', up);
   };
-  const act = (it) => {
-    if (it.type === 'task') onCompleteTask?.(it.id);
+  // Opening a row is never destructive. Clicking anywhere on a task row used to
+  // COMPLETE it, which is a hard action to fire by accident in a dense list — the
+  // resolution now lives on the explicit per-line buttons below.
+  const open = (it) => {
+    if (it.type === 'task') onOpenTasks?.();
     else if (it.type === 'shaila') onOpenShailos?.();
-    else if (it.type === 'mail') window.open(gmailDeepLink(it.raw || {}), '_blank');
-    else if (it.type === 'calendar') window.open('https://calendar.google.com/calendar/r', '_blank');
+    else if (it.type === 'mail') window.open(gmailDeepLink(it.raw || {}), '_blank', 'noopener');
+    else if (it.type === 'calendar') window.open('https://calendar.google.com/calendar/r', '_blank', 'noopener');
+  };
+
+  // Owner ticket oEsS9o4: "i need resolution options in each taskriver line. option
+  // should match content." Every row used to offer the same thing — a drag handle,
+  // plus a check on tasks only — so there was no way to resolve a shaila, an email or
+  // an event from the river at all. Each type now gets the actions that actually mean
+  // something for it. They ride the shared hover-reveal (.nc-row-host/.nc-row-actions)
+  // so a 26px-tall river row does not lose any of its line to controls.
+  const rowActions = (it) => {
+    if (it.type === 'task') return [
+      { icon: 'check', title: 'Done', color: it.color, run: () => onCompleteTask?.(it.id) },
+      { icon: 'close', title: 'Delete task', color: C.danger, run: () => onDeleteTask?.(it.id) },
+      { icon: 'open_in_new', title: 'Open in Tasks', run: () => onOpenTasks?.() },
+    ].filter(a => a.icon !== 'close' || onDeleteTask);
+    if (it.type === 'shaila') return [
+      { icon: 'question_answer', title: 'Open shaila — answer or mark got back', color: it.color, run: () => onOpenShailos?.() },
+    ];
+    if (it.type === 'mail') return [
+      { icon: 'reply', title: 'Reply in Gmail', color: it.color, run: () => window.open(gmailDeepLink(it.raw || {}), '_blank', 'noopener') },
+      { icon: 'open_in_new', title: 'Open in Gmail', run: () => window.open(gmailDeepLink(it.raw || {}), '_blank', 'noopener') },
+    ];
+    if (it.type === 'calendar') return [
+      { icon: 'event', title: 'Open in Calendar', color: it.color, run: () => window.open('https://calendar.google.com/calendar/r', '_blank', 'noopener') },
+    ];
+    return [];
   };
 
   const riverGradient = view.length
@@ -301,7 +329,7 @@ export function TaskRiverPanel({
             {view.map((it) => {
               const isDrag = dragId === it.id;
               return (
-                <div key={it.id} data-river-row={it.id} onClick={() => act(it)}
+                <div key={it.id} data-river-row={it.id} onClick={() => open(it)} className="nc-row-host"
                   style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: SP.sm,
                     padding: '3px 6px 3px 10px', minHeight: 26, cursor: 'pointer', borderRadius: RADIUS.sm,
                     background: isDrag ? rgba(it.color, 0.12) : 'transparent', transition: 'background .12s' }}>
@@ -312,9 +340,12 @@ export function TaskRiverPanel({
                     </span>
                     {it.reason && <span style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, fontStyle: 'italic', flexShrink: 0, whiteSpace: 'nowrap', marginLeft: 'auto', paddingLeft: 6 }}>{it.reason}</span>}
                   </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                  <span className="nc-row-actions" style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                     <button onPointerDown={onHandleDown(it.id)} onTouchStart={onHandleDown(it.id)} title="Drag to reorder" style={{ ...mini(C, false), cursor: 'grab', touchAction: 'none' }}>{suiteIcon('drag_indicator', ICON.sm)}</button>
-                    {it.type === 'task' && <button onClick={() => act(it)} title="Done" style={{ ...mini(C, false), color: it.color }}>{suiteIcon('check', ICON.sm)}</button>}
+                    {rowActions(it).map(a => (
+                      <button key={a.icon} onClick={a.run} title={a.title} aria-label={a.title}
+                        style={{ ...mini(C, false), ...(a.color ? { color: a.color } : {}) }}>{suiteIcon(a.icon, ICON.sm)}</button>
+                    ))}
                   </span>
                 </div>
               );

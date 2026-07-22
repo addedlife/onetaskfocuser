@@ -4020,6 +4020,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           topOffset={noticeTopOffset}
           clockTime={clockTime}
           onCompleteTask={id => compTask(id)}
+          onDeleteTask={id => delTask(id)}
           onOpenTasks={() => { openCommandView("focus"); switchTab("focus"); }}
           onOpenShailos={() => { setShailosAction(null); openCommandView("shailos"); }}
           onOpenPhone={() => openCommandView("deskphone")}
