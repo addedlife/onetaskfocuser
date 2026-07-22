@@ -90,7 +90,9 @@ function Get-FirstUserMessage {
 }
 
 function Format-Headline {
-  param([string]$Text, [int]$Max = 30)
+  # A whole row to itself now, so it can carry a lot more of the title than when it
+  # was sharing the bar with the input.
+  param([string]$Text, [int]$Max = 52)
   if (-not $Text) { return $null }
   $t = ($Text -replace '\s+', ' ').Trim()
   if ($t.Length -gt $Max) { $t = $t.Substring(0, $Max - 1).TrimEnd() + [string][char]0x2026 }
@@ -113,27 +115,42 @@ if (-not $fullTitle) { $fullTitle = if ($projName) { $projName } else { 'Claude 
 [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="BackSeatDriver" Width="460" Height="48"
+        Title="BackSeatDriver" Width="460" Height="66"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize"
         WindowStartupLocation="Manual" SizeToContent="Manual">
   <Border x:Name="Shell" CornerRadius="9" Background="#FF16181C"
           BorderBrush="#FF2E333B" BorderThickness="1">
-    <Grid Margin="11,0,7,0">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="Auto"/>
-      </Grid.ColumnDefinitions>
+    <Grid Margin="11,4,6,7">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
 
-      <TextBlock Grid.Column="0" x:Name="TitleText" Text="" Foreground="#FF767D87"
-                 FontFamily="Segoe UI" FontSize="11" VerticalAlignment="Center"
-                 MaxWidth="150" TextTrimming="CharacterEllipsis" Margin="0,0,9,0"/>
+      <!-- Title sits on its own line above the input, so it gets the full width
+           instead of competing with the box for it. -->
+      <Grid Grid.Row="0">
+        <TextBlock x:Name="TitleText" Text="" Foreground="#FF767D87"
+                   FontFamily="Segoe UI" FontSize="10.5" VerticalAlignment="Center"
+                   HorizontalAlignment="Left" TextTrimming="CharacterEllipsis"
+                   Margin="1,0,58,0"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                    VerticalAlignment="Center">
+          <TextBlock x:Name="Pill" Text="" Foreground="#FFD9A441"
+                     FontFamily="Segoe UI" FontSize="11" FontWeight="SemiBold"
+                     VerticalAlignment="Center" Margin="0,0,6,0"/>
+          <Border x:Name="CloseBtn" Width="20" Height="20" CornerRadius="5"
+                  Background="Transparent" Cursor="Hand">
+            <TextBlock x:Name="CloseGlyph" Text="&#215;" Foreground="#FF8A9099"
+                       FontFamily="Segoe UI" FontSize="14"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+        </StackPanel>
+      </Grid>
 
-      <Border Grid.Column="1" CornerRadius="6" Background="#FF1E2126"
+      <Border Grid.Row="1" CornerRadius="6" Background="#FF1E2126"
               BorderBrush="#FF2E333B" BorderThickness="1" Height="30"
-              VerticalAlignment="Center">
+              VerticalAlignment="Bottom" Margin="0,4,1,0">
         <Grid>
           <TextBlock x:Name="Hint" Text="steer..." Foreground="#FF5A616B"
                      FontFamily="Segoe UI" FontSize="12.5" Margin="9,0,9,0"
@@ -143,18 +160,6 @@ if (-not $fullTitle) { $fullTitle = if ($projName) { $projName } else { 'Claude 
                    FontFamily="Segoe UI" FontSize="12.5" AcceptsReturn="False"
                    VerticalContentAlignment="Center"/>
         </Grid>
-      </Border>
-
-      <TextBlock Grid.Column="2" x:Name="Pill" Text="" Foreground="#FFD9A441"
-                 FontFamily="Segoe UI" FontSize="11.5" FontWeight="SemiBold"
-                 VerticalAlignment="Center" Margin="8,0,2,0"/>
-
-      <Border Grid.Column="3" x:Name="CloseBtn" Width="24" Height="24" CornerRadius="6"
-              Background="Transparent" Cursor="Hand" VerticalAlignment="Center"
-              Margin="4,0,0,0">
-        <TextBlock x:Name="CloseGlyph" Text="&#215;" Foreground="#FF8A9099"
-                   FontFamily="Segoe UI" FontSize="15"
-                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
       </Border>
     </Grid>
   </Border>
@@ -181,7 +186,7 @@ $wa = [System.Windows.SystemParameters]::WorkArea
 $slot = 0
 foreach ($c in $SessionId.ToCharArray()) { $slot = ($slot + [int]$c) % 6 }
 $win.Left = $wa.Right  - $win.Width - 22
-$win.Top  = $wa.Bottom - $win.Height - 22 - ($slot * 58)
+$win.Top  = $wa.Bottom - $win.Height - 22 - ($slot * 76)
 
 # PowerShell will not reliably coerce a hex string into a Brush on property assignment,
 # so every runtime colour change goes through an explicit converter.

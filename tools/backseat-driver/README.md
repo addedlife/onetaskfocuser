@@ -4,14 +4,18 @@ A small always-on-top window, one per Claude Code session, for steering a turn t
 already running — without sending a new message and re-paying the context.
 
 ```
-┌───────────────────────────────────────────────────┐
-│ BackSeatDriver ste…  │ use outlined chips │  1  × │
-└───────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│ BackSeatDriver steering prompt window        1   × │
+│ ┌────────────────────────────────────────────────┐ │
+│ │ use outlined chips here, not filled            │ │
+│ └────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────┘
 ```
 
-One bar, 460×48, always on top. Type, press **Enter**, and it is on its way. The window is
-already the size a collapsed one would be, so there is no minimise: it would only hide the
-one thing the window exists to show.
+One bar, 460×66, always on top. The title has its own line so it gets the full width instead
+of competing with the box for it; the input runs edge to edge underneath. Type, press
+**Enter**, and it is on its way. There is no minimise: the bar is already as small as the
+window gets, and hiding it would hide the one thing it exists to show.
 
 The **pill** on the right is the entire status surface — a count in amber while notes wait
 for the next tool call, then a green tick for a few seconds once they have been folded into
