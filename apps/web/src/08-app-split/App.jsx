@@ -382,6 +382,15 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const defS = {
     lists: [{id:"default", name:"My Tasks", tasks:[]}],
     activeListId: "default",
+    // Shailos whose task pair the owner has finished with — deleted by hand, or
+    // completed all the way through. The shaila↔task sync recreates a task pair for
+    // any pending shaila that has no linked task in state, and the ONLY memory that
+    // the pair ever existed was the tasks themselves; delete them (or let a purge of
+    // completed tasks take them) and the very next snapshot helpfully put them back.
+    // Owner ticket dZBU6xc (7/22): "found some completed or deleted tasks reappeared
+    // in the task queue." Lives in app state, not localStorage, so a task retired on
+    // the PC does not come back from the tablet.
+    retiredShailaIds: [],
     priorities: [
       {...BEFORE_SHAVUOS_PRIORITY},
       {id:"now",        label:"1", color:GV_CLEAN.accent, weight:3},
@@ -1385,6 +1394,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         const toAdd = [];
         const toCompleteIds = new Set();
         const toDeleteIds = new Set();
+        // Shailos the owner has finished with — never recreate their task pair.
+        const retired = new Set(Array.isArray(prev.retiredShailaIds) ? prev.retiredShailaIds : []);
+        const newlyRetired = [];
 
         const addedShailaIds = new Set(); // prevent dupes within this batch
         shailos.forEach(s => {
@@ -1394,6 +1406,13 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           // Skip shailaIds that were just pre-assigned but haven't made it into state yet
           if (pendingShailaIds.current.has(s.id)) return;
           if (addedShailaIds.has(s.id)) return; // already adding in this batch
+          if (retired.has(s.id)) return;        // owner deleted/finished this pair
+          // Every linked task done ⇒ retire the link now, while the tasks still exist
+          // to prove it. Otherwise a later purge of completed tasks looks identical to
+          // "this shaila never had tasks" and the pair comes back (ticket dZBU6xc).
+          if (linkedTasks.length && linkedTasks.every(t => t.completed)) {
+            newlyRetired.push(s.id);
+          }
           if (!linkedTasks.length && !isAnswered && !isGotBack) {
             // Use synopsis as concise title; fall back to content
             const parentText = s.synopsis || s.content || s.parsedShaila || "New shaila";
@@ -1441,7 +1460,15 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           });
         }
 
-        if (!toAdd.length && !toCompleteIds.size && !toDeleteIds.size) return prev;
+        // Keep the retired list bounded and honest: drop ids whose shaila doc is gone.
+        // Only on a server snapshot — a cached one can be missing docs that simply
+        // haven't synced yet, same reason the deletion sweep above is gated.
+        const merged = new Set([...retired, ...newlyRetired]);
+        const nextRetired = fromCache ? [...merged] : [...merged].filter(id => shailaIdSet.has(id));
+        const retiredChanged = nextRetired.length !== retired.size
+          || nextRetired.some(id => !retired.has(id));
+
+        if (!toAdd.length && !toCompleteIds.size && !toDeleteIds.size && !retiredChanged) return prev;
 
         if (toAdd.length) {
           // Register new shailaIds as pending BEFORE state update so the next
@@ -1466,7 +1493,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           if (toAdd.length && l.id === activeId) tasks = optTasks([...tasks, ...toAdd], pris);
           return tasks !== l.tasks ? {...l, tasks} : l;
         });
-        return {...prev, lists: newLists};
+        return {...prev, lists: newLists, retiredShailaIds: nextRetired};
       });
     });
     return unsub;
@@ -2304,6 +2331,17 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     }
   }
 
+  // Mark a shaila as "its tasks are done with", so the shaila↔task sync stops
+  // recreating the pair. See defS.retiredShailaIds.
+  function retireShaila(shailaId) {
+    if (!shailaId) return;
+    setAS(p => {
+      if (!p) return p;
+      const cur = Array.isArray(p.retiredShailaIds) ? p.retiredShailaIds : [];
+      return cur.includes(shailaId) ? p : { ...p, retiredShailaIds: [...cur, shailaId] };
+    });
+  }
+
   function delTask(id) {
     const task = tasks.find(t => t.id === id);
     uT(ts => ts.filter(t => t.id !== id));
@@ -2313,6 +2351,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       deletedTmr.current = setTimeout(() => setDeletedUndo(null), 6000);
       // If shaila task with a linked shaila doc, prompt user
       if (task.shailaId && task.priority === "shaila") {
+        // Retire the link first. Whichever way the prompt goes — keep the shaila or
+        // delete it — the owner is done with THIS task, and without this the sync
+        // recreates the pair on the next snapshot because the shaila is still pending.
+        retireShaila(task.shailaId);
         setShailaDelPrompt({ shailaId: task.shailaId, taskText: task.text });
       }
     }

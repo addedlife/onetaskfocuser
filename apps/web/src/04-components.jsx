@@ -1758,7 +1758,9 @@ function ShailaMiniPill({status, shailaNum, onToggle, size="mini", answerSnippet
           {answerSnippet && (
             // Two-line clamp rather than a single nowrap line (owner ticket SpQAn5lM:
             // a cut-off answer summary is worse than none). The summary itself is now
-            // capped at 8 words upstream, so this rarely has to do anything.
+            // capped at 18 words upstream (raised from 8 for ticket SMu81hE: eight
+            // words could only hold the answer's opening clause, so every condition
+            // got dropped), which two lines clears at any realistic card width.
             <div style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:accentColor,opacity:.75,fontStyle:"italic",marginTop:2,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",wordBreak:"break-word"}}>
               {answerSnippet}
             </div>

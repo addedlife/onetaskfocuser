@@ -15,6 +15,20 @@ import {
   findPotentialMatches, generateAnswerSummary, generateSynopsis,
   performResearch, transcribeAndParse, transcribeAudio,
 } from '../shailos-ai.js';
+import { publishContentResult, releaseContentClaim, shouldRunForContentAndClaim } from '../ai-call-throttle.js';
+
+// Stable short fingerprint of an answer, used as the content key for the AI claim
+// (see the save handler). Same text ⇒ same key on every device, so the summary for a
+// given answer is generated exactly once no matter how often the shaila is re-saved.
+function answerContentKey(text) {
+  const s = String(text || '');
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `${s.length}-${h.toString(36)}`;
+}
 
 const MIC_CONSTRAINTS = {
   audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -558,12 +572,47 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
       }
       const status = shaila.status === 'got_back' ? 'got_back' :
         (shaila.answer || '').trim() !== '' ? 'answered' : 'pending';
-      // Regenerate answer summary whenever answer is present and has changed (or summary missing)
+      // Regenerate the answer summary when the answer is present and has changed, or
+      // when the summary is missing.
+      //
+      // Owner ticket FpbwpXD (7/22): the AI call manager flagged shaila-answer-summary
+      // at 21 calls in a day against a ~2/day average. Cause was this block, unguarded:
+      // a failed generation (the 503s and timeouts of 7/20–7/22) left answerSummary as
+      // '', which is exactly the `!answerSummary` condition that triggers it — so every
+      // later save of that shaila asked again, and marking "got back" or editing any
+      // other field goes through this same save path. Nothing deduplicated across
+      // devices either, so the PC, tablet and iPad each paid for the same summary.
+      //
+      // Routed through the content-keyed claim the email summaries and dashboard
+      // snapshot already use: one call per distinct answer text across all devices,
+      // losers adopt the winner's published summary, and a hard per-device time gate
+      // means even a totally broken claim path costs one call per 10 minutes rather
+      // than one per save.
       const prevShaila = shailos.find(s => s.id === shaila.id);
       const answerChanged = (shaila.answer || '') !== (prevShaila?.answer || '');
       let answerSummary = shaila.answerSummary || '';
-      if ((shaila.answer || '').trim() && (answerChanged || !answerSummary)) {
-        try { answerSummary = await generateAnswerSummary(user, shaila.answer); } catch { /* keep old */ }
+      const answerText = (shaila.answer || '').trim();
+      if (answerText && (answerChanged || !answerSummary)) {
+        const claimKey   = `shaila-answer-summary-${shaila.id || 'draft'}`;
+        const contentKey = answerContentKey(answerText);
+        const { run, cachedResult } = await shouldRunForContentAndClaim(claimKey, contentKey, 10 * 60 * 1000);
+        if (run) {
+          try {
+            const generated = await generateAnswerSummary(user, shaila.answer);
+            if (generated) {
+              answerSummary = generated;
+              publishContentResult(claimKey, contentKey, generated);
+            } else {
+              // Empty is a failure, not an answer — don't leave the claim held or the
+              // next real attempt is skipped as "already scanned".
+              releaseContentClaim(claimKey, contentKey);
+            }
+          } catch {
+            releaseContentClaim(claimKey, contentKey);   // keep the old summary
+          }
+        } else if (typeof cachedResult === 'string' && cachedResult) {
+          answerSummary = cachedResult;                  // another device already did it
+        }
       }
       const payload = {
         date: shaila.date,
@@ -846,7 +895,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                         })();
                         // Wraps to two lines instead of a single nowrap line (owner ticket
                         // SpQAn5lM: "if the text gets cut off its totally useless"). The
-                        // summary prompt is now capped at 8 words, so two lines clears it
+                        // summary prompt is capped at 18 words, so two lines clears it
                         // at any realistic card width — the clamp is the backstop, not the
                         // mechanism.
                         return <div style={{ fontSize: NC_TYPE.small, fontStyle: 'italic', color: shaila.status === 'got_back' ? C.success : GOLD, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-word', marginTop: 2 }}>{snippet}</div>;

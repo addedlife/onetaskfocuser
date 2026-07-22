@@ -1424,7 +1424,9 @@ const AI_JOB_REGISTRY = {
     model: QUOTA_FALLBACK_GEMINI_MODEL,
     task: "shaila-answer-summary",
     output: "text",
-    genConfig: { temperature: 0.1, maxOutputTokens: 64 },
+    // 18 words needs headroom the old 64-token cap did not leave — a summary cut off
+    // by the token limit is the same clipped-condition bug arriving by a different door.
+    genConfig: { temperature: 0.1, maxOutputTokens: 128 },
     buildPrompt(input = {}) {
       // Owner ticket SpQAn5lM (7/22): "almost useless as is... the way the response
       // is framed is incompatible with many shailos and comes out ridiculously
@@ -1442,10 +1444,27 @@ const AI_JOB_REGISTRY = {
       // The fix is to stop templating. Summarize whatever the answer actually says, in
       // the answer's own terms, and stay short enough to fit. Accuracy now comes from
       // NOT imposing a frame rather than from spending words describing one.
+      //
+      // Owner ticket SMu81hE (7/22, filed against the above): "answer line is better,
+      // but it's only grabbing the first sentence — it should summarize the nuances and
+      // conditions of the answer." The un-templating was right; the 8-word budget that
+      // shipped with it was not. Eight words cannot hold a qualified psak, so the
+      // cheapest way for the model to comply was to emit the answer's opening clause and
+      // stop — which reads as a clean summary while silently dropping the "but only
+      // if…", "unless…", "bedieved…" that is usually the whole point of the shaila.
+      // Clipping is a worse failure than length: a ruling without its condition is not a
+      // short summary, it is a wrong one.
+      //
+      // So: budget widened to 18 words (both display sites clamp to two lines, which
+      // holds that at any realistic card width), and the prompt now names dropped
+      // conditions as THE failure mode and says explicitly to compress rather than stop
+      // early.
       return compactLines([
         YESHIVISH_SYSTEM,
-        "Summarize this answer in at most 8 words, in plain language.",
-        "Say what the answer actually says, in its own terms. Do not impose any structure on it, and do not add framing, caveats, reasoning or sourcing the answer does not itself contain.",
+        "Summarize this answer in at most 18 words, in plain language.",
+        "Cover the whole answer, not just its opening. If the answer is conditional, qualified, or splits by case, those conditions ARE the answer — stating the ruling and dropping them is a WRONG summary, not a short one.",
+        "Compress, never clip. Shorten by tightening the wording, not by stopping early; use 'but', 'unless', 'if', 'only when' to fit the qualifications in.",
+        "Stay in the answer's own terms. Do not impose a structure it does not have, and do not add framing, caveats, reasoning or sourcing the answer does not itself contain.",
         "If the answer uses a term (mutar, assur, bedieved, lechatchila, a subject noun), keep that term. If it does not, do not introduce one.",
         "Never reverse or soften what the answer says.",
         "No trailing period.",
