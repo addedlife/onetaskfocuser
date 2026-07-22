@@ -1,7 +1,7 @@
 // Bump this version whenever stale-asset purging is needed; the activate handler
 deletes every cache that doesn't match, so installed PWAs drop old bundles on update.
-const CACHE_NAME = "onetask-offline-v7";
-const STATIC_URLS = ["/", "/index.html", "/manifest.webmanifest"];
+const CACHE_NAME = "onetask-offline-v8";
+const STATIC_URLS = ["/", "/index.html", "/manifest.webmanifest", "/fonts/material-symbols-rounded.woff2"];
 
 function shouldRuntimeCache(request) {
   if (request.method !== "GET") return false;
@@ -109,7 +109,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.origin === self.location.origin) {
-    if (url.pathname.startsWith("/assets/") || url.pathname === "/manifest.webmanifest") {
+    if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/fonts/") || url.pathname === "/manifest.webmanifest") {
       event.respondWith(cacheFirst(event.request));
       return;
     }
