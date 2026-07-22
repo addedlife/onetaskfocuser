@@ -156,7 +156,38 @@ function _googleErrorMessage(e) {
 }
 
 // Localhost-only dev bypass — creates a mock user so the preview can render the full app.
-window.__OT_DEV = (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"));
+//
+// The bypass has a real cost: the mock user carries no Firebase auth token, so every
+// Firestore read on localhost is denied and the preview renders a fully empty app with a
+// "Could not reach Firebase" banner. Worse, because AuthGate short-circuits on
+// __OT_DEV, the sign-in screen never appears — so there was no way to sign in for real
+// on localhost at all, and no way to see the app with actual data while developing.
+//
+// `?realauth=1` opts out of the bypass and runs the normal Google sign-in flow against
+// the live project. localhost is already an authorized domain in Firebase Auth (the
+// OAuth handler lives on onetaskonly-app.firebaseapp.com, also authorized), so this
+// needs no console change. The choice is remembered in localStorage so it survives
+// reloads and in-app navigation; `?realauth=0` clears it and restores the mock user.
+//
+// Default behaviour is UNCHANGED: plain localhost still gets the mock user.
+const _OT_REAL_AUTH_KEY = "ot_dev_real_auth";
+function _wantsRealAuth() {
+  if (typeof window === "undefined") return false;
+  let stored = false;
+  try { stored = localStorage.getItem(_OT_REAL_AUTH_KEY) === "1"; } catch (_) {}
+  const param = new URLSearchParams(window.location.search).get("realauth");
+  if (param === "1" || param === "0") {
+    stored = param === "1";
+    try {
+      if (stored) localStorage.setItem(_OT_REAL_AUTH_KEY, "1");
+      else localStorage.removeItem(_OT_REAL_AUTH_KEY);
+    } catch (_) {}
+  }
+  return stored;
+}
+const _OT_IS_LOCAL = typeof window !== "undefined"
+  && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+window.__OT_DEV = _OT_IS_LOCAL && !_wantsRealAuth();
 window.__OT_DEV_USER = window.__OT_DEV ? {
   uid: "dev_test_user",
   email: "devtest@onetaskapp.local",
