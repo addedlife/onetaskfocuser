@@ -47,7 +47,11 @@ winps=$(cygpath -w "$HERE/window.ps1" 2>/dev/null) || winps="$HERE/window.ps1"
 # The script path is quoted inside the argument list: Start-Process joins the array
 # with spaces and does no quoting of its own, so an unquoted path containing spaces
 # (as every path under "Documents\Shamash Pro 4 App" does) is split into fragments.
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
+# -WindowStyle Hidden on BOTH: the inner one hides the window process, but without it on
+# the outer launcher too, Windows paints a bare console window for the fraction of a
+# second it takes to run Start-Process — an unlabelled box flashing on screen every time
+# a session starts.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command \
   "Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File','\"$winps\"','-SessionId','$sid')" \
   >/dev/null 2>&1 || true
 

@@ -8,11 +8,16 @@
 # This finds them by COMMAND LINE rather than by pid file, which is the only method that
 # works when the state directory is gone.
 #
-#   .\sweep.ps1            close windows with no live session behind them
-#   .\sweep.ps1 -All       close every BackSeatDriver window
-#   .\sweep.ps1 -WhatIf    list what would be closed, change nothing
+#   .\sweep.ps1                 close windows with no live session behind them
+#   .\sweep.ps1 -All            close every BackSeatDriver window
+#   .\sweep.ps1 -SessionId <id> close only that session's window
+#   .\sweep.ps1 -WhatIf         list what would be closed, change nothing
+#
+# -All is a blunt instrument: it takes down windows belonging to other, still-running
+# sessions, which from those chats looks like a window vanishing for no reason. Prefer
+# -SessionId when you only mean to restart your own.
 [CmdletBinding()]
-param([switch]$All, [switch]$WhatIf)
+param([switch]$All, [switch]$WhatIf, [string]$SessionId)
 
 $ErrorActionPreference = 'Stop'
 $SessDir = Join-Path $env:USERPROFILE '.claude\sessions'
@@ -38,7 +43,8 @@ function Get-BsdWindows {
     Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match $rx }
 }
 
-$windows = Get-BsdWindows
+$windows = Get-BsdWindows -Session $SessionId
+if ($SessionId) { $All = $true }   # naming one session is itself the instruction to close it
 
 if (-not $windows) { Write-Host 'no BackSeatDriver windows running'; return }
 
