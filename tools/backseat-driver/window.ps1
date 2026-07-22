@@ -1,4 +1,4 @@
-# BackSeatDriver — the steering window.
+﻿# BackSeatDriver — the steering window.
 #
 # A small always-on-top WPF panel, one per Claude Code session. Whatever is typed
 # here is written to ~/.claude/backseat/<session>/inbox as a single .note file, which

@@ -1,4 +1,4 @@
-# BackSeatDriver — uninstaller.
+﻿# BackSeatDriver — uninstaller.
 #
 # Removes only the hook groups whose command path points into
 # ~/.claude/hooks/backseat, so any other hooks in settings.json survive untouched.
@@ -44,6 +44,8 @@ Get-ChildItem (Join-Path $state '*\window.pid') -EA SilentlyContinue | ForEach-O
   $wpid = (Get-Content $_.FullName -EA SilentlyContinue)
   if ($wpid) { Stop-Process -Id $wpid -Force -EA SilentlyContinue }
 }
+
+Remove-Item (Join-Path ([Environment]::GetFolderPath('Desktop')) 'BackSeatDriver.lnk') -Force -EA SilentlyContinue
 
 if (-not $KeepScripts) {
   Remove-Item $dst -Recurse -Force -EA SilentlyContinue

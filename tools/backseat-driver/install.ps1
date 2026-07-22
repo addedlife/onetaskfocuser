@@ -1,4 +1,4 @@
-# BackSeatDriver — installer.
+﻿# BackSeatDriver — installer.
 #
 # Copies the hook scripts to ~/.claude/hooks/backseat and registers four hooks in the
 # GLOBAL settings file, so BackSeatDriver runs in every Claude Code session on this
@@ -16,10 +16,28 @@ $dst      = Join-Path $env:USERPROFILE '.claude\hooks\backseat'
 $settings = Join-Path $env:USERPROFILE '.claude\settings.json'
 
 New-Item -ItemType Directory -Path $dst -Force | Out-Null
-foreach ($f in 'lib.sh', 'start.sh', 'drain.sh', 'stop.sh', 'end.sh', 'window.ps1', 'sweep.ps1') {
+foreach ($f in 'lib.sh', 'start.sh', 'drain.sh', 'stop.sh', 'end.sh', 'window.ps1', 'sweep.ps1', 'reopen.ps1') {
   Copy-Item (Join-Path $src $f) (Join-Path $dst $f) -Force
 }
 Write-Host "copied scripts -> $dst"
+
+# Desktop shortcut for reopen. Closing the window by mistake otherwise leaves no way
+# back except starting a new session — which loses the context the window exists to
+# protect — so recovery must not depend on having a terminal open.
+try {
+  $lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'BackSeatDriver.lnk'
+  $sh  = New-Object -ComObject WScript.Shell
+  $s   = $sh.CreateShortcut($lnk)
+  $s.TargetPath       = 'powershell.exe'
+  $s.Arguments        = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$dst\reopen.ps1`""
+  $s.WorkingDirectory = $dst
+  $s.IconLocation     = 'imageres.dll,76'
+  $s.Description      = 'Reopen the BackSeatDriver steering window for the session on screen'
+  $s.Save()
+  Write-Host "desktop shortcut -> $lnk"
+} catch {
+  Write-Warning "could not create the desktop shortcut: $($_.Exception.Message)"
+}
 
 # Hooks run under Git Bash, which reads C:/... happily but not C:\...
 $bashDst = ($dst -replace '\\', '/')

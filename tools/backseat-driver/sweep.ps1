@@ -1,4 +1,4 @@
-# BackSeatDriver — close orphaned steering windows.
+﻿# BackSeatDriver — close orphaned steering windows.
 #
 # Windows are normally shut down through their session's `dead` marker or the liveness
 # check. Neither reaches a window left over from an older build of window.ps1, or one
@@ -26,8 +26,19 @@ foreach ($f in Get-ChildItem (Join-Path $SessDir '*.json') -EA SilentlyContinue)
   } catch { }
 }
 
-$windows = Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -EA SilentlyContinue |
-  Where-Object { $_.CommandLine -like '*backseat*window.ps1*' }
+# Match the actual invocation form -- `-File <...>\backseat\window.ps1 -SessionId <id>` --
+# not merely a command line that mentions the path. A loose substring test also matches
+# any process that happens to CONTAIN that text, such as a shell running a search for it,
+# and this script's whole job is to kill what it matches.
+function Get-BsdWindows {
+  param([string]$Session)
+  $tail = if ($Session) { [regex]::Escape($Session) + '\b' } else { '\S+' }
+  $rx = '-File\s+"?[^"]*backseat[\\/]window\.ps1"?\s+-SessionId\s+' + $tail
+  Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -EA SilentlyContinue |
+    Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match $rx }
+}
+
+$windows = Get-BsdWindows
 
 if (-not $windows) { Write-Host 'no BackSeatDriver windows running'; return }
 

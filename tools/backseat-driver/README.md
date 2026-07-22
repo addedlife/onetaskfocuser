@@ -116,6 +116,40 @@ and the main thread would never see it. `drain.sh` bails when the payload carrie
 `stop.sh` blocks only when notes exist, and every pass **deletes** the notes it read. Notes
 appear only from a deliberate click. No notes, no block.
 
+## Getting the window back
+
+Closing it — deliberately or by fat-finger — otherwise leaves no way back except starting a
+new session, which loses exactly the context the window exists to protect.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/backseat-driver/reopen.ps1
+```
+
+Reopens for the session **currently on screen**; `-SessionId <id>` targets a specific one and
+`-List` shows every live session and whether it has a window. It refuses to open a second
+window for a session that already has one, and rebuilds the state directory if it was cleaned
+up, so it works standalone rather than only as an undo. Install also drops a
+**BackSeatDriver** shortcut on the Desktop pointing at it — recovery shouldn't depend on
+having a terminal open.
+
+This is deliberately **not** automatic. The drain hook could notice a missing window and
+respawn it after every tool call, but then closing it on purpose would be impossible.
+
+### Orphans
+
+A window left over from an older build, or one whose state directory was deleted underneath
+it, has nothing left to poll and no working close button — it just sits there. Normal cleanup
+goes through the pid file in that state directory, which is the one thing an orphan no longer
+has.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/backseat-driver/sweep.ps1
+```
+
+Finds windows by **command line** instead, which still works when the state directory is gone.
+Bare, it closes only windows with no live session behind them; `-All` closes every window,
+`-WhatIf` lists without changing anything.
+
 ## Install
 
 ```powershell
@@ -144,7 +178,7 @@ Removes only the entries pointing into `~/.claude/hooks/backseat/`; other hooks 
 State lives in `~/.claude/backseat/<session_id>/` — `inbox/`, `consumed.md` (audit trail of
 everything folded into a turn), `meta.json`, `window.pid`.
 
-## Five traps worth remembering
+## Traps worth remembering
 
 - **`$Input` is a PowerShell automatic variable.** Assigning a control to it works at script
   scope but resolves to the empty pipeline enumerator inside every function and scriptblock.
@@ -169,4 +203,19 @@ everything folded into a turn), `meta.json`, `window.pid`.
   `$ErrorActionPreference = 'Stop'`, any non-terminating error inside a `DispatcherTimer` tick
   becomes terminating and takes the whole process down with no output. The tick body is wrapped
   in `try/catch` that appends to `window-error.log` in the session's state directory — without
-  it, every timer bug looks identical from the outside.
+  it, every timer bug looks identical from the outside. Every path that *deliberately* ends a
+  window logs to `window-life.log` for the same reason: a window that vanishes with no
+  explanation is indistinguishable from one that crashed.
+- **PowerShell 5.1 reads `.ps1` files as ANSI unless they carry a UTF-8 BOM.** Without one,
+  every em-dash and ellipsis in the source silently becomes mojibake — in comments, and in the
+  strings the window actually displays. All scripts here are UTF-8 **with** BOM; tools that
+  rewrite them (most editors default to BOM-less UTF-8) will break the glyphs again.
+- **PowerShell 5.1 cannot parse a double-quoted string whose `$(...)` subexpression contains
+  double quotes.** `"a $(if ($x) { " - $x" })"` is a parse error in 5.1 though it is fine in 7.
+  Build the string in two steps.
+- **Matching processes by command-line substring matches too much.** `-like '*window.ps1*'`
+  also matches any shell whose command line merely *mentions* that text — including one running
+  a search for it. That made `reopen` believe a window was already open, and for `sweep`, whose
+  entire job is killing what it matches, it is worse than a false positive. Both now require
+  the real invocation form, `-File <...>\backseat\window.ps1 -SessionId <id>`, and exclude
+  their own process.
