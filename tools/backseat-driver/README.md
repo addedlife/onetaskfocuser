@@ -116,6 +116,16 @@ and the main thread would never see it. `drain.sh` bails when the payload carrie
 `stop.sh` blocks only when notes exist, and every pass **deletes** the notes it read. Notes
 appear only from a deliberate click. No notes, no block.
 
+## Collapsing it
+
+The **−** button rolls the window up to just its title bar; **+** (or a double-click on the
+bar) brings it back. It stays docked to the corner it was in, and keeps showing the pending
+count — "2 waiting" — since that is the one thing still worth knowing with the input hidden.
+
+It is a collapse, **not** `WindowState = Minimized`, and that is deliberate: this window sets
+`ShowInTaskbar="False"`, so a real minimize would send it somewhere with no taskbar button to
+restore it — an unrecoverable close wearing a minimize button.
+
 ## Getting the window back
 
 Closing it — deliberately or by fat-finger — otherwise leaves no way back except starting a

@@ -133,21 +133,35 @@ if (-not $headline) {
       <Grid Grid.Row="0" x:Name="DragBar" Background="Transparent">
         <TextBlock x:Name="TitleText" Text="Claude Code" Foreground="#FFE6E8EB"
                    FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"
-                   TextTrimming="CharacterEllipsis" Margin="0,0,28,0"/>
-        <Border x:Name="CloseBtn" Width="24" Height="24" CornerRadius="6"
-                Background="Transparent" HorizontalAlignment="Right"
-                VerticalAlignment="Top" Margin="0,-4,-4,0" Cursor="Hand">
-          <TextBlock x:Name="CloseGlyph" Text="&#215;" Foreground="#FF8A9099"
-                     FontFamily="Segoe UI" FontSize="15"
-                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
-        </Border>
+                   TextTrimming="CharacterEllipsis" Margin="0,0,56,0"/>
+        <!-- Glyphs are XML entities, not literal characters: the source stays pure
+             ASCII, so they survive even if the file loses its UTF-8 BOM. -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                    VerticalAlignment="Top" Margin="0,-4,-4,0">
+          <TextBlock x:Name="MiniStatus" Text="" Foreground="#FFD9A441"
+                     FontFamily="Segoe UI" FontSize="10.5" VerticalAlignment="Center"
+                     Margin="0,0,8,0" Visibility="Collapsed"/>
+          <Border x:Name="MinBtn" Width="24" Height="24" CornerRadius="6"
+                  Background="Transparent" Cursor="Hand"
+                  ToolTip="Collapse to a bar">
+            <TextBlock x:Name="MinGlyph" Text="&#8722;" Foreground="#FF8A9099"
+                       FontFamily="Segoe UI" FontSize="15"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <Border x:Name="CloseBtn" Width="24" Height="24" CornerRadius="6"
+                  Background="Transparent" Cursor="Hand">
+            <TextBlock x:Name="CloseGlyph" Text="&#215;" Foreground="#FF8A9099"
+                       FontFamily="Segoe UI" FontSize="15"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+        </StackPanel>
       </Grid>
 
       <TextBlock Grid.Row="1" x:Name="SubText" Text="" Foreground="#FF767D87"
                  FontFamily="Segoe UI" FontSize="10.5" Margin="0,1,0,8"
                  TextTrimming="CharacterEllipsis"/>
 
-      <Border Grid.Row="2" CornerRadius="7" Background="#FF1E2126"
+      <Border Grid.Row="2" x:Name="Body" CornerRadius="7" Background="#FF1E2126"
               BorderBrush="#FF2E333B" BorderThickness="1">
         <TextBox x:Name="Input" Background="Transparent" Foreground="#FFE6E8EB"
                  CaretBrush="#FF16A394" BorderThickness="0" Padding="9,7,9,7"
@@ -156,7 +170,7 @@ if (-not $headline) {
                  VerticalContentAlignment="Top"/>
       </Border>
 
-      <Grid Grid.Row="3" Margin="0,9,0,0">
+      <Grid Grid.Row="3" x:Name="Footer" Margin="0,9,0,0">
         <TextBlock x:Name="Status" Text="idle" Foreground="#FF767D87"
                    FontFamily="Segoe UI" FontSize="10.5" VerticalAlignment="Center"
                    TextTrimming="CharacterEllipsis" Margin="0,0,86,0"/>
@@ -180,7 +194,12 @@ $Status     = $win.FindName('Status')
 $SendBtn    = $win.FindName('SendBtn')
 $CloseBtn   = $win.FindName('CloseBtn')
 $CloseGlyph = $win.FindName('CloseGlyph')
+$MinBtn     = $win.FindName('MinBtn')
+$MinGlyph   = $win.FindName('MinGlyph')
+$MiniStatus = $win.FindName('MiniStatus')
 $DragBar    = $win.FindName('DragBar')
+$Body       = $win.FindName('Body')
+$Footer     = $win.FindName('Footer')
 
 $TitleText.Text = $headline
 $TitleText.ToolTip = $headline
@@ -198,7 +217,7 @@ $win.Top  = $wa.Bottom - $win.Height - 22 - ($slot * 34)
 # so every runtime colour change goes through an explicit converter.
 $BrushOf = @{}
 $bc = [System.Windows.Media.BrushConverter]::new()
-foreach ($hex in '#FFD9A441', '#FF16A394', '#FF767D87', '#FF3A2A2C', '#FFE06C75', '#FF8A9099', '#00FFFFFF') {
+foreach ($hex in '#FFD9A441', '#FF16A394', '#FF767D87', '#FF3A2A2C', '#FFE06C75', '#FF8A9099', '#00FFFFFF', '#FF23272E') {
   $BrushOf[$hex] = $bc.ConvertFromString($hex)
 }
 
@@ -234,6 +253,64 @@ $CloseBtn.Add_MouseLeave({
 })
 
 $DragBar.Add_MouseLeftButtonDown({ try { $win.DragMove() } catch { } })
+
+# --- Collapse ------------------------------------------------------------------
+# Deliberately a collapse to a title bar, NOT WindowState = Minimized. This window sets
+# ShowInTaskbar = False, so a real minimize would send it somewhere with no taskbar
+# button to bring it back — an unrecoverable close wearing a minimize button.
+# Collapsed, it keeps showing the pending-note count, which is the one thing still worth
+# knowing when the input is out of the way.
+$script:Collapsed  = $false
+$script:FullHeight = $win.Height
+
+function Set-Collapsed {
+  param([bool]$On)
+  if ($script:Collapsed -eq $On) { return }
+  $script:Collapsed = $On
+
+  if ($On) {
+    $script:FullHeight = $win.Height
+    foreach ($el in @($SubText, $Body, $Footer)) { $el.Visibility = 'Collapsed' }
+    $win.MinHeight  = 0
+    $win.ResizeMode = 'NoResize'
+    $bar = 46
+    # Keep the bottom edge planted so it stays hugging the corner it was docked in.
+    $win.Top    = $win.Top + ($script:FullHeight - $bar)
+    $win.Height = $bar
+    $MinGlyph.Text     = '+'
+    $MinBtn.ToolTip    = 'Expand'
+    $TitleText.Margin  = '0,0,110,0'
+  } else {
+    $win.Height = $script:FullHeight
+    $win.Top    = $win.Top - ($script:FullHeight - 46)
+    foreach ($el in @($SubText, $Body, $Footer)) { $el.Visibility = 'Visible' }
+    $win.MinHeight  = 180
+    $win.ResizeMode = 'CanResize'
+    $MinGlyph.Text     = [string][char]0x2212
+    $MinBtn.ToolTip    = 'Collapse to a bar'
+    $TitleText.Margin  = '0,0,56,0'
+    $MiniStatus.Visibility = 'Collapsed'
+    $InputBox.Focus() | Out-Null
+  }
+}
+
+# Same swallow as the close button: without it DragMove() captures the mouse and the
+# matching MouseUp never arrives.
+$MinBtn.Add_MouseLeftButtonDown({ $_.Handled = $true })
+$MinBtn.Add_MouseLeftButtonUp({ $_.Handled = $true; Set-Collapsed (-not $script:Collapsed) })
+$MinBtn.Add_MouseEnter({
+  $MinBtn.Background   = $BrushOf['#FF23272E']
+  $MinGlyph.Foreground = $BrushOf['#FFE6E8EB']
+})
+$MinBtn.Add_MouseLeave({
+  $MinBtn.Background   = $BrushOf['#00FFFFFF']
+  $MinGlyph.Foreground = $BrushOf['#FF8A9099']
+})
+
+# Double-clicking the bar toggles too — the usual gesture for a collapsed title bar.
+$DragBar.Add_MouseLeftButtonUp({
+  if ($_.ClickCount -eq 2) { Set-Collapsed (-not $script:Collapsed) }
+})
 
 # Ctrl+Enter sends; plain Enter stays a newline so multi-line steering is natural.
 $InputBox.Add_PreviewKeyDown({
@@ -349,6 +426,16 @@ $timer.Add_Tick({
   }
 
   $pending = @(Get-ChildItem (Join-Path $Inbox '*.note') -EA SilentlyContinue).Count
+
+  # Collapsed, the header is the only surface left, so the pending count moves there.
+  if ($script:Collapsed) {
+    if ($pending -gt 0) {
+      $MiniStatus.Text = "$pending waiting"
+      $MiniStatus.Visibility = 'Visible'
+    } else {
+      $MiniStatus.Visibility = 'Collapsed'
+    }
+  }
 
   if ($pending -gt 0) {
     $noun = if ($pending -eq 1) { 'note' } else { 'notes' }
