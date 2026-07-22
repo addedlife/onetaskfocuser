@@ -24,7 +24,7 @@ $MetaPath = Join-Path $Root 'meta.json'
 $DeadPath = Join-Path $Root 'dead'
 $Consumed = Join-Path $Root 'consumed.md'
 $SessDir  = Join-Path $env:USERPROFILE '.claude\sessions'
-$MainLog  = Join-Path $env:APPDATA 'Claude\logs\main.log'
+$StoreDir = Join-Path $env:APPDATA 'Claude\claude-code-sessions'
 $Utf8     = New-Object System.Text.UTF8Encoding($false)
 
 if (-not (Test-Path $Inbox)) { New-Item -ItemType Directory -Path $Inbox -Force | Out-Null }
@@ -33,12 +33,44 @@ if (-not (Test-Path $Inbox)) { New-Item -ItemType Directory -Path $Inbox -Force 
 $meta      = try { Get-Content $MetaPath -Raw -EA Stop | ConvertFrom-Json } catch { $null }
 $projName  = if ($meta -and $meta.cwd) { Split-Path $meta.cwd -Leaf } else { '' }
 
-# --- Title -------------------------------------------------------------------
-# The title shown in the desktop side rail is stored SERVER-side (the sessions API);
-# it is nowhere on disk, and get_session refuses to report the current session. What
-# is local is the transcript, and the side-rail title is derived from its first user
-# message — so that message is the honest local stand-in. Consequence worth knowing:
-# renaming the session in the app will not move this header.
+# --- Session store ------------------------------------------------------------
+# The desktop app keeps a JSON file per session at
+#   %APPDATA%\Claude\claude-code-sessions\<accountId>\<orgId>\local_<uuid>.json
+# holding the real side-rail `title`, a `cliSessionId` that maps straight to the
+# engine session id, and `lastFocusedAt`. That is the authoritative local source for
+# both the header and the on-screen check, so neither has to be inferred.
+$script:StoreFile = $null
+
+function Get-StoreFiles {
+  Get-ChildItem $StoreDir -Recurse -Filter 'local_*.json' -EA SilentlyContinue |
+    Sort-Object LastWriteTime -Descending
+}
+
+function Find-StoreFile {
+  # A couple of hundred files live here, so substring-test the raw text before paying
+  # for a JSON parse, and search newest-first — the session's own file is normally the
+  # most recently written one.
+  foreach ($f in Get-StoreFiles) {
+    try {
+      $txt = [System.IO.File]::ReadAllText($f.FullName)
+      if ($txt -notmatch [regex]::Escape($SessionId)) { continue }
+      $o = $txt | ConvertFrom-Json
+      if ($o.cliSessionId -eq $SessionId) { return $f.FullName }
+    } catch { continue }
+  }
+  return $null
+}
+
+function Read-Store {
+  param([string]$Path)
+  if (-not $Path -or -not (Test-Path $Path)) { return $null }
+  try { return [System.IO.File]::ReadAllText($Path) | ConvertFrom-Json } catch { return $null }
+}
+
+# --- Title fallback ------------------------------------------------------------
+# Only used when there is no store file — a CLI session, for instance, has no entry
+# there. The side-rail title is derived from the first user message, so that message
+# is the closest local stand-in.
 function Get-FirstUserMessage {
   param([string]$Path)
   if (-not $Path -or -not (Test-Path $Path)) { return $null }
@@ -62,12 +94,23 @@ function Get-FirstUserMessage {
   return $null
 }
 
-$first = Get-FirstUserMessage ($(if ($meta) { $meta.transcriptPath } else { $null }))
-if ($first) {
-  $first = ($first -replace '\s+', ' ').Trim()
-  if ($first.Length -gt 54) { $first = $first.Substring(0, 53).TrimEnd() + '…' }
-  $headline = $first
-} else {
+function Format-Headline {
+  param([string]$Text)
+  if (-not $Text) { return $null }
+  $t = ($Text -replace '\s+', ' ').Trim()
+  if ($t.Length -gt 54) { $t = $t.Substring(0, 53).TrimEnd() + '…' }
+  return $t
+}
+
+$script:StoreFile = Find-StoreFile
+$headline = $null
+if ($script:StoreFile) {
+  $headline = Format-Headline (Read-Store $script:StoreFile).title
+}
+if (-not $headline) {
+  $headline = Format-Headline (Get-FirstUserMessage ($(if ($meta) { $meta.transcriptPath } else { $null })))
+}
+if (-not $headline) {
   $headline = if ($projName) { $projName } else { 'Claude Code' }
 }
 
@@ -221,45 +264,23 @@ function Test-SessionAlive {
 }
 
 # --- On-screen check ---------------------------------------------------------
-# The app logs `ping internal session local_X to CLI session <engine uuid>`, which maps
-# our engine session id to the app's internal one, and `setFocusedSession: sessionId=`
-# whenever the visible session changes. Together those answer "is my session the one on
-# screen right now". Tail only the end of the log — it is several MB and growing.
-$script:LocalId = $null
-
-function Read-LogTail {
-  param([string]$Path, [int]$Bytes = 131072)
-  if (-not (Test-Path $Path)) { return $null }
-  try {
-    # ReadWrite share is required: the app holds this file open for writing.
-    $fs = [System.IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite')
-    try {
-      if ($fs.Length -gt $Bytes) { [void]$fs.Seek(-$Bytes, 'End') }
-      $sr = [System.IO.StreamReader]::new($fs)
-      return $sr.ReadToEnd()
-    } finally { $fs.Dispose() }
-  } catch { return $null }
-}
-
+# The visible session is simply the one with the highest `lastFocusedAt`. Only the
+# handful of most recently written store files can hold that maximum, so the scan is
+# bounded rather than parsing all ~200 every tick.
 function Test-SessionOnScreen {
-  $tail = Read-LogTail $MainLog
-  if (-not $tail) { return $null }
+  if (-not $script:StoreFile) { return $null }
+  $me = Read-Store $script:StoreFile
+  if (-not $me -or -not $me.lastFocusedAt) { return $null }
 
-  if (-not $script:LocalId) {
-    $m = [regex]::Matches($tail, "ping internal session (local_[0-9a-fA-F-]+) to CLI session $([regex]::Escape($SessionId))")
-    if ($m.Count -gt 0) { $script:LocalId = $m[$m.Count - 1].Groups[1].Value }
+  $max = [double]$me.lastFocusedAt
+  foreach ($f in (Get-StoreFiles | Select-Object -First 12)) {
+    if ($f.FullName -eq $script:StoreFile) { continue }
+    $o = Read-Store $f.FullName
+    if ($o -and $o.lastFocusedAt -and ([double]$o.lastFocusedAt) -gt $max) {
+      $max = [double]$o.lastFocusedAt
+    }
   }
-  if (-not $script:LocalId) { return $null }
-
-  $f = [regex]::Matches($tail, 'setFocusedSession: sessionId=(local_[0-9a-fA-F-]+|null)')
-  if ($f.Count -eq 0) { return $null }
-
-  $last = $f[$f.Count - 1].Groups[1].Value
-  # null shows up when the app blurs as well as when nothing is selected. Treating it
-  # as "not on screen" would hide the window every time you alt-tab away, which defeats
-  # the point of an always-on-top pad, so it is left indeterminate.
-  if ($last -eq 'null') { return $null }
-  return ($last -eq $script:LocalId)
+  return ([double]$me.lastFocusedAt -ge $max)
 }
 
 $script:Ticks   = 0
@@ -267,7 +288,12 @@ $script:Missing = 0
 
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromSeconds(1)
+# An unhandled exception inside a WPF dispatcher callback terminates the process
+# outright — no stderr, no exit code, the window just vanishes. With
+# $ErrorActionPreference = 'Stop' any non-terminating error in here becomes exactly
+# that, so the whole tick body is wrapped and anything unexpected is logged instead.
 $timer.Add_Tick({
+ try {
   $script:Ticks++
 
   if (Test-Path $DeadPath) { $timer.Stop(); $win.Close(); return }
@@ -284,12 +310,28 @@ $timer.Add_Tick({
       $script:Missing = 0
     }
 
+    # The store file may not exist yet when the window opens; keep looking until it does.
+    if (-not $script:StoreFile -and $script:Ticks % 10 -eq 0) {
+      $script:StoreFile = Find-StoreFile
+    }
+
     $onScreen = Test-SessionOnScreen
-    if ($onScreen -eq $true -and $win.Visibility -ne 'Visible') {
-      $win.Visibility = 'Visible'
+    if ($onScreen -eq $true -and -not $script:Shown) {
+      $win.Show()
       $win.Topmost = $true      # re-assert; it can be dropped while hidden
-    } elseif ($onScreen -eq $false -and $win.Visibility -eq 'Visible') {
-      $win.Visibility = 'Hidden'
+      $script:Shown = $true
+    } elseif ($onScreen -eq $false -and $script:Shown) {
+      $win.Hide()
+      $script:Shown = $false
+    }
+
+    # Follow renames — the store title is the same one shown in the side rail.
+    if ($script:StoreFile -and $script:Ticks % 6 -eq 0) {
+      $t = Format-Headline (Read-Store $script:StoreFile).title
+      if ($t -and $t -ne $TitleText.Text) {
+        $TitleText.Text = $t
+        $TitleText.ToolTip = $t
+      }
     }
   }
 
@@ -313,13 +355,31 @@ $timer.Add_Tick({
     $Status.Text = 'idle — Ctrl+Enter to send'
     $Status.Foreground = $BrushOf['#FF767D87']
   }
+ } catch {
+   try {
+     $msg = '[{0}] tick {1}: {2}: {3}{4}    at line {5}: {6}{4}' -f `
+       (Get-Date -Format 'HH:mm:ss'), $script:Ticks, $_.Exception.GetType().Name,
+       $_.Exception.Message, [Environment]::NewLine,
+       $_.InvocationInfo.ScriptLineNumber, $_.InvocationInfo.Line.Trim()
+     [System.IO.File]::AppendAllText((Join-Path $Root 'window-error.log'), $msg, $Utf8)
+   } catch { }
+ }
 })
 $timer.Start()
 
 $win.Add_Closed({
   $timer.Stop()
   try { Remove-Item (Join-Path $Root 'window.pid') -Force -EA SilentlyContinue } catch { }
+  [System.Windows.Threading.Dispatcher]::CurrentDispatcher.InvokeShutdown()
 })
 
 $win.Add_ContentRendered({ $InputBox.Focus() | Out-Null })
-$win.ShowDialog() | Out-Null
+
+# Show() + a dispatcher loop, deliberately NOT ShowDialog(). ShowDialog is modal, and
+# hiding a modal window ends its dialog loop — so the first time this window hid itself
+# because another session was on screen, ShowDialog returned, the script ran off the end
+# and the process exited. Silently: no error, no exit code, the window just never came
+# back. With Show(), visibility is decoupled from the message loop's lifetime.
+$script:Shown = $true
+$win.Show()
+[System.Windows.Threading.Dispatcher]::Run()

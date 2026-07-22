@@ -5,7 +5,7 @@ already running — without sending a new message and re-paying the context.
 
 ```
 ┌──────────────────────────────────────┐
-│ make me an always on top small di… ×  │
+│ BackSeatDriver steering prompt win… × │
 │ Shamash Pro 4 App                    │
 │ ┌──────────────────────────────────┐ │
 │ │ actually use outlined chips      │ │
@@ -15,19 +15,29 @@ already running — without sending a new message and re-paying the context.
 └──────────────────────────────────────┘
 ```
 
-## The header, and why it is not the side-rail title
+## The header
 
-The title in the desktop side rail lives **server-side** (the sessions API). It is nowhere on
-disk — not in Local Storage, IndexedDB, or any local cache — and `get_session` explicitly
-refuses to report the *current* session, so a local process cannot read it.
+The header is the **real side-rail title**, read from the desktop app's own per-session file:
 
-What is local is the transcript, and the side-rail title is derived from its first user
-message. So the header shows that message, truncated. Every hook is handed `transcript_path`,
-which is how the window finds it. **Consequence:** renaming a session in the app does not move
-this header.
+```
+%APPDATA%\Claude\claude-code-sessions\<accountId>\<orgId>\local_<uuid>.json
+```
 
-The earlier header showed `~/.claude/sessions/<pid>.json`'s `name` field — a derived slug like
-`shamash-pro-4-app-bc`, with `nameSource: "derived"`. That is the machine's name for the
+Each holds `title` (what the side rail shows), `titleSource`, `lastFocusedAt`, and — the key
+field — `cliSessionId`, which maps the app's internal session to the engine `session_id` that
+hooks are given. So the window finds its own file by matching `cliSessionId`, with no
+guessing. It re-reads the title periodically, so renaming a session moves the header too.
+
+There are a couple of hundred of these files, so the search substring-tests the raw text
+before paying for a JSON parse, and goes newest-first — a session's own file is normally the
+most recently written.
+
+If no store file exists (a pure CLI session has none), the fallback is the first user message
+from the transcript, which is what the title is derived from anyway; `transcript_path` comes
+in on the hook payload.
+
+The original header showed `~/.claude/sessions/<pid>.json`'s `name` — a derived slug like
+`shamash-pro-4-app-bc`, marked `nameSource: "derived"`. That is the machine's name for the
 session, not yours, which is why it read as meaningless.
 
 ## When the window is visible
@@ -38,13 +48,12 @@ It follows its session, and only its session:
   without one — the app being killed outright never fires `SessionEnd`, so the window checks
   that its entry in `~/.claude/sessions/` still exists and that its pid is alive.
 - **Hides** when you switch to a different session in the app, and returns when you switch
-  back. The app logs `ping internal session local_X to CLI session <engine uuid>` (the id
-  mapping) and `setFocusedSession: sessionId=local_X` (what is on screen); together those
-  answer "is my session the visible one".
-- **Stays visible** when you alt-tab to another application. `setFocusedSession=null` covers
-  both "app blurred" and "nothing selected", so it is treated as indeterminate rather than
-  hidden — an always-on-top pad that vanishes the moment you look at something else would be
-  useless.
+  back. The visible session is whichever store file holds the highest `lastFocusedAt`; only
+  the most recently written handful can hold that maximum, so the check parses the top 12 by
+  mtime rather than all ~200.
+- **Stays visible** when you alt-tab to another application — `lastFocusedAt` tracks which
+  *session* was last selected, not whether the app has OS focus. An always-on-top pad that
+  vanished the moment you looked at something else would be useless.
 
 ## Why this exists
 
@@ -135,7 +144,7 @@ Removes only the entries pointing into `~/.claude/hooks/backseat/`; other hooks 
 State lives in `~/.claude/backseat/<session_id>/` — `inbox/`, `consumed.md` (audit trail of
 everything folded into a turn), `meta.json`, `window.pid`.
 
-## Three traps worth remembering
+## Five traps worth remembering
 
 - **`$Input` is a PowerShell automatic variable.** Assigning a control to it works at script
   scope but resolves to the empty pipeline enumerator inside every function and scriptblock.
@@ -151,3 +160,13 @@ everything folded into a turn), `meta.json`, `window.pid`.
   `MouseLeftButtonDown` as `Handled` so the event never reaches the drag handler. A `TextBlock`
   with no `Background` is also hit-test transparent outside its glyphs, so the button is a
   `Border` with `Background="Transparent"` for a real 24×24 target.
+- **Hiding a `ShowDialog()` window ends its dialog loop.** `ShowDialog` is modal; when the
+  window first hid itself because another session was on screen, `ShowDialog` returned, the
+  script ran off the end, and the process exited — no error, no stderr, no exit code, the
+  window simply never came back. Any window that hides and re-shows itself must use `Show()`
+  plus `[Dispatcher]::Run()`, which decouples visibility from the message loop's lifetime.
+- **An unhandled exception in a dispatcher callback kills the process silently.** With
+  `$ErrorActionPreference = 'Stop'`, any non-terminating error inside a `DispatcherTimer` tick
+  becomes terminating and takes the whole process down with no output. The tick body is wrapped
+  in `try/catch` that appends to `window-error.log` in the session's state directory — without
+  it, every timer bug looks identical from the outside.
