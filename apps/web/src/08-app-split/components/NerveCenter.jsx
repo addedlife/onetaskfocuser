@@ -957,7 +957,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
 // When onToggleExpand is provided the header tap toggles expand instead of opening the full
 // surface; onOpen moves to a small trailing open_in_new button. collapsed=true renders the
 // header only (content hidden via display:none so embedded pollers — Phone — keep running).
-function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, stickyHeader = false, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, hero = null, count = null }) {
+function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, stickyHeader = false, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, hero = null, count = null, narrowActions = false }) {
   const scrollRef = useRef(null);
   const tint = hexToRgba(accentColor, 0.05);
   const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
@@ -992,30 +992,36 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
         // Sticky header: never collapses. Shows icon chip + title label + summary on separate line.
         // With onToggleExpand (5-column card grid) the header tap expands this column and
         // squishes the rest; opening the full surface moves to a trailing open_in_new button.
-        <div style={{ display: "flex", alignItems: "flex-start", width: "100%", flexShrink: 0, minWidth: 0, borderBottom: `1px solid ${C.divider}` }}>
+        // Columns header: title row, then action buttons on their OWN row — a
+        // ~240px column can't fit a title plus several 48dp buttons on one line
+        // (the Calendar column title was crushed to nothing, owner 7/21).
+        // Columns are tall; one extra header row is free, a crushed title is not.
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", width: "100%", flexShrink: 0, minWidth: 0, borderBottom: `1px solid ${C.divider}` }}>
           <ListItem type="button" onClick={onToggleExpand || onOpen} title={title} aria-label={title} aria-expanded={onToggleExpand ? expanded : undefined}
             style={{
               flex: 1, minWidth: 0, cursor: (onToggleExpand || onOpen) ? "pointer" : "default",
               ...denseListVars({ dense: true }),
-              '--md-list-item-one-line-container-height': '20px',
-              '--md-list-item-two-line-container-height': '36px',
+              '--md-list-item-one-line-container-height': '40px',
+              '--md-list-item-two-line-container-height': '52px',
               '--md-list-item-top-space': '6px', '--md-list-item-bottom-space': '5px',
-              '--md-list-item-leading-space': '10px', '--md-list-item-trailing-space': '10px',
+              '--md-list-item-leading-space': '12px', '--md-list-item-trailing-space': '10px',
             }}>
-            <span slot="start" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, color: C.muted, flexShrink: 0 }}>{suiteIcon(icon, 15)}</span>
+            <span slot="start" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, color: accentColor || C.accent, flexShrink: 0 }}>{suiteIcon(icon, 20)}</span>
             <div slot="headline" style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-              <span style={{ fontSize: NC_TYPE.body, fontWeight: 600, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
-              {onToggleExpand && <span style={{ display: "flex", color: C.faint, flexShrink: 0, marginLeft: "auto" }}>{suiteIcon(expanded ? "close_fullscreen" : "expand_content", 12)}</span>}
+              <span style={{ fontSize: NC_TYPE.title, fontWeight: 650, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
+              {onToggleExpand && <span style={{ display: "flex", color: C.faint, flexShrink: 0, marginLeft: "auto" }}>{suiteIcon(expanded ? "close_fullscreen" : "expand_content", 16)}</span>}
             </div>
             {summary && (
               <div slot="supporting-text" style={{ fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{summary}</div>
             )}
           </ListItem>
-          {headerActions && (
-            <span style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, margin: "3px 4px 0 0" }}>{headerActions}</span>
-          )}
-          {onToggleExpand && onOpen && (
-            <IconBtn icon="open_in_new" iconSize={12} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} style={{ margin: "5px 4px 0 0" }} />
+          {(headerActions || (onToggleExpand && onOpen)) && (
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2, padding: "0 4px 2px", minWidth: 0, overflow: "hidden" }}>
+              {headerActions}
+              {onToggleExpand && onOpen && (
+                <IconBtn icon="open_in_new" iconSize={18} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} />
+              )}
+            </span>
           )}
         </div>
       ) : (
@@ -1027,7 +1033,9 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
         // a one-row slat (owner, iPad). Thin + always visible beats fat + frozen.
         // Feed mode: a real M3 card header — 48dp tall, titled, tappable. The old
         // 22px sliver was both unreadable and an illegal touch target.
-        <div style={{ display: "flex", alignItems: "center", width: "100%", flexShrink: 0, minWidth: 0, maxHeight: "none", opacity: (false) ? 0 : 1, overflow: "hidden", pointerEvents: (false) ? "none" : "auto", transition: "max-height 0.2s ease, opacity 0.15s ease" }}>
+        // narrowActions (phone-width cards): action buttons wrap to their own row —
+        // 48dp buttons inline with the title crushed it to a single letter.
+        <div style={{ display: "flex", flexDirection: narrowActions && headerActions ? "column" : "row", alignItems: narrowActions && headerActions ? "stretch" : "center", width: "100%", flexShrink: 0, minWidth: 0, maxHeight: "none", overflow: "hidden", transition: "max-height 0.2s ease, opacity 0.15s ease" }}>
           <ListItem type="button" onClick={onToggleExpand || onOpen} title={title} aria-label={title} aria-expanded={onToggleExpand ? expanded : undefined}
             style={{
               flex: 1, minWidth: 0, cursor: (onToggleExpand || onOpen) ? "pointer" : "default",
@@ -1050,12 +1058,21 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
                 </>}
             {onToggleExpand && <span slot="end" style={{ display: "flex", color: C.faint, flexShrink: 0 }}>{suiteIcon(expanded ? "close_fullscreen" : "expand_content", 12)}</span>}
           </ListItem>
-          {headerActions && (
-            <span style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, marginRight: 2 }}>{headerActions}</span>
-          )}
-          {onToggleExpand && onOpen && (
-            <IconBtn icon="open_in_new" iconSize={13} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} style={{ marginRight: 4 }} />
-          )}
+          {narrowActions && headerActions ? (
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2, padding: "0 4px 2px" }}>
+              {headerActions}
+              {onToggleExpand && onOpen && (
+                <IconBtn icon="open_in_new" iconSize={18} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} />
+              )}
+            </span>
+          ) : (<>
+            {headerActions && (
+              <span style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, marginRight: 2 }}>{headerActions}</span>
+            )}
+            {onToggleExpand && onOpen && (
+              <IconBtn icon="open_in_new" iconSize={13} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} style={{ marginRight: 4 }} />
+            )}
+          </>)}
         </div>
       )}
       {/* Hero sits OUTSIDE the scrolling list so the list's own height — and
@@ -2840,13 +2857,14 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   if ((isMobileDevice || desktopLayout === "boxes") && !healthPage && !chiefPage) {
     const menuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
     const menuClose  = () => setMobileMenuOpen(null);
-    // >= 1500 px: 5 vertical columns side by side (each card full height, 1/5 width).
-    // <  1500 px: 5 horizontal rows stacked (each card full width, 1/5 height).
+    // >= 1000 px: 5 vertical columns side by side (each card full height, 1/5 width).
+    // <  1000 px: stacked rows / 2-col grid (below).
     // Both orientations show all 5 cards simultaneously — no carousel, no scrolling between cards.
-    // 1500 px = 5 cols × 300 px minimum comfortable reading width per column.
-    // Surface Laptop 7 (15″ at 150% DPI) ≈ 1444 px available → rows. 1080p desktop ≈ 1700 px → columns.
-    const boxesFiveCol = availableW >= 1500;
-    const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, stickyHeader: boxesFiveCol };
+    // Owner 7/21: the 1500 px threshold pushed most desktops (Surface Laptop 7 at
+    // 150% DPI ≈ 1444 px available) into stacked frozen-header row cards. Real
+    // columns are the desktop view — restore them at ~200 px/column.
+    const boxesFiveCol = availableW >= 1000;
+    const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, stickyHeader: boxesFiveCol, narrowActions: availableW < 480 };
     // Rows-mode cards (iPad portrait: five cards sharing the screen height) are far
     // too short to spend ~40px on a fixed hero — it left a single-row slat. The hero
     // is a tall-card affordance only; short cards give every pixel to real rows.
@@ -2892,7 +2910,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     const padY = dense ? 1 : 4;
     const rowMinH = dense ? 14 : 22;
     const bodyF = dense ? ncType.meta : ncType.body;   // 12 vs 14
-    const metaF = dense ? ncType.small : ncType.meta;  // 11 vs 12
+    const metaF = ncType.meta;  // 12px floor even when dense (M3 minimum type)
     const lineH = dense ? 1.05 : 1.3;
 
     // Each card's top line is the AI per-category summary, or "Updating…" while loading.
@@ -2943,14 +2961,31 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             breathing) — tone + space do the separation, matching the full-panel view. */}
         <div style={{
             // One screen, no page scroll: all five categories always visible.
-            // Rows are weighted by content so a busy card gets more of the screen
-            // than a quiet one — the equal fifths were the real bug.
+            // Wide (>= 1000 px): five REAL full-height columns side by side — the
+            // desktop columns view (owner 7/21: the stacked frozen-header row
+            // cards on desktop were a regression; columns are the wide layout).
+            // Narrow: rows weighted by content so a busy card gets more of the
+            // screen than a quiet one — the equal fifths were the real bug.
             flex: 1, minHeight: 0, overflow: "hidden",
             display: "grid", gap: 10, marginTop: 8,
-            gridTemplateColumns: availableW >= NC_FEED_2COL ? "repeat(2, minmax(0,1fr))" : "1fr",
-            gridTemplateRows: expandedBoxId
-              ? BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,4fr)" : "min-content").join(" ")
-              : BOX_ORDER.map(id => `minmax(0, ${feedWeights[id]}fr)`).join(" "),
+            ...(boxesFiveCol ? {
+              gridTemplateColumns: boxCols,
+              gridTemplateRows: "1fr",
+            } : expandedBoxId ? {
+              // Expanded card always gets the single-column treatment — predictable
+              // in both widths (in 2-col the expanded card can't cleanly span).
+              gridTemplateColumns: "1fr",
+              gridTemplateRows: BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,4fr)" : "min-content").join(" "),
+            } : availableW >= NC_FEED_2COL ? {
+              // 2-col (tablet portrait): 5 cards auto-place into 3 rows — defining 5
+              // weighted rows here left rows 4-5 EMPTY, wasting ~40% of the screen
+              // (owner's iPad). Calendar spans the full bottom row.
+              gridTemplateColumns: "repeat(2, minmax(0,1fr))",
+              gridTemplateRows: "repeat(3, minmax(0,1fr))",
+            } : {
+              gridTemplateColumns: "1fr",
+              gridTemplateRows: BOX_ORDER.map(id => `minmax(0, ${feedWeights[id]}fr)`).join(" "),
+            }),
             paddingBottom: "calc(6px + env(safe-area-inset-bottom,0px))",
           }}>
 
@@ -3112,7 +3147,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           </MobileBox>
 
           {/* Calendar */}
-          <MobileBox {...boxCtx} {...boxProps("calendar")} icon="calendar_today" title="Calendar" accentColor={C.warning} count={feedCounts.calendar} summary={cardSummary("Calendar")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} {...boxProps("calendar")} icon="calendar_today" title="Calendar" accentColor={C.warning} count={feedCounts.calendar} summary={cardSummary("Calendar")}
+            style={!boxesFiveCol && !expandedBoxId && availableW >= NC_FEED_2COL ? { ...cardStyle, gridColumn: "1 / -1" } : cardStyle} dense={dense}
             onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}
             /* Account picker + refresh + Agenda/Live-time toggle ride the card's own header
                row instead of a second toolbar row underneath it (owner ticket 7/14: "two
@@ -3286,7 +3322,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             </ListItem>
             <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
               {/* Card-grid icon tracks its real orientation: columns wide, rows narrow. */}
-              {!isMobileDevice && [{ id:"boxes", icon: availableW >= 1500 ? "view_column" : "table_rows", label:"Card grid" }, { id:"full", icon:"grid_view", label:"Full panel" }].map(({ id, icon, label }) => (
+              {!isMobileDevice && [{ id:"boxes", icon: availableW >= 1000 ? "view_column" : "table_rows", label:"Card grid" }, { id:"full", icon:"grid_view", label:"Full panel" }].map(({ id, icon, label }) => (
                 <IconBtn key={id} icon={icon} iconSize={16} color={desktopLayout === id ? C.text : C.muted} active={desktopLayout === id} activeBg={C.hover} onClick={() => setDesktopLayoutPersist(id)} title={label} aria-label={label} />
               ))}
               <IconBtn icon={densityIcon} iconSize={16} color={C.muted} onClick={toggleMobileDensity} title={densityLabel} aria-label={densityLabel} />
@@ -3586,9 +3622,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             {/* Layout: Boxes / Accordion / Full (desktop-only alternatives to the 3-column view) */}
             <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
               {[
-                // Card-grid icon tracks its real orientation (columns ≥1500 px, rows below);
+                // Card-grid icon tracks its real orientation (columns ≥1000 px, rows below);
                 // the two icons were reversed relative to what each layout actually renders.
-                { id: "boxes", icon: availableW >= 1500 ? "view_column" : "table_rows", title: "Card grid view" },
+                { id: "boxes", icon: availableW >= 1000 ? "view_column" : "table_rows", title: "Card grid view" },
                 { id: "full",  icon: "grid_view", title: "Full panel view" },
               ].map(({ id, icon, title }) => (
                 <IconBtn key={id} icon={icon} iconSize={15} onClick={() => setDesktopLayoutPersist(id)} title={title} aria-label={title}
