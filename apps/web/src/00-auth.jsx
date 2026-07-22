@@ -194,7 +194,26 @@ window.__OT_DEV_USER = window.__OT_DEV ? {
   displayName: "DevTest",
   isAnonymous: false,
   _isDev: true,
+  // The Google-Workspace and phone-relay callers bail out before their fetch if the
+  // user cannot mint an ID token, so without this the mock never even reaches the
+  // intercepted routes. The value is never sent anywhere real — dev-mock answers
+  // those routes locally.
+  getIdToken: async () => "dev-mock-id-token",
 } : null;
+
+// Simulated content clone (see dev-mock.js). The bare dev bypass renders a fully
+// EMPTY app, because the mock user holds no Firebase credential and every read is
+// denied — useless for judging row density, list overflow, truncation or card
+// balance, which is most of what this app's UI tickets are about. So the mock data
+// is ON by default whenever the bypass is active; `?mock=0` restores the old empty
+// behaviour. Nothing here can affect a deployed build: __OT_DEV is false off
+// localhost, so this branch never runs in production.
+// Only the FLAG is decided here, next to the other dev flags. main.jsx performs the
+// actual install, because it must complete before the first render — App subscribes
+// to Store on mount, and a listener registered against the real Store would never be
+// swapped afterwards.
+window.__OT_MOCK = window.__OT_DEV
+  && new URLSearchParams(window.location.search).get("mock") !== "0";
 
 class AppErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null }; }

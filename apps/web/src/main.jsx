@@ -36,6 +36,23 @@ const standaloneEmbedded = (() => {
   catch { return false; }
 })();
 
+// Simulated content clone. 00-auth.jsx decides the flag (localhost dev bypass, not
+// disabled with ?mock=0); the install has to happen HERE, before the first render,
+// because App subscribes to Store on mount and a listener already registered against
+// the real Store would never be swapped. Dynamically imported and guarded by
+// import.meta.env.DEV, so the fixtures are not part of a production build at all.
+if (import.meta.env.DEV && window.__OT_MOCK) {
+  try {
+    const [{ installDevMock }, { Store }] = await Promise.all([
+      import('./dev-mock.js'),
+      import('./01-core.js'),
+    ]);
+    await installDevMock(Store);
+  } catch (e) {
+    console.warn('[dev-mock] install failed; falling back to the empty dev app:', e);
+  }
+}
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
 if (standaloneView === 'deskphone' || standaloneView === 'phone') {
