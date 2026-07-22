@@ -1805,6 +1805,37 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   });
   const curT = displayedActT[0] || null;
 
+  // Copy the whole open queue as plain text — one task per line, the task's own text
+  // then the date and time it was submitted, nothing else (owner ticket 5fBmDz5:
+  // "copy just the text of each line and after the text on each line the date and
+  // time submitted, thats it"). Subtask groups expand to their steps so the copy is
+  // the real list rather than the collapsed position markers the screen shows.
+  const [copiedQueue, setCopiedQueue] = useState(false);
+  function buildQueueText() {
+    const stamp = ms => {
+      const d = new Date(ms);
+      if (!ms || isNaN(d.getTime())) return "";
+      return `${d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" })} ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+    };
+    const rows = [];
+    queueTFiltered.forEach(t => {
+      const group = t.parentTask ? actT.filter(s => s.parentTask === t.parentTask) : [t];
+      group.forEach(s => {
+        const when = stamp(s.createdAt);
+        rows.push(when ? `${s.text} — ${when}` : s.text);
+      });
+    });
+    return rows.join("\n");
+  }
+  function copyQueue() {
+    const text = buildQueueText();
+    if (!text) { showToast("Nothing to copy", 2000); return; }
+    const done = () => { setCopiedQueue(true); setTimeout(() => setCopiedQueue(false), 2000); showToast("Task list copied", 2000); };
+    try {
+      navigator.clipboard.writeText(text).then(done).catch(() => showToast("Copy failed", 2500));
+    } catch { showToast("Copy failed", 2500); }
+  }
+
   // Priority picker: pre-compute whether the task being re-prioritized is a subtask.
   // Kept outside JSX so Babel standalone doesn't have to parse it inside an expression.
   const chgPriTask      = chgPri ? actT.find(t => t.id === chgPri) : null;
@@ -4344,6 +4375,11 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                 title={qCondensed ? "Back to detailed list" : "Condense to a terse list"} aria-label={qCondensed ? "Show detailed task list" : "Condense task list"} aria-pressed={qCondensed}
                 onClick={toggleQCondensed}
                 style={{"--md-outlined-icon-button-outline-color":qCondensed ? C.accent : C.divider,"--md-outlined-icon-button-container-shape":RADIUS.sm,flexShrink:0}} />
+              {/* ⧉ Copy list — whole queue as text + submitted timestamps (ticket 5fBmDz5) */}
+              <IconBtn variant="outlined" icon={copiedQueue ? "check" : "content_copy"} iconSize={15} color={copiedQueue ? C.success : C.muted}
+                title="Copy the whole task list" aria-label="Copy the whole task list"
+                onClick={copyQueue}
+                style={{"--md-outlined-icon-button-outline-color":C.divider,"--md-outlined-icon-button-container-shape":RADIUS.sm,flexShrink:0}} />
               {/* ✦ AI Prioritize — direct button */}
               <IconBtn variant="outlined" title={hasAI ? "AI Prioritize queue" : "Prioritize queue"} aria-label="Prioritize queue"
                 onClick={tasksOptimize} disabled={optLoading}

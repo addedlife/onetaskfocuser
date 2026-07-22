@@ -200,16 +200,29 @@ function useFitRows(ref, { pad = 12, min = 1, max = 60, enabled = true, watch = 
 // fitSlice — given the full list and how many rows fit, return the rows to show
 // and whether a "+N more" row is needed. The more-row occupies one row slot, so
 // the total never exceeds what fits.
-function fitSlice(items, fit, expanded = false) {
+// `keep` marks rows the owner has deliberately opened. They are pulled back into
+// the shown list even when they fall outside the cut — otherwise collapsing a card
+// silently swallowed the very row being read (owner ticket fZ3Jvr5: "the expanded
+// emails disappear"). Kept rows are appended in their original order.
+function fitSlice(items, fit, expanded = false, keep = null) {
   if (expanded) return { shown: items, hidden: 0 };
   if (items.length <= fit) return { shown: items, hidden: 0 };
-  // Only reserve a slot for the "+N more" terminator when there is actually room
-  // for it. At fit <= 1 the old code showed 1 row PLUS a more-row in a one-row
-  // space — which put the overflow straight back. There the card header's own
-  // expand tap is the way in, so no terminator is drawn.
-  if (fit <= 1) return { shown: items.slice(0, Math.max(1, fit)), hidden: 0 };
-  const shown = items.slice(0, fit - 1);
-  return { shown, hidden: items.length - shown.length };
+  // Reserve a slot for the "+N more" terminator only when there is room for it. At
+  // fit <= 1 the old code showed 1 row PLUS a more-row in a one-row space — which put
+  // the overflow straight back. There the card header's own expand tap is the way in.
+  //
+  // MvX6nA5 asked for this affordance to stop hogging space. It cannot simply float:
+  // the ActionBtn 48dp floor is a standing GM3 rule, and a card that is not in
+  // show-all mode does not scroll, so a sticky bar would permanently cover the last
+  // row instead of freeing one. Left reserving its slot deliberately — see the
+  // ticket note for the design options that actually resolve it.
+  const base = fit <= 1 ? items.slice(0, Math.max(1, fit)) : items.slice(0, fit - 1);
+  if (!keep) {
+    return { shown: base, hidden: fit <= 1 ? 0 : items.length - base.length };
+  }
+  const inBase = new Set(base);
+  const shown = items.filter((it, i) => inBase.has(it) || keep(it, i));
+  return { shown, hidden: Math.max(0, items.length - shown.length) };
 }
 
 // SweepBar — rAF-driven sweep indicator for clock faces.
@@ -877,9 +890,11 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
   const tint = hexToRgba(accentColor, 0.05);
   // fullHeight: fills its grid cell in the 5-column layout (flex:1, no maxHeight cap).
   // Normal: capped so stacked accordion sections don't grow the page unbounded.
+  // backgroundColor:inherit so the sticky "+N more" bar (MoreRow) picks up this
+  // section's tinted surface rather than a flat C.bg that would read as a seam.
   const scrollStyle = fullHeight
-    ? { flex: "1 1 0", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }
-    : { maxHeight: "min(52vh, 460px)", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" };
+    ? { flex: "1 1 0", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", backgroundColor: "inherit" }
+    : { maxHeight: "min(52vh, 460px)", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", backgroundColor: "inherit" };
   return (
     <div style={{ background: `color-mix(in srgb, ${C.bg} 94%, ${accentColor || C.accent} 6%)`, borderRadius: RADIUS.lg, overflow: "hidden",
       ...(fullHeight ? { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 } : {}) }}>
@@ -958,7 +973,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
 // When onToggleExpand is provided the header tap toggles expand instead of opening the full
 // surface; onOpen moves to a small trailing open_in_new button. collapsed=true renders the
 // header only (content hidden via display:none so embedded pollers — Phone — keep running).
-function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, stickyHeader = false, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, hero = null, count = null, narrowActions = false }) {
+function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, stickyHeader = false, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, hero = null, count = null, narrowActions = false, scrollable = false }) {
   const scrollRef = useRef(null);
   const tint = hexToRgba(accentColor, 0.05);
   const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
@@ -1079,8 +1094,12 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
       {/* Hero renders INSIDE the scrolling list as its emphasized first row —
           a pinned bar read as a frozen header and locked up scroll space
           (owner tickets tr60ibj2/xFD22e5T, 7/21). */}
+      {/* Normally the list clips at the fitted row count and "+N more" is the way in.
+          When the owner has asked this card to show everything but it is not the
+          expanded card, it scrolls its own rows instead — one screen is preserved
+          because only this card scrolls, never the page. */}
       <div ref={scrollRef}
-        style={{ flex: 1, minHeight: 0, overflow: "hidden", paddingBottom: 4, ...(collapsed ? { display: "none" } : {}) }}>
+        style={{ flex: 1, minHeight: 0, overflowX: "hidden", overflowY: scrollable ? "auto" : "hidden", paddingBottom: 4, backgroundColor: "inherit", ...(collapsed ? { display: "none" } : {}) }}>
         {hero}
         {typeof children === "function" ? children(fitRows) : children}
       </div>
@@ -1134,6 +1153,12 @@ function HeroItem({ title, meta, accent, C, onClick }) {
 
 // MoreRow — the quiet "+N more" reveal under a capped list (calm-rows prototype).
 // One full-width text button; expanding is always one tap, so no information is lost.
+//
+// It sits at the card's bottom edge and is pinned there when the card scrolls, so it
+// stays reachable in show-all mode instead of only appearing after scrolling to the
+// end. backgroundColor:inherit picks up the host card's computed surface — each
+// NerveCenter card mixes its own category tint into C.bg, so a literal C.bg would
+// read as a mismatched strip.
 function MoreRow({ count, open = false, label = "more", onClick, C }) {
   return (
     <ActionBtn variant="text" icon={open ? "expand_less" : "expand_more"} iconSize={20}
@@ -1141,7 +1166,7 @@ function MoreRow({ count, open = false, label = "more", onClick, C }) {
       height={48} onClick={onClick}
       title={open ? `Hide ${label}` : `Show ${count} ${label}`}
       aria-label={open ? `Hide ${label}` : `Show ${count} ${label}`}
-      style={{ width: "100%" }}>
+      style={{ width: "100%", position: "sticky", bottom: 0, zIndex: 1, backgroundColor: "inherit" }}>
       {open ? `Show less` : `Show all ${count} ${label === "more" ? "" : label}`.trim()}
     </ActionBtn>
   );
@@ -1258,6 +1283,17 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   const [googleAcctMenuOpen, setGoogleAcctMenuOpen] = useState(false); // account-picker dropdown in calendar/mail card headers
   const [mobileExpanded, setMobileExpanded] = useState(() => new Set()); // ids of expanded accordion sections — all collapsed by default; multiple may stay open
   const [expandedBoxId, setExpandedBoxId] = useState(null); // boxes view: card expanded to page height (null = even 5-way split); ephemeral by design
+  // Cards the owner asked to show in FULL, tracked separately from which card is
+  // expanded. They used to be the same thing, so returning to equal widths threw the
+  // choice away and the "+44 more" row came straight back (owner ticket fZ3Jvr5).
+  // Kept apart, a collapsed card can honour "show all" by scrolling its own list —
+  // still one screen, still no page scroll, just that card scrolls.
+  const [showAllBoxIds, setShowAllBoxIds] = useState(() => new Set());
+  const toggleShowAllBox = id => setShowAllBoxIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
   const [expandedRows, setExpandedRows] = useState(() => new Set()); // box-mode rows tapped open to reveal full text
   const toggleRow = key => setExpandedRows(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
   const [mobileTimelineOpen, setMobileTimelineOpen] = useState(false); // mobile hero timeline reveal
@@ -2898,7 +2934,16 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
       // stays readable and "expanded" simply means this card shows all its items.
       collapsed: false,
       onToggleExpand: () => setExpandedBoxId(prev => prev === id ? null : id),
+      // A card told to show everything while it is NOT the expanded one has more
+      // rows than fit, so it scrolls itself rather than clipping them.
+      scrollable: showAllBoxIds.has(id) && expandedBoxId !== id,
     });
+    // Show every row of this card: true when it is expanded, or when the owner
+    // asked for "show all" and that choice has not been turned off.
+    const boxShowsAll = id => expandedBoxId === id || showAllBoxIds.has(id);
+    // Turning on "show all" from a "+N more" row also expands the card, because that
+    // is the gesture the owner is making. Collapsing later keeps the show-all.
+    const openAllInBox = id => { setShowAllBoxIds(prev => new Set(prev).add(id)); setExpandedBoxId(id); };
     // v7: no volume weighting and no total-count chips. Every list here is always
     // full, so both were constant noise. Cards get an equal share and earn their
     // rows through SELECTION instead.
@@ -3037,7 +3082,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             {fitRows => {
             const mailSrc = actionMail;
             const mailRest = heroOk ? mailSrc.filter(m => m.id !== heroMail?.id) : mailSrc;
-            const mailCut = fitSlice(mailRest, fitRows, expandedBoxId === "mail");
+            // keep: any email row the owner has opened stays in the list even when the
+            // card collapses back to its fitted height (ticket fZ3Jvr5).
+            const mailCut = fitSlice(mailRest, fitRows, boxShowsAll("mail"),
+              (m, i) => expandedRows.has(`mail-${m.id || i}`));
             return (<>
             {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : mailCut.shown.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
@@ -3062,7 +3110,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               );
             })}
             {mailCut.hidden > 0 && (
-              <MoreRow C={C} count={mailCut.hidden} onClick={() => setExpandedBoxId("mail")} />
+              <MoreRow C={C} count={mailCut.hidden} onClick={() => openAllInBox("mail")} />
+            )}
+            {mailCut.hidden === 0 && showAllBoxIds.has("mail") && (
+              <MoreRow C={C} open count={0} onClick={() => toggleShowAllBox("mail")} />
             )}
             </>);
             }}
@@ -3094,7 +3145,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             {fitRows => {
             const taskSrc = actionTasks;
             const taskRest = heroOk ? taskSrc.filter(t => t.id !== heroTask?.id) : taskSrc;
-            const taskCut = fitSlice(taskRest, fitRows, expandedBoxId === "tasks");
+            const taskCut = fitSlice(taskRest, fitRows, boxShowsAll("tasks"));
             return (<>
             {taskComposerOpen && (
               <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.divider}` }}>
@@ -3148,7 +3199,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               );
             })}
             {taskCut.hidden > 0 && (
-              <MoreRow C={C} count={taskCut.hidden} onClick={() => setExpandedBoxId("tasks")} />
+              <MoreRow C={C} count={taskCut.hidden} onClick={() => openAllInBox("tasks")} />
+            )}
+            {taskCut.hidden === 0 && showAllBoxIds.has("tasks") && (
+              <MoreRow C={C} open count={0} onClick={() => toggleShowAllBox("tasks")} />
             )}
             </>);
             }}
@@ -3166,7 +3220,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             {fitRows => {
             const shailaSrc = actionShailos;
             const shailaRest = heroOk ? shailaSrc.filter(s => s.id !== heroShaila?.id) : shailaSrc;
-            const shailaCut = fitSlice(shailaRest, fitRows, expandedBoxId === "shailos");
+            const shailaCut = fitSlice(shailaRest, fitRows, boxShowsAll("shailos"));
             return (<>
             {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : shailaCut.shown.map((s, si) => {
               const text = nerveDisplaySummary(s,"Open shaila");
@@ -3180,7 +3234,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               );
             })}
             {shailaCut.hidden > 0 && (
-              <MoreRow C={C} count={shailaCut.hidden} onClick={() => setExpandedBoxId("shailos")} />
+              <MoreRow C={C} count={shailaCut.hidden} onClick={() => openAllInBox("shailos")} />
+            )}
+            {shailaCut.hidden === 0 && showAllBoxIds.has("shailos") && (
+              <MoreRow C={C} open count={0} onClick={() => toggleShowAllBox("shailos")} />
             )}
             </>);
             }}
