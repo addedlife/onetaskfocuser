@@ -4,16 +4,18 @@ A small always-on-top window, one per Claude Code session, for steering a turn t
 already running — without sending a new message and re-paying the context.
 
 ```
-┌──────────────────────────────────────┐
-│ BackSeatDriver steering prompt win… × │
-│ Shamash Pro 4 App                    │
-│ ┌──────────────────────────────────┐ │
-│ │ actually use outlined chips      │ │
-│ │ here, not filled                 │ │
-│ └──────────────────────────────────┘ │
-│ 1 note waiting…            [ Send ]  │
-└──────────────────────────────────────┘
+┌───────────────────────────────────────────────────┐
+│ BackSeatDriver ste…  │ use outlined chips │  1  × │
+└───────────────────────────────────────────────────┘
 ```
+
+One bar, 460×48, always on top. Type, press **Enter**, and it is on its way. The window is
+already the size a collapsed one would be, so there is no minimise: it would only hide the
+one thing the window exists to show.
+
+The **pill** on the right is the entire status surface — a count in amber while notes wait
+for the next tool call, then a green tick for a few seconds once they have been folded into
+the turn. Hover the title for the full session name.
 
 ## The header
 
@@ -116,15 +118,12 @@ and the main thread would never see it. `drain.sh` bails when the payload carrie
 `stop.sh` blocks only when notes exist, and every pass **deletes** the notes it read. Notes
 appear only from a deliberate click. No notes, no block.
 
-## Collapsing it
+## No minimise, on purpose
 
-The **−** button rolls the window up to just its title bar; **+** (or a double-click on the
-bar) brings it back. It stays docked to the corner it was in, and keeps showing the pending
-count — "2 waiting" — since that is the one thing still worth knowing with the input hidden.
-
-It is a collapse, **not** `WindowState = Minimized`, and that is deliberate: this window sets
-`ShowInTaskbar="False"`, so a real minimize would send it somewhere with no taskbar button to
-restore it — an unrecoverable close wearing a minimize button.
+There is no minimise button, and `WindowState = Minimized` is never used. This window sets
+`ShowInTaskbar="False"`, so a real minimize would send it somewhere with **no taskbar button
+to restore it** — an unrecoverable close wearing a minimize icon. The bar is already as small
+as the window gets; to put it away, close it and reopen below.
 
 ## Getting the window back
 
