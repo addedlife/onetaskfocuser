@@ -724,6 +724,45 @@ md-text-button[trailing-icon] { padding-inline: 16px 12px; }
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.3; }
 }
+
+/* ── Row actions on demand ──────────────────────────────────────────────────
+   Owner ticket WUQh8VL: "the check and x marks take up half each line", and
+   fZ3Jvr5: in a squished column "the checks and options block half the narrower
+   width". A pair of 48dp targets is ~100px of PERMANENT width on every row, so
+   the text it belongs to gets squeezed — worst in a narrow column, where the
+   headline wrapped down to a two-character vertical string.
+
+   The controls stay 48dp (M3 floor, and they must remain hittable) but stop
+   holding layout width: they overlay the row's trailing edge and appear on hover
+   or keyboard focus. The row gets a little trailing padding so text does not sit
+   flush under them, and a short scrim keeps the overlap legible mid-fade.
+
+   Touch has no hover, so any coarse pointer keeps them permanently visible —
+   that is the one case where eating the width is better than being unreachable. */
+.nc-row-actions {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--shp-dur-base, 180ms) var(--shp-ease-standard, ease);
+}
+.nc-row-host { position: relative; }
+.nc-row-host:hover .nc-row-actions,
+.nc-row-host:focus-within .nc-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none), (pointer: coarse) {
+  .nc-row-actions { opacity: 1; pointer-events: auto; position: static; transform: none; }
+  .nc-row-host { position: static; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nc-row-actions { transition: none; }
+}
 `;
 
 // ─── Accent derivation (M3 secondary + tertiary) ────────────────────────────

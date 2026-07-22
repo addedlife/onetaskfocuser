@@ -2907,9 +2907,21 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     const boxRows = expandedBoxId
       ? BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,1fr)" : "min-content").join(" ")
       : "repeat(5, minmax(0,1fr))";
+    // Squished siblings need a width that can still hold WORDS. At the old
+    // minmax(120px, 0.28fr) a collapsed column was ~120px, and the per-row action
+    // cluster ate most of it, so the headline wrapped to about two characters per
+    // line and read as a vertical letter string (owner ticket fZ3Jvr5: "all other
+    // squished colums show ugly twoletter vertical lettrer strings, they could show
+    // more but the checks and options block half the narrowere witdth"). 168px floor
+    // + a slightly bigger share, and rowActionsHidden below reclaims the rest.
+    // Five columns then need 4x168 + 168 = 840px; this branch only runs >= 1000px.
     const boxCols = expandedBoxId
-      ? BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,1fr)" : "minmax(120px,0.28fr)").join(" ")
+      ? BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,1fr)" : "minmax(168px,0.32fr)").join(" ")
       : "repeat(5, minmax(0,1fr))";
+    // A card that is currently squished by a sibling's expansion. Its rows drop
+    // trailing controls entirely — at that width they are the difference between a
+    // readable line and an unreadable one, and the card is one tap from full size.
+    const isSquished = id => !!expandedBoxId && expandedBoxId !== id && boxesFiveCol;
 
     const fmtTimeM = (raw) => { try { const d = new Date(raw); const now = new Date(); return d.toDateString()===now.toDateString() ? d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : d.toLocaleDateString([],{month:"short",day:"numeric"}); } catch { return ""; } };
     // Abbreviated relative time (5m · 2h · Tue · Jun 3) — denser than a full timestamp.
@@ -3113,15 +3125,26 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   </div>
                 );
               }
+              // Done/Delete overlay the row's trailing edge instead of holding ~100px
+              // of it on every line (owner tickets WUQh8VL + fZ3Jvr5). They keep their
+              // 48dp targets and appear on hover/focus — or always, on touch. A card
+              // squished by a sibling's expansion drops them entirely; at that width
+              // they are the difference between a readable line and a vertical stack
+              // of letters, and the card is one tap from full size.
+              const hideRowActions = isSquished("tasks");
               return (
-                <ListItem key={t.id} type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
-                  <span slot="start" style={{ width: 7, height: 7, borderRadius:RADIUS.pill, background:priColor }} />
-                  <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>{nerveDisplaySummary(t,"Untitled task")}</span>
-                  <span slot="end" style={{ display:"flex", gap: 4 }}>
-                    <IconBtn icon="check" size={48} iconSize={22} color={C.success} title="Done" aria-label="Mark done" onClick={e => { e.stopPropagation(); onCompleteTask?.(t.id); }} />
-                    <IconBtn icon="close" size={48} iconSize={20} color={C.danger} title="Delete" aria-label="Delete task" onClick={e => { e.stopPropagation(); onDeleteTask?.(t.id); }} />
-                  </span>
-                </ListItem>
+                <div key={t.id} className={hideRowActions ? undefined : "nc-row-host"}>
+                  <ListItem type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
+                    <span slot="start" style={{ width: 7, height: 7, borderRadius:RADIUS.pill, background:priColor }} />
+                    <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word", paddingRight: hideRowActions ? 0 : 6 }}>{nerveDisplaySummary(t,"Untitled task")}</span>
+                  </ListItem>
+                  {!hideRowActions && (
+                    <div className="nc-row-actions">
+                      <IconBtn icon="check" size={48} iconSize={22} color={C.success} title="Done" aria-label="Mark done" onClick={e => { e.stopPropagation(); onCompleteTask?.(t.id); }} />
+                      <IconBtn icon="close" size={48} iconSize={20} color={C.danger} title="Delete" aria-label="Delete task" onClick={e => { e.stopPropagation(); onDeleteTask?.(t.id); }} />
+                    </div>
+                  )}
+                </div>
               );
             })}
             {taskCut.hidden > 0 && (
@@ -3422,15 +3445,21 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   </div>
                 );
               }
+              // Same hover-reveal as the card grid: Done/Delete overlay the trailing
+              // edge instead of holding width on every line (owner ticket WUQh8VL).
+              // These were also below the M3 48dp floor at 26-32px — moving them out
+              // of the layout means they can be full size without costing the text.
               return (
-                <ListItem key={t.id} data-nc-task-row="true" type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
-                  <span slot="start" style={{ width: 7,height: 7,borderRadius:RADIUS.pill,background:priColor }} />
-                  <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>{nerveDisplaySummary(t,"Untitled task")}</span>
-                  <span slot="end" style={{ display:"flex", gap:2 }}>
-                    <IconBtn icon="check" size={dense?26:32} iconSize={dense?13:15} color={C.success} title="Done" aria-label="Mark done" onClick={e => { e.stopPropagation(); onCompleteTask?.(t.id); }} />
-                    <IconBtn icon="close" size={dense?26:32} iconSize={dense?12:14} color={C.danger} title="Delete" aria-label="Delete task" onClick={e => { e.stopPropagation(); onDeleteTask?.(t.id); }} />
-                  </span>
-                </ListItem>
+                <div key={t.id} className="nc-row-host">
+                  <ListItem data-nc-task-row="true" type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
+                    <span slot="start" style={{ width: 7,height: 7,borderRadius:RADIUS.pill,background:priColor }} />
+                    <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word", paddingRight: 6 }}>{nerveDisplaySummary(t,"Untitled task")}</span>
+                  </ListItem>
+                  <div className="nc-row-actions">
+                    <IconBtn icon="check" size={48} iconSize={22} color={C.success} title="Done" aria-label="Mark done" onClick={e => { e.stopPropagation(); onCompleteTask?.(t.id); }} />
+                    <IconBtn icon="close" size={48} iconSize={20} color={C.danger} title="Delete" aria-label="Delete task" onClick={e => { e.stopPropagation(); onDeleteTask?.(t.id); }} />
+                  </div>
+                </div>
               );
             })}
             {secTaskCut.hidden > 0 && (
