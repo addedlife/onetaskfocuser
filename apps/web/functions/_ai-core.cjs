@@ -89,6 +89,27 @@ function modelLadderFrom(requestedModel) {
 // room for the real generateContent fetch inside the ~26-30s function budget.
 const LADDER_WALL_CLOCK_BUDGET_MS = 18000;
 
+// Which upstream failures mean "this rung is unavailable, try the next one" as opposed
+// to "this request is bad, stop".
+//
+// Owner ticket BrOz0Md0 (7/20): "after the fixes for Gemini calls it actually degraded
+// and now barely works for anything." The ladder had been widened to 6 models x 3
+// credentials, but it only ever ADVANCED on a 429. Google's routine transient failures
+// are 500 / 502 / 503 ("The model is overloaded. Please try again later") and 504 — and
+// any one of those on the very FIRST rung threw straight out of callGemini, so the other
+// seventeen rungs, holding completely fresh quota, were never tried. The wider ladder
+// made this worse, not better: more rungs behind a gate that a single blip slammed shut.
+// It also defeated the Claude last-resort tier, which only fires on a 429.
+//
+// 4xx stay fatal on purpose. A 400 (malformed body), 401/403 (bad key) or 404 (no such
+// model) will fail identically on every rung, so walking the ladder would just burn
+// quota and wall-clock to arrive at the same error more slowly.
+const GEMINI_RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
+
+function isRetryableGeminiFailure(e) {
+  return GEMINI_RETRYABLE_STATUSES.has(Number(e?.statusCode));
+}
+
 const MODEL_CATALOG = [
   { provider: "gemini", model: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview", tier: "frontier", note: "Advanced reasoning and coding; preview." },
   { provider: "gemini", model: "gemini-3-flash-preview",  label: "Gemini 3 Flash Preview",  tier: "fast",     note: "Frontier multimodal model at lower cost; preview." },
@@ -1734,17 +1755,24 @@ async function callGemini({ body, prompt, base64, mimeType, model, genConfig, cr
   // cap: a per-minute pacing-queue timeout on one (credential, model) pair 429s with a
   // short retryAfter and a generic "pacing requests" message, and the next rung has its
   // own independent RPM/RPD budget that was very likely free.
+  let totalAttempts = 0;
   for (const credential of credentials) {
     let attemptsOnThisCredential = 0;
+    // A retryable failure used to be almost free: a daily-cap 429 throws locally before
+    // any network call. Now that 5xx also advances the ladder, a rung can cost a REAL
+    // upstream round trip, so the budget has to gate entry to a new credential too —
+    // otherwise three overloaded lanes could burn three full round trips and blow the
+    // function's own timeout. The first attempt overall is always allowed.
+    if (totalAttempts > 0 && Date.now() - startedAt > LADDER_WALL_CLOCK_BUDGET_MS) break;
     for (const attemptModel of models) {
-      // Over-budget handling is per-credential, not a global kill switch: the 7/19
+      // Over-budget handling within a credential is not a global kill switch: the 7/19
       // outage happened because the primary lane's four pacing-queued rungs ate the
       // whole 18s budget and this used to THROW here — so overflow-01 and paid-01
-      // never got a single attempt while holding fresh quota. Now an exhausted budget
-      // only stops walking MORE models on the current credential; every credential
-      // still gets at least its first rung.
+      // never got a single attempt while holding fresh quota. An exhausted budget only
+      // stops walking MORE models on the current credential.
       if (attemptsOnThisCredential > 0 && Date.now() - startedAt > LADDER_WALL_CLOCK_BUDGET_MS) break;
       attemptsOnThisCredential++;
+      totalAttempts++;
       try {
         return await callGeminiOnce({
           body: requestBody,
@@ -1757,8 +1785,8 @@ async function callGemini({ body, prompt, base64, mimeType, model, genConfig, cr
         });
       } catch (e) {
         lastError = e;
-        if (e.statusCode !== 429) throw e;
-        console.warn(`[AI] Gemini ${credential.id}/${attemptModel} returned 429 (${e.message}); trying next in the ladder.`);
+        if (!isRetryableGeminiFailure(e)) throw e;
+        console.warn(`[AI] Gemini ${credential.id}/${attemptModel} returned ${e.statusCode} (${e.message}); trying next in the ladder.`);
       }
     }
   }
@@ -2067,7 +2095,11 @@ async function callWithFallback(common) {
     recordAiLaneEvent(result).catch(() => {});
     return result;
   } catch (e) {
-    if (e.statusCode !== 429) throw e;
+    // Same widening as the ladder itself (owner ticket BrOz0Md0): Gemini being
+    // universally overloaded (503) is exactly the situation the last-resort tier
+    // exists for, but this gate only opened for a 429, so a 503 sailed past it and
+    // the fallback never fired.
+    if (!isRetryableGeminiFailure(e)) throw e;
     try {
       const result = await callClaude(common);
       recordAiLaneEvent(result, e.message || "Gemini exhausted").catch(() => {});
