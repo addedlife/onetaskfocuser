@@ -1426,15 +1426,29 @@ const AI_JOB_REGISTRY = {
     output: "text",
     genConfig: { temperature: 0.1, maxOutputTokens: 64 },
     buildPrompt(input = {}) {
-      // Owner ticket 7/20: the old "4-6 words" budget forced the model to
-      // collapse case-split rulings into one ("beged assur, other gifts
-      // lechatchila wait" came out as a blanket "bedieved mutar, lechatchila
-      // wait" — inverting the din for clothing). Accuracy outranks brevity.
+      // Owner ticket SpQAn5lM (7/22): "almost useless as is... the way the response
+      // is framed is incompatible with many shailos and comes out ridiculously
+      // inaccurate... just plain-summarize the answer, no halachic context gated, so
+      // it will naturally match the answer. And always make it superterse so it never
+      // gets truncated."
+      //
+      // The old prompt imposed a psak-shaped template on every answer: "start with the
+      // ruling", "preserve mutar/assur/bedieved/lechatchila", "state EACH case's
+      // ruling". Most shailos are not case-split rulings, so the model had to invent
+      // that structure to comply — which is exactly how a summary ends up saying
+      // something the answer never said. The 12-word budget (widened on 7/20 to stop a
+      // different inaccuracy) then guaranteed a single-line card would ellipsis it away.
+      //
+      // The fix is to stop templating. Summarize whatever the answer actually says, in
+      // the answer's own terms, and stay short enough to fit. Accuracy now comes from
+      // NOT imposing a frame rather than from spending words describing one.
       return compactLines([
         YESHIVISH_SYSTEM,
-        "Summarize this halachic answer in at most 12 words. Start with the ruling.",
-        "If the ruling differs by case (e.g. one item assur, another mutar), state EACH case's ruling with its subject — never collapse different cases into one blanket ruling.",
-        "Never invert or soften a ruling: if something is assur, say assur. Preserve key terms like mutar, assur, bedieved, lechatchila, and the subject nouns (e.g. beged).",
+        "Summarize this answer in at most 8 words, in plain language.",
+        "Say what the answer actually says, in its own terms. Do not impose any structure on it, and do not add framing, caveats, reasoning or sourcing the answer does not itself contain.",
+        "If the answer uses a term (mutar, assur, bedieved, lechatchila, a subject noun), keep that term. If it does not, do not introduce one.",
+        "Never reverse or soften what the answer says.",
+        "No trailing period.",
         `Answer: ${truncateText(input.answerText || input.answer, 1000)}`,
         "Return only the summary.",
       ]);

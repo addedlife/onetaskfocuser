@@ -844,7 +844,12 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
                           const words = (shaila.answer || '').trim().split(/\s+/).filter(Boolean);
                           return words.slice(0, 6).join(' ') + (words.length > 6 ? '…' : '');
                         })();
-                        return <div style={{ fontSize: NC_TYPE.small, fontStyle: 'italic', color: shaila.status === 'got_back' ? C.success : GOLD, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>{snippet}</div>;
+                        // Wraps to two lines instead of a single nowrap line (owner ticket
+                        // SpQAn5lM: "if the text gets cut off its totally useless"). The
+                        // summary prompt is now capped at 8 words, so two lines clears it
+                        // at any realistic card width — the clamp is the backstop, not the
+                        // mechanism.
+                        return <div style={{ fontSize: NC_TYPE.small, fontStyle: 'italic', color: shaila.status === 'got_back' ? C.success : GOLD, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-word', marginTop: 2 }}>{snippet}</div>;
                       })()}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>

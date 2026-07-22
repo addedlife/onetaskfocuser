@@ -1756,7 +1756,10 @@ function ShailaMiniPill({status, shailaNum, onToggle, size="mini", answerSnippet
             {isGotBack ? "Got back to asker! ✓" : "Got back to asker?"}
           </span>
           {answerSnippet && (
-            <div style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:accentColor,opacity:.75,fontStyle:"italic",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+            // Two-line clamp rather than a single nowrap line (owner ticket SpQAn5lM:
+            // a cut-off answer summary is worse than none). The summary itself is now
+            // capped at 8 words upstream, so this rarely has to do anything.
+            <div style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:accentColor,opacity:.75,fontStyle:"italic",marginTop:2,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",wordBreak:"break-word"}}>
               {answerSnippet}
             </div>
           )}
@@ -1781,7 +1784,7 @@ function ShailaMiniPill({status, shailaNum, onToggle, size="mini", answerSnippet
   return (
     <div
       onClick={e => { e.stopPropagation(); onToggle?.(); }}
-      title={isGotBack ? "Undo: not yet got back" : "Mark: got back to asker"}
+      title={[isGotBack ? "Undo: not yet got back" : "Mark: got back to asker", answerSnippet].filter(Boolean).join(" — ")}
       style={{
         display:"inline-flex", alignItems:"center", gap:SP.xs,
         background: isGotBack ? "#6AB87D18" : "#C8A84C18",
@@ -1799,11 +1802,12 @@ function ShailaMiniPill({status, shailaNum, onToggle, size="mini", answerSnippet
       <span style={{fontSize:NC_TYPE.small,fontWeight:600,fontFamily:NC_FONT_STACK,color:accentColor}}>
         {isGotBack ? "Got back! ✓" : "Got back?"}
       </span>
-      {answerSnippet && (
-        <span style={{fontSize:NC_TYPE.small,fontFamily:NC_FONT_STACK,color:accentColor,opacity:.7,fontStyle:"italic",maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-          {answerSnippet}
-        </span>
-      )}
+      {/* The mini pill used to render the answer summary in a 60px-wide box — about
+          seven characters before the ellipsis, so it was guaranteed to be a meaningless
+          stub on every shaila (owner ticket SpQAn5lM: "if the text gets cut off its
+          totally useless"). A chip this size cannot carry the summary, so it no longer
+          pretends to; the full summary rides the pill's tooltip instead, and the
+          readable copy lives on the full-size pill and the Shailos list. */}
       {isGotBack
         ? <span style={{fontSize:NC_TYPE.small,color:"#6AB87D",opacity:.7}}>↩</span>
         : <span style={{fontSize:NC_TYPE.small,background:"#C8A84C",color:"#fff",borderRadius:"50%",width:14,height:14,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:700,flexShrink:0}}>✓</span>
