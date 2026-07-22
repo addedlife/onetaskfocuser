@@ -103,24 +103,43 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
   // "possible leak" list forever). Storage was historically a plain array of
   // detectedAt stamps (no bug id); those migrate to an empty-id entry — still
   // dedupe-safe, just can't show a fix note.
-  const [ticketedLeaks, setTicketedLeaks] = React.useState(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem('nc_ai_leaks_ticketed') || '{}');
-      if (Array.isArray(raw)) return Object.fromEntries(raw.map(at => [at, '']));
-      return raw && typeof raw === 'object' ? raw : {};
-    } catch (_) { return {}; }
-  });
+  const [ticketedLeaks, setTicketedLeaks] = React.useState({});
+  // Seeded from the shared Firestore doc, so every device agrees on which leaks are
+  // already ticketed. Any legacy per-device localStorage map is folded in once and
+  // pushed up, then the key is dropped — otherwise old devices keep their private
+  // view and keep re-filing (owner tickets xELAgamY / EsLx8PYS / VWTQZhwq / 9f6eubMl).
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const remote = await Store.loadAiLeakTickets();
+      let legacy = {};
+      try {
+        const raw = JSON.parse(localStorage.getItem('nc_ai_leaks_ticketed') || '{}');
+        legacy = Array.isArray(raw) ? Object.fromEntries(raw.map(at => [at, ''])) : (raw && typeof raw === 'object' ? raw : {});
+      } catch (_) {}
+      const merged = { ...legacy, ...remote };
+      if (cancelled) return;
+      setTicketedLeaks(merged);
+      const missing = Object.entries(legacy).filter(([at]) => remote[at] === undefined);
+      if (missing.length) await Promise.all(missing.map(([at, id]) => Store.linkAiLeakTicket(at, id)));
+      try { localStorage.removeItem('nc_ai_leaks_ticketed'); } catch (_) {}
+    })();
+    return () => { cancelled = true; };
+  }, [Store.uid]);
   const createLeakTicket = async (leak) => {
     if (ticketedLeaks[leak.detectedAt] !== undefined) return;
+    // Claim the slot before the write so a double-tap (or a second device racing the
+    // same click) can't produce a second ticket for one leak.
+    setTicketedLeaks(prev => ({ ...prev, [leak.detectedAt]: '' }));
     const id = await Store.addBug({
       text: `AI call leak flagged by the call manager: job "${leak.jobId}" — ${leak.reason} Proposed fix: ${leak.proposedFix}`,
     });
-    if (!id) return;
-    setTicketedLeaks(prev => {
-      const next = { ...prev, [leak.detectedAt]: id };
-      try { localStorage.setItem('nc_ai_leaks_ticketed', JSON.stringify(Object.fromEntries(Object.entries(next).slice(-50)))); } catch (_) {}
-      return next;
-    });
+    if (!id) {
+      setTicketedLeaks(prev => { const next = { ...prev }; delete next[leak.detectedAt]; return next; });
+      return;
+    }
+    setTicketedLeaks(prev => ({ ...prev, [leak.detectedAt]: id }));
+    await Store.linkAiLeakTicket(leak.detectedAt, id);
   };
   // Fix state of each ticketed leak, keyed detectedAt → { resolved, fixNote }.
   // Fetched (one small doc read per ticketed leak) each time the popover opens —

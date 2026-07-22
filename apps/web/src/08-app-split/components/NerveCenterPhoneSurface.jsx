@@ -11,6 +11,14 @@ import {
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 const PHONE_FETCH_TIMEOUT_MS = 4500;
+// Hang-up suppression survives reloads (owner ticket QSMv7nY1) — see callSuppressRef.
+const CALL_SUPPRESS_KEY = 'shamash_phone_call_suppress';
+const CALL_SUPPRESS_MS = 90000;
+// A host "Active" call state that has not changed in this long is treated as a
+// phantom the host never cleared, not a call (owner tickets QSMv7nY1 / 0M23WoHO).
+// Well past any call the owner actually takes, so a real long call is never cut off.
+const CALL_PHANTOM_AFTER_MS = 2 * 60 * 60 * 1000;
+const CALL_SEEN_KEY = 'shamash_phone_call_first_seen';
 // All liveness/staleness windows and age labels live in phone-link.js — the
 // shared state machine both phone surfaces derive from.
 
@@ -349,7 +357,24 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const callsCacheRef = useRef([]);
   // Optimistic hang-up: suppress a lagging host "Active" callState after the
   // user pressed Hang up, until the host reports a NEW state (ticket 0kti1vt).
+  // PERSISTED (owner ticket QSMv7nY1, 7/21: "every reload shows live call from
+  // hours ago"). This was an in-memory ref, so a reload wiped the suppression and
+  // the host's stale "Active" blob re-rendered "On call" — for a call that had
+  // ended hours earlier — and it did so again on every single reload. The record
+  // is keyed to the exact raw state it was suppressing, so a genuinely NEW call
+  // is never hidden by a stale entry.
   const callSuppressRef = useRef(null);
+  if (callSuppressRef.current === null) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CALL_SUPPRESS_KEY) || 'null');
+      if (saved && typeof saved === 'object' && Date.now() < Number(saved.until || 0)) callSuppressRef.current = saved;
+    } catch (_) {}
+  }
+  const suppressCall = (raw, ms = CALL_SUPPRESS_MS) => {
+    const entry = { raw, until: Date.now() + ms };
+    callSuppressRef.current = entry;
+    try { localStorage.setItem(CALL_SUPPRESS_KEY, JSON.stringify(entry)); } catch (_) {}
+  };
   const C = cleanTheme(T);
   const RELAY_BASE = "/api/phone-relay";
 
@@ -786,8 +811,27 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const suppressedCall = !!(callSuppressRef.current
     && callSuppressRef.current.raw === callStateRaw
     && nowTick < callSuppressRef.current.until);
-  const isIncoming = !suppressedCall && /ring|incoming/i.test(callState);
-  const isOnCall = !suppressedCall && !!callState && !isIncoming && /^(active|dialing|oncall|callactive)$/i.test(callState.replace(/\s+/g, ""));
+  // Phantom-call ageing (owner tickets QSMv7nY1 / 0M23WoHO, 7/17–7/21): when a call
+  // is ended ON THE PHONE, the host can miss the transition and keep publishing
+  // "Active" indefinitely — so the card claimed a live call from hours earlier, and
+  // pressing Hang up did nothing because there was no call left to hang up. The
+  // first time a given call signature is seen is recorded (persisted, so a reload
+  // doesn't restart the clock); once it has stood unchanged past the phantom
+  // ceiling the state is ignored. Any real change to the signature resets it.
+  const callSignature = `${callStateRaw}|${status?.callerNumber || status?.CallerNumber || ""}`;
+  const callFirstSeenAt = (() => {
+    if (!callStateRaw) return 0;
+    let rec = null;
+    try { rec = JSON.parse(localStorage.getItem(CALL_SEEN_KEY) || 'null'); } catch (_) {}
+    if (rec && rec.sig === callSignature && Number(rec.at) > 0) return Number(rec.at);
+    const at = Date.now();
+    try { localStorage.setItem(CALL_SEEN_KEY, JSON.stringify({ sig: callSignature, at })); } catch (_) {}
+    return at;
+  })();
+  const phantomCall = !!callStateRaw && callFirstSeenAt > 0 && (nowTick - callFirstSeenAt) > CALL_PHANTOM_AFTER_MS;
+  const hideCall = suppressedCall || phantomCall;
+  const isIncoming = !hideCall && /ring|incoming/i.test(callState);
+  const isOnCall = !hideCall && !!callState && !isIncoming && /^(active|dialing|oncall|callactive)$/i.test(callState.replace(/\s+/g, ""));
   const statusOnline = !!status;
   // A raw Bluetooth address ("7E4B46E95FBA") is plumbing, not a phone name — never show it.
   const deviceNameRaw = status?.deviceName || status?.DeviceName || status?.device || status?.Device || status?.phoneName || status?.PhoneName || "";
@@ -816,7 +860,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const linkText = describePhoneLink(link, { deviceName, hostFallbackLabel: activeHostLabel });
   const statusText = !phoneLinkLive
     ? linkText.label
-    : (isIncoming ? "Incoming call" : isOnCall ? "On call" : callState ? "Call status changed" : idleLabel);
+    : (isIncoming ? "Incoming call" : isOnCall ? "On call" : (callState && !hideCall) ? "Call status changed" : idleLabel);
   const linkDotColor = linkText.tone === "ok" ? C.success : linkText.tone === "warn" ? C.warning : C.faint;
   const linkStatusLabel = linkText.label;
   const linkOffline = linkText.showReconnect;
@@ -1235,11 +1279,11 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             <ActionBtn variant="filled" icon="phone_callback" iconSize={14} containerColor={C.success} labelColor="#fff"
               onClick={() => post("/answer", "answer")} disabled={!!busy} title="Answer">Answer</ActionBtn>
             <ActionBtn variant="filled" icon="call_end" iconSize={14} containerColor={C.danger} labelColor="#fff"
-              onClick={() => { callSuppressRef.current = { raw: callStateRaw, until: Date.now() + 90000 }; setNowTick(Date.now()); post("/hangup", "decline"); }} disabled={!!busy} title="Decline">Decline</ActionBtn>
+              onClick={() => { suppressCall(callStateRaw); setNowTick(Date.now()); post("/hangup", "decline"); }} disabled={!!busy} title="Decline">Decline</ActionBtn>
           </>
         ) : isOnCall ? (
           <ActionBtn variant="filled" icon="call_end" iconSize={14} containerColor={C.danger} labelColor="#fff"
-            onClick={() => { callSuppressRef.current = { raw: callStateRaw, until: Date.now() + 90000 }; setNowTick(Date.now()); post("/hangup", "hangup"); }} disabled={!!busy} title="Hang up">Hang up</ActionBtn>
+            onClick={() => { suppressCall(callStateRaw); setNowTick(Date.now()); post("/hangup", "hangup"); }} disabled={!!busy} title="Hang up">Hang up</ActionBtn>
         ) : null}
         <div style={{ flex: 1 }} />
         {/* Reconnect now lives in the always-visible status line above (offline-only

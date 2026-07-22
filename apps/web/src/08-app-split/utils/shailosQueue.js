@@ -94,6 +94,7 @@ function shailaGroupKey(task) {
 
 function buildNerveShailaRows(tasks = [], priorities = [], sourceShailos = []) {
   const groups = new Map();
+  const seenShailaTextKeys = new Set();
 
   (tasks || []).forEach((task, index) => {
     const linkedShailaWork = isNerveTaskShailaWork(task, priorities);
@@ -181,7 +182,20 @@ function buildNerveShailaRows(tasks = [], priorities = [], sourceShailos = []) {
       };
     })
     .filter(Boolean)
-    .sort((a, b) => (a._nerveOrder - b._nerveOrder) || ((a._nerveCreatedAt || 0) - (b._nerveCreatedAt || 0)));
+    .sort((a, b) => (a._nerveOrder - b._nerveOrder) || ((a._nerveCreatedAt || 0) - (b._nerveCreatedAt || 0)))
+    // Final same-question collapse (owner tickets PWbASPpx / V37NEU7I, 7/21): the
+    // grouping above keys on shailaId first, so the SAME question asked twice — two
+    // real shaila docs with different ids and identical text — survived as two rows.
+    // Grouping can't merge them earlier without destroying the id linkage each row
+    // needs; collapsing at the end keeps the first (oldest) row intact and just drops
+    // the echo. Rows with no usable text are never collapsed.
+    .filter((row, _i, _all) => {
+      const key = shailaTextKey(row);
+      if (!key) return true;
+      if (seenShailaTextKeys.has(key)) return false;
+      seenShailaTextKeys.add(key);
+      return true;
+    });
 }
 
 export { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack, shailaText, shailaCreatedAt, shailaField };

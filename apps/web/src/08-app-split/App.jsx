@@ -24,7 +24,7 @@ import { BugLog } from './components/BugLog.jsx';
 // full chief + health page implementations, so the old NerveCenterPanel.jsx (and
 // its `?ui=legacy` escape hatch) was deleted rather than kept as a stale twin.
 // `?ncproto=1` inside NerveCenter.jsx is a live experiment, unrelated to this.
-import { buildNerveShailaRows, isNerveTaskShailaWork, isShailaPriority, shailaIsAnswered, shailaIsGotBack, shailaText, shailaCreatedAt, shailaField } from './utils/shailosQueue.js';
+import { buildNerveShailaRows, isShailaPriority, shailaIsAnswered, shailaIsGotBack, shailaText, shailaCreatedAt, shailaField } from './utils/shailosQueue.js';
 import { shouldRunForContentAndClaim, publishContentResult, releaseContentClaim } from './ai-call-throttle.js';
 import { IconButton, OutlinedIconButton, FilledIconButton, FilledButton, OutlinedButton, List, ListItem, AssistChip } from './m3.jsx';
 
@@ -2128,13 +2128,27 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     flashOpt();
   }
 
-  function polishNerveItems(items) {
+  // The polish job was the ONLY NerveCenter AI path with no cross-device claim on it
+  // (owner tickets xELAgamY / EsLx8PYS / VWTQZhwq / 9f6eubMl, 7/21: "dashboard-polish
+  // — 74 calls today vs a ~24.3/day average, 3.0x normal"). Every surface with the
+  // dashboard open — PC, tablet, iPad — saw the same unpolished rows at the same
+  // moment and each fired its own call for them, so the daily count scaled with the
+  // number of screens the owner had open. The multiplier being ~3.0x across three
+  // different jobs at once was the tell: not three leaks, three devices.
+  // The claim key is the batch itself, so one state of the world is polished once.
+  async function polishNerveItems(items) {
     if (!hasAI || !aiOpts || !Array.isArray(items) || items.length === 0) return;
     const cleanItems = items
       .map(item => ({ id: item.id, kind: item.kind || "task", source: String(item.source || "").trim() }))
       .filter(item => item.id && item.source)
       .slice(0, 8);
     if (!cleanItems.length) return;
+    const contentKey = cleanItems.map(i => `${i.id}:${i.source}`).sort().join("|");
+    const { run } = await shouldRunForContentAndClaim("dashboard-polish", contentKey, 30000);
+    // Lost the claim: another surface is polishing this exact batch and its summaries
+    // sync back through Firestore. Nothing to show here and nothing to clear — this
+    // device never set the pending flags.
+    if (!run) return;
     const ids = new Set(cleanItems.map(item => item.id));
     setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => ids.has(t.id) ? {...t, ncSummaryPending: true} : t)}))}));
     runAIJob("dashboard.polish_items.v1", { items: cleanItems }, aiOpts).then(job => {
@@ -2147,6 +2161,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         return {...t, ncSummaryPending: false, ncSummary: summary || t.ncSummary, ncSummarySource: item.source, ncSummaryFailedSource: undefined, ncSummaryFailedAt: undefined};
       })}))}));
     }).catch(() => {
+      // Hand the batch back so a retry is possible — a failed call must not mark this
+      // content as permanently scanned.
+      releaseContentClaim("dashboard-polish", contentKey);
       setAS(p => ({...p, lists: p.lists.map(l => ({...l, tasks: l.tasks.map(t => {
         const item = cleanItems.find(x => x.id === t.id);
         return item ? {...t, ncSummaryPending: false, ncSummaryFailedSource: item.source, ncSummaryFailedAt: Date.now()} : t;
@@ -2982,21 +2999,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const allSwitchboardTasks = AS ? AS.lists.flatMap(l => l.tasks || []) : tasks;
   const switchboardShailaList = buildNerveShailaRows(allSwitchboardTasks, pris, shailosSnapshot);
   const shailaOpenCount = switchboardShailaList.length;
-  // Dedupe by normalized text: the same shaila can exist as several completed
-  // task copies (owner ticket 7/20 — the contractor shaila showed 4× in
-  // "Recently resolved"). Newest copy wins (list is already sorted desc).
-  const seenCompletedShailaKeys = new Set();
-  const switchboardShailaCompleted = compT
-    .filter(t => isNerveTaskShailaWork(t, pris) && t.completed)
-    .sort((a, b) => (b.completedAt || b.createdAt || 0) - (a.completedAt || a.createdAt || 0))
-    .filter(t => {
-      const key = String(t.text || "").trim().toLowerCase().replace(/\s+/g, " ");
-      if (!key) return true;
-      if (seenCompletedShailaKeys.has(key)) return false;
-      seenCompletedShailaKeys.add(key);
-      return true;
-    })
-    .slice(0, 5);
+  // The NerveCenter Shailos card no longer renders a "Recently resolved" block at
+  // all (owner tickets PWbASPpx / XPrGq77h / EczjwFRB / V37NEU7I, 7/21–7/22), so the
+  // completed-shaila list it fed — and the text dedupe that never fully stopped the
+  // duplicates — are gone with it. Resolved history lives on the Shailos page.
   const shellHidden = !!(zen && curT);
   // The rail is collapsible/expandable on every screen size. It defaults collapsed on
   // small screens (see sidebarOpen init) but the toggle must always work — previously
@@ -3855,7 +3861,6 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           sections={switchboardSections}
           tasks={switchboardTaskList}
           shailos={switchboardShailaList}
-          shailosCompleted={switchboardShailaCompleted}
           priorities={ap}
           aiOpts={aiOpts}
           aiConfigLoading={!aiConfigLoaded}

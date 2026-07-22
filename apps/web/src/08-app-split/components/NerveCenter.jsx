@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, Store, textOnColor } from '../../01-core.js';
 import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BRD, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth, useWindowSizeClass } from '../ui-tokens.jsx';
-import { ActionBtn, IconBtn, List, ListItem, TextButton, OutlinedButton, CircularProgress, denseListVars, OutlinedSelect, SelectOption } from '../m3.jsx';
+import { ActionBtn, IconBtn, List, ListItem, OutlinedButton, CircularProgress, denseListVars, OutlinedSelect, SelectOption } from '../m3.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthPage } from './HealthPage.jsx';
@@ -936,11 +936,12 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
         )}
       </div>
       {/* Preview shown inline in the header — no second body row needed. */}
-      {/* Hero sits outside the scrolling list so the whole-rows measurement is exact. */}
-      {expanded && hero}
+      {/* Hero renders INSIDE the scrolling list as its emphasized first row — a
+          pinned bar read as a frozen header and locked up scroll space (owner
+          tickets tr60ibj2/xFD22e5T, 7/21). */}
       {keepMounted
-        ? <div ref={sectionScrollRef} style={expanded ? { ...scrollStyle, ...({ paddingTop: 6, paddingBottom: 6 }) } : { display: "none" }}>{typeof children === "function" ? children(fitRows) : children}</div>
-        : (expanded && <div ref={sectionScrollRef} style={{ ...scrollStyle, ...({ paddingTop: 6, paddingBottom: 6 }) }}>{typeof children === "function" ? children(fitRows) : children}</div>)}
+        ? <div ref={sectionScrollRef} style={expanded ? { ...scrollStyle, ...({ paddingTop: 6, paddingBottom: 6 }) } : { display: "none" }}>{hero}{typeof children === "function" ? children(fitRows) : children}</div>
+        : (expanded && <div ref={sectionScrollRef} style={{ ...scrollStyle, ...({ paddingTop: 6, paddingBottom: 6 }) }}>{hero}{typeof children === "function" ? children(fitRows) : children}</div>)}
     </div>
   );
 }
@@ -1075,11 +1076,12 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
           </>)}
         </div>
       )}
-      {/* Hero sits OUTSIDE the scrolling list so the list's own height — and
-          therefore the whole-rows measurement below — is exact. */}
-      {!collapsed && hero}
+      {/* Hero renders INSIDE the scrolling list as its emphasized first row —
+          a pinned bar read as a frozen header and locked up scroll space
+          (owner tickets tr60ibj2/xFD22e5T, 7/21). */}
       <div ref={scrollRef}
         style={{ flex: 1, minHeight: 0, overflow: "hidden", paddingBottom: 4, ...(collapsed ? { display: "none" } : {}) }}>
+        {hero}
         {typeof children === "function" ? children(fitRows) : children}
       </div>
       {/* No gradient scrim: M3 clips scrolling lists cleanly at the padded
@@ -1145,7 +1147,7 @@ function MoreRow({ count, open = false, label = "more", onClick, C }) {
   );
 }
 
-function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], shailosCompleted = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
+function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
   const viewportW = useViewportWidth();
   // M3 window size class on both axes. Height is what drives row density (see
   // densityPref below); width still comes from `availableW` further down, which
@@ -1513,7 +1515,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
         const gridH = taskGridRef.current?.getBoundingClientRect().height || 0;
         if (!gridH) return;
         const headerH = taskHeaderRef.current?.getBoundingClientRect().height || 0;
-        const moreH = primaryTaskQueue.length > MIN_COLLAPSED_TASKS ? (taskMoreButtonRef.current?.getBoundingClientRect().height || 24) : 0;
+        // 48 = the shared MoreRow's height (M3 touch floor). It used to be a 24px
+        // sliver measured off a ref; standardizing on MoreRow made that ref dead, and
+        // a stale 24 here under-reserved space and clipped the last task row.
+        const moreH = primaryTaskQueue.length > MIN_COLLAPSED_TASKS ? 48 : 0;
         const rows = Array.from(taskListRef.current?.querySelectorAll("[data-nc-task-row='true']") || []);
         const measuredRows = rows.map(row => row.getBoundingClientRect().height).filter(h => h > 0);
         // Trust the real measured row height (dense rows run ~28 px) — clamping it
@@ -1534,7 +1539,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
 
     recompute();
     const observer = new ResizeObserver(recompute);
-    [taskGridRef.current, taskHeaderRef.current, taskListRef.current, taskMoreButtonRef.current].filter(Boolean).forEach(el => observer.observe(el));
+    [taskGridRef.current, taskHeaderRef.current, taskListRef.current].filter(Boolean).forEach(el => observer.observe(el));
     window.addEventListener("resize", recompute);
     return () => {
       cancelAnimationFrame(frame);
@@ -1711,13 +1716,19 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     return {
       currentTime: bucketDate.toISOString(),
       localeTime: bucketDate.toLocaleString([], { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
+      // sourceKey hashes the RAW text, never the AI-polished `ncSummary`. The scan key
+      // below strips `text` and keeps this instead — same trick already used for
+      // emails — so a polish result landing on a task can't masquerade as a content
+      // change and fire another snapshot (owner tickets umG220dj / 9f6eubMl, 7/21).
       tasks: primaryTaskQueue.slice(0, 18).map(task => ({
         text: nerveDisplaySummary(task, task.text || "Task"),
+        sourceKey: hashChiefValue(`task|${task.id || ""}|${task.text || ""}`),
         priority: priById.get(task.priority) || task.priority || "",
         ageHours: task.createdAt ? Math.max(0, Math.round((timeBucket * CHIEF_TIME_BUCKET_MS - Number(task.createdAt || 0)) / 3600000)) : null,
       })),
       shailos: visibleShailos.slice(0, 12).map(item => ({
         text: nerveDisplaySummary(item, item.text || "Shaila"),
+        sourceKey: hashChiefValue(`shaila|${item.shailaId || item.id || ""}|${item.parentTask || item.text || ""}`),
         status: item.status === "get_back" || item.isGetBackStep ? "waiting to reply" : "pending answer",
       })),
       calendar: calendarRows.filter(r => !r.past).slice(0, 24).map(row => ({
@@ -1778,7 +1789,13 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     ...chiefContext,
     currentTime: undefined,
     localeTime: undefined,
-    tasks: (chiefContext.tasks || []).map(({ ageHours, ...rest }) => rest),
+    // `text` drops out for the same reason `summary` does on emails: it prefers the
+    // AI-polished ncSummary, which lands asynchronously AFTER the polish job, so
+    // every polish rewrote this key and fired a fresh snapshot — a feedback loop
+    // between two AI jobs (owner tickets umG220dj / 9f6eubMl / EsLx8PYS, 7/21).
+    // sourceKey, hashed off the raw text, still catches a genuine edit.
+    tasks: (chiefContext.tasks || []).map(({ ageHours, text, ...rest }) => rest),
+    shailos: (chiefContext.shailos || []).map(({ text, ...rest }) => rest),
     emails: (chiefContext.emails || []).map(({ summary, ...rest }) => rest),
     calendar: (chiefContext.calendar || []).map(({ now, past, ...rest }) => rest),
     phone: chiefContext.phone ? {
@@ -3293,7 +3310,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     // Expanded sections scroll internally now, so show the full lists rather than a teaser.
     const taskMax = 50;
     const topTasks = primaryTaskQueue.slice(0, taskMax);
-    const hiddenMobileTasks = Math.max(0, primaryTaskQueue.length - taskMax);
     const tasksPreview = signalNote("Tasks");
 
     return (
@@ -3419,12 +3435,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             })}
             {secTaskCut.hidden > 0 && (
               <MoreRow C={C} open={expandedRows.has("sec-tasks")} count={secTaskCut.hidden} onClick={() => toggleRow("sec-tasks")} />
-            )}
-            {false && (
-              <ActionBtn variant="text" labelColor={C.faint} labelSize={ncType.meta} onClick={onOpenQueue}
-                style={{ width:"100%", borderTop:`1px solid ${C.divider}` }}>
-                +{hiddenMobileTasks} more — open queue
-              </ActionBtn>
             )}
             </>);
             }}
@@ -3572,12 +3582,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             {secShailaCut.hidden > 0 && (
               <MoreRow C={C} open={expandedRows.has("sec-shailos")} count={secShailaCut.hidden} onClick={() => toggleRow("sec-shailos")} />
             )}
-            {false && (
-              <ActionBtn variant="text" labelColor={C.faint} labelSize={ncType.meta} onClick={onOpenShailos}
-                style={{ width:"100%", borderTop:`1px solid ${C.divider}` }}>
-                +{visibleShailos.length-40} more
-              </ActionBtn>
-            )}
             </>);
             }}
           </MobileSection>
@@ -3710,12 +3714,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             </div>
             )}
             <div style={ncTaskBody}>
-              {!isStacked && heroTask && (
-                <HeroItem C={C} accent={gP(priorities, heroTask.priority)?.color || C.accent}
-                  title={nerveDisplaySummary(heroTask, "Untitled task")}
-                  meta={gP(priorities, heroTask.priority)?.label || ""}
-                  onClick={() => setShowAllTasks(v => !v)} />
-              )}
               {isStacked && (taskComposerOpen ? (
                 <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 32px 32px", gap: 6, alignItems: "start" }}>
@@ -3736,6 +3734,14 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </ActionBtn>
               ))}
               <div ref={taskListRef} style={{ ...ncTaskList, ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }) }}>
+              {/* Hero task scrolls with the list as its emphasized first row —
+                  the pinned bar read as a frozen header (owner ticket tr60ibj2). */}
+              {!isStacked && heroTask && (
+                <HeroItem C={C} accent={gP(priorities, heroTask.priority)?.color || C.accent}
+                  title={nerveDisplaySummary(heroTask, "Untitled task")}
+                  meta={gP(priorities, heroTask.priority)?.label || ""}
+                  onClick={() => setShowAllTasks(v => !v)} />
+              )}
               {primaryTasks.length ? primaryTasks.filter(t => isStacked || t.id !== heroTask?.id).map((t, ti) => {
                 const pri = gP(priorities, t.priority);
                 const priColor = pri?.color || C.accent || "#7EB0DE";
@@ -3782,13 +3788,12 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No open tasks.</div>}
               </div>
-              {!isStacked && (showAllTasks || hiddenTaskCount > 0) && (true) && (
-                <TextButton ref={taskMoreButtonRef} onClick={() => setShowAllTasks(v => !v)} title={showAllTasks ? "Show fewer tasks" : `Show ${hiddenTaskCount} more tasks`} aria-label={showAllTasks ? "Show fewer tasks" : `Show ${hiddenTaskCount} more tasks`}
-                  style={{ width: "100%", height: 24, flex: "0 0 24px", borderTop: `1px solid ${C.divider}`,
-                    '--md-text-button-container-height': '24px', '--md-text-button-label-text-color': C.faint, '--md-text-button-label-text-size': '11px', flexShrink: 0 }}>
-                  <span slot="icon" className="material-symbols-rounded" style={{ fontSize: NC_TYPE.meta }}>{showAllTasks ? "expand_less" : "expand_more"}</span>
-                  {!showAllTasks && <span>+{hiddenTaskCount} more</span>}
-                </TextButton>
+              {/* Same MoreRow every other card uses (owner ticket WusnfkOE, 7/21: the
+                  reveal control was a different shape, size and wording on each card —
+                  this one was a 24px 11px-label sliver, below the M3 touch floor). */}
+              {!isStacked && (showAllTasks || hiddenTaskCount > 0) && (
+                <MoreRow C={C} open={showAllTasks} count={hiddenTaskCount} label="tasks"
+                  onClick={() => setShowAllTasks(v => !v)} />
               )}
 
             </div>
@@ -3807,13 +3812,14 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 <ActionBtn variant="text" icon="open_in_full" iconSize={15} labelColor={GOLD} onClick={onOpenShailos}>Open</ActionBtn>
               </div>
             </div>
-            {!isStacked && heroShaila && (
-              <HeroItem C={C} accent={GOLD}
-                title={nerveDisplaySummary(heroShaila, "Open shaila")}
-                meta={(heroShaila.status === "get_back" || heroShaila.isGetBackStep) ? "waiting to reply" : "pending answer"}
-                onClick={onOpenShailos} />
-            )}
             <div ref={deskShailosRef} style={{ ...ncScrollPane, ...denseListVars({ dense, primary: C.text, secondary: GOLD, hover: GOLD }), ...({ paddingTop: 6, paddingBottom: 6 }) }}>
+              {/* Hero shaila scrolls with the list as its emphasized first row (owner ticket tr60ibj2). */}
+              {!isStacked && heroShaila && (
+                <HeroItem C={C} accent={GOLD}
+                  title={nerveDisplaySummary(heroShaila, "Open shaila")}
+                  meta={(heroShaila.status === "get_back" || heroShaila.isGetBackStep) ? "waiting to reply" : "pending answer"}
+                  onClick={onOpenShailos} />
+              )}
               {/* Active shailos — open + pending get-back. Calm-rows v3: the hero row
                   above carries the top item; the list shows exactly the rows that fit. */}
               {visibleShailos.length ? (fitSlice(visibleShailos.filter(s => s.id !== heroShaila?.id), deskShailosFit, expandedRows.has("desk-shailos")).shown).map((s, idx) => {
@@ -3838,25 +3844,11 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 ) : null;
               })()}
 
-              {/* Recently completed shailos */}
-              {shailosCompleted.length > 0 && (
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 16px 5px", borderTop: `1px solid ${C.divider}` }}>
-                    <span style={{ color: C.success }}>{suiteIcon("check_circle", 15)}</span>
-                    <span style={{ fontSize: ncType.label, fontWeight: 500, color: C.muted, letterSpacing: 0, textTransform: "uppercase" }}>Recently resolved</span>
-                  </div>
-                  {shailosCompleted.map(s => {
-                    const text = nerveDisplaySummary(s, "Resolved shaila");
-                    return (
-                      <ListItem key={s.id} type="text" style={{ opacity: 0.72, borderRadius: RADIUS.sm }}>
-                        <span slot="start" style={{ width: 8, height: 8, borderRadius: RADIUS.pill, background: C.success }} />
-                        <span slot="headline" style={{ color: C.muted, wordBreak: "break-word", textDecoration: "line-through" }}>{text}</span>
-                        <span slot="trailing-supporting-text" style={{ fontSize: ncType.small, fontWeight: 500, color: C.success, background: "rgba(46,125,50,0.10)", border: "1px solid rgba(46,125,50,0.22)", borderRadius: RADIUS.pill, padding: "2px 7px", whiteSpace: "nowrap" }}>Done</span>
-                      </ListItem>
-                    );
-                  })}
-                </div>
-              )}
+              {/* The "Recently resolved" block is GONE from this card (owner tickets
+                  PWbASPpx / XPrGq77h / EczjwFRB / V37NEU7I, 7/21–7/22). Five struck-through
+                  answered shailos were eating ~90% of the card's height and pushing the
+                  shailos actually waiting on the owner off screen. Resolved history lives
+                  on the Shailos page, which is one tap away via Open. */}
             </div>
           </section>
           {paneResizeHandle("shailos", "phone")}

@@ -823,6 +823,43 @@ const Store = {
     }
   },
 
+  // ── AI leak → buglog ticket links ────────────────────────────────────────
+  // Which flagged AI call-leaks already have a ticket, keyed by the leak's
+  // detectedAt stamp → bug doc id. This lived in localStorage until 7/22 and that
+  // was the bug: localStorage is PER DEVICE, so the PC, the tablet and the iPad
+  // each saw an untouched "Create buglog ticket" button for the SAME leak and the
+  // owner filed it once per device — four identical "dashboard-polish, 74 calls"
+  // tickets on 7/21 alone. It also meant a device that hadn't filed the ticket
+  // could never learn the ticket was resolved, so the leak sat in the red list
+  // forever (owner ticket ug0JOmt0). One shared doc fixes both.
+  aiLeakTicketsDoc() { return db && this.uid ? db.collection("users").doc(this.uid).collection("meta").doc("aiLeakTickets") : null; },
+
+  async loadAiLeakTickets() {
+    const ref = this.aiLeakTicketsDoc();
+    if (!ref) return {};
+    try {
+      const snap = await ref.get();
+      const map = snap.exists ? (snap.data()?.byDetectedAt || {}) : {};
+      return map && typeof map === "object" ? map : {};
+    } catch (e) {
+      console.warn("[Store] loadAiLeakTickets failed:", e);
+      return {};
+    }
+  },
+
+  async linkAiLeakTicket(detectedAt, bugId) {
+    const ref = this.aiLeakTicketsDoc();
+    if (!ref || !detectedAt) return;
+    try {
+      await ref.set({
+        byDetectedAt: { [String(detectedAt)]: String(bugId || "") },
+        updatedAtMs: Date.now(),
+      }, { merge: true });
+    } catch (e) {
+      console.warn("[Store] linkAiLeakTicket failed:", e);
+    }
+  },
+
   // Condensed mirror of all non-resolved tickets at users/{uid}/meta/openTickets.
   // Exists so a coding session can find open work with one tiny document read
   // instead of dumping the whole bugs collection (full text + history). Re-built
