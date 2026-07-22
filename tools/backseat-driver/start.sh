@@ -20,27 +20,18 @@ sid=$(bsd_session_id "$payload") || exit 0
 cwd=$(bsd_json_str cwd "$payload" 2>/dev/null) || cwd=""
 [ -n "$cwd" ] || cwd=$(pwd)
 
+# The window titles itself from the session's first user message, which is what the
+# desktop's own side-rail title is derived from. Every hook is handed transcript_path,
+# so pass it through rather than reconstructing the path from the session id.
+tpath=$(bsd_json_str transcript_path "$payload" 2>/dev/null) || tpath=""
+
 dir="$BSD_ROOT/$sid"
 mkdir -p "$dir/inbox"
 rm -f "$dir/dead"
 
-# Best-effort session title. The engine writes ~/.claude/sessions/<pid>.json with a
-# `name` field, but not necessarily before this hook runs — so fall back to the
-# project folder and let the window upgrade the header once the file appears.
-title=""
-for f in "$HOME"/.claude/sessions/*.json; do
-  [ -f "$f" ] || continue
-  meta=$(cat "$f" 2>/dev/null) || continue
-  case "$meta" in
-    *"\"$sid\""*) title=$(bsd_json_str name "$meta" 2>/dev/null) ;;
-  esac
-  [ -n "$title" ] && break
-done
-[ -n "$title" ] || title=$(basename "$cwd")
-
-printf '{"sessionId":"%s","cwd":"%s","title":"%s","startedAt":%s}\n' \
+printf '{"sessionId":"%s","cwd":"%s","transcriptPath":"%s","startedAt":%s}\n' \
   "$(bsd_json_escape "$sid")" "$(bsd_json_escape "$cwd")" \
-  "$(bsd_json_escape "$title")" "$(date +%s)" > "$dir/meta.json"
+  "$(bsd_json_escape "$tpath")" "$(date +%s)" > "$dir/meta.json"
 
 # Don't stack a second window on a session that already has a live one (resume,
 # reconnect, a second SessionStart matcher firing).

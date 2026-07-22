@@ -17,6 +17,13 @@ payload=$(cat)
 sid=$(bsd_session_id "$payload") || exit 0
 [ -n "$sid" ] || exit 0
 
+# Subagents run tools under the SAME session_id, so without this a Task/Explore
+# subagent would consume the owner's steering into its own context and the main
+# thread would never see it. Notes are for the main loop only.
+case "$payload" in
+  *'"agent_id"'*) exit 0 ;;
+esac
+
 dir="$BSD_ROOT/$sid"
 [ -d "$dir/inbox" ] || exit 0
 

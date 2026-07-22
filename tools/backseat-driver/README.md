@@ -5,8 +5,8 @@ already running — without sending a new message and re-paying the context.
 
 ```
 ┌──────────────────────────────────────┐
-│ shamash-pro-4-app-0c              ×  │
-│ Shamash Pro 4 App · 8cf190c4         │
+│ make me an always on top small di… ×  │
+│ Shamash Pro 4 App                    │
 │ ┌──────────────────────────────────┐ │
 │ │ actually use outlined chips      │ │
 │ │ here, not filled                 │ │
@@ -14,6 +14,37 @@ already running — without sending a new message and re-paying the context.
 │ 1 note waiting…            [ Send ]  │
 └──────────────────────────────────────┘
 ```
+
+## The header, and why it is not the side-rail title
+
+The title in the desktop side rail lives **server-side** (the sessions API). It is nowhere on
+disk — not in Local Storage, IndexedDB, or any local cache — and `get_session` explicitly
+refuses to report the *current* session, so a local process cannot read it.
+
+What is local is the transcript, and the side-rail title is derived from its first user
+message. So the header shows that message, truncated. Every hook is handed `transcript_path`,
+which is how the window finds it. **Consequence:** renaming a session in the app does not move
+this header.
+
+The earlier header showed `~/.claude/sessions/<pid>.json`'s `name` field — a derived slug like
+`shamash-pro-4-app-bc`, with `nameSource: "derived"`. That is the machine's name for the
+session, not yours, which is why it read as meaningless.
+
+## When the window is visible
+
+It follows its session, and only its session:
+
+- **Closes** when the session ends (`SessionEnd`), and also when the session's process dies
+  without one — the app being killed outright never fires `SessionEnd`, so the window checks
+  that its entry in `~/.claude/sessions/` still exists and that its pid is alive.
+- **Hides** when you switch to a different session in the app, and returns when you switch
+  back. The app logs `ping internal session local_X to CLI session <engine uuid>` (the id
+  mapping) and `setFocusedSession: sessionId=local_X` (what is on screen); together those
+  answer "is my session the visible one".
+- **Stays visible** when you alt-tab to another application. `setFocusedSession=null` covers
+  both "app blurred" and "nothing selected", so it is treated as indeterminate rather than
+  hidden — an always-on-top pad that vanishes the moment you look at something else would be
+  useless.
 
 ## Why this exists
 
@@ -65,6 +96,12 @@ active work, and free while idle.
 on the machine this was built for; the script itself is fork-free on that path (session id
 is parsed with shell builtins, not `jq` — which isn't installed here anyway).
 
+### Subagents are skipped
+
+Subagents run tools under the **same** `session_id`. Without an explicit skip, a `Task` or
+`Explore` subagent's tool call would consume your steering note into the subagent's context
+and the main thread would never see it. `drain.sh` bails when the payload carries `agent_id`.
+
 ### It cannot loop
 
 `stop.sh` blocks only when notes exist, and every pass **deletes** the notes it read. Notes
@@ -98,7 +135,7 @@ Removes only the entries pointing into `~/.claude/hooks/backseat/`; other hooks 
 State lives in `~/.claude/backseat/<session_id>/` — `inbox/`, `consumed.md` (audit trail of
 everything folded into a turn), `meta.json`, `window.pid`.
 
-## Two traps worth remembering
+## Three traps worth remembering
 
 - **`$Input` is a PowerShell automatic variable.** Assigning a control to it works at script
   scope but resolves to the empty pipeline enumerator inside every function and scriptblock.
@@ -107,3 +144,10 @@ everything folded into a turn), `meta.json`, `window.pid`.
 - **`Start-Process -ArgumentList` does no quoting.** It joins the array with spaces, so any
   path containing them — every path under `Documents\Shamash Pro 4 App` — is split into
   fragments. The script path is quoted explicitly inside the argument list.
+- **`DragMove()` eats the click that follows it.** With a custom title bar, a
+  `MouseLeftButtonDown` handler that calls `DragMove()` captures the mouse and enters a modal
+  drag loop, so the matching `MouseUp` never arrives. Any button inside that drag region — the
+  × here — silently does nothing, with no error to point at. The close button marks
+  `MouseLeftButtonDown` as `Handled` so the event never reaches the drag handler. A `TextBlock`
+  with no `Background` is also hit-test transparent outside its glyphs, so the button is a
+  `Border` with `Background="Transparent"` for a real 24×24 target.
