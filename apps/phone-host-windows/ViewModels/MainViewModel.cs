@@ -3129,6 +3129,14 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _relay.GetRelayMedia = BuildRelayMedia;
         _relay.IsPhoneConnected = () => IsFullyConnected;
         _relay.ReleasePhone     = ReleasePhoneForHandoffAsync;
+        // A settings file we could not read means the relay key in memory is NOT
+        // the saved one — the cloud will reject it and remote control stays dead.
+        // Say so at startup instead of letting it show up only as 401s.
+        if (_settings.LoadFailed)
+            AppendDebug($"[SETTINGS] could not read settings.json ({_settings.LoadError}) — " +
+                        "running on defaults for this session. Nothing will be saved over the file, " +
+                        "and the relay key was NOT regenerated. Restart DeskPhone to pick the saved settings back up.");
+
         _relay.Configure(_settings.Current.RelayKey, _settings.Current.RelayUrl);
         _api.GetRelayStatus = () =>
         {
@@ -3136,7 +3144,9 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             var url   = string.IsNullOrWhiteSpace(_settings.Current.RelayUrl)
                         ? "https://onetaskonly-app.firebaseapp.com/api/phone-relay"
                         : _settings.Current.RelayUrl;
-            return $"{{\"enabled\":{(_relay.IsEnabled ? "true" : "false")},\"key\":\"{key}\",\"relayUrl\":\"{url}\"}}";
+            var blocked = _relay.AuthBlockedReason;
+            var blockedJson = blocked == null ? "null" : System.Text.Json.JsonSerializer.Serialize(blocked);
+            return $"{{\"enabled\":{(_relay.IsEnabled ? "true" : "false")},\"key\":\"{key}\",\"relayUrl\":\"{url}\",\"authBlocked\":{blockedJson}}}";
         };
         _relay.Start();
         if (_relay.IsEnabled)

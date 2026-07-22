@@ -280,6 +280,7 @@ public class RelayService : IDisposable
     private const string RtdbCommandsUrl = "https://" + FB_PROJECT + "-default-rtdb.firebaseio.com/phone-relay/commands.json";
     private readonly HttpClient _streamHttp = new() { Timeout = Timeout.InfiniteTimeSpan };
     private volatile bool _rtdbStreamHealthy;
+    private volatile bool _mailboxReachable;   // a real 2xx has come back at least once
 
     // ── RTDB auth: the commands mailbox used to be a public .read/.write:true
     // rule (anyone, signed in or not, could read/inject phone commands). It now
@@ -294,13 +295,28 @@ public class RelayService : IDisposable
     private DateTime _relayIdTokenExpiryUtc = DateTime.MinValue;
     private readonly SemaphoreSlim _relayTokenGate = new(1, 1);
 
+    // ── Rejected-key state ──────────────────────────────────────────────────
+    // A 401 from the mint endpoint means this PC's relay key is not the one the
+    // cloud holds. That is a standing condition, not a blip: retrying every few
+    // seconds cannot fix it, it just buries the log under hundreds of identical
+    // lines an hour and fires ~600 pointless requests. Back off hard, say once
+    // what is wrong and how to fix it, and expose it so the UI can show it.
+    private DateTime _relayAuthBlockedUntilUtc = DateTime.MinValue;
+    private int      _relayAuthFailures;
+    private bool     _relayAuthRejectedLogged;
+    /// <summary>Non-null when the cloud is refusing this host's relay key. Shown in
+    /// the relay status so a dead relay is visible instead of log-only.</summary>
+    public string? AuthBlockedReason { get; private set; }
+
     private async Task<string?> GetRelayIdTokenAsync(CancellationToken ct)
     {
         if (_relayIdToken != null && DateTime.UtcNow < _relayIdTokenExpiryUtc) return _relayIdToken;
+        if (DateTime.UtcNow < _relayAuthBlockedUntilUtc) return null;
         await _relayTokenGate.WaitAsync(ct);
         try
         {
             if (_relayIdToken != null && DateTime.UtcNow < _relayIdTokenExpiryUtc) return _relayIdToken;
+            if (DateTime.UtcNow < _relayAuthBlockedUntilUtc) return null;
             if (string.IsNullOrWhiteSpace(_relayKey))
             {
                 LogLine?.Invoke("[RELAY AUTH] no relay secret configured — cannot mint an RTDB token");
@@ -311,7 +327,33 @@ public class RelayService : IDisposable
             using var mintResp = await _http.SendAsync(mintReq, ct);
             if (!mintResp.IsSuccessStatusCode)
             {
-                LogLine?.Invoke($"[RELAY AUTH] token mint HTTP {(int)mintResp.StatusCode}");
+                var code = (int)mintResp.StatusCode;
+                if (code is 401 or 403)
+                {
+                    _relayAuthFailures++;
+                    // 30 s, 1 m, 2 m, 4 m, 8 m, then every 15 min.
+                    var backoff = TimeSpan.FromSeconds(
+                        Math.Min(900, 30 * (1 << Math.Min(_relayAuthFailures - 1, 5))));
+                    _relayAuthBlockedUntilUtc = DateTime.UtcNow.Add(backoff);
+                    AuthBlockedReason = $"the cloud rejected this PC's relay key (HTTP {code})";
+                    if (!_relayAuthRejectedLogged)
+                    {
+                        _relayAuthRejectedLogged = true;
+                        LogLine?.Invoke(
+                            $"[RELAY AUTH] REJECTED (HTTP {code}) — the cloud does not recognise this PC's relay key. " +
+                            "Remote texts, dialling and call control are OFF until it matches. " +
+                            "The key is in Settings → Connection and must equal PHONE_RELAY_SECRET in the cloud. " +
+                            "If it looks wrong, closing and reopening DeskPhone restores the saved key.");
+                    }
+                    else
+                    {
+                        LogLine?.Invoke($"[RELAY AUTH] still rejected — next retry in {backoff.TotalMinutes:0.#} min");
+                    }
+                }
+                else
+                {
+                    LogLine?.Invoke($"[RELAY AUTH] token mint HTTP {code}");
+                }
                 return null;
             }
             using var mintDoc = JsonDocument.Parse(await mintResp.Content.ReadAsStringAsync(ct));
@@ -333,6 +375,12 @@ public class RelayService : IDisposable
             _relayIdToken = signInDoc.RootElement.GetProperty("idToken").GetString();
             var expiresInSec = int.TryParse(signInDoc.RootElement.GetProperty("expiresIn").GetString(), out var s) ? s : 3600;
             _relayIdTokenExpiryUtc = DateTime.UtcNow.AddSeconds(Math.Max(60, expiresInSec - 300));
+            if (_relayAuthRejectedLogged)
+                LogLine?.Invoke("[RELAY AUTH] key accepted — remote commands are live again");
+            _relayAuthFailures       = 0;
+            _relayAuthRejectedLogged = false;
+            _relayAuthBlockedUntilUtc = DateTime.MinValue;
+            AuthBlockedReason        = null;
             return _relayIdToken;
         }
         catch (Exception ex)
@@ -343,7 +391,10 @@ public class RelayService : IDisposable
         finally { _relayTokenGate.Release(); }
     }
 
-    private async Task AttachRelayAuthAsync(HttpRequestMessage req, CancellationToken ct)
+    /// <summary>Attaches the RTDB credential. Returns false when no token could be
+    /// obtained — callers must then SKIP the request rather than send it bare, which
+    /// only produced a second, redundant 401 in the log for every failed mint.</summary>
+    private async Task<bool> AttachRelayAuthAsync(HttpRequestMessage req, CancellationToken ct)
     {
         // RTDB's REST API only honors Firebase ID tokens as an ?auth= query
         // parameter. An Authorization: Bearer header is parsed as a (wrong-type)
@@ -351,9 +402,10 @@ public class RelayService : IDisposable
         // Bearer form, so from the moment the rules locked down (7/15) every
         // mailbox read/clear failed silently and no cloud command was delivered.
         var idToken = await GetRelayIdTokenAsync(ct);
-        if (idToken == null || req.RequestUri == null) return;
+        if (idToken == null || req.RequestUri == null) return false;
         var sep = string.IsNullOrEmpty(req.RequestUri.Query) ? "?" : "&";
         req.RequestUri = new Uri(req.RequestUri.AbsoluteUri + sep + "auth=" + Uri.EscapeDataString(idToken));
+        return true;
     }
 
     private const int DrainStreamHealthyMs = 120_000; // safety sweep behind a live stream
@@ -373,9 +425,16 @@ public class RelayService : IDisposable
             {
                 using var req = new HttpRequestMessage(HttpMethod.Get, RtdbCommandsUrl);
                 req.Headers.Accept.ParseAdd("text/event-stream");
-                await AttachRelayAuthAsync(req, ct);
-                using var resp = await _streamHttp.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
-                if (!resp.IsSuccessStatusCode)
+                // No credential ⇒ don't open a bare stream that can only 401. The
+                // mint attempt has already said why, once.
+                using HttpResponseMessage? resp = await AttachRelayAuthAsync(req, ct)
+                    ? await _streamHttp.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct)
+                    : null;
+                if (resp == null)
+                {
+                    // fall through to the backoff below
+                }
+                else if (!resp.IsSuccessStatusCode)
                 {
                     LogLine?.Invoke($"[RELAY STREAM] HTTP {(int)resp.StatusCode}");
                 }
@@ -435,21 +494,24 @@ public class RelayService : IDisposable
         // phone — draining here would execute commands on a phone-less PC.
         if (IsPhoneConnected?.Invoke() == false) return false;
         using var getReq = new HttpRequestMessage(HttpMethod.Get, RtdbCommandsUrl);
-        await AttachRelayAuthAsync(getReq, ct);
+        // Without a credential this GET can only 401 — sending it anyway just
+        // doubled the noise for every rejected mint.
+        if (!await AttachRelayAuthAsync(getReq, ct)) return false;
         using var resp = await _http.SendAsync(getReq, ct);
         if (!resp.IsSuccessStatusCode)
         {
             LogLine?.Invoke($"[RELAY DRAIN] RTDB HTTP {(int)resp.StatusCode}");
             return false;
         }
+        _mailboxReachable = true;
         var body = (await resp.Content.ReadAsStringAsync(ct)).Trim();
         if (body.Length <= 2 || body == "null") return false;
 
         using (var clearReq = new HttpRequestMessage(HttpMethod.Put, RtdbCommandsUrl)
         { Content = new StringContent("null", Encoding.UTF8, "application/json") })
         {
-            await AttachRelayAuthAsync(clearReq, ct);
-            await _http.SendAsync(clearReq, ct);
+            if (await AttachRelayAuthAsync(clearReq, ct))
+                await _http.SendAsync(clearReq, ct);
         }
 
         var commandsJson = NormalizeRtdbArray(body);
@@ -488,7 +550,11 @@ public class RelayService : IDisposable
             try
             {
                 await DrainMailboxOnceAsync(ct);
-                if (!loggedFirstPoll)
+                // Only claim the mailbox is reachable once a fetch has actually
+                // succeeded. This used to fire whenever the call merely didn't
+                // throw — so it printed "remote commands will run" one line above
+                // the 401 that proved they would not.
+                if (!loggedFirstPoll && _mailboxReachable)
                 {
                     loggedFirstPoll = true;
                     LogLine?.Invoke("[RELAY DRAIN] command mailbox reachable — remote commands will run");

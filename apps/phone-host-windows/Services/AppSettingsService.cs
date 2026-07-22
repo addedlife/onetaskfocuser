@@ -112,6 +112,16 @@ public class AppSettingsService
     private Settings _current = new();
     public  Settings Current  => _current;
 
+    /// <summary>True when a settings file exists on disk but could not be read or
+    /// parsed this session. In that state the in-memory settings are DEFAULTS, not
+    /// the user's — so nothing may be persisted over the real file, and no identity
+    /// (relay key) may be regenerated from them.</summary>
+    public bool    LoadFailed { get; private set; }
+    /// <summary>Why the load failed, for the debug log. Null when the load was clean.</summary>
+    public string? LoadError  { get; private set; }
+    /// <summary>Why the last Save() did not persist. Null when the last save succeeded.</summary>
+    public string? SaveError  { get; private set; }
+
     /// <summary>Most-recently-used device (for the startup reconnect prompt).</summary>
     public KnownDevice? MostRecentDevice =>
         _current.KnownDevices
@@ -125,17 +135,38 @@ public class AppSettingsService
     // ── Constructor ───────────────────────────────────────────────────────
     public AppSettingsService()
     {
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        try { Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!); }
+        catch (Exception ex) { LoadError = $"settings folder unavailable — {ex.GetType().Name}: {ex.Message}"; }
 
-            if (File.Exists(SettingsPath))
+        var fileExists = false;
+        try { fileExists = File.Exists(SettingsPath); } catch { }
+
+        if (fileExists)
+        {
+            // A settings file that EXISTS but cannot be read is not a first run, and
+            // must never be treated as one. The usual cause is transient: an
+            // overlapping restart where the outgoing instance still holds the file
+            // for a moment. Retry briefly before giving up.
+            for (var attempt = 1; attempt <= 4; attempt++)
             {
-                var json = File.ReadAllText(SettingsPath);
-                _current = JsonSerializer.Deserialize<Settings>(json) ?? new();
+                try
+                {
+                    var parsed = JsonSerializer.Deserialize<Settings>(File.ReadAllText(SettingsPath));
+                    if (parsed != null)
+                    {
+                        _current   = parsed;
+                        LoadFailed = false;
+                        LoadError  = null;
+                        break;
+                    }
+                    LoadError = "settings file parsed to null";
+                }
+                catch (Exception ex) { LoadError = $"{ex.GetType().Name}: {ex.Message}"; }
+
+                LoadFailed = true;
+                if (attempt < 4) Thread.Sleep(150 * attempt);
             }
         }
-        catch { _current = new(); }
 
         // ── Migrate from old single-device fields ─────────────────────────
         if (_current.KnownDevices.Count == 0 &&
@@ -156,8 +187,19 @@ public class AppSettingsService
             Save();
         }
 
-        // ── Auto-generate relay key on first run ──────────────────────────
-        if (string.IsNullOrWhiteSpace(_current.RelayKey))
+        // ── Auto-generate relay key on a GENUINE first run ────────────────
+        // The relay key is this PC's identity to the cloud: it must equal the
+        // PHONE_RELAY_SECRET the phoneRelay Function holds. Minting a fresh one
+        // silently re-identifies the host, and because nothing surfaces the
+        // mismatch, remote texts and call control stay dead for the whole session
+        // behind an endless [RELAY AUTH] token mint HTTP 401 loop.
+        // That is exactly what happened 2026-07-22: the settings file could not be
+        // read at startup, the old code read that as "first run", invented a new
+        // key, and its Save() failed too — so disk still held the CORRECT key while
+        // the running process used a random one for hours.
+        // Hence the LoadFailed guard: no key is ever generated from settings we
+        // could not read.
+        if (string.IsNullOrWhiteSpace(_current.RelayKey) && !LoadFailed)
         {
             _current.RelayKey = Guid.NewGuid().ToString("N"); // 32 hex chars, no dashes
             Save();
@@ -169,13 +211,31 @@ public class AppSettingsService
     // ── API ───────────────────────────────────────────────────────────────
     public void Save()
     {
+        // Never write defaults over a settings file we could not read. Doing so
+        // turns a momentary read failure into permanent loss of the relay key,
+        // known devices, drafts, pins and theme.
+        if (LoadFailed)
+        {
+            SaveError = "not saved — the existing settings file could not be read this session";
+            return;
+        }
+
         try
         {
             var json = JsonSerializer.Serialize(_current,
                 new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(SettingsPath, json);
+
+            // Write-then-replace: a crash or a full disk mid-write leaves the old
+            // file intact instead of a truncated one that fails to parse next launch.
+            var tmp = SettingsPath + ".tmp";
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, SettingsPath, overwrite: true);
+            SaveError = null;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            SaveError = $"{ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     public void SetDarkMode(bool enabled)
