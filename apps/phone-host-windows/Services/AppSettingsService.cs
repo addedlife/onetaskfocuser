@@ -122,6 +122,29 @@ public class AppSettingsService
     /// <summary>Why the last Save() did not persist. Null when the last save succeeded.</summary>
     public string? SaveError  { get; private set; }
 
+    /// <summary>True when a first-run relay key was generated but could not be written
+    /// to disk, so it was discarded rather than used. The host then has NO relay key,
+    /// which is the honest state — an unsaved key is one the cloud rejects forever.</summary>
+    public bool    RelayKeyMintAbandoned { get; private set; }
+
+    /// <summary>False when the key this process is using is not the one saved on disk —
+    /// i.e. the running host has silently re-identified itself and the cloud will reject
+    /// it. Surfaced by /relay-status so the whole diagnosis is one request.</summary>
+    public bool RelayKeyMatchesDisk => RelayKeyPersisted(_current.RelayKey);
+
+    /// <summary>Read the file back and confirm the key really landed. Save() reports its
+    /// own exceptions, but a write that "succeeds" into a redirected/virtualised folder
+    /// still leaves the next launch reading the old file — only a read-back proves it.</summary>
+    private static bool RelayKeyPersisted(string expected)
+    {
+        try
+        {
+            var onDisk = JsonSerializer.Deserialize<Settings>(File.ReadAllText(SettingsPath));
+            return string.Equals(onDisk?.RelayKey, expected, StringComparison.Ordinal);
+        }
+        catch { return false; }
+    }
+
     /// <summary>Most-recently-used device (for the startup reconnect prompt).</summary>
     public KnownDevice? MostRecentDevice =>
         _current.KnownDevices
@@ -135,11 +158,26 @@ public class AppSettingsService
     // ── Constructor ───────────────────────────────────────────────────────
     public AppSettingsService()
     {
+        // A folder we could not create is NOT a clean first run — we have no idea
+        // whether a settings file is sitting in there. LoadFailed must be set here
+        // too, or the relay-key mint below fires on a state we never inspected.
         try { Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!); }
-        catch (Exception ex) { LoadError = $"settings folder unavailable — {ex.GetType().Name}: {ex.Message}"; }
+        catch (Exception ex)
+        {
+            LoadError  = $"settings folder unavailable — {ex.GetType().Name}: {ex.Message}";
+            LoadFailed = true;
+        }
 
+        // Same for the existence probe itself: a throwing File.Exists means
+        // "unknown", not "absent". Treating it as absent is what turns a transient
+        // filesystem hiccup into a regenerated identity.
         var fileExists = false;
-        try { fileExists = File.Exists(SettingsPath); } catch { }
+        try { fileExists = File.Exists(SettingsPath); }
+        catch (Exception ex)
+        {
+            LoadError  = $"could not probe settings file — {ex.GetType().Name}: {ex.Message}";
+            LoadFailed = true;
+        }
 
         if (fileExists)
         {
@@ -199,10 +237,24 @@ public class AppSettingsService
         // the running process used a random one for hours.
         // Hence the LoadFailed guard: no key is ever generated from settings we
         // could not read.
+        // It happened AGAIN on 2026-07-23 despite the LoadFailed guard: the running
+        // b342 process held a random key while disk held the correct one, and nothing
+        // said so. A minted key that does not reach disk is worse than no key at all —
+        // it is an identity the cloud rejects forever, silently, for the whole session.
+        // So the mint is now persist-or-abandon: if the write does not verifiably land,
+        // the key is rolled back to empty, which makes the relay report "no relay key
+        // set" (loud, actionable) instead of 401-looping behind a phantom identity.
         if (string.IsNullOrWhiteSpace(_current.RelayKey) && !LoadFailed)
         {
-            _current.RelayKey = Guid.NewGuid().ToString("N"); // 32 hex chars, no dashes
+            var minted = Guid.NewGuid().ToString("N"); // 32 hex chars, no dashes
+            _current.RelayKey = minted;
             Save();
+            if (!RelayKeyPersisted(minted))
+            {
+                _current.RelayKey = "";
+                RelayKeyMintAbandoned = true;
+                SaveError ??= "settings file did not accept the new relay key";
+            }
         }
 
         NormalizeAppearanceSettings();

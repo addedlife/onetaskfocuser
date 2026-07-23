@@ -3136,6 +3136,10 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             AppendDebug($"[SETTINGS] could not read settings.json ({_settings.LoadError}) — " +
                         "running on defaults for this session. Nothing will be saved over the file, " +
                         "and the relay key was NOT regenerated. Restart DeskPhone to pick the saved settings back up.");
+        if (_settings.RelayKeyMintAbandoned)
+            AppendDebug($"[SETTINGS] a new relay key was generated but could not be saved ({_settings.SaveError}) — " +
+                        "it was discarded rather than used, so remote access is OFF until settings.json is writable. " +
+                        "Restart DeskPhone once the file is reachable.");
 
         _relay.Configure(_settings.Current.RelayKey, _settings.Current.RelayUrl);
         _api.GetRelayStatus = () =>
@@ -3146,7 +3150,10 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                         : _settings.Current.RelayUrl;
             var blocked = _relay.AuthBlockedReason;
             var blockedJson = blocked == null ? "null" : System.Text.Json.JsonSerializer.Serialize(blocked);
-            return $"{{\"enabled\":{(_relay.IsEnabled ? "true" : "false")},\"key\":\"{key}\",\"relayUrl\":\"{url}\",\"authBlocked\":{blockedJson}}}";
+            // keyMatchesDisk false + authBlocked set = the host re-identified itself and
+            // a restart is the fix. That pairing used to take three manual probes to reach.
+            var matchesDisk = _settings.RelayKeyMatchesDisk ? "true" : "false";
+            return $"{{\"enabled\":{(_relay.IsEnabled ? "true" : "false")},\"key\":\"{key}\",\"relayUrl\":\"{url}\",\"authBlocked\":{blockedJson},\"keyMatchesDisk\":{matchesDisk}}}";
         };
         _relay.Start();
         if (_relay.IsEnabled)
