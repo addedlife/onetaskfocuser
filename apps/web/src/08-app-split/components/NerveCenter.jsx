@@ -1172,6 +1172,31 @@ function MoreRow({ count, open = false, label = "more", onClick, C }) {
   );
 }
 
+// CardMoreChip — the same "+N more" reveal, sized for the tight card-grid columns
+// (ticket MvX6nA5: "any crd should show till its bottom and then at the very
+// bottom not hogging space an option to extend to scrolling card"). MoreRow's
+// full-width 48dp row is right for the roomier stacked/full-panel views, but in a
+// ~200px column it costs a whole row just to offer one tap. The touch target
+// stays a real 48dp md-icon-button (GM3 floor — non-negotiable), it just stops
+// holding layout height: a zero-height sticky anchor at the card's scroll edge
+// holds an absolutely-positioned chip that overlaps the corner instead of
+// pushing the list up, the same technique 4.104.2 already uses for row actions.
+// A short gradient scrim keeps it legible over whatever text is underneath.
+function CardMoreChip({ count, open, onClick, C, accentColor }) {
+  if (!open && !count) return null;
+  const a = accentColor || C.accent;
+  return (
+    <div style={{ position: "sticky", bottom: 0, height: 0, zIndex: 3 }}>
+      <div style={{ position: "absolute", right: 2, bottom: 2, display: "flex", alignItems: "center" }}>
+        <span aria-hidden style={{ position: "absolute", inset: "-4px -4px -4px -36px", background: `linear-gradient(to right, transparent, ${C.bg} 65%)` }} />
+        <IconBtn icon={open ? "expand_less" : "expand_more"} iconSize={16} color={a}
+          onClick={onClick} title={open ? "Show less" : `Show ${count} more`} aria-label={open ? "Show less" : `Show ${count} more`}
+          style={{ position: "relative", background: C.bg, boxShadow: ELEV[1], borderRadius: RADIUS.pill }} />
+      </div>
+    </div>
+  );
+}
+
 function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
   const viewportW = useViewportWidth();
   // M3 window size class on both axes. Height is what drives row density (see
@@ -2974,13 +2999,17 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   if ((isMobileDevice || desktopLayout === "boxes") && !healthPage && !chiefPage) {
     const menuToggle = id => setMobileMenuOpen(prev => prev === id ? null : id);
     const menuClose  = () => setMobileMenuOpen(null);
-    // >= 1000 px: 5 vertical columns side by side (each card full height, 1/5 width).
-    // <  1000 px: stacked rows / 2-col grid (below).
+    // >= 1500 px: 5 vertical columns side by side (each card full height, 1/5 width).
+    // <  1500 px: stacked rows / 2-col grid (below).
     // Both orientations show all 5 cards simultaneously — no carousel, no scrolling between cards.
-    // Owner 7/21: the 1500 px threshold pushed most desktops (Surface Laptop 7 at
-    // 150% DPI ≈ 1444 px available) into stacked frozen-header row cards. Real
-    // columns are the desktop view — restore them at ~200 px/column.
-    const boxesFiveCol = availableW >= 1000;
+    // Owner 7/21 briefly dropped this to 1000px so the Surface Laptop 7 (150% DPI ≈
+    // 1444 px available) got columns instead of stacked rows — but at that width 5
+    // columns squished to ~190px each and read badly (ticket nFlnVwdT: "it used to
+    // be rows unless it was on a large desktop monitor, that was the correct
+    // thing"). Reverted 7/24 to the original 1500px = 5 cols × 300px minimum
+    // comfortable reading width per column; the Surface Laptop goes back to rows,
+    // which per the owner is what it should have stayed on.
+    const boxesFiveCol = availableW >= 1500;
     const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, stickyHeader: boxesFiveCol, narrowActions: availableW < 480 };
     // Rows-mode cards (iPad portrait: five cards sharing the screen height) are far
     // too short to spend ~40px on a fixed hero — it left a single-row slat. The hero
@@ -3023,7 +3052,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     // squished colums show ugly twoletter vertical lettrer strings, they could show
     // more but the checks and options block half the narrowere witdth"). 168px floor
     // + a slightly bigger share, and rowActionsHidden below reclaims the rest.
-    // Five columns then need 4x168 + 168 = 840px; this branch only runs >= 1000px.
+    // Five columns then need 4x168 + 168 = 840px; this branch only runs >= 1500px.
     const boxCols = expandedBoxId
       ? BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,1fr)" : "minmax(168px,0.32fr)").join(" ")
       : "repeat(5, minmax(0,1fr))";
@@ -3093,15 +3122,15 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
 
         {nextActionBar}
 
-        {/* >= 1000 px: 5 columns side by side, each full height.
-            <  1000 px: 5 rows stacked, each 1/5 height — all cards always visible. */}
+        {/* >= 1500 px: 5 columns side by side, each full height.
+            <  1500 px: 5 rows stacked, each 1/5 height — all cards always visible. */}
         {/* GM3 grid rhythm: real gutters between cards (tighter when dense, but still
             breathing) — tone + space do the separation, matching the full-panel view. */}
         <div style={{
             // One screen, no page scroll: all five categories always visible.
-            // Wide (>= 1000 px): five REAL full-height columns side by side — the
-            // desktop columns view (owner 7/21: the stacked frozen-header row
-            // cards on desktop were a regression; columns are the wide layout).
+            // Wide (>= 1500 px): five REAL full-height columns side by side — a large
+            // desktop monitor only (ticket nFlnVwdT — narrower screens, including the
+            // Surface Laptop, read as rows; that's the correct default).
             // Narrow: rows weighted by content so a busy card gets more of the
             // screen than a quiet one — the equal fifths were the real bug.
             flex: 1, minHeight: 0, overflow: "hidden",
@@ -3184,12 +3213,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </ListItem>
               );
             })}
-            {mailCut.hidden > 0 && (
-              <MoreRow C={C} count={mailCut.hidden} onClick={() => openAllInBox("mail")} />
-            )}
-            {mailCut.hidden === 0 && showAllBoxIds.has("mail") && (
-              <MoreRow C={C} open count={0} onClick={() => toggleShowAllBox("mail")} />
-            )}
+            <CardMoreChip C={C} accentColor={CAT_MAIL} count={mailCut.hidden}
+              open={mailCut.hidden === 0 && showAllBoxIds.has("mail")}
+              onClick={() => mailCut.hidden > 0 ? openAllInBox("mail") : toggleShowAllBox("mail")} />
             </>);
             }}
           </MobileBox>
@@ -3273,12 +3299,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </div>
               );
             })}
-            {taskCut.hidden > 0 && (
-              <MoreRow C={C} count={taskCut.hidden} onClick={() => openAllInBox("tasks")} />
-            )}
-            {taskCut.hidden === 0 && showAllBoxIds.has("tasks") && (
-              <MoreRow C={C} open count={0} onClick={() => toggleShowAllBox("tasks")} />
-            )}
+            <CardMoreChip C={C} count={taskCut.hidden}
+              open={taskCut.hidden === 0 && showAllBoxIds.has("tasks")}
+              onClick={() => taskCut.hidden > 0 ? openAllInBox("tasks") : toggleShowAllBox("tasks")} />
             </>);
             }}
           </MobileBox>
@@ -3308,12 +3331,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </ListItem>
               );
             })}
-            {shailaCut.hidden > 0 && (
-              <MoreRow C={C} count={shailaCut.hidden} onClick={() => openAllInBox("shailos")} />
-            )}
-            {shailaCut.hidden === 0 && showAllBoxIds.has("shailos") && (
-              <MoreRow C={C} open count={0} onClick={() => toggleShowAllBox("shailos")} />
-            )}
+            <CardMoreChip C={C} accentColor={GOLD} count={shailaCut.hidden}
+              open={shailaCut.hidden === 0 && showAllBoxIds.has("shailos")}
+              onClick={() => shailaCut.hidden > 0 ? openAllInBox("shailos") : toggleShowAllBox("shailos")} />
             </>);
             }}
           </MobileBox>
@@ -3493,7 +3513,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             </ListItem>
             <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
               {/* Card-grid icon tracks its real orientation: columns wide, rows narrow. */}
-              {!isMobileDevice && [{ id:"boxes", icon: availableW >= 1000 ? "view_column" : "table_rows", label:"Card grid" }, { id:"full", icon:"grid_view", label:"Full panel" }].map(({ id, icon, label }) => (
+              {!isMobileDevice && [{ id:"boxes", icon: availableW >= 1500 ? "view_column" : "table_rows", label:"Card grid" }, { id:"full", icon:"grid_view", label:"Full panel" }].map(({ id, icon, label }) => (
                 <IconBtn key={id} icon={icon} iconSize={16} color={desktopLayout === id ? C.text : C.muted} active={desktopLayout === id} activeBg={C.hover} onClick={() => setDesktopLayoutPersist(id)} title={label} aria-label={label} />
               ))}
               <IconBtn icon={densityIcon} iconSize={16} color={C.muted} onClick={toggleMobileDensity} title={densityLabel} aria-label={densityLabel} />
@@ -3789,9 +3809,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             {/* Layout: Boxes / Accordion / Full (desktop-only alternatives to the 3-column view) */}
             <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
               {[
-                // Card-grid icon tracks its real orientation (columns ≥1000 px, rows below);
+                // Card-grid icon tracks its real orientation (columns ≥1500 px, rows below);
                 // the two icons were reversed relative to what each layout actually renders.
-                { id: "boxes", icon: availableW >= 1000 ? "view_column" : "table_rows", title: "Card grid view" },
+                { id: "boxes", icon: availableW >= 1500 ? "view_column" : "table_rows", title: "Card grid view" },
                 { id: "full",  icon: "grid_view", title: "Full panel view" },
               ].map(({ id, icon, title }) => (
                 <IconBtn key={id} icon={icon} iconSize={15} onClick={() => setDesktopLayoutPersist(id)} title={title} aria-label={title}
