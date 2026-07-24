@@ -3,6 +3,30 @@
 A small always-on-top window, one per Claude Code session, for steering a turn that is
 already running — without sending a new message and re-paying the context.
 
+> ## ⚠ MOTHBALLED 2026-07-24 — installed but not running
+>
+> **Claude Code gained this natively.** Engine `claude-code` **2.1.217** (2026-07-22, bundled in
+> desktop 1.24012.1) began delivering mid-run messages into the running turn — the model gets a
+> `<system-reminder>` appended to the tool-call result telling it to continue rather than stop.
+> This tool is now duplicate machinery. Full evidence, including the within-session engine-flip
+> experiment that dates it: [`audits/midturn-changeover-2026-07-22.md`](../../audits/midturn-changeover-2026-07-22.md).
+>
+> The four hooks have been **unregistered** from `~/.claude/settings.json`; the scripts are
+> **deliberately kept** at `~/.claude/hooks/backseat/` in case the native behaviour is a staged
+> flag that gets rolled back. Nothing is deleted — archived steering logs under
+> `~/.claude/backseat/` are intact too.
+>
+> **To bring it back:**
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File tools/backseat-driver/install.ps1
+> ```
+> (Hooks load at session start, so it takes effect in the next session.)
+>
+> **Why mothball rather than keep it:** the drain hook bills every tool call whether or not you
+> ever type. Measured cost is **~222ms per tool call** on this machine — see Cost below.
+> The one thing the native path still cannot do is catch a message typed *after the last tool
+> call*, which the `Stop` hook here handles by blocking the turn from ending.
+
 ```
 ┌────────────────────────────────────────────────────┐
 │ BackSeatDriver steering prompt window        1   × │
@@ -107,9 +131,20 @@ active work, and free while idle.
 
 ### Cost
 
-`drain.sh` runs after every tool call. Idle cost is one process spawn, measured at **~63ms**
-on the machine this was built for; the script itself is fork-free on that path (session id
-is parsed with shell builtins, not `jq` — which isn't installed here anyway).
+`drain.sh` runs after every tool call. Idle cost is one process spawn; the script itself is
+fork-free on that path (session id is parsed with shell builtins, not `jq` — which isn't
+installed here anyway).
+
+**Corrected 2026-07-24.** This previously claimed **~63ms**. A direct measurement — 10 spawns of
+`drain.sh` with a synthetic PostToolUse payload — came to **2222ms, i.e. ~222ms per tool call**,
+about 3.5× the documented figure. Windows process creation is expensive and every tool call pays
+a full `bash` interpreter startup; the fork-free script body is a rounding error next to it.
+
+That is the real argument against running this once the native path works. The tax is charged on
+**every tool call in every session**, typed note or not: ~100 tool calls ≈ 22s of pure overhead,
+~300 ≈ a full minute. The native path writes to an already-open stdin pipe and costs nothing when
+idle. Delivery latency between the two is effectively tied, because both wait on the same next
+tool boundary, and that wait dominates the 222ms.
 
 ### Subagents are skipped
 
