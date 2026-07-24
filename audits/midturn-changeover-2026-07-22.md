@@ -133,10 +133,16 @@ building on top. Case in point: BackSeatDriver was built the same night the nati
   7/22; the within-session flip experiment.
 - **Strong inference:** the behaviour shipped in engine **2.1.216/217** — desktop shell constant
   across the boundary, correlation exact, reproduced within one session.
-- **External corroboration:** an independent third party on #71726 reported the same mechanism
-  (system-reminder appended to the end of a tool-call result, instruction to continue rather than
-  stop) and the same missing changelog entry, on desktop 1.24012.1. Mechanism and silence are now
-  independently replicated; their version attribution is coarser (desktop, not engine).
+- **External corroboration — corrected, not blind-independent.** The owner had already posted the
+  mechanism to #71726 themselves on **2026-07-22T22:47:20Z**
+  ([comment 5052392191](https://github.com/anthropics/claude-code/issues/71726#issuecomment-5052392191)),
+  ahead of this investigation, quoting BackSeatDriver's own prompt alongside the native fix's
+  near-identical wording. `chk-mk`'s "confirming this is fixed" the next day
+  ([comment, 2026-07-23T01:23:18Z](https://github.com/anthropics/claude-code/issues/71726))
+  therefore came **after** seeing that post, not blind. It still has real evidentiary value — they
+  reproduced the mechanism against their own install (desktop 1.24012.1) in their own words, and
+  independently flagged the missing changelog entry — but it is corroboration-after-disclosure,
+  not the independent replication earlier drafts of this report implied.
 - **Caveat:** CLI changelog 2.1.210–2.1.218 says nothing about steering. Cannot *fully* exclude a
   coincident server-side rollout that merely landed with the 2.1.217 bundle; nothing on disk
   favours that over the simpler engine-version explanation.
@@ -149,6 +155,18 @@ building on top. Case in point: BackSeatDriver was built the same night the nati
   the same need. Keep it only as insurance against a flag rollback. Memory
   `project_backseatdriver.md` has been updated to record this.
 - **Watcher:** daily cloud routine `trig_01KpBB8KMo8RSZURCkxWpjU9` (09:00 America/Indianapolis)
-  watches the CLI changelog, Desktop release notes, and #71726 / #30492, and fires **only** on
-  official acknowledgement — a changelog entry, a maintainer reply, a close/fix label, or official
-  docs. Third-party confirmations and version churn are explicitly excluded.
+  watches the CLI changelog and Desktop release notes for official acknowledgement only. For
+  **#71726 specifically**, broadened 2026-07-24 to alert on **any new comment at all** (baseline:
+  10 comments, latest `5072555390`), fetched via the GitHub REST API
+  (`api.github.com/repos/anthropics/claude-code/issues/71726/comments`) rather than scraping the
+  HTML page, which does not render comments. #30492 and the changelogs stay on the
+  official-acknowledgement-only bar.
+
+## 9. Update log
+
+- **2026-07-24, post-investigation:** engine bumped to **2.1.219** (2.1.218 never got a local
+  bundle) — headline is Claude Opus 5; full bullet list checked, nothing steering-related.
+  Desktop jumped **1.24012.1 → 1.24012.9**, eight patch releases with **zero** published
+  changelog entries for any of them (newest published entry remains v1.24012.0, 2026-07-21).
+  Issue #71726 gained one new comment: the owner's own draft from §above, posted live. No
+  maintainer reply yet; issue still open, still labeled `duplicate` + `area:desktop`.

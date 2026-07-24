@@ -1,14 +1,17 @@
-# DRAFT — comment for anthropics/claude-code#71726
+# POSTED — comment on anthropics/claude-code#71726
 
-**Status: NOT POSTED.** For owner review. Nothing has been published to the public thread.
+**Status: LIVE.** Posted by the owner (@addedlife) on 2026-07-24T17:18:29Z, comment id
+`5072555390`: https://github.com/anthropics/claude-code/issues/71726#issuecomment-5072555390
 
-Notes before posting:
-- Contains no local paths, usernames, or personal data — deliberately generic ("local session
-  transcripts").
-- Tone is collegial and additive; it refines the version attribution rather than contradicting
-  the existing confirmation.
-- If you'd rather not disclose that you keep transcripts, drop §2's counts and keep §3 only —
-  the within-session experiment carries the argument on its own.
+Text below is preserved as the record of what was submitted (unedited from the draft). No
+maintainer reply as of the last check.
+
+For context, the owner had already posted an earlier comment on this same issue —
+2026-07-22T22:47:20Z, id `5052392191`:
+https://github.com/anthropics/claude-code/issues/71726#issuecomment-5052392191 — describing the
+BackSeatDriver mechanism and the native fix's near-identical wording, predating this
+investigation. See §9 of `midturn-changeover-2026-07-22.md` for how that affects the
+independence of the third-party corroboration in that report.
 
 ---
 
