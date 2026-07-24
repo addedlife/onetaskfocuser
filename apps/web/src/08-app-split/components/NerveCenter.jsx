@@ -6,7 +6,7 @@ import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhone
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthPage } from './HealthPage.jsx';
 import { shouldRunForContentAndClaim, publishContentResult } from '../ai-call-throttle.js';
-import { gmailDeepLink } from '../utils/gmail-links.js';
+import { gmailDeepLink, gmailReplyLink } from '../utils/gmail-links.js';
 
 // Owner ticket 7/15: the 5-min gate on dashboard.snapshot.v1 lived only in an
 // in-memory ref, which reset to 0 (an immediate, uncapped call) every time this
@@ -1232,6 +1232,12 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   const [addEventLoading, setAddEventLoading] = useState(false);
   const [addEventError, setAddEventError] = useState(null);
   const [hoverEmail, setHoverEmail] = useState(null);
+  // Click-to-read panel for mail rows (owner ticket WUQh8VL: "clicking on one should
+  // start a hovering full text of email display, with a direct response / respond to
+  // all option without leaving nc, but if more is reqwd offers to leave"). Floats over
+  // the card grid so the row underneath stays put — opening a message never reflows
+  // the five-card layout. {id, top, left}
+  const [readerEmail, setReaderEmail] = useState(null);
   const [selectedEmailId, setSelectedEmailId] = useState(null);
   const [emailDetails, setEmailDetails] = useState({});
   const [emailDetailLoadingId, setEmailDetailLoadingId] = useState(null);
@@ -1363,6 +1369,64 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   // Helpers needed by both the Google IIFE and handleAddEvent
   const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || '';
   const fmtFrom = (raw) => { const m = raw?.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : (raw || '').split('@')[0]; };
+
+  // ── Mail reader (owner ticket WUQh8VL) ─────────────────────────────────────
+  // Full text of the clicked email, floating over whatever layout is on screen,
+  // with the responses right there. Defined ONCE here rather than inside a layout
+  // branch: the card grid and the full-panel view return from different places, so
+  // a copy living in either one is invisible in the other.
+  //
+  // Reply / Reply all deep-link into the Gmail composer for this thread. Sending
+  // from inside NerveCenter is not possible yet — the app holds Gmail READ scope
+  // only (google-workspace.js exposes gmailMessage and nothing that sends), so a
+  // true in-place send needs gmail.send added to the consent screen. That is a
+  // permissions change and the owner's call. "Open in Gmail" is the escape the
+  // ticket asks for ("if more is reqwd offers to leave").
+  const mailReaderPanel = readerEmail ? (() => {
+    const msg = (gmailMessages || []).find(m => m.id === readerEmail.id);
+    if (!msg) return null;
+    const detail = emailDetails[msg.id];
+    const loading = emailDetailLoadingId === msg.id;
+    const subject = gmailHeader(msg, 'Subject') || '(no subject)';
+    const body = detail?.fullBody || decodeSnippet(msg.snippet || '');
+    const close = () => { setReaderEmail(null); setSelectedEmailId(null); };
+    return (
+      <>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9995 }} onClick={close} />
+        <div role="dialog" aria-label={`Email: ${subject}`}
+          style={{ position: "fixed", top: readerEmail.top, left: readerEmail.left, width: 400, maxHeight: 340,
+            zIndex: 9996, display: "flex", flexDirection: "column",
+            background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md,
+            boxShadow: ELEV[3], fontFamily: NC_FONT_STACK, overflow: "hidden" }}>
+          <div style={{ padding: "10px 12px 8px", borderBottom: `1px solid ${C.divider}` }}>
+            <div style={{ fontSize: NC_TYPE.control, fontWeight: 600, color: C.text, wordBreak: "break-word" }}>{subject}</div>
+            <div style={{ fontSize: NC_TYPE.meta, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {fmtFrom(gmailHeader(msg, 'From'))}{msg.sourceAccount ? ` → ${msg.sourceAccount}` : ""}
+            </div>
+          </div>
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 12px",
+            fontSize: NC_TYPE.meta, lineHeight: LINE.body, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            {emailDetailError ? <span style={{ color: C.warning }}>{emailDetailError}</span>
+              : loading ? "Loading the full message…"
+              : (body || "No message body available.")}
+          </div>
+          <div style={{ display: "flex", gap: 4, padding: "6px 8px", borderTop: `1px solid ${C.divider}`, flexWrap: "wrap", alignItems: "center" }}>
+            <ActionBtn variant="tonal" icon="reply" iconSize={15} height={36} labelSize={NC_TYPE.small}
+              containerColor={C.bgSoft} labelColor={C.text} title="Reply in Gmail"
+              onClick={() => window.open(gmailReplyLink(msg, false), "_blank", "noopener")}>Reply</ActionBtn>
+            <ActionBtn variant="tonal" icon="reply_all" iconSize={15} height={36} labelSize={NC_TYPE.small}
+              containerColor={C.bgSoft} labelColor={C.text} title="Reply to everyone in Gmail"
+              onClick={() => window.open(gmailReplyLink(msg, true), "_blank", "noopener")}>Reply all</ActionBtn>
+            <ActionBtn variant="text" icon="open_in_new" iconSize={15} height={36} labelSize={NC_TYPE.small}
+              labelColor={C.accent} title="Open the whole thread in Gmail"
+              onClick={() => window.open(gmailDeepLink(msg), "_blank", "noopener")}>Open in Gmail</ActionBtn>
+            <IconBtn icon="close" iconSize={16} color={C.muted} title="Close" aria-label="Close"
+              onClick={close} style={{ marginLeft: "auto" }} />
+          </div>
+        </div>
+      </>
+    );
+  })() : null;
   const decodeSnippet = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ').trim();
 
   async function handleEmailSelect(msg) {
@@ -3096,8 +3160,19 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               const exp = expandedRows.has(rk);
               // Calm-rows: read mail whispers; unread carries the color.
               const rowVars = !mailIsUnread(msg) && !exp ? NC_DIM_ROW : {};
+              const openReader = (e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                // Anchor beside the row, then clamp so the panel is never off-screen.
+                const w = 400, h = 340;
+                setReaderEmail({
+                  id: msg.id,
+                  top: Math.max(8, Math.min(r.top, window.innerHeight - h - 8)),
+                  left: Math.max(8, Math.min(r.right + 8, window.innerWidth - w - 8)),
+                });
+                handleEmailSelect(msg);
+              };
               return (
-                <ListItem key={msg.id||i} type="button" onClick={()=>toggleRow(rk)} style={{ borderRadius: RADIUS.sm, ...rowVars }}>
+                <ListItem key={msg.id||i} type="button" onClick={openReader} style={{ borderRadius: RADIUS.sm, ...rowVars }}>
                   {/* Uniform leading: same 7px dot metric as every other card's rows. */}
                   {<span slot="start" style={{ width: 7, height: 7, borderRadius: RADIUS.pill, background: mailIsUnread(msg) ? CAT_MAIL : "transparent", flexShrink: 0 }} />}
                   {/* Body summary is the read target (full headline size); sender rides the
@@ -3695,6 +3770,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           )}
 
         </div>
+
+        {mailReaderPanel}
 
       </div>
     );
@@ -4491,6 +4568,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               )}
               </div>{/* end cards row */}
             </div>
+
+            {mailReaderPanel}
 
             {/* ── Gmail hover tooltip ── */}
             {hoverEmail && (
