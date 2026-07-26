@@ -30,6 +30,16 @@ function answerContentKey(text) {
   return `${s.length}-${h.toString(36)}`;
 }
 
+// ── Answer-summary format generation ────────────────────────────────────────
+// Bump this whenever the `shaila.answer_summary.v1` PROMPT changes shape in
+// backend/functions/_ai-core.cjs. Every shaila carries the generation its
+// answerSummary was written under (`answerSummaryV`); anything older is stale and
+// gets rewritten by the backfill below. Generation 3 = the un-templated,
+// nuance-preserving, untruncated line that shipped 7/22 (tickets SpQAn5lM +
+// SMu81hE). Generations 1–2 were the psak-shaped 8/12-word versions; documents
+// written under them have no stamp at all, which is exactly how they're detected.
+const ANSWER_SUMMARY_FORMAT = 3;
+
 const MIC_CONSTRAINTS = {
   audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
 };
@@ -527,38 +537,85 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
   // burns a lane's quota. Slow and serial is correct here.
   const [bulkSummary, setBulkSummary] = useState(null); // {done, total, failed} | null
   const bulkCancelRef = useRef(false);
+  const bulkRunningRef = useRef(false);
 
+  const answeredShailos = () => shailos.filter(s => (s.answer || '').trim());
+  // Stale = has an answer but its summary predates the current prompt generation.
+  const staleSummaryShailos = () => answeredShailos().filter(s => Number(s.answerSummaryV || 0) < ANSWER_SUMMARY_FORMAT);
+
+  // The actual pass. `targets` is whatever the caller decided to rewrite; both the
+  // manual button and the automatic backfill land here so there is exactly one
+  // implementation of the throttling, stamping and failure handling.
+  const runResummarize = async (targets) => {
+    if (bulkRunningRef.current || !targets.length) return;
+    bulkRunningRef.current = true;
+    bulkCancelRef.current = false;
+    setBulkSummary({ done: 0, total: targets.length, failed: 0 });
+    let done = 0, failed = 0, consecutiveFailures = 0;
+    for (const s of targets) {
+      if (bulkCancelRef.current) break;
+      try {
+        const summary = await generateAnswerSummary(user, s.answer);
+        if (summary) {
+          // answerSummaryV is written in the SAME update as the summary, so a doc can
+          // never be stamped current while carrying an old line (and vice versa).
+          await shailosCol().doc(s.id).update({ answerSummary: summary, answerSummaryV: ANSWER_SUMMARY_FORMAT, updatedAt: Ts() });
+          // Keep the throttle's content cache in step, so the next ordinary save of
+          // this shaila adopts this result instead of paying for it again.
+          publishContentResult(`shaila-answer-summary-${s.id}`, answerContentKey((s.answer || '').trim()), summary);
+          consecutiveFailures = 0;
+        } else { failed++; consecutiveFailures++; }
+      } catch { failed++; consecutiveFailures++; }
+      done++;
+      setBulkSummary({ done, total: targets.length, failed });
+      // Three failures in a row is an outage (the 503s of 7/20–7/22), not bad luck.
+      // Stop rather than burn the remaining calls; unstamped docs are retried on the
+      // next open, so nothing is lost by giving up early.
+      if (consecutiveFailures >= 3) break;
+      await new Promise(r => setTimeout(r, 1200));
+    }
+    setBulkSummary(null);
+    bulkRunningRef.current = false;
+    return { done, failed };
+  };
+
+  // Manual button: rewrites EVERY answered shaila, current stamp or not — that is
+  // its point (the owner wants a way to force a redo after a prompt tweak).
   const resummarizeAllAnswers = async () => {
     if (bulkSummary) { bulkCancelRef.current = true; return; }   // second click = cancel
-    const targets = shailos.filter(s => (s.answer || '').trim());
+    const targets = answeredShailos();
     if (!targets.length) { setError('No answered shailos to re-summarize.'); return; }
     if (!window.confirm(
       `Re-summarize the answer line on ${targets.length} shaila${targets.length === 1 ? '' : 's'}?\n\n` +
       `This rewrites only the short answer summary shown on the chip. The shaila text, ` +
       `synopsis and answer are not touched.\n\nIt makes ${targets.length} AI calls, one at a time.`
     )) return;
-
-    bulkCancelRef.current = false;
-    setBulkSummary({ done: 0, total: targets.length, failed: 0 });
-    let done = 0, failed = 0;
-    for (const s of targets) {
-      if (bulkCancelRef.current) break;
-      try {
-        const summary = await generateAnswerSummary(user, s.answer);
-        if (summary) {
-          await shailosCol().doc(s.id).update({ answerSummary: summary, updatedAt: Ts() });
-          // Keep the throttle's content cache in step, so the next ordinary save of
-          // this shaila adopts this result instead of paying for it again.
-          publishContentResult(`shaila-answer-summary-${s.id}`, answerContentKey((s.answer || '').trim()), summary);
-        } else { failed++; }
-      } catch { failed++; }
-      done++;
-      setBulkSummary({ done, total: targets.length, failed });
-      await new Promise(r => setTimeout(r, 1200));
-    }
-    setBulkSummary(null);
-    if (failed) setError(`Re-summarized ${done - failed} of ${targets.length}; ${failed} failed (they keep their old summary).`);
+    const r = await runResummarize(targets);
+    if (r?.failed) setError(`Re-summarized ${r.done - r.failed} of ${targets.length}; ${r.failed} failed (they keep their old summary).`);
   };
+
+  // ── Automatic one-shot backfill (owner ticket zmhk3Ds) ──────────────────────
+  // The manual button shipped in 4.104.5 and then sat unclicked, because a fix that
+  // depends on the owner remembering to press something is not a fix — the ticket
+  // asked for the shailos to BE re-summarized, not for a way to re-summarize them.
+  // So: whenever the Shailos surface is open and any answered shaila still carries a
+  // pre-generation-3 summary, the same throttled pass runs on its own.
+  //
+  // Why this is safe to run unattended:
+  //   · it only ever touches answerSummary + answerSummaryV, never the shaila text,
+  //     synopsis or answer;
+  //   · one call at a time with a 1.2 s gap, so it cannot trip the leak detector the
+  //     way a parallel burst would (ticket FpbwpXD);
+  //   · each success stamps its document, so the work is strictly finite and never
+  //     repeats — once the last old summary is rewritten this never fires again;
+  //   · three consecutive failures abort the pass entirely.
+  useEffect(() => {
+    if (!user || USER_ID === 'unauthenticated' || bulkRunningRef.current) return;
+    const stale = staleSummaryShailos();
+    if (!stale.length) return;
+    const t = setTimeout(() => { runResummarize(stale); }, 4000);   // let the surface settle first
+    return () => clearTimeout(t);
+  }, [user, shailos]);
 
   const handleResearch = async (shaila) => {
     if (researchingSetRef.current.has(shaila.id)) return;
@@ -637,6 +694,10 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
       const prevShaila = shailos.find(s => s.id === shaila.id);
       const answerChanged = (shaila.answer || '') !== (prevShaila?.answer || '');
       let answerSummary = shaila.answerSummary || '';
+      // Carries forward whatever generation this shaila already had, and moves to the
+      // current one only if THIS save actually produced a new line. A stamp written
+      // without a fresh summary would make the backfill skip a stale document forever.
+      let answerSummaryV = Number(shaila.answerSummaryV || 0);
       const answerText = (shaila.answer || '').trim();
       if (answerText && (answerChanged || !answerSummary)) {
         const claimKey   = `shaila-answer-summary-${shaila.id || 'draft'}`;
@@ -647,6 +708,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
             const generated = await generateAnswerSummary(user, shaila.answer);
             if (generated) {
               answerSummary = generated;
+              answerSummaryV = ANSWER_SUMMARY_FORMAT;
               publishContentResult(claimKey, contentKey, generated);
             } else {
               // Empty is a failure, not an answer — don't leave the claim held or the
@@ -658,6 +720,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
           }
         } else if (typeof cachedResult === 'string' && cachedResult) {
           answerSummary = cachedResult;                  // another device already did it
+          answerSummaryV = ANSWER_SUMMARY_FORMAT;        // …under the current prompt
         }
       }
       const payload = {
@@ -668,6 +731,7 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
         askerName: shaila.askerName || 'Unknown',
         answer: shaila.answer || '',
         answerSummary,
+        answerSummaryV,
         answererName: shaila.answererName || '',
         reasons: shaila.reasons || '',
         status,

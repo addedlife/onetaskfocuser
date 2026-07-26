@@ -68,7 +68,8 @@ const TIMELINE_PX_HR = 60; // 60 px/hour in the daily timeline — Google Calend
 // Opt-in declutter experiment (owner 7/21: cards read as "a sea of line items").
 // Three techniques, all reversible and OFF by default so the live app is unchanged:
 //   cap    — each card rests at an adaptive row count + a quiet "+N more" reveal
-//   hero   — the first (most urgent) row per card renders one type step larger
+//   hero   — RETIRED 7/26 (ticket T0aqnE2h): an emphasized first row read as a
+//            frozen header on every card. Urgency is carried by ORDER alone now.
 //   dim    — routine/already-handled rows (read mail, routine calendar events)
 //            drop to ~55% so the few real signals carry the card
 // 2026-07-21: the `ncproto` flag is gone. It gated the GM3-correct feed — 48dp
@@ -881,7 +882,7 @@ const agendaNowBarRef = el => {
 // stay open. When expanded the content scrolls internally so the page stays bounded.
 // `keepMounted` hides via display:none so embedded pollers (Phone) keep running while
 // collapsed. State arrives via props (expandedIds/menuId + the on* callbacks).
-function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuItems, preview, expandable = true, keepMounted = false, fullHeight = false, children, C, expandedIds, menuId, onExpand, onMenuToggle, onMenuClose, hero = null, dense = false }) {
+function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuItems, preview, expandable = true, keepMounted = false, fullHeight = false, children, C, expandedIds, menuId, onExpand, onMenuToggle, onMenuClose, dense = false }) {
   const expanded = !expandable || !!expandedIds?.has(id);
   const sectionScrollRef = useRef(null);
   const fitRows = useFitRows(sectionScrollRef, { enabled: true, watch: `${dense}|${expanded}` });
@@ -951,12 +952,10 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
         )}
       </div>
       {/* Preview shown inline in the header — no second body row needed. */}
-      {/* Hero renders INSIDE the scrolling list as its emphasized first row — a
-          pinned bar read as a frozen header and locked up scroll space (owner
-          tickets tr60ibj2/xFD22e5T, 7/21). */}
+      {/* No hero/auto-prioritized block: the list starts at its first real row. */}
       {keepMounted
-        ? <div ref={sectionScrollRef} style={expanded ? { ...scrollStyle, ...({ paddingTop: 6, paddingBottom: 6 }) } : { display: "none" }}>{hero}{typeof children === "function" ? children(fitRows) : children}</div>
-        : (expanded && <div ref={sectionScrollRef} style={{ ...scrollStyle, ...({ paddingTop: 6, paddingBottom: 6 }) }}>{hero}{typeof children === "function" ? children(fitRows) : children}</div>)}
+        ? <div ref={sectionScrollRef} style={expanded ? { ...scrollStyle, ...({ paddingTop: 6, paddingBottom: 6 }) } : { display: "none" }}>{typeof children === "function" ? children(fitRows) : children}</div>
+        : (expanded && <div ref={sectionScrollRef} style={{ ...scrollStyle, ...({ paddingTop: 6, paddingBottom: 6 }) }}>{typeof children === "function" ? children(fitRows) : children}</div>)}
     </div>
   );
 }
@@ -970,7 +969,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
 // When onToggleExpand is provided the header tap toggles expand instead of opening the full
 // surface; onOpen moves to a small trailing open_in_new button. collapsed=true renders the
 // header only (content hidden via display:none so embedded pollers — Phone — keep running).
-function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, hero = null, count = null, narrowActions = false, scrollable = false }) {
+function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, count = null, narrowActions = false, scrollable = false }) {
   const scrollRef = useRef(null);
   const tint = hexToRgba(accentColor, 0.05);
   const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
@@ -1056,16 +1055,13 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
           </>)}
         </div>
       )}
-      {/* Hero renders INSIDE the scrolling list as its emphasized first row —
-          a pinned bar read as a frozen header and locked up scroll space
-          (owner tickets tr60ibj2/xFD22e5T, 7/21). */}
+      {/* No hero/auto-prioritized block: the list starts at its first real row. */}
       {/* Normally the list clips at the fitted row count and "+N more" is the way in.
           When the owner has asked this card to show everything but it is not the
           expanded card, it scrolls its own rows instead — one screen is preserved
           because only this card scrolls, never the page. */}
       <div ref={scrollRef}
         style={{ flex: 1, minHeight: 0, overflowX: "hidden", overflowY: scrollable ? "auto" : "hidden", paddingBottom: 4, backgroundColor: "inherit", ...(collapsed ? { display: "none" } : {}) }}>
-        {hero}
         {typeof children === "function" ? children(fitRows) : children}
       </div>
       {/* No gradient scrim: M3 clips scrolling lists cleanly at the padded
@@ -1118,44 +1114,14 @@ function TaskRowActions({ id, C, open, onToggle, onClose, onDone, onDelete }) {
   );
 }
 
-// Abbreviated relative time (5m · 2h · Tue · Jun 3) shared by the hero blocks.
-function fmtRelShort(raw) {
-  try {
-    const d = new Date(raw); const diff = Date.now() - d.getTime();
-    if (isNaN(d.getTime())) return "";
-    if (diff >= 0 && diff < 3600000) return `${Math.max(1, Math.round(diff / 60000))}m`;
-    if (diff >= 0 && diff < 86400000) return `${Math.round(diff / 3600000)}h`;
-    if (diff >= 0 && diff < 604800000) return d.toLocaleDateString([], { weekday: "short" });
-    return d.toLocaleDateString([], { month: "short", day: "numeric" });
-  } catch { return ""; }
-}
-
-// HeroItem — the card's most-important item, rendered as an EMPHASIZED FLUSH ROW
-// (v3, owner 7/21: the rounded tinted pill read as a section header, not as
-// content). Same left-dot metric and inset as every list row, a faint full-bleed
-// accent wash, and bolder title text — so it reads as "the top row, highlighted",
-// continuous with the rows below it, not a separate header block. Tapping opens.
-function HeroItem({ title, meta, accent, C, onClick }) {
-  if (!title) return null;
-  const a = accent || C.accent;
-  return (
-    <div role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined}
-      onClick={onClick}
-      onKeyDown={onClick ? e => { if (e.key === "Enter") onClick(); } : undefined}
-      style={{
-        display: "flex", alignItems: "flex-start", gap: 10, flexShrink: 0,
-        padding: "7px 12px",
-        background: softBg(a, 0.07),
-        boxShadow: `inset 3px 0 0 ${a}`,
-        cursor: onClick ? "pointer" : "default",
-      }}>
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.body, fontWeight: 650, lineHeight: 1.3, color: C.text, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word" }}>{title}</div>
-        {meta && <div style={{ marginTop: 1, fontFamily: NC_FONT_STACK, fontSize: NC_TYPE.small, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meta}</div>}
-      </div>
-    </div>
-  );
-}
+// The "hero" / auto-prioritized item block is GONE (owner ticket T0aqnE2h, 7/26:
+// "I DONT WANT THAT AUTOPRIORITIZED FIXED LINE ITEM THERE ANYMORE … i see them in
+// nc grid view - i asked repeatedly they be removed"). Earlier passes only moved
+// it (pill → flush row → inside the scroller); it still read as a frozen header
+// on every card in every layout. There is now no emphasized first row anywhere:
+// the most important item is simply the first ordinary row of its list, which is
+// what the actionMail/actionTasks/actionShailos/actionCalendar sorts already
+// guarantee. Do not reintroduce a per-card hero block.
 
 // MoreRow — the quiet "+N more" reveal under a capped list (calm-rows prototype).
 // One full-width text button; expanding is always one tap, so no information is lost.
@@ -1809,35 +1775,12 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     });
   }, [calendarRows, calRatings]);
 
-  // ── Calm-rows v2: auto-prioritized "most important item" per card ──────────
-  // Each card leads with its hero (rendered by HeroItem); the list below excludes
-  // it. Selection rules: Tasks = highest priority weight; Mail = newest unread,
-  // else newest; Shailos = waiting-to-reply first (a person is waiting), else
-  // oldest open; Calendar = happening now, else next upcoming, else tomorrow;
-  // Phone = first unread text, else a missed call.
-  const priWeightOf = id => Number((priorities.find(p => p.id === id) || {}).weight || 0);
-  const heroTask = primaryTaskQueue.length
-    ? primaryTaskQueue.reduce((best, t) => priWeightOf(t.priority) > priWeightOf(best.priority) ? t : best, primaryTaskQueue[0])
-    : null;
-  const heroMail = (gmailMessages || []).length
-    ? ((gmailMessages || []).find(mailIsUnread) || gmailMessages[0])
-    : null;
-  const heroShaila = visibleShailos.length
-    ? (visibleShailos.find(s => s.status === "get_back" || s.isGetBackStep) || visibleShailos[0])
-    : null;
-  const heroCalRow = calendarRows.find(r => r.now)
-      || [...calendarRows.filter(r => !r.past && !r.tomorrow)].sort((a, b) => a.startMs - b.startMs)[0]
-      || calendarRows.find(r => r.tomorrow)
-      || null;
-  const heroPhone = (() => {
-    const t = (phoneActivitySummary.texts || [])[0];
-    if (Number(phoneActivitySummary.unreadTexts || 0) > 0 && t) {
-      return { title: t.preview || t.name || "New text", meta: [t.name, t.time].filter(Boolean).join(" · ") };
-    }
-    const missed = (phoneActivitySummary.calls || []).find(c => /miss/i.test(String(c.kind || "")));
-    if (missed) return { title: `Missed call — ${missed.name || "unknown"}`, meta: missed.time || "" };
-    return null;
-  })();
+  // ── Calm-rows v3: NO auto-prioritized hero item ────────────────────────────
+  // The per-card "most important item" block (heroTask/heroMail/heroShaila/
+  // heroCalRow/heroPhone) is deleted, not hidden — owner ticket T0aqnE2h, 7/26.
+  // Importance is expressed purely by ORDER: the actionMail/actionTasks/
+  // actionShailos/actionCalendar sorts above put the item that matters first,
+  // and it renders as an ordinary row like every other one.
 
   const chiefProfileNotes = useMemo(() => profileNotesForPrompt(chiefProfile), [chiefProfile?.updatedAt]);
   const chiefContext = useMemo(() => {
@@ -3021,11 +2964,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     // is true on a phone-width card AND in the 5-column grid, where each column is
     // only ~240-280px (the Calendar title was crushed to nothing, owner 7/21).
     const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, narrowActions: availableW < 480 || boxesFiveCol };
-    // Rows-mode cards (iPad portrait: five cards sharing the screen height) are far
-    // too short to spend ~40px on a fixed hero — it left a single-row slat. The hero
-    // is a tall-card affordance only; short cards give every pixel to real rows.
-    const heroOk = boxesFiveCol;
-    const showHero = node => (heroOk ? node : null);
     // Card-level expand: both orientations. Rows: tapping a header gives that card the
     // whole page and the rest shrink to header strips. Columns (wide screens): the
     // expanded card takes most of the width and the other columns squish to slim
@@ -3176,15 +3114,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               {googleAcctMenuEl}
               <IconBtn icon="refresh" iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh mail" aria-label="Refresh mail" />
             </>}
-            hero={heroMail ? showHero(
-              <HeroItem C={C} accent={CAT_MAIL}
-                title={heroMail.aiSummary || decodeSnipM(heroMail.snippet) || gmailHdr(heroMail,"Subject") || "(no subject)"}
-                meta={[fmtFromM(gmailHdr(heroMail,"From")), fmtRelM(gmailHdr(heroMail,"Date"))].filter(Boolean).join(" · ")}
-                onClick={() => setExpandedBoxId(prev => prev === "mail" ? null : "mail")} />
-            ) : null}>
+            >
             {fitRows => {
-            const mailSrc = actionMail;
-            const mailRest = heroOk ? mailSrc.filter(m => m.id !== heroMail?.id) : mailSrc;
+            const mailRest = actionMail;
             // keep: any email row the owner has opened stays in the list even when the
             // card collapses back to its fitted height (ticket fZ3Jvr5).
             const mailCut = fitSlice(mailRest, fitRows, boxShowsAll("mail"),
@@ -3232,11 +3164,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
 
           {/* Phone */}
           <MobileBox {...boxCtx} {...boxProps("phone")} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} count={feedCounts.phone} summary={cardSummary("Phone")} style={cardStyle} dense={dense}
-            statusDot={phoneDotColor} onOpen={onOpenPhone}
-            hero={heroPhone ? showHero(
-              <HeroItem C={C} accent={CAT_PHONE} title={heroPhone.title} meta={heroPhone.meta}
-                onClick={() => setExpandedBoxId(prev => prev === "phone" ? null : "phone")} />
-            ) : null}>
+            statusDot={phoneDotColor} onOpen={onOpenPhone}>
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
             <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0, padding: "0 8px 6px", boxSizing:"border-box" }}>
@@ -3246,16 +3174,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
 
           {/* Tasks */}
           <MobileBox {...boxCtx} {...boxProps("tasks")} icon="rule" title="Tasks" accentColor={C.accent} count={feedCounts.tasks} summary={cardSummary("Tasks")} style={cardStyle} dense={dense}
-            onOpen={onOpenQueue}
-            hero={heroTask ? showHero(
-              <HeroItem C={C} accent={gP(priorities, heroTask.priority)?.color || C.accent}
-                title={nerveDisplaySummary(heroTask, "Untitled task")}
-                meta={gP(priorities, heroTask.priority)?.label || ""}
-                onClick={() => setExpandedBoxId(prev => prev === "tasks" ? null : "tasks")} />
-            ) : null}>
+            onOpen={onOpenQueue}>
             {fitRows => {
-            const taskSrc = actionTasks;
-            const taskRest = heroOk ? taskSrc.filter(t => t.id !== heroTask?.id) : taskSrc;
+            const taskRest = actionTasks;
             const taskCut = fitSlice(taskRest, fitRows, boxShowsAll("tasks"));
             return (<>
             {taskComposerOpen && (
@@ -3320,16 +3241,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
 
           {/* Shailos */}
           <MobileBox {...boxCtx} {...boxProps("shailos")} icon="question_mark" title="Shailos" accentColor={GOLD} count={feedCounts.shailos} summary={cardSummary("Shailos")} style={cardStyle} dense={dense}
-            onOpen={onOpenShailos}
-            hero={heroShaila ? showHero(
-              <HeroItem C={C} accent={GOLD}
-                title={nerveDisplaySummary(heroShaila, "Open shaila")}
-                meta={(heroShaila.status === "get_back" || heroShaila.isGetBackStep) ? "waiting to reply" : "pending answer"}
-                onClick={() => setExpandedBoxId(prev => prev === "shailos" ? null : "shailos")} />
-            ) : null}>
+            onOpen={onOpenShailos}>
             {fitRows => {
-            const shailaSrc = actionShailos;
-            const shailaRest = heroOk ? shailaSrc.filter(s => s.id !== heroShaila?.id) : shailaSrc;
+            const shailaRest = actionShailos;
             const shailaCut = fitSlice(shailaRest, fitRows, boxShowsAll("shailos"));
             return (<>
             {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : shailaCut.shown.map((s, si) => {
@@ -3362,13 +3276,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               <IconBtn icon="refresh" iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh calendar" aria-label="Refresh calendar" />
               <IconBtn icon="schedule" iconSize={14} color={calCardView==="timeline"?C.text:C.muted} active={calCardView==="timeline"} activeBg={C.hover} onClick={()=>setCalCardView("timeline")} title="Live time" aria-label="Live time view" />
               <IconBtn icon="view_agenda" iconSize={14} color={calCardView==="agenda"?C.text:C.muted} active={calCardView==="agenda"} activeBg={C.hover} onClick={()=>setCalCardView("agenda")} title="Agenda" aria-label="Agenda view" />
-            </>}
-            hero={heroCalRow ? showHero(
-              <HeroItem C={C} accent={GCAL_COLORS[heroCalRow.evt?.colorId] || C.warning}
-                title={heroCalRow.evt?.summary || "(no title)"}
-                meta={heroCalRow.now ? `Now · ${heroCalRow.label}` : heroCalRow.tomorrow ? `Tomorrow · ${heroCalRow.label}` : heroCalRow.label}
-                onClick={() => setExpandedBoxId(prev => prev === "calendar" ? null : "calendar")} />
-            ) : null}>
+            </>}>
             {/* Fill the box as a flex column so the timeline's internal scroll bounds correctly. */}
             <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0 }}>
               {showAddEvent && (
@@ -3475,10 +3383,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     // Both orientations show all 5 sections simultaneously — always expanded, always fullHeight.
     // 1500 px = 5 cols × 300 px minimum comfortable reading width per column.
     const accWide = availableW >= 1500;
-    // Same rule as the card grid: narrow stacked sections are too short for a
-    // fixed hero row; give the height to real rows instead.
-    const heroOk = accWide;
-    const showHero = node => (heroOk ? node : null);
     // Accordion mode is retired — narrow-stacked sections are always expanded.
     const isAccordion = false;
     const sectionCtx = { C, expandedIds: mobileExpanded, menuId: mobileMenuOpen, onExpand: mobileExpandToggle, onMenuToggle: mobileMenuToggle, onMenuClose: mobileMenuClose, expandable: isAccordion, fullHeight: !isAccordion, dense };
@@ -3568,16 +3472,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               { icon: "local_drink", label: "Zen mode",        run: onOpenZen },
               ...(onAddMrsWTask ? [{ icon: "person", label: "Add Mrs W task", run: () => { setMobileExpanded(prev => new Set(prev).add("tasks")); openTaskComposer(taskPriority, { mrsW: true }); } }] : []),
             ]}
-            hero={heroTask ? showHero(
-              <HeroItem C={C} accent={gP(priorities, heroTask.priority)?.color || C.accent}
-                title={nerveDisplaySummary(heroTask, "Untitled task")}
-                meta={gP(priorities, heroTask.priority)?.label || ""}
-                onClick={() => toggleRow("sec-tasks")} />
-            ) : null}
           >
             {fitRows => {
-            const secTaskRest = heroOk ? topTasks.filter(t => t.id !== heroTask?.id) : topTasks;
-            const secTaskCut = fitSlice(secTaskRest, fitRows, expandedRows.has("sec-tasks"));
+            const secTaskCut = fitSlice(topTasks, fitRows, expandedRows.has("sec-tasks"));
             return (<>
             {taskComposerOpen && (
               <div style={{ padding: "8px 12px", borderBottom: `1px solid ${C.divider}` }}>
@@ -3643,15 +3540,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 ...googleAcctMenuItems,
                 { icon: "link_off",    label: "Disconnect",           run: onDisconnectGoogle },
               ]}
-              hero={heroCalRow ? showHero(
-                <HeroItem C={C} accent={GCAL_COLORS[heroCalRow.evt?.colorId] || C.warning}
-                  title={heroCalRow.evt?.summary || "(no title)"}
-                  meta={heroCalRow.now ? `Now · ${heroCalRow.label}` : heroCalRow.tomorrow ? `Tomorrow · ${heroCalRow.label}` : heroCalRow.label}
-                  onClick={() => toggleRow("sec-cal")} />
-              ) : null}
             >
               {fitRows => {
-              const secCalRest = (calendarRows.filter(r=>!r.past) || []).filter(r => !(heroOk) || r !== heroCalRow);
+              const secCalRest = calendarRows.filter(r => !r.past);
               const secCalCut = fitSlice(secCalRest, fitRows, expandedRows.has("sec-cal"));
               return (<>
               {!calendarEvents ? (
@@ -3705,15 +3596,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 { icon: "open_in_new", label: "Open Gmail", run: () => window.open("https://mail.google.com/mail/u/0/#inbox","_blank") },
                 ...googleAcctMenuItems,
               ]}
-              hero={heroMail ? showHero(
-                <HeroItem C={C} accent={CAT_MAIL}
-                  title={heroMail.aiSummary || decodeSnipM(heroMail.snippet) || gmailHdr(heroMail,"Subject") || "(no subject)"}
-                  meta={[fmtFromM(gmailHdr(heroMail,"From")), fmtRelShort(gmailHdr(heroMail,"Date"))].filter(Boolean).join(" · ")}
-                  onClick={() => window.open(gmailDeepLink(heroMail), "_blank")} />
-              ) : null}
             >
               {fitRows => {
-              const secMailRest = heroOk ? (gmailMessages || []).filter(m => m.id !== heroMail?.id) : (gmailMessages || []).slice(0,40);
+              const secMailRest = actionMail.slice(0, 40);
               const secMailCut = fitSlice(secMailRest, fitRows, expandedRows.has("sec-mail"));
               return (<>
               {!gmailMessages || gmailMessages.length === 0 ? (
@@ -3747,15 +3632,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             preview={signalNote("Shailos")}
             primaryBtn={<IconBtn icon="add" iconSize={14} color={GOLD} onClick={onOpenShailaAdd} title="Add shaila" aria-label="Add shaila" />}
             menuItems={[{ icon: "open_in_full", label: "Open Shailos", run: onOpenShailos }]}
-            hero={heroShaila ? showHero(
-              <HeroItem C={C} accent={GOLD}
-                title={nerveDisplaySummary(heroShaila, "Open shaila")}
-                meta={(heroShaila.status === "get_back" || heroShaila.isGetBackStep) ? "waiting to reply" : "pending answer"}
-                onClick={onOpenShailos} />
-            ) : null}
           >
             {fitRows => {
-            const secShailaRest = heroOk ? visibleShailos.filter(s => s.id !== heroShaila?.id) : visibleShailos.slice(0,40);
+            const secShailaRest = actionShailos.slice(0, 40);
             const secShailaCut = fitSlice(secShailaRest, fitRows, expandedRows.has("sec-shailos"));
             return (<>
             {visibleShailos.length === 0 ? (
@@ -3782,9 +3661,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           <MobileSection {...sectionCtx} id="phone" icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} keepMounted
             preview={signalNote("Phone")}
             menuItems={[{ icon: "open_in_full", label: "Open phone view", run: onOpenPhone }]}
-            hero={heroPhone ? showHero(
-              <HeroItem C={C} accent={CAT_PHONE} title={heroPhone.title} meta={heroPhone.meta} onClick={onOpenPhone} />
-            ) : null}
           >
             {/* Real height so the phone surface's flex:1 activity feed (texts + calls) gets
                 space — a plain block wrapper collapsed it to zero, so calls never showed. */}
@@ -3928,15 +3804,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </ActionBtn>
               ))}
               <div ref={taskListRef} style={{ ...ncTaskList, ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }) }}>
-              {/* Hero task scrolls with the list as its emphasized first row —
-                  the pinned bar read as a frozen header (owner ticket tr60ibj2). */}
-              {!isStacked && heroTask && (
-                <HeroItem C={C} accent={gP(priorities, heroTask.priority)?.color || C.accent}
-                  title={nerveDisplaySummary(heroTask, "Untitled task")}
-                  meta={gP(priorities, heroTask.priority)?.label || ""}
-                  onClick={() => setShowAllTasks(v => !v)} />
-              )}
-              {primaryTasks.length ? primaryTasks.filter(t => isStacked || t.id !== heroTask?.id).map((t, ti) => {
+              {primaryTasks.length ? primaryTasks.map((t, ti) => {
                 const pri = gP(priorities, t.priority);
                 const priColor = pri?.color || C.accent || "#7EB0DE";
                 const isEditing = editingTaskId === t.id;
@@ -4001,16 +3869,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               </div>
             </div>
             <div ref={deskShailosRef} style={{ ...ncScrollPane, ...denseListVars({ dense, primary: C.text, secondary: GOLD, hover: GOLD }), ...({ paddingTop: 6, paddingBottom: 6 }) }}>
-              {/* Hero shaila scrolls with the list as its emphasized first row (owner ticket tr60ibj2). */}
-              {!isStacked && heroShaila && (
-                <HeroItem C={C} accent={GOLD}
-                  title={nerveDisplaySummary(heroShaila, "Open shaila")}
-                  meta={(heroShaila.status === "get_back" || heroShaila.isGetBackStep) ? "waiting to reply" : "pending answer"}
-                  onClick={onOpenShailos} />
-              )}
-              {/* Active shailos — open + pending get-back. Calm-rows v3: the hero row
-                  above carries the top item; the list shows exactly the rows that fit. */}
-              {visibleShailos.length ? (fitSlice(visibleShailos.filter(s => s.id !== heroShaila?.id), deskShailosFit, expandedRows.has("desk-shailos")).shown).map((s, idx) => {
+              {/* Active shailos — open + pending get-back. Calm-rows v3: no hero row;
+                  the list simply shows exactly the rows that fit, most urgent first. */}
+              {visibleShailos.length ? (fitSlice(actionShailos, deskShailosFit, expandedRows.has("desk-shailos")).shown).map((s, idx) => {
                 const text = nerveDisplaySummary(s, "Open shaila");
                 const isGetBack = s.status === "get_back" || !!s.isGetBackStep;
                 const chipLabel = isGetBack ? "Get back" : "Answer";
@@ -4025,7 +3886,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No pending shailos.</div>}
               {(() => {
-                const cut = fitSlice(visibleShailos.filter(s => s.id !== heroShaila?.id), deskShailosFit, expandedRows.has("desk-shailos"));
+                const cut = fitSlice(actionShailos, deskShailosFit, expandedRows.has("desk-shailos"));
                 const open = expandedRows.has("desk-shailos");
                 return (cut.hidden > 0 || open) ? (
                   <MoreRow C={C} open={open} count={cut.hidden} onClick={() => toggleRow("desk-shailos")} />
@@ -4497,14 +4358,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                     <CardAction icon="open_in_new" title="Open Gmail" href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" />
                     <CardAction icon="refresh" title="Refresh mail and calendar" onClick={onRefreshCalendar || onConnectGoogle} />
                   </>)}
-                  {/* Hero + its tap-to-read body sit OUTSIDE the scrolling list so the
-                      whole-rows measurement below is exact. */}
-                  {gmailMessages?.length > 0 && heroMail && (
-                    <HeroItem C={C} accent={CAT_MAIL}
-                      title={heroMail.aiSummary || decodeSnippet(heroMail.snippet) || gmailHeader(heroMail, 'Subject') || "(no subject)"}
-                      meta={[fmtFrom(gmailHeader(heroMail, 'From')), fmtRelShort(gmailHeader(heroMail, 'Date'))].filter(Boolean).join(" · ")}
-                      onClick={() => selectedEmailId === heroMail.id ? setSelectedEmailId(null) : handleEmailSelect(heroMail)} />
-                  )}
                   <div ref={deskMailRef} style={cardBody}>
                     {!gmailMessages ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap:8 }}>
@@ -4515,19 +4368,14 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                       <p style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, margin: "12px 0", textAlign: "center" }}>Inbox zero 🎉</p>
                     ) : (
                       <>
-                      {heroMail && selectedEmailId === heroMail.id && (
-                        <div style={{ margin: "0 12px 8px", padding: "8px 10px", borderRadius: RADIUS.sm, background: C.bg, fontSize: NC_TYPE.meta, lineHeight: 1.5, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: 200, overflowY: "auto", fontFamily: NC_FONT_STACK, flexShrink: 0 }}>
-                          {emailDetailLoadingId === heroMail.id ? "Loading…" : (emailDetails[heroMail.id]?.fullBody || decodeSnippet(heroMail.snippet || "") || "No message body available.")}
-                        </div>
-                      )}
                       <List ref={deskMailListRef} style={cardListStyle}>
-                      {(fitSlice(gmailMessages.filter(m => m.id !== heroMail?.id), deskMailFit, expandedRows.has("desk-mail")).shown).map((msg, i) => {
+                      {(fitSlice(actionMail, deskMailFit, expandedRows.has("desk-mail")).shown).map((msg, i) => {
                       const subject = gmailHeader(msg, 'Subject') || '(no subject)';
                       const from = fmtFrom(gmailHeader(msg, 'From'));
                       const date = fmtTime(gmailHeader(msg, 'Date'));
                       const url = gmailDeepLink(msg);
                       const selected = selectedEmailId === msg.id;
-                      // Calm-rows: read mail whispers (dim), the newest row is the hero.
+                      // Calm-rows: read mail whispers (dim); unread carries the color.
                       const rowVars = !mailIsUnread(msg) && !selected ? NC_DIM_ROW : {};
                       return (
                         <React.Fragment key={msg.id || i}>
@@ -4580,7 +4428,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                     })}
                     </List>
                     {(() => {
-                      const cut = fitSlice(gmailMessages.filter(m => m.id !== heroMail?.id), deskMailFit, expandedRows.has("desk-mail"));
+                      const cut = fitSlice(actionMail, deskMailFit, expandedRows.has("desk-mail"));
                       const open = expandedRows.has("desk-mail");
                       return (cut.hidden > 0 || open) ? (
                         <MoreRow C={C} open={open} count={cut.hidden} onClick={() => toggleRow("desk-mail")} />

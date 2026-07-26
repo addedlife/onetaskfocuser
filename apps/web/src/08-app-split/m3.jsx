@@ -140,8 +140,18 @@ export const SegmentedButton = createComponent({ react: React, tagName: 'md-outl
 // while staying dense, so that is the mechanism used here rather than an
 // exemption. Two levels, and neither goes under the 48dp floor:
 //
-//   comfortable  56 / 72 px   M3 default. For tall windows (expanded height).
-//   compact      48 / 64 px   M3 density -2. The floor, not below it.
+//   comfortable  56 / 64 px   M3 density -2 on two-line. For tall windows.
+//   compact      48 / 56 px   M3 density -4 on two-line, -2 on one-line.
+//
+// 2026-07-26 (owner ticket 8E4SqZyh: "rows have too much padding and display like
+// one entry only"): the compact two-line container came down 64 → 56 px and the
+// vertical padding 6 → 4 px. M3's density scale for lists steps -4 px per level
+// from the 72 px default, so 56 px is level -4 — still a documented level, and
+// still 8 px ABOVE the 48 dp touch-target floor, which is the line that must not
+// move. One-line rows stay at exactly 48 px because that IS the floor. The
+// comfortable level came down with it (72 → 64 px two-line, density -2) because
+// the owner's own window is a tall one and it was the padding he was looking at.
+// Net effect on a ~420 px card: 6 two-line rows become 7, with no text shrinkage.
 //
 // Type is IDENTICAL in both — only spacing tightens. That is the owner's standing
 // rule (density is not smaller text) and it happens to match M3, which varies
@@ -155,11 +165,11 @@ export const SegmentedButton = createComponent({ react: React, tagName: 'md-outl
 export function denseListVars({ dense = false, density = null, primary, secondary, trailing, hover } = {}) {
   const compact = density ? density === 'compact' : dense;
   return {
-    '--md-list-item-two-line-container-height': compact ? '64px' : '72px',
+    '--md-list-item-two-line-container-height': compact ? '56px' : '64px',
     '--md-list-item-one-line-container-height': compact ? '48px' : '56px',
-    '--md-list-item-top-space': compact ? '6px' : '8px',
-    '--md-list-item-bottom-space': compact ? '6px' : '8px',
-    '--md-list-item-leading-space': compact ? '14px' : '16px',
+    '--md-list-item-top-space': compact ? '4px' : '6px',
+    '--md-list-item-bottom-space': compact ? '4px' : '6px',
+    '--md-list-item-leading-space': compact ? '12px' : '16px',
     '--md-list-item-trailing-space': compact ? '8px' : '12px',
     // M3 list item type: label = body-large 16sp, supporting = body-medium 14sp.
     '--md-list-item-label-text-size': '16px',
