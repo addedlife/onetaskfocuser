@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, Store, textOnColor } from '../../01-core.js';
 import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BRD, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth, useWindowSizeClass } from '../ui-tokens.jsx';
-import { ActionBtn, IconBtn, List, ListItem, OutlinedButton, CircularProgress, denseListVars, OutlinedSelect, SelectOption } from '../m3.jsx';
+import { ActionBtn, IconBtn, List, ListItem, OutlinedButton, CircularProgress, denseListVars, Divider, Menu, MenuItem, OutlinedSelect, SelectOption } from '../m3.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthPage } from './HealthPage.jsx';
@@ -966,14 +966,11 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
 // its summary: a pinned [colored icon chip + chief summary] row. Once the card's content is
 // scrolled, that summary line collapses away into just the icon to reclaim space; tapping
 // the row opens the full surface. Hoisted to module scope for stable identity.
-// stickyHeader=true: the icon+title+summary bar is always visible (not collapsed on scroll).
-// Used for desktop boxes view where cards are tall enough that collapsing the header loses
-// the per-category summary the user always wants to see.
 // expanded/collapsed/onToggleExpand: card-level expand-to-page (mobile rows orientation).
 // When onToggleExpand is provided the header tap toggles expand instead of opening the full
 // surface; onOpen moves to a small trailing open_in_new button. collapsed=true renders the
 // header only (content hidden via display:none so embedded pollers — Phone — keep running).
-function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, stickyHeader = false, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, hero = null, count = null, narrowActions = false, scrollable = false }) {
+function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, hero = null, count = null, narrowActions = false, scrollable = false }) {
   const scrollRef = useRef(null);
   const tint = hexToRgba(accentColor, 0.05);
   const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
@@ -985,9 +982,13 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
   // no remaining consumer — the state was still being written on every scroll and
   // re-rendering the card to produce an identical tree.
   //
-  // `stickyHeader` still selects between the two header layouts below (the
-  // 5-column card grid passes it); what's gone is the scroll-driven COLLAPSE of
-  // the non-sticky one, which was a pre-GM3 behaviour.
+  // There is now exactly ONE header layout. The 5-column card grid used to get a
+  // second, `stickyHeader` variant: tighter metrics, a hard borderBottom rule, and
+  // its action buttons on a dedicated second row. Nothing about it actually stuck —
+  // scroll-collapse was already gone — but a titled bar with a rule under it reads
+  // as a frozen header, which is what the owner kept filing against it (tickets
+  // tr60ibj2, xFD22e5T, T0aqnE2h). The one thing worth keeping from it is the
+  // wrapped action row for narrow columns, and `narrowActions` already does that.
 
   // The card owns a fixed slice of the screen, so it renders exactly the whole
   // rows that fit that slice — no clipped row, no dead gap, and no page scroll.
@@ -1004,43 +1005,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
         // Feed card: height comes from content. No fixed fifth, so no clipped row
         // and no dead gap under a short card.
         minHeight: 0, ...style }}>
-      {stickyHeader ? (
-        // Sticky header: never collapses. Shows icon chip + title label + summary on separate line.
-        // With onToggleExpand (5-column card grid) the header tap expands this column and
-        // squishes the rest; opening the full surface moves to a trailing open_in_new button.
-        // Columns header: title row, then action buttons on their OWN row — a
-        // ~240px column can't fit a title plus several 48dp buttons on one line
-        // (the Calendar column title was crushed to nothing, owner 7/21).
-        // Columns are tall; one extra header row is free, a crushed title is not.
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", width: "100%", flexShrink: 0, minWidth: 0, borderBottom: `1px solid ${C.divider}` }}>
-          <ListItem type="button" onClick={onToggleExpand || onOpen} title={title} aria-label={title} aria-expanded={onToggleExpand ? expanded : undefined}
-            style={{
-              flex: 1, minWidth: 0, cursor: (onToggleExpand || onOpen) ? "pointer" : "default",
-              ...denseListVars({ dense: true }),
-              '--md-list-item-one-line-container-height': '40px',
-              '--md-list-item-two-line-container-height': '52px',
-              '--md-list-item-top-space': '6px', '--md-list-item-bottom-space': '5px',
-              '--md-list-item-leading-space': '12px', '--md-list-item-trailing-space': '10px',
-            }}>
-            <span slot="start" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, color: accentColor || C.accent, flexShrink: 0 }}>{suiteIcon(icon, 20)}</span>
-            <div slot="headline" style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-              <span style={{ fontSize: NC_TYPE.title, fontWeight: 650, color: C.text, fontFamily: NC_FONT_STACK, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
-              {onToggleExpand && <span style={{ display: "flex", color: C.faint, flexShrink: 0, marginLeft: "auto" }}>{suiteIcon(expanded ? "close_fullscreen" : "expand_content", 16)}</span>}
-            </div>
-            {summary && (
-              <div slot="supporting-text" style={{ fontSize: NC_TYPE.small, color: C.muted, fontFamily: NC_FONT_STACK, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: "normal" }}>{summary}</div>
-            )}
-          </ListItem>
-          {(headerActions || (onToggleExpand && onOpen)) && (
-            <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2, padding: "0 4px 2px", minWidth: 0, overflow: "hidden" }}>
-              {headerActions}
-              {onToggleExpand && onOpen && (
-                <IconBtn icon="open_in_new" iconSize={18} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} />
-              )}
-            </span>
-          )}
-        </div>
-      ) : (
+      {(
         // Collapsing header: hides when the card content scrolls (mobile default).
         // dense = aggressively compact: a thin single-line header that reclaims vertical space.
         // Calm-rows: the header now always uses the thin metrics. Since the resting
@@ -1109,6 +1074,47 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
           with it. */}
       {statusDot && <span style={{ position: "absolute", top: 7, right: onToggleExpand ? 36 : 7, width: 8, height: 8, borderRadius: RADIUS.pill, background: statusDot, boxShadow: `0 0 0 2px ${C.bg}`, pointerEvents: "none" }} />}
     </div>
+  );
+}
+
+// TaskRowActions — the row's Done/Delete, as M3 says to build it.
+//
+// History: these started as two inline buttons that held ~100px of every line
+// (owner tickets WUQh8VL + fZ3Jvr5), then became a hover overlay pinned over the
+// row's trailing edge. The overlay solved the width but created a worse problem —
+// it sits ON TOP of the very line it belongs to, so revealing the actions hides
+// the text you are acting on (owner ticket 8Ooq97WA). It was also hover-only,
+// which is not an affordance at all for keyboard or touch.
+//
+// M3's answer to "a list row has more actions than fit" is a single trailing icon
+// button that opens an anchored menu — the pattern already proven in BugLog.jsx.
+// One 48dp target instead of two, so it costs ~48px rather than ~100px; always
+// visible, so it needs no hover; and the menu is a popover that positions itself
+// clear of the anchor, so it can never cover the row's own text.
+// `onClose` must CLOSE, never toggle: md-menu fires `closed` as part of the same
+// interaction that dismisses it, so a toggling handler flips the row straight back
+// open and the menu can never be dismissed by its own button.
+function TaskRowActions({ id, C, open, onToggle, onClose, onDone, onDelete }) {
+  const anchorId = `nc-taskrow-${id}`;
+  return (
+    <span slot="end" style={{ position: "relative", display: "flex", alignItems: "center" }}
+      onClick={e => e.stopPropagation()}>
+      <IconBtn id={anchorId} icon="more_vert" iconSize={18} color={C.faint}
+        title="Task actions" aria-label="Task actions"
+        active={open} activeBg={C.hover}
+        onClick={e => { e.stopPropagation(); onToggle(); }} />
+      <Menu anchor={anchorId} open={open} onClosed={onClose} positioning="popover">
+        <MenuItem onClick={onDone}>
+          <span slot="start" className="material-symbols-rounded" style={{ color: C.success }}>check</span>
+          <div slot="headline">Mark done</div>
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={onDelete}>
+          <span slot="start" className="material-symbols-rounded" style={{ color: C.danger }}>delete</span>
+          <div slot="headline" style={{ color: C.danger }}>Delete</div>
+        </MenuItem>
+      </Menu>
+    </span>
   );
 }
 
@@ -3010,7 +3016,11 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     // comfortable reading width per column; the Surface Laptop goes back to rows,
     // which per the owner is what it should have stayed on.
     const boxesFiveCol = availableW >= 1500;
-    const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, stickyHeader: boxesFiveCol, narrowActions: availableW < 480 };
+    // narrowActions: wrap the header's action buttons onto their own row when the
+    // card is too narrow to fit a title plus several 48dp buttons on one line. That
+    // is true on a phone-width card AND in the 5-column grid, where each column is
+    // only ~240-280px (the Calendar title was crushed to nothing, owner 7/21).
+    const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, narrowActions: availableW < 480 || boxesFiveCol };
     // Rows-mode cards (iPad portrait: five cards sharing the screen height) are far
     // too short to spend ~40px on a fixed hero — it left a single-row slat. The hero
     // is a tall-card affordance only; short cards give every pixel to real rows.
@@ -3277,25 +3287,27 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   </div>
                 );
               }
-              // Done/Delete overlay the row's trailing edge instead of holding ~100px
-              // of it on every line (owner tickets WUQh8VL + fZ3Jvr5). They keep their
-              // 48dp targets and appear on hover/focus — or always, on touch. A card
-              // squished by a sibling's expansion drops them entirely; at that width
-              // they are the difference between a readable line and a vertical stack
-              // of letters, and the card is one tap from full size.
+              // Row actions are one trailing menu button (see TaskRowActions) — it
+              // holds ~48px instead of the ~100px two inline buttons used to cost
+              // (owner tickets WUQh8VL + fZ3Jvr5), and unlike the hover overlay that
+              // replaced them it never covers the row's own text (ticket 8Ooq97WA).
+              // A card squished by a sibling's expansion still drops it: at ~100px
+              // wide every pixel is the difference between a readable line and a
+              // vertical stack of letters, and the card is one tap from full size.
               const hideRowActions = isSquished("tasks");
               return (
-                <div key={t.id} className={hideRowActions ? undefined : "nc-row-host"}>
+                <div key={t.id}>
                   <ListItem type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
                     <span slot="start" style={{ width: 7, height: 7, borderRadius:RADIUS.pill, background:priColor }} />
-                    <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word", paddingRight: hideRowActions ? 0 : 6 }}>{nerveDisplaySummary(t,"Untitled task")}</span>
+                    <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>{nerveDisplaySummary(t,"Untitled task")}</span>
+                    {!hideRowActions && (
+                      <TaskRowActions id={t.id} C={C} open={openTaskActionsId === t.id}
+                        onToggle={() => setOpenTaskActionsId(prev => prev === t.id ? null : t.id)}
+                        onClose={() => setOpenTaskActionsId(prev => prev === t.id ? null : prev)}
+                        onDone={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }}
+                        onDelete={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} />
+                    )}
                   </ListItem>
-                  {!hideRowActions && (
-                    <div className="nc-row-actions">
-                      <IconBtn icon="check" size={48} iconSize={22} color={C.success} title="Done" aria-label="Mark done" onClick={e => { e.stopPropagation(); onCompleteTask?.(t.id); }} />
-                      <IconBtn icon="close" size={48} iconSize={20} color={C.danger} title="Delete" aria-label="Delete task" onClick={e => { e.stopPropagation(); onDeleteTask?.(t.id); }} />
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -3597,20 +3609,19 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   </div>
                 );
               }
-              // Same hover-reveal as the card grid: Done/Delete overlay the trailing
-              // edge instead of holding width on every line (owner ticket WUQh8VL).
-              // These were also below the M3 48dp floor at 26-32px — moving them out
-              // of the layout means they can be full size without costing the text.
+              // Same trailing action menu as the card grid — one 48dp target that
+              // opens an anchored M3 menu, never an overlay on top of the row.
               return (
-                <div key={t.id} className="nc-row-host">
+                <div key={t.id}>
                   <ListItem data-nc-task-row="true" type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
                     <span slot="start" style={{ width: 7,height: 7,borderRadius:RADIUS.pill,background:priColor }} />
-                    <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word", paddingRight: 6 }}>{nerveDisplaySummary(t,"Untitled task")}</span>
+                    <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>{nerveDisplaySummary(t,"Untitled task")}</span>
+                    <TaskRowActions id={t.id} C={C} open={openTaskActionsId === t.id}
+                      onToggle={() => setOpenTaskActionsId(prev => prev === t.id ? null : t.id)}
+                      onClose={() => setOpenTaskActionsId(prev => prev === t.id ? null : prev)}
+                      onDone={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }}
+                      onDelete={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} />
                   </ListItem>
-                  <div className="nc-row-actions">
-                    <IconBtn icon="check" size={48} iconSize={22} color={C.success} title="Done" aria-label="Mark done" onClick={e => { e.stopPropagation(); onCompleteTask?.(t.id); }} />
-                    <IconBtn icon="close" size={48} iconSize={20} color={C.danger} title="Delete" aria-label="Delete task" onClick={e => { e.stopPropagation(); onDeleteTask?.(t.id); }} />
-                  </div>
                 </div>
               );
             })}
@@ -3932,8 +3943,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 const actionsOpen = openTaskActionsId === t.id;
                 const displayText = nerveDisplaySummary(t, "Untitled task");
                 // Editing → inline textarea (unchanged behavior). Otherwise a genuine
-                // md-list-item; hover Done/Delete stay a light-DOM sibling inside the
-                // position:relative .nc-action-row wrapper (avoids shadow-DOM slotting).
+                // md-list-item with the shared trailing action menu.
                 if (isEditing) {
                   return (
                     <div key={t.id} data-nc-task-row="true" style={{ display: "grid", gridTemplateColumns: "16px minmax(0,1fr)", alignItems: "start", padding: "7px 16px 7px 0", gap: 8 }}>
@@ -3946,27 +3956,22 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                     </div>
                   );
                 }
+                // One trailing menu button on every pointer type. The old split — a
+                // floating Done/Delete panel on hover for mouse, an expanding strip
+                // for touch — put an opaque card ON the row it belonged to, hiding
+                // the text being acted on (owner ticket 8Ooq97WA), and pushed the
+                // rows below it down when the touch strip opened.
                 return (
-                  <div key={t.id} data-nc-task-row="true" className="nc-action-row">
+                  <div key={t.id} data-nc-task-row="true">
                     <ListItem type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
                       <span slot="start" style={{ width: 7, height: 7, borderRadius: RADIUS.pill, background: priColor }} />
                       <span slot="headline" style={{ color: C.text, fontWeight: 500, wordBreak: "break-word" }}>{displayText}</span>
-                      {touchLayout && (
-                        <span slot="end"><IconBtn icon="more_horiz" size={dense?30:36} iconSize={dense?16:18} color={C.muted} title={actionsOpen ? "Hide actions" : "Show actions"} active={actionsOpen} activeBg={C.hover} onClick={e => { e.stopPropagation(); setOpenTaskActionsId(actionsOpen ? null : t.id); }} /></span>
-                      )}
+                      <TaskRowActions id={t.id} C={C} open={actionsOpen}
+                        onToggle={() => setOpenTaskActionsId(prev => prev === t.id ? null : t.id)}
+                        onClose={() => setOpenTaskActionsId(prev => prev === t.id ? null : prev)}
+                        onDone={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }}
+                        onDelete={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} />
                     </ListItem>
-                    {!touchLayout && (
-                      <div className="nc-hover-actions" style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", zIndex: 2, display: "flex", gap: 4, background: C.bg, borderRadius: RADIUS.sm, boxShadow: ELEV[1], padding: 4 }}>
-                        <ActionBtn variant="tonal" icon="check" iconSize={17} height={34} labelSize={NC_TYPE.small} containerColor={C.bgSoft} labelColor={C.success} onClick={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }} title="Mark done" aria-label="Mark done">Done</ActionBtn>
-                        <ActionBtn variant="tonal" icon="close" iconSize={15} height={34} labelSize={NC_TYPE.small} containerColor={C.bgSoft} labelColor={C.danger} onClick={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} title="Delete task" aria-label="Delete task">Delete</ActionBtn>
-                      </div>
-                    )}
-                    {touchLayout && actionsOpen && (
-                      <div style={{ display: "flex", gap: 4, padding: "0 16px 6px 24px" }}>
-                        <ActionBtn variant="tonal" icon="check" iconSize={17} height={34} labelSize={NC_TYPE.small} containerColor={C.bgSoft} labelColor={C.success} onClick={() => { setOpenTaskActionsId(null); onCompleteTask?.(t.id); }} title="Mark done" aria-label="Mark done">Done</ActionBtn>
-                        <ActionBtn variant="tonal" icon="close" iconSize={15} height={34} labelSize={NC_TYPE.small} containerColor={C.bgSoft} labelColor={C.danger} onClick={() => { setOpenTaskActionsId(null); onDeleteTask?.(t.id); }} title="Delete task" aria-label="Delete task">Delete</ActionBtn>
-                      </div>
-                    )}
                   </div>
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No open tasks.</div>}
