@@ -1123,6 +1123,41 @@ function TaskRowActions({ id, C, open, onToggle, onClose, onDone, onDelete }) {
 // what the actionMail/actionTasks/actionShailos/actionCalendar sorts already
 // guarantee. Do not reintroduce a per-card hero block.
 
+// CalImportanceMenu — the calendar row's importance picker, as a real M3 menu.
+//
+// It used to be one button that CYCLED 1 → 2 → 3 → 1 on tap. Owner ticket
+// r1GN2lSJ (7/26): "needs dropdown not multiple clicks for cycling importance
+// because each click sends it somewhere else." Exactly right, and the reason is
+// structural, not cosmetic: the agenda is sorted BY rating (actionCalendar), so
+// every cycle step re-sorts the list and the row you are aiming at moves out from
+// under the cursor. Reaching "FYI" from "High" meant hitting a moving target
+// twice. A menu sets the value in one interaction, so the row moves once, after
+// the choice — same anchored-menu pattern as TaskRowActions and BugLog.
+function CalImportanceMenu({ id, C, rating, open, onToggle, onClose, onPick }) {
+  const anchorId = `nc-calrate-${id}`;
+  const tint = r => (r === 1 ? C.danger : r === 3 ? C.faint : C.muted);
+  return (
+    <span slot="end" style={{ position: "relative", display: "flex", alignItems: "center" }}
+      onClick={e => { e.stopPropagation(); e.preventDefault(); }}>
+      <IconBtn id={anchorId} icon={CAL_IMPORTANCE[rating].icon} size={48} iconSize={20}
+        color={tint(rating)}
+        active={open} activeBg={C.hover}
+        title={`Importance: ${CAL_IMPORTANCE[rating].label}`}
+        aria-label={`Importance ${rating}, ${CAL_IMPORTANCE[rating].label}. Opens a menu.`}
+        onClick={e => { e.stopPropagation(); e.preventDefault(); onToggle(); }} />
+      <Menu anchor={anchorId} open={open} onClosed={onClose} positioning="popover">
+        {[1, 2, 3].map(r => (
+          <MenuItem key={r} onClick={() => onPick(r)}>
+            <span slot="start" className="material-symbols-rounded" style={{ color: tint(r) }}>{CAL_IMPORTANCE[r].icon}</span>
+            <div slot="headline" style={{ fontWeight: r === rating ? 700 : 400 }}>{CAL_IMPORTANCE[r].label}</div>
+            {r === rating && <span slot="end" className="material-symbols-rounded" style={{ color: C.accent }}>check</span>}
+          </MenuItem>
+        ))}
+      </Menu>
+    </span>
+  );
+}
+
 // MoreRow — the quiet "+N more" reveal under a capped list (calm-rows prototype).
 // One full-width text button; expanding is always one tap, so no information is lost.
 //
@@ -1742,11 +1777,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     setCalRatings(prev => ({ ...prev, [key]: rating })); // optimistic
     Store.setCalendarRating(key, rating);
   }, []);
-  // Cycle 1 → 2 → 3 → 1 on tap.
-  const cycleCalendarRating = useCallback((evt) => {
-    const next = (calendarRatingOf(evt, calRatings) % 3) + 1;
-    rateCalendarEvent(evt, next);
-  }, [calRatings, rateCalendarEvent]);
+  // Which agenda row currently has its importance menu open (ticket r1GN2lSJ —
+  // the old tap-to-cycle is gone; see CalImportanceMenu for why).
+  const [openCalRateId, setOpenCalRateId] = useState(null);
 
   // ── Needs-action ordering (v7) ─────────────────────────────────────────────
   // Stable sorts: flagged items rise, everything else keeps its natural order,
@@ -3008,6 +3041,27 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     // trailing controls entirely — at that width they are the difference between a
     // readable line and an unreadable one, and the card is one tap from full size.
     const isSquished = id => !!expandedBoxId && expandedBoxId !== id && boxesFiveCol;
+    // ── Do per-row controls fit at this column width? (owner ticket yk3jFYeI: "the
+    // column view is still being wasted space with the options per line, which take
+    // up half the column for no reason. figure out a better gm3 industry standard
+    // way.") ──
+    // He is right about the arithmetic. A per-row control cannot be shrunk — 48dp is
+    // the M3 touch floor and this codebase does not go under it — so the only way to
+    // give a narrow column its width back is for the row not to carry one. That is
+    // also what M3 says: window size classes drive WHICH affordances a surface shows,
+    // and a compact pane keeps content and moves secondary actions into the item's
+    // own expanded/selected state rather than crowding every line.
+    // 420px is the threshold. Measured on the owner's 1920px screen the five columns
+    // come out at 359px each, and a row there spends 48 (control) + ~44 (timestamp) +
+    // ~19 (dot and inset) + gaps before a single character of the headline — which is
+    // what "take up half the column" describes. 420px is the first width where the
+    // control is a comfortable minority of the line, so below it the row carries no
+    // control at all. Nothing becomes unreachable: task Done/Delete move into the
+    // row's tap-to-edit state, which spans the full column and costs zero width while
+    // closed, and calendar importance stays available at any width in the roomier
+    // stacked/full-panel layouts.
+    const colW = boxesFiveCol ? Math.floor((availableW - 64) / (expandedBoxId ? 3 : 5)) : availableW;
+    const rowActionsFit = colW >= 420;
 
     const fmtTimeM = (raw) => { try { const d = new Date(raw); const now = new Date(); return d.toDateString()===now.toDateString() ? d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : d.toLocaleDateString([],{month:"short",day:"numeric"}); } catch { return ""; } };
     // Abbreviated relative time (5m · 2h · Tue · Jun 3) — denser than a full timestamp.
@@ -3151,7 +3205,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   <span slot="headline" style={{ color:C.text, fontWeight:450, whiteSpace:"normal", wordBreak:"break-word", ...(exp ? {} : { display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }) }}>{snip}</span>
                   <span slot="supporting-text" style={{ color:C.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{exp && subj && subj !== snip ? `${from} — ${subj}` : from}</span>
                   <span slot="trailing-supporting-text" style={{ color:C.faint, whiteSpace:"nowrap" }}>{date}</span>
-                  <span slot="end"><IconBtn icon="open_in_new" iconSize={14} color={C.faint} title="Open in Gmail" href={gmailDeepLink(msg)} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} /></span>
+                  {/* Narrow columns drop it (ticket yk3jFYeI): tapping the row opens the
+                      reader panel, which carries its own Open-in-Gmail action. */}
+                  {rowActionsFit && <span slot="end"><IconBtn icon="open_in_new" iconSize={14} color={C.faint} title="Open in Gmail" href={gmailDeepLink(msg)} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} /></span>}
                 </ListItem>
               );
             })}
@@ -3168,7 +3224,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
             <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0, padding: "0 8px 6px", boxSizing:"border-box" }}>
-              <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact dense={dense} onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
+              <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact dense={dense} rowActions={rowActionsFit} onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </MobileBox>
 
@@ -3200,11 +3256,28 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 return (
                   <div key={t.id} style={{ display:"grid", gridTemplateColumns: dense ? "12px minmax(0,1fr)" : "16px minmax(0,1fr)", alignItems:"start", padding:`${padY}px 10px ${padY}px 0`, gap: dense?6:8 }}>
                     <span style={{ width: dense?6:8, height: dense?6:8, borderRadius:RADIUS.pill, background:priColor, flexShrink:0, marginLeft: dense?6:0, marginTop:6 }} />
-                    <textarea value={editText} autoFocus rows={2}
-                      onChange={e => setEditText(e.target.value)}
-                      onKeyDown={e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();if(editText.trim())onEditTask?.(t.id,editText.trim());setEditingTaskId(null);} if(e.key==="Escape")setEditingTaskId(null); }}
-                      onBlur={() => { if(editText.trim()&&editText!==t.text)onEditTask?.(t.id,editText.trim());setEditingTaskId(null); }}
-                      style={{ width:"100%", boxSizing:"border-box", borderRadius:RADIUS.sm, border:`1px solid ${priColor}`, background:C.bgSoft, color:C.text, padding:"6px 8px", fontSize:ncType.body, fontFamily:NC_FONT_STACK, lineHeight:ncType.line, resize:"none", outline:"none" }} />
+                    <div style={{ minWidth:0 }}>
+                      <textarea value={editText} autoFocus rows={2}
+                        onChange={e => setEditText(e.target.value)}
+                        onKeyDown={e => { if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();if(editText.trim())onEditTask?.(t.id,editText.trim());setEditingTaskId(null);} if(e.key==="Escape")setEditingTaskId(null); }}
+                        onBlur={() => { if(editText.trim()&&editText!==t.text)onEditTask?.(t.id,editText.trim());setEditingTaskId(null); }}
+                        style={{ width:"100%", boxSizing:"border-box", borderRadius:RADIUS.sm, border:`1px solid ${priColor}`, background:C.bgSoft, color:C.text, padding:"6px 8px", fontSize:ncType.body, fontFamily:NC_FONT_STACK, lineHeight:ncType.line, resize:"none", outline:"none" }} />
+                      {/* Narrow columns carry no trailing menu on the row, so Done/Delete
+                          live here, in the row's open state — full width, and zero cost
+                          to every other line (ticket yk3jFYeI). onMouseDown rather than
+                          onClick: the textarea's onBlur commits and closes the editor,
+                          which would unmount these before a click could land. */}
+                      {!rowActionsFit && (
+                        <div style={{ display:"flex", gap:4, marginTop:4 }}>
+                          <ActionBtn variant="text" icon="check" iconSize={18} labelColor={C.success}
+                            onMouseDown={e => { e.preventDefault(); setEditingTaskId(null); onCompleteTask?.(t.id); }}
+                            title="Mark done" aria-label="Mark done">Done</ActionBtn>
+                          <ActionBtn variant="text" icon="delete" iconSize={18} labelColor={C.danger}
+                            onMouseDown={e => { e.preventDefault(); setEditingTaskId(null); onDeleteTask?.(t.id); }}
+                            title="Delete task" aria-label="Delete task">Delete</ActionBtn>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               }
@@ -3212,10 +3285,12 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               // holds ~48px instead of the ~100px two inline buttons used to cost
               // (owner tickets WUQh8VL + fZ3Jvr5), and unlike the hover overlay that
               // replaced them it never covers the row's own text (ticket 8Ooq97WA).
-              // A card squished by a sibling's expansion still drops it: at ~100px
-              // wide every pixel is the difference between a readable line and a
-              // vertical stack of letters, and the card is one tap from full size.
-              const hideRowActions = isSquished("tasks");
+              // It is still 48dp of every line, though, and in a 5-column layout that
+              // is a third of the column (owner ticket yk3jFYeI). So the row carries it
+              // only when the column is wide enough to spare it; below 320px the same
+              // two actions live in the row's tap-to-edit state instead. A card
+              // squished by a sibling's expansion drops it for the same reason.
+              const hideRowActions = isSquished("tasks") || !rowActionsFit;
               return (
                 <div key={t.id}>
                   <ListItem type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
@@ -3320,11 +3395,20 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                       const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
                       const barColor = GCAL_COLORS[row.evt?.colorId] || C.warning;
                       const rating = calendarRatingOf(row.evt, calRatings);
-                      const rateBtn = <IconBtn slot="end" icon={CAL_IMPORTANCE[rating].icon} size={48} iconSize={20}
-                          color={rating === 1 ? C.danger : rating === 3 ? C.faint : C.muted}
-                          title={`Importance: ${CAL_IMPORTANCE[rating].label} — tap to change`}
-                          aria-label={`Importance ${rating}, ${CAL_IMPORTANCE[rating].label}. Tap to change.`}
-                          onClick={e => { e.stopPropagation(); e.preventDefault(); cycleCalendarRating(row.evt); }} />;
+                      const rateId = row.evt?.id || row.index;
+                      // This is the ONE per-row control that survives a narrow column
+                      // (ticket yk3jFYeI). Tasks, mail and phone all had another path to
+                      // the same actions — the row's own tap — so their trailing buttons
+                      // were redundant width. Importance has no other path: the row tap
+                      // opens the event in Google Calendar. Dropping it here would not be
+                      // reclaiming waste, it would be deleting the feature.
+                      const rateBtn = (
+                        <CalImportanceMenu id={rateId} C={C} rating={rating}
+                          open={openCalRateId === rateId}
+                          onToggle={() => setOpenCalRateId(prev => prev === rateId ? null : rateId)}
+                          onClose={() => setOpenCalRateId(prev => prev === rateId ? null : prev)}
+                          onPick={r => { setOpenCalRateId(null); rateCalendarEvent(row.evt, r); }} />
+                      );
                       const item = (
                         <>
                           {/* v2 uniform leading: same 7px dot metric as every card; the
