@@ -1,0 +1,48 @@
+# Cloud session → Firestore bridge.
+#
+# A Claude Code cloud session holds no Firebase credential (service-account key
+# is PC-only; Firestore rules deny unauthenticated reads; the deployed MCP
+# endpoint needs a bearer token the session cannot see). MCP_READ_TOKEN does
+# exist here as a repo secret, so the session dispatches this workflow, the
+# runner makes the call, and the answer comes back encrypted to a one-time key
+# the session generated. Actions logs are readable by anyone who can read the
+# repo — the encryption is what keeps the owner's Bug Log out of them.
+#
+# See tools/firestore-bridge/README.md for the three commands.
+name: Firestore bridge
+
+on:
+  workflow_dispatch:
+    inputs:
+      tool:
+        description: "MCP tool (list_bugs, add_bug_note, set_bug_status, get_meta, list_tasks, …)"
+        required: true
+        default: list_bugs
+      args:
+        description: 'JSON arguments, e.g. {"status":"unresolved","limit":50}'
+        required: false
+        default: "{}"
+      pubkey:
+        description: "base64 SPKI public key printed by tools/firestore-bridge/keygen.mjs"
+        required: true
+
+# Inputs are visible to anyone who can read the repo. Tool name and arguments
+# are deliberately in the clear (they are the session's own words — a ticket id
+# and a fix note); only the RESPONSE carries owner data, and that is encrypted.
+jobs:
+  call:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Call MCP endpoint
+        env:
+          MCP_READ_TOKEN: ${{ secrets.MCP_READ_TOKEN }}
+          BRIDGE_TOOL: ${{ inputs.tool }}
+          BRIDGE_ARGS: ${{ inputs.args }}
+          BRIDGE_PUBKEY: ${{ inputs.pubkey }}
+        run: node tools/firestore-bridge/call.mjs
