@@ -162,6 +162,45 @@ export function BugLog({ T, railVisible = true }) {
     return () => window.removeEventListener(BUGLOG_OPEN_EVENT, onOpenReq);
   }, []);
 
+  // ── Tap outside to dismiss ────────────────────────────────────────────────
+  // Same gesture as the mail-reader popup card. Deliberately NOT the same
+  // mechanism: that card lays a full-viewport catcher <div> under itself, which
+  // also swallows scroll and hover on everything behind it. This panel exists to
+  // be used *while looking at the thing being reported*, so blocking the page
+  // under it would cost more than the gesture is worth. A capture-phase document
+  // listener gives the same dismissal with nothing blocked.
+  //
+  // Nothing is lost by closing: draft text, the in-progress inline edit and the
+  // filter all live in component state, and the component stays mounted, so
+  // reopening restores exactly what was there.
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const isInside = (e) => {
+      const panel = panelRef.current;
+      if (!panel) return false;
+      // composedPath, not contains: M3 controls in the panel are custom elements
+      // with shadow roots, and e.target for a click inside one is the host's
+      // shadow content — which panel.contains() reports as outside.
+      const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+      return path.includes(panel) || panel.contains(e.target);
+    };
+    const onPointerDown = (e) => { if (!isInside(e)) setOpen(false); };
+    const onKeyDown = (e) => {
+      if (e.key !== 'Escape') return;
+      if (editId) return;   // Escape belongs to the inline editor first
+      setOpen(false);
+    };
+    // Deferred by a tick: the very pointerdown that opened the panel (rail item
+    // or FAB) is still propagating, and would otherwise close it instantly.
+    const t = setTimeout(() => document.addEventListener('pointerdown', onPointerDown, true), 0);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open, editId]);
+
   // Keep a dragged FAB position on-screen if the window is resized smaller.
   React.useEffect(() => {
     if (!fabPos) return undefined;

@@ -969,7 +969,7 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
 // When onToggleExpand is provided the header tap toggles expand instead of opening the full
 // surface; onOpen moves to a small trailing open_in_new button. collapsed=true renders the
 // header only (content hidden via display:none so embedded pollers — Phone — keep running).
-function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, count = null, narrowActions = false, scrollable = false }) {
+function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, count = null, narrowActions = false }) {
   const scrollRef = useRef(null);
   const tint = hexToRgba(accentColor, 0.05);
   const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
@@ -1060,8 +1060,19 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
           When the owner has asked this card to show everything but it is not the
           expanded card, it scrolls its own rows instead — one screen is preserved
           because only this card scrolls, never the page. */}
+      {/* The body always scrolls. It used to be `scrollable ? "auto" : "hidden"`,
+          on the theory that useFitRows renders exactly the rows that fit so there
+          is never anything to scroll to. Measured on a 1280x800 tablet that is not
+          true: the Mail card's last row ended 29px below the body and its "+N more"
+          chip a further 63px below that — the chip is appended AFTER the fitted
+          rows and was never part of the fit — so the card was clipping content with
+          no scroll AND no affordance to reach it (owner: "won't scroll in card").
+          `auto` costs nothing when the fit is exact and rescues every case where it
+          is not, which includes any card whose body brings its own layout, like
+          Phone. Clipping was never the feature; the "+N more" chip is, and it still
+          leads the way in. */}
       <div ref={scrollRef}
-        style={{ flex: 1, minHeight: 0, overflowX: "hidden", overflowY: scrollable ? "auto" : "hidden", paddingBottom: 4, backgroundColor: "inherit", ...(collapsed ? { display: "none" } : {}) }}>
+        style={{ flex: 1, minHeight: 0, overflowX: "hidden", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", paddingBottom: 4, backgroundColor: "inherit", ...(collapsed ? { display: "none" } : {}) }}>
         {typeof children === "function" ? children(fitRows) : children}
       </div>
       {/* No gradient scrim: M3 clips scrolling lists cleanly at the padded
@@ -1423,65 +1434,17 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   // Helpers needed by both the Google IIFE and handleAddEvent
   const gmailHeader = (msg, name) => msg?.payload?.headers?.find(h => h.name === name)?.value || '';
   const fmtFrom = (raw) => { const m = raw?.match(/^"?([^"<]+)"?\s*<[^>]+>/); return m ? m[1].trim() : (raw || '').split('@')[0]; };
-
-  // ── Mail reader (owner ticket WUQh8VL) ─────────────────────────────────────
-  // Full text of the clicked email, floating over whatever layout is on screen,
-  // with the responses right there. Defined ONCE here rather than inside a layout
-  // branch: the card grid and the full-panel view return from different places, so
-  // a copy living in either one is invisible in the other.
-  //
-  // Reply / Reply all deep-link into the Gmail composer for this thread. Sending
-  // from inside NerveCenter is not possible yet — the app holds Gmail READ scope
-  // only (google-workspace.js exposes gmailMessage and nothing that sends), so a
-  // true in-place send needs gmail.send added to the consent screen. That is a
-  // permissions change and the owner's call. "Open in Gmail" is the escape the
-  // ticket asks for ("if more is reqwd offers to leave").
-  const mailReaderPanel = readerEmail ? (() => {
-    const msg = (gmailMessages || []).find(m => m.id === readerEmail.id);
-    if (!msg) return null;
-    const detail = emailDetails[msg.id];
-    const loading = emailDetailLoadingId === msg.id;
-    const subject = gmailHeader(msg, 'Subject') || '(no subject)';
-    const body = detail?.fullBody || decodeSnippet(msg.snippet || '');
-    const close = () => { setReaderEmail(null); setSelectedEmailId(null); };
-    return (
-      <>
-        <div style={{ position: "fixed", inset: 0, zIndex: 9995 }} onClick={close} />
-        <div role="dialog" aria-label={`Email: ${subject}`}
-          style={{ position: "fixed", top: readerEmail.top, left: readerEmail.left, width: 400, maxHeight: 340,
-            zIndex: 9996, display: "flex", flexDirection: "column",
-            background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md,
-            boxShadow: ELEV[3], fontFamily: NC_FONT_STACK, overflow: "hidden" }}>
-          <div style={{ padding: "10px 12px 8px", borderBottom: `1px solid ${C.divider}` }}>
-            <div style={{ fontSize: NC_TYPE.control, fontWeight: 600, color: C.text, wordBreak: "break-word" }}>{subject}</div>
-            <div style={{ fontSize: NC_TYPE.meta, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {fmtFrom(gmailHeader(msg, 'From'))}{msg.sourceAccount ? ` → ${msg.sourceAccount}` : ""}
-            </div>
-          </div>
-          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 12px",
-            fontSize: NC_TYPE.meta, lineHeight: LINE.body, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-            {emailDetailError ? <span style={{ color: C.warning }}>{emailDetailError}</span>
-              : loading ? "Loading the full message…"
-              : (body || "No message body available.")}
-          </div>
-          <div style={{ display: "flex", gap: 4, padding: "6px 8px", borderTop: `1px solid ${C.divider}`, flexWrap: "wrap", alignItems: "center" }}>
-            <ActionBtn variant="tonal" icon="reply" iconSize={15} height={36} labelSize={NC_TYPE.small}
-              containerColor={C.bgSoft} labelColor={C.text} title="Reply in Gmail"
-              onClick={() => window.open(gmailReplyLink(msg, false), "_blank", "noopener")}>Reply</ActionBtn>
-            <ActionBtn variant="tonal" icon="reply_all" iconSize={15} height={36} labelSize={NC_TYPE.small}
-              containerColor={C.bgSoft} labelColor={C.text} title="Reply to everyone in Gmail"
-              onClick={() => window.open(gmailReplyLink(msg, true), "_blank", "noopener")}>Reply all</ActionBtn>
-            <ActionBtn variant="text" icon="open_in_new" iconSize={15} height={36} labelSize={NC_TYPE.small}
-              labelColor={C.accent} title="Open the whole thread in Gmail"
-              onClick={() => window.open(gmailDeepLink(msg), "_blank", "noopener")}>Open in Gmail</ActionBtn>
-            <IconBtn icon="close" iconSize={16} color={C.muted} title="Close" aria-label="Close"
-              onClick={close} style={{ marginLeft: "auto" }} />
-          </div>
-        </div>
-      </>
-    );
-  })() : null;
+  // Declared HERE, above mailReaderPanel, and not below it. The panel calls this
+  // while rendering — the snippet is what it shows until the full body arrives —
+  // so a `const` declared after the panel is in its temporal dead zone at exactly
+  // the moment the panel first renders. That threw ReferenceError: "Cannot access
+  // 'decodeSnippet' before initialization" out of render and into the app error
+  // boundary, so the first tap on any email replaced the whole app with "Something
+  // went wrong. Tap to reload." (owner: "tapping to open a email gets an error
+  // screen"). It could only ever be seen on the FIRST tap of a message, because
+  // once the detail fetch has cached a fullBody the fallback stops being reached.
   const decodeSnippet = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ').trim();
+
 
   async function handleEmailSelect(msg) {
     if (!msg?.id) return;
@@ -1543,6 +1506,73 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
 
   const C = cleanTheme(T);
   const ncType = NC_TYPE;
+
+  // ── Mail reader (owner ticket WUQh8VL) ─────────────────────────────────────
+  // Full text of the clicked email, floating over whatever layout is on screen,
+  // with the responses right there. Defined ONCE here rather than inside a layout
+  // branch: the card grid and the full-panel view return from different places, so
+  // a copy living in either one is invisible in the other.
+  //
+  // Reply / Reply all deep-link into the Gmail composer for this thread. Sending
+  // from inside NerveCenter is not possible yet — the app holds Gmail READ scope
+  // only (google-workspace.js exposes gmailMessage and nothing that sends), so a
+  // true in-place send needs gmail.send added to the consent screen. That is a
+  // permissions change and the owner's call. "Open in Gmail" is the escape the
+  // ticket asks for ("if more is reqwd offers to leave").
+  //
+  // POSITION IS LOAD-BEARING: this must stay below `C` and `decodeSnippet`. It was
+  // originally written ~120 lines higher, above both of them, and since it is a
+  // plain const (not a function declaration, so no hoisting) it read them from
+  // their temporal dead zone the moment `readerEmail` went truthy. Rendering threw
+  // ReferenceError, the app error boundary caught it, and the entire app was
+  // replaced by "Something went wrong. Tap to reload." on the first tap of any
+  // email — in every layout, since it shipped in 4.105.0. If this block ever moves
+  // again, it moves DOWN.
+  const mailReaderPanel = readerEmail ? (() => {
+    const msg = (gmailMessages || []).find(m => m.id === readerEmail.id);
+    if (!msg) return null;
+    const detail = emailDetails[msg.id];
+    const loading = emailDetailLoadingId === msg.id;
+    const subject = gmailHeader(msg, 'Subject') || '(no subject)';
+    const body = detail?.fullBody || decodeSnippet(msg.snippet || '');
+    const close = () => { setReaderEmail(null); setSelectedEmailId(null); };
+    return (
+      <>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9995 }} onClick={close} />
+        <div role="dialog" aria-label={`Email: ${subject}`}
+          style={{ position: "fixed", top: readerEmail.top, left: readerEmail.left, width: 400, maxHeight: 340,
+            zIndex: 9996, display: "flex", flexDirection: "column",
+            background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.md,
+            boxShadow: ELEV[3], fontFamily: NC_FONT_STACK, overflow: "hidden" }}>
+          <div style={{ padding: "10px 12px 8px", borderBottom: `1px solid ${C.divider}` }}>
+            <div style={{ fontSize: NC_TYPE.control, fontWeight: 600, color: C.text, wordBreak: "break-word" }}>{subject}</div>
+            <div style={{ fontSize: NC_TYPE.meta, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {fmtFrom(gmailHeader(msg, 'From'))}{msg.sourceAccount ? ` → ${msg.sourceAccount}` : ""}
+            </div>
+          </div>
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 12px",
+            fontSize: NC_TYPE.meta, lineHeight: LINE.body, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            {emailDetailError ? <span style={{ color: C.warning }}>{emailDetailError}</span>
+              : loading ? "Loading the full message…"
+              : (body || "No message body available.")}
+          </div>
+          <div style={{ display: "flex", gap: 4, padding: "6px 8px", borderTop: `1px solid ${C.divider}`, flexWrap: "wrap", alignItems: "center" }}>
+            <ActionBtn variant="tonal" icon="reply" iconSize={15} height={36} labelSize={NC_TYPE.small}
+              containerColor={C.bgSoft} labelColor={C.text} title="Reply in Gmail"
+              onClick={() => window.open(gmailReplyLink(msg, false), "_blank", "noopener")}>Reply</ActionBtn>
+            <ActionBtn variant="tonal" icon="reply_all" iconSize={15} height={36} labelSize={NC_TYPE.small}
+              containerColor={C.bgSoft} labelColor={C.text} title="Reply to everyone in Gmail"
+              onClick={() => window.open(gmailReplyLink(msg, true), "_blank", "noopener")}>Reply all</ActionBtn>
+            <ActionBtn variant="text" icon="open_in_new" iconSize={15} height={36} labelSize={NC_TYPE.small}
+              labelColor={C.accent} title="Open the whole thread in Gmail"
+              onClick={() => window.open(gmailDeepLink(msg), "_blank", "noopener")}>Open in Gmail</ActionBtn>
+            <IconBtn icon="close" iconSize={16} color={C.muted} title="Close" aria-label="Close"
+              onClick={close} style={{ marginLeft: "auto" }} />
+          </div>
+        </div>
+      </>
+    );
+  })() : null;
 
   // One Google account picker, shared by EVERY layout's Calendar/Mail headers —
   // it used to exist only in the desktop card strip (owner ticket HwhngHW).
@@ -3019,6 +3049,11 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     // is true on a phone-width card AND in the 5-column grid, where each column is
     // only ~240-280px (the Calendar title was crushed to nothing, owner 7/21).
     const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, narrowActions: availableW < 480 || boxesFiveCol };
+    // Height of a sibling card while another card is expanded: exactly its header,
+    // so it stays tappable (one tap switches which card is expanded) without
+    // claiming any of the expanded card's space. Taller when the header wraps its
+    // action buttons onto a second row, which is what narrowActions means.
+    const boxStripH = (availableW < 480 || boxesFiveCol) ? 96 : 56;
     // Card-level expand: both orientations. Rows: tapping a header gives that card the
     // whole page and the rest shrink to header strips. Columns (wide screens): the
     // expanded card takes most of the width and the other columns squish to slim
@@ -3030,9 +3065,11 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
       // stays readable and "expanded" simply means this card shows all its items.
       collapsed: false,
       onToggleExpand: () => setExpandedBoxId(prev => prev === id ? null : id),
-      // A card told to show everything while it is NOT the expanded one has more
-      // rows than fit, so it scrolls itself rather than clipping them.
-      scrollable: showAllBoxIds.has(id) && expandedBoxId !== id,
+      // No `scrollable` flag any more — MobileBox's body always scrolls. It used to
+      // be granted only to a show-all card that was NOT the expanded one, which got
+      // it exactly backwards: expanding is the gesture that means "show me all of
+      // this", the card then renders every row, and with overflow hidden everything
+      // past the fold was unreachable.
     });
     // Show every row of this card: true when it is expanded, or when the owner
     // asked for "show all" and that choice has not been turned off.
@@ -3165,8 +3202,21 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             } : expandedBoxId ? {
               // Expanded card always gets the single-column treatment — predictable
               // in both widths (in 2-col the expanded card can't cleanly span).
+              //
+              // Siblings are FIXED-HEIGHT strips, not `min-content`. min-content
+              // sizes a sibling to its whole list, and these cards are never
+              // collapsed (the Phone surface has to keep polling, so its body stays
+              // mounted), so a busy sibling took whatever height it liked and the
+              // expanded card — sharing what was left through a single 4fr row —
+              // ended up SMALLER than it started. Measured on a 1280x800 tablet:
+              // expanding Mail took Mail from 211px to ~0 while Calendar grew by
+              // 219px, so the card that visibly expanded was never the card that
+              // was tapped (owner: "expansion of one card often goes to another").
+              // A strip is the header's own height, which is what "the rest shrink
+              // to header strips" meant all along; the expanded card then takes
+              // every remaining pixel via 1fr.
               gridTemplateColumns: "1fr",
-              gridTemplateRows: BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,4fr)" : "min-content").join(" "),
+              gridTemplateRows: BOX_ORDER.map(id => id === expandedBoxId ? "minmax(0,1fr)" : `${boxStripH}px`).join(" "),
             } : availableW >= NC_FEED_2COL ? {
               // 2-col (tablet portrait): 5 cards auto-place into 3 rows — defining 5
               // weighted rows here left rows 4-5 EMPTY, wasting ~40% of the screen
@@ -3468,6 +3518,13 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             </div>
           </MobileBox>
         </div>
+
+        {/* The reader itself. It is built once at the top of the component so every
+            layout can show it, but this branch never actually rendered it — so on
+            the card grid (phone and tablet) tapping a mail row set the state, fired
+            the detail fetch, and then showed nothing at all. The other two layouts
+            each render it; this one was simply missed. */}
+        {mailReaderPanel}
 
       </div>
     );
