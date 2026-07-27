@@ -27,6 +27,10 @@ import { contactDisplayName, contactNumber, fetchRelayContacts, resolveContactBy
 // because the thing the owner needs to check is the target, not the wording.
 const ACTION_CATS = ['completions', 'gotBacks', 'shailaAnswers', 'messages', 'priorityChanges', 'bugReports'];
 
+// What an appointment lasts when nobody says. Speech almost never carries a
+// duration, so this is the common case, not the fallback.
+const DEFAULT_EVENT_MINUTES = 60;
+
 const PERSONAL_HINTS = /\b(personal|home|private|my own|myself|family)\b/i;
 const WORK_HINTS = /\b(work|shul|office|congregation|synagogue|rabbi|rabbinic|business)\b/i;
 
@@ -95,12 +99,35 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
   const recogRef = useRef(null);
   const elapsedTmrRef = useRef(null);
 
+  // What genuinely BLOCKS a schedule row from being added.
+  //
+  // This used to demand date AND time AND duration, and any approved row missing
+  // one aborted the entire apply — losing the tasks and shailos from the same
+  // recording along with it. Almost nothing spoken aloud survives that: nobody
+  // says how long an appointment will be, and until the extractor was given
+  // today's date it could not fill `date` either. "Add a 2pm appointment by the
+  // doctor" — the owner's own example — failed all three and silently took
+  // everything else down with it.
+  //
+  // The gate was also checking the wrong thing. The event body is not built from
+  // these fields: applyApproved passes the row through aiParseCalendarEvent,
+  // which gets today's date AND the speaker's own wording in `when`, and resolves
+  // the real start/end itself. So a row needs enough for THAT call to succeed, not
+  // a filled-in grid:
+  //
+  //   · duration never blocks — it defaults (DEFAULT_EVENT_MINUTES) like every
+  //     calendar app does when you don't say
+  //   · date/time only block when there is also no spoken `when` to fall back on,
+  //     because with the wording present the parse step can still place the event
   function normalizeMissingScheduleDetails(item) {
-    const missing = new Set();
-    if (!String(item?.date || '').trim()) missing.add('date');
-    if (!String(item?.time || '').trim()) missing.add('time');
-    if (!Number(item?.durationMinutes)) missing.add('duration');
-    return Array.from(missing).filter(Boolean);
+    const hasDate = !!String(item?.date || '').trim();
+    const hasTime = !!String(item?.time || '').trim();
+    const hasWhen = !!String(item?.when || '').trim();
+    if (hasWhen || (hasDate && hasTime)) return [];
+    const missing = [];
+    if (!hasDate) missing.push('date');
+    if (!hasTime) missing.push('time');
+    return missing;
   }
 
   function normalizeScheduleItem(item) {
@@ -443,7 +470,9 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
     const parts = [];
     if (it.date) parts.push(`date: ${it.date}`);
     if (it.time) parts.push(`start time: ${it.time}`);
-    if (it.durationMinutes) parts.push(`duration: ${it.durationMinutes} minutes`);
+    // An unspoken duration is not a blocker any more, so state the default
+    // explicitly rather than leaving the parse step to invent one.
+    parts.push(`duration: ${Number(it.durationMinutes) || DEFAULT_EVENT_MINUTES} minutes`);
     if (it.when) parts.push(`spoken timing: ${it.when}`);
     return parts.length ? `${it.text} (${parts.join(', ')})` : it.text;
   }
@@ -883,8 +912,11 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
                               style={{ minWidth: 0, background: C.bgSoft, border: `1px solid ${scheduleMissingDetails(it).includes('date') ? C.warning : C.divider}`, borderRadius: RADIUS.xs, color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}/>
                             <input value={it.time || ''} onChange={e => updateScheduleField(it.id, 'time', e.target.value)} placeholder="Time"
                               style={{ minWidth: 0, background: C.bgSoft, border: `1px solid ${scheduleMissingDetails(it).includes('time') ? C.warning : C.divider}`, borderRadius: RADIUS.xs, color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}/>
-                            <input value={it.durationMinutes || ''} onChange={e => updateScheduleField(it.id, 'durationMinutes', e.target.value)} placeholder="Min" inputMode="numeric"
-                              style={{ minWidth: 0, background: C.bgSoft, border: `1px solid ${scheduleMissingDetails(it).includes('duration') ? C.warning : C.divider}`, borderRadius: RADIUS.xs, color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}/>
+                            {/* Placeholder shows the default that will actually be
+                                used, so an empty box reads as "60 minutes" rather
+                                than as something still to fill in. */}
+                            <input value={it.durationMinutes || ''} onChange={e => updateScheduleField(it.id, 'durationMinutes', e.target.value)} placeholder={String(DEFAULT_EVENT_MINUTES)} inputMode="numeric"
+                              style={{ minWidth: 0, background: C.bgSoft, border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}/>
                             <input value={it.when || ''} onChange={e => updateScheduleField(it.id, 'when', e.target.value)} placeholder="Original wording / notes"
                               style={{ gridColumn: '1 / -1', minWidth: 0, background: 'transparent', border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, color: C.muted, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}/>
                             {/* Which calendar. Only shown when there is a real

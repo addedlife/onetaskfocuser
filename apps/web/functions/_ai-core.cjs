@@ -833,6 +833,10 @@ const AI_JOB_REGISTRY = {
       return compactLines([
         YESHIVISH_SYSTEM,
         "You are extracting every actionable item from a Yeshivish English recording. The speaker is driving an app by voice: as well as noting things down, they issue instructions to it.",
+        // Without today's date the model cannot turn "tomorrow at 2" — or even a
+        // bare "2pm" — into a date, so every spoken appointment came back with
+        // date:null and tripped the review screen's completeness gate.
+        `Today is ${cleanString(input.today, 40)}.`,
         `Transcript:\n${truncateText(input.transcript, 20000)}`,
         `Current task queue (1-based):\n${truncateText(input.taskSnap || input.currentTasks || "(none)", 6000)}`,
         `Open shailos (1-based):\n${truncateText(input.shailaSnap || input.currentShailos || "(none)", 6000)}`,
@@ -845,6 +849,8 @@ const AI_JOB_REGISTRY = {
         "CLASSIFICATION GUARD — a shaila is ONLY an unresolved halachic question that needs a ruling (psak). Errands, phone calls, purchases, repairs, research, and follow-ups are tasks even when they involve halachic topics, rabbis, seforim, or shul matters. 'Look up the sugya' or 'call the posek back' is a TASK; the underlying question itself is a shaila only if the transcript actually poses it. When genuinely unsure whether something is a task or a shaila, put it in tasks.",
         "Never downgrade an intended calendar event into a task because date, time, or duration is missing. Put unclear fields as null and list them in missingDetails.",
         "For scheduleItems, text is only the event title/action, date is the spoken date if clear, time is the spoken start time if clear, durationMinutes is the duration if clear, and unclearReason explains ambiguity briefly.",
+        "DATES — resolve what was said against today's date and return date as YYYY-MM-DD. 'Tomorrow at 2', 'this Tuesday', 'the 14th' all have an answer; work it out rather than returning null. A bare time with no day said at all ('a 2pm appointment by the doctor') means TODAY. Return null only when the day is genuinely ambiguous, and say why in unclearReason.",
+        "Always copy the speaker's own timing words into `when` as well, even when date and time are filled in — it is what a later step uses to double-check the date it builds.",
         "CALENDAR TARGET — if the speaker names which calendar an event belongs on ('my personal calendar', 'the shul calendar', 'my work calendar'), copy THEIR WORDS into calendarHint. Never output an email address, and never guess a calendar that was not named: leave calendarHint null and it will go to their default.",
         "TASKS — write text with full context: include the person's name, what needs to be done, and any relevant detail. Bad: 'Call back'. Good: 'Call Mrs. Lerman about the stove kashrus question'. If the speaker mentions a specific date or time for the task (e.g. 'Tuesday at 3pm', 'this Sunday morning'), put that in schedulingHint; otherwise schedulingHint is null.",
         "SHAILOS — write content as a natural halachic question in question form: 'Is it permitted to...?', 'What is the halacha regarding...?', 'Can one...?'. Include the full scenario detail (the specific item, action, and circumstances). Extract askerName when a person's name is identifiable as the one who asked. If an answer or ruling was given in the recording, capture it verbatim in answer, and put the name of whoever gave it in answererName.",

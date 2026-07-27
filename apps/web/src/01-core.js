@@ -2206,6 +2206,9 @@ async function aiParseConversation(transcript, currentTasks, currentShailos, aiO
   const { taskRows, shailaRows, taskSnap, shailaSnap } = conversationSnapshots(currentTasks, currentShailos);
   const input = {
     transcript, taskSnap, shailaSnap,
+    // Without this the model has no way to resolve "tomorrow at 2" — or a bare
+    // "2pm" — into a date, and every spoken appointment came back date-less.
+    today: context.today || new Date().toISOString().slice(0, 10),
     priorityOptions: context.priorityOptions || "",
     contactNames: context.contactNames || "",
     calendarNames: context.calendarNames || "",
