@@ -228,7 +228,12 @@ function PhoneMmsImage({ attachment, C }) {
 // the row's OWN tap already runs the identical handler (setOpenPhoneActionId /
 // setExpandedPhoneMessageId), so nothing becomes unreachable. The missed-call
 // resolve toggle stays at every width; it is a real one-tap action, not a menu.
-function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, dense = false, rowActions = true, onRecordConversation, onRecordCall, onMoreHistory }) {
+//
+// `rowMeta` (owner 7/27): false when the card is narrower still (< 340px). md-item
+// lays its slots out with a hardcoded 16px flex gap, so a trailing timestamp costs
+// its own width PLUS 16px of every line. Below that width the time moves onto the
+// supporting line, where it costs nothing and stays just as readable.
+function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSummary, onActivitySnapshot, compact = false, dense = false, rowActions = true, rowMeta = true, onRecordConversation, onRecordCall, onMoreHistory }) {
   // ONE simple rule (no LAN discovery, no proxies — that experiment was dizzying):
   // if a phone host is running on THIS device (loopback answers), talk to it
   // directly; otherwise read the cloud relay, which is fed by whichever host
@@ -1440,8 +1445,12 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                       {/* Message BODY is the read target (full headline size); sender drops
                           to the smaller supporting line — buglog "need a magnifier" ticket. */}
                       <span slot="headline" style={{ fontWeight: isUnread ? 600 : 450, color: C.text, whiteSpace: "normal", wordBreak: "break-word", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{preview || thread._name}</span>
-                      {preview && <span slot="supporting-text" style={{ color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread._name}</span>}
-                      {time && <span slot="trailing-supporting-text" style={{ color: C.muted }}>{time}</span>}
+                      {(() => {
+                        // Narrow card: sender AND time share the supporting line.
+                        const meta = [preview ? thread._name : null, !rowMeta && time ? time : null].filter(Boolean).join(" · ");
+                        return meta ? <span slot="supporting-text" style={{ color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meta}</span> : null;
+                      })()}
+                      {rowMeta && time && <span slot="trailing-supporting-text" style={{ color: C.muted }}>{time}</span>}
                       {rowActions && <span slot="end"><IconBtn icon="more_horiz" iconSize={17} color={C.muted} title="Show actions" aria-label="Show actions" onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionId); }} /></span>}
                     </ListItem>
                   );
@@ -1580,18 +1589,26 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                     <ListItem key={`call-${idx}`} type="button" onClick={() => setOpenPhoneActionId(actionId)} style={{ borderRadius: RADIUS.sm, opacity: resolved ? 0.62 : 1 }}>
                       <span slot="start" style={phoneLeadIconStyle(color)}>{suiteIcon(icon, 14)}</span>
                       <span slot="headline" style={{ fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                      {/* Narrow card: the time joins this line instead of taking a slot. */}
                       {needsCallback ? (
-                        <span slot="supporting-text" style={{ fontWeight: 700, color: C.danger }}>Needs callback</span>
+                        <span slot="supporting-text" style={{ fontWeight: 700, color: C.danger }}>Needs callback{!rowMeta && time ? ` · ${time}` : ""}</span>
                       ) : resolved ? (
-                        <span slot="supporting-text" style={{ display: "inline-flex", alignItems: "center", gap: 3, color: C.success }}>{suiteIcon("check_circle", 11)} Resolved</span>
-                      ) : (num && num !== name ? <span slot="supporting-text" style={{ color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{num}</span> : null)}
-                      {time && <span slot="trailing-supporting-text" style={{ color: C.muted }}>{time}</span>}
-                      <span slot="end" style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                        {isMissed && mKey && (resolved
-                          ? <IconBtn icon="undo" iconSize={16} color={C.muted} title="Reopen missed call" aria-label="Reopen missed call" onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, false); }} />
-                          : <IconBtn icon="check_circle" iconSize={17} color={C.success} title="Mark resolved" aria-label="Mark resolved" onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, true); }} />)}
-                        {rowActions && <IconBtn icon="more_horiz" iconSize={17} color={C.muted} title="Show actions" aria-label="Show actions" onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionId); }} />}
-                      </span>
+                        <span slot="supporting-text" style={{ display: "inline-flex", alignItems: "center", gap: 3, color: C.success }}>{suiteIcon("check_circle", 11)} Resolved{!rowMeta && time ? ` · ${time}` : ""}</span>
+                      ) : (() => {
+                        const meta = [num && num !== name ? num : null, !rowMeta && time ? time : null].filter(Boolean).join(" · ");
+                        return meta ? <span slot="supporting-text" style={{ color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meta}</span> : null;
+                      })()}
+                      {rowMeta && time && <span slot="trailing-supporting-text" style={{ color: C.muted }}>{time}</span>}
+                      {/* Only render the end slot when it actually holds a control —
+                          an empty one still costs md-item's 16px inter-slot gap. */}
+                      {((isMissed && mKey) || rowActions) && (
+                        <span slot="end" style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                          {isMissed && mKey && (resolved
+                            ? <IconBtn icon="undo" iconSize={16} color={C.muted} title="Reopen missed call" aria-label="Reopen missed call" onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, false); }} />
+                            : <IconBtn icon="check_circle" iconSize={17} color={C.success} title="Mark resolved" aria-label="Mark resolved" onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, true); }} />)}
+                          {rowActions && <IconBtn icon="more_horiz" iconSize={17} color={C.muted} title="Show actions" aria-label="Show actions" onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionId); }} />}
+                        </span>
+                      )}
                     </ListItem>
                   );
                 }

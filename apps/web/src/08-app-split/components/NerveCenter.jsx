@@ -3164,16 +3164,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     // comfortable reading width per column; the Surface Laptop goes back to rows,
     // which per the owner is what it should have stayed on.
     const boxesFiveCol = availableW >= 1500;
-    // narrowActions: wrap the header's action buttons onto their own row when the
-    // card is too narrow to fit a title plus several 48dp buttons on one line. That
-    // is true on a phone-width card AND in the 5-column grid, where each column is
-    // only ~240-280px (the Calendar title was crushed to nothing, owner 7/21).
-    const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, narrowActions: availableW < 480 || boxesFiveCol };
-    // Height of a sibling card while another card is expanded: exactly its header,
-    // so it stays tappable (one tap switches which card is expanded) without
-    // claiming any of the expanded card's space. Taller when the header wraps its
-    // action buttons onto a second row, which is what narrowActions means.
-    const boxStripH = (availableW < 480 || boxesFiveCol) ? 96 : 56;
     // Card-level expand: both orientations. Rows: tapping a header gives that card the
     // whole page and the rest shrink to header strips. Columns (wide screens): the
     // expanded card takes most of the width and the other columns squish to slim
@@ -3239,8 +3229,42 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     // row's tap-to-edit state, which spans the full column and costs zero width while
     // closed, and calendar importance stays available at any width in the roomier
     // stacked/full-panel layouts.
-    const colW = boxesFiveCol ? Math.floor((availableW - 64) / (expandedBoxId ? 3 : 5)) : availableW;
+    // ── How wide is ONE card, really? ──
+    // This used to be `boxesFiveCol ? (availableW - 64) / 5 : availableW` — i.e. in
+    // EVERY layout other than the 5-column one the code believed a card was as wide
+    // as the whole page. In the 2-column tablet layout that is off by a factor of
+    // two, so a 445px card was told it had 900px and kept every per-row control; the
+    // row then spent its width on chrome and the headline wrapped two words to a
+    // line (owner 7/27, "these columns squish beyond anything compatible with GM3").
+    // Count the real grid: page padding (10px each side) + a 10px gutter per seam.
+    const feedColCount = boxesFiveCol ? (expandedBoxId ? 3 : 5)
+      : (!expandedBoxId && availableW >= NC_FEED_2COL) ? 2 : 1;
+    const colW = Math.max(0, Math.floor((availableW - 20 - 10 * (feedColCount - 1)) / feedColCount));
     const rowActionsFit = colW >= 420;
+    // ── Does the row have room for a trailing timestamp COLUMN? ──
+    // md-item lays its slots out as a flex row with a hardcoded 16px gap (it is not
+    // tokenized, so it cannot be tuned from outside the shadow DOM). Every extra slot
+    // therefore costs its own width PLUS 16px. A mail row with a leading dot, a
+    // timestamp and a trailing button spends 20 (padding) + 7 (dot) + 48 (three gaps)
+    // + ~26 (time) + 40 (button) = ~141px before one character of the headline — on a
+    // 250px card that leaves ~110px, which is the two-words-per-line column in the
+    // screenshot. M3's own answer for a compact pane is fewer slots, not smaller type:
+    // below 340px the timestamp folds into the supporting line, where it costs nothing.
+    const rowMetaFit = colW >= 340;
+    // Calendar is the one card that spans BOTH columns in the 2-column layout, so it
+    // is as wide as the page there and must not be judged by the two-column width.
+    const calSpansFull = !boxesFiveCol && !expandedBoxId && availableW >= NC_FEED_2COL;
+    const calColW = calSpansFull ? Math.max(0, availableW - 20) : colW;
+    const calRowMetaFit = calColW >= 340;
+    // narrowActions: wrap the header's action buttons onto their own row when the
+    // CARD (not the page) is too narrow to hold a title plus several 48dp buttons on
+    // one line — otherwise the title ellipsises to a single letter ("M…" over "Up…").
+    const narrowCardActions = colW < 480;
+    const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, narrowActions: narrowCardActions };
+    // Height of a sibling card while another card is expanded: exactly its header,
+    // so it stays tappable (one tap switches which card is expanded) without
+    // claiming any of the expanded card's space.
+    const boxStripH = (availableW < 480 || boxesFiveCol) ? 96 : 56;
 
     const fmtTimeM = (raw) => { try { const d = new Date(raw); const now = new Date(); return d.toDateString()===now.toDateString() ? d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}) : d.toLocaleDateString([],{month:"short",day:"numeric"}); } catch { return ""; } };
     // Abbreviated relative time (5m · 2h · Tue · Jun 3) — denser than a full timestamp.
@@ -3395,8 +3419,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   {/* Body summary is the read target (full headline size); sender rides the
                       smaller supporting line — buglog "need a magnifier" ticket. */}
                   <span slot="headline" style={{ color:C.text, fontWeight:450, whiteSpace:"normal", wordBreak:"break-word", ...(exp ? {} : { display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }) }}>{snip}</span>
-                  <span slot="supporting-text" style={{ color:C.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{exp && subj && subj !== snip ? `${from} — ${subj}` : from}</span>
-                  <span slot="trailing-supporting-text" style={{ color:C.faint, whiteSpace:"nowrap" }}>{date}</span>
+                  <span slot="supporting-text" style={{ color:C.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{exp && subj && subj !== snip ? `${from} — ${subj}` : from}{!rowMetaFit && date ? ` · ${date}` : ""}</span>
+                  {/* Narrow card: the date rides the sender line instead of holding a
+                      slot of its own (a slot costs its width + md-item's 16px gap). */}
+                  {rowMetaFit && <span slot="trailing-supporting-text" style={{ color:C.faint, whiteSpace:"nowrap" }}>{date}</span>}
                   {/* Narrow columns drop it (ticket yk3jFYeI): tapping the row opens the
                       reader panel, which carries its own Open-in-Gmail action. */}
                   {rowActionsFit && <span slot="end"><IconBtn icon="open_in_new" iconSize={14} color={C.faint} title="Open in Gmail" href={gmailDeepLink(msg)} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} /></span>}
@@ -3416,7 +3442,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
             <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0, padding: "0 8px 6px", boxSizing:"border-box" }}>
-              <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact dense={dense} rowActions={rowActionsFit} onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
+              <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact dense={dense} rowActions={rowActionsFit} rowMeta={rowMetaFit} onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </MobileBox>
 
@@ -3532,8 +3558,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           </MobileBox>
 
           {/* Calendar */}
-          <MobileBox {...boxCtx} {...boxProps("calendar")} icon="calendar_today" title="Calendar" accentColor={C.warning} count={feedCounts.calendar} summary={cardSummary("Calendar")}
-            style={!boxesFiveCol && !expandedBoxId && availableW >= NC_FEED_2COL ? { ...cardStyle, gridColumn: "1 / -1" } : cardStyle} dense={dense}
+          <MobileBox {...boxCtx} narrowActions={calColW < 480} {...boxProps("calendar")} icon="calendar_today" title="Calendar" accentColor={C.warning} count={feedCounts.calendar} summary={cardSummary("Calendar")}
+            style={calSpansFull ? { ...cardStyle, gridColumn: "1 / -1" } : cardStyle} dense={dense}
             onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}
             /* Account picker + refresh + Agenda/Live-time toggle ride the card's own header
                row instead of a second toolbar row underneath it (owner ticket 7/14: "two
@@ -3607,7 +3633,12 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                               pre-proto look keeps the GCal-style vertical bar. */}
                           <span slot="start" style={{ width:7, height:7, borderRadius:RADIUS.pill, background:barColor, opacity:row.past?0.4:1 }} />
                           <span slot="headline" style={{ color:row.now?C.text:row.past?C.faint:C.muted, fontWeight:row.now?600:500, wordBreak:"break-word" }}>{row.evt?.summary||"(no title)"}</span>
-                          <span slot="trailing-supporting-text" style={{ color:row.now?C.accent:C.faint, fontWeight:row.now?700:500, whiteSpace:"nowrap" }}>{row.now?"Now":timeLabel}</span>
+                          {/* Narrow card: the time drops UNDER the title rather than
+                              holding its own slot beside it — the importance menu is
+                              the one trailing control this row keeps at any width. */}
+                          {calRowMetaFit
+                            ? <span slot="trailing-supporting-text" style={{ color:row.now?C.accent:C.faint, fontWeight:row.now?700:500, whiteSpace:"nowrap" }}>{row.now?"Now":timeLabel}</span>
+                            : <span slot="supporting-text" style={{ color:row.now?C.accent:C.faint, fontWeight:row.now?700:500, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.now?"Now":timeLabel}</span>}
                           {rateBtn}
                         </>
                       );
