@@ -1,0 +1,33 @@
+{
+  "watchTopic": "Claude Desktop mid-turn message queuing / 'Steer' behavior change after undocumented patch 1.24012.1 (2026-07-22)",
+  "lastRunDate": "2026-07-27",
+  "sources": {
+    "githubIssue": {
+      "url": "https://github.com/anthropics/claude-code/issues/71726",
+      "title": "[FEATURE] Desktop app: inject queued messages mid-task between tool calls (CLI steering parity) #71726",
+      "state": "open",
+      "commentCount": 0,
+      "mostRecentCommentId": null,
+      "mostRecentCommentTimestamp": null,
+      "labels": ["area:desktop", "duplicate"],
+      "linkedPullRequest": null,
+      "lastCheckedAt": "2026-07-27"
+    },
+    "desktopChangelog": {
+      "url": "https://claude.com/docs/cowork/changelog",
+      "topVersionSeen": "v1.24012.9",
+      "topVersionDate": "2026-07-24",
+      "note": "No entry exists for v1.24012.1 (the undocumented patch) between v1.24012.0 (2026-07-21) and v1.24012.9 (2026-07-24). Most recent entry mentioning 'Steer' by name is v1.18286.0 (2026-07-02): 'Added drag-to-reorder for queued messages, and Steer now works for messages that include images.' -- predates the patch in question, not a new finding.",
+      "extractedContentHash_sha256": "d1e1d520324c891adc062ad72e8c14eeaa7251897cb96df0acda2bdd07575a1c",
+      "lastCheckedAt": "2026-07-27"
+    },
+    "cliChangelog": {
+      "url": "https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md",
+      "topVersionSeen": "2.1.220",
+      "confirmedCleanThrough": "2.1.217",
+      "note": "No mentions of steering/queue/message-delivery-timing changes in versions 2.1.218-2.1.220.",
+      "rawFileHash_sha256": "9e4ad11b0443ad9db409b030481e284eb819781d94ee9f1ad28844b7759d74f5",
+      "lastCheckedAt": "2026-07-27"
+    }
+  }
+}
