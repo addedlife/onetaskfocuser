@@ -7,6 +7,9 @@ import {
   reconcilePendingSms, unmatchedPendingSms, collapseHostDoubles, smsBodyKey, smsPhoneKey,
 } from './08-app-split/utils/pending-sms.js';
 import { derivePhoneLinkState, describePhoneLink, messageListSignature, mergeMessageFeeds, mergeCallFeeds } from './08-app-split/phone-link.js';
+// The two real M3 controls this surface uses (call-log search). Everything else
+// here predates the GM3 rule and is raw markup on purpose — a native-parity clone.
+import { TextField as DpTextField, IconButton as DpIconButton } from './08-app-split/m3.jsx';
 import { subscribeOwner } from './08-app-split/phone-host-control.js';
 
 const DEFAULT_HOST = "http://127.0.0.1:8765";
@@ -1797,6 +1800,7 @@ function ConversationCallHistory({
   onDeleteCall,
 }) {
   const [callFilter, setCallFilter] = useState("All");
+  const [callSearch, setCallSearch] = useState("");
   const [dialerOpen, setDialerOpen] = useState(dialerDefaultOpen);
   const [dialerNumber, setDialerNumber] = useState("");
   const [showRecents, setShowRecents] = useState(true);
@@ -1832,12 +1836,31 @@ function ConversationCallHistory({
   }, []);
   const isFullCallsSurface = mode === "full";
   const selectedCalls = useMemo(() => getSortedCalls(calls).map((call) => enrichCallWithContactName(call, contacts)), [calls, contacts]);
-  const visibleCalls = selectedCalls.filter((call) => callMatchesFilter(call, callFilter));
-  const callSummary = selectedCalls.length
-    ? callFilter === "All"
-      ? `${selectedCalls.length} total`
-      : `${visibleCalls.length} of ${selectedCalls.length} ${callFilter.toLowerCase()}`
-    : "No calls";
+  // Log search (owner ticket: "Phone log on phone screen needs search function").
+  // The filter chips answer "what kind of call"; they cannot answer "the call from
+  // that plumber last month", which is what a log is actually searched for. Name,
+  // number and bare digits all match, so a half-remembered 4432 finds the row.
+  const callQuery = callSearch.trim().toLowerCase();
+  const searchedCalls = useMemo(() => {
+    if (!callQuery) return selectedCalls;
+    const terms = callQuery.split(/\s+/);
+    return selectedCalls.filter((call) => {
+      const number = String(call.number || "");
+      const hay = [call.contactName, number, number.replace(/\D/g, ""), call.direction, call.isMissed ? "missed" : ""]
+        .filter(Boolean).join(" ").toLowerCase();
+      return terms.every((term) => hay.includes(term));
+    });
+  }, [selectedCalls, callQuery]);
+  const visibleCalls = searchedCalls.filter((call) => callMatchesFilter(call, callFilter));
+  const callSummary = !selectedCalls.length
+    ? "No calls"
+    : callQuery
+      // Say what is being counted — a filtered log that looks short is otherwise
+      // indistinguishable from a log that lost its history.
+      ? `${visibleCalls.length} match${visibleCalls.length === 1 ? "" : "es"} of ${selectedCalls.length}`
+      : callFilter === "All"
+        ? `${selectedCalls.length} total`
+        : `${visibleCalls.length} of ${selectedCalls.length} ${callFilter.toLowerCase()}`;
 
   useEffect(() => {
     if (dialerOpenSignal) setDialerOpen(true);
@@ -1864,6 +1887,39 @@ function ConversationCallHistory({
         </div>
       ) : (
         <>
+          {/* Search sits above the filter chips, because the two compose: search
+              narrows the log, the chips then narrow the matches.
+              Real M3 components rather than this file's usual raw <input>/<button>:
+              the surrounding surface is a deliberate native-parity clone written
+              before the GM3 rule, but new controls still have to be compliant, and
+              the ratchet counts raw elements. Themed through md-* custom properties
+              to the DeskPhone palette so it reads as part of this surface. */}
+          <div className="dp-call-search">
+            <DpTextField
+              type="search"
+              value={callSearch}
+              label="Search name or number"
+              aria-label="Search calls"
+              data-automation-id="CallHistorySearchBox"
+              onInput={(event) => setCallSearch(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Escape") setCallSearch(""); }}
+              style={{
+                width: "100%",
+                '--md-outlined-text-field-container-shape': '16px',
+                '--md-outlined-text-field-outline-color': 'var(--dp-border)',
+                '--md-outlined-text-field-input-text-color': 'var(--dp-text)',
+                '--md-outlined-text-field-label-text-color': 'var(--dp-muted)',
+                '--md-outlined-field-top-space': '8px',
+                '--md-outlined-field-bottom-space': '8px',
+              }}>
+              <span slot="leading-icon" className="material-symbols-rounded" style={{ fontSize: NC_TYPE.title, color: 'var(--dp-muted)' }}>search</span>
+              {callSearch ? (
+                <DpIconButton slot="trailing-icon" title="Clear search" aria-label="Clear search" onClick={() => setCallSearch("")}>
+                  <span className="material-symbols-rounded" style={{ color: 'var(--dp-muted)' }}>close</span>
+                </DpIconButton>
+              ) : null}
+            </DpTextField>
+          </div>
           <div className="dp-call-filter-grid" data-native-source={isFullCallsSurface ? "MainWindow.xaml:3298" : "MainWindow.xaml:2483"}>
             {CALL_FILTERS.map((filter) => (
               <button
@@ -4422,6 +4478,12 @@ const css = `
   color: var(--dp-muted);
   font-size: 11px;
   white-space: nowrap;
+}
+/* Wrapper for the call-log search field. The field itself is a real M3
+   outlined text field themed to the DeskPhone palette, so this only owns the
+   spacing between it and the filter chips below. */
+.dp-call-search {
+  margin: 0 0 6px;
 }
 .dp-thread-search button,
 .dp-bubble-actions button,

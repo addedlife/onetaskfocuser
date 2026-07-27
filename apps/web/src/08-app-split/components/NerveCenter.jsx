@@ -992,6 +992,8 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
   // The card owns a fixed slice of the screen, so it renders exactly the whole
   // rows that fit that slice — no clipped row, no dead gap, and no page scroll.
   const fitRows = useFitRows(scrollRef, { enabled: !collapsed, watch: `${dense}|${expanded}|${count}` });
+  // Narrow columns fold the card's actions behind one overflow button (see header).
+  const [overflowOpen, setOverflowOpen] = useState(false);
 
   return (
     // GM3 filled card: borderless plain surface on the deeper tonal page — depth
@@ -1013,9 +1015,21 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
         // a one-row slat (owner, iPad). Thin + always visible beats fat + frozen.
         // Feed mode: a real M3 card header — 48dp tall, titled, tappable. The old
         // 22px sliver was both unreadable and an illegal touch target.
-        // narrowActions (phone-width cards): action buttons wrap to their own row —
-        // 48dp buttons inline with the title crushed it to a single letter.
-        <div style={{ display: "flex", flexDirection: narrowActions && headerActions ? "column" : "row", alignItems: narrowActions && headerActions ? "stretch" : "center", width: "100%", flexShrink: 0, minWidth: 0, maxHeight: "none", overflow: "hidden", transition: "max-height 0.2s ease, opacity 0.15s ease" }}>
+        //
+        // ONE row, always, at ONE height. narrowActions used to switch this to a
+        // column so the action buttons wrapped underneath the title — but only the
+        // two cards that HAVE actions (Mail and Calendar) wrapped, so in the
+        // five-column widescreen view two columns started their list a row lower
+        // than the other three (owner: "Columns on widescreens didn't have
+        // consistent tops, because icons are on sexond line, which also takes up
+        // space"). The height is pinned rather than left to the list item, because
+        // a card whose AI summary is empty renders a one-line item and would sit at
+        // 48px while its neighbours sit at 56px — the same ragged top by another
+        // route. Actions now fold into one uniform overflow button (below), which
+        // is also the "uniform iconography not over customized per card" half of
+        // the ticket: every card header is puck, title, one optional overflow, open,
+        // expand — in that order, whatever the card is.
+        <div style={{ display: "flex", flexDirection: "row", alignItems: "center", width: "100%", flexShrink: 0, minWidth: 0, minHeight: 56, maxHeight: "none", overflow: "visible", transition: "max-height 0.2s ease, opacity 0.15s ease" }}>
           <ListItem type="button" onClick={onToggleExpand || onOpen} title={title} aria-label={title} aria-expanded={onToggleExpand ? expanded : undefined}
             style={{
               flex: 1, minWidth: 0, cursor: (onToggleExpand || onOpen) ? "pointer" : "default",
@@ -1038,21 +1052,33 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
                 </>}
             {onToggleExpand && <span slot="end" style={{ display: "flex", color: C.faint, flexShrink: 0 }}>{suiteIcon(expanded ? "close_fullscreen" : "expand_content", 12)}</span>}
           </ListItem>
+          {/* Narrow column: the card's own actions collapse behind ONE overflow
+              button, so every header costs the same single row no matter how many
+              actions the card happens to carry. The actions themselves are
+              unchanged — they are the same elements, just parked one tap away
+              instead of on a second line that only some cards had. */}
           {narrowActions && headerActions ? (
-            <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2, padding: "0 4px 2px" }}>
-              {headerActions}
-              {onToggleExpand && onOpen && (
-                <IconBtn icon="open_in_new" iconSize={18} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} />
+            <span style={{ position: "relative", display: "flex", alignItems: "center", flexShrink: 0, marginRight: 2 }}>
+              <IconBtn icon="more_vert" iconSize={16} color={overflowOpen ? C.accent : C.faint}
+                onClick={() => setOverflowOpen(o => !o)}
+                title={`${title} actions`} aria-label={`${title} actions`} aria-expanded={overflowOpen} />
+              {overflowOpen && (
+                <>
+                  {/* Same dismiss pattern as the account picker directly below. */}
+                  <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={() => setOverflowOpen(false)} />
+                  <span style={{
+                    position: "absolute", top: "100%", right: 0, zIndex: 9101, display: "flex", alignItems: "center", gap: 2,
+                    padding: 4, background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, boxShadow: ELEV[3],
+                  }}>{headerActions}</span>
+                </>
               )}
             </span>
-          ) : (<>
-            {headerActions && (
-              <span style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, marginRight: 2 }}>{headerActions}</span>
-            )}
-            {onToggleExpand && onOpen && (
-              <IconBtn icon="open_in_new" iconSize={13} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} style={{ marginRight: 4 }} />
-            )}
-          </>)}
+          ) : headerActions ? (
+            <span style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0, marginRight: 2 }}>{headerActions}</span>
+          ) : null}
+          {onToggleExpand && onOpen && (
+            <IconBtn icon="open_in_new" iconSize={13} color={C.faint} onClick={onOpen} title={`Open ${title}`} aria-label={`Open ${title}`} style={{ marginRight: 4 }} />
+          )}
         </div>
       )}
       {/* No hero/auto-prioritized block: the list starts at its first real row. */}

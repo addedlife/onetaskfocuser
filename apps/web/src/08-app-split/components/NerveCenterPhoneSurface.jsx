@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cleanTheme, DUR, EASE, ELEV, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth } from '../ui-tokens.jsx';
-import { ActionBtn, AssistChip, IconBtn, ListItem, denseListVars } from '../m3.jsx';
+import { ActionBtn, AssistChip, IconBtn, ListItem, TextField, denseListVars } from '../m3.jsx';
 import { db } from '../../01-core.js';
 import { subscribeOwner } from '../phone-host-control.js';
 import { derivePhoneLinkState, describePhoneLink, formatAgeShort, messageListSignature, mergeMessageFeeds, mergeCallFeeds } from '../phone-link.js';
@@ -324,6 +324,8 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);       // { name, number } — who we're composing to
   const [showDialer, setShowDialer] = useState(false);
+  const [logQuery, setLogQuery] = useState("");   // phone-log search (full screen only)
+  const [logSearchOpen, setLogSearchOpen] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);    // is compose area visible?
   const [composeIsNew, setComposeIsNew] = useState(false);  // opened as "new message" (has contact search)
@@ -1108,7 +1110,39 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     // Generous caps — the card is a fixed-height scroll area, so more items FILL
     // tall screens instead of ending the list mid-card over dead whitespace
     // (buglog: "autopopulate to fill the available screen").
-    return [...pinned, ...rest].slice(0, Math.max(compact ? 30 : 40, pinned.length));
+    const all = [...pinned, ...rest];
+
+    // ── Log search (owner ticket: "Phone log on phone screen needs search function") ──
+    // Searching happens BEFORE the cap, which is the whole point: the log is capped
+    // at 30-40 entries for layout reasons, so without this a search could only ever
+    // find what was already on screen. A query searches the full feed and the cap
+    // is lifted while one is active, because a match at position 200 is exactly the
+    // one worth finding. Unresolved missed calls stay pinned to the top of the
+    // results they appear in — a search must not be the thing that hides them.
+    const q = logQuery.trim().toLowerCase();
+    if (!q) return all.slice(0, Math.max(compact ? 30 : 40, pinned.length));
+
+    const hay = (entry) => {
+      if (entry.kind === "call") {
+        const c = entry.item;
+        const num = callNumber(c);
+        // Name, number and kind: "missed", "sarah", "4432" all have to work.
+        return [
+          lookupName(num), c.name, c.displayName, c.Name, c.DisplayName, c.from, num,
+          phoneDigits(num), callKindLabel(c),
+        ].filter(Boolean).join(" ").toLowerCase();
+      }
+      const thread = entry.item;
+      // Every message in the thread, not just the latest — the owner is looking for
+      // something that was said, and the newest line is rarely the one remembered.
+      const bodies = (thread._messages || []).map(messageBody).join(" ");
+      const num = thread._who || "";
+      return [thread._name, num, phoneDigits(num), bodies].filter(Boolean).join(" ").toLowerCase();
+    };
+    // Multi-word queries match on ALL terms, in any order and any field, so
+    // "missed sarah" finds a missed call from Sarah.
+    const terms = q.split(/\s+/);
+    return all.filter(entry => { const h = hay(entry); return terms.every(t => h.includes(t)); });
   })();
 
   const phoneActivitySnapshot = useMemo(() => ({
@@ -1301,6 +1335,13 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
           <IconBtn variant="filled" icon="fiber_manual_record" iconSize={14} color="#fff" containerColor={C.danger}
             onClick={onRecordCall} title="Record this call and extract tasks/shailos" aria-label="Record this call" />
         )}
+        {/* Search the log (full screen only — the compact card has no room, and the
+            full surface is one tap away from it). */}
+        {!compact && (
+          <PhoneIconBtn icon="search" active={logSearchOpen}
+            onClick={() => setLogSearchOpen(open => { if (open) setLogQuery(""); return !open; })}
+            title="Search calls and texts" aria-label="Search calls and texts" />
+        )}
         {/* New message button */}
         <PhoneIconBtn icon="edit" active={composeOpen && composeIsNew} onClick={openNewMessage} title="New message" aria-label="New message" />
         {/* Keypad toggle */}
@@ -1343,9 +1384,37 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
         </div>
       )}
 
+      {/* ── Log search field ── */}
+      {logSearchOpen && !compact && statusOnline && (hasMessages || hasCalls) && (
+        <div style={{ flexShrink: 0, padding: "2px 0 6px" }}>
+          <TextField value={logQuery} onInput={e => setLogQuery(e.target.value)}
+            label="Search calls and texts" autoFocus
+            onKeyDown={e => { if (e.key === "Escape") { setLogQuery(""); setLogSearchOpen(false); } }}
+            style={{ width: "100%", '--md-outlined-text-field-container-shape': RADIUS.pill, '--md-outlined-field-top-space': '8px', '--md-outlined-field-bottom-space': '8px' }}>
+            <span slot="leading-icon" className="material-symbols-rounded" style={{ fontSize: ICON.md, color: C.faint }}>search</span>
+            {logQuery && (
+              <IconBtn slot="trailing-icon" icon="close" iconSize={16} color={C.faint}
+                onClick={() => setLogQuery("")} title="Clear search" aria-label="Clear search" />
+            )}
+          </TextField>
+          {/* Say plainly what is on screen: a filtered log that looks like a short
+              log is otherwise indistinguishable from a log that lost its history. */}
+          <div style={{ padding: "4px 12px 0", fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK }}>
+            {logQuery.trim()
+              ? `${activityItems.length} match${activityItems.length === 1 ? "" : "es"} in the full history`
+              : "Searches every call and every message, past the on-screen list"}
+          </div>
+        </div>
+      )}
+
       {/* ── Unified phone activity feed ── */}
       {statusOnline && (hasMessages || hasCalls) && (
         <div style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", paddingRight: 1, ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }) }}>
+          {logQuery.trim() && activityItems.length === 0 && (
+            <div style={{ padding: "16px 14px", fontSize: NC_TYPE.body, color: C.faint, fontFamily: NC_FONT_STACK }}>
+              Nothing in the call or message history matches “{logQuery.trim()}”.
+            </div>
+          )}
           {activityItems.map(entry => {
             if (entry.kind === "message") {
                 const thread = entry.item;
