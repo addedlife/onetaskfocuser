@@ -291,6 +291,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   // so the UI reads this to say "reconnect" up front instead of offering a
   // Delete button that 403s (owner ticket: silent staleness reads as a bug).
   const [googleGrants, setGoogleGrants] = useState([]);
+  // Accounts whose last refresh FAILED, by email. A second account with a
+  // revoked grant used to be silent (owner: "if eg rabbidanziger is authed it
+  // never shows missing ydanziger auth and my emails are 3 days stale").
+  const [googleFailedAccounts, setGoogleFailedAccounts] = useState([]);
   const [googleAccountFilter, setGoogleAccountFilter] = useState(() => {
     try { return localStorage.getItem('ot_google_account_filter') || 'all'; } catch { return 'all'; }
   });
@@ -817,6 +821,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       setGoogleToken(GOOGLE_SERVER_TOKEN);
       setGoogleWasConnected(true);
       try { localStorage.setItem("ot_google_connected", "1"); } catch {}
+      setGoogleFailedAccounts(Array.isArray(d.failedAccounts) ? d.failedAccounts : []);
       setGoogleError((d.errors || []).join(" - ") || null);
       return true;
     } catch(e) {
@@ -4110,6 +4115,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           onSendEmailReply={sendGoogleEmailReply}
           onDeleteEmail={deleteGoogleEmail}
           googleGrants={googleGrants}
+          googleFailedAccounts={googleFailedAccounts}
           onCreateCalendarEvent={createGoogleCalendarEvent}
           onDeleteCalendarEvent={deleteGoogleCalendarEvent}
           chiefProfile={chiefProfile}

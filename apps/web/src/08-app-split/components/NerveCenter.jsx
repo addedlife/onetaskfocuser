@@ -1263,7 +1263,7 @@ function CardMoreChip({ count, open, onClick, C, accentColor }) {
   );
 }
 
-function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onSendEmailReply, onDeleteEmail, googleGrants = [], onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
+function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onSendEmailReply, onDeleteEmail, googleGrants = [], googleFailedAccounts = [], onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
   const viewportW = useViewportWidth();
   // M3 window size class on both axes. Height is what drives row density (see
   // densityPref below); width still comes from `availableW` further down, which
@@ -1846,6 +1846,14 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   const googleStateNotice = (() => {
     if (!googleClientId) return null;
     const disconnected = !googleToken && !googleLoading && calendarEvents === null && gmailMessages === null;
+    // One account down while another is fine — the case that produced "my emails
+    // are 3 days stale" with nothing on screen saying so. It gets its own line
+    // ahead of the generic error, because the actionable fact is WHICH account.
+    if (googleFailedAccounts.length) {
+      return googleNoticeRow(softBg(C.warning, 0.10), C.warning, C.warning, "link_off",
+        `${googleFailedAccounts.join(", ")} is signed out — mail and calendar from ${googleFailedAccounts.length > 1 ? "those accounts are" : "that account are"} not updating.`,
+        "Reconnect", () => onConnectGoogle?.());
+    }
     if (googleError) {
       return googleNoticeRow(softBg(C.warning, 0.10), C.warning, C.warning, "error", googleError, "Retry", () => onConnectGoogle?.());
     }

@@ -309,15 +309,34 @@ async function summary(user, body = {}) {
         email: acct.email,
         calendar: cal.status === "fulfilled" ? cal.value.map(e => ({ ...e, sourceAccount: acct.email })) : [],
         gmail: gm.status === "fulfilled" ? gm.value.map(m => ({ ...m, sourceAccount: acct.email })) : [],
+        // Name the account in the message. It used to read "Google session
+        // expired. Connect Google again." with nothing saying WHICH of two
+        // accounts had expired (owner: "if eg rabbidanziger is authed it never
+        // shows missing ydanziger auth and my emails are 3 days stale").
         error: [
           cal.status === "rejected" ? cal.reason.message : "",
           gm.status === "rejected" ? gm.reason.message : "",
-        ].filter(Boolean).join("; "),
+        ].filter(Boolean).map(m => `${acct.email} — ${m}`).join("; "),
       };
     } catch (e) {
-      return { email: acct.email, calendar: [], gmail: [], error: `${acct.email}: ${e.message}` };
+      return { email: acct.email, calendar: [], gmail: [], error: `${acct.email} — ${e.message}` };
     }
   }));
+
+  // Accounts NOT being displayed right now (the owner has filtered to one) are
+  // still checked — a refresh-token probe, no data fetch, so it costs one cheap
+  // token call each. Without this, a second account whose grant has been revoked
+  // is completely silent: it is not queried, so it produces no error, so nothing
+  // ever says its mail stopped arriving. That is the three-days-stale case.
+  const unchecked = accounts.filter(a => !used.some(u => u.email === a.email));
+  const unusedErrors = (await Promise.all(unchecked.map(async acct => {
+    try {
+      await accessTokenFor(user, acct.email);
+      return "";
+    } catch (e) {
+      return `${acct.email} — ${e.message}`;
+    }
+  }))).filter(Boolean);
 
   // Merge + dedupe across accounts. The same invite shows in both mailboxes with
   // the same iCalUID; the same email carries the same RFC822 Message-ID header.
@@ -353,7 +372,14 @@ async function summary(user, body = {}) {
     selectedAccounts: used.map(a => a.email),
     calendarEvents,
     gmailMessages,
-    errors: perAccount.map(p => p.error).filter(Boolean),
+    errors: [...perAccount.map(p => p.error).filter(Boolean), ...unusedErrors],
+    // Which accounts failed, by email — so the UI can name them rather than
+    // concatenating error prose.
+    failedAccounts: [
+      ...perAccount.filter(p => p.error).map(p => p.email),
+      ...unchecked.filter((a, i) => unusedErrors.some(e => e.startsWith(a.email))).map(a => a.email),
+    ],
+    grants: await accountsWithAbilities(user),
   };
 }
 
