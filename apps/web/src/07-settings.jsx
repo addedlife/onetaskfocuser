@@ -12,6 +12,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
   effectiveCount, overwhelmThreshold, hasAI, aiConfig,
   deskPhoneThemeSync = true, deskPhoneOnline = false,
   onToggleDeskPhoneThemeSync, onRefreshDeskPhoneTheme, initialTab = "queue",
+  penEntries = [], penRetentionDays = 10, onOpenRecordingPen,
   sidebarW = 0}) {
 
   const [sTab, setSTab] = useState(initialTab || "queue");
@@ -119,6 +120,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
     {id:"schedule",   label:"Schedule"},
     {id:"account",    label:"Account"},
     {id:"google",     label:"Google"},
+    {id:"recordings", label:"Recordings"},
     {id:"features",   label:"Features"},
   ];
 
@@ -531,6 +533,70 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
         )}
 
         {/* ── FEATURES TAB ── */}
+        {/* ── Recording pen ──────────────────────────────────────────────────
+            Owner ticket: "Recordings stay 20 days which is good but it should
+            persist on screen. Put it in settings, recording pen or something,
+            with very terse ai summary description and date stamp."
+            The pen already existed, but its only way in was a floating button
+            that renders ONLY while something is held — so the moment the pen
+            emptied, the feature vanished from the app and there was no place to
+            go and look. A settings tab is always there, empty or not. */}
+        {sTab === "recordings" && (
+          <div>
+            <h4 style={sh}>Recording pen</h4>
+            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 20px",lineHeight:settingsType.line}}>
+              Every recording made anywhere in the app is held here with its transcript, on this
+              device and in your account, for {penRetentionDays} days. After that it is deleted
+              automatically.
+            </p>
+
+            {penEntries.length === 0 ? (
+              <p style={{fontSize:settingsType.body,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 20px",lineHeight:settingsType.line}}>
+                Nothing held right now. New recordings land here on their own.
+              </p>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:18}}>
+                {penEntries.slice(0, 25).map(rec => {
+                  const transcript = rec.transcript || "";
+                  // Terse line first: the AI summary when there is one, the opening of
+                  // the transcript when there is not, and an honest status when there
+                  // is neither. The label (kind) is demoted to the meta line — "voice
+                  // note" was never the thing being looked for.
+                  const line = rec.summary
+                    || (transcript.trim() ? `${transcript.trim().replace(/\s+/g, " ").slice(0, 110)}${transcript.trim().length > 110 ? "…" : ""}` : "");
+                  const kind = rec.label || String(rec.kind || "Recording").replace(/_/g, " ");
+                  const stamp = (() => {
+                    try { return new Date(rec.createdAt).toLocaleString([], { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" }); }
+                    catch { return ""; }
+                  })();
+                  return (
+                    <div key={rec.id} style={{background:T.bgSoft || T.bg,border:`1px solid ${T.brdS}`,borderRadius:RADIUS.sm,padding:"8px 10px"}}>
+                      <div style={{fontSize:settingsType.body,color:T.text,fontFamily:NC_FONT_STACK,lineHeight:settingsType.line,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
+                        {line || (rec.error ? "Transcription failed — open the pen to retry." : "Awaiting transcription.")}
+                      </div>
+                      <div style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,marginTop:3}}>
+                        {stamp}{kind ? ` · ${kind}` : ""}
+                      </div>
+                    </div>
+                  );
+                })}
+                {penEntries.length > 25 && (
+                  <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:0}}>
+                    +{penEntries.length - 25} more in the pen.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Playback, re-transcribe, download and delete stay in the pen panel —
+                one implementation of those actions, not two. */}
+            <ActionBtn variant="tonal" icon="graphic_eq" height={40} labelSize={settingsType.control}
+              onClick={() => onOpenRecordingPen?.()} disabled={!onOpenRecordingPen}>
+              Open recording pen{penEntries.length ? ` (${penEntries.length})` : ""}
+            </ActionBtn>
+          </div>
+        )}
+
         {sTab === "features" && (
           <div>
             <h4 style={sh}>Experimental Features</h4>

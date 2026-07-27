@@ -222,6 +222,20 @@ async function updatePendingRecording(id, patch) {
   return publicRec;
 }
 
+// The one-line "what was this recording" description shown in the pen list.
+// Written once per recording and then reused: it is display-only sugar over the
+// transcript, which stays authoritative, so a failed or missing summary costs
+// nothing but a plainer row. Stored in BOTH pens so the line survives on any
+// device, matching how transcripts themselves are stored.
+async function setPenSummary(id, summary) {
+  const text = String(summary || '').trim();
+  if (!text) return null;
+  const next = await updatePendingRecording(id, { summary: text }).catch(() => null);
+  const col = _penCol();
+  if (col) col.doc(id).set({ summary: text, summarizedAt: Date.now() }, { merge: true }).catch(() => {});
+  return next;
+}
+
 async function updatePendingRecordingError(id, error) {
   const next = await updatePendingRecording(id, { error, lastFailedAt: Date.now() });
   const col = _penCol();
@@ -373,6 +387,7 @@ export {
   getPendingRecording,
   updatePendingRecording,
   updatePendingRecordingError,
+  setPenSummary,
   deletePendingRecording,
   transcribePendingRecording,
   listCloudPenRecordings,

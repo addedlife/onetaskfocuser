@@ -6,7 +6,7 @@ import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, En
 import { BulkAdd, TaskBD, BlockedModal, ContextTagPicker, ListManager } from '../05-modals.jsx';
 import { ShelfView, SubtaskGroup } from '../06-shelf.jsx';
 import { SettingsModal } from '../07-settings.jsx';
-import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, listPendingRecordings, listCloudPenRecordings, ensureLocalPenAudio, downloadPenRecording, sweepExpiredPen, PENDING_EVENT, formatPendingAge } from '../09-transcription-pen.js';
+import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, listPendingRecordings, listCloudPenRecordings, ensureLocalPenAudio, downloadPenRecording, sweepExpiredPen, setPenSummary, PEN_RETENTION_MS, PENDING_EVENT, formatPendingAge } from '../09-transcription-pen.js';
 import { DeskPhoneWebPanel } from '../10-deskphone-web.jsx';
 import { isOfflineShellReady } from '../offline-support.js';
 import { buildDeskPhoneThemeQuery, cleanTheme, DUR, EASE, ELEV, getInitialSuiteView, GV_CLEAN, NC_FONT_STACK, NC_GLOBAL_CSS, NC_TYPE, RADIUS, suiteIcon, themeVarsCss, useViewportWidth, Z } from './ui-tokens.jsx';
@@ -1720,6 +1720,49 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     for (const l of pendingRecordings) { if (l?.id) map.set(l.id, { ...(map.get(l.id) || {}), ...l, local: true }); }
     return Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }, [cloudPen, pendingRecordings]);
+
+  // ── Pen one-liners (owner: "very terse ai summary description and date stamp") ──
+  // A pen row previously identified itself only by kind and size — "conversation ·
+  // 2.4 MB" — which says nothing about WHICH conversation, and the transcript that
+  // would say so is behind a tap. One short line per recording makes the pen
+  // readable at a glance, which is the whole point of putting it on screen.
+  //
+  // Display-only, exactly like the Bug Log's auto-summary and reusing the same
+  // deployed job: the transcript stays authoritative, the summary is written once
+  // and cached in both pens, and a failure just leaves a plainer row. Only entries
+  // that actually have a transcript are eligible — there is nothing to summarize
+  // before then, and the row already says "Awaiting transcription".
+  const penSummarizedRef = useRef(new Set());
+  useEffect(() => {
+    if (!aiOpts) return;
+    const pending = penEntries.filter(rec => {
+      const transcript = pendingTranscripts[rec.id] || rec.transcript || "";
+      return rec.id && !rec.summary && transcript.trim().length > 40 && !penSummarizedRef.current.has(rec.id);
+    }).slice(0, 8);
+    if (!pending.length) return;
+    pending.forEach(rec => penSummarizedRef.current.add(rec.id));
+    (async () => {
+      try {
+        const items = pending.map(rec => ({
+          id: rec.id,
+          kind: "voice recording",
+          source: (pendingTranscripts[rec.id] || rec.transcript || "").slice(0, 4000),
+        }));
+        const job = await runAIJob("dashboard.polish_items.v1", { items }, aiOpts);
+        const out = Array.isArray(job?.output) ? job.output : [];
+        for (const row of out) {
+          if (row?.id && row?.summary && pending.some(rec => rec.id === row.id)) {
+            await setPenSummary(row.id, row.summary).catch(() => {});
+          }
+        }
+      } catch (e) {
+        // Un-mark on failure so an AI outage does not permanently cost these rows
+        // their line — the same trap the Bug Log hit in ticket pMfqQ4PY.
+        pending.forEach(rec => penSummarizedRef.current.delete(rec.id));
+        console.warn("[Pen] summary failed (rows fall back to kind + size):", e?.message || e);
+      }
+    })();
+  }, [penEntries, pendingTranscripts, aiOpts]);
 
   const sc = ensureSchemeContrast(SCHEMES[AS?.colorScheme] || AS?.customSchemes?.[AS?.colorScheme] || SCHEMES.claude);
   // Detect dark theme by checking bg luminance
@@ -3747,6 +3790,9 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           showToast(ok ? "DeskPhone theme sync refreshed" : "DeskPhone is not answering", 3000, ok ? undefined : C.danger);
           return ok;
         }}
+        penEntries={penEntries}
+        penRetentionDays={Math.round(PEN_RETENTION_MS / 86400000)}
+        onOpenRecordingPen={() => { setShowSet(false); setShowPenPanel(true); }}
       />}
 
       {/* Holding Pen launcher — floating icon with count; recordings + transcripts
@@ -3786,6 +3832,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                     <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start"}}>
                       <div style={{minWidth:0}}>
                         <div style={{fontSize:NC_TYPE.body,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
+                        {/* The one-liner that says WHICH recording this is. */}
+                        {rec.summary && (
+                          <div style={{fontSize:NC_TYPE.meta,color:C.text,marginTop:2,lineHeight:1.35,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{rec.summary}</div>
+                        )}
                         <div style={{fontSize:NC_TYPE.meta,color:C.faint,marginTop:1}}>{formatPendingAge(rec.createdAt)} · {((rec.size||0)/1024/1024).toFixed(1)} MB · {whereNote}</div>
                         <div style={{fontSize:NC_TYPE.meta,color:statusColor,marginTop:2,fontWeight:500}}>{statusTxt}</div>
                       </div>
