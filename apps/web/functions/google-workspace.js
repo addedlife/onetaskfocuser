@@ -6,6 +6,12 @@ const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
 const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+// Sending is a SEPARATE scope from reading, and gmail.send is the narrow one:
+// it permits sending only, not reading, not deleting, not modifying labels. An
+// account connected before this scope existed holds a refresh token without it,
+// and Google does not retroactively widen a grant — those accounts get a clear
+// 403 from sendGmailReply telling them to reconnect, rather than a silent failure.
+const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 const TOKEN_SAFETY_MS = 2 * 60 * 1000;
 
 function httpError(statusCode, message) {
@@ -122,7 +128,7 @@ async function exchangeCode(req, user, body) {
     refreshToken,
     accessToken: tokens.access_token || "",
     expiresAt: Date.now() + Math.max(60, Number(tokens.expires_in || 3600) - 60) * 1000,
-    scope: tokens.scope || `${CALENDAR_SCOPE} ${GMAIL_SCOPE}`,
+    scope: tokens.scope || `${CALENDAR_SCOPE} ${GMAIL_SCOPE} ${GMAIL_SEND_SCOPE}`,
     tokenType: tokens.token_type || "Bearer",
     appUid: user.uid,
     firebaseUid: user.firebaseUid,
@@ -357,6 +363,89 @@ async function listAccountsAction(user) {
   return { available: true, accounts: await connectedEmails(user) };
 }
 
+// ── Send a reply, for real ───────────────────────────────────────────────────
+// Owner: "Email now has reply, problem is it doesn't reply, just kicks you to the
+// email webpage, so functionally no more useful than open Gmail." Correct — the
+// old Reply button was a deep link. This actually sends.
+//
+// Threading is the part that has to be right, or the reply shows up in Gmail as a
+// new unrelated conversation. Three things together do it: the In-Reply-To header
+// (the parent's Message-ID), a References chain (the parent's chain plus the
+// parent), and Gmail's own threadId on the send call. Gmail will silently start a
+// new thread if the headers disagree with the threadId, so both are set from the
+// SAME fetched parent message rather than from anything the client passed in.
+async function sendGmailReply(user, body) {
+  const id = String(body.id || "").trim();
+  const text = String(body.text || "").trim();
+  if (!id) throw httpError(400, "Missing the id of the message being replied to.");
+  if (!text) throw httpError(400, "Cannot send an empty reply.");
+  const replyAll = body.all === true;
+
+  const email = await resolveAccount(user, body);
+  const accessToken = await accessTokenFor(user, email);
+
+  // The parent, fetched server-side: the client's copy is a list-view summary and
+  // may not carry the headers threading depends on.
+  const parent = await googleJson(
+    `https://www.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=metadata&metadataHeaders=Message-ID&metadataHeaders=References&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Reply-To`,
+    accessToken,
+  );
+  const header = (name) => (parent?.payload?.headers || [])
+    .find(h => String(h.name || "").toLowerCase() === name.toLowerCase())?.value || "";
+
+  const messageId = header("Message-ID");
+  const references = [header("References"), messageId].filter(Boolean).join(" ");
+  const rawSubject = header("Subject") || "(no subject)";
+  const subject = /^re:/i.test(rawSubject.trim()) ? rawSubject : `Re: ${rawSubject}`;
+
+  // Reply goes to Reply-To when the sender set one, else From — the same rule every
+  // mail client follows, and the reason a mailing-list reply lands in the right place.
+  const to = header("Reply-To") || header("From");
+  if (!to) throw httpError(422, "That message has no sender address to reply to.");
+
+  // Reply-all adds the original To and Cc, minus this account itself — replying to
+  // yourself is never intended and Gmail will happily do it if asked.
+  const extra = replyAll
+    ? [header("To"), header("Cc")].filter(Boolean).join(", ")
+    : "";
+  const stripSelf = (list) => list
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean)
+    .filter(addr => !addr.toLowerCase().includes(email.toLowerCase()));
+  const ccList = extra ? [...new Set(stripSelf(extra))] : [];
+
+  const headers = [
+    `To: ${to}`,
+    ...(ccList.length ? [`Cc: ${ccList.join(", ")}`] : []),
+    `Subject: ${subject}`,
+    ...(messageId ? [`In-Reply-To: ${messageId}`, `References: ${references}`] : []),
+    "MIME-Version: 1.0",
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: 8bit",
+  ];
+  const mime = `${headers.join("\r\n")}\r\n\r\n${text}\r\n`;
+  // base64url, per the Gmail API's raw field.
+  const raw = Buffer.from(mime, "utf8").toString("base64")
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+  try {
+    const sent = await googleJson("https://www.googleapis.com/gmail/v1/users/me/messages/send", accessToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw, threadId: parent.threadId || undefined }),
+    });
+    return { ok: true, id: sent.id, threadId: sent.threadId, to, cc: ccList, subject, account: email };
+  } catch (e) {
+    // The one failure worth naming precisely: an account connected before the send
+    // scope existed. Google answers 403 and the fix is a reconnect, not a retry.
+    if (e?.statusCode === 403) {
+      throw httpError(403, `${email} was connected before sending was enabled. Reconnect Google to allow replies to be sent.`);
+    }
+    throw e;
+  }
+}
+
 async function gmailMessage(user, body) {
   const id = String(body.id || "").trim();
   if (!id) throw httpError(400, "Missing Gmail message id.");
@@ -428,6 +517,7 @@ const handler = async (req, res) => {
     if (action === "exchange")            return res.status(200).set(headers).json(await exchangeCode(req, user, body));
     if (action === "summary")             return res.status(200).set(headers).json(await summary(user, body));
     if (action === "gmailMessage")        return res.status(200).set(headers).json(await gmailMessage(user, body));
+    if (action === "sendGmailReply")      return res.status(200).set(headers).json(await sendGmailReply(user, body));
     if (action === "createCalendarEvent") return res.status(200).set(headers).json(await createCalendarEvent(user, body));
     if (action === "deleteCalendarEvent") return res.status(200).set(headers).json(await deleteCalendarEvent(user, body));
     if (action === "disconnect")          return res.status(200).set(headers).json(await disconnect(user, body));

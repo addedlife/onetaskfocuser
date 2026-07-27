@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, Store, textOnColor } from '../../01-core.js';
 import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BRD, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth, useWindowSizeClass } from '../ui-tokens.jsx';
-import { ActionBtn, AssistChip, IconBtn, List, ListItem, OutlinedButton, CircularProgress, denseListVars, Divider, Menu, MenuItem, OutlinedSelect, SelectOption } from '../m3.jsx';
+import { ActionBtn, AssistChip, IconBtn, List, ListItem, OutlinedButton, CircularProgress, denseListVars, Divider, Menu, MenuItem, OutlinedSelect, SelectOption, TextField } from '../m3.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthPage } from './HealthPage.jsx';
 import { shouldRunForContentAndClaim, publishContentResult } from '../ai-call-throttle.js';
-import { gmailDeepLink, gmailReplyLink } from '../utils/gmail-links.js';
+import { gmailDeepLink, gmailInboxLink, gmailReplyLink } from '../utils/gmail-links.js';
 
 // Owner ticket 7/15: the 5-min gate on dashboard.snapshot.v1 lived only in an
 // in-memory ref, which reset to 0 (an immediate, uncapped call) every time this
@@ -1263,7 +1263,7 @@ function CardMoreChip({ count, open, onClick, C, accentColor }) {
   );
 }
 
-function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
+function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onSendEmailReply, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
   const viewportW = useViewportWidth();
   // M3 window size class on both axes. Height is what drives row density (see
   // densityPref below); width still comes from `availableW` further down, which
@@ -1329,6 +1329,17 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   // the card grid so the row underneath stays put — opening a message never reflows
   // the five-card layout. {id, top, left}
   const [readerEmail, setReaderEmail] = useState(null);
+  // In-reader reply composer (owner: Reply "doesn't reply, just kicks you to the
+  // email webpage"). Reset whenever a different message is opened.
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyAll, setReplyAll] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [replySending, setReplySending] = useState(false);
+  const [replyError, setReplyError] = useState("");
+  const [replySent, setReplySent] = useState("");
+  useEffect(() => {
+    setReplyOpen(false); setReplyText(""); setReplyError(""); setReplySent("");
+  }, [readerEmail?.id]);
   const [selectedEmailId, setSelectedEmailId] = useState(null);
   const [emailDetails, setEmailDetails] = useState({});
   const [emailDetailLoadingId, setEmailDetailLoadingId] = useState(null);
@@ -1533,6 +1544,54 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   const C = cleanTheme(T);
   const ncType = NC_TYPE;
 
+  // Reply composer state for the mail reader below.
+  async function sendReply(msg) {
+    const text = replyText.trim();
+    if (!text || replySending) return;
+    setReplySending(true);
+    setReplyError("");
+    try {
+      if (!onSendEmailReply) throw new Error("Sending is not wired up on this surface.");
+      await onSendEmailReply({ id: msg.id, text, all: replyAll, account: msg.sourceAccount || "" });
+      setReplyOpen(false);
+      setReplyText("");
+      setReplySent(replyAll ? "Reply sent to everyone." : "Reply sent.");
+    } catch (e) {
+      // Kept in the composer, with the typed text intact — a failed send must never
+      // be the thing that loses what was written.
+      setReplyError(e?.message || "Could not send that reply.");
+    } finally {
+      setReplySending(false);
+    }
+  }
+
+  // ── "Open Gmail", done properly (two owner tickets) ────────────────────────
+  // WHICH ACCOUNT: every one of these entry points used to be hardcoded to
+  // /mail/u/0/#inbox, and /u/0 is a session slot, not an account — whichever one
+  // that browser profile happens to have first, i.e. wherever Gmail was last left.
+  // Mail addressed to rabbidanziger therefore opened Ydanziger. The account is now
+  // named explicitly: the account filter when one is chosen, else the account the
+  // newest message on screen actually arrived at, else the primary.
+  //
+  // WHERE IT OPENS: on a touch device the app keeps the mail INSIDE the app —
+  // Gmail cannot be embedded (it refuses to be framed), so "in the app" means the
+  // app's own mail surface: the Mail card expanded to the page, with the reader for
+  // individual messages. On a PC it opens the real Gmail web page as before, which
+  // is what the owner asked for ("only on a tablet, pc must open in reg webpage").
+  const accountEmail = a => (typeof a === "string" ? a : (a?.email || a?.googleEmail || ""));
+  const primaryMailAccount = (googleAccountFilter && googleAccountFilter !== "all")
+    ? accountEmail(googleAccountFilter)
+    : ((gmailMessages || [])[0]?.sourceAccount || accountEmail(googleAccounts[0]) || "");
+  const openGmailInbox = () => {
+    if (isMobileDevice) {
+      setExpandedBoxId("mail");
+      setMobileExpanded(prev => { const next = new Set(prev); next.add("mail"); return next; });
+      setExpandedRows(prev => { const next = new Set(prev); next.add("desk-mail"); return next; });
+      return;
+    }
+    window.open(gmailInboxLink(primaryMailAccount), "_blank", "noopener");
+  };
+
   // ── Mail reader (owner ticket WUQh8VL) ─────────────────────────────────────
   // Full text of the clicked email, floating over whatever layout is on screen,
   // with the responses right there. Defined ONCE here rather than inside a layout
@@ -1582,19 +1641,54 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               : loading ? "Loading the full message…"
               : (body || "No message body available.")}
           </div>
-          <div style={{ display: "flex", gap: 4, padding: "6px 8px", borderTop: `1px solid ${C.divider}`, flexWrap: "wrap", alignItems: "center" }}>
-            <ActionBtn variant="tonal" icon="reply" iconSize={15} height={36} labelSize={NC_TYPE.small}
-              containerColor={C.bgSoft} labelColor={C.text} title="Reply in Gmail"
-              onClick={() => window.open(gmailReplyLink(msg, false), "_blank", "noopener")}>Reply</ActionBtn>
-            <ActionBtn variant="tonal" icon="reply_all" iconSize={15} height={36} labelSize={NC_TYPE.small}
-              containerColor={C.bgSoft} labelColor={C.text} title="Reply to everyone in Gmail"
-              onClick={() => window.open(gmailReplyLink(msg, true), "_blank", "noopener")}>Reply all</ActionBtn>
-            <ActionBtn variant="text" icon="open_in_new" iconSize={15} height={36} labelSize={NC_TYPE.small}
-              labelColor={C.accent} title="Open the whole thread in Gmail"
-              onClick={() => window.open(gmailDeepLink(msg), "_blank", "noopener")}>Open in Gmail</ActionBtn>
-            <IconBtn icon="close" iconSize={16} color={C.muted} title="Close" aria-label="Close"
-              onClick={close} style={{ marginLeft: "auto" }} />
-          </div>
+          {/* The composer. Reply used to be a deep link, which the owner correctly
+              called out as "functionally no more useful than open Gmail" — it left
+              the app to do the one thing the panel was for. Typing here and
+              pressing Send actually sends, threaded, through the account the
+              message arrived at. Gmail stays available for anything this cannot do
+              (attachments, formatting, editing recipients). */}
+          {replyOpen ? (
+            <div style={{ borderTop: `1px solid ${C.divider}`, padding: "8px", display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontSize: NC_TYPE.small, color: C.muted }}>
+                {replyAll ? "Reply all" : "Reply"} · from {msg.sourceAccount || "your primary account"}
+              </div>
+              <TextField type="textarea" rows={3} value={replyText} label="Your reply" autoFocus
+                onInput={e => setReplyText(e.target.value)}
+                onKeyDown={e => { if (e.key === "Escape") { setReplyOpen(false); setReplyError(""); } }}
+                style={{ width: "100%", '--md-outlined-text-field-container-shape': RADIUS.sm }} />
+              {replyError && <div style={{ fontSize: NC_TYPE.small, color: C.danger, lineHeight: LINE.body }}>{replyError}</div>}
+              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <ActionBtn variant="filled" icon="send" iconSize={15} height={36} labelSize={NC_TYPE.small}
+                  disabled={replySending || !replyText.trim()}
+                  title="Send this reply" onClick={() => sendReply(msg)}>
+                  {replySending ? "Sending…" : "Send"}
+                </ActionBtn>
+                <ActionBtn variant="text" height={36} labelSize={NC_TYPE.small} labelColor={C.muted}
+                  onClick={() => { setReplyOpen(false); setReplyError(""); }}>Cancel</ActionBtn>
+                <ActionBtn variant="text" icon="open_in_new" iconSize={15} height={36} labelSize={NC_TYPE.small}
+                  labelColor={C.accent} title="Finish this reply in Gmail instead"
+                  onClick={() => window.open(gmailReplyLink(msg, replyAll), "_blank", "noopener")}
+                  style={{ marginLeft: "auto" }}>Gmail</ActionBtn>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 4, padding: "6px 8px", borderTop: `1px solid ${C.divider}`, flexWrap: "wrap", alignItems: "center" }}>
+              <ActionBtn variant="tonal" icon="reply" iconSize={15} height={36} labelSize={NC_TYPE.small}
+                containerColor={C.bgSoft} labelColor={C.text} title="Reply from here"
+                onClick={() => { setReplyAll(false); setReplyText(""); setReplyError(""); setReplySent(""); setReplyOpen(true); }}>Reply</ActionBtn>
+              <ActionBtn variant="tonal" icon="reply_all" iconSize={15} height={36} labelSize={NC_TYPE.small}
+                containerColor={C.bgSoft} labelColor={C.text} title="Reply to everyone from here"
+                onClick={() => { setReplyAll(true); setReplyText(""); setReplyError(""); setReplySent(""); setReplyOpen(true); }}>Reply all</ActionBtn>
+              <ActionBtn variant="text" icon="open_in_new" iconSize={15} height={36} labelSize={NC_TYPE.small}
+                labelColor={C.accent} title="Open the whole thread in Gmail"
+                onClick={() => window.open(gmailDeepLink(msg), "_blank", "noopener")}>Open in Gmail</ActionBtn>
+              <IconBtn icon="close" iconSize={16} color={C.muted} title="Close" aria-label="Close"
+                onClick={close} style={{ marginLeft: "auto" }} />
+            </div>
+          )}
+          {replySent && !replyOpen && (
+            <div style={{ padding: "0 10px 8px", fontSize: NC_TYPE.small, color: C.success }}>{replySent}</div>
+          )}
         </div>
       </>
     );
@@ -3201,7 +3295,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           {/* Owner ticket UFgySrCag: email + contacts icons on every layout (this is the card-grid chrome). */}
           <IconBtn icon="mail" iconSize={16}
             color={googleToken ? C.muted : C.accent}
-            onClick={googleToken ? () => window.open("https://mail.google.com/mail/u/0/#inbox", "_blank") : onConnectGoogle}
+            onClick={googleToken ? openGmailInbox : onConnectGoogle}
             title={googleToken ? "Open Gmail" : "Connect Google Mail & Calendar"}
             aria-label={googleToken ? "Open Gmail" : "Connect Google Mail and Calendar"} />
           <IconBtn icon="contacts" iconSize={16} color={C.muted} onClick={onOpenPhone} title="Contacts — open phone view" aria-label="Contacts" />
@@ -3258,7 +3352,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
 
           {/* Mail */}
           <MobileBox {...boxCtx} {...boxProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} count={feedCounts.mail} summary={cardSummary("Mail")} style={cardStyle} dense={dense}
-            onOpen={() => window.open("https://mail.google.com/mail/u/0/#inbox","_blank")}
+            onOpen={openGmailInbox}
             /* Account picker + refresh ride the card's own header row instead of a second
                toolbar row underneath it (owner ticket 7/14: "two rows when they need only
                one" — was its own <div> above the list, doubling the header height). */
@@ -3629,7 +3723,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   "connect" while Google isn't linked, quiet "open Gmail" once it is. */}
               <IconBtn icon="mail" iconSize={16}
                 color={googleToken ? C.muted : C.accent}
-                onClick={googleToken ? () => window.open("https://mail.google.com/mail/u/0/#inbox", "_blank") : onConnectGoogle}
+                onClick={googleToken ? openGmailInbox : onConnectGoogle}
                 title={googleToken ? "Open Gmail" : "Connect Google Mail & Calendar"}
                 aria-label={googleToken ? "Open Gmail" : "Connect Google Mail and Calendar"} />
               <IconBtn icon="contacts" iconSize={16} color={C.muted} onClick={onOpenPhone} title="Contacts — open phone view" aria-label="Contacts" />
@@ -3782,7 +3876,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               preview={signalNote("Mail")}
               menuItems={[
                 { icon: "refresh",     label: "Refresh",    run: onRefreshCalendar || onConnectGoogle },
-                { icon: "open_in_new", label: "Open Gmail", run: () => window.open("https://mail.google.com/mail/u/0/#inbox","_blank") },
+                { icon: "open_in_new", label: "Open Gmail", run: openGmailInbox },
                 ...googleAcctMenuItems,
               ]}
             >
@@ -3902,7 +3996,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             {/* Owner ticket UFgySrCag: email + contacts icons on every layout (this is the full-panel chrome). */}
             <IconBtn icon="mail" iconSize={15}
               color={googleToken ? C.faint : C.accent}
-              onClick={googleToken ? () => window.open("https://mail.google.com/mail/u/0/#inbox", "_blank") : onConnectGoogle}
+              onClick={googleToken ? openGmailInbox : onConnectGoogle}
               title={googleToken ? "Open Gmail" : "Connect Google Mail & Calendar"}
               aria-label={googleToken ? "Open Gmail" : "Connect Google Mail and Calendar"} />
             <IconBtn icon="contacts" iconSize={15} color={C.faint} onClick={onOpenPhone} title="Contacts — open phone view" aria-label="Contacts" />
@@ -4544,7 +4638,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   {cardHeader("mail", "Mail", CAT_MAIL, <>
                     {googleLoading && <Spinner size={13} color={C.faint} />}
                     {googleAcctMenuEl}
-                    <CardAction icon="open_in_new" title="Open Gmail" href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer" />
+                    <CardAction icon="open_in_new" title="Open Gmail" onClick={openGmailInbox} />
                     <CardAction icon="refresh" title="Refresh mail and calendar" onClick={onRefreshCalendar || onConnectGoogle} />
                   </>)}
                   <div ref={deskMailRef} style={cardBody}>

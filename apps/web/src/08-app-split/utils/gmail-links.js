@@ -15,6 +15,29 @@ export function gmailDeepLink(msg = {}) {
     : `https://mail.google.com/mail/u/0/#inbox/${conversation}`;
 }
 
+// The plain "Open Gmail" destination — the inbox, for a KNOWN account.
+//
+// Owner ticket: "is there a way to specifically open Gmail in the account at which
+// the email was received, now ill get an email for example to rabbidanziger and
+// open email takes me to Ydanziger as that's what it was open to before." Every
+// Open-Gmail entry point was hardcoded to /mail/u/0/, and /u/0 is not an account —
+// it is a SESSION SLOT, meaning whichever account that browser profile happens to
+// have in position zero. So the button always landed wherever Gmail was last left.
+// authuser names the account by address and lets Google pick the slot, which is the
+// same mechanism gmailDeepLink already uses for a specific message.
+export function gmailInboxLink(account = "") {
+  // Accepts an email, or an account object from the status endpoint — the server
+  // returns plain strings but the account list has carried objects too, and
+  // String({}) silently produces "[object Object]", which Gmail answers with a
+  // sign-in-chooser page. Anything that is not recognisably an address falls back
+  // to the plain inbox rather than shipping a broken authuser.
+  const raw = typeof account === "string" ? account : (account?.email || account?.googleEmail || "");
+  const email = String(raw || "").trim();
+  return email.includes("@")
+    ? `https://mail.google.com/mail/?authuser=${encodeURIComponent(email)}#inbox`
+    : "https://mail.google.com/mail/u/0/#inbox";
+}
+
 // Reply / reply-all deep link for the NerveCenter mail reader (owner ticket
 // WUQh8VL). Gmail's `#inbox/<conv>` hash opens the thread but not a composer;
 // appending `?compose=...` is unreliable, while the documented `to`/`su`/`body`

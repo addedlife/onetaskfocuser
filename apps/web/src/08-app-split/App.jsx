@@ -872,7 +872,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         console.log('[Google] initCodeClient', isIOS ? '(redirect/iOS)' : '(popup)');
         gTokenClientRef.current = window.google.accounts.oauth2.initCodeClient({
           client_id: serverGoogleClientId,
-          scope: 'openid email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly',
+          scope: 'openid email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
           ux_mode: isIOS ? 'redirect' : 'popup',
           ...(isIOS ? { redirect_uri: window.location.origin } : {}),
           include_granted_scopes: true,
@@ -923,7 +923,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       console.log('[Google] initTokenClient');
       gTokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        scope: 'openid email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly',
+        scope: 'openid email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
         callback: (resp) => {
           console.log('[Google] OAuth callback error:', resp.error || 'none', '| has token:', !!resp.access_token);
           if (resp.error) {
@@ -1305,6 +1305,16 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     if (useGoogleServerAuth) callGoogleWorkspace("disconnect").catch(() => {});
     setGoogleWasConnected(false);
     try { clearStoredGoogleBrowserToken(); localStorage.removeItem('ot_google_connected'); localStorage.removeItem(GOOGLE_SILENT_REAUTH_LAST_KEY); } catch {}
+  }
+
+  // Send a real threaded reply (owner: the Reply button "doesn't reply, just kicks
+  // you to the email webpage"). Server path only — the browser-token path holds
+  // read scope from a different client and has no send route; on that path the
+  // reader keeps its Gmail deep link.
+  async function sendGoogleEmailReply({ id, text, all = false, account = "" }) {
+    if (!useGoogleServerAuth) throw new Error("Reconnect Google to send replies from inside the app.");
+    const acct = String(account || "").trim();
+    return callGoogleWorkspace("sendGmailReply", { id, text, all, ...(acct ? { account: acct } : {}) });
   }
 
   async function loadGoogleEmailDetail(messageId, sourceAccount = "") {
@@ -4053,6 +4063,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           onConnectGoogle={connectGoogle}
           onDisconnectGoogle={disconnectGoogle}
           onLoadEmailDetail={loadGoogleEmailDetail}
+          onSendEmailReply={sendGoogleEmailReply}
           onCreateCalendarEvent={createGoogleCalendarEvent}
           onDeleteCalendarEvent={deleteGoogleCalendarEvent}
           chiefProfile={chiefProfile}
