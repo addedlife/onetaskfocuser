@@ -3511,7 +3511,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           }}>
 
           {/* Mail */}
-          <MobileBox {...boxCtx} {...boxProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} count={feedCounts.mail} summary={cardSummary("Mail")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} narrowActions={colW < 480} {...boxProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} count={feedCounts.mail} summary={cardSummary("Mail")} style={cardStyle} dense={dense}
             onOpen={openGmailInbox}
             /* Account picker + refresh ride the card's own header row instead of a second
                toolbar row underneath it (owner ticket 7/14: "two rows when they need only
@@ -3583,8 +3583,20 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           </MobileBox>
 
           {/* Tasks */}
-          <MobileBox {...boxCtx} {...boxProps("tasks")} icon="rule" title="Tasks" accentColor={C.accent} count={feedCounts.tasks} summary={cardSummary("Tasks")} style={cardStyle} dense={dense}
-            onOpen={onOpenQueue}>
+          <MobileBox {...boxCtx} narrowActions={colW < 480} {...boxProps("tasks")} icon="rule" title="Tasks" accentColor={C.accent} count={feedCounts.tasks} summary={cardSummary("Tasks")} style={cardStyle} dense={dense}
+            onOpen={onOpenQueue}
+            /* Parity gap found by the ticket-PCkGDtd sweep: this card RENDERS the
+               task composer but had no control that opens it, so on the card grid
+               there was no way to add a task at all — the stacked layout has had an
+               Add button on this card the whole time. */
+            headerActions={<>
+              <IconBtn icon="add" iconSize={14} color={C.muted} onClick={() => openTaskComposer(taskPriority)} title="Add task" aria-label="Add task" />
+              {onAddMrsWTask && (
+                <IconBtn icon="person_add" iconSize={14} color={C.muted} onClick={() => openTaskComposer(taskPriority, { mrsW: true })} title="Add Mrs W task" aria-label="Add Mrs W task" />
+              )}
+              {/* Zen mode was another stacked-only entry point. */}
+              <IconBtn icon="local_drink" iconSize={14} color={C.muted} onClick={onOpenZen} title="Zen mode" aria-label="Zen mode" />
+            </>}>
             {fitRows => {
             const taskRest = actionTasks;
             const taskCut = fitSlice(taskRest, fitRows, boxShowsAll("tasks"));
@@ -3670,7 +3682,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
 
           {/* Shailos */}
           <MobileBox {...boxCtx} {...boxProps("shailos")} icon="question_mark" title="Shailos" accentColor={GOLD} count={feedCounts.shailos} summary={cardSummary("Shailos")} style={cardStyle} dense={dense}
-            onOpen={onOpenShailos}>
+            onOpen={onOpenShailos}
+            /* Same parity gap: Add shaila existed on the stacked layout and on the
+               full panel, and nowhere on the card grid. */
+            headerActions={<IconBtn icon="add" iconSize={14} color={GOLD} onClick={onOpenShailaAdd} title="Add shaila" aria-label="Add shaila" />}>
             {fitRows => {
             const shailaRest = actionShailos;
             const shailaCut = fitSlice(shailaRest, fitRows, boxShowsAll("shailos"));
@@ -3702,6 +3717,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                rows when they need only one"). */
             headerActions={<>
               {googleAcctMenuEl}
+              {/* Add event was reachable from the stacked layout's card menu and from
+                  the full panel, but not from the card grid (ticket PCkGDtd sweep). */}
+              <IconBtn icon="add" iconSize={14} color={C.muted} onClick={() => setShowAddEvent(true)} title="Add event" aria-label="Add event" />
               <IconBtn icon="refresh" iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh calendar" aria-label="Refresh calendar" />
               <IconBtn icon="schedule" iconSize={14} color={calCardView==="timeline"?C.text:C.muted} active={calCardView==="timeline"} activeBg={C.hover} onClick={()=>setCalCardView("timeline")} title="Live time" aria-label="Live time view" />
               <IconBtn icon="view_agenda" iconSize={14} color={calCardView==="agenda"?C.text:C.muted} active={calCardView==="agenda"} activeBg={C.hover} onClick={()=>setCalCardView("agenda")} title="Agenda" aria-label="Agenda view" />
