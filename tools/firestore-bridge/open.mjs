@@ -17,9 +17,12 @@ if (!dir || !logPath) {
 }
 
 const log = readFileSync(logPath, 'utf8');
-const match = log.match(/---BRIDGE-ENVELOPE-BEGIN---([\s\S]*?)---BRIDGE-ENVELOPE-END---/);
+// Two accepted shapes: a job log with the envelope between its markers, and the
+// bare .bridge-response.json the runner commits back to the request branch.
+const match = log.match(/---BRIDGE-ENVELOPE-BEGIN---([\s\S]*?)---BRIDGE-ENVELOPE-END---/)
+  || (/^[A-Za-z0-9+/=\s]+$/.test(log) ? [null, log] : null);
 if (!match) {
-  console.error('no envelope in that log — check the run actually reached the bridge step');
+  console.error('no envelope in that file — check the run actually reached the bridge step');
   process.exit(1);
 }
 

@@ -36,6 +36,9 @@ on:
 # Inputs are visible to anyone who can read the repo. Tool name and arguments
 # are deliberately in the clear (they are the session's own words — a ticket id
 # and a fix note); only the RESPONSE carries owner data, and that is encrypted.
+permissions:
+  contents: write   # to commit the encrypted answer back to the request branch
+
 jobs:
   call:
     runs-on: ubuntu-latest
@@ -53,3 +56,14 @@ jobs:
           BRIDGE_ARGS: ${{ inputs.args }}
           BRIDGE_PUBKEY: ${{ inputs.pubkey }}
         run: node tools/firestore-bridge/call.mjs
+
+      # Push the (encrypted) answer back to the request branch, so the session can
+      # git-fetch it instead of scraping it out of the job log.
+      - name: Return the answer on the branch
+        if: github.event_name == 'push'
+        run: |
+          git config user.name "Firestore bridge"
+          git config user.email "noreply@anthropic.com"
+          git add .bridge-response.json
+          git commit -m "bridge: response"
+          git push origin HEAD:${{ github.ref_name }}

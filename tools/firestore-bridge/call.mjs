@@ -14,7 +14,7 @@
 // under the session's RSA-OAEP(SHA-256) public key. Nothing readable is ever
 // written to the (public) Actions log.
 import { createCipheriv, publicEncrypt, randomBytes, constants } from 'node:crypto';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
 const endpoint = process.env.MCP_ENDPOINT || 'https://onetaskonly-app.web.app/mcp';
 const token = process.env.MCP_READ_TOKEN || '';
@@ -86,6 +86,13 @@ const envelope = {
   data: ciphertext.toString('base64'),
 };
 
+const packed = Buffer.from(JSON.stringify(envelope), 'utf8').toString('base64');
+
+// Written to a file as well as printed. Reading it out of the log means pulling
+// the whole ciphertext through whatever is reading the log; committed to the
+// request branch, the session just fetches the branch and decrypts locally.
+writeFileSync('.bridge-response.json', `${packed}\n`);
+
 console.log('---BRIDGE-ENVELOPE-BEGIN---');
-console.log(Buffer.from(JSON.stringify(envelope), 'utf8').toString('base64'));
+console.log(packed);
 console.log('---BRIDGE-ENVELOPE-END---');
