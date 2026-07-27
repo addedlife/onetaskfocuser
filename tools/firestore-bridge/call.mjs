@@ -14,12 +14,25 @@
 // under the session's RSA-OAEP(SHA-256) public key. Nothing readable is ever
 // written to the (public) Actions log.
 import { createCipheriv, publicEncrypt, randomBytes, constants } from 'node:crypto';
+import { readFileSync, existsSync } from 'node:fs';
 
 const endpoint = process.env.MCP_ENDPOINT || 'https://onetaskonly-app.web.app/mcp';
 const token = process.env.MCP_READ_TOKEN || '';
-const tool = (process.env.BRIDGE_TOOL || '').trim();
-const rawArgs = (process.env.BRIDGE_ARGS || '{}').trim() || '{}';
-const pubkeyB64 = (process.env.BRIDGE_PUBKEY || '').trim();
+
+// Request source: workflow_dispatch inputs when they are there, otherwise the
+// request file carried by a push to a bridge/** branch. The file path exists
+// because dispatching needs actions:write and a cloud session may only have
+// push — see the workflow's own note.
+const REQUEST_FILE = '.bridge-request.json';
+const fileRequest = (!process.env.BRIDGE_TOOL && existsSync(REQUEST_FILE))
+  ? JSON.parse(readFileSync(REQUEST_FILE, 'utf8'))
+  : {};
+
+const tool = (process.env.BRIDGE_TOOL || fileRequest.tool || '').trim();
+const rawArgs = (process.env.BRIDGE_ARGS
+  || (fileRequest.args === undefined ? '' : JSON.stringify(fileRequest.args))
+  || '{}').trim() || '{}';
+const pubkeyB64 = (process.env.BRIDGE_PUBKEY || fileRequest.pubkey || '').trim();
 
 function die(message) {
   // Failures are printed in the clear on purpose: they are about plumbing

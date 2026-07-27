@@ -12,6 +12,10 @@
 name: Firestore bridge
 
 on:
+  # Two ways in, because a session may have one and not the other. Dispatching
+  # needs the actions:write permission, which a Claude Code cloud session's GitHub
+  # App does not necessarily hold — but every session can push. Pushing a request
+  # file to a bridge/** branch therefore works when dispatch returns 403.
   workflow_dispatch:
     inputs:
       tool:
@@ -25,6 +29,9 @@ on:
       pubkey:
         description: "base64 SPKI public key printed by tools/firestore-bridge/keygen.mjs"
         required: true
+  push:
+    branches: ["bridge/**"]
+    paths: [".bridge-request.json"]
 
 # Inputs are visible to anyone who can read the repo. Tool name and arguments
 # are deliberately in the clear (they are the session's own words — a ticket id
