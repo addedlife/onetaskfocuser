@@ -12,7 +12,7 @@ import { db } from '../../01-core.js';
 import { cleanTheme, ELEV, GOLD, NC_FONT_STACK, NC_TYPE, RADIUS, suiteIcon, useViewportWidth, Z, NC_MONO_STACK } from '../ui-tokens.jsx';
 import { ActionBtn, AssistChip, ChipSet, CircularProgress, FilterChip, IconBtn, TextField } from '../m3.jsx';
 import {
-  findPotentialMatches, generateAnswerSummary, generateSynopsis,
+  findPotentialMatches, generateAnswerSummary, generateAnswerSummariesBatch, generateSynopsis,
   performResearch, transcribeAndParse, transcribeAudio,
 } from '../shailos-ai.js';
 import { publishContentResult, releaseContentClaim, shouldRunForContentAndClaim } from '../ai-call-throttle.js';
@@ -531,10 +531,15 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
   // answerSummary and nothing else; content, parsedShaila and synopsis are left
   // exactly as they are.
   //
-  // Runs one shaila at a time with a gap between calls. This job is the same one
-  // the AI call manager flagged at 10.5x normal (ticket FpbwpXD), so a bulk pass
-  // firing N calls at once is precisely the shape that trips the leak detector and
-  // burns a lane's quota. Slow and serial is correct here.
+  // Runs in BATCHES: one AI call per BATCH_SIZE shailos, not one per shaila
+  // (owner ticket ACtKg0XH — "just extraxct the list and ai call once asking it to
+  // summarize all list items"). A 120-shaila backfill goes from 120 calls spaced
+  // 1.2s apart to 5, which is both far quicker and much further from the call
+  // volume that had this job flagged at 10.5x normal (ticket FpbwpXD).
+  //
+  // Batches stay serial with a gap between them for that same reason, and the size
+  // is capped so a full batch cannot exhaust the job's token budget and come back
+  // truncated mid-array.
   const [bulkSummary, setBulkSummary] = useState(null); // {done, total, failed} | null
   const bulkCancelRef = useRef(false);
   const bulkRunningRef = useRef(false);
@@ -552,25 +557,40 @@ export function ShailosTracker({ T, user = null, action = null, onRecordCall = n
     bulkCancelRef.current = false;
     setBulkSummary({ done: 0, total: targets.length, failed: 0 });
     let done = 0, failed = 0, consecutiveFailures = 0;
-    for (const s of targets) {
+    const BATCH_SIZE = 25;
+    const batches = [];
+    for (let i = 0; i < targets.length; i += BATCH_SIZE) batches.push(targets.slice(i, i + BATCH_SIZE));
+
+    for (const batch of batches) {
       if (bulkCancelRef.current) break;
+      let summaries = new Map();
       try {
-        const summary = await generateAnswerSummary(user, s.answer);
+        summaries = await generateAnswerSummariesBatch(user, batch.map(s => ({ id: s.id, answer: s.answer })));
+      } catch { summaries = new Map(); }
+
+      // Writes are per-doc regardless of how the summaries were produced, so a
+      // batch that comes back partial still saves what it got: a shaila the model
+      // skipped simply stays unstamped and is picked up on the next pass.
+      for (const s of batch) {
+        const summary = summaries.get(s.id);
         if (summary) {
-          // answerSummaryV is written in the SAME update as the summary, so a doc can
-          // never be stamped current while carrying an old line (and vice versa).
-          await shailosCol().doc(s.id).update({ answerSummary: summary, answerSummaryV: ANSWER_SUMMARY_FORMAT, updatedAt: Ts() });
-          // Keep the throttle's content cache in step, so the next ordinary save of
-          // this shaila adopts this result instead of paying for it again.
-          publishContentResult(`shaila-answer-summary-${s.id}`, answerContentKey((s.answer || '').trim()), summary);
-          consecutiveFailures = 0;
-        } else { failed++; consecutiveFailures++; }
-      } catch { failed++; consecutiveFailures++; }
-      done++;
+          try {
+            // answerSummaryV is written in the SAME update as the summary, so a doc can
+            // never be stamped current while carrying an old line (and vice versa).
+            await shailosCol().doc(s.id).update({ answerSummary: summary, answerSummaryV: ANSWER_SUMMARY_FORMAT, updatedAt: Ts() });
+            // Keep the throttle's content cache in step, so the next ordinary save of
+            // this shaila adopts this result instead of paying for it again.
+            publishContentResult(`shaila-answer-summary-${s.id}`, answerContentKey((s.answer || '').trim()), summary);
+          } catch { failed++; }
+        } else { failed++; }
+        done++;
+      }
       setBulkSummary({ done, total: targets.length, failed });
-      // Three failures in a row is an outage (the 503s of 7/20–7/22), not bad luck.
-      // Stop rather than burn the remaining calls; unstamped docs are retried on the
-      // next open, so nothing is lost by giving up early.
+
+      // A batch that returned nothing usable is the outage signal now that one call
+      // covers 25 shailos — three dead batches, not three dead items. Unstamped docs
+      // are retried on the next open, so stopping early loses nothing.
+      if (summaries.size === 0) { consecutiveFailures++; } else { consecutiveFailures = 0; }
       if (consecutiveFailures >= 3) break;
       await new Promise(r => setTimeout(r, 1200));
     }

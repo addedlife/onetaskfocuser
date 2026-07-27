@@ -1569,6 +1569,55 @@ const AI_JOB_REGISTRY = {
       ]);
     },
   },
+  // Batch form of shaila.answer_summary.v1 — same rules, N answers per call.
+  //
+  // Owner ticket ACtKg0XH: "silly to have resummarize shaila answer summaried 120
+  // entries ionlt ai call at a time - ? just extraxct the list and ai call once
+  // asking it to summarize all list items!" Correct: a 120-shaila backfill was 120
+  // round trips at ~1.2s apart, which is both slow and exactly the call-volume
+  // shape the leak detector flags.
+  //
+  // The summarization RULES are deliberately identical to the single-item job,
+  // word for word — they are the product of five owner tickets (SpQAn5lM, SMu81hE
+  // and the 7/20 widening among them) and a batch pass that quietly summarized to
+  // a different standard would be a silent regression in the answer line. Only the
+  // input/output shape differs.
+  "shaila.answer_summary.batch.v1": {
+    model: QUOTA_FALLBACK_GEMINI_MODEL,
+    task: "shaila-answer-summary-batch",
+    output: "json",
+    shape: "array",
+    // ~18 words per item plus JSON overhead. Chunk size is the client's business;
+    // this is sized so a full chunk cannot be truncated mid-array.
+    genConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+    schema: '[{"n":1,"summary":"the summary for answer 1"}]',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "Summarize EACH of the numbered answers below in at most 18 words, in plain language.",
+        "Cover the whole answer, not just its opening. If an answer is conditional, qualified, or splits by case, those conditions ARE the answer — stating the ruling and dropping them is a WRONG summary, not a short one.",
+        "Compress, never clip. Shorten by tightening the wording, not by stopping early; use 'but', 'unless', 'if', 'only when' to fit the qualifications in.",
+        "Stay in each answer's own terms. Do not impose a structure it does not have, and do not add framing, caveats, reasoning or sourcing the answer does not itself contain.",
+        "If an answer uses a term (mutar, assur, bedieved, lechatchila, a subject noun), keep that term. If it does not, do not introduce one.",
+        "Never reverse or soften what an answer says.",
+        "No trailing period.",
+        "Summarize each answer INDEPENDENTLY. Do not let one answer's wording, subject or ruling influence another's, and never merge two answers into one summary.",
+        "Return exactly one entry per numbered answer, with `n` set to that answer's number. Do not skip, reorder or invent numbers.",
+        `Answers:\n${truncateText(input.answers, 24000)}`,
+        responseJsonInstruction("array", this.schema),
+      ]);
+    },
+    validate(value) {
+      return ensureArray(value).map(row => {
+        const o = ensureObject(row, "summary");
+        const n = Number(o.n);
+        return {
+          n: Number.isFinite(n) && n > 0 ? Math.floor(n) : null,
+          summary: cleanString(o.summary, 400),
+        };
+      }).filter(r => r.n && r.summary);
+    },
+  },
   "shaila.research_queries.v1": {
     model: QUOTA_FALLBACK_GEMINI_MODEL,
     task: "shaila-research-queries",

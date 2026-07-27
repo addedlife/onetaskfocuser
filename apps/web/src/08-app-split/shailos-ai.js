@@ -300,8 +300,39 @@ export async function performResearch(user, shaila) {
   return { queries, sources, seforim, engine };
 }
 
+function cleanSummaryText(value) {
+  const text = typeof value === "string" ? value : "";
+  return text.trim().replace(/^["'`]+|["'`]+$/g, "");
+}
+
 export async function generateAnswerSummary(user, answerText) {
   const data = await runAiJob(user, "shaila.answer_summary.v1", { answerText });
-  const text = typeof data === "string" ? data : "";
-  return text.trim().replace(/^["'`]+|["'`]+$/g, "");
+  return cleanSummaryText(data);
+}
+
+// Summarize many answers in ONE call (owner ticket ACtKg0XH). `items` is
+// [{id, answer}]; the result is a Map of id → summary containing only the ids the
+// model actually returned a usable line for.
+//
+// Ids never go to the model — answers are numbered 1..N and the numbers are mapped
+// back here. That keeps document ids out of the prompt entirely and means a
+// hallucinated or duplicated `n` can only ever fail to match, never write a
+// summary onto the wrong shaila.
+export async function generateAnswerSummariesBatch(user, items) {
+  const list = (items || []).filter(it => it && it.id && String(it.answer || "").trim());
+  if (!list.length) return new Map();
+  const answers = list
+    .map((it, i) => `${i + 1}. ${String(it.answer).trim()}`)
+    .join("\n\n");
+  const data = await runAiJob(user, "shaila.answer_summary.batch.v1", { answers });
+  const rows = Array.isArray(data) ? data : [];
+  const out = new Map();
+  rows.forEach(row => {
+    const n = Number(row?.n);
+    const target = Number.isFinite(n) && n >= 1 && n <= list.length ? list[n - 1] : null;
+    const summary = cleanSummaryText(row?.summary);
+    // First write wins: a repeated `n` must not overwrite a line already accepted.
+    if (target && summary && !out.has(target.id)) out.set(target.id, summary);
+  });
+  return out;
 }

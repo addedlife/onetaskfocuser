@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, Store, textOnColor } from '../../01-core.js';
 import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BRD, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth, useWindowSizeClass } from '../ui-tokens.jsx';
-import { ActionBtn, IconBtn, List, ListItem, OutlinedButton, CircularProgress, denseListVars, Divider, Menu, MenuItem, OutlinedSelect, SelectOption } from '../m3.jsx';
+import { ActionBtn, AssistChip, IconBtn, List, ListItem, OutlinedButton, CircularProgress, denseListVars, Divider, Menu, MenuItem, OutlinedSelect, SelectOption } from '../m3.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthPage } from './HealthPage.jsx';
@@ -1179,7 +1179,22 @@ function MoreRow({ count, open = false, label = "more", onClick, C }) {
   );
 }
 
-// CardMoreChip — the same "+N more" reveal, sized for the tight card-grid columns
+// CardMoreChip — the "+N more" reveal for the tight card-grid columns.
+//
+// This was a circular icon button floating over the list on a `C.bg` pill with an
+// ELEV[1] shadow and a gradient scrim behind it, anchored to a zero-height sticky
+// element so it cost the card no layout height. The height saving was real, but
+// the owner's read of the result is the correct one (ticket lRC5gnqP): "white
+// obtrusive show more icon in column view, is that gm3 pure cant beleive". It is
+// not. M3 has no floating-circular-button-over-list-content pattern — that shape
+// is the FAB, which means "the screen's primary action", not "reveal four more
+// rows" — and a solid light pill parked on top of the content is exactly the kind
+// of improvisation the GM3 rule exists to stop.
+//
+// It is now a real md-assist-chip sitting inline at the end of the list, which IS
+// M3's element for a low-emphasis optional action, and which the full-panel view's
+// MoreRow already expresses as a text button. It costs one 32px line back, which
+// the 4.106.0 row-density work (two-line rows 64→56px) more than paid for.
 // (ticket MvX6nA5: "any crd should show till its bottom and then at the very
 // bottom not hogging space an option to extend to scrolling card"). MoreRow's
 // full-width 48dp row is right for the roomier stacked/full-panel views, but in a
@@ -1192,14 +1207,21 @@ function MoreRow({ count, open = false, label = "more", onClick, C }) {
 function CardMoreChip({ count, open, onClick, C, accentColor }) {
   if (!open && !count) return null;
   const a = accentColor || C.accent;
+  const label = open ? "Show less" : `${count} more`;
   return (
-    <div style={{ position: "sticky", bottom: 0, height: 0, zIndex: 3 }}>
-      <div style={{ position: "absolute", right: 2, bottom: 2, display: "flex", alignItems: "center" }}>
-        <span aria-hidden style={{ position: "absolute", inset: "-4px -4px -4px -36px", background: `linear-gradient(to right, transparent, ${C.bg} 65%)` }} />
-        <IconBtn icon={open ? "expand_less" : "expand_more"} iconSize={16} color={a}
-          onClick={onClick} title={open ? "Show less" : `Show ${count} more`} aria-label={open ? "Show less" : `Show ${count} more`}
-          style={{ position: "relative", background: C.bg, boxShadow: ELEV[1], borderRadius: RADIUS.pill }} />
-      </div>
+    <div style={{ display: "flex", justifyContent: "flex-start", padding: `2px ${SP.sm} ${SP.xs} 12px` }}>
+      <AssistChip label={label} onClick={onClick} title={label} aria-label={open ? "Show less" : `Show ${count} more`}
+        style={{
+          '--md-assist-chip-container-height': '32px',
+          '--md-assist-chip-label-text-size': NC_TYPE.meta,
+          '--md-assist-chip-label-text-color': a,
+          '--md-assist-chip-outline-color': softBg(a, 0.35),
+          '--md-assist-chip-icon-size': '16px',
+          '--md-assist-chip-with-icon-leading-space': '8px',
+          '--md-assist-chip-trailing-space': '10px',
+        }}>
+        <span slot="icon" className="material-symbols-rounded" style={{ color: a }}>{open ? "expand_less" : "expand_more"}</span>
+      </AssistChip>
     </div>
   );
 }
