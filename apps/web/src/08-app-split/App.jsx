@@ -1325,9 +1325,23 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     return r.json();
   }
 
-  async function createGoogleCalendarEvent(eventBody) {
+  // `account` targets one of the CURRENTLY SIGNED-IN USER's connected Google
+  // accounts. It is validated against `googleAccounts` — which the server builds
+  // per-uid from serverOnlyGoogleWorkspaceTokens/{uid}/accounts — so a value that
+  // is not this user's own is dropped rather than forwarded. The server applies
+  // the same check again in resolveAccount(); this one exists so a bad hint fails
+  // as "use my default" instead of as an error. Direct-token mode has only the
+  // signed-in account available, so it ignores the hint entirely.
+  async function createGoogleCalendarEvent(eventBody, account = null) {
     const normalizedEventBody = withCalendarEventDefaults(eventBody);
-    if (useGoogleServerAuth) return callGoogleWorkspace("createCalendarEvent", { eventBody: normalizedEventBody });
+    if (useGoogleServerAuth) {
+      const wanted = String(account || "").toLowerCase().trim();
+      const owned = googleAccounts.some(a => String(a?.email || a || "").toLowerCase() === wanted);
+      return callGoogleWorkspace("createCalendarEvent", {
+        eventBody: normalizedEventBody,
+        ...(wanted && owned ? { account: wanted } : {}),
+      });
+    }
     if (!googleToken) throw new Error("Reconnect Google to add calendar events.");
     const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
       method: 'POST',
@@ -3895,6 +3909,19 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           aiOpts={aiOpts}
           T={T}
           callMode={convCallMode}
+          /* Action execution. Each is the same function the corresponding button
+             in the UI calls, so a spoken instruction and a tap take the identical
+             path — no second implementation to drift. */
+          user={user}
+          googleAccounts={googleAccounts}
+          onCompleteTask={id => compTask(id)}
+          onAnswerShaila={(id, answer, answeredBy) => {
+            if (answer) saveShailaField(id, "shailaAnswer", answer);
+            if (answeredBy) saveShailaField(id, "answeredBy", answeredBy);
+            if (!answer) handleShailaGotBack(id, true);
+          }}
+          onSetTaskPriority={(id, pri) => chgPriority(id, pri, 'one')}
+          onAddBug={(text, type) => Store.addBug({ text, type })}
         />
       )}
 

@@ -2182,12 +2182,37 @@ async function aiDetectShailaAnswers(shailas, aiOpts) {
   return Array.isArray(job?.output) ? job.output.filter(x => x?.id && x?.answer) : [];
 }
 
-async function aiParseConversation(transcript, currentTasks, currentShailos, aiOpts) {
-  const taskSnap = currentTasks.slice(0,20).map((t,i)=>`${i+1}. [${t.priority}] ${t.text}`).join("\n") || "(none)";
-  const shailaSnap = currentShailos.slice(0,15).map((s,i)=>`${i+1}. ${s.synopsis||s.content||"shaila"}`).join("\n") || "(none)";
-  const job = await runAIJob("conversation.extract.v1", { transcript, taskSnap, shailaSnap }, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 8192 } });
+// The indices the model is told to reference are 1-based positions in THESE
+// snapshots, so the caller gets the exact slices back to resolve them against.
+// Resolving against the full unsliced list would silently point at the wrong row
+// the moment the queue is longer than the cap.
+function conversationSnapshots(currentTasks, currentShailos) {
+  const taskRows = (currentTasks || []).slice(0, 20);
+  const shailaRows = (currentShailos || []).slice(0, 15);
+  return {
+    taskRows,
+    shailaRows,
+    taskSnap: taskRows.map((t,i)=>`${i+1}. [${t.priority}] ${t.text}`).join("\n") || "(none)",
+    shailaSnap: shailaRows.map((s,i)=>`${i+1}. ${s.synopsis||s.content||"shaila"}`).join("\n") || "(none)",
+  };
+}
+
+// `context` carries what the parser needs to recognise app ACTIONS, not just
+// content: the priority ids it may assign, the contact names it may address a
+// message to, and the calendar names the speaker might say out loud. All three are
+// derived from the signed-in user's own data by the caller — the model is only
+// ever shown, and only ever echoes back, names that user already has.
+async function aiParseConversation(transcript, currentTasks, currentShailos, aiOpts, context = {}) {
+  const { taskRows, shailaRows, taskSnap, shailaSnap } = conversationSnapshots(currentTasks, currentShailos);
+  const input = {
+    transcript, taskSnap, shailaSnap,
+    priorityOptions: context.priorityOptions || "",
+    contactNames: context.contactNames || "",
+    calendarNames: context.calendarNames || "",
+  };
+  const job = await runAIJob("conversation.extract.v2", input, aiOpts, { genConfig: { temperature: 0.1, maxOutputTokens: 8192 } });
   if (!job?.output) throw new Error("Could not parse AI response");
-  return job.output;
+  return { ...job.output, _taskRows: taskRows, _shailaRows: shailaRows };
 }
 
 const DEFAULT_CALENDAR_TIME_ZONE = "America/New_York";

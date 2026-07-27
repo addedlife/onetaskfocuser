@@ -1,11 +1,67 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, aiParseConversation, fmtMs, uid } from '../../01-core.js';
 import { savePendingRecording, transcribePendingRecording, updatePendingRecordingError } from '../../09-transcription-pen.js';
-import { cleanTheme, ELEV, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
-import { ActionBtn, IconBtn, List, ListItem } from '../m3.jsx';
+import { CAT_PHONE, cleanTheme, ELEV, GOLD, ICON, NC_FONT_STACK, NC_TYPE, RADIUS, SP, suiteIcon } from '../ui-tokens.jsx';
+import { ActionBtn, IconBtn, List, ListItem, OutlinedSelect, SelectOption, TextField } from '../m3.jsx';
 import { probeCallAudioFeed, openCallAudioFeed } from '../call-audio-feed.js';
+import { contactDisplayName, contactNumber, fetchRelayContacts, resolveContactByName, sendRelaySms } from '../utils/relay-messaging.js';
 
-function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalendar, tasks, shailos, pris, aiOpts, T, callMode=false }) {
+// ── Spoken calendar name → one of THIS user's connected Google accounts ───────
+//
+// Never a hardcoded address. `googleAccounts` is built server-side per-uid from
+// serverOnlyGoogleWorkspaceTokens/{uid}/accounts, so it only ever contains
+// accounts the signed-in user personally connected — a different user signing in
+// resolves against their own list and can never reach someone else's calendar.
+// The matching is therefore positional and lexical, never identity-based:
+//
+//   · a hint naming part of an address ("put it on ydanziger", "the hocsouthbend
+//     one") matches that account directly
+//   · "personal / home / private / my own" prefers a NON-primary account, which is
+//     what a second connected account almost always is
+//   · "work / shul / office / congregation / rabbi" prefers the primary — the
+//     first account ever connected, which is the working one
+//   · anything else, or an unmatched hint, is null: send it to the user's default
+//     rather than guessing a calendar they did not name
+// Rows that DO something to an existing record rather than filing a new one.
+// They render as "this action, on this row" instead of as an editable text line,
+// because the thing the owner needs to check is the target, not the wording.
+const ACTION_CATS = ['completions', 'gotBacks', 'shailaAnswers', 'messages', 'priorityChanges', 'bugReports'];
+
+const PERSONAL_HINTS = /\b(personal|home|private|my own|myself|family)\b/i;
+const WORK_HINTS = /\b(work|shul|office|congregation|synagogue|rabbi|rabbinic|business)\b/i;
+
+function normalizeAccountList(googleAccounts) {
+  return (Array.isArray(googleAccounts) ? googleAccounts : [])
+    .map(a => (typeof a === 'string' ? { email: a, primary: false } : a))
+    .filter(a => a && a.email)
+    .map(a => ({ email: String(a.email).toLowerCase(), primary: !!a.primary }));
+}
+
+function resolveCalendarAccount(hint, googleAccounts) {
+  const accounts = normalizeAccountList(googleAccounts);
+  if (accounts.length < 2) return null;               // nothing to route between
+  const h = String(hint || '').trim();
+  if (!h) return null;
+
+  // Direct lexical hit on an address the user actually owns.
+  const direct = accounts.find(a => {
+    const [local, domain = ''] = a.email.split('@');
+    const domainRoot = domain.split('.')[0];
+    return (local && h.toLowerCase().includes(local)) || (domainRoot && h.toLowerCase().includes(domainRoot));
+  });
+  if (direct) return direct.email;
+
+  const primary = accounts.find(a => a.primary) || accounts[0];
+  if (WORK_HINTS.test(h)) return primary.email;
+  if (PERSONAL_HINTS.test(h)) {
+    const secondary = accounts.find(a => a.email !== primary.email);
+    return (secondary || primary).email;
+  }
+  return null;
+}
+
+function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalendar, tasks, shailos, pris, aiOpts, T, callMode=false,
+                       user = null, googleAccounts = [], onCompleteTask, onAnswerShaila, onSetTaskPriority, onAddBug }) {
   const C = cleanTheme(T);
   // callMode (phone call)  → 'ready' phase (waiting for user to share screen).
   // mic mode ("Record anything") → 'choose' phase so the user can pick between
@@ -131,6 +187,17 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
     return () => { alive = false; };
   }, []);
 
+  // Contacts, once per open. They serve two purposes: the parser is told the
+  // names so it can recognise "text Rabbi Cohen…" as a message rather than a
+  // task, and the review row resolves the spoken name back to a number. One
+  // read of the relay state doc the phone surface already subscribes to.
+  const [contacts, setContacts] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    fetchRelayContacts().then(list => { if (alive) setContacts(list); });
+    return () => { alive = false; };
+  }, []);
+
   // PC-link capture: the DeskPhone bridge streams the call's carkit audio as a
   // MediaStream — the reliable, zero-dialog lane whenever the host runs here.
   async function startFeedCapture() {
@@ -223,7 +290,26 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
         return;
       }
 
-      const parsed = await aiParseConversation(transcript, tasks, shailos, aiOpts);
+      // Context the parser needs to recognise ACTIONS rather than only content.
+      // Every value is derived from this user's own data: their priority ids,
+      // their contacts, their connected calendars. The model is never shown, and
+      // so can never echo back, a name that is not already theirs.
+      const accounts = normalizeAccountList(googleAccounts);
+      const parseContext = {
+        priorityOptions: (pris || []).filter(p => !p.deleted).map(p => `"${p.id}" = ${p.label}`).join(', '),
+        contactNames: contacts.map(contactDisplayName).filter(Boolean).slice(0, 200).join(', '),
+        calendarNames: accounts.length > 1
+          ? accounts.map(a => `${a.email}${a.primary ? ' (default/work)' : ' (secondary/personal)'}`).join(', ')
+          : '',
+      };
+      const parsed = await aiParseConversation(transcript, tasks, shailos, aiOpts, parseContext);
+      // The 1-based indices the model returns point at THESE slices, not at the
+      // full queues — resolving against the unsliced lists would silently target
+      // the wrong row whenever the queue is longer than the prompt cap.
+      const taskRows = parsed._taskRows || [];
+      const shailaRows = parsed._shailaRows || [];
+      const rowAt = (rows, i) => (Number.isFinite(i) && i >= 1 && i <= rows.length) ? rows[i - 1] : null;
+      const livePriIds = new Set((pris || []).filter(p => !p.deleted).map(p => p.id));
 
       const existingTaskTexts = new Set(
         (tasks || []).map(t => (t.text || '').trim().toLowerCase()).filter(Boolean)
@@ -255,10 +341,62 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
       });
       add('tasks', filteredTasks);
       add('shailos', filteredShailos);
-      add('gotBacks', parsed.gotBacks);
-      add('completions', parsed.completions);
-      add('scheduleItems', parsed.scheduleItems);
+      // Completions and got-backs resolve their matched row the same way the
+      // action rows do. An unmatched one still shows — "I finished the Lerman
+      // call" is worth seeing even when the queue has no row to tie it to — but
+      // it carries no targetId and the review row says so instead of implying an
+      // action that will not happen.
+      (parsed.completions || []).forEach(c => {
+        const target = rowAt(taskRows, c.matchedTask);
+        allItems.push({ id: uid(), cat: 'completions', approved: !!target,
+          text: c.text, targetId: target?.id || null, targetText: target?.text || '' });
+      });
+      (parsed.gotBacks || []).forEach(g => {
+        const target = rowAt(shailaRows, g.matchedShailaIndex);
+        allItems.push({ id: uid(), cat: 'gotBacks', approved: !!target,
+          text: g.synopsis, targetId: target?.id || null,
+          targetText: target ? (target.synopsis || target.content || '') : '' });
+      });
+      // Schedule rows carry a resolved target account so the review row can show
+      // which calendar it is going to BEFORE it is added, and let it be changed.
+      (parsed.scheduleItems || []).forEach(item => {
+        const next = normalizeScheduleItem(item);
+        allItems.push({
+          id: uid(), cat: 'scheduleItems', approved: true, ...next,
+          account: resolveCalendarAccount(item?.calendarHint, googleAccounts) || '',
+        });
+      });
       add('reminders', parsed.reminders);
+
+      // ── Action rows ────────────────────────────────────────────────────────
+      // Each resolves its target NOW, at parse time, so the review screen shows
+      // what will actually happen. Anything that cannot be resolved to a real
+      // task/shaila/contact/priority is dropped rather than shown as an action
+      // that would silently no-op — or worse, act on the wrong row.
+      (parsed.shailaAnswers || []).forEach(a => {
+        const target = rowAt(shailaRows, a.matchedShailaIndex);
+        if (!target) return;
+        allItems.push({ id: uid(), cat: 'shailaAnswers', approved: true,
+          targetId: target.id, text: target.synopsis || target.content || 'Open shaila',
+          answer: a.answer, answererName: a.answererName || '' });
+      });
+      (parsed.messages || []).forEach(m => {
+        const contact = resolveContactByName(contacts, m.to);
+        allItems.push({ id: uid(), cat: 'messages',
+          // A message with no resolved number cannot be sent, so it arrives
+          // unchecked with the number field empty for the owner to fill.
+          approved: !!contact, spokenName: m.to,
+          toName: contact ? contactDisplayName(contact) : m.to,
+          toNumber: contact ? contactNumber(contact) : '',
+          text: m.body });
+      });
+      (parsed.priorityChanges || []).forEach(p => {
+        const target = rowAt(taskRows, p.matchedTask);
+        if (!target || !livePriIds.has(p.priority)) return;
+        allItems.push({ id: uid(), cat: 'priorityChanges', approved: true,
+          targetId: target.id, text: target.text, priority: p.priority });
+      });
+      add('bugReports', parsed.bugReports);
       setItems(allItems);
       // Recording + transcript stay in the Holding Pen for the retention window —
       // canceling the review must never cost the audio (owner spec 2026-07-19).
@@ -327,20 +465,42 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
         const missing = scheduleMissingDetails(incomplete).join(', ');
         throw new Error(`Fill ${missing} for "${incomplete.text || 'schedule item'}" before adding it to Calendar.`);
       }
+      // Messages are the one irreversible action here, so they are validated
+      // before ANYTHING is written: an approved message with no number aborts the
+      // whole apply rather than sending some rows and failing on the rest.
+      const messages = approved.filter(it => it.cat === 'messages');
+      const unaddressed = messages.find(it => !String(it.toNumber || '').trim());
+      if (unaddressed) {
+        throw new Error(`No phone number for "${unaddressed.toName || unaddressed.spokenName || 'that contact'}" — add one or uncheck the message.`);
+      }
+
       for (const it of scheduleItems) {
         const eventBody = await aiParseCalendarEvent(scheduleDescription(it), aiOpts);
-        await onCreateCalendarEvent(eventBody);
+        await onCreateCalendarEvent(eventBody, it.account || null);
       }
       if (scheduleItems.length) onRefreshCalendar?.();
+
+      // Send after the calendar writes: if a calendar call throws, nothing has
+      // left the building yet, and re-running the apply cannot double-send.
+      for (const it of messages) {
+        await sendRelaySms(user, it.toNumber, it.text);
+      }
+
       approved.forEach(it => {
         if (it.cat === 'tasks')         onApply(it.text, it.priority || 'eventually');
         else if (it.cat === 'shailos') onApply(it.content || it.text || it.synopsis || 'Shaila', 'shaila');
         else if (it.cat === 'reminders') onApply(it.text, 'eventually');
-        // completions + gotBacks are info-only for now
+        // These four used to be rendered "Info only — no action taken": the AI
+        // had already matched them to a real row and the match was thrown away.
+        else if (it.cat === 'completions' && it.targetId) onCompleteTask?.(it.targetId);
+        else if (it.cat === 'gotBacks' && it.targetId) onAnswerShaila?.(it.targetId, it.answer || '', it.answererName || '');
+        else if (it.cat === 'shailaAnswers') onAnswerShaila?.(it.targetId, it.answer, it.answererName || '');
+        else if (it.cat === 'priorityChanges') onSetTaskPriority?.(it.targetId, it.priority);
+        else if (it.cat === 'bugReports') onAddBug?.(it.text, it.type || 'bug');
       });
       shouldClose = true;
     } catch (e) {
-      setErr(e.message || 'Could not add calendar event.');
+      setErr(e.message || 'Could not apply everything from this recording.');
     } finally {
       setApplying(false);
       if (shouldClose) onClose();
@@ -353,13 +513,28 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
   const fmtElapsed = `${mm}:${ss}`;
 
   const SECTIONS = [
-    { cat: 'tasks',        color: C.accent,   label: 'New Tasks' },
-    { cat: 'shailos',      color: '#C8A84C',  label: 'Shailos' },
-    { cat: 'gotBacks',     color: '#2ECC71',  label: 'Got Back to Asker' },
-    { cat: 'completions',  color: '#27AE60',  label: 'Mark Complete' },
-    { cat: 'scheduleItems',color: '#9B59B6',  label: 'Schedule' },
-    { cat: 'reminders',    color: C.warning,  label: 'Reminders' },
+    { cat: 'tasks',           color: C.accent,   label: 'New Tasks' },
+    { cat: 'shailos',         color: '#C8A84C',  label: 'Shailos' },
+    { cat: 'shailaAnswers',   color: GOLD,       label: 'Answers to Open Shailos' },
+    { cat: 'gotBacks',        color: '#2ECC71',  label: 'Got Back to Asker' },
+    { cat: 'completions',     color: '#27AE60',  label: 'Mark Complete' },
+    { cat: 'scheduleItems',   color: '#9B59B6',  label: 'Schedule' },
+    { cat: 'messages',        color: CAT_PHONE,  label: 'Send Message' },
+    { cat: 'priorityChanges', color: C.accent,   label: 'Change Priority' },
+    { cat: 'bugReports',      color: C.danger,   label: 'Buglog' },
+    { cat: 'reminders',       color: C.warning,  label: 'Reminders' },
   ];
+  const accountOptions = normalizeAccountList(googleAccounts);
+  // Shared metrics for the action rows' M3 fields. Density comes from the
+  // component's own size tokens, never from restyling its internals.
+  const actionFieldS = (grow = 0, width) => ({
+    ...(grow ? { flex: grow, minWidth: 0 } : {}),
+    ...(width ? { width } : {}),
+    '--md-outlined-text-field-top-space': SP.sm,
+    '--md-outlined-text-field-bottom-space': SP.sm,
+    '--md-outlined-select-text-field-top-space': SP.sm,
+    '--md-outlined-select-text-field-bottom-space': SP.sm,
+  });
 
   const overlayS = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: SP.lg };
   const cardS    = { background: C.bg, borderRadius: RADIUS.md, maxWidth: 560, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: ELEV[4], fontFamily: 'inherit' };
@@ -575,8 +750,55 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
                       style={{ marginTop: 5, accentColor: color, flexShrink: 0, cursor: 'pointer', width: 14, height: 14 }}/>
                     <div style={{ flex: 1, minWidth: 0 }}>
 
-                      {/* ── Shaila: question form + asker + answer ── */}
-                      {it.cat === 'shailos' ? (<>
+                      {/* ── Action rows: what this will DO, and to which row ── */}
+                      {ACTION_CATS.includes(it.cat) ? (<>
+                        {it.cat === 'messages' ? (<>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: SP.sm, marginBottom: SP.xs }}>
+                            <TextField label="To" value={it.toName || ''} style={actionFieldS(1)}
+                              onInput={e => updateShailaField(it.id, 'toName', e.target.value)} />
+                            <TextField label="Number" value={it.toNumber || ''} type="tel"
+                              error={!it.toNumber} style={{ ...actionFieldS(), width: 150 }}
+                              onInput={e => updateShailaField(it.id, 'toNumber', e.target.value)} />
+                          </div>
+                          <TextField type="textarea" rows={2} label="Message" value={it.text || ''} style={actionFieldS(1, '100%')}
+                            onInput={e => updateText(it.id, e.target.value)} />
+                          <div style={{ fontSize: NC_TYPE.small, color: it.toNumber ? C.faint : C.warning, fontFamily: NC_FONT_STACK, marginTop: SP.xs }}>
+                            {it.toNumber
+                              ? 'Sends through the phone when you press Add — this cannot be undone.'
+                              : `No contact matched "${it.spokenName || ''}" — add a number or leave this unchecked.`}
+                          </div>
+                        </>) : it.cat === 'shailaAnswers' ? (<>
+                          <div style={{ fontSize: NC_TYPE.meta, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.4, marginBottom: SP.xs }}>{it.text}</div>
+                          <TextField type="textarea" rows={2} label="Answer" value={it.answer || ''} style={actionFieldS(1, '100%')}
+                            onInput={e => updateShailaField(it.id, 'answer', e.target.value)} />
+                          <TextField label="Answered by" value={it.answererName || ''} style={{ ...actionFieldS(1, '100%'), marginTop: SP.xs }}
+                            onInput={e => updateShailaField(it.id, 'answererName', e.target.value)} />
+                        </>) : it.cat === 'priorityChanges' ? (<>
+                          <div style={{ fontSize: NC_TYPE.body, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.4, marginBottom: SP.xs }}>{it.text}</div>
+                          <OutlinedSelect label="Move to" value={it.priority} style={actionFieldS(0, 200)}
+                            onChange={e => updateShailaField(it.id, 'priority', e.target.value)}>
+                            {pris.filter(p => !p.deleted).map(p => (
+                              <SelectOption key={p.id} value={p.id}><div slot="headline">{p.label}</div></SelectOption>
+                            ))}
+                          </OutlinedSelect>
+                        </>) : it.cat === 'bugReports' ? (<>
+                          <TextField type="textarea" rows={2} label="Ticket" value={it.text || ''} style={actionFieldS(1, '100%')}
+                            onInput={e => updateText(it.id, e.target.value)} />
+                          <OutlinedSelect label="Type" value={it.type || 'bug'} style={{ ...actionFieldS(0, 140), marginTop: SP.xs }}
+                            onChange={e => updateShailaField(it.id, 'type', e.target.value)}>
+                            <SelectOption value="bug"><div slot="headline">Bug</div></SelectOption>
+                            <SelectOption value="idea"><div slot="headline">Idea</div></SelectOption>
+                          </OutlinedSelect>
+                        </>) : (<>
+                          {/* completions + gotBacks */}
+                          <div style={{ fontSize: NC_TYPE.body, color: C.text, fontFamily: NC_FONT_STACK, lineHeight: 1.4 }}>{it.text}</div>
+                          <div style={{ fontSize: NC_TYPE.small, color: it.targetId ? C.faint : C.warning, fontFamily: NC_FONT_STACK, marginTop: 2 }}>
+                            {it.targetId
+                              ? (it.cat === 'completions' ? `Completes: ${it.targetText}` : `Marks answered: ${it.targetText}`)
+                              : 'Nothing in the queue matched this — noted only, nothing will change.'}
+                          </div>
+                        </>)}
+                      </>) : it.cat === 'shailos' ? (<>
                         <div style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, marginBottom: 2 }}>Question</div>
                         <textarea
                           value={it.content || it.text || it.synopsis || ''}
@@ -665,6 +887,24 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
                               style={{ minWidth: 0, background: C.bgSoft, border: `1px solid ${scheduleMissingDetails(it).includes('duration') ? C.warning : C.divider}`, borderRadius: RADIUS.xs, color: C.text, fontSize: NC_TYPE.meta, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}/>
                             <input value={it.when || ''} onChange={e => updateScheduleField(it.id, 'when', e.target.value)} placeholder="Original wording / notes"
                               style={{ gridColumn: '1 / -1', minWidth: 0, background: 'transparent', border: `1px solid ${C.divider}`, borderRadius: RADIUS.xs, color: C.muted, fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, padding: '5px 7px', outline: 'none', boxSizing: 'border-box' }}/>
+                            {/* Which calendar. Only shown when there is a real
+                                choice — with one connected account there is
+                                nothing to pick and the row stays quiet. The
+                                options are this user's own connected accounts,
+                                so the list itself cannot leak another user's. */}
+                            {accountOptions.length > 1 && (
+                              <div style={{ gridColumn: '1 / -1' }}>
+                                <OutlinedSelect label="Calendar" value={it.account || ''} style={actionFieldS(0, '100%')}
+                                  onChange={e => updateShailaField(it.id, 'account', e.target.value)}>
+                                  <SelectOption value=""><div slot="headline">Default</div></SelectOption>
+                                  {accountOptions.map(a => (
+                                    <SelectOption key={a.email} value={a.email}>
+                                      <div slot="headline">{a.email}{a.primary ? ' (default)' : ''}</div>
+                                    </SelectOption>
+                                  ))}
+                                </OutlinedSelect>
+                              </div>
+                            )}
                             {scheduleMissingDetails(it).length > 0 && (
                               <div style={{ gridColumn: '1 / -1', fontSize: NC_TYPE.small, color: C.warning, fontFamily: NC_FONT_STACK }}>
                                 Needs {scheduleMissingDetails(it).join(', ')} before adding to Calendar{it.unclearReason ? ` — ${it.unclearReason}` : ''}.
@@ -701,4 +941,7 @@ function ConvCapture({ onClose, onApply, onCreateCalendarEvent, onRefreshCalenda
   );
 }
 
-export { ConvCapture };
+// Exported for verification: this is the function that decides which of the
+// user's calendars a spoken instruction lands on, so it is worth being able to
+// exercise directly rather than only through a recording.
+export { ConvCapture, resolveCalendarAccount };

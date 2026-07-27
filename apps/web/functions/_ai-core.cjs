@@ -653,6 +653,64 @@ function normalizeConversationExtract(value) {
   };
 }
 
+// v2 adds the action types that let a recording drive the app rather than only
+// file into it. Everything v1 produced is produced identically; the new fields are
+// additive, so a v2 response degrades to a v1-shaped one if the model omits them.
+//
+// This normalizer is the ONLY thing standing between a model response and code
+// that completes tasks, writes calendar events and drafts texts, so every field is
+// clamped here: names are capped, indices are coerced to finite numbers or null,
+// and unknown enum values fall back to the inert choice. Nothing downstream may
+// assume a field is well-formed because the prompt asked for it.
+function normalizeConversationExtractV2(value) {
+  const o = ensureObject(value);
+  const base = normalizeConversationExtract(o);
+  const idx = v => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+  };
+  return {
+    ...base,
+    // Spoken calendar target ("my personal calendar", "the shul calendar"). This is
+    // the WORDS ONLY — resolving them to a Google account happens client-side
+    // against the signed-in user's own connected accounts, never here, so the model
+    // is never in a position to name an address that isn't theirs.
+    scheduleItems: base.scheduleItems.map((item, i) => ({
+      ...item,
+      calendarHint: cleanString(ensureArray(o.scheduleItems || [])[i]?.calendarHint, 80) || null,
+    })),
+    // Who gave the psak, alongside who asked it.
+    shailos: base.shailos.map((item, i) => ({
+      ...item,
+      answererName: cleanString(ensureArray(o.shailos || [])[i]?.answererName, 160) || null,
+    })),
+    // "Answers an open shaila" — 1-based index into the open-shailos list the
+    // prompt was given, so the client can attach instead of creating a duplicate.
+    shailaAnswers: ensureArray(o.shailaAnswers || []).slice(0, 20).map(item => ({
+      matchedShailaIndex: idx(item?.matchedShailaIndex),
+      answer: cleanString(item?.answer, 3000),
+      answererName: cleanString(item?.answererName, 160) || null,
+    })).filter(item => item.matchedShailaIndex && item.answer),
+    // Outbound texts. `to` is the spoken name; contact resolution is client-side.
+    messages: ensureArray(o.messages || []).slice(0, 10).map(item => ({
+      to: cleanString(item?.to, 120),
+      body: cleanString(item?.body, 1200),
+    })).filter(item => item.to && item.body),
+    // Repriorities of EXISTING tasks. `priority` is a free string here because the
+    // owner's priority ids are user-defined; the client drops anything that is not
+    // a live priority id rather than inventing one.
+    priorityChanges: ensureArray(o.priorityChanges || []).slice(0, 20).map(item => ({
+      matchedTask: idx(item?.matchedTask),
+      priority: cleanString(item?.priority, 60),
+      text: cleanString(item?.text, 300),
+    })).filter(item => item.matchedTask && item.priority),
+    bugReports: ensureArray(o.bugReports || []).slice(0, 10).map(item => ({
+      text: cleanString(item?.text, 1200),
+      type: item?.type === "idea" ? "idea" : "bug",
+    })).filter(item => item.text),
+  };
+}
+
 function normalizeBrainDumpExtract(value) {
   const o = Array.isArray(value) ? { tasks: value, scheduleItems: [] } : ensureObject(value);
   return {
@@ -761,6 +819,44 @@ const AI_JOB_REGISTRY = {
       ]);
     },
     validate: normalizeConversationExtract,
+  },
+  // v2 — the same extraction as v1 plus the action vocabulary. v1 stays registered:
+  // it is a different job key, so rolling the client back to v1 needs no server
+  // change, and nothing that still calls v1 changes behaviour.
+  "conversation.extract.v2": {
+    task: "conversation-extract",
+    output: "json",
+    shape: "object",
+    genConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+    schema: '{"tasks":[{"text":"full description — who, what, context","priority":"now|today|eventually","schedulingHint":null}],"completions":[{"text":"...","matchedTask":null}],"shailos":[{"synopsis":"Topic: Core Question","content":"Is it permitted to...?","askerName":null,"answer":"","answererName":null}],"shailaAnswers":[{"matchedShailaIndex":1,"answer":"the ruling as given","answererName":null}],"gotBacks":[{"synopsis":"...","matchedShailaIndex":null}],"scheduleItems":[{"text":"event title","when":null,"date":null,"time":null,"durationMinutes":null,"calendarHint":null,"missingDetails":["date","time","duration"],"unclearReason":"what is unclear"}],"messages":[{"to":"spoken name","body":"message text"}],"priorityChanges":[{"matchedTask":1,"priority":"now","text":"why"}],"bugReports":[{"text":"...","type":"bug|idea"}],"reminders":[{"text":"..."}]}',
+    buildPrompt(input = {}) {
+      return compactLines([
+        YESHIVISH_SYSTEM,
+        "You are extracting every actionable item from a Yeshivish English recording. The speaker is driving an app by voice: as well as noting things down, they issue instructions to it.",
+        `Transcript:\n${truncateText(input.transcript, 20000)}`,
+        `Current task queue (1-based):\n${truncateText(input.taskSnap || input.currentTasks || "(none)", 6000)}`,
+        `Open shailos (1-based):\n${truncateText(input.shailaSnap || input.currentShailos || "(none)", 6000)}`,
+        `Priority levels available: ${cleanString(input.priorityOptions, 600) || "now, today, eventually"}`,
+        `Known contact names: ${truncateText(input.contactNames || "(none known)", 2000)}`,
+        `Calendars the speaker can name: ${cleanString(input.calendarNames, 400) || "(one calendar only)"}`,
+        "Rules: Extract ONLY new items discussed in the transcript. Do NOT include any tasks from the 'Current task queue' in the 'tasks' output array. Do NOT include any shailos from the 'Open shailos' list in the 'shailos' output array. Those lists exist so you can reference their 1-based indices from completions[].matchedTask, gotBacks[].matchedShailaIndex, shailaAnswers[].matchedShailaIndex, and priorityChanges[].matchedTask.",
+        "Never merge unrelated items; preserve halachic/Jewish terms exactly.",
+        "Halachic questions always go to shailos. Got-back answers go to gotBacks. Fixed-time appointments, meetings, calls at a date/time, deadlines with a time, and calendar entries go to scheduleItems even when details are incomplete.",
+        "CLASSIFICATION GUARD — a shaila is ONLY an unresolved halachic question that needs a ruling (psak). Errands, phone calls, purchases, repairs, research, and follow-ups are tasks even when they involve halachic topics, rabbis, seforim, or shul matters. 'Look up the sugya' or 'call the posek back' is a TASK; the underlying question itself is a shaila only if the transcript actually poses it. When genuinely unsure whether something is a task or a shaila, put it in tasks.",
+        "Never downgrade an intended calendar event into a task because date, time, or duration is missing. Put unclear fields as null and list them in missingDetails.",
+        "For scheduleItems, text is only the event title/action, date is the spoken date if clear, time is the spoken start time if clear, durationMinutes is the duration if clear, and unclearReason explains ambiguity briefly.",
+        "CALENDAR TARGET — if the speaker names which calendar an event belongs on ('my personal calendar', 'the shul calendar', 'my work calendar'), copy THEIR WORDS into calendarHint. Never output an email address, and never guess a calendar that was not named: leave calendarHint null and it will go to their default.",
+        "TASKS — write text with full context: include the person's name, what needs to be done, and any relevant detail. Bad: 'Call back'. Good: 'Call Mrs. Lerman about the stove kashrus question'. If the speaker mentions a specific date or time for the task (e.g. 'Tuesday at 3pm', 'this Sunday morning'), put that in schedulingHint; otherwise schedulingHint is null.",
+        "SHAILOS — write content as a natural halachic question in question form: 'Is it permitted to...?', 'What is the halacha regarding...?', 'Can one...?'. Include the full scenario detail (the specific item, action, and circumstances). Extract askerName when a person's name is identifiable as the one who asked. If an answer or ruling was given in the recording, capture it verbatim in answer, and put the name of whoever gave it in answererName.",
+        "SHAILA ANSWERS — when the transcript answers a shaila that is ALREADY in the 'Open shailos' list, do NOT repeat it in shailos. Put it in shailaAnswers with that shaila's 1-based index, the ruling as given, and who gave it. A shaila the transcript both asks and answers belongs in shailos, not here.",
+        "MESSAGES — only when the speaker explicitly asks for a message to be sent ('text Rabbi Cohen that...', 'let Mrs. Lerman know...', 'send my wife a message saying...'). `to` is the person's name exactly as spoken. `body` is what should be sent, written as the speaker would send it — first person, no 'tell him that' framing. Talking ABOUT contacting someone later ('I should call him tomorrow') is a TASK, not a message.",
+        "PRIORITY CHANGES — only for tasks ALREADY in the queue ('move the Lerman call to now', 'that can wait until tomorrow'). matchedTask is its 1-based index and priority must be one of the available levels. A new task with a stated urgency belongs in tasks with that priority, not here.",
+        "BUG REPORTS — when the speaker is complaining about the app itself or asking for a change to it ('file a bug that the headers stick', 'it would be better if the rows were tighter'). type is 'bug' for something broken, 'idea' for a request.",
+        "Any array with nothing to put in it must be an empty array, never omitted and never filled with guesses.",
+        responseJsonInstruction("object", this.schema),
+      ]);
+    },
+    validate: normalizeConversationExtractV2,
   },
   "task.optimize.basic.v1": {
     task: "task-optimize",
