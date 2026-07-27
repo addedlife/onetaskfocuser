@@ -120,15 +120,39 @@ const MODEL_IDS_BY_PROVIDER = {
   gemini: GEMINI_MODELS,
 };
 
+// `billed: true` means requests on this lane cost real money. IMPORTANT: "billed" is a
+// property of the lane's GOOGLE CLOUD PROJECT, not of the key or the model. An AI Studio
+// key is free-tier ONLY while its project has no billing account attached; the moment one
+// is, Google moves that project to paid tier and every call is charged — the free daily
+// quotas simply stop existing. The flags below therefore have to be kept in sync by hand
+// with the billing state of each project; nothing in the API response reveals it.
+//
+// Billing audit 2026-06-27..2026-07-27 ($3.32 total): "Default Gemini Project"
+// (gen-lang-client-0743523606) billed $3.12 for 6.3M gemini-3.1-flash-lite tokens — i.e.
+// the app's ordinary dashboard traffic, on a lane this file had documented as "free tier".
+// It was never free; its project has a billing account attached. Detaching that billing
+// account in the Cloud console is the actual fix and is the owner's action — until it is
+// done, treat primary/overflow as billed regardless of what their comments used to say.
 const GEMINI_CREDENTIALS = [
-  { id: "primary", label: "Gemini Primary", env: "GEMINI_API_KEY" },
-  { id: "overflow-01", label: "Gemini Overflow 01", env: "Gemini_Overflow_01" },
-  // Paid Tier-1 lane (project "Shamash Gemini paid lane", billed against the owner's
-  // Google trial-credit billing account, added 7/16). Deliberately LAST: it only serves
-  // once both free lanes are capped, and the same per-lane daily safety cap in
+  { id: "primary", label: "Gemini Primary", env: "GEMINI_API_KEY", billed: false },
+  { id: "overflow-01", label: "Gemini Overflow 01", env: "Gemini_Overflow_01", billed: false },
+  // Paid Tier-1 lane (project "Shamash Gemini paid lane" / shamash-gemini-free-01, billed
+  // against the owner's Google billing account, added 7/16). Deliberately LAST: it only
+  // serves once every free lane is capped, and the same per-lane daily safety cap in
   // reserveInState applies to it — that cap doubles as the cost bound here.
-  { id: "paid-01", label: "Gemini Paid 01", env: "GEMINI_PAID_01" },
+  { id: "paid-01", label: "Gemini Paid 01", env: "GEMINI_PAID_01", billed: true },
 ];
+
+// Free-only is the DEFAULT. Owner directive 2026-07-27: the AI lanes should cost $0, and a
+// lane that can spend money should never be reachable by accident. Set
+// AI_ALLOW_BILLED_LANES=1 in the Functions env to put billed lanes back in the ladder.
+//
+// The tradeoff, stated plainly: with billed lanes off, once every free lane hits its daily
+// cap, AI jobs return 429 and the affected surfaces degrade to their non-AI fallback for
+// the rest of the Pacific-time day instead of quietly spending money to stay up.
+function billedLanesAllowed() {
+  return /^(1|true|yes|on)$/i.test(String(process.env.AI_ALLOW_BILLED_LANES || "").trim());
+}
 
 const geminiLimiterState = globalThis.__shamashGeminiLimiterState || {
   queue: Promise.resolve(),
@@ -1755,11 +1779,23 @@ function envValue(...names) {
 }
 
 function geminiCredentialCatalog() {
+  const allowBilled = billedLanesAllowed();
   return GEMINI_CREDENTIALS.map(credential => {
     const key = credential.id === "overflow-01"
       ? envValue("Gemini_Overflow_01", "GEMINI_OVERFLOW_01")
       : envValue(credential.env);
-    return { ...credential, key, available: !!key };
+    // A billed lane with free-only mode on is reported as configured-but-withheld rather
+    // than silently missing, so the Settings lane readout can tell "no key" apart from
+    // "key present, deliberately not used" — the two need very different owner responses.
+    const withheld = !!credential.billed && !allowBilled;
+    return {
+      ...credential,
+      key,
+      available: !!key && !withheld,
+      configured: !!key,
+      withheld,
+      withheldReason: withheld ? "Billed lane held back: free-only mode (AI_ALLOW_BILLED_LANES is off)." : null,
+    };
   });
 }
 
@@ -1924,7 +1960,14 @@ async function callGeminiOnce({ body, prompt, base64, mimeType, model, genConfig
 
 async function callGemini({ body, prompt, base64, mimeType, model, genConfig, credential: preferredCredential }) {
   const credentials = orderedGeminiCredentials(preferredCredential);
-  if (!credentials.length) throw httpError(500, "No Gemini API key configured in Firebase Functions env vars");
+  if (!credentials.length) {
+    // Distinguish "nothing is set up" from "everything set up is a billed lane we are
+    // deliberately refusing to use" — otherwise free-only mode looks like a broken deploy.
+    const withheldOnly = geminiCredentialCatalog().some(c => c.withheld);
+    throw httpError(500, withheldOnly
+      ? "No free Gemini lane is configured; the only available lanes are billed and free-only mode is on (set AI_ALLOW_BILLED_LANES=1 to permit them)."
+      : "No Gemini API key configured in Firebase Functions env vars");
+  }
 
   const requestBody = normalizeGeminiBody(body || (base64
     ? buildAudioGeminiBody(base64, mimeType, prompt, genConfig)

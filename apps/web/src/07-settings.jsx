@@ -438,7 +438,7 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                   <option value="auto">Auto failover</option>
                   {geminiCredentialLanes.map(lane => (
                     <option key={lane.id} value={lane.id}>
-                      {lane.label}{lane.available ? "" : " key missing"}
+                      {lane.label}{lane.available ? "" : (lane.withheld ? " — billed, off" : " key missing")}
                     </option>
                   ))}
                 </select>
