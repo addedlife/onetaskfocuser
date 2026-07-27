@@ -33,6 +33,23 @@ const GOOGLE_TOKEN_EXPIRY_SKEW_MS = 60 * 1000;
 const GOOGLE_SILENT_REAUTH_COOLDOWN_MS = 10 * 60 * 1000;
 const GOOGLE_SILENT_REAUTH_LAST_KEY = "ot_google_silent_reauth_last";
 
+// One scope list for BOTH consent paths (server code-client and browser token
+// client). They used to be two identical string literals, which is how a scope
+// added for one path silently never reached the other. gmail.modify is what
+// makes Delete land in the real mailbox; it permits trashing and label changes
+// but NOT permanent deletion, which needs the full-mailbox grant we do not ask
+// for. Adding a scope here does NOT widen already-connected accounts — Google
+// only grants what was asked for at connect time, so an older account keeps
+// working read-only and the UI tells it to reconnect.
+const GOOGLE_OAUTH_SCOPES = [
+  'openid',
+  'email',
+  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/gmail.modify',
+].join(' ');
+
 // ─── Email summary cache ─────────────────────────────────────────────────────
 // Per-email content hash so summaries survive across tabs, reloads, and browser
 // restarts. localStorage (was sessionStorage): the key is a hash of the email's
@@ -268,6 +285,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   // Multi-account: every connected Google account email, and which of them the
   // user is currently viewing ("all" = both/merged, or a single email).
   const [googleAccounts, setGoogleAccounts] = useState([]);
+  // Per-account grant abilities from the server ({email, canSend, canDelete}).
+  // An account connected before a scope existed keeps a narrower grant forever
+  // until it reconnects, and Google reports no error until the call is made —
+  // so the UI reads this to say "reconnect" up front instead of offering a
+  // Delete button that 403s (owner ticket: silent staleness reads as a bug).
+  const [googleGrants, setGoogleGrants] = useState([]);
   const [googleAccountFilter, setGoogleAccountFilter] = useState(() => {
     try { return localStorage.getItem('ot_google_account_filter') || 'all'; } catch { return 'all'; }
   });
@@ -789,6 +812,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       setGmailMessages(preMergeEmailSummaries(rawMsgs));
       applyEmailSummaries(rawMsgs); // AI-summarize only cache misses
       if (Array.isArray(d.accounts)) setGoogleAccounts(d.accounts);
+      if (Array.isArray(d.grants)) setGoogleGrants(d.grants);
       setGoogleServerConnected(true);
       setGoogleToken(GOOGLE_SERVER_TOKEN);
       setGoogleWasConnected(true);
@@ -845,6 +869,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         setGoogleToken(GOOGLE_SERVER_TOKEN);
         setGoogleWasConnected(true);
         if (Array.isArray(d.accounts)) setGoogleAccounts(d.accounts);
+        if (Array.isArray(d.grants)) setGoogleGrants(d.grants);
         try {
           localStorage.setItem('ot_google_connected', '1');
           localStorage.removeItem('ot_google_token');
@@ -872,7 +897,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         console.log('[Google] initCodeClient', isIOS ? '(redirect/iOS)' : '(popup)');
         gTokenClientRef.current = window.google.accounts.oauth2.initCodeClient({
           client_id: serverGoogleClientId,
-          scope: 'openid email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
+          scope: GOOGLE_OAUTH_SCOPES,
           ux_mode: isIOS ? 'redirect' : 'popup',
           ...(isIOS ? { redirect_uri: window.location.origin } : {}),
           include_granted_scopes: true,
@@ -910,6 +935,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           callGoogleWorkspace("status")
             .then(d => {
               if (Array.isArray(d.accounts)) setGoogleAccounts(d.accounts);
+              if (Array.isArray(d.grants)) setGoogleGrants(d.grants);
               if (d.connected) {
                 setGoogleServerConnected(true);
                 setGoogleToken(GOOGLE_SERVER_TOKEN);
@@ -923,7 +949,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       console.log('[Google] initTokenClient');
       gTokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        scope: 'openid email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
+        scope: GOOGLE_OAUTH_SCOPES,
         callback: (resp) => {
           console.log('[Google] OAuth callback error:', resp.error || 'none', '| has token:', !!resp.access_token);
           if (resp.error) {
@@ -981,6 +1007,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
       callGoogleWorkspace("status")
         .then(d => {
           if (Array.isArray(d.accounts)) setGoogleAccounts(d.accounts);
+          if (Array.isArray(d.grants)) setGoogleGrants(d.grants);
           if (d.connected) {
             setGoogleServerConnected(true);
             setGoogleToken(GOOGLE_SERVER_TOKEN);
@@ -1315,6 +1342,23 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     if (!useGoogleServerAuth) throw new Error("Reconnect Google to send replies from inside the app.");
     const acct = String(account || "").trim();
     return callGoogleWorkspace("sendGmailReply", { id, text, all, ...(acct ? { account: acct } : {}) });
+  }
+
+  // Delete an email for real (owner: "I NEED A WORKING DELETE option for emails
+  // that deletes it live in my real email acct also"). It trashes in Gmail, the
+  // same as Gmail's own delete button — recoverable from Trash, not purged.
+  //
+  // The row is dropped from local state only AFTER Gmail confirms. Optimistic
+  // removal would have the row vanish on a 403 from a stale grant, which is the
+  // exact failure mode the owner filed the token-expiry ticket about: it looks
+  // like it worked and the mail is still sitting in the inbox.
+  async function deleteGoogleEmail({ id, account = "" }) {
+    if (!useGoogleServerAuth) throw new Error("Reconnect Google to delete mail from inside the app.");
+    if (!id) throw new Error("No message selected.");
+    const acct = String(account || "").trim();
+    const result = await callGoogleWorkspace("trashGmailMessage", { id, ...(acct ? { account: acct } : {}) });
+    setGmailMessages(prev => Array.isArray(prev) ? prev.filter(m => m.id !== id) : prev);
+    return result;
   }
 
   async function loadGoogleEmailDetail(messageId, sourceAccount = "") {
@@ -4064,6 +4108,8 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           onDisconnectGoogle={disconnectGoogle}
           onLoadEmailDetail={loadGoogleEmailDetail}
           onSendEmailReply={sendGoogleEmailReply}
+          onDeleteEmail={deleteGoogleEmail}
+          googleGrants={googleGrants}
           onCreateCalendarEvent={createGoogleCalendarEvent}
           onDeleteCalendarEvent={deleteGoogleCalendarEvent}
           chiefProfile={chiefProfile}

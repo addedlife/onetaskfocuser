@@ -1263,7 +1263,7 @@ function CardMoreChip({ count, open, onClick, C, accentColor }) {
   );
 }
 
-function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onSendEmailReply, onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
+function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onSendEmailReply, onDeleteEmail, googleGrants = [], onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
   const viewportW = useViewportWidth();
   // M3 window size class on both axes. Height is what drives row density (see
   // densityPref below); width still comes from `availableW` further down, which
@@ -1337,6 +1337,13 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState("");
   const [replySent, setReplySent] = useState("");
+  // Delete-in-Gmail state for the reader. `confirm` is a two-tap guard rather than
+  // a modal: the button is inches from Reply and a mis-tap that bins mail is not
+  // recoverable inside this app (it is recoverable in Gmail's Trash, which is why
+  // this is a guard and not a dialog).
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   useEffect(() => {
     setReplyOpen(false); setReplyText(""); setReplyError(""); setReplySent("");
   }, [readerEmail?.id]);
@@ -1565,6 +1572,52 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     }
   }
 
+  // Delete this email in the real mailbox (owner: "I NEED A WORKING DELETE option
+  // for emails that deletes it live in my real email acct also"). It trashes in
+  // Gmail — recoverable there for 30 days, which is why one confirming tap is
+  // enough and a modal would be theatre.
+  async function deleteEmail(msg) {
+    if (!msg?.id || deleting) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      if (!onDeleteEmail) throw new Error("Deleting is not wired up on this surface.");
+      await onDeleteEmail({ id: msg.id, account: msg.sourceAccount || "" });
+      // The row is gone from the list the moment the parent state drops it, so the
+      // reader has nothing left to show.
+      setDeleteConfirmId(null);
+      setReaderEmail(null);
+      setSelectedEmailId(null);
+    } catch (e) {
+      setDeleteError(e?.message || "Could not delete that email.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  // Does the account this message arrived at actually hold the delete grant? An
+  // account connected before gmail.modify was requested does not, and Google will
+  // not widen it retroactively — so say "reconnect" rather than offering a button
+  // that 403s.
+  const grantFor = (email) => {
+    const want = String(email || "").toLowerCase();
+    const list = Array.isArray(googleGrants) ? googleGrants : [];
+    return list.find(g => String(g?.email || "").toLowerCase() === want)
+      || (list.length === 1 ? list[0] : null);
+  };
+  const canDeleteMail = (msg) => {
+    if (!onDeleteEmail) return false;
+    const g = grantFor(msg?.sourceAccount);
+    // No grant info yet (older server, or status not back): let the attempt run —
+    // the server's 403 message is itself a clear instruction.
+    return g ? !!g.canDelete : true;
+  };
+  // Any connected account still on a pre-delete grant. Drives the one-line
+  // "reconnect" notice that every layout now shows.
+  const staleGrantAccounts = (Array.isArray(googleGrants) ? googleGrants : [])
+    .filter(g => g && (g.canDelete === false || g.canSend === false))
+    .map(g => g.email);
+
   // ── "Open Gmail", done properly (two owner tickets) ────────────────────────
   // WHICH ACCOUNT: every one of these entry points used to be hardcoded to
   // /mail/u/0/#inbox, and /u/0 is a session slot, not an account — whichever one
@@ -1598,12 +1651,11 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   // branch: the card grid and the full-panel view return from different places, so
   // a copy living in either one is invisible in the other.
   //
-  // Reply / Reply all deep-link into the Gmail composer for this thread. Sending
-  // from inside NerveCenter is not possible yet — the app holds Gmail READ scope
-  // only (google-workspace.js exposes gmailMessage and nothing that sends), so a
-  // true in-place send needs gmail.send added to the consent screen. That is a
-  // permissions change and the owner's call. "Open in Gmail" is the escape the
-  // ticket asks for ("if more is reqwd offers to leave").
+  // Reply / Reply all SEND from here (4.111.0, gmail.send) and Delete trashes in
+  // the real mailbox (gmail.modify). Both are true actions, not deep links; the
+  // comment that used to sit here saying sending was impossible predated the send
+  // scope and was wrong for three releases. "Open in Gmail" remains the escape
+  // for what this panel cannot do — attachments, formatting, editing recipients.
   //
   // POSITION IS LOAD-BEARING: this must stay below `C` and `decodeSnippet`. It was
   // originally written ~120 lines higher, above both of them, and since it is a
@@ -1679,12 +1731,31 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               <ActionBtn variant="tonal" icon="reply_all" iconSize={15} height={36} labelSize={NC_TYPE.small}
                 containerColor={C.bgSoft} labelColor={C.text} title="Reply to everyone from here"
                 onClick={() => { setReplyAll(true); setReplyText(""); setReplyError(""); setReplySent(""); setReplyOpen(true); }}>Reply all</ActionBtn>
+              {/* Delete, for real. Two taps: the first arms it, the second bins it
+                  in Gmail. No modal — the mail lands in Gmail's Trash, so the cost
+                  of a mistake is one undo in Gmail, not lost mail. */}
+              {canDeleteMail(msg) ? (
+                <ActionBtn variant="text" icon={deleteConfirmId === msg.id ? "delete_forever" : "delete"} iconSize={15}
+                  height={36} labelSize={NC_TYPE.small} labelColor={C.danger}
+                  disabled={deleting}
+                  title={deleteConfirmId === msg.id ? "Tap again to move this email to Trash in Gmail" : "Delete this email in Gmail"}
+                  onClick={() => { if (deleteConfirmId === msg.id) deleteEmail(msg); else { setDeleteError(""); setDeleteConfirmId(msg.id); } }}>
+                  {deleting ? "Deleting…" : deleteConfirmId === msg.id ? "Confirm delete" : "Delete"}
+                </ActionBtn>
+              ) : (
+                <ActionBtn variant="text" icon="link_off" iconSize={15} height={36} labelSize={NC_TYPE.small}
+                  labelColor={C.warning} title="This account was connected before deleting was enabled — reconnect Google to allow it"
+                  onClick={() => onConnectGoogle?.()}>Reconnect to delete</ActionBtn>
+              )}
               <ActionBtn variant="text" icon="open_in_new" iconSize={15} height={36} labelSize={NC_TYPE.small}
                 labelColor={C.accent} title="Open the whole thread in Gmail"
                 onClick={() => window.open(gmailDeepLink(msg), "_blank", "noopener")}>Open in Gmail</ActionBtn>
               <IconBtn icon="close" iconSize={16} color={C.muted} title="Close" aria-label="Close"
                 onClick={close} style={{ marginLeft: "auto" }} />
             </div>
+          )}
+          {deleteError && (
+            <div style={{ padding: "0 10px 8px", fontSize: NC_TYPE.small, color: C.danger, lineHeight: LINE.body }}>{deleteError}</div>
           )}
           {replySent && !replyOpen && (
             <div style={{ padding: "0 10px 8px", fontSize: NC_TYPE.small, color: C.success }}>{replySent}</div>
@@ -1745,6 +1816,56 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     }] : []),
     { icon: "person_add", label: "Add account", run: () => onConnectGoogle?.() },
   ] : [];
+
+  // ── Google connection notice — ONE definition, shown in EVERY layout ────────
+  // Owner ticket: "email auth tokens expire silently and go stale, emails I don't
+  // even know except for the gridcard format which says so, needs to say that
+  // message in any format." Exactly right: the connect / reconnect / error block
+  // lived inside the full-panel branch only, so on the card grid and on a phone a
+  // dead Google session showed as an inbox that had simply stopped changing —
+  // indistinguishable from a quiet day. Defined here, beside the reader and the
+  // account menu, so no layout can be built without it.
+  //
+  // Three distinct states, because they need three different actions:
+  //   • error       — something failed; retry.
+  //   • disconnected — the session is gone; reconnect (or connect the first time).
+  //   • stale grant  — still connected and reading fine, but the stored grant
+  //     predates a scope, so Reply or Delete would 403. Nothing looks broken,
+  //     which is why it has to be said out loud.
+  const googleNoticeRow = (bg, border, color, icon, text, actionLabel, action) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", margin: "0 0 6px",
+      background: bg, border: `1px solid ${border}`, borderRadius: RADIUS.sm, fontFamily: NC_FONT_STACK }}>
+      <span style={{ display: "inline-flex", color, flexShrink: 0 }}>{suiteIcon(icon, 15)}</span>
+      <span style={{ flex: 1, minWidth: 0, fontSize: NC_TYPE.meta, color, lineHeight: LINE.body }}>{text}</span>
+      {action && (
+        <ActionBtn variant="text" height={32} labelSize={NC_TYPE.small} labelColor={color}
+          onClick={action} style={{ flexShrink: 0 }}>{actionLabel}</ActionBtn>
+      )}
+    </div>
+  );
+  const googleStateNotice = (() => {
+    if (!googleClientId) return null;
+    const disconnected = !googleToken && !googleLoading && calendarEvents === null && gmailMessages === null;
+    if (googleError) {
+      return googleNoticeRow(softBg(C.warning, 0.10), C.warning, C.warning, "error", googleError, "Retry", () => onConnectGoogle?.());
+    }
+    if (disconnected && googleWasConnected) {
+      return reconnectTimedOut
+        ? googleNoticeRow(softBg(C.warning, 0.10), C.warning, C.warning, "link_off",
+            "Google signed out — mail and calendar are not updating.", "Reconnect", () => onConnectGoogle?.())
+        : googleNoticeRow(softBg(C.muted, 0.08), C.divider, C.muted, "sync", "Reconnecting to Google…", null, null);
+    }
+    if (disconnected) {
+      return googleNoticeRow(softBg(C.muted, 0.08), C.divider, C.muted, "add_link",
+        "Google Calendar and Gmail are not connected.", "Connect", () => onConnectGoogle?.());
+    }
+    if (staleGrantAccounts.length) {
+      return googleNoticeRow(softBg(C.warning, 0.10), C.warning, C.warning, "lock_reset",
+        `${staleGrantAccounts.join(", ")} was connected before replying and deleting were enabled — reading works, sending and deleting do not.`,
+        "Reconnect", () => onConnectGoogle?.());
+    }
+    return null;
+  })();
   const availableW = Math.max(0, viewportW - sidebarW);
   // A real phone/tablet (not just a narrow desktop window) — gets the 5-box grid.
   const isMobileDevice = useMemo(() => isMobilePhoneDevice(), []);
@@ -3325,6 +3446,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           <IconBtn icon="contacts" iconSize={16} color={C.muted} onClick={onOpenPhone} title="Contacts — open phone view" aria-label="Contacts" />
         </div>
 
+        {/* Google session state — was full-panel-only, so a dead token was invisible
+            here (owner ticket PCkGDtd). Shared element, see googleStateNotice. */}
+        {googleStateNotice}
+
         {nextActionBar}
 
         {/* >= 1500 px: 5 columns side by side, each full height.
@@ -3340,6 +3465,17 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             // screen than a quiet one — the equal fifths were the real bug.
             flex: 1, minHeight: 0, overflow: "hidden",
             display: "grid", gap: 10, marginTop: 8,
+            // Owner ticket yOp5Oea: "the data markers per line in columns should be
+            // much more compact, they waste so much horizontal space." Below 420px a
+            // column spends 20px of every line on md-item's leading + trailing EDGE
+            // space alone, before any content. These are inherited custom properties,
+            // so setting them once on the grid reaches every row in every card rather
+            // than needing a per-list edit. Edge space only — height, type size and
+            // the 48dp touch target are untouched.
+            ...(rowActionsFit ? {} : {
+              '--md-list-item-leading-space': '8px',
+              '--md-list-item-trailing-space': '4px',
+            }),
             ...(boxesFiveCol ? {
               gridTemplateColumns: boxCols,
               gridTemplateRows: "1fr",
@@ -3724,6 +3860,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
         {/* ── Chrome: layout selector, summary, clock — never scrolls ── */}
         <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 5, padding: "5px 10px 0" }}>
 
+          {/* Google session state — see googleStateNotice (owner ticket PCkGDtd:
+              a silently expired token was only ever announced in one layout). */}
+          {googleStateNotice}
+
           {nextActionBar}
 
           {/* One-row chrome: time strip (tap for timeline) + one-touch display controls */}
@@ -3921,10 +4061,24 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 const subj = gmailHdr(msg,"Subject")||"(no subject)";
                 const from = fmtFromM(gmailHdr(msg,"From"));
                 const date = fmtTimeM(gmailHdr(msg,"Date"));
-                const url  = gmailDeepLink(msg);
                 const rowVars = !mailIsUnread(msg) ? NC_DIM_ROW : {};
+                // Parity fix (owner ticket PCkGDtd, "make sure everything exists
+                // everywhere"): this row used to be a plain link straight out to
+                // Gmail, so the reader — and with it Reply, Reply all and Delete —
+                // simply did not exist on a narrow screen. It now opens the same
+                // reader the card grid opens; Open in Gmail lives inside it.
+                const openReader = (e) => {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  const w = 400, h = 340;
+                  setReaderEmail({
+                    id: msg.id,
+                    top: Math.max(8, Math.min(r.top, window.innerHeight - h - 8)),
+                    left: Math.max(8, Math.min(r.left, window.innerWidth - w - 8)),
+                  });
+                  handleEmailSelect(msg);
+                };
                 return (
-                  <ListItem key={msg.id||i} type="link" href={url} target="_blank" style={{ borderRadius: RADIUS.sm, ...rowVars }}>
+                  <ListItem key={msg.id||i} type="button" onClick={openReader} style={{ borderRadius: RADIUS.sm, ...rowVars }}>
                     {<span slot="start" style={{ width: 7, height: 7, borderRadius: RADIUS.pill, background: mailIsUnread(msg) ? CAT_MAIL : "transparent", flexShrink: 0 }} />}
                     {/* Body summary headlines; sender rides the smaller supporting line. */}
                     <span slot="headline" style={{ color:C.text, fontWeight:450, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden", whiteSpace:"normal", wordBreak:"break-word" }}>{msg.aiSummary||decodeSnipM(msg.snippet)||subj}</span>
@@ -4372,6 +4526,19 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </div>
               )}
 
+              {/* Stale grant — connected and reading fine, but the stored consent
+                  predates the reply/delete scopes, so those 403. Nothing else on
+                  the page would ever say so. */}
+              {!googleError && staleGrantAccounts.length > 0 && (
+                <div style={{ ...cardWrap, borderColor: C.warning, flexDirection: "row", alignItems: "center", padding: "0 14px", gap: 10 }}>
+                  <span style={{ fontSize: NC_TYPE.meta, color: C.warning, fontFamily: NC_FONT_STACK, flex: 1 }}>
+                    {staleGrantAccounts.join(", ")} was connected before replying and deleting were enabled — reading works, sending and deleting do not.
+                  </span>
+                  <ActionBtn variant="outlined" outlineColor={accentBlue} labelColor={accentBlue} labelSize={NC_TYPE.meta}
+                    onClick={onConnectGoogle} style={{ flexShrink: 0 }}>Reconnect</ActionBtn>
+                </div>
+              )}
+
               {/* Loading (before any data) */}
               {googleLoading && !calendarEvents && !gmailMessages && !googleError && (
                 <div style={{ ...cardWrap, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
@@ -4654,11 +4821,14 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                       onClick={toggleTimeline} style={{ width: "100%", '--md-text-button-label-text-weight': '700' }}>
                       {clockTimelineOpen ? "▲ timeline" : "▼ timeline"}
                     </ActionBtn>
-                    <IconBtn className="nc-hover-actions" onClick={e => { e.stopPropagation(); setClockMenuPos({ x: e.clientX, y: e.clientY }); }}
-                      title="Change clock style" iconSize={NC_TYPE.body} color={C.faint}
-                      style={{ position: "absolute", top: 5, right: 5, borderRadius: RADIUS.xs }}>
-                      ···
-                    </IconBtn>
+                    {/* Was a literal "···" typed as text — the one horizontal
+                        three-dots left in the app (owner ticket yOp5Oea: "the three
+                        dots can be vertical not horizontal"). Now the real M3
+                        more_vert glyph, same as every other overflow control. */}
+                    <IconBtn className="nc-hover-actions" icon="more_vert" iconSize={16}
+                      onClick={e => { e.stopPropagation(); setClockMenuPos({ x: e.clientX, y: e.clientY }); }}
+                      title="Change clock style" aria-label="Change clock style" color={C.faint}
+                      style={{ position: "absolute", top: 5, right: 5, borderRadius: RADIUS.xs }} />
                   </div>
                 );
               })()}
@@ -4720,6 +4890,24 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                                 <div style={{ fontSize: NC_TYPE.meta, color: C.muted, whiteSpace: "normal", wordBreak: "break-word", marginTop: 2 }}>{fmtFrom(gmailHeader(selectedEmailSource, 'From'))}</div>
                               </div>
                               <span style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                                {/* Parity (owner ticket PCkGDtd): this pane could only
+                                    read and leave. Reply hands off to the same reader
+                                    composer the card grid uses — one implementation,
+                                    anchored beside the row. */}
+                                <CardAction icon="reply" title="Reply from here" onClick={e => {
+                                  const r = e.currentTarget.getBoundingClientRect();
+                                  setReaderEmail({
+                                    id: msg.id,
+                                    top: Math.max(8, Math.min(r.top, window.innerHeight - 348)),
+                                    left: Math.max(8, Math.min(r.left - 408, window.innerWidth - 408)),
+                                  });
+                                  setReplyAll(false); setReplyText(""); setReplyError(""); setReplySent(""); setReplyOpen(true);
+                                }} />
+                                {canDeleteMail(msg) && (
+                                  <CardAction icon={deleteConfirmId === msg.id ? "delete_forever" : "delete"}
+                                    title={deleteConfirmId === msg.id ? "Tap again to move this email to Trash in Gmail" : "Delete this email in Gmail"}
+                                    onClick={() => { if (deleteConfirmId === msg.id) deleteEmail(msg); else { setDeleteError(""); setDeleteConfirmId(msg.id); } }} />
+                                )}
                                 <CardAction icon="open_in_new" title="Open in Gmail" href={url} target="_blank" rel="noopener noreferrer" />
                                 <CardAction icon="close" title="Close message" onClick={() => { setSelectedEmailId(null); setEmailDetailError(""); }} />
                               </span>
@@ -4734,6 +4922,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                               <div style={{ fontSize: NC_TYPE.meta, lineHeight: 1.55, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: isStacked ? 150 : 200, overflowY: "auto", paddingRight: 2 }}>
                                 {selectedEmailBody || "No message body available."}
                               </div>
+                            )}
+                            {deleteError && deleteConfirmId === msg.id && (
+                              <div style={{ fontSize: NC_TYPE.meta, color: C.danger, marginTop: 6 }}>{deleteError}</div>
                             )}
                           </div>
                         )}

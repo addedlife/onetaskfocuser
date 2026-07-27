@@ -224,7 +224,7 @@ function PhoneMmsImage({ attachment, C }) {
 
 // `rowActions` (owner ticket yk3jFYeI, 7/26): false in a narrow NerveCenter column,
 // where a 48dp trailing control on every line is a third of the width. The only
-// thing it hides is the collapsed row's `more_horiz`, which is pure redundancy —
+// thing it hides is the collapsed row's `more_vert`, which is pure redundancy —
 // the row's OWN tap already runs the identical handler (setOpenPhoneActionId /
 // setExpandedPhoneMessageId), so nothing becomes unreachable. The missed-call
 // resolve toggle stays at every width; it is a real one-tap action, not a menu.
@@ -1451,7 +1451,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                         return meta ? <span slot="supporting-text" style={{ color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meta}</span> : null;
                       })()}
                       {rowMeta && time && <span slot="trailing-supporting-text" style={{ color: C.muted }}>{time}</span>}
-                      {rowActions && <span slot="end"><IconBtn icon="more_horiz" iconSize={17} color={C.muted} title="Show actions" aria-label="Show actions" onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionId); }} /></span>}
+                      {rowActions && <span slot="end"><IconBtn icon="more_vert" iconSize={17} color={C.muted} title="Show actions" aria-label="Show actions" onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionId); }} /></span>}
                     </ListItem>
                   );
                 }
@@ -1468,7 +1468,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                       {preview && !expanded && <span style={{ display: "block", fontSize: NC_TYPE.meta, color: C.muted, marginTop: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: NC_TYPE.line }}>{thread._name}</span>}
                     </button>
                     {!expanded && (
-                      <PhoneIconBtn icon="more_horiz" iconSize={17} active={actionsOpen}
+                      <PhoneIconBtn icon="more_vert" iconSize={17} active={actionsOpen}
                         onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }}
                         title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} />
                     )}
@@ -1606,7 +1606,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                           {isMissed && mKey && (resolved
                             ? <IconBtn icon="undo" iconSize={16} color={C.muted} title="Reopen missed call" aria-label="Reopen missed call" onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, false); }} />
                             : <IconBtn icon="check_circle" iconSize={17} color={C.success} title="Mark resolved" aria-label="Mark resolved" onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, true); }} />)}
-                          {rowActions && <IconBtn icon="more_horiz" iconSize={17} color={C.muted} title="Show actions" aria-label="Show actions" onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionId); }} />}
+                          {rowActions && <IconBtn icon="more_vert" iconSize={17} color={C.muted} title="Show actions" aria-label="Show actions" onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionId); }} />}
                         </span>
                       )}
                     </ListItem>
@@ -1631,7 +1631,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                       {isMissed && mKey && (resolved
                         ? <PhoneIconBtn icon="undo" iconSize={16} onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, false); }} title="Reopen missed call" aria-label="Reopen missed call" />
                         : <PhoneIconBtn icon="check_circle" iconSize={17} color={C.success} onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, true); }} title="Mark resolved" aria-label="Mark resolved" />)}
-                      <PhoneIconBtn icon="more_horiz" iconSize={17} active={actionsOpen}
+                      <PhoneIconBtn icon="more_vert" iconSize={17} active={actionsOpen}
                         onClick={e => { e.stopPropagation(); setOpenPhoneActionId(actionsOpen ? null : actionId); }}
                         title={actionsOpen ? "Hide actions" : "Show actions"} aria-label={actionsOpen ? "Hide actions" : "Show actions"} />
                     </div>

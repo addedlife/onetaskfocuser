@@ -162,15 +162,24 @@ export const SegmentedButton = createComponent({ react: React, tagName: 'md-outl
 // prefer deriving it from the window height class (see useWindowSizeClass) rather
 // than hardcoding, so a small landscape screen compacts automatically and a tall
 // portrait one breathes.
-export function denseListVars({ dense = false, density = null, primary, secondary, trailing, hover } = {}) {
+// `narrow: true` is the HORIZONTAL counterpart to `density` (owner ticket
+// yOp5Oea: "the data markers per line in columns should be much more compact,
+// they waste so much horizontal space"). In a five-column card grid each column
+// is ~300px, and a row was spending 12px leading + 8px trailing edge space
+// before md-item's own inter-slot gaps — ~20px of a 300px line, on every line.
+// This trims the EDGE space only: container height, type size and touch targets
+// are untouched, so the 48dp floor and the 12px type floor both still hold. It
+// is deliberately not tied to `density`, because vertical and horizontal
+// pressure are different problems: a tall narrow column wants this and not that.
+export function denseListVars({ dense = false, density = null, narrow = false, primary, secondary, trailing, hover } = {}) {
   const compact = density ? density === 'compact' : dense;
   return {
     '--md-list-item-two-line-container-height': compact ? '56px' : '64px',
     '--md-list-item-one-line-container-height': compact ? '48px' : '56px',
     '--md-list-item-top-space': compact ? '4px' : '6px',
     '--md-list-item-bottom-space': compact ? '4px' : '6px',
-    '--md-list-item-leading-space': compact ? '12px' : '16px',
-    '--md-list-item-trailing-space': compact ? '8px' : '12px',
+    '--md-list-item-leading-space': narrow ? '8px' : compact ? '12px' : '16px',
+    '--md-list-item-trailing-space': narrow ? '4px' : compact ? '8px' : '12px',
     // M3 list item type: label = body-large 16sp, supporting = body-medium 14sp.
     '--md-list-item-label-text-size': '16px',
     '--md-list-item-label-text-line-height': '21px',

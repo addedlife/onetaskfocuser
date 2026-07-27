@@ -12,6 +12,13 @@ const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 // and Google does not retroactively widen a grant — those accounts get a clear
 // 403 from sendGmailReply telling them to reconnect, rather than a silent failure.
 const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+// Deleting needs gmail.modify — there is no narrower "trash only" scope. modify
+// permits label changes and trashing but NOT permanent deletion, which requires
+// the full https://mail.google.com/ grant and is deliberately not requested: a
+// trashed message is recoverable from Gmail's Trash for 30 days, a purged one is
+// gone. "Delete" in this app therefore means "moves to Trash in the real
+// account", which is what Gmail's own delete button does.
+const GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 const TOKEN_SAFETY_MS = 2 * 60 * 1000;
 
 function httpError(statusCode, message) {
@@ -128,7 +135,7 @@ async function exchangeCode(req, user, body) {
     refreshToken,
     accessToken: tokens.access_token || "",
     expiresAt: Date.now() + Math.max(60, Number(tokens.expires_in || 3600) - 60) * 1000,
-    scope: tokens.scope || `${CALENDAR_SCOPE} ${GMAIL_SCOPE} ${GMAIL_SEND_SCOPE}`,
+    scope: tokens.scope || `${CALENDAR_SCOPE} ${GMAIL_SCOPE} ${GMAIL_SEND_SCOPE} ${GMAIL_MODIFY_SCOPE}`,
     tokenType: tokens.token_type || "Bearer",
     appUid: user.uid,
     firebaseUid: user.firebaseUid,
@@ -350,17 +357,37 @@ async function summary(user, body = {}) {
   };
 }
 
+// Which extra powers a stored grant actually carries. Google does NOT widen an
+// existing refresh token when the app starts asking for more, so an account
+// connected before send/delete existed is read-only forever until it reconnects.
+// Reporting that up front is what lets the UI say "reconnect to enable delete"
+// instead of showing a Delete button that 403s (owner ticket: a silently stale
+// grant is worse than a missing feature, because it looks like it works).
+function grantAbilities(accountDoc) {
+  const scope = String(accountDoc?.scope || "");
+  return {
+    canSend: scope.includes(GMAIL_SEND_SCOPE),
+    canDelete: scope.includes(GMAIL_MODIFY_SCOPE),
+  };
+}
+
+async function accountsWithAbilities(user) {
+  const docs = await listAccountDocs(user);
+  return docs.map(d => ({ email: d.email, primary: !!d.primary, ...grantAbilities(d) }));
+}
+
 async function statusAction(user) {
   const { available } = config();
-  if (!available) return { available: false, connected: false, accounts: [] };
-  const accounts = await connectedEmails(user);
-  return { available: true, connected: accounts.length > 0, accounts };
+  if (!available) return { available: false, connected: false, accounts: [], grants: [] };
+  const grants = await accountsWithAbilities(user);
+  return { available: true, connected: grants.length > 0, accounts: grants.map(g => g.email), grants };
 }
 
 async function listAccountsAction(user) {
   const { available } = config();
-  if (!available) return { available: false, accounts: [] };
-  return { available: true, accounts: await connectedEmails(user) };
+  if (!available) return { available: false, accounts: [], grants: [] };
+  const grants = await accountsWithAbilities(user);
+  return { available: true, accounts: grants.map(g => g.email), grants };
 }
 
 // ── Send a reply, for real ───────────────────────────────────────────────────
@@ -454,6 +481,40 @@ async function gmailMessage(user, body) {
   return googleJson(`https://www.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=full`, accessToken);
 }
 
+// ── Delete an email, for real ────────────────────────────────────────────────
+// Owner: "I NEED A WORKING DELETE option for emails that deletes it live in my
+// real email acct also." This trashes the message in Gmail itself — same effect
+// as Gmail's own delete button, recoverable from Trash for 30 days. Permanent
+// purge is deliberately NOT offered: it needs the full-mailbox scope and there
+// is no undo for it.
+//
+// Threads vs messages: a conversation the owner is looking at in the app is one
+// message row, so one message is trashed. Trashing the whole thread would also
+// bin the owner's own sent replies in it, which is not what "delete this email"
+// means to anyone.
+async function trashGmailMessage(user, body) {
+  const id = String(body.id || "").trim();
+  if (!id) throw httpError(400, "Missing the id of the message to delete.");
+  const email = await resolveAccount(user, body);
+  const accessToken = await accessTokenFor(user, email);
+  try {
+    const result = await googleJson(
+      `https://www.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}/trash`,
+      accessToken,
+      { method: "POST" },
+    );
+    return { ok: true, id: result.id || id, threadId: result.threadId, account: email, trashed: true };
+  } catch (e) {
+    // Same failure shape as sendGmailReply: an account connected before the
+    // modify scope existed answers 403, and the fix is a reconnect, not a retry.
+    if (e?.statusCode === 403) {
+      throw httpError(403, `${email} was connected before deleting was enabled. Reconnect Google to allow mail to be deleted from inside the app.`);
+    }
+    if (e?.statusCode === 404) throw httpError(404, "That message no longer exists in Gmail — it may already be deleted.");
+    throw e;
+  }
+}
+
 async function createCalendarEvent(user, body) {
   const eventBody = body.eventBody;
   if (!eventBody || typeof eventBody !== "object") throw httpError(400, "Missing calendar event body.");
@@ -518,6 +579,7 @@ const handler = async (req, res) => {
     if (action === "summary")             return res.status(200).set(headers).json(await summary(user, body));
     if (action === "gmailMessage")        return res.status(200).set(headers).json(await gmailMessage(user, body));
     if (action === "sendGmailReply")      return res.status(200).set(headers).json(await sendGmailReply(user, body));
+    if (action === "trashGmailMessage")   return res.status(200).set(headers).json(await trashGmailMessage(user, body));
     if (action === "createCalendarEvent") return res.status(200).set(headers).json(await createCalendarEvent(user, body));
     if (action === "deleteCalendarEvent") return res.status(200).set(headers).json(await deleteCalendarEvent(user, body));
     if (action === "disconnect")          return res.status(200).set(headers).json(await disconnect(user, body));
