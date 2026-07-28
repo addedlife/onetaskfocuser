@@ -1170,14 +1170,29 @@ function TaskRowActions({ id, C, open, onToggle, onClose, onDone, onDelete }) {
 // under the cursor. Reaching "FYI" from "High" meant hitting a moving target
 // twice. A menu sets the value in one interaction, so the row moves once, after
 // the choice — same anchored-menu pattern as TaskRowActions and BugLog.
-function CalImportanceMenu({ id, C, rating, open, onToggle, onClose, onPick }) {
+// `placement` — which md-item slot this control occupies.
+//   "end"   (default): its own trailing slot, the roomy layouts.
+//   "start": it TAKES OVER the row's leading slot instead of adding a slot of its
+//     own. A narrow column cannot afford both the 7px event dot and a 48px
+//     trailing button, because md-item charges a hardcoded 16px gap for each slot
+//     it lays out — the dot plus its gap and the button plus its gap were 87px of
+//     a 335px column. Folding the two into one leading control pays for the button
+//     with the dot's slot rather than with the headline. The event colour is not
+//     lost: at the default rating the importance glyph is drawn IN the event's
+//     colour (`restColor`), so the row still reads as "this calendar, this event",
+//     and only an explicit High/FYI rating overrides it with the rating tint.
+//     Size stays 48dp either way — the M3 touch floor is not negotiable here.
+function CalImportanceMenu({ id, C, rating, open, onToggle, onClose, onPick, placement = "end", restColor = null }) {
   const anchorId = `nc-calrate-${id}`;
   const tint = r => (r === 1 ? C.danger : r === 3 ? C.faint : C.muted);
+  // At "Medium" the owner has expressed no opinion, so the glyph is free to carry
+  // the event colour instead of a meaningless neutral grey.
+  const restingColor = (placement === "start" && rating === 2 && restColor) ? restColor : tint(rating);
   return (
-    <span slot="end" style={{ position: "relative", display: "flex", alignItems: "center" }}
+    <span slot={placement} style={{ position: "relative", display: "flex", alignItems: "center" }}
       onClick={e => { e.stopPropagation(); e.preventDefault(); }}>
       <IconBtn id={anchorId} icon={CAL_IMPORTANCE[rating].icon} size={48} iconSize={20}
-        color={tint(rating)}
+        color={restingColor}
         active={open} activeBg={C.hover}
         title={`Importance: ${CAL_IMPORTANCE[rating].label}`}
         aria-label={`Importance ${rating}, ${CAL_IMPORTANCE[rating].label}. Opens a menu.`}
@@ -3397,6 +3412,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     const calSpansFull = !boxesFiveCol && !expandedBoxId && availableW >= NC_FEED_2COL;
     const calColW = calSpansFull ? Math.max(0, availableW - 20) : colW;
     const calRowMetaFit = calColW >= 340;
+    // Same 420px rule the other four cards obey — but for calendar it selects WHERE
+    // the importance control lives (trailing slot vs leading slot) rather than
+    // whether it exists, because nothing else in the app can set importance.
+    const calRowActionsFit = calColW >= 420;
     // narrowActions: wrap the header's action buttons onto their own row when the
     // CARD (not the page) is too narrow to hold a title plus several 48dp buttons on
     // one line — otherwise the title ellipsises to a single letter ("M…" over "Up…").
@@ -3794,8 +3813,17 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                       // were redundant width. Importance has no other path: the row tap
                       // opens the event in Google Calendar. Dropping it here would not be
                       // reclaiming waste, it would be deleting the feature.
+                      //
+                      // So in a narrow column it MOVES rather than disappears (owner
+                      // 7/27, second "column squish" ticket): it takes over the leading
+                      // slot from the 7px event dot instead of holding a trailing slot of
+                      // its own, and absorbs the dot's job by wearing the event colour at
+                      // the default rating. One slot instead of two, same 48dp target,
+                      // same one tap to the same menu.
+                      const ratePlacement = calRowActionsFit ? "end" : "start";
                       const rateBtn = (
                         <CalImportanceMenu id={rateId} C={C} rating={rating}
+                          placement={ratePlacement} restColor={barColor}
                           open={openCalRateId === rateId}
                           onToggle={() => setOpenCalRateId(prev => prev === rateId ? null : rateId)}
                           onClose={() => setOpenCalRateId(prev => prev === rateId ? null : prev)}
@@ -3804,8 +3832,13 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                       const item = (
                         <>
                           {/* v2 uniform leading: same 7px dot metric as every card; the
-                              pre-proto look keeps the GCal-style vertical bar. */}
-                          <span slot="start" style={{ width:7, height:7, borderRadius:RADIUS.pill, background:barColor, opacity:row.past?0.4:1 }} />
+                              pre-proto look keeps the GCal-style vertical bar. In a narrow
+                              column the importance control stands in for this dot — see
+                              ratePlacement above — so rendering both would re-spend the
+                              width the move just reclaimed. */}
+                          {ratePlacement === "end" && (
+                            <span slot="start" style={{ width:7, height:7, borderRadius:RADIUS.pill, background:barColor, opacity:row.past?0.4:1 }} />
+                          )}
                           <span slot="headline" style={{ color:row.now?C.text:row.past?C.faint:C.muted, fontWeight:row.now?600:500, wordBreak:"break-word" }}>{row.evt?.summary||"(no title)"}</span>
                           {/* Narrow card: the time drops UNDER the title rather than
                               holding its own slot beside it — the importance menu is
