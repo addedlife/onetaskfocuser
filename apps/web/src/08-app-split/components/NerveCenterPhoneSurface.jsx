@@ -1600,8 +1600,18 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
                       })()}
                       {rowMeta && time && <span slot="trailing-supporting-text" style={{ color: C.muted }}>{time}</span>}
                       {/* Only render the end slot when it actually holds a control —
-                          an empty one still costs md-item's 16px inter-slot gap. */}
-                      {((isMissed && mKey) || rowActions) && (
+                          an empty one still costs md-item's 16px inter-slot gap.
+                          This used to be `(isMissed && mKey) || rowActions`, which kept
+                          the slot for every MISSED call regardless of column width. On
+                          the owner's screen the call list is almost entirely missed
+                          calls, so the narrow-column rule never actually applied here:
+                          measured at a 335px column the headline got 192px while Mail,
+                          Tasks and Shailos rows got 300px in the same grid — two of five
+                          columns visibly squished, which is the "column squish
+                          regressed" ticket. Nothing is lost by dropping it: tapping the
+                          row opens the expanded action row directly below, which carries
+                          the same resolve/reopen toggle plus Call back and Text back. */}
+                      {rowActions && (
                         <span slot="end" style={{ display: "flex", alignItems: "center", gap: 2 }}>
                           {isMissed && mKey && (resolved
                             ? <IconBtn icon="undo" iconSize={16} color={C.muted} title="Reopen missed call" aria-label="Reopen missed call" onClick={e => { e.stopPropagation(); toggleMissedResolved(mKey, false); }} />
