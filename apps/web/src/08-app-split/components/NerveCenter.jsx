@@ -1872,6 +1872,18 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
         `${staleGrantAccounts.join(", ")} was connected before replying and deleting were enabled — reading works, sending and deleting do not.`,
         "Reconnect", () => onConnectGoogle?.());
     }
+    // Filtered to one account while another is connected. Nothing was broken and
+    // nothing said anything — the other account's mail simply was not there, which
+    // is indistinguishable from that account having gone quiet (owner ticket
+    // NtSWJzll, "Email stale three day old in Ydanziger"). The account picker's
+    // tooltip carried this and nothing else did. Informational tone, not a warning:
+    // it is a setting working as asked, not a fault.
+    if (googleAccounts.length > 1 && googleAccountFilter && googleAccountFilter !== "all") {
+      const hidden = googleAccounts.filter(a => accountEmail(a) !== googleAccountFilter);
+      return googleNoticeRow(softBg(C.muted, 0.08), C.divider, C.muted, "filter_alt",
+        `Showing ${googleAccountFilter} only — mail and calendar from ${hidden.map(accountEmail).join(", ")} are hidden, not missing.`,
+        "Show both", () => onSelectGoogleAccount?.("all"));
+    }
     return null;
   })();
   const availableW = Math.max(0, viewportW - sidebarW);
