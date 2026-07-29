@@ -462,6 +462,22 @@ public class RelayService : IDisposable
                 }
                 return null;
             }
+            // A successful mint IS the proof of approval, so say so. EnrollState
+            // was previously written only at enroll time and never refreshed, so
+            // Settings kept reading "pending" on a host that was demonstrably
+            // working — a status field that lies is the whole failure class this
+            // per-device system exists to end.
+            if (EnrollState != "approved")
+            {
+                EnrollState = "approved";
+                if (_relayAuthRejectedLogged)
+                    LogLine?.Invoke($"[RELAY AUTH] approved — remote texting and call control are live (device {_relayDeviceId})");
+            }
+            _relayAuthFailures = 0;
+            _relayAuthBlockedUntilUtc = DateTime.MinValue;
+            _relayAuthRejectedLogged = false;
+            AuthBlockedReason = null;
+
             using var mintDoc = JsonDocument.Parse(await mintResp.Content.ReadAsStringAsync(ct));
             var customToken = mintDoc.RootElement.GetProperty("customToken").GetString();
 

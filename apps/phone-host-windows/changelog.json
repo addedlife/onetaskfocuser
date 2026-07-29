@@ -1,5 +1,11 @@
 [
     {
+        "version":  "b346",
+        "timestamp":  "2026-07-29 11:24:07",
+        "notes":  "The connection screen no longer says this PC is \u0027waiting for approval\u0027 after you have already approved it. Once remote texting is actually working, it says so, and the earlier warning clears itself instead of sitting there stale.",
+        "devNotes":  "Cosmetic-but-misleading state left over from b344/b345: EnrollState was written once during enrollment and never refreshed, so /relay-status kept reporting enrollState:\u0027pending\u0027 on a host whose authBlocked had already gone null and whose mint was succeeding - verified live after approving win-usersurface-7ac2f39f. A status field that contradicts observable behaviour is precisely the failure class this per-device work exists to end (the three shared-secret outages were all diagnosed slowly because the reported state was wrong or absent). Fix: a successful mint is treated as proof of approval - it sets EnrollState=\u0027approved\u0027, resets _relayAuthFailures/_relayAuthBlockedUntilUtc/_relayAuthRejectedLogged, and clears AuthBlockedReason, so recovery is self-announcing and the backoff ladder restarts clean for any genuinely new failure. Logs the transition once, only if a rejection had previously been logged, so a normal healthy start stays quiet. Same clear-on-success behaviour already added to the Android twin in the previous commit."
+    },
+    {
         "version":  "b345",
         "timestamp":  "2026-07-29 11:19:43",
         "notes":  "Fixes a flaw in yesterday\u0027s new sign-up system that could leave this PC permanently stuck. If the cloud turned DeskPhone away even once - which it always does before you have approved the PC - DeskPhone would go quiet for a while before trying again, but the step that actually registers the PC was sitting behind that same quiet period. So it could never register, and never get approved, and would report \u0027this device is not enrolled\u0027 forever. Registering now happens first, before any waiting, so a PC always makes it onto your approval list. A brief network hiccup during sign-up also no longer stops it retrying.",
