@@ -5,6 +5,7 @@ import { Store, aiGenSchemes, uid, DEF_AGE_THRESHOLDS, DEF_PRI, BEFORE_SHAVUOS_P
 import { PriEditor } from './04-components.jsx';
 import { NC_TYPE, RADIUS, SP, NC_FONT_STACK, NC_MONO_STACK } from './08-app-split/ui-tokens.jsx';
 import { ActionBtn, IconBtn, Switch, TextField, Slider } from './08-app-split/m3.jsx';
+import RelayDevicesPanel from './08-app-split/components/RelayDevicesPanel.jsx';
 
 
 function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
@@ -493,6 +494,12 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
                 </ActionBtn>
               </>
             )}
+
+            {/* Phone hosts — approve/revoke the PCs and tablets that hold the
+                phone's Bluetooth link. Replaces the old shared relay secret. */}
+            <div style={{marginTop:24,paddingTop:20,borderTop:`1px solid ${T.brdS || T.brd}`}}>
+              <RelayDevicesPanel T={T} type={settingsType} />
+            </div>
           </div>
         )}
 

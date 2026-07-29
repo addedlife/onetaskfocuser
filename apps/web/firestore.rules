@@ -78,6 +78,18 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if true;
     }
+    // ── Relay device registry (per-device host credentials) ─────────────────
+    // Replaces the single shared PHONE_RELAY_SECRET. Every write goes through
+    // phone-relay.js's Admin SDK (enroll / approve / revoke / delete), which is
+    // why writes are closed here — a client with the public API key must not be
+    // able to approve its own device. Reads are owner-only so the Settings
+    // surface can list hosts; the stored secretHash is never returned by the
+    // function anyway. See functions/_relay-devices.cjs.
+    match /relay-devices/{deviceId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // ── Phone relay v2 (standalone tester build, not yet live) ──────────────
     // Unlike v1, writes never happen from a client or a host directly — every
     // write goes through phoneRelayV2's Admin SDK (see functions/phone-relay-v2/

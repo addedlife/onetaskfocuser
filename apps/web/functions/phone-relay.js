@@ -15,10 +15,11 @@
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-Relay-Secret, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, X-Relay-Secret, X-Relay-Device, Authorization",
 };
 
 const { FIREBASE_PROJECT_ID, FIREBASE_WEB_API_KEY, getAdminAuth, getAdminDatabase } = require("./_config.cjs");
+const relayDevices = require("./_relay-devices.cjs");
 const FS_BASE = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/phone-relay`;
 const FS_MEDIA_BASE = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/phone-media`;
 
@@ -153,8 +154,17 @@ module.exports = async (req, res) => {
 
   const action = (req.query.action || "").toLowerCase();
   const method = req.method;
-  const secret = process.env.PHONE_RELAY_SECRET || "";
-  const incoming = req.headers["x-relay-secret"] || "";
+
+  // Host auth is now per-device (see _relay-devices.cjs for the full why).
+  // Every host endpoint calls this instead of comparing one shared secret.
+  // The denial body says what is actually wrong and what to do about it —
+  // a bare "unauthorized" is what made the three previous key outages take
+  // days to diagnose.
+  let _hostAuth = null;
+  const requireHost = async () => {
+    if (!_hostAuth) _hostAuth = await relayDevices.verifyHost(req);
+    return _hostAuth;
+  };
 
   // ── GET state (webapp reads phone data — Firebase auth required) ─────────
   if (action === "state" && method === "GET") {
@@ -173,7 +183,7 @@ module.exports = async (req, res) => {
 
   // ── POST push (DeskPhone → cloud, relay secret required) ─────────────────
   if (action === "push" && method === "POST") {
-    if (!secret || incoming !== secret) return sendErr(res, 401, "unauthorized");
+    { const v = await requireHost(); if (!v.ok) return sendErr(res, 401, relayDevices.explainDenial(v)); }
     // Use rawBody if available (Firebase provides it); otherwise stringify the parsed body
     const rawStr = req.rawBody ? req.rawBody.toString() : JSON.stringify(req.body || {});
     if (!rawStr || rawStr === "{}") return sendErr(res, 400, "empty body");
@@ -200,7 +210,7 @@ module.exports = async (req, res) => {
 
   // ── POST push-media (DeskPhone → cloud, relay secret required) ───────────
   if (action === "push-media" && method === "POST") {
-    if (!secret || incoming !== secret) return sendErr(res, 401, "unauthorized");
+    { const v = await requireHost(); if (!v.ok) return sendErr(res, 401, relayDevices.explainDenial(v)); }
     const payload = req.body || {};
     if (!payload.id || !payload.dataUrl) return sendErr(res, 400, "missing id or dataUrl");
     try {
@@ -260,7 +270,7 @@ module.exports = async (req, res) => {
 
   // ── GET drain (cloud → DeskPhone, relay secret required) ─────────────────
   if (action === "drain" && method === "GET") {
-    if (!secret || incoming !== secret) return sendErr(res, 401, "unauthorized");
+    { const v = await requireHost(); if (!v.ok) return sendErr(res, 401, relayDevices.explainDenial(v)); }
     try {
       const commands = await rtdbTakeAllCommands();
       return sendOk(res, dropExpiredCommands(commands));
@@ -276,12 +286,74 @@ module.exports = async (req, res) => {
   // short-lived custom token (exchanged by DeskPhone for an ID token) carrying
   // relay_device:true, which database.rules.json requires for that one path.
   if (action === "relay-token" && method === "POST") {
-    if (!secret || incoming !== secret) return sendErr(res, 401, "unauthorized");
+    { const v = await requireHost(); if (!v.ok) return sendErr(res, 401, relayDevices.explainDenial(v)); }
     try {
-      const customToken = await getAdminAuth().createCustomToken("deskphone-relay", { relay_device: true });
+      // Per-device uid so two hosts are distinguishable in RTDB and in logs —
+      // under the old shared secret every host was literally the same identity
+      // ("deskphone-relay"), which is why two DeskPhone processes could collide
+      // invisibly. database.rules.json gates on the relay_device claim, not the
+      // uid, so a per-device uid is a drop-in change.
+      const v = _hostAuth;
+      const uid = v.legacy ? "deskphone-relay" : `relay-${v.deviceId}`;
+      const customToken = await getAdminAuth().createCustomToken(uid, {
+        relay_device: true,
+        device_id: v.deviceId,
+      });
       return sendOk(res, { customToken });
     } catch (e) {
       return sendErr(res, 500, "Failed to mint relay token: " + e.message);
+    }
+  }
+
+  // ── POST device-enroll (host → cloud, NO auth by design) ─────────────────
+  // The bootstrap call. Grants nothing: the device lands as `pending` and is
+  // inert until the owner approves it. See _relay-devices.cjs for why this is
+  // safe and how deviceId takeover is prevented.
+  if (action === "device-enroll" && method === "POST") {
+    const b = req.body || {};
+    try {
+      const r = await relayDevices.enrollDevice({
+        deviceId: b.deviceId,
+        secret: b.secret,
+        label: b.label,
+        platform: b.platform,
+      });
+      if (!r.ok) return sendErr(res, r.code || 400, r.error);
+      return sendOk(res, r);
+    } catch (e) {
+      return sendErr(res, 500, "Enrollment failed: " + e.message);
+    }
+  }
+
+  // ── GET device-status (host → cloud) ─────────────────────────────────────
+  // Lets a pending host poll for its own approval without spamming the real
+  // endpoints with 401s, and lets it say "waiting for approval" in its UI.
+  if (action === "device-status" && method === "GET") {
+    const v = await requireHost();
+    if (v.ok) return sendOk(res, { status: "approved", deviceId: v.deviceId, label: v.label, legacy: !!v.legacy });
+    return sendOk(res, { status: v.reason === "pending_approval" ? "pending" : (v.reason || "denied"), message: relayDevices.explainDenial(v) });
+  }
+
+  // ── Owner-only device registry (web app → cloud) ─────────────────────────
+  if (action.startsWith("device-") && (method === "POST" || method === "GET")) {
+    const owner = await relayDevices.verifyOwner(req);
+    if (!owner.ok) return sendErr(res, 401, owner.error);
+
+    if (action === "device-list" && method === "GET") {
+      try { return sendOk(res, { devices: await relayDevices.listDevices() }); }
+      catch (e) { return sendErr(res, 500, "Failed to list devices: " + e.message); }
+    }
+    if (action === "device-approve" && method === "POST") {
+      const r = await relayDevices.setDeviceStatus((req.body || {}).deviceId, "approved");
+      return r.ok ? sendOk(res, r) : sendErr(res, r.code || 400, r.error);
+    }
+    if (action === "device-revoke" && method === "POST") {
+      const r = await relayDevices.setDeviceStatus((req.body || {}).deviceId, "revoked");
+      return r.ok ? sendOk(res, r) : sendErr(res, r.code || 400, r.error);
+    }
+    if (action === "device-delete" && method === "POST") {
+      const r = await relayDevices.deleteDevice((req.body || {}).deviceId);
+      return r.ok ? sendOk(res, r) : sendErr(res, r.code || 400, r.error);
     }
   }
 

@@ -58,6 +58,16 @@ class RelayClient(private val host: HostService) {
             "https://us-central1-$FB_PROJECT.cloudfunctions.net/phoneRelay?action=relay-token"
         private const val IDENTITY_SIGNIN_URL =
             "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=$FB_API_KEY"
+        private const val RELAY_ENROLL_URL =
+            "https://us-central1-$FB_PROJECT.cloudfunctions.net/phoneRelay?action=device-enroll"
+
+        // Per-device relay identity (see functions/_relay-devices.cjs). Replaces
+        // BuildConfig.RELAY_SECRET, which was one shared value baked into the APK:
+        // every install was the same identity, so it could not be revoked
+        // individually and any rotation broke every host at once.
+        private const val PREFS_RELAY = "relay-identity"
+        private const val KEY_DEVICE_ID = "deviceId"
+        private const val KEY_DEVICE_SECRET = "deviceSecret"
 
         // Host arbitration (owner doc) — see phone-host-control.js / RelayService.cs.
         private const val OWNER_DOC =
@@ -130,25 +140,76 @@ class RelayClient(private val host: HostService) {
     @Volatile private var relayIdTokenExpiryMs: Long = 0L
     private val relayTokenLock = Any()
 
+    // ── Per-device relay identity ─────────────────────────────────────────────
+    // Generated once, on this install, and kept in SharedPreferences. A random
+    // secret is the CORRECT outcome here — uniqueness is the whole point, unlike
+    // the old shared BuildConfig.RELAY_SECRET which had to match a global value.
+    private val relayPrefs by lazy { host.getSharedPreferences(PREFS_RELAY, android.content.Context.MODE_PRIVATE) }
+    @Volatile private var enrollAttempted = false
+
+    private fun deviceId(): String {
+        relayPrefs.getString(KEY_DEVICE_ID, null)?.let { if (it.isNotBlank()) return it }
+        val raw = "android-" + android.os.Build.MODEL.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-') +
+                  "-" + java.util.UUID.randomUUID().toString().replace("-", "").take(8)
+        val id = raw.filter { it.isLetterOrDigit() || it == '-' || it == '_' }.take(64)
+        relayPrefs.edit().putString(KEY_DEVICE_ID, id).apply()
+        return id
+    }
+
+    private fun deviceSecret(): String {
+        relayPrefs.getString(KEY_DEVICE_SECRET, null)?.let { if (it.isNotBlank()) return it }
+        val bytes = ByteArray(32)
+        java.security.SecureRandom().nextBytes(bytes)
+        val secret = bytes.joinToString("") { "%02x".format(it) }
+        relayPrefs.edit().putString(KEY_DEVICE_SECRET, secret).apply()
+        return secret
+    }
+
+    /** Registers this install in the cloud device registry. Idempotent; the owner
+     *  approves it once in the web app under Settings → Account → Phone hosts. */
+    private fun ensureEnrolled() {
+        if (enrollAttempted) return
+        enrollAttempted = true
+        try {
+            val body = JSONObject()
+                .put("deviceId", deviceId())
+                .put("secret", deviceSecret())
+                .put("label", "Shamash host on ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                .put("platform", "android")
+                .toString()
+            val resp = httpPostForBody(RELAY_ENROLL_URL, body, mapOf("Content-Type" to "application/json"))
+            if (resp == null) { enrollAttempted = false; HostLog.add("[RELAY ENROLL] failed — will retry"); return }
+            val status = JSONObject(resp).optString("status")
+            HostLog.add(
+                if (status == "approved") "[RELAY ENROLL] this tablet is approved (device ${deviceId()})"
+                else "[RELAY ENROLL] registered — approve it in the web app under Settings → Account → Phone hosts (device ${deviceId()})"
+            )
+        } catch (ex: Exception) {
+            enrollAttempted = false
+            HostLog.add("[RELAY ENROLL] ${ex.javaClass.simpleName}: ${ex.message}")
+        }
+    }
+
     /** Mints/caches the Firebase ID token the RTDB command mailbox now requires.
-     *  Returns null (drainTick just skips that tick) if RELAY_SECRET isn't
-     *  configured or either hop fails — never throws. */
+     *  Returns null (drainTick just skips that tick) if either hop fails —
+     *  never throws. */
     private fun getRelayIdToken(): String? {
         val now = System.currentTimeMillis()
         relayIdToken?.let { if (now < relayIdTokenExpiryMs) return it }
         synchronized(relayTokenLock) {
             val now2 = System.currentTimeMillis()
             relayIdToken?.let { if (now2 < relayIdTokenExpiryMs) return it }
-            if (BuildConfig.RELAY_SECRET.isBlank()) {
-                HostLog.add("[RELAY AUTH] no relay secret configured — cannot mint an RTDB token")
-                return null
-            }
+            ensureEnrolled()
             return try {
                 val mintResp = httpPostForBody(
                     RELAY_TOKEN_MINT_URL, "",
-                    mapOf("X-Relay-Secret" to BuildConfig.RELAY_SECRET, "Content-Type" to "application/json")
+                    mapOf(
+                        "X-Relay-Secret" to deviceSecret(),
+                        "X-Relay-Device" to deviceId(),
+                        "Content-Type" to "application/json",
+                    )
                 )
-                if (mintResp == null) { HostLog.add("[RELAY AUTH] token mint failed"); return null }
+                if (mintResp == null) { HostLog.add("[RELAY AUTH] token mint failed — if this tablet is newly installed, approve it in the web app under Settings → Account → Phone hosts"); return null }
                 val customToken = JSONObject(mintResp).optString("customToken")
                 if (customToken.isBlank()) return null
 
