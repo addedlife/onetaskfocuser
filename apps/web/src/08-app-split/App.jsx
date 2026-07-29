@@ -4058,6 +4058,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           features={AS.features || {}}
           onEnsurePcHost={bringDeskPhoneForward}
           onOpenFocusSuggest={openFocusSuggestions}
+          aiLaneCatalog={aiConfig?.credentialLanes?.gemini || null}
         />
       )}
 

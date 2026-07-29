@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {
   derivePhoneLinkState, describePhoneLink, messageListSignature, formatAgeShort,
   mergeMessageFeeds, mergeCallFeeds,
+  tombstoneMessageId, untombstoneMessageId, clearMessageTombstones,
   HEARTBEAT_LIVE_WINDOW_MS, STATE_FALLBACK_WINDOW_MS,
 } from '../src/08-app-split/phone-link.js';
 
@@ -280,4 +281,58 @@ test('chooseAutoHost fails over when the holder dies, and honors a margin win', 
 
 test('chooseAutoHost with nobody alive returns empty', () => {
   assert.equal(chooseAutoHost({ hosts: {}, now: NOW, currentHostId: 'android' }), '');
+});
+
+// ── Bubble delete + pin (owner ticket UgoRV8cs, 7/29) ───────────────────────
+// Both bubble actions were dead for the same reason in two different places:
+// the pin never repainted because the list signature ignored isPinned, and the
+// delete was silently undone by the retention union restoring the message.
+
+test('messageListSignature sees a pin toggle (pin button repaints)', () => {
+  const list = [{ id: 'a', isPinned: false }, { id: 'b', isPinned: false }];
+  const pinned = list.map(m => m.id === 'b' ? { ...m, isPinned: true } : m);
+  assert.notEqual(messageListSignature(list), messageListSignature(pinned));
+});
+
+test('mergeMessageFeeds does NOT resurrect a tombstoned (deleted) message', () => {
+  clearMessageTombstones();
+  const prev = [{ id: 'keep', body: 'hi', timestamp: NOW }, { id: 'gone', body: 'bye', timestamp: NOW }];
+  // Host list no longer contains 'gone' — exactly what a real delete looks like.
+  const next = [{ id: 'keep', body: 'hi', timestamp: NOW }];
+  // Without the tombstone, retention restores it — that WAS the bug.
+  assert.equal(mergeMessageFeeds(prev, next).length, 2);
+  tombstoneMessageId('gone');
+  const merged = mergeMessageFeeds(prev, next);
+  assert.equal(merged.length, 1);
+  assert.equal(merged.filter(m => m.id === 'gone').length, 0);
+  clearMessageTombstones();
+});
+
+test('a tombstoned message is hidden immediately, before the host catches up', () => {
+  clearMessageTombstones();
+  tombstoneMessageId('gone');
+  // Host has not drained the delete yet, so it is still in the incoming list.
+  const next = [{ id: 'keep', body: 'hi', timestamp: NOW }, { id: 'gone', body: 'bye', timestamp: NOW }];
+  assert.equal(mergeMessageFeeds([], next).filter(m => m.id === 'gone').length, 0);
+  clearMessageTombstones();
+});
+
+test('a failed delete un-tombstones and the message comes back', () => {
+  clearMessageTombstones();
+  const prev = [{ id: 'gone', body: 'bye', timestamp: NOW }];
+  tombstoneMessageId('gone');
+  assert.equal(mergeMessageFeeds(prev, []).length, 0);
+  untombstoneMessageId('gone');
+  assert.equal(mergeMessageFeeds(prev, []).length, 1);
+  clearMessageTombstones();
+});
+
+test('clearMessageTombstones restores everything (the Undo bar)', () => {
+  clearMessageTombstones();
+  const prev = [{ id: 'a', body: 'one', timestamp: NOW }, { id: 'b', body: 'two', timestamp: NOW }];
+  tombstoneMessageId('a');
+  tombstoneMessageId('b');
+  assert.equal(mergeMessageFeeds(prev, []).length, 0);
+  clearMessageTombstones();
+  assert.equal(mergeMessageFeeds(prev, []).length, 2);
 });

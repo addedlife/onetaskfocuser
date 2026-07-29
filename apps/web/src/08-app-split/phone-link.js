@@ -122,7 +122,11 @@ export function messageListSignature(list) {
   let hash = 0;
   for (let i = 0; i < arr.length; i++) {
     const m = arr[i] || {};
-    const piece = `${m.id ?? m.handle ?? i}|${m.sendStatus ?? m.SendStatus ?? ""}|${m.isRead ?? m.IsRead ?? m.read ?? m.unread ?? ""}`;
+    // isPinned is load-bearing here, not decoration: a pin toggle changes NOTHING
+    // else about a message, so leaving it out of the signature made the whole
+    // repaint get skipped and the bubble's pin button look dead (owner ticket
+    // UgoRV8cs, 7/29). Same class of bug the sendStatus/isRead fields fixed.
+    const piece = `${m.id ?? m.handle ?? i}|${m.sendStatus ?? m.SendStatus ?? ""}|${m.isRead ?? m.IsRead ?? m.read ?? m.unread ?? ""}|${(m.isPinned ?? m.IsPinned) ? 1 : 0}`;
     for (let j = 0; j < piece.length; j++) hash = (hash * 31 + piece.charCodeAt(j)) | 0;
   }
   return `${arr.length}|${hash}`;
@@ -284,6 +288,39 @@ function messagePeerKey(m) {
   return digitsKey(m?.address ?? m?.Address ?? m?.number ?? m?.Number ?? m?.from ?? m?.From ?? m?.to ?? m?.To ?? m?.peer ?? '');
 }
 
+// ── Delete tombstones ───────────────────────────────────────────────────────
+// The retention union below exists so a host mid-resync never wipes visible
+// history. That same union silently un-deleted messages: the host drops a
+// deleted message from its list, the merge finds it missing from `next`, and
+// faithfully restores it from `prev` — so the bubble's Delete button did
+// nothing visible at all (owner ticket UgoRV8cs, 7/29). Retention can't tell
+// "not re-synced yet" from "deleted on purpose", so the deleting caller has to
+// say so. Session-scoped, like the rest of this merge state — the host's own
+// delete is already durable, this only has to outlive the next few refreshes.
+const MSG_TOMBSTONE_CAP = 500;
+const messageTombstones = new Set();
+
+export function tombstoneMessageId(id) {
+  const key = id === undefined || id === null ? '' : String(id);
+  if (!key) return;
+  messageTombstones.add(key);
+  // Oldest-first eviction: Set preserves insertion order.
+  while (messageTombstones.size > MSG_TOMBSTONE_CAP) {
+    messageTombstones.delete(messageTombstones.values().next().value);
+  }
+}
+
+// The delete didn't take (host refused, no host drained it, relay error) — put
+// the message back rather than leaving a bubble hidden that still exists.
+export function untombstoneMessageId(id) {
+  const key = id === undefined || id === null ? '' : String(id);
+  if (key) messageTombstones.delete(key);
+}
+
+export function clearMessageTombstones() {
+  messageTombstones.clear();
+}
+
 // Union-merge message lists: `next` (the incoming host truth) verbatim, plus
 // any `prev` entry the incoming list doesn't contain — matched first by id,
 // then fuzzily (same body + same peer-or-unknown + close timestamp) so the
@@ -299,6 +336,10 @@ export function mergeMessageFeeds(prev, next) {
     const id = messageIdKey(m);
     if (!id) return true;
     if (ids.has(id)) return false;
+    // A cloud delete takes a few seconds to reach the host and come back in a
+    // fresh blob. Hiding the bubble the moment it's tombstoned makes Delete feel
+    // immediate; a failed command calls untombstoneMessageId and it returns.
+    if (messageTombstones.has(id)) return false;
     ids.add(id);
     return true;
   });
@@ -311,6 +352,8 @@ export function mergeMessageFeeds(prev, next) {
   const retained = prevArr.filter(m => {
     const id = messageIdKey(m);
     if (id && ids.has(id)) return false;
+    // Deleted on purpose — never retain it back onto the screen.
+    if (id && messageTombstones.has(id)) return false;
     const body = messageBodyKey(m);
     const peer = messagePeerKey(m);
     const at = feedTimeMs(m);

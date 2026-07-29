@@ -2101,7 +2101,17 @@ async function recordAiLaneEvent(result, reason = "") {
       // "Recent fallovers" history is credential-lane changes only — a model degrade on
       // the SAME free credential isn't a failover in the sense that list already
       // communicates to the owner, just a quota-aware model choice.
-      if (laneChanged) {
+      //
+      // The lane-changed test has to be made against the PERSISTED lane, not the
+      // in-memory aiLaneState above. That cache starts null in every new Functions
+      // instance, so each cold start looked like "primary -> primary" and pushed a
+      // history row for a switch that never happened — which is why the owner's log
+      // filled up with meaningless "Recovered: Gemini -> Gemini" entries (ticket
+      // YiFScLpp, 7/29). The in-memory cache still does its real job: skipping the
+      // Firestore round-trip entirely when nothing changed.
+      const persistedLane = typeof data.currentLane === "string" ? data.currentLane : null;
+      const laneReallyChanged = persistedLane !== null ? lane !== persistedLane : laneChanged;
+      if (laneReallyChanged) {
         recent.push({ lane, label, at: Date.now(), reason: reason || "" });
         while (recent.length > 15) recent.shift();
       }

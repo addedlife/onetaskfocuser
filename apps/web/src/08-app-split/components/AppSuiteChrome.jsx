@@ -24,7 +24,7 @@ import {
 const BUGLOG_OPEN_EVENT = 'shamash-buglog:open';
 const BUGLOG_COUNT_EVENT = 'shamash-buglog:count';
 
-function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffset = 0, forceCompact = false, clockTime = null, onSettings, features = {}, onEnsurePcHost, onOpenFocusSuggest }) {
+function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffset = 0, forceCompact = false, clockTime = null, onSettings, features = {}, onEnsurePcHost, onOpenFocusSuggest, aiLaneCatalog = null }) {
   const [bugLogCount, setBugLogCount] = React.useState(0);
   React.useEffect(() => {
     const onCount = (e) => setBugLogCount(e.detail?.unresolved || 0);
@@ -491,6 +491,31 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
           : (aiLane.currentLane === 'gemini:overflow-01' || aiLane.currentLane === 'gemini:paid-01') ? C.warning
           : null; // primary lane: no dot, nothing to draw attention to
         const hasUnseenLeak = unseenLeaks.length > 0;
+        // Only real SWITCHES belong in this list. The backend used to append a row
+        // on every Functions cold start, so the stored history is full of
+        // primary→primary no-ops that rendered as "Recovered: Gemini → Gemini"
+        // (owner ticket YiFScLpp). The backend no longer writes them; collapsing
+        // runs of the same lane here also cleans up the entries already stored.
+        const laneSwitches = aiLane.recent.filter((event, i, arr) => i === 0 || arr[i - 1].lane !== event.lane);
+        const laneCatalog = Array.isArray(aiLaneCatalog) && aiLaneCatalog.length ? aiLaneCatalog : null;
+        // "AI is broken" vs "AI simply hasn't been asked anything lately" are very
+        // different problems and the popover never told them apart (owner ticket
+        // MoVWuNw0). The live log is the evidence: its newest entry is the last time
+        // a call genuinely succeeded.
+        const aiHealth = (() => {
+          const lastAt = aiLog.length ? aiLog[0].at : 0;
+          if (!lastAt) {
+            return { tone: C.faint, text: 'No AI call has been logged yet. Most AI here runs on open or refresh, not in the background — open a card that uses it to see a call appear.' };
+          }
+          const ageMin = Math.max(0, Math.round((Date.now() - lastAt) / 60000));
+          const when = ageMin < 60 ? `${ageMin || 1} min ago`
+            : ageMin < 1440 ? `${Math.round(ageMin / 60)} h ago`
+            : `${Math.round(ageMin / 1440)} d ago`;
+          return {
+            tone: ageMin > 1440 ? C.warning : C.faint,
+            text: `Last successful AI call ${when}, on ${aiLog[0].model || aiLane.label}${aiLog[0].job ? ` (${aiLog[0].job})` : ''}. AI is answering.`,
+          };
+        })();
         return (
           <div style={{ position: 'relative', width: '100%', flexShrink: 0 }}>
             <button ref={aiLaneBtnRef} onClick={() => { if (!aiLanePopoverOpen) openAiLanePopover(); setAiLanePopoverOpen(p => !p); markLeaksSeen(); }} title={`AI: ${aiLane.label}${aiLane.model ? ' · ' + aiLane.model : ''}${hasUnseenLeak ? ' — possible leak flagged' : ''}`} aria-label={`AI lane: ${aiLane.label}${aiLane.model ? ', model ' + aiLane.model : ''}`} style={navBtn(aiLanePopoverOpen)}>
@@ -538,23 +563,56 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                   <div style={{ padding: '0 12px 9px' }}>
                     <div style={{ fontSize: NC_TYPE.small, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, paddingBottom: 4 }}>Lane override</div>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                      {[['', 'Auto'], ['primary', 'Primary'], ['overflow_01', 'Overflow'], ['paid_01', 'Paid']].map(([value, label]) => (
-                        <FilterChip
-                          key={value || 'auto'}
-                          label={label}
-                          selected={aiLanePref === value}
-                          title={value ? `Try the ${label} Gemini lane first (others still serve as fallbacks)` : 'Server picks: primary → overflow → paid'}
-                          onClick={() => setAiLanePref(value)}
-                          style={{
-                            flexShrink: 0,
-                            '--md-filter-chip-container-height': '22px',
-                            '--md-filter-chip-label-text-font': NC_FONT_STACK,
-                            '--md-filter-chip-label-text-size': '11px',
-                            '--md-filter-chip-outline-color': C.divider,
-                          }}
-                        />
-                      ))}
+                      {[['', 'Auto', null], ['primary', 'Primary', 'primary'], ['overflow_01', 'Overflow', 'overflow-01'], ['paid_01', 'Paid', 'paid-01']].map(([value, label, laneId]) => {
+                        // Owner ticket MoVWuNw0 ("three ai lanes and no explanation
+                        // anywhere"): a chip that cannot serve must SAY it cannot serve.
+                        // Paid in particular is held back by free-only mode, so picking
+                        // it silently did nothing at all.
+                        const lane = laneId && laneCatalog ? laneCatalog.find(l => l.id === laneId) : null;
+                        const unusable = !!lane && !lane.available;
+                        const why = !lane ? '' : lane.withheld
+                          ? (lane.withheldReason || 'Held back: free-only mode is on.')
+                          : !lane.configured ? 'No API key is set for this lane.' : '';
+                        return (
+                          <FilterChip
+                            key={value || 'auto'}
+                            label={unusable ? `${label} — off` : label}
+                            selected={aiLanePref === value}
+                            disabled={unusable}
+                            title={unusable ? `${label}: ${why}`
+                              : value ? `Try the ${label} Gemini lane first (others still serve as fallbacks)`
+                              : 'Server picks: primary → overflow → paid'}
+                            onClick={() => { if (!unusable) setAiLanePref(value); }}
+                            style={{
+                              flexShrink: 0,
+                              opacity: unusable ? 0.5 : 1,
+                              '--md-filter-chip-container-height': '22px',
+                              '--md-filter-chip-label-text-font': NC_FONT_STACK,
+                              '--md-filter-chip-label-text-size': '11px',
+                              '--md-filter-chip-outline-color': C.divider,
+                            }}
+                          />
+                        );
+                      })}
                     </div>
+                    {/* The plain-language answer to "what gives" — which lanes can
+                        actually serve right now, and why any of them can't. */}
+                    <div style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 5, lineHeight: 1.45 }}>
+                      {laneCatalog
+                        ? (() => {
+                            const off = laneCatalog.filter(l => !l.available);
+                            const on = laneCatalog.filter(l => l.available);
+                            if (!on.length) return 'No AI lane can serve right now — every lane is either missing its key or held back. AI features will fail until one is restored.';
+                            return `${on.length} of ${laneCatalog.length} lanes can serve.${off.length ? ` ${off.map(l => l.label).join(', ')} ${off.length === 1 ? 'is' : 'are'} off: ${off[0].withheld ? 'free-only mode keeps billed lanes out of the ladder.' : 'no API key set.'}` : ''}`;
+                          })()
+                        : 'Lane availability loads with the app config.'}
+                    </div>
+                  </div>
+                  {/* "No AI functions working and no explanation anywhere" — state the
+                      last time AI actually answered, so a real outage is instantly
+                      distinguishable from a feature that simply has not run yet. */}
+                  <div style={{ padding: '0 12px 9px', fontSize: NC_TYPE.small, fontFamily: NC_FONT_STACK, lineHeight: 1.45, color: aiHealth.tone }}>
+                    {aiHealth.text}
                   </div>
                   {activeLeaks.length > 0 && (
                     <div>
@@ -601,11 +659,11 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                     </div>
                   )}
                   <button onClick={() => setAiSectOpen(s => ({ ...s, fallovers: !s.fallovers }))} style={{ display: 'flex', alignItems: 'center', width: '100%', background: 'none', border: 'none', borderTop: `1px solid ${C.divider}`, cursor: 'pointer', padding: '8px 12px 4px', fontSize: NC_TYPE.small, fontWeight: 700, color: C.faint, letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: NC_FONT_STACK, textAlign: 'left' }}>
-                    <span style={{ flex: 1 }}>Recent fallovers{aiLane.recent.length ? ` (${aiLane.recent.length})` : ''}</span>
+                    <span style={{ flex: 1 }}>Recent lane switches{laneSwitches.length ? ` (${laneSwitches.length})` : ''}</span>
                     {suiteIcon(aiSectOpen.fallovers ? 'expand_less' : 'expand_more', 14)}
                   </button>
-                  {aiSectOpen.fallovers && (aiLane.recent.length === 0 ? (
-                    <div style={{ padding: '9px 12px 12px', fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>No fallovers yet — running on Gemini primary.</div>
+                  {aiSectOpen.fallovers && (laneSwitches.length === 0 ? (
+                    <div style={{ padding: '9px 12px 12px', fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK }}>No lane switches — AI has stayed on {aiLane.label} the whole time. That is the healthy case.</div>
                   ) : (
                     // Owner ticket 7/19 ("fallovers don't look like fallovers — they look
                     // like straight calls"): each event is a lane SWITCH, so say so.
@@ -613,16 +671,21 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
                     // last-resort) with a warning icon and "Fell over: from → to";
                     // returning to primary is green "Recovered". A neutral row of
                     // label+timestamp read as just another call — that was the bug.
-                    [...aiLane.recent].reverse().map((event, i, arr) => {
+                    [...laneSwitches].reverse().map((event, i, arr) => {
                       const isPrimary = event.lane === 'gemini:primary';
-                      const tone = isPrimary ? C.success : event.lane === 'claude:fallback' ? C.danger : C.warning;
                       const prior = arr[i + 1]; // next in reversed order = the lane it came FROM
+                      // The oldest row has nothing before it — there is no switch to
+                      // describe, so state it plainly instead of calling it a recovery.
+                      const isOrigin = !prior;
+                      const tone = isOrigin ? C.faint : isPrimary ? C.success : event.lane === 'claude:fallback' ? C.danger : C.warning;
                       return (
                         <div key={i} style={{ padding: '7px 12px', borderTop: `1px solid ${C.divider}`, borderLeft: `3px solid ${tone}` }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <span style={{ color: tone, display: 'inline-flex' }}>{suiteIcon(isPrimary ? 'undo' : 'warning', 13)}</span>
+                            <span style={{ color: tone, display: 'inline-flex' }}>{suiteIcon(isOrigin ? 'schedule' : isPrimary ? 'undo' : 'warning', 13)}</span>
                             <span style={{ fontSize: NC_TYPE.meta, color: tone, fontFamily: NC_FONT_STACK, fontWeight: 700 }}>
-                              {isPrimary ? 'Recovered' : 'Fell over'}{prior?.label ? `: ${prior.label} → ${event.label}` : ` to ${event.label}`}
+                              {isOrigin
+                                ? `Earliest record — on ${event.label}`
+                                : `${isPrimary ? 'Recovered' : 'Fell over'}: ${prior.label} → ${event.label}`}
                             </span>
                           </div>
                           <div style={{ fontSize: NC_TYPE.small, color: C.faint, fontFamily: NC_FONT_STACK, marginTop: 1 }}>

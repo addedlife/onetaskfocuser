@@ -6,7 +6,7 @@ import {
   addPendingSms, updatePendingSms, getPendingSms, subscribePendingSms,
   reconcilePendingSms, unmatchedPendingSms, collapseHostDoubles, smsBodyKey, smsPhoneKey,
 } from './08-app-split/utils/pending-sms.js';
-import { derivePhoneLinkState, describePhoneLink, messageListSignature, mergeMessageFeeds, mergeCallFeeds } from './08-app-split/phone-link.js';
+import { derivePhoneLinkState, describePhoneLink, messageListSignature, mergeMessageFeeds, mergeCallFeeds, tombstoneMessageId, untombstoneMessageId, clearMessageTombstones } from './08-app-split/phone-link.js';
 // The two real M3 controls this surface uses (call-log search). Everything else
 // here predates the GM3 rule and is raw markup on purpose — a native-parity clone.
 import { TextField as DpTextField, IconButton as DpIconButton } from './08-app-split/m3.jsx';
@@ -2292,12 +2292,26 @@ function MessagesSlice({
     await onCommand(`/toggle-message-pin?id=${encodeURIComponent(message.id)}`, "toggle message pin");
   }, [onCommand, onNotice]);
 
+  // Delete is optimistic-then-confirmed. Tombstoning the id first is what makes
+  // the bubble actually go away: the retention union in mergeMessageFeeds is
+  // designed to restore anything missing from the host's list, which silently
+  // undid every delete (owner ticket UgoRV8cs). Background mode is used so a
+  // real failure rethrows here instead of being swallowed into the error
+  // banner — then the tombstone is lifted and the bubble comes back.
   const deleteMessage = useCallback(async (message) => {
     if (!message?.id) {
       onNotice("Delete needs a message id from DeskPhone.");
       return;
     }
-    await onCommand(`/delete-message?id=${encodeURIComponent(message.id)}`, "delete message");
+    const id = message.id;
+    tombstoneMessageId(id);
+    setOpenActionMessageId("");
+    try {
+      await onCommand(`/delete-message?id=${encodeURIComponent(id)}`, "delete message", undefined, { background: true });
+    } catch (err) {
+      untombstoneMessageId(id);
+      onNotice(err?.message || "The phone host did not delete that message.");
+    }
   }, [onCommand, onNotice]);
 
   const runConversationAction = useCallback((endpoint, label, number) => {
@@ -2662,7 +2676,10 @@ function MessagesSlice({
                 {hasUndoMessageDelete ? (
                   <div className="dp-undo-delete-bar" data-native-source="MainWindow.xaml:2315">
                     <span>{undoMessageDeleteText}</span>
-                    <button type="button" data-native-source="MainWindow.xaml:2340" onClick={() => onCommand("/undo-message-delete", "undo message delete")}>Undo</button>
+                    {/* Drop the tombstones first, or the restored message stays
+                        hidden and Undo looks as dead as Delete used to. The host
+                        list is truth for anything that really is still deleted. */}
+                    <button type="button" data-native-source="MainWindow.xaml:2340" onClick={() => { clearMessageTombstones(); onCommand("/undo-message-delete", "undo message delete"); }}>Undo</button>
                   </div>
                 ) : null}
                 <footer className="dp-compose-bar" data-native-source="MainWindow.xaml:2342">
