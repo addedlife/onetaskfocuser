@@ -348,6 +348,12 @@ public class RelayService : IDisposable
             var text = await resp.Content.ReadAsStringAsync(ct);
             if (!resp.IsSuccessStatusCode)
             {
+                // Only a 409 is permanent (the id belongs to a different
+                // credential — a human must remove it). Anything else is
+                // transient, so clear the latch and let the next tick retry;
+                // a one-shot latch here would strand the host for the whole
+                // session on a single blip.
+                if ((int)resp.StatusCode != 409) _enrollAttempted = false;
                 LogLine?.Invoke($"[RELAY ENROLL] HTTP {(int)resp.StatusCode} — {text}");
                 return;
             }
@@ -370,22 +376,29 @@ public class RelayService : IDisposable
     private async Task<string?> GetRelayIdTokenAsync(CancellationToken ct)
     {
         if (_relayIdToken != null && DateTime.UtcNow < _relayIdTokenExpiryUtc) return _relayIdToken;
-        if (DateTime.UtcNow < _relayAuthBlockedUntilUtc) return null;
         await _relayTokenGate.WaitAsync(ct);
         try
         {
             if (_relayIdToken != null && DateTime.UtcNow < _relayIdTokenExpiryUtc) return _relayIdToken;
-            if (DateTime.UtcNow < _relayAuthBlockedUntilUtc) return null;
             if (string.IsNullOrWhiteSpace(_relayKey))
             {
                 LogLine?.Invoke("[RELAY AUTH] no relay secret configured — cannot mint an RTDB token");
                 return null;
             }
-            // Enroll before the first mint. Cheap, idempotent, and it is what
-            // turns a brand-new PC from "401s forever until a human copies a
-            // secret into a JSON file" into "shows up in Settings → Phone hosts,
-            // owner clicks Approve, done".
+
+            // Enroll BEFORE the backoff gate, never after it.
+            //
+            // b344 shipped this call below the `_relayAuthBlockedUntilUtc` check,
+            // which is a bootstrap deadlock: an un-enrolled host is rejected, the
+            // rejection arms the backoff, and from then on every call returns at
+            // the gate WITHOUT ever reaching the enrollment that would have fixed
+            // it. Observed live on b344 — /relay-status showed a deviceId, an
+            // empty enrollState, and "this device is not enrolled" forever, while
+            // the enroll endpoint itself was healthy. Enrollment is the escape
+            // hatch from the blocked state, so it must never sit behind the block.
             await EnsureEnrolledAsync(ct);
+
+            if (DateTime.UtcNow < _relayAuthBlockedUntilUtc) return null;
 
             using var mintReq = new HttpRequestMessage(HttpMethod.Post, RelayTokenMintUrl);
             mintReq.Headers.Add("X-Relay-Secret", _relayKey);
