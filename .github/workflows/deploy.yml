@@ -20,6 +20,14 @@ jobs:
         working-directory: apps/web
         run: npm ci
 
+      # docs/ops/MAP.md is the single file a session reads to find its way around the
+      # repo. If it points at a path that no longer exists, sessions fall back to
+      # repo-wide grepping — the exact token burn the map prevents. This fails the
+      # deploy on a stale map, the same way the GM3 ratchet fails on a UI regression.
+      - name: Onboarding map paths resolve
+        working-directory: apps/web
+        run: npm run map:check
+
       # GM3 conformance ratchet. Counts Material 3 lint violations and fails only
       # if the count went UP against .gm3-baseline.json. Existing violations are
       # allowed through (there were 1386 at the 2026-07-21 audit); the point is

@@ -1,37 +1,17 @@
-# Shamash Pro 4 Agent Instructions
+# Agent instructions — Shamash Pro 4
 
-Start with `BRIEF.txt`. Keep both cached and uncached token use low: read the brief, then the matching row in `docs/ops/CONTEXT_INDEX.md`, then only the specific ops log and source files needed for the task.
+Two files, in this order, and nothing else up front:
 
-## Production Source
+1. **`CLAUDE.md`** — standing rules (release, gates, UI standard, how work is delivered).
+   Claude Code loads it automatically; other agents should read it once.
+2. **`docs/ops/MAP.md`** — the routing table. Task → the exact files that task touches,
+   plus the grep recipes for finding code without opening 5000-line files.
 
-- Active workspace: `C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App`
-- `apps/web/` - Tasks, NerveCenter, Switchboard, DeskPhone Web, Firebase Functions (`apps/web/functions/`, the live backend).
-- `apps/shailos/` - editable Shailos source.
-- `apps/phone-host-windows/` - native DeskPhone host.
-- Old Shamash/OneTask/DeskPhone folders are rollback/archive only unless the user explicitly requests recovery.
+Reasoning and incident history behind the rules: `docs/ops/RULES_RATIONALE.md`, by section,
+only when the task touches that area.
 
-## Operating Law
+Production source is `apps/web`, `apps/shailos`, `apps/phone-host-windows`. Push target is
+`origin/main`; Firebase Hosting is the only live deploy target.
 
-- Before a coding fix, project, upgrade, or change, research the relevant industry-standard practice. If it conflicts with the local plan, tell the user and get confirmation before proceeding.
-- Verify current state from `docs/ops/VERIFICATION_LOG.md` before changing code.
-- Use `docs/ops/CONTEXT_INDEX.md` to target source reads; expand with `rg` only when the listed context is insufficient.
-- **Always push live after a verified good fix** (standing owner authorization — see `CLAUDE.md`). After verified web changes, commit and push straight to `origin/main` — do not leave a verified fix on a feature branch and do not ask "should I push this live?" for a normal fix. Then verify `.github/workflows/deploy.yml` deployed the pushed commit to Firebase Hosting — **Firebase is the only live target; Netlify is fully decommissioned**, not a fallback or secondary host. (Exceptions needing a heads-up first: storage/sync refactors per `HANDOFF.md` §9, schema migrations, secret/permission changes.)
-- Bump `apps/web/src/version.js` (`APP_VERSION` + `APP_VERSION_DATE`, shown in the left rail) on every release — minor for `feat:`, patch for `fix:`/`style:`.
-- Do not relink Netlify without explicit approval.
-- Record verification results in `docs/ops/VERIFICATION_LOG.md`.
-- Record migration decisions in `docs/ops/MIGRATION_MANIFEST.md`.
-
-## Git And Release
-
-- Git origin is `https://github.com/addedlife/onetaskfocuser.git`.
-- GitHub `main` is reconciled to Pro 4 as of 2026-05-11.
-- Normal push target is `origin/main`.
-- Old GitHub main is preserved at branch `archive/pre-pro4-main-20260511-011424` and tag `archive-pre-pro4-main-20260511-011424`.
-- **Netlify is fully decommissioned — it does not build, deploy, or serve anything.** Normal web release is push-to-GitHub, then `.github/workflows/deploy.yml` deploys to Firebase Hosting (`firebase deploy --only hosting,functions --project onetaskonly-app`). The root `netlify.toml` and `apps/web/netlify.toml` still exist only as a labeled rollback path (see their own header comments) — never treat them as live or describe Netlify as auto-publishing.
-
-## Verification Gates
-
-- `apps/web`: `npm run build`
-- `apps/shailos`: `npm run build`
-- `apps/phone-host-windows`: `dotnet build`
-- Smoke-test affected app surfaces locally before claiming completion.
+This file used to duplicate all of the above. It no longer does — the duplication is what
+made every session pay for the same rules three times.

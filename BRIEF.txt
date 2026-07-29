@@ -1,12 +1,9 @@
 Shamash Pro 4 context kernel
 
-Read this first; then read only the matching row in docs/ops/CONTEXT_INDEX.md.
+Superseded. Everything that was here now lives in one routing file:
 
-- Active source: C:\Users\ydanz\OneDrive\Documents\Shamash Pro 4 App
-- Live app: https://onetaskonly-app.firebaseapp.com (the .web.app twin auto-redirects here)
-- Git origin: https://github.com/addedlife/onetaskfocuser.git
-- Git main is reconciled to Pro 4; normal push target is origin/main.
-- Production source only: apps/web, apps/shailos, apps/phone-host-windows.
-- Old folders are rollback/archive only.
-- Verify current state from docs/ops/VERIFICATION_LOG.md before edits.
-- Web release standard: after verified web changes, commit and push to `origin/main`; the GitHub Action `.github/workflows/deploy.yml` auto-builds `apps/web` and runs `firebase deploy --only hosting,functions`. Verify the Action is green and production picked up the change. (Netlify is no longer in the deploy path.)
+    docs/ops/MAP.md
+
+Read that. Standing rules are in CLAUDE.md, which loads automatically.
+Do not read this file, AGENTS.md, or docs/ops/CONTEXT_INDEX.md — all three
+are pointers, kept only so older instructions land somewhere correct.

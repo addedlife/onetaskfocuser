@@ -12,5 +12,10 @@ artifacts/
 deno.lock
 *.log
 *.tmp
+# Local-only scratch. BACKUPS/ is a hand-made snapshot dir and the "Unresolved tickets"
+# exports are 300 KB session transcripts — neither belongs in the repo, and both would
+# otherwise turn up in every grep a session runs.
+BACKUPS/
+Unresolved tickets*
 Thumbs.db
 desktop.ini

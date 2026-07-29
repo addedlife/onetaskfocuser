@@ -11,7 +11,8 @@
     "lint": "node scripts/lint.mjs",
     "gm3": "node scripts/gm3-ratchet.mjs",
     "gm3:update": "node scripts/gm3-ratchet.mjs --update",
-    "test:phone": "node --test tests/*.test.mjs"
+    "test:phone": "node --test tests/*.test.mjs",
+    "map:check": "node scripts/check-map.cjs"
   },
   "dependencies": {
     "@lit/react": "^1.0.8",

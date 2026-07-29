@@ -17,3 +17,6 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -d apps/web ]; then
 fi
 
 echo "session-start: git push guard active (core.hooksPath=.githooks); apps/web deps ready"
+echo "onboarding: read docs/ops/MAP.md and nothing else until you know which files the task touches."
+echo "  standing rules are already loaded from CLAUDE.md - do not read BRIEF.txt or AGENTS.md."
+echo "  App.jsx/NerveCenter.jsx/10-deskphone-web.jsx are 5000-6800 lines: rg -n first, then Read with offset/limit."
