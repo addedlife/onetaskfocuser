@@ -60,6 +60,8 @@ class RelayClient(private val host: HostService) {
             "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=$FB_API_KEY"
         private const val RELAY_ENROLL_URL =
             "https://us-central1-$FB_PROJECT.cloudfunctions.net/phoneRelay?action=device-enroll"
+        private const val RELAY_STATUS_URL =
+            "https://us-central1-$FB_PROJECT.cloudfunctions.net/phoneRelay?action=device-status"
 
         // Per-device relay identity (see functions/_relay-devices.cjs). Replaces
         // BuildConfig.RELAY_SECRET, which was one shared value baked into the APK:
@@ -147,6 +149,37 @@ class RelayClient(private val host: HostService) {
     private val relayPrefs by lazy { host.getSharedPreferences(PREFS_RELAY, android.content.Context.MODE_PRIVATE) }
     @Volatile private var enrollAttempted = false
 
+    // ── Rejected/pending backoff ──────────────────────────────────────────────
+    // drainTick calls getRelayIdToken() every few seconds. Without this, a tablet
+    // that is merely awaiting approval hammers the mint endpoint ~15x/min and
+    // buries its own log — the same retry-storm shape the whole per-device design
+    // exists to kill (DeskPhone's RelayService has had this since b342).
+    // "Pending" is a state a human clears in seconds, so it polls gently at 20s;
+    // anything else is a standing condition and backs off hard: 30s,1m,2m,4m,8m,15m.
+    @Volatile private var relayAuthBlockedUntilMs = 0L
+    @Volatile private var relayAuthFailures = 0
+    @Volatile private var relayAuthLoggedOnce = false
+
+    private fun noteRelayAuthFailure(pending: Boolean, msg: String) {
+        if (pending) {
+            relayAuthBlockedUntilMs = System.currentTimeMillis() + 20_000L
+        } else {
+            relayAuthFailures++
+            val backoffSec = minOf(900L, 30L shl minOf(relayAuthFailures - 1, 5))
+            relayAuthBlockedUntilMs = System.currentTimeMillis() + backoffSec * 1000L
+        }
+        if (!relayAuthLoggedOnce) {
+            relayAuthLoggedOnce = true
+            HostLog.add("[RELAY AUTH] $msg")
+        }
+    }
+
+    private fun clearRelayAuthBlock() {
+        relayAuthFailures = 0
+        relayAuthBlockedUntilMs = 0L
+        relayAuthLoggedOnce = false
+    }
+
     private fun deviceId(): String {
         relayPrefs.getString(KEY_DEVICE_ID, null)?.let { if (it.isNotBlank()) return it }
         val raw = "android-" + android.os.Build.MODEL.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-') +
@@ -196,9 +229,11 @@ class RelayClient(private val host: HostService) {
     private fun getRelayIdToken(): String? {
         val now = System.currentTimeMillis()
         relayIdToken?.let { if (now < relayIdTokenExpiryMs) return it }
+        if (now < relayAuthBlockedUntilMs) return null
         synchronized(relayTokenLock) {
             val now2 = System.currentTimeMillis()
             relayIdToken?.let { if (now2 < relayIdTokenExpiryMs) return it }
+            if (now2 < relayAuthBlockedUntilMs) return null
             ensureEnrolled()
             return try {
                 val mintResp = httpPostForBody(
@@ -209,7 +244,18 @@ class RelayClient(private val host: HostService) {
                         "Content-Type" to "application/json",
                     )
                 )
-                if (mintResp == null) { HostLog.add("[RELAY AUTH] token mint failed — if this tablet is newly installed, approve it in the web app under Settings → Account → Phone hosts"); return null }
+                if (mintResp == null) {
+                    // httpPostForBody collapses every non-2xx to null, so ask the
+                    // status endpoint what is actually wrong rather than guessing.
+                    val state = queryEnrollStatus()
+                    val pending = state == "pending"
+                    noteRelayAuthFailure(
+                        pending,
+                        if (pending) "awaiting approval — approve this tablet in the web app under Settings → Account → Phone hosts (device ${deviceId()})"
+                        else "token mint refused ($state) — device ${deviceId()}"
+                    )
+                    return null
+                }
                 val customToken = JSONObject(mintResp).optString("customToken")
                 if (customToken.isBlank()) return null
 
@@ -222,6 +268,10 @@ class RelayClient(private val host: HostService) {
                 val expiresInSec = signInJson.optString("expiresIn", "3600").toIntOrNull() ?: 3600
                 relayIdToken = idToken
                 relayIdTokenExpiryMs = System.currentTimeMillis() + maxOf(60_000L, (expiresInSec - 300) * 1000L)
+                if (relayAuthFailures > 0 || relayAuthLoggedOnce) {
+                    HostLog.add("[RELAY AUTH] approved — remote texting and call control are live (device ${deviceId()})")
+                }
+                clearRelayAuthBlock()
                 idToken
             } catch (ex: Exception) {
                 HostLog.add("[RELAY AUTH] ${ex.javaClass.simpleName}: ${ex.message}")
@@ -692,4 +742,19 @@ class RelayClient(private val host: HostService) {
         val text = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() }
         if (code in 200..299) text else null
     } catch (_: Exception) { null }
+
+    /** Asks the relay what this device's enrollment state actually is. Always 200,
+     *  so it distinguishes "waiting for approval" from a genuinely bad credential —
+     *  httpPostForBody collapses every non-2xx to null and cannot tell them apart. */
+    private fun queryEnrollStatus(): String = try {
+        val conn = URL(RELAY_STATUS_URL).openConnection() as HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.connectTimeout = HTTP_TIMEOUT_MS
+        conn.readTimeout = HTTP_TIMEOUT_MS
+        conn.setRequestProperty("X-Relay-Secret", deviceSecret())
+        conn.setRequestProperty("X-Relay-Device", deviceId())
+        val code = conn.responseCode
+        val text = (if (code in 200..299) conn.inputStream else conn.errorStream)?.bufferedReader()?.use { it.readText() }
+        if (code in 200..299 && text != null) JSONObject(text).optString("status", "unknown") else "unreachable"
+    } catch (_: Exception) { "unreachable" }
 }
