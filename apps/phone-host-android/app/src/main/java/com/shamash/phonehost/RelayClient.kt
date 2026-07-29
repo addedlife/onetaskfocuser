@@ -229,12 +229,16 @@ class RelayClient(private val host: HostService) {
     private fun getRelayIdToken(): String? {
         val now = System.currentTimeMillis()
         relayIdToken?.let { if (now < relayIdTokenExpiryMs) return it }
-        if (now < relayAuthBlockedUntilMs) return null
         synchronized(relayTokenLock) {
             val now2 = System.currentTimeMillis()
             relayIdToken?.let { if (now2 < relayIdTokenExpiryMs) return it }
-            if (now2 < relayAuthBlockedUntilMs) return null
+            // Enroll BEFORE the backoff gate, never after it. An un-enrolled host
+            // is rejected, the rejection arms the backoff, and if enrollment sat
+            // behind that gate every later call would bail out without ever
+            // reaching the one thing that fixes it. Same bootstrap deadlock that
+            // was observed live on DeskPhone b344 and fixed in b345.
             ensureEnrolled()
+            if (System.currentTimeMillis() < relayAuthBlockedUntilMs) return null
             return try {
                 val mintResp = httpPostForBody(
                     RELAY_TOKEN_MINT_URL, "",
