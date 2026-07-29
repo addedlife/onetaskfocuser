@@ -106,6 +106,14 @@ public class AppSettingsService
         // Cloud relay: DeskPhone pushes phone state here so any browser anywhere can reach it
         public string RelayKey { get; set; } = "";
         public string RelayUrl { get; set; } = "";   // empty = use default Netlify URL
+
+        // This PC's stable identity in the cloud device registry. Paired with
+        // RelayKey (which is now this device's OWN secret, not a shared one).
+        // See functions/_relay-devices.cjs for the full design.
+        public string RelayDeviceId { get; set; } = "";
+        // Set once the cloud has confirmed enrollment, so we don't re-enroll on
+        // every launch. "pending" until the owner approves in the web app.
+        public string RelayEnrollState { get; set; } = "";
     }
 
     // ── State ─────────────────────────────────────────────────────────────
@@ -225,36 +233,71 @@ public class AppSettingsService
             Save();
         }
 
-        // ── Auto-generate relay key on a GENUINE first run ────────────────
-        // The relay key is this PC's identity to the cloud: it must equal the
-        // PHONE_RELAY_SECRET the phoneRelay Function holds. Minting a fresh one
-        // silently re-identifies the host, and because nothing surfaces the
-        // mismatch, remote texts and call control stay dead for the whole session
-        // behind an endless [RELAY AUTH] token mint HTTP 401 loop.
-        // That is exactly what happened 2026-07-22: the settings file could not be
-        // read at startup, the old code read that as "first run", invented a new
-        // key, and its Save() failed too — so disk still held the CORRECT key while
-        // the running process used a random one for hours.
-        // Hence the LoadFailed guard: no key is ever generated from settings we
-        // could not read.
-        // It happened AGAIN on 2026-07-23 despite the LoadFailed guard: the running
-        // b342 process held a random key while disk held the correct one, and nothing
-        // said so. A minted key that does not reach disk is worse than no key at all —
-        // it is an identity the cloud rejects forever, silently, for the whole session.
-        // So the mint is now persist-or-abandon: if the write does not verifiably land,
-        // the key is rolled back to empty, which makes the relay report "no relay key
-        // set" (loud, actionable) instead of 401-looping behind a phantom identity.
+        // ── Mint this PC's own relay identity on a GENUINE first run ──────
+        //
+        // HISTORY — why this block is so heavily guarded.
+        //
+        // The relay key USED to have to equal a single global PHONE_RELAY_SECRET
+        // held by the cloud. Minting a random Guid therefore produced a key that
+        // could never match, and nothing surfaced the mismatch, so remote texts
+        // and call control stayed dead for the whole session behind an endless
+        // [RELAY AUTH] 401 loop. That happened three times:
+        //   2026-07-15  the secret was rotated in GitHub; disk still held the old one.
+        //   2026-07-22  settings could not be read, the code called it "first run",
+        //               invented a key, and its Save() failed too — disk held the
+        //               CORRECT key while the process used a random one for hours.
+        //   2026-07-24  two DeskPhone processes ran at once, indistinguishable
+        //               because every host shared one identity.
+        //
+        // WHAT CHANGED — the key is no longer shared. It is now THIS DEVICE'S OWN
+        // secret, paired with RelayDeviceId, registered in the cloud's
+        // relay-devices registry and approved once by the owner. A freshly minted
+        // random key is now the CORRECT outcome rather than a guaranteed outage,
+        // because uniqueness is the point. See functions/_relay-devices.cjs.
+        //
+        // Two guards survive that change and still matter:
+        //   • LoadFailed — never mint an identity from settings we could not read,
+        //     or we orphan the real one that is sitting on disk.
+        //   • persist-or-abandon — an identity that does not reach disk means we
+        //     re-enroll under a NEW id on every launch, piling up pending devices
+        //     the owner has to sift through. Roll it back and say so instead.
         if (string.IsNullOrWhiteSpace(_current.RelayKey) && !LoadFailed)
         {
-            var minted = Guid.NewGuid().ToString("N"); // 32 hex chars, no dashes
-            _current.RelayKey = minted;
+            var minted   = Guid.NewGuid().ToString("N"); // 32 hex chars, no dashes
+            var deviceId = "win-" + Environment.MachineName.ToLowerInvariant()
+                                       .Replace(" ", "-")
+                                       .Replace(".", "-")
+                         + "-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            // Registry ids are [A-Za-z0-9_-]{8,64}; strip anything else a machine
+            // name might contribute so enrollment can never be rejected as malformed.
+            deviceId = new string(deviceId.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_').ToArray());
+            if (deviceId.Length > 64) deviceId = deviceId.Substring(0, 64);
+
+            _current.RelayKey      = minted;
+            _current.RelayDeviceId = deviceId;
+            _current.RelayEnrollState = "";
             Save();
             if (!RelayKeyPersisted(minted))
             {
-                _current.RelayKey = "";
-                RelayKeyMintAbandoned = true;
+                _current.RelayKey      = "";
+                _current.RelayDeviceId = "";
+                RelayKeyMintAbandoned  = true;
                 SaveError ??= "settings file did not accept the new relay key";
             }
+        }
+        // An older build's settings file has a RelayKey but no RelayDeviceId.
+        // Give it one so it can enroll instead of falling back to the legacy
+        // shared-secret path forever.
+        else if (!string.IsNullOrWhiteSpace(_current.RelayKey)
+              && string.IsNullOrWhiteSpace(_current.RelayDeviceId)
+              && !LoadFailed)
+        {
+            var deviceId = "win-" + Environment.MachineName.ToLowerInvariant().Replace(" ", "-").Replace(".", "-")
+                         + "-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            deviceId = new string(deviceId.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_').ToArray());
+            if (deviceId.Length > 64) deviceId = deviceId.Substring(0, 64);
+            _current.RelayDeviceId = deviceId;
+            Save();
         }
 
         NormalizeAppearanceSettings();

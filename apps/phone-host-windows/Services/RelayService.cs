@@ -88,7 +88,17 @@ public class RelayService : IDisposable
 
     // ── Config ────────────────────────────────────────────────────────────────
     private string _relayKey = "";
+    // This PC's id in the cloud device registry. Sent as X-Relay-Device alongside
+    // X-Relay-Secret so the cloud can tell hosts apart, approve them individually,
+    // and revoke one without taking the others down. Empty ⇒ pre-enrollment build,
+    // and the cloud falls back to the legacy shared-secret check.
+    private string _relayDeviceId = "";
     public  bool   IsEnabled => !string.IsNullOrWhiteSpace(_relayKey);
+
+    /// <summary>Latest enrollment state reported by the cloud ("approved",
+    /// "pending", "revoked", …). Surfaced in Settings so a host that is merely
+    /// awaiting approval never looks like a broken one.</summary>
+    public string EnrollState { get; private set; } = "";
 
     // ── State ─────────────────────────────────────────────────────────────────
     private CancellationTokenSource _cts      = new();
@@ -166,9 +176,10 @@ public class RelayService : IDisposable
         return true;
     }
 
-    public void Configure(string relayKey, string? relayUrl)
+    public void Configure(string relayKey, string? relayUrl, string? relayDeviceId = null)
     {
         _relayKey = relayKey?.Trim() ?? "";
+        _relayDeviceId = relayDeviceId?.Trim() ?? "";
         // relayUrl is no longer used — the host writes directly to Firestore (see FS_BASE).
         // Kept in the signature so the settings layer needs no change.
     }
@@ -291,6 +302,8 @@ public class RelayService : IDisposable
     // 1-hour expiry; every direct RTDB call below attaches it as a Bearer header.
     private const string RelayTokenMintUrl = "https://us-central1-" + FB_PROJECT + ".cloudfunctions.net/phoneRelay?action=relay-token";
     private const string IdentityToolkitSignInUrl = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=" + FB_API_KEY;
+    private const string RelayEnrollUrl = "https://us-central1-" + FB_PROJECT + ".cloudfunctions.net/phoneRelay?action=device-enroll";
+    private bool _enrollAttempted;
     private string? _relayIdToken;
     private DateTime _relayIdTokenExpiryUtc = DateTime.MinValue;
     private readonly SemaphoreSlim _relayTokenGate = new(1, 1);
@@ -308,6 +321,52 @@ public class RelayService : IDisposable
     /// the relay status so a dead relay is visible instead of log-only.</summary>
     public string? AuthBlockedReason { get; private set; }
 
+    /// <summary>Registers this PC in the cloud device registry. Idempotent and
+    /// safe to call repeatedly: re-enrolling with the same id and secret is a
+    /// no-op that just refreshes the label. Runs once per process — a device that
+    /// is enrolled but not yet approved does not need to re-enroll, it needs the
+    /// owner to click Approve.</summary>
+    private async Task EnsureEnrolledAsync(CancellationToken ct)
+    {
+        if (_enrollAttempted) return;
+        if (string.IsNullOrWhiteSpace(_relayDeviceId) || string.IsNullOrWhiteSpace(_relayKey)) return;
+        _enrollAttempted = true;
+        try
+        {
+            var body = JsonSerializer.Serialize(new
+            {
+                deviceId = _relayDeviceId,
+                secret   = _relayKey,
+                label    = $"DeskPhone on {Environment.MachineName}",
+                platform = "windows",
+            });
+            using var req = new HttpRequestMessage(HttpMethod.Post, RelayEnrollUrl)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            };
+            using var resp = await _http.SendAsync(req, ct);
+            var text = await resp.Content.ReadAsStringAsync(ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                LogLine?.Invoke($"[RELAY ENROLL] HTTP {(int)resp.StatusCode} — {text}");
+                return;
+            }
+            using var doc = JsonDocument.Parse(text);
+            var status = doc.RootElement.TryGetProperty("status", out var s) ? (s.GetString() ?? "") : "";
+            EnrollState = status;
+            LogLine?.Invoke(status == "approved"
+                ? $"[RELAY ENROLL] this PC is approved (device {_relayDeviceId})"
+                : $"[RELAY ENROLL] registered as \"{Environment.MachineName}\" — approve it in the web app under Settings → Phone hosts to turn on remote texting and call control (device {_relayDeviceId})");
+        }
+        catch (Exception ex)
+        {
+            // Never fatal: a failed enrollment just means the mint below reports
+            // "not enrolled", and we retry on the next process start.
+            _enrollAttempted = false;
+            LogLine?.Invoke($"[RELAY ENROLL] failed: {ex.Message}");
+        }
+    }
+
     private async Task<string?> GetRelayIdTokenAsync(CancellationToken ct)
     {
         if (_relayIdToken != null && DateTime.UtcNow < _relayIdTokenExpiryUtc) return _relayIdToken;
@@ -322,8 +381,16 @@ public class RelayService : IDisposable
                 LogLine?.Invoke("[RELAY AUTH] no relay secret configured — cannot mint an RTDB token");
                 return null;
             }
+            // Enroll before the first mint. Cheap, idempotent, and it is what
+            // turns a brand-new PC from "401s forever until a human copies a
+            // secret into a JSON file" into "shows up in Settings → Phone hosts,
+            // owner clicks Approve, done".
+            await EnsureEnrolledAsync(ct);
+
             using var mintReq = new HttpRequestMessage(HttpMethod.Post, RelayTokenMintUrl);
             mintReq.Headers.Add("X-Relay-Secret", _relayKey);
+            if (!string.IsNullOrWhiteSpace(_relayDeviceId))
+                mintReq.Headers.Add("X-Relay-Device", _relayDeviceId);
             using var mintResp = await _http.SendAsync(mintReq, ct);
             if (!mintResp.IsSuccessStatusCode)
             {
@@ -335,19 +402,45 @@ public class RelayService : IDisposable
                     var backoff = TimeSpan.FromSeconds(
                         Math.Min(900, 30 * (1 << Math.Min(_relayAuthFailures - 1, 5))));
                     _relayAuthBlockedUntilUtc = DateTime.UtcNow.Add(backoff);
-                    AuthBlockedReason = $"the cloud rejected this PC's relay key (HTTP {code})";
+
+                    // The cloud now returns a body that says exactly WHICH failure
+                    // this is (not enrolled / pending approval / revoked / bad
+                    // secret) and what to do. Surface it verbatim rather than
+                    // guessing — guessing is what made the old outages take days.
+                    var serverMsg = "";
+                    try
+                    {
+                        using var errDoc = JsonDocument.Parse(await mintResp.Content.ReadAsStringAsync(ct));
+                        if (errDoc.RootElement.TryGetProperty("error", out var em))
+                            serverMsg = em.GetString() ?? "";
+                    }
+                    catch { /* non-JSON body — fall back to the generic text */ }
+
+                    var isPending = serverMsg.Contains("pending", StringComparison.OrdinalIgnoreCase);
+                    EnrollState = isPending ? "pending" : EnrollState;
+                    // "Awaiting approval" is a state a human clears in seconds, so
+                    // the hard backoff meant for a genuinely wrong key would make
+                    // approval appear not to work for up to 15 minutes. Poll gently
+                    // instead — this is the one denial that is expected to resolve.
+                    if (isPending) _relayAuthBlockedUntilUtc = DateTime.UtcNow.AddSeconds(20);
+                    AuthBlockedReason = string.IsNullOrWhiteSpace(serverMsg)
+                        ? $"the cloud rejected this PC's relay key (HTTP {code})"
+                        : serverMsg;
+
                     if (!_relayAuthRejectedLogged)
                     {
                         _relayAuthRejectedLogged = true;
                         LogLine?.Invoke(
-                            $"[RELAY AUTH] REJECTED (HTTP {code}) — the cloud does not recognise this PC's relay key. " +
-                            "Remote texts, dialling and call control are OFF until it matches. " +
-                            "The key is in Settings → Connection and must equal PHONE_RELAY_SECRET in the cloud. " +
-                            "If it looks wrong, closing and reopening DeskPhone restores the saved key.");
+                            $"[RELAY AUTH] {(isPending ? "AWAITING APPROVAL" : "REJECTED")} (HTTP {code}) — " +
+                            (string.IsNullOrWhiteSpace(serverMsg)
+                                ? "the cloud does not recognise this PC."
+                                : serverMsg) +
+                            " Remote texts, dialling and call control are OFF until this clears." +
+                            $" Device id: {(_relayDeviceId is { Length: > 0 } ? _relayDeviceId : "(none — legacy build)")}");
                     }
                     else
                     {
-                        LogLine?.Invoke($"[RELAY AUTH] still rejected — next retry in {backoff.TotalMinutes:0.#} min");
+                        LogLine?.Invoke($"[RELAY AUTH] still {(isPending ? "awaiting approval" : "rejected")} — next retry in {backoff.TotalMinutes:0.#} min");
                     }
                 }
                 else

@@ -3141,10 +3141,15 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                         "it was discarded rather than used, so remote access is OFF until settings.json is writable. " +
                         "Restart DeskPhone once the file is reachable.");
 
-        _relay.Configure(_settings.Current.RelayKey, _settings.Current.RelayUrl);
+        _relay.Configure(_settings.Current.RelayKey, _settings.Current.RelayUrl, _settings.Current.RelayDeviceId);
         _api.GetRelayStatus = () =>
         {
-            var key   = _settings.Current.RelayKey;
+            // The relay key is this device's SECRET now, not a value the owner has
+            // to copy anywhere, so the status endpoint reports a short fingerprint
+            // instead of the key itself. Enough to tell two hosts apart in a log,
+            // useless to anyone who intercepts it.
+            var rawKey = _settings.Current.RelayKey ?? "";
+            var key    = rawKey.Length >= 8 ? rawKey[..4] + "…" + rawKey[^4..] : (rawKey.Length > 0 ? "set" : "");
             var url   = string.IsNullOrWhiteSpace(_settings.Current.RelayUrl)
                         ? "https://onetaskonly-app.firebaseapp.com/api/phone-relay"
                         : _settings.Current.RelayUrl;
@@ -3153,7 +3158,9 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             // keyMatchesDisk false + authBlocked set = the host re-identified itself and
             // a restart is the fix. That pairing used to take three manual probes to reach.
             var matchesDisk = _settings.RelayKeyMatchesDisk ? "true" : "false";
-            return $"{{\"enabled\":{(_relay.IsEnabled ? "true" : "false")},\"key\":\"{key}\",\"relayUrl\":\"{url}\",\"authBlocked\":{blockedJson},\"keyMatchesDisk\":{matchesDisk}}}";
+            var deviceId    = _settings.Current.RelayDeviceId ?? "";
+            var enrollState = _relay.EnrollState ?? "";
+            return $"{{\"enabled\":{(_relay.IsEnabled ? "true" : "false")},\"key\":\"{key}\",\"deviceId\":\"{deviceId}\",\"enrollState\":\"{enrollState}\",\"relayUrl\":\"{url}\",\"authBlocked\":{blockedJson},\"keyMatchesDisk\":{matchesDisk}}}";
         };
         _relay.Start();
         if (_relay.IsEnabled)
