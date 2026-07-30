@@ -1,14 +1,14 @@
 {
-  "total": 781,
+  "total": 762,
   "byRule": {
-    "no hex color literals": 345,
+    "no hex color literals": 344,
     "no literal corner radii above 2px": 37,
-    "no literal font sizes": 67,
-    "use ActionBtn / IconBtn from m3": 236,
+    "no literal font sizes": 66,
+    "use ActionBtn / IconBtn from m3": 222,
     "use TextField from m3": 32,
-    "use TextField / Checkbox / Switch / Slider from m3": 51,
+    "use TextField / Checkbox / Switch / Slider from m3": 49,
     "use OutlinedSelect + SelectOption from m3": 10,
-    "never 'transition: all'": 3
+    "never 'transition: all'": 2
   },
-  "updated": "2026-07-21"
+  "updated": "2026-07-30"
 }

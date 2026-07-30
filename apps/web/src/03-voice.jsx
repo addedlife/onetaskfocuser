@@ -264,7 +264,9 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
   );
 
   // ── Shared UI helpers ──────────────────────────────────────────────────────
-  function useText(txt) { cleanup(); onResult(txt.trim()); }
+  // NOT a hook — despite the old `useText` name, which made
+  // react-hooks/rules-of-hooks flag it and read to a human as one.
+  function applyText(txt) { cleanup(); onResult(txt.trim()); }
   function dismiss()    { cleanup(); onClose(); }
 
   const shell = (brd) => ({
@@ -288,8 +290,8 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
     }} />
   );
 
-  const useBtn = (bg) => (
-    <button onClick={() => useText(editText)} disabled={!editText.trim()} style={{
+  const applyBtn = (bg) => (
+    <button onClick={() => applyText(editText)} disabled={!editText.trim()} style={{
       width: "100%", marginTop: 8, padding: "10px",
       fontSize: NC_TYPE.body, fontWeight: 700, fontFamily: NC_FONT_STACK,
       background: editText.trim() ? bg : "transparent",
@@ -396,7 +398,7 @@ function VoiceInput({ onResult, onClose, onAddShailos, onExistingShailaAnswers, 
         {closeBtn}
       </div>
       {editArea}
-      {useBtn(color)}
+      {applyBtn(color)}
       {shailaParseBtn}
       {detectedAnswersBanner}
       {errLine}

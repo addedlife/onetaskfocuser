@@ -4,7 +4,6 @@ import { IC } from '../02-icons.jsx';
 import { VoiceInput } from '../03-voice.jsx';
 import { Ripple, Confetti, playCompletionSound, AutoFitText, Toast, AgeBadge, EnergyBadge, ContextBadges, MrsWBadge, BlockedBadge, TabBtn, ZenMode, ZenDumpReview, JustStartTimer, BodyDoubleTimer, BrainDump, OverwhelmBanner, BlockReflectModal, ShailaManager, PostItStack, ShailaMiniPill } from '../04-components.jsx';
 import { BulkAdd, TaskBD, BlockedModal, ContextTagPicker, ListManager } from '../05-modals.jsx';
-import { ShelfView, SubtaskGroup } from '../06-shelf.jsx';
 import { SettingsModal } from '../07-settings.jsx';
 import { savePendingRecording, deletePendingRecording, updatePendingRecordingError, transcribePendingRecording, listPendingRecordings, listCloudPenRecordings, ensureLocalPenAudio, downloadPenRecording, sweepExpiredPen, setPenSummary, PEN_RETENTION_MS, PENDING_EVENT, formatPendingAge } from '../09-transcription-pen.js';
 import { DeskPhoneWebPanel } from '../10-deskphone-web.jsx';

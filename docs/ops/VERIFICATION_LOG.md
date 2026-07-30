@@ -1409,3 +1409,38 @@ Current source-grade file count after cleanup: 162 files.
   reporting the Web app surface, DeskPhone Developer Tools showing the cloud copy
   and opening the device's own log.
 - Version 4.113.2 → 4.114.1 (fix, feat, fix).
+
+### Deep inspection (ticket 10:01 AM — body was the two words "deep inspection")
+
+Read as: sweep for the bug classes a green build cannot see. Three checks, run
+rather than reasoned about.
+
+- **ESLint `no-undef` over `src/`** — three live ReferenceErrors, all fixed above.
+  Over `functions/` (node env): zero. This check costs seconds and would have
+  caught all three at any point since they landed; it belongs in the lint script.
+- **`react-hooks/rules-of-hooks` over `src/`** (the plugin is already installed,
+  just not wired into `.eslintrc.cjs`) — three hits:
+  - `06-shelf.jsx` `SubtaskGroup` calls `React.useEffect` **after** `if
+    (!steps.length) return null`. A group that renders with no open steps and then
+    gains one goes from 8 hooks to 9 — React error #310, the whole tree to the
+    error boundary. Latent, because the entire module is **dead**: `App.jsx`
+    imported `ShelfView` and `SubtaskGroup` and rendered neither, `ShelfView` had
+    no other referrer, and `TaskActionsShelf` was used only by `ShelfView`. The
+    queue's group rows are drawn inline in `App.jsx`. Deleted, 274 lines, which
+    also took the GM3 baseline 781 → 762.
+  - `03-voice.jsx` `useText` / `useBtn` are a plain callback and a render helper,
+    not hooks. False positives, but the `use-` prefix is what made them false
+    positives and makes a reader mis-file them — renamed to `applyText` /
+    `applyBtn`. `rules-of-hooks` is now clean across `src/`, which is what makes it
+    worth wiring into the lint script.
+- Same-class check on the new code: the queue overflow menu's `useState` was
+  itself placed below `App.jsx`'s `if (!AS) return` on the first attempt and
+  crashed the app on load. Caught by the browser smoke, not by the build — which
+  is the argument for the smoke step, and for the two lint rules above.
+
+**Recommended next, none of it done here:** wire `no-undef` and
+`react-hooks/rules-of-hooks` into `.eslintrc.cjs` as errors and into the deploy
+gate beside `npm run gm3` — all three are clean right now, so they can go straight
+to `error` with no baseline. That is a ratchet for the one bug class in this app
+that ships silently.
+
