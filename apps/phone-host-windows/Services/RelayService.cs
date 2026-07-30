@@ -321,6 +321,24 @@ public class RelayService : IDisposable
     /// the relay status so a dead relay is visible instead of log-only.</summary>
     public string? AuthBlockedReason { get; private set; }
 
+    // ── Command-channel health, for the CLOUD state blob ────────────────────────
+    // State pushes go straight to Firestore with the web API key; the command
+    // mailbox is RTDB and needs a relay_device token. The two fail independently,
+    // and until b347 only the first one was visible remotely — so a host whose
+    // mailbox was 401-dead still pushed a healthy-looking status and every remote
+    // panel stayed green while sends sat in the mailbox until the browser gave up
+    // after 30 s (owner ticket 7/29: "not sending and timing out … all indicator
+    // panels are green"). These three make the second channel reportable, so the
+    // web can refuse the send up front and say which host is deaf and why.
+    /// <summary>A mailbox fetch has returned 2xx at least once this session.</summary>
+    public bool MailboxReachable => _mailboxReachable;
+    /// <summary>The RTDB SSE stream is currently connected (sub-second commands).</summary>
+    public bool CommandStreamHealthy => _rtdbStreamHealthy;
+    /// <summary>Whether this host is currently draining the mailbox at all. A parked
+    /// host (the other host holds the phone) deliberately does not — that is correct,
+    /// not a fault, and the web must be able to tell the two apart.</summary>
+    public bool DrainsCommands => IsPhoneConnected?.Invoke() ?? true;
+
     /// <summary>Registers this PC in the cloud device registry. Idempotent and
     /// safe to call repeatedly: re-enrolling with the same id and secret is a
     /// no-op that just refreshes the label. Runs once per process — a device that

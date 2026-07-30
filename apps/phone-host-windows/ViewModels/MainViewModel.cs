@@ -2834,6 +2834,20 @@ public class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 knownDevices,
                 scannedDevices,
                 appVisible       = true,
+                // Can this host actually RECEIVE remote commands right now? State
+                // pushes and the command mailbox authenticate differently and fail
+                // independently, so "connected" says nothing about whether a text
+                // queued from a browser will ever be drained. Reported here so the
+                // web can fail a send immediately with the real reason instead of
+                // timing out against a host that is deaf (owner ticket 7/29).
+                commandChannel = new
+                {
+                    draining     = _relay.DrainsCommands,
+                    reachable    = _relay.MailboxReachable,
+                    streaming    = _relay.CommandStreamHealthy,
+                    enrollState  = _relay.EnrollState ?? "",
+                    authBlocked  = _relay.AuthBlockedReason,
+                },
                 build            = BuildStamp
             });
         };
