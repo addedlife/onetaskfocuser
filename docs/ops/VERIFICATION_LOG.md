@@ -1444,3 +1444,37 @@ gate beside `npm run gm3` — all three are clean right now, so they can go stra
 to `error` with no baseline. That is a ratchet for the one bug class in this app
 that ships silently.
 
+### The lint gate that should have caught all of it (4.114.3)
+
+The previous entry recommended wiring the two rules in "next session". Doing it
+immediately instead surfaced why they never fired, and a fourth instance of the
+same bug:
+
+- **`no-undef` was explicitly `'off'`** in `.eslintrc.cjs`. That single line is why
+  all three ReferenceErrors above shipped and survived releases. Now `'error'`.
+- **`parserOptions.ecmaVersion` was 2021, which cannot parse top-level `await`** —
+  so `src/main.jsx`, the app's ENTRY POINT, failed to parse and was skipped by
+  every rule in the file, the GM3 set included. A parse error reads as one error
+  among ~965 warnings, which is how it stayed invisible. Now 2022; the GM3 count
+  did not move (main.jsx carries none), so no baseline surprise.
+- **`react-hooks/rules-of-hooks` was already `'error'`** and would have caught the
+  `06-shelf.jsx` #310 crash — but `npm run lint` exited non-zero on the parse error
+  and printed 965 warnings, so nobody read it, and it was in no CI gate.
+- **A fourth instance of the `firebase`-is-not-a-global bug**, found by turning the
+  rule on: `ai-call-throttle.js` guarded with `typeof firebase === 'undefined'`,
+  which was ALWAYS true, so `throttleRef()` always returned null and the
+  cross-device Firestore claim that module's own comment calls "the source of
+  truth" has never once engaged — AI call throttling has been per-device only, the
+  exact degradation the comment says must not happen. Now uses `Store.uid`, the
+  canonical uid the app sets at sign-in.
+- Vite's `__BUILD_COMMIT__` / `__BUILD_TIME__` declared in `globals` rather than
+  assumed. Every read site already guarded with `typeof`.
+- `npm run lint` now exits 0 (965 GM3 warnings, 0 errors) and is a **deploy gate**,
+  ahead of the GM3 ratchet in `.github/workflows/deploy.yml`. No baseline to carry:
+  both rules are clean today, so any new undefined reference or misplaced hook
+  fails the deploy from here on.
+
+Verified: `npm run lint` 0 errors; `npm run gm3` 762/762; `npm run build` green;
+`npm run test:phone` 67/67; `npm run map:check` 59/59 paths; browser smoke clean.
+- Version 4.114.2 → 4.114.3 (fix).
+

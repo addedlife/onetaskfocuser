@@ -16,12 +16,19 @@
 // of truth, but a per-device local gate (in-memory + localStorage) now backs it:
 // a broken Firestore degrades to "at most one run per gap per device", never to
 // "unlimited".
-import { db, canonicalUid } from '../01-core.js';
+import { db, Store } from '../01-core.js';
 
+// `firebase` is not a global in this bundle and never has been — nothing in src/
+// assigns it to window, and this module does not import it. So the old
+// `typeof firebase === 'undefined'` guard was ALWAYS true, this function always
+// returned null, and the cross-device Firestore claim the comment above calls
+// "the source of truth" has never once engaged: throttling has been per-device
+// only, which is exactly the failure mode that comment says must not happen.
+// `Store.uid` is the canonical uid the app sets at sign-in (App.jsx line ~186,
+// `Store.setUid(canonicalUid(user))`) — the same value this was trying to derive.
 function throttleRef(key) {
-  if (!db || typeof firebase === 'undefined' || !firebase.auth) return null;
-  const user = firebase.auth().currentUser;
-  const uid = canonicalUid(user);
+  if (!db) return null;
+  const uid = Store.uid;
   if (!uid) return null;
   return db.collection('users').doc(uid).collection('ai-throttles').doc(key);
 }

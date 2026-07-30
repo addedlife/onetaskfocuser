@@ -78,7 +78,15 @@ module.exports = {
   },
   plugins: ['react', 'react-hooks'],
   rules: {
-    'no-undef': 'off',
+    // Was 'off'. That is precisely why three ReferenceErrors shipped and survived
+    // for releases (2026-07-30 audit): `switchTab` calling a setter that does not
+    // exist, the queue quick-add calling `triggerAIPrioritize` which was never
+    // written, and App.jsx calling `firebase.auth()` without importing firebase —
+    // the last one swallowed by a try/catch, which silently disabled the Gmail
+    // push listener for the life of the app. None is visible to a build, all three
+    // are visible to this rule in under a second. Clean across src/ as of 4.114.2,
+    // so it goes straight to error with no baseline to carry.
+    'no-undef': 'error',
     'no-unused-vars': 'warn',
     // Without these two, ESLint has no idea that `<IconBtn/>` counts as using the
     // `IconBtn` binding, so no-unused-vars reports every imported component and
@@ -118,8 +126,18 @@ module.exports = {
       rules: { 'no-restricted-imports': 'off' },
     },
   ],
+  // Build-time constants injected by Vite's `define` (see vite.config.js). Every
+  // read site already guards with `typeof`, so they are declared, not assumed.
+  globals: {
+    __BUILD_COMMIT__: 'readonly',
+    __BUILD_TIME__: 'readonly',
+  },
   parserOptions: {
-    ecmaVersion: 2021,
+    // 2021 cannot parse top-level `await`, which src/main.jsx uses — so the app's
+    // ENTRY POINT failed to parse and was skipped by every rule in this file,
+    // including the GM3 set and the ratchet that counts them. A parse error is
+    // reported as one error among ~965 warnings, which is how it went unnoticed.
+    ecmaVersion: 2022,
     sourceType: 'module',
     ecmaFeatures: { jsx: true },
   },
