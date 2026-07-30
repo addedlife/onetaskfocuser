@@ -394,17 +394,16 @@ const CHIEF_SCAN_LAST_RUN_KEY = "ot_chief_scan_last_ai_run_v1";
 const CHIEF_SUGGESTIONS_CACHE_KEY = "ot_chief_task_suggestions_cache_v1";
 const CHIEF_SUGGESTIONS_LAST_RUN_KEY = "ot_chief_task_suggestions_last_ai_run_v1";
 const CHIEF_SCAN_CACHE_MS = 10 * 60 * 1000;      // industry standard: 10-min TTL for live dashboard AI briefs
-const CHIEF_SCAN_MIN_AI_GAP_MS = 3 * 60 * 1000;  // min 3 min between AI calls (debounced, not per keystroke)
-const CHIEF_SUGGESTIONS_CACHE_MS = 45 * 60 * 1000;
-const CHIEF_SUGGESTIONS_MIN_AI_GAP_MS = 25 * 60 * 1000;
-const NC_SUMMARY_CACHE_KEY = "ot_nc_summary_cache_v1";
-const NC_SUMMARY_LAST_RUN_KEY = "ot_nc_summary_last_run_v1";
-const NC_SUMMARY_CACHE_MS = 8 * 60 * 1000;
-const NC_SUMMARY_MIN_GAP_MS = 90 * 1000;
 const SNAPSHOT_CACHE_KEY = "ot_nc_snapshot_v1";
-const SNAPSHOT_LAST_RUN_KEY = "ot_nc_snapshot_last_run_v1";
-const SNAPSHOT_CACHE_MS = 20 * 60 * 1000;
-const SNAPSHOT_MIN_GAP_MS = 8 * 60 * 1000;
+// Nine sibling constants stood here until 2026-07-30 and were dead — the
+// minimum-gap knobs (CHIEF_SCAN_MIN_AI_GAP_MS, CHIEF_SUGGESTIONS_MIN_AI_GAP_MS,
+// NC_SUMMARY_MIN_GAP_MS, SNAPSHOT_MIN_GAP_MS), their cache TTLs, and the
+// NC_SUMMARY/SNAPSHOT last-run keys. Rate limiting moved to
+// ai-call-throttle.js during the AI-call-leak work and these were never
+// removed, so this file still READ as though it enforced a 3-minute floor
+// between chief scans. It does not, and has not for some time. Deleting them
+// is not a behaviour change; leaving them was a standing invitation to
+// diagnose the next call-volume ticket against a limit that isn't there.
 const ROUTINE_CALENDAR_RE = /\b(shacharis|shacharit|mincha|maariv|arvit|daven(?:ing)?|daf yomi|mishna(?:h)? yomi|halacha yomi|parsha|selichos|slichos)\b/i;
 const CHIEF_SEARCHING_BRIEF = { summary: "", nextAction: "", why: "", urgency: "watch", sources: [], focusArea: "operations", _isPlaceholder: true };
 const CHIEF_QUIET_BRIEF = { summary: "", nextAction: "", why: "", urgency: "watch", sources: [], focusArea: "operations", _isPlaceholder: true };
@@ -483,10 +482,6 @@ function readStorageJson(key) {
 
 function writeStorageJson(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
-}
-
-function readStorageNumber(key) {
-  try { return Number(localStorage.getItem(key) || 0) || 0; } catch { return 0; }
 }
 
 function writeStorageNumber(key, value) {

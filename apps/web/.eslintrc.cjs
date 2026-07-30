@@ -87,7 +87,18 @@ module.exports = {
     // are visible to this rule in under a second. Clean across src/ as of 4.114.2,
     // so it goes straight to error with no baseline to carry.
     'no-undef': 'error',
-    'no-unused-vars': 'warn',
+    // The `_name` prefix is this codebase's existing, consistent convention for a
+    // binding that is deliberately kept and deliberately unused — a destructured
+    // tuple slot, a caught error nobody inspects, a parameter held for signature
+    // shape. Counting those as findings buried the ~40 genuinely dead bindings
+    // under ~135 intentional ones, which is why nobody had read this rule's
+    // output. Honouring the convention makes what is left actionable.
+    'no-unused-vars': ['warn', {
+      argsIgnorePattern: '^_',
+      varsIgnorePattern: '^_',
+      caughtErrorsIgnorePattern: '^_',
+      destructuredArrayIgnorePattern: '^_',
+    }],
     // Without these two, ESLint has no idea that `<IconBtn/>` counts as using the
     // `IconBtn` binding, so no-unused-vars reports every imported component and
     // every locally-defined component as dead. That produced ~60 false positives

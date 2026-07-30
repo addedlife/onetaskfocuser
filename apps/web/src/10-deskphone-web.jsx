@@ -1830,7 +1830,6 @@ function ConversationCallHistory({
   onCall,
   onText,
   onDial,
-  onOpenFullCalls,
   onDeleteAllCalls,
   onToggleCallBlock,
   onDeleteCall,
@@ -2082,7 +2081,6 @@ function MessagesSlice({
   setDraft,
   onCommand,
   onOpenNewMessage,
-  onOpenFullCalls,
   onOpenContactEditor,
   onNotice,
   onRequestDeleteAllCalls,
@@ -2797,7 +2795,6 @@ function MessagesSlice({
                 onCall={callNumber}
                 onText={textNumber}
                 onDial={dialRawNumber}
-                onOpenFullCalls={onOpenFullCalls}
                 onDeleteAllCalls={deleteAllCalls}
                 onToggleCallBlock={toggleCallBlock}
                 onDeleteCall={deleteCall}
@@ -3182,7 +3179,6 @@ function SimpleTabContent({
   onRefresh,
   onCommand,
   onOpenNewMessage,
-  onOpenFullCalls,
   onOpenContactEditor,
   onContactDraftConsumed,
   onCancelNewMessage,
@@ -3219,7 +3215,6 @@ function SimpleTabContent({
         setDraft={setDraft}
         onCommand={onCommand}
         onOpenNewMessage={onOpenNewMessage}
-        onOpenFullCalls={onOpenFullCalls}
         onOpenContactEditor={onOpenContactEditor}
         onNotice={onNotice}
         onRequestDeleteAllCalls={onRequestDeleteAllCalls}
@@ -3275,7 +3270,6 @@ function SimpleTabContent({
             const cleaned = String(number || "").replace(/[^\d+*#]/g, "");
             if (cleaned) onCommand(`/dial?n=${encodeURIComponent(cleaned)}`, "call");
           }}
-          onOpenFullCalls={() => {}}
           onDeleteAllCalls={onRequestDeleteAllCalls}
           onToggleCallBlock={(call) => {
             const normalized = normalizePhoneKey(call?.number);
@@ -6687,10 +6681,6 @@ export function DeskPhoneWebPanel({
     setActiveTab("new-message");
   }, []);
 
-  const openFullCalls = useCallback(() => {
-    setActiveTab("calls");
-  }, []);
-
   const openContactEditor = useCallback((phone = "", mode = "new") => {
     setContactDraft({ phone: String(phone || ""), mode });
     setActiveTab("contacts");
@@ -6918,7 +6908,6 @@ export function DeskPhoneWebPanel({
               onRefresh={refresh}
               onCommand={runCommand}
               onOpenNewMessage={openNewMessage}
-              onOpenFullCalls={openFullCalls}
               onOpenContactEditor={openContactEditor}
               onContactDraftConsumed={() => setContactDraft(null)}
               onCancelNewMessage={() => setActiveTab("messages")}
