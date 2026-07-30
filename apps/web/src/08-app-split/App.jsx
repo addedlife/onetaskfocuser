@@ -3083,7 +3083,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   }, [aiChatHistory, aiChatLoading]);
 
   // Helper: change tab and close any open menus
-  const switchTab = (t) => { setTab(t); setShowLM(false); setNavExp(false); setShowAides(false); setShowEntryTools(false); };
+  // `setShowAides` and `setShowEntryTools` are both left behind by features that
+  // no longer exist — neither is declared anywhere in this file. Every Tasks /
+  // Queue / Insights switch therefore threw a ReferenceError on the third
+  // statement, silently skipping the rest of the handler; the tab itself had
+  // already changed on the FIRST statement, which is why this survived unnoticed.
+  // Verified live in the dev app: two "setShowAides is not defined" page errors
+  // per tab switch before, none after.
+  const switchTab = (t) => { setTab(t); setShowLM(false); setNavExp(false); };
 
   const syncDeskPhoneTheme = useCallback(async (force = false) => {
     if (!deskPhoneThemeSyncEnabled) return false;
@@ -3178,6 +3185,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const [qCondensed, setQCondensed] = useState(() => {
     try { return localStorage.getItem('ot_queue_condensed') === '1'; } catch (_) { return false; }
   });
+  // Which queue row's overflow menu is open (one at a time). Same early-exit rule
+  // as qCondensed above — this is a hook, so it cannot sit next to the render
+  // helper that uses it, which is defined below the exit.
+  const [rowMenuId, setRowMenuId] = useState(null);
 
   if (!AS) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:NC_FONT_STACK,color:"#999"}}>Loading...</div>;
 
@@ -3471,7 +3482,7 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   // the render body gets a new function identity every render, which React reads
   // as a different element type and remounts — the popover would tear down mid
   // interaction. Returning JSX inlines it into the parent tree instead.
-  const [rowMenuId, setRowMenuId] = useState(null);
+  // (`rowMenuId` itself lives above the `if (!AS) return` exit — see the note there.)
   const queueMoreMenu = ({ id, opacity, color, items }) => {
     const anchorId = `qmore-${id}`;
     const visible = items.filter(Boolean);

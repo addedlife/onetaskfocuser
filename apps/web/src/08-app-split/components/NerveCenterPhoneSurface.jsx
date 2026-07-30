@@ -8,6 +8,10 @@ import {
   addPendingSms, updatePendingSms, getPendingSms, subscribePendingSms,
   reconcilePendingSms, unmatchedPendingSms, collapseHostDoubles, smsBodyKey, smsPhoneKey,
 } from '../utils/pending-sms.js';
+import {
+  detectSurfaceId, startProcessRun, logProcessStep, finishProcessRun,
+} from '../process-log.js';
+import { ProcessLogPopup } from './ProcessLog.jsx';
 
 const DIALER_KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];
 const PHONE_FETCH_TIMEOUT_MS = 4500;
@@ -698,16 +702,35 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     // auto-clear them, the user needs to see the command didn't run.
     const fail = msg => { if (opts.background) opts.onError?.(msg); else { errorIsTransportRef.current = false; setError(msg); } };
     if (!opts.background) setBusy(label);
+    // Live process log (owner ticket 7/29): every relay command from this
+    // surface is recorded step by step, so a send that stalls says WHERE it
+    // stalled instead of only that it did. Cheap — a few objects in memory.
+    const runId = startProcessRun({
+      surfaceId: detectSurfaceId(),
+      kind: label === "send" ? "send" : "relay-command",
+      label: opts.logLabel || `${label} — ${path.split("?")[0]}`,
+      detail: opts.logDetail || "",
+      transport: "cloud relay → whichever host holds the phone",
+    });
+    const step = (stage, status = "info", note = "") => logProcessStep(runId, { stage, status, note });
+    const done = (ok, error = "") => { finishProcessRun(runId, { ok, error }); return ok; };
     try {
       // Route command through the cloud relay — the active host drains it.
       // Include Firebase ID token so the function can gate on auth.
       let cmdAuthHeaders = {};
+      let tokenOk = false;
       try {
         if (user?.getIdToken) {
           const tok = await user.getIdToken();
           cmdAuthHeaders["Authorization"] = `Bearer ${tok}`;
+          tokenOk = true;
         }
       } catch {}
+      // Queueing a command with no token gets a 401 from the relay and reads as
+      // "the phone is broken". Naming it is the difference between a fixable
+      // message and a mystery.
+      step(tokenOk ? "signed-in token attached" : "NO sign-in token available", tokenOk ? "ok" : "warn");
+      step("POST /api/phone-relay?action=command");
       const res = await fetch(`${RELAY_BASE}?action=command`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...cmdAuthHeaders },
@@ -716,26 +739,34 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
       if (!res.ok) {
         let msg = `Relay rejected the command (${res.status})`;
         try { const d = await res.json(); if (d?.error) msg = d.error; } catch {}
+        step(`relay refused the command — HTTP ${res.status}`, "fail", msg);
         fail(msg);
-        return false;
+        return done(false, msg);
       }
       const queued = await res.json().catch(() => ({}));
       if (queued?.id) {
+        step("queued in the cloud mailbox", "ok", `command id ${queued.id}`);
+        step("waiting for the host's acknowledgement (up to 25s)");
         // Await the host acknowledgement — it rides the state pushes we already
         // receive. No ack within 25 s means no live host accepted the command.
         const ack = await waitForAck(queued.id, 25000);
         await refresh();
         if (ack && !ack.ok) {
-          fail(ack.error || "The phone host could not run the command.");
-          return false;
+          const msg = ack.error || "The phone host could not run the command.";
+          step("host ran it and reported FAILURE", "fail", msg);
+          fail(msg);
+          return done(false, msg);
         }
         if (!ack) {
+          step("no acknowledgement in 25s — the host never confirmed", "warn",
+            "the host acks through the state blob it pushes; either it never drained the mailbox, or it ran the command and its state push is not landing");
           // No ack in 25 s. WITHDRAW the command before reporting failure —
           // "failed" must mean it can never fire later. Before 4.91.1 the
           // command stayed queued for up to 10 minutes, so a host reconnecting
           // inside that window sent every "failed" retry too (owner incident
           // 7/19: four /send commands queued 8:05–8:13 PM all fired at 8:14).
           let withdrawn = false;
+          step("withdrawing the command from the mailbox before calling it failed");
           try {
             const cRes = await fetch(`${RELAY_BASE}?action=cancel`, {
               method: "POST",
@@ -746,33 +777,48 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
             withdrawn = !!(cRes.ok && cd?.removed);
           } catch { /* cancel unreachable — fall through to the honest-unknown path */ }
           if (withdrawn) {
-            fail("The phone host is offline — this was NOT sent and won't fire later. Retry when the link is back.");
-            return false;
+            const msg = "The phone host is offline — this was NOT sent and won't fire later. Retry when the link is back.";
+            step("still in the mailbox, now withdrawn — no host ever took it", "fail",
+              "a host that holds the phone drains this mailbox within seconds; none did");
+            fail(msg);
+            return done(false, msg);
           }
           // Not in the mailbox = a host already took it and may be mid-send.
           // Never claim failure while that's possible — wait out a slow ack.
+          step("already gone from the mailbox — a host DID take it", "warn",
+            "waiting a further 65s for a slow acknowledgement rather than reporting a failure that may still deliver");
           const lateAck = await waitForAck(queued.id, 65000);
           await refresh();
           if (lateAck && lateAck.ok) {
+            step("late acknowledgement arrived — the host ran it", "ok");
             if (!opts.background) setError("");
-            return true;
+            return done(true);
           }
-          fail(lateAck?.error || "Couldn't confirm the phone host ran this. Check the thread before resending.");
-          return false;
+          const msg = lateAck?.error
+            || "The host took this command but never confirmed it ran. It may or may not have gone out — check the thread before resending.";
+          step(lateAck ? "late acknowledgement says it FAILED" : "no acknowledgement after 90s total", "fail",
+            lateAck ? (lateAck.error || "") : "the host drained the command but its state push never carried the ack back");
+          fail(msg);
+          return done(false, msg);
         }
+        step("host acknowledged — the command really ran", "ok");
         if (!opts.background) setError("");
-        return true;
+        return done(true);
       }
       // Relay without command ids (older function) — keep the legacy blind wait.
+      step("relay returned no command id — cannot confirm this one", "warn",
+        "an older phone-relay function; success here is assumed, not verified");
       if (!opts.background) setError("");
       await new Promise(r => setTimeout(r, 2500));
       await refresh();
-      return true;
+      return done(true);
     }
-    catch {
-      fail("The phone host did not answer.");
+    catch (err) {
+      const msg = "The phone host did not answer.";
+      step("the command request itself threw", "fail", String(err?.message || err || ""));
+      fail(msg);
       onOnlineChange?.(false);
-      return false;
+      return done(false, msg);
     }
     finally { if (!opts.background) setBusy(""); }
   };
@@ -798,6 +844,10 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     // blob copy then matches this echo EXACTLY (no fuzzy dedupe needed).
     post(`/send?to=${encodeURIComponent(to)}&body=${encodeURIComponent(text)}&cid=${encodeURIComponent(echoId)}`, "send", {
       background: true,
+      // The log line names the recipient but never the message text — the log is
+      // copied into prompts and screenshots, and the body is private.
+      logLabel: `Text to ${lookupName(to) || to}`,
+      logDetail: `${text.length} character${text.length === 1 ? "" : "s"}${existingEchoId ? " · retry" : ""}`,
       onError: msg => updatePendingSms(echoId, { status: "failed", error: msg || "Failed" }),
     }).then(ok => { if (ok) updatePendingSms(echoId, { status: "sent" }); });
   };
@@ -1281,6 +1331,12 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   // app is a pure cloud client; DeskPhone's window is its own local surface.)
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: dense ? 2 : (compact ? 6 : 12), minWidth: 0, flex: "1 1 auto", minHeight: 0, overflow: "hidden", color: C.text, animation: `nc-phone-surface-fade ${DUR.base} ${EASE.standard}` }}>
+
+      {/* Live process log (owner ticket 7/29). Position-fixed, so it sits outside
+          this column's layout and cannot squeeze the phone card; it only appears
+          while a send or relay command from THIS surface is in flight or has just
+          ended. */}
+      <ProcessLogPopup C={C} />
 
       {(isIncoming || isOnCall || vmCount > 0) && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, minHeight: dense ? 20 : (compact ? 28 : 36), padding: "0 2px" }}>

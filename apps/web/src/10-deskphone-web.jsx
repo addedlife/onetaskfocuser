@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import firebase from 'firebase/compat/app';
-import { deriveAccents, GV_CLEAN, NC_TYPE, RADIUS } from './08-app-split/ui-tokens.jsx';
+import { cleanTheme, deriveAccents, GV_CLEAN, NC_TYPE, RADIUS } from './08-app-split/ui-tokens.jsx';
 import { hostAuthHeaders, pairWithHost } from './08-app-split/host-auth.js';
 import {
   addPendingSms, updatePendingSms, getPendingSms, subscribePendingSms,
@@ -11,6 +11,8 @@ import { derivePhoneLinkState, describePhoneLink, messageListSignature, mergeMes
 // here predates the GM3 rule and is raw markup on purpose — a native-parity clone.
 import { TextField as DpTextField, IconButton as DpIconButton } from './08-app-split/m3.jsx';
 import { subscribeOwner } from './08-app-split/phone-host-control.js';
+import { detectSurfaceId, startProcessRun, logProcessStep, finishProcessRun } from './08-app-split/process-log.js';
+import { ProcessLogPanel, ProcessLogPopup } from './08-app-split/components/ProcessLog.jsx';
 
 const DEFAULT_HOST = "http://127.0.0.1:8765";
 // Cloud fallback: when no host answers on loopback, the panel reads the same
@@ -86,6 +88,22 @@ const COLORS = {
   textOnAccentBlueLight: GV_CLEAN.accentDark,
   border: GV_CLEAN.divider,
 };
+
+// The process-log components speak the app-wide role names (bg/text/muted/…).
+// cleanTheme() is the one bridge that already does that rename, and this page's
+// COLORS map is itself built from GV_CLEAN — so passing GV_CLEAN through it
+// keeps the log on exactly this surface's palette with no second declaration.
+const PROCESS_LOG_COLORS = cleanTheme({
+  card: COLORS.bgMain,
+  bgW: COLORS.bgInput,
+  brdS: COLORS.border,
+  text: COLORS.textPrimary,
+  tSoft: COLORS.textMuted,
+  tFaint: COLORS.textDisabled,
+  primary: COLORS.accentBlue,
+  success: COLORS.accentGreen,
+  danger: COLORS.accentRed,
+});
 
 function dpIsHexColor(value) {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim());
@@ -563,9 +581,11 @@ function sendComposeMessage({ onCommand, to, body, attachments, label, echoId = 
       // host copy then matches this echo EXACTLY (no fuzzy dedupe needed).
       if (attachments.length) {
         const uploads = await Promise.all(attachments.map(composeAttachmentUpload));
-        await onCommand("/send-with-attachments", label, { to: phone, body: text, cid: id, attachments: uploads }, { background: true });
+        await onCommand("/send-with-attachments", label, { to: phone, body: text, cid: id, attachments: uploads },
+          { background: true, logLabel: `Picture text to ${phone}`, logDetail: `${uploads.length} attachment${uploads.length === 1 ? "" : "s"}` });
       } else {
-        await onCommand(`/send?to=${encodeURIComponent(phone)}&body=${encodeURIComponent(text)}&cid=${encodeURIComponent(id)}`, label, undefined, { background: true });
+        await onCommand(`/send?to=${encodeURIComponent(phone)}&body=${encodeURIComponent(text)}&cid=${encodeURIComponent(id)}`, label, undefined,
+          { background: true, logLabel: `Text to ${phone}`, logDetail: `${text.length} character${text.length === 1 ? "" : "s"}${echoId ? " · retry" : ""}` });
       }
       updatePendingSms(id, { status: "sent" });
     } catch (err) {
@@ -3152,6 +3172,8 @@ function SimpleTabContent({
   onCancelNewMessage,
   onNotice,
   onRequestDeleteAllCalls,
+  viaCloud,
+  onOpenOwnLog,
 }) {
   const [settingsSection, setSettingsSection] = useState("connection");
 
@@ -3433,14 +3455,44 @@ function SimpleTabContent({
       </div>
     );
   }
+  // This surface's OWN process log (owner tickets 7/29). Reached from the rail's
+  // "Live Log" entry whenever this page is a cloud client — see handleNavSelect.
+  if (activeTab === "live-log") {
+    return (
+      <div className="dp-tab-placeholder">
+        <h2>Process log — this device</h2>
+        <p style={{ fontSize: NC_TYPE.meta, color: COLORS.textMuted, margin: "0 0 12px", maxWidth: 620 }}>
+          Every text send and relay command this phone screen attempts, step by step. The DeskPhone app on the PC keeps
+          its own log in its own window; this is the log for the surface you are actually looking at.
+        </p>
+        <ProcessLogPanel C={PROCESS_LOG_COLORS} />
+      </div>
+    );
+  }
+  // Developer Tools. Every button here drives a command only the NATIVE host
+  // implements, so over the cloud relay all four used to fail AFTER the click
+  // with "that control only works with the phone host open on this device"
+  // (owner ticket 7/29: "many functions in phone and settings and developer logs
+  // are unworking in the webapp"). A control that cannot work is now disabled and
+  // says why, and Live Log routes to this surface's own log instead of trying to
+  // raise a window on another machine.
   return (
     <div className="dp-tab-placeholder" data-native-source="MainWindow.xaml:3920">
       <h2>Developer Tools</h2>
+      {viaCloud ? (
+        <p style={{ fontSize: NC_TYPE.meta, color: COLORS.textMuted, margin: "0 0 12px", maxWidth: 620 }}>
+          These tools live inside the DeskPhone app on the PC and cannot be driven over the cloud relay. Open DeskPhone
+          on that machine to use them — or read this device's own log, which is the button below.
+        </p>
+      ) : null}
       <div className="dp-settings-actions dp-settings-tools">
-        <ShellButton className="dp-tonal" iconName="article" nativeSource="MainWindow.xaml:620" onClick={() => onCommand("/open-live-log", "open live log")}>Live Log</ShellButton>
-        <ShellButton className="dp-tonal" iconName="ink_eraser" nativeSource="LogWindow.xaml:45" onClick={() => onCommand("/clear-log", "clear log")}>Clear Log</ShellButton>
-        <ShellButton className="dp-tonal" iconName="fact_check" nativeSource="MainWindow.xaml:4346" onClick={() => onCommand("/run-ui-auditor", "run UI auditor")}>Open Auditor</ShellButton>
-        <ShellButton className="dp-tonal" iconName="bug_report" nativeSource="MainWindow.xaml:4639" onClick={() => onCommand("/run-ui-auditor", "run UI auditor")}>Run UI Auditor</ShellButton>
+        <ShellButton className="dp-tonal" iconName="article" nativeSource="MainWindow.xaml:620"
+          onClick={() => (viaCloud ? onOpenOwnLog?.() : onCommand("/open-live-log", "open live log"))}>
+          {viaCloud ? "This device's log" : "Live Log"}
+        </ShellButton>
+        <ShellButton className="dp-tonal" iconName="ink_eraser" nativeSource="LogWindow.xaml:45" disabled={viaCloud} onClick={() => onCommand("/clear-log", "clear log")}>Clear Log</ShellButton>
+        <ShellButton className="dp-tonal" iconName="fact_check" nativeSource="MainWindow.xaml:4346" disabled={viaCloud} onClick={() => onCommand("/run-ui-auditor", "run UI auditor")}>Open Auditor</ShellButton>
+        <ShellButton className="dp-tonal" iconName="bug_report" nativeSource="MainWindow.xaml:4639" disabled={viaCloud} onClick={() => onCommand("/run-ui-auditor", "run UI auditor")}>Run UI Auditor</ShellButton>
       </div>
     </div>
   );
@@ -6413,9 +6465,21 @@ export function DeskPhoneWebPanel({
   // Cloud command: queue it in the relay mailbox for whichever host holds the
   // phone to drain (≤3 s). Payload fields become query params so /send etc. carry
   // their data in the single command string the host contract expects.
-  const runCloudCommand = useCallback(async (path, payload) => {
-    if (!CLOUD_ALLOWED_COMMANDS.has(path.split("?")[0])) {
-      throw new Error("That control only works with the phone host open on this device.");
+  const runCloudCommand = useCallback(async (path, payload, step = () => {}) => {
+    const bare = path.split("?")[0];
+    // Picture texts are a loopback-only capability and always were: the command
+    // mailbox carries ONE query string, and a base64 image is megabytes, so the
+    // attachment payload physically cannot ride it — the Windows host's relay
+    // switch has no case for it either. The old generic refusal ("that control
+    // only works with the phone host open on this device") was true but useless
+    // here; say what is actually needed.
+    if (bare === "/send-with-attachments") {
+      step("picture texts cannot go over the cloud relay", "fail", "the mailbox carries one query string; image data has to go over loopback");
+      throw new Error("Picture texts need the DeskPhone window open on this PC — the cloud relay carries text only. The words alone will send from here.");
+    }
+    if (!CLOUD_ALLOWED_COMMANDS.has(bare)) {
+      step(`${bare} is not a cloud-relayable command`, "fail");
+      throw new Error(`"${bare}" only works with the phone host open on this device.`);
     }
     let fullPath = path;
     if (payload && typeof payload === "object") {
@@ -6426,15 +6490,24 @@ export function DeskPhoneWebPanel({
       if (qs) fullPath += (fullPath.includes("?") ? "&" : "?") + qs;
     }
     const authUser = firebase.auth?.().currentUser;
-    if (!authUser) throw new Error("Sign in to control your phone here.");
+    if (!authUser) {
+      step("no signed-in user on this device", "fail");
+      throw new Error("Sign in to control your phone here.");
+    }
     const token = await authUser.getIdToken();
+    step("signed-in token attached", "ok");
+    step("POST /api/phone-relay?action=command");
     const res = await fetch(`${RELAY_BASE}?action=command`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ path: fullPath }),
     });
-    if (!res.ok) throw new Error(`Relay rejected the command (${res.status})`);
+    if (!res.ok) {
+      step(`relay refused the command — HTTP ${res.status}`, "fail");
+      throw new Error(`Relay rejected the command (${res.status})`);
+    }
     const queued = await res.json().catch(() => ({}));
+    if (queued?.id) step("queued in the cloud mailbox", "ok", `command id ${queued.id}`);
     return queued?.id || null;
   }, []);
 
@@ -6474,54 +6547,94 @@ export function DeskPhoneWebPanel({
   // silent "Sent" (owner incident 7/17). On timeout the command is WITHDRAWN
   // from the mailbox first, so "failed" can never fire later when a host
   // reconnects (owner incident 7/19 — duplicate texts on reconnect).
-  const runCloudCommandConfirmed = useCallback(async (path, payload) => {
-    const cmdId = await runCloudCommand(path, payload);
+  const runCloudCommandConfirmed = useCallback(async (path, payload, step = () => {}) => {
+    const cmdId = await runCloudCommand(path, payload, step);
     if (!cmdId) {
       // Relay without command ids (older function) — legacy blind wait.
+      step("relay returned no command id — cannot confirm this one", "warn",
+        "an older phone-relay function; success here is assumed, not verified");
       await new Promise((r) => setTimeout(r, 1500));
       await refresh();
       return;
     }
+    step(`waiting for the host's acknowledgement (up to ${Math.round(CLOUD_ACK_TIMEOUT_MS / 1000)}s)`);
     const ack = await waitForCloudAck(cmdId, CLOUD_ACK_TIMEOUT_MS);
     await refresh();
-    if (ack && !ack.ok) throw new Error(ack.error || "Your phone host reported the command failed.");
+    if (ack && !ack.ok) {
+      step("host ran it and reported FAILURE", "fail", ack.error || "");
+      throw new Error(ack.error || "Your phone host reported the command failed.");
+    }
     if (!ack) {
+      step("no acknowledgement in time — the host never confirmed", "warn",
+        "the host acks through the state blob it pushes; either it never drained the mailbox, or it ran the command and its state push is not landing");
       let withdrawn = false;
+      step("withdrawing the command from the mailbox before calling it failed");
       try { withdrawn = await cancelCloudCommand(cmdId); } catch { /* honest-unknown path below */ }
-      if (withdrawn) throw new Error("No phone host picked this up — it was withdrawn and did NOT run. Retry when the link is back.");
+      if (withdrawn) {
+        step("still in the mailbox, now withdrawn — no host ever took it", "fail",
+          "a host that holds the phone drains this mailbox within seconds; none did");
+        throw new Error("No phone host picked this up — it was withdrawn and did NOT run. Retry when the link is back.");
+      }
       // A host already drained it and may be mid-run — wait out a slow ack
       // rather than reporting a failure that could become a duplicate send.
+      step("already gone from the mailbox — a host DID take it", "warn",
+        "waiting a further 65s for a slow acknowledgement rather than reporting a failure that may still deliver");
       const lateAck = await waitForCloudAck(cmdId, 65000);
       await refresh();
-      if (lateAck && lateAck.ok) return;
-      if (lateAck) throw new Error(lateAck.error || "Your phone host reported the command failed.");
-      throw new Error("Couldn't confirm your phone host ran this. Check the thread before resending.");
+      if (lateAck && lateAck.ok) { step("late acknowledgement arrived — the host ran it", "ok"); return; }
+      if (lateAck) {
+        step("late acknowledgement says it FAILED", "fail", lateAck.error || "");
+        throw new Error(lateAck.error || "Your phone host reported the command failed.");
+      }
+      step("no acknowledgement after 95s total", "fail",
+        "the host drained the command but its state push never carried the ack back");
+      throw new Error("The host took this command but never confirmed it ran. It may or may not have gone out — check the thread before resending.");
     }
+    step("host acknowledged — the command really ran", "ok");
   }, [runCloudCommand, waitForCloudAck, cancelCloudCommand, refresh]);
 
   const runCommand = useCallback(async (path, label, payload, opts = {}) => {
+    // Live process log (owner ticket 7/29): one run per command, with the step
+    // where the clock went. `logLabel`/`logDetail` let a send name its recipient
+    // without ever logging the message text.
+    const runId = startProcessRun({
+      surfaceId: detectSurfaceId(),
+      kind: path.startsWith("/send") ? "send" : "relay-command",
+      label: opts.logLabel || label || path.split("?")[0],
+      detail: opts.logDetail || "",
+      transport: viaCloudRef.current ? "cloud relay → whichever host holds the phone" : "loopback to the host on this machine",
+    });
+    const step = (stage, status = "info", note = "") => logProcessStep(runId, { stage, status, note });
+    const runIt = async () => {
+      if (viaCloudRef.current) {
+        await runCloudCommandConfirmed(path, payload, step);
+      } else {
+        step(`POST ${path.split("?")[0]} to the host on this machine`);
+        await postJson(host, path, payload);
+        step("host accepted it over loopback", "ok");
+        await refresh();
+      }
+    };
     // Background mode (sends): no busy overlay, no global error banner — the
     // echo bubble in the thread reports the outcome. Rethrows on failure so
     // sendComposeMessage can flip its echo to Failed.
     if (opts.background) {
-      if (viaCloudRef.current) {
-        await runCloudCommandConfirmed(path, payload);
-      } else {
-        await postJson(host, path, payload);
-        await refresh();
+      try {
+        await runIt();
+        finishProcessRun(runId, { ok: true });
+      } catch (err) {
+        finishProcessRun(runId, { ok: false, error: err?.message || "Failed" });
+        throw err;
       }
       return;
     }
     setBusy(label);
     try {
-      if (viaCloudRef.current) {
-        await runCloudCommandConfirmed(path, payload);
-      } else {
-        await postJson(host, path, payload);
-        await refresh();
-      }
+      await runIt();
+      finishProcessRun(runId, { ok: true });
       setError("");
     } catch (err) {
+      finishProcessRun(runId, { ok: false, error: err?.message || "Failed" });
       setError(err?.message || "The phone host did not accept the command.");
     } finally {
       setBusy("");
@@ -6559,6 +6672,14 @@ export function DeskPhoneWebPanel({
       return;
     }
     if (id === "live-log") {
+      // Owner tickets 7/29: this entry used to fire `/open-live-log`, a command
+      // only the NATIVE host implements — so on a cloud-served page it either
+      // raised a window on someone else's machine or threw "that control only
+      // works with the phone host open on this device". When the page IS the
+      // host (loopback) the native window is genuinely the right log; otherwise
+      // this surface shows ITS OWN process log, which is what "each app logs its
+      // own processes, autorouting to its one" means.
+      if (viaCloudRef.current) { setActiveTab("live-log"); return; }
       runCommand("/open-live-log", "open live log");
       return;
     }
@@ -6772,10 +6893,16 @@ export function DeskPhoneWebPanel({
               onCancelNewMessage={() => setActiveTab("messages")}
               onNotice={showNotice}
               onRequestDeleteAllCalls={() => setDeleteAllCallsConfirm(true)}
+              viaCloud={viaCloud}
+              onOpenOwnLog={() => setActiveTab("live-log")}
             />
           </div>
 
           {activeTab === "developer" ? <ParityLedgerPanel rows={[...SHELL_PARITY_ROWS, ...MESSAGE_PARITY_ROWS]} /> : null}
+
+          {/* Live mini process log — fixed position, so it never squeezes the
+              phone layout. Shows only this surface's own runs. */}
+          <ProcessLogPopup C={PROCESS_LOG_COLORS} />
 
           {notice ? <div className="dp-action-toast">{notice}</div> : null}
           {error ? <div className="dp-error-toast">{error}</div> : null}

@@ -3,9 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { Store, aiGenSchemes, uid, DEF_AGE_THRESHOLDS, DEF_PRI, BEFORE_SHAVUOS_PRIORITY_ID, SCHEMES, ensureSchemeContrast } from './01-core.js';
 import { PriEditor } from './04-components.jsx';
-import { NC_TYPE, RADIUS, SP, NC_FONT_STACK, NC_MONO_STACK } from './08-app-split/ui-tokens.jsx';
+import { cleanTheme, NC_TYPE, RADIUS, SP, NC_FONT_STACK, NC_MONO_STACK } from './08-app-split/ui-tokens.jsx';
 import { ActionBtn, IconBtn, Switch, TextField, Slider } from './08-app-split/m3.jsx';
 import RelayDevicesPanel from './08-app-split/components/RelayDevicesPanel.jsx';
+import { ProcessLogPanel } from './08-app-split/components/ProcessLog.jsx';
+import { detectSurfaceId, surfaceLabel } from './08-app-split/process-log.js';
 
 
 function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
@@ -123,6 +125,11 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
     {id:"google",     label:"Google"},
     {id:"recordings", label:"Recordings"},
     {id:"features",   label:"Features"},
+    // Owner ticket 7/29: "make a full process log on each app for that app …
+    // reachable by settings of its app, autorouting to its one." This tab shows
+    // THIS device's log and nothing else — there is no surface picker to get
+    // wrong, because the store is surface-scoped.
+    {id:"processlog",  label:"Process log"},
   ];
 
   const settingsType = {
@@ -638,6 +645,19 @@ function SettingsModal({AS, setAS, T, ap, onClose, onSignOut,
               </div>
               <Switch selected={AS.features?.health===true} onChange={()=>setAS(p=>{const ft=p.features||{};return{...p,features:{...ft,health:!ft.health}};})} style={switchVars} />
             </div>
+          </div>
+        )}
+
+        {sTab === "processlog" && (
+          <div>
+            <h4 style={sh}>This device's process log</h4>
+            <p style={{fontSize:settingsType.help,color:T.tFaint,fontFamily:NC_FONT_STACK,margin:"0 0 20px",lineHeight:settingsType.line}}>
+              Every text send and phone-relay command this device attempts, step by step, with how long each step took.
+              The DeskPhone app has always had a log like this; every other surface now keeps its own — you are looking at
+              the {surfaceLabel(detectSurfaceId())} log, and it never mixes in another device's runs. Copy any entry
+              straight into a prompt when something goes wrong.
+            </p>
+            <ProcessLogPanel C={cleanTheme(T)} />
           </div>
         )}
 

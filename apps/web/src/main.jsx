@@ -5,8 +5,16 @@ import { DeskPhoneWebPanel } from './10-deskphone-web.jsx';
 import { RelayTesterPage } from './11-relay-tester.jsx';
 import { GV_CLEAN } from './08-app-split/ui-tokens.jsx';
 import { registerOfflineShell } from './offline-support.js';
+import { initProcessLog, setProcessLogContext } from './08-app-split/process-log.js';
+import { APP_VERSION } from './version.js';
 
 registerOfflineShell();
+
+// Per-surface process log (owner tickets 7/29). Restored from this device's
+// localStorage before the first render, so Settings → Process log still holds
+// yesterday's failed send rather than starting empty at every reload.
+initProcessLog();
+setProcessLogContext({ appVersion: APP_VERSION });
 
 // Dev-only UI drift logger — opt in with ?uiaudit=1. Lazily imported so it is
 // never loaded or run in normal/production use. Read-only; changes nothing visual.
