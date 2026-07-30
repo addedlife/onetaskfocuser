@@ -38,9 +38,12 @@ export const CLOUD_ALLOWED_COMMANDS = new Set([
 //                       so it works when the tablet holds the phone and comes back
 //                       "unknown command" when the PC does. That asymmetry is the
 //                       whole reason message delete/pin kept coming back as a
-//                       ticket. The fix is a host build (see docs/ops/
-//                       VERIFICATION_LOG.md); this table is what makes the failure
-//                       legible in the meantime.
+//                       ticket. FIXED in DeskPhone b348: the relay now dispatches
+//                       through the same local handler as everything else, so the
+//                       switch cannot fall behind again. The set stays because a
+//                       PC still running b347 or older has the gap — it is now
+//                       gated on the host's reported build number, and a host
+//                       that reports no build is trusted (see PC_RELAY_GAP_FIXED_BUILD).
 export const HOST_DESKTOP_ONLY = new Set([
   "/open-live-log", "/clear-log", "/run-ui-auditor", "/open-bluetooth-settings",
   "/open-sound-settings", "/open-contact-sync-folder", "/toggle-main-window",
@@ -59,10 +62,23 @@ export const PC_RELAY_GAP = new Set([
   "/delete-message", "/toggle-message-pin", "/save-contact", "/delete-contact",
 ]);
 
+// The DeskPhone build that closed the gap. The host reports its build in the
+// status blob as e.g. "b348  07/30/26 2:01 pm".
+export const PC_RELAY_GAP_FIXED_BUILD = 348;
+
+/** Build number out of a host's reported build string; null when unreadable.
+ *  Null must stay permissive: refusing a button because a build string could not
+ *  be parsed would fail a working control, which is the failure this whole table
+ *  exists to prevent. An honest ack error is the cheaper wrong answer. */
+export function hostBuildNumber(build) {
+  const m = /b(\d{2,5})/i.exec(String(build || ""));
+  return m ? Number(m[1]) : null;
+}
+
 // Can this command work right now? `{ ok, reason }` — `reason` is shown to the
 // user verbatim, as a disabled control's tooltip or as the thrown error, so it
 // says what to do rather than what failed.
-export function commandAvailability(path, viaCloud, activeHostId = "") {
+export function commandAvailability(path, viaCloud, activeHostId = "", hostBuild = "") {
   const bare = String(path || "").split("?")[0];
   if (!viaCloud) return { ok: true, reason: "" };
   if (bare === "/send-with-attachments") {
@@ -78,7 +94,10 @@ export function commandAvailability(path, viaCloud, activeHostId = "") {
     return { ok: false, reason: `"${bare}" only works with the phone host open on this device.` };
   }
   if (PC_RELAY_GAP.has(bare) && activeHostId === "windows") {
-    return { ok: false, reason: "The PC host's current build doesn't accept this over the relay. It works when the tablet holds the phone, or from DeskPhone's own window." };
+    const num = hostBuildNumber(hostBuild);
+    if (num !== null && num < PC_RELAY_GAP_FIXED_BUILD) {
+      return { ok: false, reason: "This PC is running an older DeskPhone that doesn't accept this over the relay. Update DeskPhone on that machine, or use it while the tablet holds the phone." };
+    }
   }
   return { ok: true, reason: "" };
 }
@@ -90,7 +109,7 @@ export function explainAckError(error, path, activeHostId = "") {
   const bare = String(path || "").split("?")[0];
   if (/^unknown command/i.test(raw)) {
     const holder = activeHostId === "android" ? "The tablet host" : activeHostId === "windows" ? "The PC host" : "The phone host";
-    return `${holder} does not accept "${bare}" over the relay${PC_RELAY_GAP.has(bare) && activeHostId !== "android" ? " — it works when the tablet holds the phone, or from DeskPhone's own window" : ""}.`;
+    return `${holder} does not accept "${bare}" over the relay${PC_RELAY_GAP.has(bare) && activeHostId !== "android" ? " — update DeskPhone on that PC (build 348 or newer), or use it while the tablet holds the phone" : ""}.`;
   }
   return raw;
 }

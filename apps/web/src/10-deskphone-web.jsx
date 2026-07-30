@@ -6490,7 +6490,8 @@ export function DeskPhoneWebPanel({
     // One table decides what can work where (commandAvailability above), so the
     // refusal a user reads and the button that disabled itself can never
     // disagree.
-    const avail = commandAvailability(bare, true, linkRef.current?.activeHostId || "");
+    const avail = commandAvailability(bare, true, linkRef.current?.activeHostId || "",
+      statusRef.current?.build || "");
     if (!avail.ok) {
       step(`${bare} cannot run over the cloud relay`, "fail", avail.reason);
       throw new Error(avail.reason);

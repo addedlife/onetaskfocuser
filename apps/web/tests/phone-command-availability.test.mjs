@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import {
   commandAvailability, explainAckError,
   CLOUD_ALLOWED_COMMANDS, HOST_DESKTOP_ONLY, HOST_LOOPBACK_ONLY, PC_RELAY_GAP,
+  hostBuildNumber,
 } from '../src/08-app-split/phone-command-availability.js';
 
 test('on loopback every command is available — that host implements all of them', () => {
@@ -36,14 +37,37 @@ test('loopback-only phone operations say no host relays them yet', () => {
   }
 });
 
-test('the PC relay gap: the same command works via the tablet and is refused via the PC', () => {
+test('the PC relay gap is refused only on a PC host older than the build that fixed it', () => {
   for (const cmd of PC_RELAY_GAP) {
     assert.equal(commandAvailability(cmd, true, 'android').ok, true,
       `${cmd} is implemented by the Android host and must be attempted when the tablet holds the phone`);
-    const viaPc = commandAvailability(cmd, true, 'windows');
-    assert.equal(viaPc.ok, false, `${cmd} has no case in the Windows relay switch`);
-    assert.match(viaPc.reason, /tablet/, 'the refusal must name the thing that does work');
+
+    // b347 and older: no case in the Windows relay switch, so it would come back
+    // "unknown command" after the click. Refuse now, and name the fix.
+    const viaOldPc = commandAvailability(cmd, true, 'windows', 'b347  07/30/26 10:27 am');
+    assert.equal(viaOldPc.ok, false, `${cmd} has no dispatch on a pre-b348 PC host`);
+    assert.match(viaOldPc.reason, /Update DeskPhone|tablet/,
+      'the refusal must name the thing that does work');
+
+    // b348 dispatches through the local control API, so all four work again.
+    assert.equal(commandAvailability(cmd, true, 'windows', 'b348  07/30/26 2:01 pm').ok, true,
+      `${cmd} is dispatched by b348's loopback forward`);
+    assert.equal(commandAvailability(cmd, true, 'windows', 'b400').ok, true,
+      `${cmd} must not be refused on a build newer than the fix`);
+
+    // An unparseable or absent build stays permissive — an honest ack error is a
+    // cheaper wrong answer than a button that refuses to work.
+    assert.equal(commandAvailability(cmd, true, 'windows', '').ok, true);
+    assert.equal(commandAvailability(cmd, true, 'windows').ok, true);
   }
+});
+
+test('hostBuildNumber reads the build string the host actually pushes', () => {
+  assert.equal(hostBuildNumber('b348  07/30/26 2:01 pm'), 348);
+  assert.equal(hostBuildNumber('B99'), 99);
+  assert.equal(hostBuildNumber('unknown'), null);
+  assert.equal(hostBuildNumber(''), null);
+  assert.equal(hostBuildNumber(undefined), null);
 });
 
 test('an unknown host holder does not block a whitelisted command', () => {
@@ -84,7 +108,7 @@ test('every whitelisted command is genuinely relayable — the sets cannot contr
 test('"unknown command" acks are translated into something actionable', () => {
   const viaPc = explainAckError('unknown command /delete-message', '/delete-message', 'windows');
   assert.match(viaPc, /PC host/);
-  assert.match(viaPc, /tablet/);
+  assert.match(viaPc, /tablet|update DeskPhone/i);
   assert.doesNotMatch(viaPc, /^unknown command/);
 
   const viaTablet = explainAckError('unknown command /toggle-call-block', '/toggle-call-block', 'android');

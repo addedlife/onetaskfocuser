@@ -1478,3 +1478,80 @@ Verified: `npm run lint` 0 errors; `npm run gm3` 762/762; `npm run build` green;
 `npm run test:phone` 67/67; `npm run map:check` 59/59 paths; browser smoke clean.
 - Version 4.114.2 → 4.114.3 (fix).
 
+
+### The three PC-only items closed (b348 + 4.114.6)
+
+The previous entry stopped at three things a cloud session could not do. All three
+were finished on the owner's PC.
+
+- **The Windows host relay gap — FIXED, build b348.** `RelayService`'s
+  `ExecuteCommandAsync` switch is no longer a second route table. Its `default:`
+  now POSTs the raw path to this host's own control API on 127.0.0.1:8765, so a
+  relayed command and a local one run identical code and the 10-vs-71 divergence
+  cannot recur. The explicit cases are kept ONLY for commands with relay-specific
+  semantics (`/send`'s cid dedupe, the TTL-sensitive call controls), and the
+  comment at the switch says so — re-growing it is the actual regression risk.
+  Loopback is exempt from the pairing gate, so the forward carries
+  `RelayableLocalPaths`, a verbatim mirror of `COMMAND_PATH_ALLOWLIST` in
+  `phone-relay-v2/schemas.js`: a legacy v1 queue entry or a future cloud
+  regression still cannot reach a route like `/shutdown`. Non-2xx replies surface
+  the control API's own `{"error"}` text in the ack instead of a status code.
+  Verified: `dotnet build -c Release -p:Platform=ARM64` clean, b348 deployed and
+  running (`/status` reports `b348`), and the three previously-dead loopback
+  routes answered live — `/toggle-message-pin` 200, `/delete-contact` 200,
+  `/save-contact` with missing args 400 (the case that now returns a real reason).
+  - Web side follows in 4.114.6: `PC_RELAY_GAP` is no longer an unconditional
+    refusal on `activeHostId === "windows"`. It is gated on the host's reported
+    build (`hostBuildNumber`, `PC_RELAY_GAP_FIXED_BUILD = 348`), so a PC still on
+    b347 is refused with "update DeskPhone" while a b348 host is allowed through.
+    An absent or unparseable build stays permissive — refusing a working button is
+    worse than an honest ack error.
+  - Process note: the b348 changelog entry was hand-inserted INTO the b347 object,
+    producing duplicate JSON keys. Later keys win, so the release commit carried
+    b347's notes and b347 vanished from the list. Binary unaffected; both entries
+    restored in `acb32d15`. `deploy.ps1` validates that an entry for the tag
+    exists, not that it is a distinct object — worth knowing before hand-editing
+    that file again.
+
+- **The SMS timeout — one of the two causes closed, live, not by reasoning.**
+  Read off the running host rather than the source: `/relay-status` showed
+  `enrollState: approved`, `authBlocked: null`, `keyMatchesDisk: true`, and
+  `/status` showed `commandChannel {draining:false, reachable:false,
+  streaming:true}` with `connected:false`. `DrainMailboxOnceAsync` returns early
+  when `IsPhoneConnected()` is false, so a PC holding no Bluetooth link never
+  drains — and `relay-health.js` deliberately treated `draining:false` as "the
+  other host is the holder, not a fault". When NO host holds the phone, that
+  reading is wrong and nothing warned: the command sat until its TTL and the
+  browser reported the ticket's exact symptom, a 30 s timeout naming nothing.
+  Fixed in 4.114.6: `draining:false` **together with** `connected:false` is now
+  refused up front with "No phone host is holding your phone right now". The
+  combination cannot be produced by the tablet's blob (Android reports no
+  `commandChannel` at all, so it stays permissive), and a parked Windows host
+  pushes one farewell blob and then goes silent while the holder keeps pushing —
+  so the freshest blob is the holder's and a false refusal has no window to
+  live in. 7 new tests in `tests/relay-health.test.mjs`.
+  - The live relay was healthy at the time of writing: the state doc was the
+    Android host's, `connected:true`, RTDB `/phone-relay/commands` empty — the
+    tablet was holding and draining, the PC parked. So the second cause (a host
+    ran the command and its ack never came back in a state push) could not be
+    reproduced on demand and is NOT closed. It does not need to be guessed at
+    either: the ack-timeout path already withdraws the command from the mailbox
+    first and reports which of the two happened — "still in the mailbox, now
+    withdrawn — no host ever took it" versus the state-push branch. The process
+    log's Copy for prompt captures that verdict with elapsed time per stage.
+
+- **The five open tickets — closed** in `users/rabbidanziger/bugs`, each with a
+  resolution note, via the admin path on the PC: `1m6JulRSg2Ieil0i95HP` (task-row
+  actions behind a menu), `rcjoAhNQnMKglWQxGzGb` (webapp cleanup / dead wiring),
+  `EZqCceDbpENpTOlQPB87` (deep inspection), `1962qKarNjg3dX8h7Lje` (per-app
+  process logs), `ZHRpsYy0UcZUBiNsG8eU` (SMS timeout + process log — noted
+  honestly as "both halves shipped", with the Copy-for-prompt instruction if it
+  recurs).
+
+Verified: `npm run test:phone` 75/75 (7 new); `npm run lint` 0 errors;
+`npm run gm3` 762/762; `npm run build` green; DeskPhone ARM64 Release build clean
+and b348 running live. Version 4.114.5 → 4.114.6 (fix).
+
+Concurrent-session note: `4cf97835` (4.114.5, unused-vars ratchet) landed on main
+from another session while this work was in progress. Files are disjoint; it was
+left alone.

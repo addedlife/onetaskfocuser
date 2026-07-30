@@ -29,7 +29,25 @@ export function commandChannelHealth(status) {
   // Parked host — the OTHER host holds the phone and is the one draining. That
   // is the arbitration rule working correctly, not a fault, and this host has no
   // standing to refuse a send on its behalf.
-  if (draining === false) return { known: true, ok: true, parked: true, reason: '' };
+  //
+  // Unless nobody is holding it. A parked Windows host pushes ONE farewell blob
+  // with connected:false and then stays silent while the tablet keeps pushing, so
+  // the freshest blob is normally the holder's. `draining:false` together with
+  // `connected:false` therefore means the last host to speak holds nothing and
+  // will not drain — and no other host has spoken since. A command queued into
+  // that gap sits until its TTL and comes back as a 30 s timeout naming nothing:
+  // possibility (a) of the 7/29 ticket. Refuse it now instead.
+  if (draining === false) {
+    const connected = status?.connected ?? status?.Connected;
+    if (connected === false) {
+      return {
+        known: true, ok: false, parked: true,
+        reason: 'No phone host is holding your phone right now, so nothing would pick this up. ' +
+                'Reconnect DeskPhone on the PC (or the tablet) and try again.',
+      };
+    }
+    return { known: true, ok: true, parked: true, reason: '' };
+  }
 
   if (enrollState === 'pending') {
     return {
