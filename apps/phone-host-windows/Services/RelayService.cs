@@ -980,8 +980,16 @@ public class RelayService : IDisposable
                     }
                     break;
                 default:
-                    LogLine?.Invoke($"[RELAY CMD] unhandled: {path}");
-                    ok = false; error = $"unknown command {path}";
+                    // Everything this switch does not special-case is dispatched
+                    // through the SAME loopback handler the local web shell uses.
+                    // The switch above exists only for the commands that carry
+                    // relay-specific semantics (cid dedupe on /send, TTL-sensitive
+                    // call control); it is not — and must never again be — a second
+                    // copy of ControlApiService's route table. It had drifted to 10
+                    // cases against 71 routes, which is why /delete-message,
+                    // /toggle-message-pin, /save-contact and /delete-contact worked
+                    // from the tablet and answered "unknown command" from the PC.
+                    (ok, error) = await ForwardToLocalApiAsync(rawPath, path);
                     break;
             }
 
@@ -998,6 +1006,67 @@ public class RelayService : IDisposable
             RecordCommandResult(commandId, path, ok: false, error: ex.Message);
             PushNow();
         }
+    }
+
+    // ── Loopback dispatch ─────────────────────────────────────────────────────
+    // Local mirror of COMMAND_PATH_ALLOWLIST in
+    // apps/web/functions/phone-relay-v2/schemas.js. The cloud already rejects
+    // anything outside that set, so this is defence in depth, not the gate: it
+    // guarantees that a legacy v1 queue entry, or a future cloud regression,
+    // can never reach a loopback route like /shutdown just because loopback
+    // callers are exempt from the pairing check. Adding a relayable command
+    // means adding it in BOTH lists — the two are checked against each other by
+    // the web-side availability matrix (phone-command-availability.js).
+    private static readonly HashSet<string> RelayableLocalPaths = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "/dial", "/answer", "/hangup", "/toggle-mute", "/send", "/refresh", "/connect",
+        "/mark-conversation-read", "/mark-conversation-unread",
+        "/delete-message", "/toggle-message-pin", "/save-contact", "/delete-contact",
+    };
+
+    /// <summary>POSTs a relayed command to this host's own control API on
+    /// 127.0.0.1:8765, so relayed and local callers run identical code. Returns
+    /// the (ok, error) pair the acknowledgement carries back to the browser.</summary>
+    private async Task<(bool ok, string? error)> ForwardToLocalApiAsync(string rawPath, string path)
+    {
+        if (!RelayableLocalPaths.Contains(path))
+        {
+            LogLine?.Invoke($"[RELAY CMD] refused (not relayable): {path}");
+            return (false, $"unknown command {path}");
+        }
+
+        var url = $"http://127.0.0.1:{ControlApiService.LoopbackPort}{(rawPath.StartsWith('/') ? rawPath : "/" + rawPath)}";
+        try
+        {
+            using var req  = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent("") };
+            using var resp = await _http.SendAsync(req);
+            var respBody = await resp.Content.ReadAsStringAsync();
+            if (resp.IsSuccessStatusCode)
+            {
+                LogLine?.Invoke($"[RELAY CMD] {path} handled by local API");
+                return (true, null);
+            }
+            LogLine?.Invoke($"[RELAY CMD] {path} local API returned {(int)resp.StatusCode}");
+            return (false, ExtractApiError(respBody) ?? $"local API returned {(int)resp.StatusCode}");
+        }
+        catch (Exception ex)
+        {
+            LogLine?.Invoke($"[RELAY CMD] {path} local API unreachable: {ex.Message}");
+            return (false, "DeskPhone's local control API did not answer");
+        }
+    }
+
+    // The control API answers errors as {"error":"…"}; surface that verbatim so the
+    // browser shows the host's own words rather than a bare status code.
+    private static string? ExtractApiError(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            return doc.RootElement.TryGetProperty("error", out var e) ? e.GetString() : null;
+        }
+        catch { return null; }
     }
 
     private static string ParseStr(string qs, string key)

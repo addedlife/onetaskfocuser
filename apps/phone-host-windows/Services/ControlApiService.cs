@@ -37,7 +37,11 @@ namespace DeskPhone.Services;
 /// </summary>
 public class ControlApiService : IDisposable
 {
-    private const int Port = 8765;
+    /// <summary>The loopback port every in-process caller must use. Public so the
+    /// relay can dispatch relayed commands through this same handler instead of
+    /// keeping its own copy of the route table (see RelayService).</summary>
+    public const int LoopbackPort = 8765;
+    private const int Port = LoopbackPort;
     private const int MaxJsonBodyChars = 12 * 1024 * 1024;
     private TcpListener? _server;
     private CancellationTokenSource _cts = new();
