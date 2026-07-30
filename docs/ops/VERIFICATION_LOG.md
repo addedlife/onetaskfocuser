@@ -1323,3 +1323,89 @@ Current source-grade file count after cleanup: 162 files.
 - Verified: `npm run build` green at every push; `npm run gm3` at baseline 781 (+0) throughout; browser-driven checks against the dev content clone for the tablet card grid, the 1920px column tops, the phone-log search and the Settings pen tab; live site confirmed serving 4.110.0 after the deploy.
 - **Not done, owner action required**: the repo is still PUBLIC — `PATCH /repos/...` is refused at this session's proxy ("Repository settings writes are not permitted through this proxy"), so the visibility flip has to be a click in Settings → Danger Zone.
 - Version 4.108.2 → 4.110.0 (fix, feat, feat).
+
+## 2026-07-30 Shamash Pro 4 Ticket Batch — Queue Overflow Menu, Per-Surface Process Log, Dead-Control Audit (web 4.113.3 → 4.114.1)
+
+- Session scope: the five open tickets pasted by the owner (7/29). Worked from the
+  pasted text — the Firestore bridge was dispatched (403 as documented, then the
+  `bridge/**` push path) but the owner supplied the list directly, so the round
+  trip was abandoned and the request branch deleted.
+
+- **Queue per-task options (ticket 2:02 PM, 4.113.3)**: the row rail carried 7–8
+  icon buttons. Suggest first step, change priority, shatter and add subtasks moved
+  behind a real `md-menu` (`positioning="popover"`, so it escapes the card's
+  `overflow:hidden`); group rows got the same treatment. Five controls per row now.
+  Written as a render function rather than a nested component — a component defined
+  in a render body gets a fresh identity each render, which React treats as a new
+  element type and remounts, tearing the popover down mid-interaction. Verified in
+  the browser: 12 rows, 12 kebabs, menu contains exactly the four moved actions.
+
+- **Per-surface process log (tickets 8:04 AM + 8:05 AM, 4.114.0)**: new
+  `process-log.js` (pure, node-tested) + `ProcessLog.jsx` (mini live popup, full
+  log). Runs are surface-scoped, so "each their own" and "autorouting to its one"
+  are properties of the store rather than of any screen. Reachable from Settings →
+  Process log and from the DeskPhone Web rail's Live Log entry (which previously
+  fired `/open-live-log`, a NATIVE-only command). Sends and relay commands on all
+  three call paths are instrumented; the no-ack path now names each stage instead
+  of burning 95 s and reporting one unusable sentence. Log lines name the recipient
+  and never the message text — these get pasted into prompts.
+
+- **Dead-control audit (ticket 10:31 AM, 4.114.1)**. Three live ReferenceErrors,
+  all found by running the app and by an ESLint `no-undef` sweep, none of which the
+  build or the GM3 ratchet can see:
+  - `switchTab` called `setShowAides` and `setShowEntryTools`; neither is declared
+    anywhere in `App.jsx`. Every Tasks/Queue/Insights switch threw on the third
+    statement and skipped the rest of the handler. It survived because the tab had
+    already changed on the FIRST statement. Two page errors per switch before, none
+    after.
+  - The queue quick-add box ended its submit handler with `triggerAIPrioritize()`,
+    which did not exist. Every add from that box threw on its last statement, and
+    the nudge the neighbouring comment describes ("AI prioritizes every 5 events")
+    had never once run. Implemented as described: a counter that hands the fifth add
+    to the same `tasksOptimize` the AI-Prioritize button runs, no-op without AI or
+    while a sort is in flight.
+  - `App.jsx` line ~1292 read `firebase.auth().currentUser`, but `firebase` is
+    neither imported into that file nor assigned to `window` anywhere in `src/`. The
+    ReferenceError was swallowed by the surrounding `try`, leaving `unsubPush` null —
+    so the Gmail **push** listener has never been subscribed and new mail has only
+    ever arrived on the poll. Now uses the `user` prop the file already has.
+
+- **The relay command matrix**, audited command by command against
+  `ControlApiService.cs` (71 loopback routes), `RelayService.cs` (10 relay dispatch
+  cases) and `HostService.kt` (26 routes, dispatched generically). The DeskPhone Web
+  surface drives 44 distinct commands; over the cloud relay only 13 were ever
+  attempted and every other control failed AFTER the click with one generic
+  sentence. Now in `phone-command-availability.js` — pure, 11 node tests — with
+  three classes: desktop-only (21), loopback-only phone operations (6), and the PC
+  relay gap. 15 Settings/Developer-Tools controls disable themselves with the reason
+  in the tooltip instead of failing on click.
+
+- **OPEN — needs a host build, not shippable from a cloud session.** `/delete-message`,
+  `/toggle-message-pin`, `/save-contact` and `/delete-contact` are whitelisted, are
+  implemented by the Android host, and have **no case in `RelayService.cs`'s
+  `ExecuteCommandAsync` switch**. When the PC holds the phone all four come back
+  `unknown command`; when the tablet holds it they work. That asymmetry is why
+  message delete/pin kept returning as a ticket (last touched in 4.113.2). The fix
+  is to make the Windows relay dispatch through the same local API handler the
+  Android host uses, instead of a hand-maintained switch that silently diverges
+  from ControlApiService's 71 routes. **No `dotnet` in this container**, so the
+  CLAUDE.md DeskPhone build gate cannot be met and no C# was changed. The web side
+  now translates the `unknown command` ack into a sentence that names the holder and
+  the alternative, and the process log records it.
+
+- **NOT diagnosed — the SMS timeout itself (ticket 8:04 AM).** The reported symptom
+  (a send from the web phone times out while every indicator is green) needs the
+  live relay to distinguish its two remaining causes, and both live on the host
+  side: a mailbox the holder never drained, versus a command it ran whose ack never
+  came back in a state push. The web path was read end to end and its provable
+  defects were fixed, but nothing here can honestly be called the root cause. The
+  process log was built for exactly this: the next occurrence produces a copyable
+  step list that separates the two.
+
+- Verified: `npm run test:phone` 67/67 (31 new); `npm run build` green at every
+  push; `npm run gm3` 781 against baseline 781 throughout. Browser-driven against
+  the dev content clone (Chromium, 1500×950): clean boot, queue row menu, tab
+  switches error-free, quick-add error-free, Settings → Process log rendering and
+  reporting the Web app surface, DeskPhone Developer Tools showing the cloud copy
+  and opening the device's own log.
+- Version 4.113.2 → 4.114.1 (fix, feat, fix).

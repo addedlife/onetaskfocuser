@@ -1289,7 +1289,12 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     // actual mail is fetched here, on demand, exactly as before.
     let unsubPush = null;
     try {
-      const uid = canonicalUid(firebase.auth().currentUser);
+      // `firebase` is neither imported into this file nor assigned to window
+      // anywhere in src/, so `firebase.auth()` threw a ReferenceError here — caught
+      // by the surrounding try, which left `unsubPush` null and the Gmail push
+      // listener silently unsubscribed for the life of the app. The signed-in user
+      // is already a prop (line 185) and is what line 186 uses for Store.setUid.
+      const uid = canonicalUid(user);
       if (db && uid) {
         let seenChangedAt = null;
         unsubPush = db.collection("users").doc(uid).collection("pushState").doc("mail")
@@ -2069,6 +2074,25 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   }
 
   // ─── Manual tasks AI prioritization ──────────────────────────────────
+  // The queue's quick-add box has always ended its submit handler with
+  // `triggerAIPrioritize()`, and no such function existed anywhere — so every add
+  // from that box threw a ReferenceError on its last statement (the task itself
+  // was already saved, which is why this went unnoticed) and the nudge the
+  // comment above describes ("AI prioritizes every 5 events") never happened.
+  // This is that function: it counts adds and hands the fifth to the same
+  // tasksOptimize the AI-Prioritize button runs. Non-destructive — a reorder plus
+  // a toast — and it stays out of the way when there is no AI or a sort is
+  // already in flight.
+  const AI_PRIORITIZE_EVERY = 5;
+  const aiPrioritizeEvents = useRef(0);
+  const triggerAIPrioritize = () => {
+    if (!hasAI || optLoading) return;
+    aiPrioritizeEvents.current += 1;
+    if (aiPrioritizeEvents.current < AI_PRIORITIZE_EVERY) return;
+    aiPrioritizeEvents.current = 0;
+    tasksOptimize();
+  };
+
   async function tasksOptimize() {
     if (!hasAI || optLoading) return;
     setOptLoading(true);

@@ -12,6 +12,7 @@ import { derivePhoneLinkState, describePhoneLink, messageListSignature, mergeMes
 import { TextField as DpTextField, IconButton as DpIconButton } from './08-app-split/m3.jsx';
 import { subscribeOwner } from './08-app-split/phone-host-control.js';
 import { detectSurfaceId, startProcessRun, logProcessStep, finishProcessRun } from './08-app-split/process-log.js';
+import { commandAvailability, explainAckError } from './08-app-split/phone-command-availability.js';
 import { ProcessLogPanel, ProcessLogPopup } from './08-app-split/components/ProcessLog.jsx';
 
 const DEFAULT_HOST = "http://127.0.0.1:8765";
@@ -26,11 +27,11 @@ const RELAY_BASE = "/api/phone-relay";
 const CLOUD_ACK_TIMEOUT_MS = 30000;
 // Liveness windows + status wording come from the shared phone-link.js state
 // machine — this page and the NerveCenter card can no longer disagree.
-const CLOUD_ALLOWED_COMMANDS = new Set([
-  "/dial", "/answer", "/hangup", "/toggle-mute", "/send", "/refresh", "/connect",
-  "/mark-conversation-read", "/mark-conversation-unread",
-  "/delete-message", "/toggle-message-pin", "/save-contact", "/delete-contact",
-]);
+
+// The command-availability table and its two helpers live in
+// ./08-app-split/phone-command-availability.js — pure data + pure functions, so
+// the node suite exercises them directly (see tests/phone-command-availability.test.mjs).
+
 const canUseCloud = () => {
   try { return window.location.port !== "8765"; } catch { return false; }
 };
@@ -1238,16 +1239,30 @@ function SourceTag({ children }) {
   return <span className="dp-source-tag">{children}</span>;
 }
 
+// `command` + `viaCloud`: a button whose command cannot work on the current
+// transport disables itself and puts the reason in its tooltip, rather than
+// failing after the click (owner ticket 7/29 — the "unworking functions").
 function ShellButton({
   children,
   iconName,
   className = "",
   nativeSource,
   nativeGlyph,
+  command,
+  viaCloud,
+  activeHostId,
   ...props
 }) {
+  const avail = command ? commandAvailability(command, !!viaCloud, activeHostId || "") : { ok: true, reason: "" };
   return (
-    <button {...props} className={`dp-md-button ${className}`} data-native-source={nativeSource || ""} data-native-glyph={nativeGlyph || ""}>
+    <button
+      {...props}
+      disabled={props.disabled || !avail.ok}
+      title={avail.ok ? props.title : avail.reason}
+      className={`dp-md-button ${className}`}
+      data-native-source={nativeSource || ""}
+      data-native-glyph={nativeGlyph || ""}
+    >
       {iconName ? icon(iconName, 18) : null}
       <span>{children}</span>
     </button>
@@ -3173,6 +3188,7 @@ function SimpleTabContent({
   onNotice,
   onRequestDeleteAllCalls,
   viaCloud,
+  activeHostId,
   onOpenOwnLog,
 }) {
   const [settingsSection, setSettingsSection] = useState("connection");
@@ -3356,12 +3372,12 @@ function SimpleTabContent({
                 <div className="dp-device-status">Manage which phone this PC links to.</div>
                 <div className="dp-settings-actions dp-settings-tools">
                   <ShellButton className="dp-tonal" iconName="refresh" onClick={onRefresh}>Check status now</ShellButton>
-                  <ShellButton className="dp-tonal" iconName="bluetooth" nativeSource="MainWindow.xaml:4140" onClick={() => onCommand("/open-bluetooth-settings", "open Bluetooth settings")}>Open Windows Bluetooth settings</ShellButton>
+                  <ShellButton command="/open-bluetooth-settings" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="bluetooth" nativeSource="MainWindow.xaml:4140" onClick={() => onCommand("/open-bluetooth-settings", "open Bluetooth settings")}>Open Windows Bluetooth settings</ShellButton>
                 </div>
                 <div className="dp-device-manager" data-native-source="MainWindow.xaml:4052">
                   <div className="dp-device-manager-head">
                     <h3>Paired phones</h3>
-                    <ShellButton className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4052" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Find another phone</ShellButton>
+                    <ShellButton command="/scan-devices" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4052" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Find another phone</ShellButton>
                   </div>
                   {bluetoothStatus && !/^(idle|ready)$/i.test(bluetoothStatus.trim())
                     ? <div className="dp-device-status">{bluetoothStatus}</div>
@@ -3378,9 +3394,9 @@ function SimpleTabContent({
                             {address ? <span className="dp-device-address" title={address}>Paired</span> : <span className="dp-device-status-text">Not found</span>}
                           </div>
                           <div className="dp-device-row-actions">
-                            <ShellButton className="dp-tonal" iconName="link" nativeSource="MainWindow.xaml:4083" onClick={() => onCommand(`/connect-saved-device?addr=${encodeURIComponent(address)}`, "connect saved device")} disabled={!address}>Connect</ShellButton>
-                            <ShellButton className="dp-tonal" iconName="star" nativeSource="MainWindow.xaml:4088" onClick={() => onCommand(`/set-default-saved-device?addr=${encodeURIComponent(address)}`, "set default device")} disabled={!address}>Set default</ShellButton>
-                            <ShellButton className="dp-tonal" iconName="delete" nativeSource="MainWindow.xaml:4102" onClick={() => onCommand(`/forget-saved-device?addr=${encodeURIComponent(address)}`, "forget device")} disabled={!address}>Forget</ShellButton>
+                            <ShellButton command="/connect-saved-device" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="link" nativeSource="MainWindow.xaml:4083" onClick={() => onCommand(`/connect-saved-device?addr=${encodeURIComponent(address)}`, "connect saved device")} disabled={!address}>Connect</ShellButton>
+                            <ShellButton command="/set-default-saved-device" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="star" nativeSource="MainWindow.xaml:4088" onClick={() => onCommand(`/set-default-saved-device?addr=${encodeURIComponent(address)}`, "set default device")} disabled={!address}>Set default</ShellButton>
+                            <ShellButton command="/forget-saved-device" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="delete" nativeSource="MainWindow.xaml:4102" onClick={() => onCommand(`/forget-saved-device?addr=${encodeURIComponent(address)}`, "forget device")} disabled={!address}>Forget</ShellButton>
                           </div>
                         </div>
                       );
@@ -3390,7 +3406,7 @@ function SimpleTabContent({
                 <div className="dp-device-manager" data-native-source="MainWindow.xaml:4135">
                   <div className="dp-device-manager-head">
                     <h3>Available phones</h3>
-                    <ShellButton className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4135" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Look again</ShellButton>
+                    <ShellButton command="/scan-devices" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="search" nativeSource="MainWindow.xaml:4135" onClick={() => onCommand("/scan-devices", "scan devices")} disabled={isScanning}>Look again</ShellButton>
                   </div>
                   <div className="dp-device-list">
                     {scannedDevices.length ? scannedDevices.map((device) => {
@@ -3402,7 +3418,7 @@ function SimpleTabContent({
                             <span>{address}{device?.isPaired || device?.IsPaired ? " - paired" : ""}</span>
                           </div>
                           <div className="dp-device-row-actions">
-                            <ShellButton className="dp-tonal" iconName="link" nativeSource="MainWindow.xaml:4150" onClick={() => onCommand(`/connect-scanned-device?addr=${encodeURIComponent(address)}`, "connect scanned device")} disabled={!address}>Connect to selected device</ShellButton>
+                            <ShellButton command="/connect-scanned-device" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="link" nativeSource="MainWindow.xaml:4150" onClick={() => onCommand(`/connect-scanned-device?addr=${encodeURIComponent(address)}`, "connect scanned device")} disabled={!address}>Connect to selected device</ShellButton>
                           </div>
                         </div>
                       );
@@ -3416,7 +3432,7 @@ function SimpleTabContent({
         {settingsSection === "appearance" && (
           <section className="dp-settings-panel" data-native-source="MainWindow.xaml:4000" aria-label="Appearance settings">
             <div className="dp-settings-actions dp-settings-tools">
-              <ShellButton className="dp-tonal" iconName="restart_alt" nativeSource="MainWindow.xaml:4235" onClick={() => onCommand("/reset-ui-scale", "reset appearance")}>Reset</ShellButton>
+              <ShellButton command="/reset-ui-scale" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="restart_alt" nativeSource="MainWindow.xaml:4235" onClick={() => onCommand("/reset-ui-scale", "reset appearance")}>Reset</ShellButton>
             </div>
             <label className="dp-settings-toggle" data-native-source="MainWindow.xaml:4294">
               <span>History Background Fetching</span>
@@ -3436,19 +3452,19 @@ function SimpleTabContent({
         {settingsSection === "contact-sync" && (
           <section className="dp-settings-panel" data-native-source="MainWindow.xaml:4005">
             <div className="dp-settings-actions dp-settings-tools">
-              <ShellButton className="dp-tonal" iconName="upload_file" nativeSource="MainWindow.xaml:4381" onClick={() => onCommand("/import-starter-vcf", "import starter VCF")}>Import VCF</ShellButton>
-              <ShellButton className="dp-tonal" iconName="move_to_inbox" nativeSource="MainWindow.xaml:4385" onClick={() => onCommand("/import-pending-contacts", "import synced contacts")}>Import Synced</ShellButton>
-              <ShellButton className="dp-tonal" iconName="block" nativeSource="MainWindow.xaml:4390" onClick={() => onCommand("/skip-pending-contacts", "ignore pending contacts")}>Ignore Pending</ShellButton>
-              <ShellButton className="dp-tonal" iconName="folder_open" nativeSource="MainWindow.xaml:4395" onClick={() => onCommand("/open-contact-sync-folder", "open contact sync folder")}>Sync Folder</ShellButton>
-              <ShellButton className="dp-tonal" iconName="download" nativeSource="MainWindow.xaml:4412" onClick={() => onCommand("/export-messages-backup", "export messages backup")}>Save Backup</ShellButton>
+              <ShellButton command="/import-starter-vcf" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="upload_file" nativeSource="MainWindow.xaml:4381" onClick={() => onCommand("/import-starter-vcf", "import starter VCF")}>Import VCF</ShellButton>
+              <ShellButton command="/import-pending-contacts" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="move_to_inbox" nativeSource="MainWindow.xaml:4385" onClick={() => onCommand("/import-pending-contacts", "import synced contacts")}>Import Synced</ShellButton>
+              <ShellButton command="/skip-pending-contacts" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="block" nativeSource="MainWindow.xaml:4390" onClick={() => onCommand("/skip-pending-contacts", "ignore pending contacts")}>Ignore Pending</ShellButton>
+              <ShellButton command="/open-contact-sync-folder" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="folder_open" nativeSource="MainWindow.xaml:4395" onClick={() => onCommand("/open-contact-sync-folder", "open contact sync folder")}>Sync Folder</ShellButton>
+              <ShellButton command="/export-messages-backup" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="download" nativeSource="MainWindow.xaml:4412" onClick={() => onCommand("/export-messages-backup", "export messages backup")}>Save Backup</ShellButton>
             </div>
           </section>
         )}
         {settingsSection === "audio" && (
           <section className="dp-settings-panel" data-native-source="MainWindow.xaml:4010">
             <div className="dp-settings-actions dp-settings-tools">
-              <ShellButton className="dp-tonal" iconName="volume_up" nativeSource="MainWindow.xaml:4480" onClick={() => onCommand("/open-sound-settings", "open sound settings")}>Sound Settings</ShellButton>
-              <ShellButton className="dp-tonal" iconName="sync" nativeSource="MainWindow.xaml:4476" onClick={() => onCommand("/audio-refresh", "refresh audio")}>Refresh Audio</ShellButton>
+              <ShellButton command="/open-sound-settings" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="volume_up" nativeSource="MainWindow.xaml:4480" onClick={() => onCommand("/open-sound-settings", "open sound settings")}>Sound Settings</ShellButton>
+              <ShellButton command="/audio-refresh" viaCloud={viaCloud} activeHostId={activeHostId} className="dp-tonal" iconName="sync" nativeSource="MainWindow.xaml:4476" onClick={() => onCommand("/audio-refresh", "refresh audio")}>Refresh Audio</ShellButton>
             </div>
           </section>
         )}
@@ -3490,9 +3506,9 @@ function SimpleTabContent({
           onClick={() => (viaCloud ? onOpenOwnLog?.() : onCommand("/open-live-log", "open live log"))}>
           {viaCloud ? "This device's log" : "Live Log"}
         </ShellButton>
-        <ShellButton className="dp-tonal" iconName="ink_eraser" nativeSource="LogWindow.xaml:45" disabled={viaCloud} onClick={() => onCommand("/clear-log", "clear log")}>Clear Log</ShellButton>
-        <ShellButton className="dp-tonal" iconName="fact_check" nativeSource="MainWindow.xaml:4346" disabled={viaCloud} onClick={() => onCommand("/run-ui-auditor", "run UI auditor")}>Open Auditor</ShellButton>
-        <ShellButton className="dp-tonal" iconName="bug_report" nativeSource="MainWindow.xaml:4639" disabled={viaCloud} onClick={() => onCommand("/run-ui-auditor", "run UI auditor")}>Run UI Auditor</ShellButton>
+        <ShellButton className="dp-tonal" iconName="ink_eraser" nativeSource="LogWindow.xaml:45" command="/clear-log" viaCloud={viaCloud} activeHostId={activeHostId} onClick={() => onCommand("/clear-log", "clear log")}>Clear Log</ShellButton>
+        <ShellButton className="dp-tonal" iconName="fact_check" nativeSource="MainWindow.xaml:4346" command="/run-ui-auditor" viaCloud={viaCloud} activeHostId={activeHostId} onClick={() => onCommand("/run-ui-auditor", "run UI auditor")}>Open Auditor</ShellButton>
+        <ShellButton className="dp-tonal" iconName="bug_report" nativeSource="MainWindow.xaml:4639" command="/run-ui-auditor" viaCloud={viaCloud} activeHostId={activeHostId} onClick={() => onCommand("/run-ui-auditor", "run UI auditor")}>Run UI Auditor</ShellButton>
       </div>
     </div>
   );
@@ -6428,6 +6444,11 @@ export function DeskPhoneWebPanel({
     relayReceivedAt: relayStamp,
   });
   const relayStale = link.stale;
+  // The relay callbacks below have stable ([]) deps but need to know which host
+  // currently holds the phone, so they read it through a ref rather than closing
+  // over a value that would go stale on the first handoff.
+  const linkRef = useRef(null);
+  linkRef.current = link;
   const hostLabel = link.activeHostLabel
     ? (link.activeHostId === "android" ? "the tablet" : "your PC")
     : ((status?.hostPlatform === "android" || status?.HostPlatform === "android") ? "the tablet" : "your PC");
@@ -6467,19 +6488,13 @@ export function DeskPhoneWebPanel({
   // their data in the single command string the host contract expects.
   const runCloudCommand = useCallback(async (path, payload, step = () => {}) => {
     const bare = path.split("?")[0];
-    // Picture texts are a loopback-only capability and always were: the command
-    // mailbox carries ONE query string, and a base64 image is megabytes, so the
-    // attachment payload physically cannot ride it — the Windows host's relay
-    // switch has no case for it either. The old generic refusal ("that control
-    // only works with the phone host open on this device") was true but useless
-    // here; say what is actually needed.
-    if (bare === "/send-with-attachments") {
-      step("picture texts cannot go over the cloud relay", "fail", "the mailbox carries one query string; image data has to go over loopback");
-      throw new Error("Picture texts need the DeskPhone window open on this PC — the cloud relay carries text only. The words alone will send from here.");
-    }
-    if (!CLOUD_ALLOWED_COMMANDS.has(bare)) {
-      step(`${bare} is not a cloud-relayable command`, "fail");
-      throw new Error(`"${bare}" only works with the phone host open on this device.`);
+    // One table decides what can work where (commandAvailability above), so the
+    // refusal a user reads and the button that disabled itself can never
+    // disagree.
+    const avail = commandAvailability(bare, true, linkRef.current?.activeHostId || "");
+    if (!avail.ok) {
+      step(`${bare} cannot run over the cloud relay`, "fail", avail.reason);
+      throw new Error(avail.reason);
     }
     let fullPath = path;
     if (payload && typeof payload === "object") {
@@ -6561,8 +6576,9 @@ export function DeskPhoneWebPanel({
     const ack = await waitForCloudAck(cmdId, CLOUD_ACK_TIMEOUT_MS);
     await refresh();
     if (ack && !ack.ok) {
-      step("host ran it and reported FAILURE", "fail", ack.error || "");
-      throw new Error(ack.error || "Your phone host reported the command failed.");
+      const explained = explainAckError(ack.error, path, linkRef.current?.activeHostId || "");
+      step("host ran it and reported FAILURE", "fail", explained);
+      throw new Error(explained || "Your phone host reported the command failed.");
     }
     if (!ack) {
       step("no acknowledgement in time — the host never confirmed", "warn",
@@ -6583,8 +6599,9 @@ export function DeskPhoneWebPanel({
       await refresh();
       if (lateAck && lateAck.ok) { step("late acknowledgement arrived — the host ran it", "ok"); return; }
       if (lateAck) {
-        step("late acknowledgement says it FAILED", "fail", lateAck.error || "");
-        throw new Error(lateAck.error || "Your phone host reported the command failed.");
+        const explained = explainAckError(lateAck.error, path, linkRef.current?.activeHostId || "");
+        step("late acknowledgement says it FAILED", "fail", explained);
+        throw new Error(explained || "Your phone host reported the command failed.");
       }
       step("no acknowledgement after 95s total", "fail",
         "the host drained the command but its state push never carried the ack back");
@@ -6894,6 +6911,7 @@ export function DeskPhoneWebPanel({
               onNotice={showNotice}
               onRequestDeleteAllCalls={() => setDeleteAllCallsConfirm(true)}
               viaCloud={viaCloud}
+              activeHostId={link.activeHostId}
               onOpenOwnLog={() => setActiveTab("live-log")}
             />
           </div>
