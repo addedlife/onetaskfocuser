@@ -11,6 +11,7 @@ import { derivePhoneLinkState, describePhoneLink, messageListSignature, mergeMes
 // here predates the GM3 rule and is raw markup on purpose — a native-parity clone.
 import { TextField as DpTextField, IconButton as DpIconButton } from './08-app-split/m3.jsx';
 import { subscribeOwner } from './08-app-split/phone-host-control.js';
+import { commandChannelHealth } from './08-app-split/utils/relay-health.js';
 import { detectSurfaceId, startProcessRun, logProcessStep, finishProcessRun } from './08-app-split/process-log.js';
 import { commandAvailability, explainAckError } from './08-app-split/phone-command-availability.js';
 import { ProcessLogPanel, ProcessLogPopup } from './08-app-split/components/ProcessLog.jsx';
@@ -6177,6 +6178,10 @@ export function DeskPhoneWebPanel({
 }) {
   const host = DEFAULT_HOST;
   const [status, setStatus] = useState(null);
+  // Latest status, read at COMMAND time rather than render time: the
+  // command-channel pre-flight below runs inside a useCallback that must not be
+  // re-created on every poll.
+  const statusRef = useRef(null);
   const [messages, setMessages] = useState([]);
   const [calls, setCalls] = useState([]);
   const [contacts, setContacts] = useState([]);
@@ -6367,7 +6372,7 @@ export function DeskPhoneWebPanel({
       if (!anyOnline) {
         throw nextStatus.error || nextMessages.error || nextCalls.error || nextContacts.error || new Error("No phone host was reached.");
       }
-      if (nextStatus.ok) setStatus(nextStatus.data);
+      if (nextStatus.ok) { statusRef.current = nextStatus.data; setStatus(nextStatus.data); }
       if (nextMessages.ok) {
         const mediaData = nextMediaMessages.ok ? nextMediaMessages.data : mediaMessagesRef.current;
         const mergedMedia = mergeMessagesWithMedia(nextMessages.data, mediaData);
@@ -6563,6 +6568,15 @@ export function DeskPhoneWebPanel({
   // from the mailbox first, so "failed" can never fire later when a host
   // reconnects (owner incident 7/19 — duplicate texts on reconnect).
   const runCloudCommandConfirmed = useCallback(async (path, payload, step = () => {}) => {
+    // Pre-flight: hosts from b347 report whether they can drain the mailbox at
+    // all. Queueing against a host that says no buys a 30 s wait and a verdict
+    // that names nothing — refuse now, with the reason and the fix (owner ticket
+    // 7/29: timed-out sends while every panel showed green).
+    const health = commandChannelHealth(statusRef.current);
+    if (health.known && !health.ok) {
+      step("the phone host says it cannot receive commands", "fail", health.reason);
+      throw new Error(health.reason);
+    }
     const cmdId = await runCloudCommand(path, payload, step);
     if (!cmdId) {
       // Relay without command ids (older function) — legacy blind wait.

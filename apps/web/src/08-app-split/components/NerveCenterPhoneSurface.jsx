@@ -8,6 +8,7 @@ import {
   addPendingSms, updatePendingSms, getPendingSms, subscribePendingSms,
   reconcilePendingSms, unmatchedPendingSms, collapseHostDoubles, smsBodyKey, smsPhoneKey,
 } from '../utils/pending-sms.js';
+import { commandChannelHealth } from '../utils/relay-health.js';
 import {
   detectSurfaceId, startProcessRun, logProcessStep, finishProcessRun,
 } from '../process-log.js';
@@ -250,6 +251,9 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
   const viewportW = useViewportWidth();
   const touchActions = viewportW < 980;
   const [status, setStatus] = useState(null);
+  // Read by the command-channel pre-flight at send time — `post` is a plain
+  // function and must not close over a render-time snapshot of status.
+  const statusRef = useRef(null);
   const [messages, setMessages] = useState([]);
   const [calls, setCalls] = useState([]);
   // Manually resolved missed calls — stored in Firestore so every browser/device (Chrome,
@@ -439,6 +443,7 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     const incomingCalls = Array.isArray(callsParsed) ? callsParsed : (callsParsed?.calls || nextStatus?.recentCalls || []);
     const contactsParsed = contactsRes || [];
     const nextContacts = Array.isArray(contactsParsed) ? contactsParsed : (contactsParsed?.contacts || []);
+    statusRef.current = nextStatus;
     setStatus(nextStatus);
     // Retention merge (phone-link.js): a freshly handed-to host re-syncs its
     // store from the phone over minutes — union its (small) list with what we
@@ -714,6 +719,19 @@ function NerveCenterPhoneSurface({ T, user = null, onOnlineChange, onStatusSumma
     });
     const step = (stage, status = "info", note = "") => logProcessStep(runId, { stage, status, note });
     const done = (ok, error = "") => { finishProcessRun(runId, { ok, error }); return ok; };
+    // Pre-flight: hosts from b347 report whether they can drain the command
+    // mailbox at all. State pushes and the mailbox authenticate separately, so a
+    // host that is unapproved or key-rejected still looks perfectly healthy here
+    // while nothing it is sent ever runs (owner ticket 7/29). Refuse up front
+    // with the real reason instead of buying a 25 s wait and a vague verdict.
+    const health = commandChannelHealth(statusRef.current);
+    if (health.known && !health.ok) {
+      step("the phone host says it cannot receive commands", "fail", health.reason);
+      fail(health.reason);
+      done(false, health.reason);
+      if (!opts.background) setBusy("");
+      return false;
+    }
     try {
       // Route command through the cloud relay — the active host drains it.
       // Include Firebase ID token so the function can gate on auth.
