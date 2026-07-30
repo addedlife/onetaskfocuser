@@ -26,7 +26,7 @@ import { BugLog } from './components/BugLog.jsx';
 // `?ncproto=1` inside NerveCenter.jsx is a live experiment, unrelated to this.
 import { buildNerveShailaRows, isShailaPriority, shailaIsAnswered, shailaIsGotBack, shailaText, shailaCreatedAt, shailaField } from './utils/shailosQueue.js';
 import { shouldRunForContentAndClaim, publishContentResult, releaseContentClaim } from './ai-call-throttle.js';
-import { IconButton, OutlinedIconButton, FilledIconButton, FilledButton, OutlinedButton, List, ListItem, AssistChip } from './m3.jsx';
+import { IconButton, OutlinedIconButton, FilledIconButton, FilledButton, OutlinedButton, List, ListItem, AssistChip, Menu, MenuItem, Divider } from './m3.jsx';
 
 const GOOGLE_SERVER_TOKEN = "__server_google_workspace__";
 const GOOGLE_TOKEN_EXPIRY_SKEW_MS = 60 * 1000;
@@ -3460,6 +3460,46 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     ...(queueCompactRows ? { width: "100%", paddingLeft: 64, boxSizing: "border-box", marginTop: 2 } : {}),
   };
 
+  // Queue row overflow menu (owner ticket, 7/29/26: "all the per-task options
+  // taking up more than half the row … suggest next step, change priority,
+  // shatter and add subtasks should be behind the bars"). The four secondary
+  // actions move into a real `md-menu`; the rail keeps only what is used on
+  // nearly every row — done, to-top, unpin, delete (+ expand on a group).
+  // One menu open at a time, keyed by row id.
+  //
+  // Written as a render FUNCTION, not a nested component: a component defined in
+  // the render body gets a new function identity every render, which React reads
+  // as a different element type and remounts — the popover would tear down mid
+  // interaction. Returning JSX inlines it into the parent tree instead.
+  const [rowMenuId, setRowMenuId] = useState(null);
+  const queueMoreMenu = ({ id, opacity, color, items }) => {
+    const anchorId = `qmore-${id}`;
+    const visible = items.filter(Boolean);
+    if (!visible.length) return null;
+    return (
+      <span style={{ position: "relative", display: "inline-flex" }} onClick={e => e.stopPropagation()}>
+        <IconBtn id={anchorId} icon="more_vert" iconSize={13} size={26} color={color}
+          title="More task actions" aria-label="More task actions"
+          onClick={e => { e.stopPropagation(); setRowMenuId(m => (m === id ? null : id)); }}
+          style={{ opacity }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = opacity} />
+        <Menu anchor={anchorId} open={rowMenuId === id} positioning="popover"
+          onClosed={() => setRowMenuId(m => (m === id ? null : m))}>
+          {visible.map((it, i) => (
+            it.divider
+              ? <Divider key={`d${i}`} />
+              : (
+                <MenuItem key={it.label} disabled={it.disabled || undefined}
+                  onClick={() => { setRowMenuId(null); if (!it.disabled) it.run(); }}>
+                  <span slot="start" className="material-symbols-rounded" style={{ color: it.danger ? C.danger : C.muted }}>{it.icon}</span>
+                  <div slot="headline" style={it.danger ? { color: C.danger } : undefined}>{it.label}</div>
+                </MenuItem>
+              )
+          ))}
+        </Menu>
+      </span>
+    );
+  };
+
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div ref={appRef} className="nc-suite-root" style={{overflow:"hidden",background:`linear-gradient(170deg,${T.grad[0]} 0%,${T.grad[1]} 50%,${T.grad[2]} 100%)`,fontFamily:NC_FONT_STACK,color:C.text,display:"flex",flexDirection:"column",alignItems:"center","--nc-font-weight-normal":fontWeightNormal,"--nc-font-weight-strong":fontWeightStrong}}>
@@ -4644,11 +4684,14 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                             <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.7}}/>
                             <div style={queueActionRail}>
                               <IconBtn title="Complete next step" aria-label="Complete next step" onClick={e=>{e.stopPropagation();compTask(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></IconBtn>
-                              {AS.legacyCompleteUI && <IconBtn title="Legacy complete (no timestamp)" aria-label="Legacy complete" onClick={e=>{e.stopPropagation();legacyCompTask(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></IconBtn>}
                               <IconBtn title="To top" aria-label="Move to top" onClick={e=>{e.stopPropagation();moveTop(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={rowSoft}/></IconBtn>
-                              <IconBtn title="Change priority" aria-label="Change priority" onClick={e=>{e.stopPropagation();setChgPri(gSteps[0]?.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={rowSoft}/></IconBtn>
-                              <IconBtn icon="add_circle" iconSize={12} color={rowSoft} title="Add step" aria-label="Add step" onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.add(task.parentTask);return n;});setGroupAdding(task.parentTask);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity} />
                               <IconBtn title="Delete group" aria-label="Delete group" onClick={e=>{e.stopPropagation();gSteps.forEach(s=>delTask(s.id));}} style={{opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={rowSoft}/></IconBtn>
+                              {queueMoreMenu({id:`grp-${task.parentTask}`, opacity:rowActionOpacity, color:rowSoft, items:[
+                                {icon:"low_priority", label:"Change priority", run:()=>setChgPri(gSteps[0]?.id)},
+                                {icon:"add_circle", label:"Add step", run:()=>{setOpenGroups(prev=>{const n=new Set(prev);n.add(task.parentTask);return n;});setGroupAdding(task.parentTask);}},
+                                AS.legacyCompleteUI && {divider:true},
+                                AS.legacyCompleteUI && {icon:"schedule", label:"Legacy complete (no timestamp)", run:()=>legacyCompTask(gSteps[0]?.id)},
+                              ]})}
                               {/* THE one extra icon — expand/collapse steps */}
                               <IconBtn title={isOpen?"Hide steps":"Show steps"} aria-label={isOpen?"Hide steps":"Show steps"} onClick={e=>{e.stopPropagation();setOpenGroups(prev=>{const n=new Set(prev);n.has(task.parentTask)?n.delete(task.parentTask):n.add(task.parentTask);return n;});}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Chev d={isOpen?"up":"down"} s={12} c={rowSoft}/></IconBtn>
                             </div>
@@ -4738,14 +4781,17 @@ function App({ user, onSignOut, onSessionLostAccess }) {
                           <div style={{width:8,height:8,borderRadius:"50%",background:tp.color,flexShrink:0,opacity:.7}}/>
                           <div draggable={false} onPointerDown={e=>e.stopPropagation()} style={queueActionRail}>
                             <IconBtn title="Mark done" aria-label="Mark done" onClick={e=>{e.stopPropagation();compTask(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Check s={13} c={rowAccent}/></IconBtn>
-                            {AS.legacyCompleteUI && <IconBtn title="Legacy complete (no timestamp)" aria-label="Legacy complete" onClick={e=>{e.stopPropagation();legacyCompTask(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Clock s={12} c={rowAccent}/></IconBtn>}
                             <IconBtn title="Top" aria-label="Move to top" onClick={e=>{e.stopPropagation();moveTop(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.MoveTop s={12} c={_qSoft}/></IconBtn>
                             {task.pinned && <IconBtn icon="location_on" iconSize={10} color={_qSoft} title="Unpin" aria-label="Unpin" onClick={e=>{e.stopPropagation();unpinTask(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity} />}
-                            <IconBtn title="Change priority" aria-label="Change priority" onClick={e=>{e.stopPropagation();setChgPri(task.id);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.PriC s={12} c={_qSoft}/></IconBtn>
-                            <IconBtn title="Shatter with AI" aria-label="Shatter with AI" onClick={e=>{e.stopPropagation();setShowBD(task);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity}><IC.Split s={12} c={_qSoft}/></IconBtn>
-                            <IconBtn icon="arrow_forward" iconSize={12} color={_qSoft} title="Suggest first step with AI" aria-label="Suggest first step" disabled={!hasAI} onClick={e=>{e.stopPropagation();openFirstStep(task);}} style={{opacity:hasAI?rowActionOpacity:.15}} onMouseEnter={e=>{if(hasAI)e.currentTarget.style.opacity=1;}} onMouseLeave={e=>e.currentTarget.style.opacity=hasAI?rowActionOpacity:.15} />
-                            <IconBtn icon="add_circle" iconSize={12} color={_qSoft} title="Add subtasks manually" aria-label="Add subtasks" onClick={e=>{e.stopPropagation();startManualGroup(task);}} style={{opacity:rowActionOpacity}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=rowActionOpacity} />
                             <IconBtn title="Delete" aria-label="Delete" onClick={e=>{e.stopPropagation();delTask(task.id);}} style={{opacity:isF ? .72 : .3}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=isF ? .72 : .3}><IC.Trash s={12} c={_qSoft}/></IconBtn>
+                            {queueMoreMenu({id:task.id, opacity:rowActionOpacity, color:_qSoft, items:[
+                              {icon:"arrow_forward", label:hasAI?"Suggest first step":"Suggest first step (needs AI)", disabled:!hasAI, run:()=>openFirstStep(task)},
+                              {icon:"low_priority", label:"Change priority", run:()=>setChgPri(task.id)},
+                              {icon:"account_tree", label:"Shatter with AI", run:()=>setShowBD(task)},
+                              {icon:"add_circle", label:"Add subtasks", run:()=>startManualGroup(task)},
+                              AS.legacyCompleteUI && {divider:true},
+                              AS.legacyCompleteUI && {icon:"schedule", label:"Legacy complete (no timestamp)", run:()=>legacyCompTask(task.id)},
+                            ]})}
                           </div>
                         </div>
                       );
