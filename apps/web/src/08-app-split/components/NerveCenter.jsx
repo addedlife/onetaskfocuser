@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aiParseCalendarEvent, BEFORE_SHAVUOS_PRIORITY_ID, gP, runAIJob, Store, textOnColor } from '../../01-core.js';
 import { CAT_MAIL, CAT_PHONE, cleanTheme, ELEV, GOLD, GOLD_BRD, ICON, LINE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, SP, suiteIcon, useViewportWidth, useWindowSizeClass } from '../ui-tokens.jsx';
-import { ActionBtn, AssistChip, IconBtn, List, ListItem, OutlinedButton, CircularProgress, denseListVars, Divider, Menu, MenuItem, OutlinedSelect, SelectOption, TextField } from '../m3.jsx';
+import { ActionBtn, IconBtn, List, ListItem, OutlinedButton, CircularProgress, denseListVars, Divider, Menu, MenuItem, OutlinedSelect, SelectOption, TextField } from '../m3.jsx';
 import { NerveCenterPhoneSurface, isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 import { isNerveTaskShailaWork } from '../utils/shailosQueue.js';
 import { HealthPage } from './HealthPage.jsx';
@@ -154,77 +154,23 @@ function calendarRatingOf(evt, ratings) {
 // clamp to M3_MIN_TARGET, denseListVars emits M3 row metrics), which makes the
 // override redundant here and correct everywhere.
 
-// useFitRows — measure a list container and report how many WHOLE rows fit in it.
-// This is what actually stops a row bleeding over the card edge: a hardcoded cap
-// can never be right across every card height, orientation and density, so the
-// card measures itself and renders exactly the rows that fit, leaving equal
-// padding top and bottom and no partial row.
-// Safe against feedback loops: the observed container's height comes from the
-// layout (grid cell / flex), never from its own content, so changing the row
-// count cannot re-trigger the observer. The TALLEST child is used as the row
-// unit, so a wrapped two-line row still can't overrun.
-// `rowsRef` (optional): when the rows live inside a wrapper (e.g. an <md-list>),
-// available height still comes from `ref` but the row unit is measured from
-// rowsRef's children.
-function useFitRows(ref, { pad = 12, min = 1, max = 60, enabled = true, watch = null, rowsRef = null } = {}) {
-  const [fit, setFit] = useState(3);
-  useEffect(() => {
-    if (!enabled) return undefined;
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return undefined;
-    let raf = 0;
-    const recompute = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const node = ref.current;
-        if (!node) return;
-        const avail = node.clientHeight - pad;
-        const rowHost = rowsRef?.current || node;
-        const heights = Array.from(rowHost.children)
-          .map(k => k.getBoundingClientRect().height)
-          .filter(h => h > 2);
-        if (avail <= 0 || !heights.length) return;
-        const rowH = Math.max(...heights);
-        if (!(rowH > 0)) return;
-        const next = Math.max(min, Math.min(max, Math.floor(avail / rowH)));
-        setFit(p => (p === next ? p : next));
-      });
-    };
-    recompute();
-    const obs = new ResizeObserver(recompute);
-    obs.observe(el);
-    return () => { obs.disconnect(); cancelAnimationFrame(raf); };
-  }, [ref, rowsRef, pad, min, max, enabled, watch]);
-  return fit;
-}
 
-// fitSlice — given the full list and how many rows fit, return the rows to show
-// and whether a "+N more" row is needed. The more-row occupies one row slot, so
-// the total never exceeds what fits.
-// `keep` marks rows the owner has deliberately opened. They are pulled back into
-// the shown list even when they fall outside the cut — otherwise collapsing a card
-// silently swallowed the very row being read (owner ticket fZ3Jvr5: "the expanded
-// emails disappear"). Kept rows are appended in their original order.
-function fitSlice(items, fit, expanded = false, keep = null) {
-  if (expanded) return { shown: items, hidden: 0 };
-  if (items.length <= fit) return { shown: items, hidden: 0 };
-  // Reserve a slot for the "+N more" terminator only when there is room for it. At
-  // fit <= 1 the old code showed 1 row PLUS a more-row in a one-row space — which put
-  // the overflow straight back. There the card header's own expand tap is the way in.
-  //
-  // MvX6nA5 asked for this affordance to stop hogging space. It cannot simply float:
-  // the ActionBtn 48dp floor is a standing GM3 rule, and a card that is not in
-  // show-all mode does not scroll, so a sticky bar would permanently cover the last
-  // row instead of freeing one. Left reserving its slot deliberately — see the
-  // ticket note for the design options that actually resolve it.
-  const base = fit <= 1 ? items.slice(0, Math.max(1, fit)) : items.slice(0, fit - 1);
-  if (!keep) {
-    return { shown: base, hidden: fit <= 1 ? 0 : items.length - base.length };
-  }
-  const inBase = new Set(base);
-  const shown = items.filter((it, i) => inBase.has(it) || keep(it, i));
-  return { shown, hidden: Math.max(0, items.length - shown.length) };
-}
+// Row caps are gone. Every NerveCenter card now renders its whole list and lets
+// its own body scroll — the card bodies already carry `overflowY: auto`, so
+// nothing is clipped and nothing needs an affordance to reach.
+//
+// What was here: fitSlice() measured how many whole rows fit the card, sliced the
+// list to that, and reserved a slot for a "+N more" terminator (CardMoreChip in
+// the tight column grid, MoreRow in the roomier stacked/full-panel views). Three
+// successive tickets pushed against it — MvX6nA5 ("any card should show till its
+// bottom"), lRC5gnqP (the floating chip read as non-M3), fZ3Jvr5 (collapsing a
+// card swallowed the row being read) — and the owner's ruling on 3waTrsYloL01D6nFLhfW
+// is the simple one: get rid of all the show-mores, just show them. A capped list
+// plus a reveal was always more machinery than a scrollbar, and the machinery is
+// what kept generating bugs.
+//
+// The useFitRows hook that fed it went with it: card height comes from the grid
+// cell, row count comes from the data, and the browser handles the overflow.
 
 // SweepBar — rAF-driven sweep indicator for clock faces.
 // Runs at 60fps via requestAnimationFrame; no state updates, no CSS animation tricks.
@@ -880,7 +826,6 @@ const agendaNowBarRef = el => {
 function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuItems, preview, expandable = true, keepMounted = false, fullHeight = false, children, C, expandedIds, menuId, onExpand, onMenuToggle, onMenuClose, dense = false }) {
   const expanded = !expandable || !!expandedIds?.has(id);
   const sectionScrollRef = useRef(null);
-  const fitRows = useFitRows(sectionScrollRef, { enabled: true, watch: `${dense}|${expanded}` });
   const menuOpen = menuId === id;
   const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
   const tint = hexToRgba(accentColor, 0.05);
@@ -949,8 +894,8 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
       {/* Preview shown inline in the header — no second body row needed. */}
       {/* No hero/auto-prioritized block: the list starts at its first real row. */}
       {keepMounted
-        ? <div ref={sectionScrollRef} style={expanded ? { ...scrollStyle, ...({ paddingTop: 6, paddingBottom: 6 }) } : { display: "none" }}>{typeof children === "function" ? children(fitRows) : children}</div>
-        : (expanded && <div ref={sectionScrollRef} style={{ ...scrollStyle, ...({ paddingTop: 6, paddingBottom: 6 }) }}>{typeof children === "function" ? children(fitRows) : children}</div>)}
+        ? <div ref={sectionScrollRef} style={expanded ? { ...scrollStyle, ...({ paddingTop: 6, paddingBottom: 6 }) } : { display: "none" }}>{typeof children === "function" ? children() : children}</div>
+        : (expanded && <div ref={sectionScrollRef} style={{ ...scrollStyle, ...({ paddingTop: 6, paddingBottom: 6 }) }}>{typeof children === "function" ? children() : children}</div>)}
     </div>
   );
 }
@@ -986,7 +931,6 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
 
   // The card owns a fixed slice of the screen, so it renders exactly the whole
   // rows that fit that slice — no clipped row, no dead gap, and no page scroll.
-  const fitRows = useFitRows(scrollRef, { enabled: !collapsed, watch: `${dense}|${expanded}|${count}` });
   // Narrow columns fold the card's actions behind one overflow button (see header).
   const [overflowOpen, setOverflowOpen] = useState(false);
 
@@ -1094,7 +1038,7 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
           leads the way in. */}
       <div ref={scrollRef}
         style={{ flex: 1, minHeight: 0, overflowX: "hidden", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", paddingBottom: 4, backgroundColor: "inherit", ...(collapsed ? { display: "none" } : {}) }}>
-        {typeof children === "function" ? children(fitRows) : children}
+        {typeof children === "function" ? children() : children}
       </div>
       {/* No gradient scrim: M3 clips scrolling lists cleanly at the padded
           container edge, and the "+N more" row is the more-content affordance.
@@ -1226,52 +1170,6 @@ function MoreRow({ count, open = false, label = "more", onClick, C }) {
   );
 }
 
-// CardMoreChip — the "+N more" reveal for the tight card-grid columns.
-//
-// This was a circular icon button floating over the list on a `C.bg` pill with an
-// ELEV[1] shadow and a gradient scrim behind it, anchored to a zero-height sticky
-// element so it cost the card no layout height. The height saving was real, but
-// the owner's read of the result is the correct one (ticket lRC5gnqP): "white
-// obtrusive show more icon in column view, is that gm3 pure cant beleive". It is
-// not. M3 has no floating-circular-button-over-list-content pattern — that shape
-// is the FAB, which means "the screen's primary action", not "reveal four more
-// rows" — and a solid light pill parked on top of the content is exactly the kind
-// of improvisation the GM3 rule exists to stop.
-//
-// It is now a real md-assist-chip sitting inline at the end of the list, which IS
-// M3's element for a low-emphasis optional action, and which the full-panel view's
-// MoreRow already expresses as a text button. It costs one 32px line back, which
-// the 4.106.0 row-density work (two-line rows 64→56px) more than paid for.
-// (ticket MvX6nA5: "any crd should show till its bottom and then at the very
-// bottom not hogging space an option to extend to scrolling card"). MoreRow's
-// full-width 48dp row is right for the roomier stacked/full-panel views, but in a
-// ~200px column it costs a whole row just to offer one tap. The touch target
-// stays a real 48dp md-icon-button (GM3 floor — non-negotiable), it just stops
-// holding layout height: a zero-height sticky anchor at the card's scroll edge
-// holds an absolutely-positioned chip that overlaps the corner instead of
-// pushing the list up, the same technique 4.104.2 already uses for row actions.
-// A short gradient scrim keeps it legible over whatever text is underneath.
-function CardMoreChip({ count, open, onClick, C, accentColor }) {
-  if (!open && !count) return null;
-  const a = accentColor || C.accent;
-  const label = open ? "Show less" : `${count} more`;
-  return (
-    <div style={{ display: "flex", justifyContent: "flex-start", padding: `2px ${SP.sm} ${SP.xs} 12px` }}>
-      <AssistChip label={label} onClick={onClick} title={label} aria-label={open ? "Show less" : `Show ${count} more`}
-        style={{
-          '--md-assist-chip-container-height': '32px',
-          '--md-assist-chip-label-text-size': NC_TYPE.meta,
-          '--md-assist-chip-label-text-color': a,
-          '--md-assist-chip-outline-color': softBg(a, 0.35),
-          '--md-assist-chip-icon-size': '16px',
-          '--md-assist-chip-with-icon-leading-space': '8px',
-          '--md-assist-chip-trailing-space': '10px',
-        }}>
-        <span slot="icon" className="material-symbols-rounded" style={{ color: a }}>{open ? "expand_less" : "expand_more"}</span>
-      </AssistChip>
-    </div>
-  );
-}
 
 function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], priorities = [], aiOpts = null, aiConfigLoading = false, onRefreshAiConfig, onAddTask, onAddMrsWTask, onOpenQueue, onOpenShailos, onOpenShailaAdd, onOpenPhone, onOnlineChange, onRecordConversation, onRecordCall, onCompleteTask, onDeleteTask, onEditTask, onOpenZen, onOpenGoogleSettings, sidebarW = 0, topOffset = 0, actionsOpen = false, setActionsOpen, actionCategoryId = "tasks", setActionCategoryId, calendarEvents = null, gmailMessages = null, googleLoading = false, googleError = null, googleToken = null, googleClientId = null, googleAccounts = [], googleAccountFilter = "all", onSelectGoogleAccount, onConnectGoogle, onDisconnectGoogle, onLoadEmailDetail, onSendEmailReply, onDeleteEmail, googleGrants = [], googleFailedAccounts = [], onCreateCalendarEvent, onDeleteCalendarEvent, chiefProfile = null, chiefProfileLoading = false, onAppendChiefProfileNote, onRecordChiefLearning, onSaveChiefProfileMarkdown, googleWasConnected = false, onRefreshCalendar, paneWeights = { tasks: 1, shailos: 1, phone: 1 }, onPaneWeightsChange, onOpenChiefPage, googlePaneHeight = 244, onGooglePaneHeightChange, onPolishNerveItems, clockTime = null, chiefPage = false, onCloseChiefPage, healthPage = false, onOpenHealth, onCloseHealthPage, healthData = null, healthConfig = null, healthHistory = null, onSaveHealthData, onSyncHealth }) {
   const viewportW = useViewportWidth();
@@ -1314,18 +1212,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editText, setEditText] = useState("");
   const [openTaskActionsId, setOpenTaskActionsId] = useState(null);
-  const [showAllTasks, setShowAllTasks] = useState(false);
-  const [autoTaskLimit, setAutoTaskLimit] = useState(MIN_COLLAPSED_TASKS);
   const [activeStackPanel, setActiveStackPanel] = useState(0);
   const taskGridRef = useRef(null);
-  const taskHeaderRef = useRef(null);
-  const taskListRef = useRef(null);
-  const taskMoreButtonRef = useRef(null);
   const taskInputRef = useRef(null);
   const stackedTaskInputRef = useRef(null);
-  const deskShailosRef = useRef(null);      // desktop Shailos pane list (measured)
-  const deskMailRef = useRef(null);         // desktop Google Mail card body (available height)
-  const deskMailListRef = useRef(null);     // its <md-list> (row unit)
   const calendarNowRef = useRef(null);     // timeline scroll container
   const calendarNowLineRef = useRef(null); // now-line div — top driven by rAF, not React
   const [showAddEvent, setShowAddEvent] = useState(false);
@@ -1408,17 +1298,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   const [googleAcctMenuOpen, setGoogleAcctMenuOpen] = useState(false); // account-picker dropdown in calendar/mail card headers
   const [mobileExpanded, setMobileExpanded] = useState(() => new Set()); // ids of expanded accordion sections — all collapsed by default; multiple may stay open
   const [expandedBoxId, setExpandedBoxId] = useState(null); // boxes view: card expanded to page height (null = even 5-way split); ephemeral by design
-  // Cards the owner asked to show in FULL, tracked separately from which card is
-  // expanded. They used to be the same thing, so returning to equal widths threw the
-  // choice away and the "+44 more" row came straight back (owner ticket fZ3Jvr5).
-  // Kept apart, a collapsed card can honour "show all" by scrolling its own list —
-  // still one screen, still no page scroll, just that card scrolls.
-  const [showAllBoxIds, setShowAllBoxIds] = useState(() => new Set());
-  const toggleShowAllBox = id => setShowAllBoxIds(prev => {
-    const next = new Set(prev);
-    next.has(id) ? next.delete(id) : next.add(id);
-    return next;
-  });
   const [expandedRows, setExpandedRows] = useState(() => new Set()); // box-mode rows tapped open to reveal full text
   const toggleRow = key => setExpandedRows(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
   const [mobileTimelineOpen, setMobileTimelineOpen] = useState(false); // mobile hero timeline reveal
@@ -1908,8 +1787,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   // height comes from the container, not from a guessed constant.
   // Desktop panes measure themselves the same way the cards do, so their resting
   // lists also end on a whole row inside the padding.
-  const deskShailosFit = useFitRows(deskShailosRef, { enabled: !isStacked, watch: `${dense}|${expandedRows.has("desk-shailos")}` });
-  const deskMailFit = useFitRows(deskMailRef, { rowsRef: deskMailListRef, enabled: !isStacked, watch: `${dense}|${googlePaneHeight}|${expandedRows.has("desk-mail")}|${selectedEmailId || ""}` });
   const paneW = {
     tasks: Math.max(0.55, Number(paneWeights?.tasks || 1)),
     shailos: Math.max(0.55, Number(paneWeights?.shailos || 1)),
@@ -1933,11 +1810,9 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     // container differentiation); pre-proto keeps the single neutral surface.
     { background: `color-mix(in srgb, ${C.bg} 95%, ${_accent || C.accent} 5%)`, borderRadius: RADIUS.lg, display: "flex", flexDirection: "column", minHeight: isTablet && !isStacked ? 420 : 0, overflow: "hidden", boxShadow: "none" }
   );
-  const ncPanel = tintedPanel(C.accent); // default; overridden per-section below
   const ncScrollPane = { overflow: "auto", flex: "1 1 auto", minHeight: 0, overscrollBehavior: "contain", scrollbarGutter: "stable", ...(isStacked ? { touchAction: "pan-y" } : {}) };
   const ncTaskBody = { flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", overscrollBehavior: "contain" };
-  const ncTaskList = (isStacked || showAllTasks) ? ncScrollPane : { ...ncScrollPane, flex: "0 0 auto", overflow: "visible", maxHeight: "none" };
-  const ncTasksPanel = showAllTasks ? ncPanel : { ...ncPanel, alignSelf: "start", width: "100%" };
+  const ncTaskList = ncScrollPane;
   // ui=next M3 re-skin — elevate the shared header/title/icon system in place.
   // Material 3: no dividing lines (depth from space + tone), leadership-weight
   // title typography, and a tonal rounded icon "puck" carrying each section's
@@ -1957,58 +1832,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
 
   const isShailaWork = t => isNerveTaskShailaWork(t, priorities);
   const primaryTaskQueue = tasks.filter(t => !isShailaWork(t));
-  useEffect(() => {
-    if (showAllTasks || isStacked || !primaryTaskQueue.length || typeof ResizeObserver === "undefined") {
-      setAutoTaskLimit(MIN_COLLAPSED_TASKS);
-      return;
-    }
-
-    let frame = 0;
-    const recompute = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const gridH = taskGridRef.current?.getBoundingClientRect().height || 0;
-        if (!gridH) return;
-        const headerH = taskHeaderRef.current?.getBoundingClientRect().height || 0;
-        // 48 = the shared MoreRow's height (M3 touch floor). It used to be a 24px
-        // sliver measured off a ref; standardizing on MoreRow made that ref dead, and
-        // a stale 24 here under-reserved space and clipped the last task row.
-        const moreH = primaryTaskQueue.length > MIN_COLLAPSED_TASKS ? 48 : 0;
-        const rows = Array.from(taskListRef.current?.querySelectorAll("[data-nc-task-row='true']") || []);
-        const measuredRows = rows.map(row => row.getBoundingClientRect().height).filter(h => h > 0);
-        // Trust the real measured row height (dense rows run ~28 px) — clamping it
-        // up to 56 halved the fill and left "+N more" floating over dead whitespace.
-        const avgRowH = measuredRows.length
-          ? Math.max(24, measuredRows.reduce((sum, h) => sum + h, 0) / measuredRows.length)
-          : 56;
-        const nextLimit = Math.max(
-          MIN_COLLAPSED_TASKS,
-          Math.floor(Math.max(0, gridH - headerH - moreH) / avgRowH)
-        );
-        setAutoTaskLimit(prev => {
-          const bounded = Math.min(primaryTaskQueue.length, nextLimit);
-          return prev === bounded ? prev : bounded;
-        });
-      });
-    };
-
-    recompute();
-    const observer = new ResizeObserver(recompute);
-    [taskGridRef.current, taskHeaderRef.current, taskListRef.current].filter(Boolean).forEach(el => observer.observe(el));
-    window.addEventListener("resize", recompute);
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      window.removeEventListener("resize", recompute);
-    };
-  }, [primaryTaskQueue.length, showAllTasks, taskComposerOpen, touchLayout]);
-  const collapsedTaskLimit = Math.min(primaryTaskQueue.length, Math.max(MIN_COLLAPSED_TASKS, autoTaskLimit));
-  // Calm-rows prototype: the tall desktop Tasks pane keeps its measured auto-fit
-  // (fills the column, never clips — the pane is full height); the emphasized top
-  // row is rendered separately and excluded from this list.
-  const effectiveTaskLimit = collapsedTaskLimit;
-  const hiddenTaskCount = Math.max(0, primaryTaskQueue.length - effectiveTaskLimit);
-  const primaryTasks = (isStacked || showAllTasks) ? primaryTaskQueue : primaryTaskQueue.slice(0, effectiveTaskLimit);
+  // No cap: the Tasks pane renders the whole queue and scrolls (ticket 3waTrsYloL01D6nFLhfW).
+  const primaryTasks = primaryTaskQueue;
   const visibleShailos = shailos.filter(Boolean);
   const timeBucket = Math.floor(nowMs / CHIEF_TIME_BUCKET_MS);
   const calendarMinuteKey = Math.floor(nowMs / 60000);
@@ -3332,12 +3157,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
       // this", the card then renders every row, and with overflow hidden everything
       // past the fold was unreachable.
     });
-    // Show every row of this card: true when it is expanded, or when the owner
-    // asked for "show all" and that choice has not been turned off.
-    const boxShowsAll = id => expandedBoxId === id || showAllBoxIds.has(id);
-    // Turning on "show all" from a "+N more" row also expands the card, because that
-    // is the gesture the owner is making. Collapsing later keeps the show-all.
-    const openAllInBox = id => { setShowAllBoxIds(prev => new Set(prev).add(id)); setExpandedBoxId(id); };
     // v7: no volume weighting and no total-count chips. Every list here is always
     // full, so both were constant noise. Cards get an equal share and earn their
     // rows through SELECTION instead.
@@ -3555,14 +3374,12 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               <IconBtn icon="refresh" iconSize={14} color={C.muted} onClick={onRefreshCalendar || onConnectGoogle} title="Refresh mail" aria-label="Refresh mail" />
             </>}
             >
-            {fitRows => {
+            {() => {
             const mailRest = actionMail;
             // keep: any email row the owner has opened stays in the list even when the
             // card collapses back to its fitted height (ticket fZ3Jvr5).
-            const mailCut = fitSlice(mailRest, fitRows, boxShowsAll("mail"),
-              (m, i) => expandedRows.has(`mail-${m.id || i}`));
             return (<>
-            {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : mailCut.shown.map((msg,i) => {
+            {(!gmailMessages || gmailMessages.length===0) ? emptyMsg("Inbox clear.") : mailRest.map((msg,i) => {
               const subj = gmailHdr(msg,"Subject")||"(no subject)";
               const from = fmtFromM(gmailHdr(msg,"From"));
               const date = fmtRelM(gmailHdr(msg,"Date"));
@@ -3599,9 +3416,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </ListItem>
               );
             })}
-            <CardMoreChip C={C} accentColor={CAT_MAIL} count={mailCut.hidden}
-              open={mailCut.hidden === 0 && showAllBoxIds.has("mail")}
-              onClick={() => mailCut.hidden > 0 ? openAllInBox("mail") : toggleShowAllBox("mail")} />
             </>);
             }}
           </MobileBox>
@@ -3631,9 +3445,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               {/* Zen mode was another stacked-only entry point. */}
               <IconBtn icon="local_drink" iconSize={14} color={C.muted} onClick={onOpenZen} title="Zen mode" aria-label="Zen mode" />
             </>}>
-            {fitRows => {
+            {() => {
             const taskRest = actionTasks;
-            const taskCut = fitSlice(taskRest, fitRows, boxShowsAll("tasks"));
             return (<>
             {taskComposerOpen && (
               <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.divider}` }}>
@@ -3648,7 +3461,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </div>
               </div>
             )}
-            {primaryTaskQueue.length === 0 && !taskComposerOpen ? emptyMsg("No open tasks.") : taskCut.shown.map((t, ti) => {
+            {primaryTaskQueue.length === 0 && !taskComposerOpen ? emptyMsg("No open tasks.") : taskRest.map((t, ti) => {
               const pri = gP(priorities, t.priority);
               const priColor = pri?.color || C.accent || "#7EB0DE";
               const isEditing = editingTaskId === t.id;
@@ -3707,9 +3520,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </div>
               );
             })}
-            <CardMoreChip C={C} count={taskCut.hidden}
-              open={taskCut.hidden === 0 && showAllBoxIds.has("tasks")}
-              onClick={() => taskCut.hidden > 0 ? openAllInBox("tasks") : toggleShowAllBox("tasks")} />
             </>);
             }}
           </MobileBox>
@@ -3720,11 +3530,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             /* Same parity gap: Add shaila existed on the stacked layout and on the
                full panel, and nowhere on the card grid. */
             headerActions={<IconBtn icon="add" iconSize={14} color={GOLD} onClick={onOpenShailaAdd} title="Add shaila" aria-label="Add shaila" />}>
-            {fitRows => {
+            {() => {
             const shailaRest = actionShailos;
-            const shailaCut = fitSlice(shailaRest, fitRows, boxShowsAll("shailos"));
             return (<>
-            {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : shailaCut.shown.map((s, si) => {
+            {visibleShailos.length === 0 ? emptyMsg("No pending shailos.") : shailaRest.map((s, si) => {
               const text = nerveDisplaySummary(s,"Open shaila");
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
               return (
@@ -3735,9 +3544,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </ListItem>
               );
             })}
-            <CardMoreChip C={C} accentColor={GOLD} count={shailaCut.hidden}
-              open={shailaCut.hidden === 0 && showAllBoxIds.has("shailos")}
-              onClick={() => shailaCut.hidden > 0 ? openAllInBox("shailos") : toggleShowAllBox("shailos")} />
             </>);
             }}
           </MobileBox>
@@ -3993,8 +3799,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               ...(onAddMrsWTask ? [{ icon: "person", label: "Add Mrs W task", run: () => { setMobileExpanded(prev => new Set(prev).add("tasks")); openTaskComposer(taskPriority, { mrsW: true }); } }] : []),
             ]}
           >
-            {fitRows => {
-            const secTaskCut = fitSlice(topTasks, fitRows, expandedRows.has("sec-tasks"));
+            {() => {
             return (<>
             {taskComposerOpen && (
               <div style={{ padding: "8px 12px", borderBottom: `1px solid ${C.divider}` }}>
@@ -4010,7 +3815,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
               </div>
             )}
             {topTasks.length === 0 && !taskComposerOpen && <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK }}>No open tasks.</div>}
-            {secTaskCut.shown.map((t, ti) => {
+            {topTasks.map((t, ti) => {
               const pri = gP(priorities, t.priority);
               const priColor = pri?.color || C.accent || "#7EB0DE";
               const isEditing = editingTaskId === t.id;
@@ -4042,9 +3847,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </div>
               );
             })}
-            {secTaskCut.hidden > 0 && (
-              <MoreRow C={C} open={expandedRows.has("sec-tasks")} count={secTaskCut.hidden} onClick={() => toggleRow("sec-tasks")} />
-            )}
             </>);
             }}
           </MobileSection>
@@ -4061,9 +3863,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 { icon: "link_off",    label: "Disconnect",           run: onDisconnectGoogle },
               ]}
             >
-              {fitRows => {
+              {() => {
               const secCalRest = calendarRows.filter(r => !r.past);
-              const secCalCut = fitSlice(secCalRest, fitRows, expandedRows.has("sec-cal"));
               return (<>
               {!calendarEvents ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,display:"flex",gap:8,alignItems:"center",borderTop:`1px solid ${C.divider}` }}>
@@ -4071,7 +3872,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </div>
               ) : calendarRows.filter(r=>!r.past).length === 0 ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Nothing upcoming today.</div>
-              ) : secCalCut.shown.map(row => {
+              ) : secCalRest.map(row => {
                 const timeLabel = row.evt?.start?.date ? "All day" : new Date(row.evt?.start?.dateTime).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
                 const lifted = row.now || row.special;
                 // Calm-rows: routine events (davening etc.) whisper so specials stand out.
@@ -4087,9 +3888,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   ? <ListItem key={row.evt?.id||row.index} type="link" href={row.evt.htmlLink} target="_blank" style={{ borderRadius: RADIUS.sm, opacity: rowOpacity }}>{item}</ListItem>
                   : <ListItem key={row.evt?.id||row.index} type="text" style={{ borderRadius: RADIUS.sm, opacity: rowOpacity }}>{item}</ListItem>;
               })}
-              {secCalCut.hidden > 0 && (
-                <MoreRow C={C} open={expandedRows.has("sec-cal")} count={secCalCut.hidden} onClick={() => toggleRow("sec-cal")} />
-              )}
               {showAddEvent && (
                 <div style={{ padding:"10px 12px",borderTop:`1px solid ${C.divider}` }}>
                   <textarea autoFocus value={addEventText} onChange={e=>setAddEventText(e.target.value)} rows={2} placeholder='e.g. "Call David Mon at 3pm"'
@@ -4117,13 +3915,12 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 ...googleAcctMenuItems,
               ]}
             >
-              {fitRows => {
+              {() => {
               const secMailRest = actionMail.slice(0, 40);
-              const secMailCut = fitSlice(secMailRest, fitRows, expandedRows.has("sec-mail"));
               return (<>
               {!gmailMessages || gmailMessages.length === 0 ? (
                 <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>Inbox clear.</div>
-              ) : secMailCut.shown.map((msg,i) => {
+              ) : secMailRest.map((msg,i) => {
                 const subj = gmailHdr(msg,"Subject")||"(no subject)";
                 const from = fmtFromM(gmailHdr(msg,"From"));
                 const date = fmtTimeM(gmailHdr(msg,"Date"));
@@ -4153,9 +3950,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   </ListItem>
                 );
               })}
-              {secMailCut.hidden > 0 && (
-                <MoreRow C={C} open={expandedRows.has("sec-mail")} count={secMailCut.hidden} onClick={() => toggleRow("sec-mail")} />
-              )}
               </>);
               }}
             </MobileSection>
@@ -4167,13 +3961,12 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             primaryBtn={<IconBtn icon="add" iconSize={14} color={GOLD} onClick={onOpenShailaAdd} title="Add shaila" aria-label="Add shaila" />}
             menuItems={[{ icon: "open_in_full", label: "Open Shailos", run: onOpenShailos }]}
           >
-            {fitRows => {
+            {() => {
             const secShailaRest = actionShailos.slice(0, 40);
-            const secShailaCut = fitSlice(secShailaRest, fitRows, expandedRows.has("sec-shailos"));
             return (<>
             {visibleShailos.length === 0 ? (
               <div style={{ padding:"7px 12px",fontSize:ncType.meta,color:C.faint,fontFamily:NC_FONT_STACK,borderTop:`1px solid ${C.divider}` }}>No pending shailos.</div>
-            ) : secShailaCut.shown.map((s, si) => {
+            ) : secShailaRest.map((s, si) => {
               const text = nerveDisplaySummary(s,"Open shaila");
               const isGetBack = s.status==="get_back"||!!s.isGetBackStep;
               return (
@@ -4184,9 +3977,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 </ListItem>
               );
             })}
-            {secShailaCut.hidden > 0 && (
-              <MoreRow C={C} open={expandedRows.has("sec-shailos")} count={secShailaCut.hidden} onClick={() => toggleRow("sec-shailos")} />
-            )}
             </>);
             }}
           </MobileSection>
@@ -4275,7 +4065,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           {/* ── Tasks ── */}
           <section style={isStacked ? { ...tintedPanel(C.accent), flex: "0 0 100%", minWidth: 0, scrollSnapAlign: "start", height: "100%", touchAction: "pan-y" } : (primaryTaskQueue.length > MIN_COLLAPSED_TASKS ? tintedPanel(C.accent) : { ...tintedPanel(C.accent), alignSelf: "start", width: "100%" })}>
             {!isStacked && (
-            <div ref={taskHeaderRef} style={{ ...ncHeader, display: taskComposerOpen ? "block" : "flex", ...(taskComposerOpen ? { padding: "7px 12px" } : {}) }}>
+            <div style={{ ...ncHeader, display: taskComposerOpen ? "block" : "flex", ...(taskComposerOpen ? { padding: "7px 12px" } : {}) }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, ...(taskComposerOpen ? { marginBottom: 7 } : {}) }}>
                 <div style={{ display: "flex", alignItems: "center", gap:8 }}>
                   <span style={ncSectionIcon()}>{suiteIcon("rule", 16)}</span>
@@ -4337,7 +4127,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   New task
                 </ActionBtn>
               ))}
-              <div ref={taskListRef} style={{ ...ncTaskList, ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }) }}>
+              <div style={{ ...ncTaskList, ...denseListVars({ dense, primary: C.text, secondary: C.muted, hover: C.text }) }}>
               {primaryTasks.length ? primaryTasks.map((t, ti) => {
                 const pri = gP(priorities, t.priority);
                 const priColor = pri?.color || C.accent || "#7EB0DE";
@@ -4378,13 +4168,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No open tasks.</div>}
               </div>
-              {/* Same MoreRow every other card uses (owner ticket WusnfkOE, 7/21: the
-                  reveal control was a different shape, size and wording on each card —
-                  this one was a 24px 11px-label sliver, below the M3 touch floor). */}
-              {!isStacked && (showAllTasks || hiddenTaskCount > 0) && (
-                <MoreRow C={C} open={showAllTasks} count={hiddenTaskCount} label="tasks"
-                  onClick={() => setShowAllTasks(v => !v)} />
-              )}
 
             </div>
           </section>
@@ -4402,10 +4185,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 <ActionBtn variant="text" icon="open_in_full" iconSize={15} labelColor={GOLD} onClick={onOpenShailos}>Open</ActionBtn>
               </div>
             </div>
-            <div ref={deskShailosRef} style={{ ...ncScrollPane, ...denseListVars({ dense, primary: C.text, secondary: GOLD, hover: GOLD }), ...({ paddingTop: 6, paddingBottom: 6 }) }}>
+            <div style={{ ...ncScrollPane, ...denseListVars({ dense, primary: C.text, secondary: GOLD, hover: GOLD }), ...({ paddingTop: 6, paddingBottom: 6 }) }}>
               {/* Active shailos — open + pending get-back. Calm-rows v3: no hero row;
                   the list simply shows exactly the rows that fit, most urgent first. */}
-              {visibleShailos.length ? (fitSlice(actionShailos, deskShailosFit, expandedRows.has("desk-shailos")).shown).map((s, idx) => {
+              {visibleShailos.length ? actionShailos.map((s, idx) => {
                 const text = nerveDisplaySummary(s, "Open shaila");
                 const isGetBack = s.status === "get_back" || !!s.isGetBackStep;
                 const chipLabel = isGetBack ? "Get back" : "Answer";
@@ -4419,13 +4202,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   </ListItem>
                 );
               }) : <div style={{ padding: "18px 20px", fontSize: ncType.meta, lineHeight: ncType.line, color: C.faint }}>No pending shailos.</div>}
-              {(() => {
-                const cut = fitSlice(actionShailos, deskShailosFit, expandedRows.has("desk-shailos"));
-                const open = expandedRows.has("desk-shailos");
-                return (cut.hidden > 0 || open) ? (
-                  <MoreRow C={C} open={open} count={cut.hidden} onClick={() => toggleRow("desk-shailos")} />
-                ) : null;
-              })()}
 
               {/* The "Recently resolved" block is GONE from this card (owner tickets
                   PWbASPpx / XPrGq77h / EczjwFRB / V37NEU7I, 7/21–7/22). Five struck-through
@@ -4908,7 +4684,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                     <CardAction icon="open_in_new" title="Open Gmail" onClick={openGmailInbox} />
                     <CardAction icon="refresh" title="Refresh mail and calendar" onClick={onRefreshCalendar || onConnectGoogle} />
                   </>)}
-                  <div ref={deskMailRef} style={cardBody}>
+                  <div style={cardBody}>
                     {!gmailMessages ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap:8 }}>
                         <Spinner size={16} />
@@ -4918,8 +4694,8 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                       <p style={{ fontSize: NC_TYPE.meta, color: C.faint, fontFamily: NC_FONT_STACK, margin: "12px 0", textAlign: "center" }}>Inbox zero 🎉</p>
                     ) : (
                       <>
-                      <List ref={deskMailListRef} style={cardListStyle}>
-                      {(fitSlice(actionMail, deskMailFit, expandedRows.has("desk-mail")).shown).map((msg, i) => {
+                      <List style={cardListStyle}>
+                      {actionMail.map((msg, i) => {
                       const subject = gmailHeader(msg, 'Subject') || '(no subject)';
                       const from = fmtFrom(gmailHeader(msg, 'From'));
                       const date = fmtTime(gmailHeader(msg, 'Date'));
@@ -4998,13 +4774,6 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                       );
                     })}
                     </List>
-                    {(() => {
-                      const cut = fitSlice(actionMail, deskMailFit, expandedRows.has("desk-mail"));
-                      const open = expandedRows.has("desk-mail");
-                      return (cut.hidden > 0 || open) ? (
-                        <MoreRow C={C} open={open} count={cut.hidden} onClick={() => toggleRow("desk-mail")} />
-                      ) : null;
-                    })()}
                     </>
                     )}
                   </div>
