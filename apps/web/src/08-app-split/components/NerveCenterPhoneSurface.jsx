@@ -9,6 +9,7 @@ import {
   reconcilePendingSms, unmatchedPendingSms, collapseHostDoubles, smsBodyKey, smsPhoneKey,
 } from '../utils/pending-sms.js';
 import { commandChannelHealth } from '../utils/relay-health.js';
+import { cachedPhoneMedia, loadPhoneMedia } from '../utils/phone-media.js';
 import {
   detectSurfaceId, startProcessRun, logProcessStep, finishProcessRun,
 } from '../process-log.js';
@@ -188,33 +189,27 @@ async function fetchPhoneJson(url, timeoutMs = PHONE_FETCH_TIMEOUT_MS, extraHead
   }
 }
 
-// Cross-render cache of fetched picture-text previews (mediaId → data: URL) so a thread
-// re-render or reopen doesn't refetch the same image.
-const mediaCache = new Map();
-
 // Renders one MMS image. On the LAN path the bytes arrive inline (attachment.dataUrl);
-// on the cloud-relay path only a small mediaId comes through, so we fetch the resized
-// preview from the phone-media/{mediaId} Firestore doc (gated by the signed-in user).
+// on the cloud-relay path only a small mediaId comes through, so the shared
+// phone-media helper fetches the resized preview from phone-media/{mediaId}. The
+// cache and the fetch itself now live in that module — DeskPhone Web needs the
+// identical resolution and used to go without it (ticket 8RbMKKO9PTQX7ZRfkwmF).
 function PhoneMmsImage({ attachment, C }) {
   const inline = attachment?.dataUrl || "";
   const mediaId = attachment?.mediaId || "";
-  const [src, setSrc] = useState(inline || (mediaId ? mediaCache.get(mediaId) || "" : ""));
+  const [src, setSrc] = useState(inline || cachedPhoneMedia(mediaId));
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     if (inline) { setSrc(inline); return; }
-    if (!mediaId || !db) return;
-    const cached = mediaCache.get(mediaId);
+    if (!mediaId) return;
+    const cached = cachedPhoneMedia(mediaId);
     if (cached) { setSrc(cached); return; }
     let cancelled = false;
-    db.collection("phone-media").doc(mediaId).get()
-      .then(snap => {
-        if (cancelled) return;
-        const url = snap.exists ? (snap.data()?.data || "") : "";
-        if (url) { mediaCache.set(mediaId, url); setSrc(url); }
-        else setFailed(true);
-      })
-      .catch(() => { if (!cancelled) setFailed(true); });
+    loadPhoneMedia(mediaId).then(url => {
+      if (cancelled) return;
+      if (url) setSrc(url); else setFailed(true);
+    });
     return () => { cancelled = true; };
   }, [inline, mediaId]);
 

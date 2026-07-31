@@ -12,6 +12,7 @@ import { derivePhoneLinkState, describePhoneLink, messageListSignature, mergeMes
 import { TextField as DpTextField, IconButton as DpIconButton } from './08-app-split/m3.jsx';
 import { subscribeOwner } from './08-app-split/phone-host-control.js';
 import { commandChannelHealth } from './08-app-split/utils/relay-health.js';
+import { hydrateMessagesWithMedia } from './08-app-split/utils/phone-media.js';
 import { detectSurfaceId, startProcessRun, logProcessStep, finishProcessRun } from './08-app-split/process-log.js';
 import { commandAvailability, explainAckError } from './08-app-split/phone-command-availability.js';
 import { ProcessLogPanel, ProcessLogPopup } from './08-app-split/components/ProcessLog.jsx';
@@ -1064,7 +1065,9 @@ function attachmentLabel(attachment) {
 
 function saveDataUrlAttachment(attachment, onNotice) {
   if (!attachment?.dataUrl) {
-    onNotice?.("Attachment data is not available in the browser yet.");
+    onNotice?.(attachment?.mediaId
+      ? "Still fetching this picture from the phone relay — try again in a moment."
+      : "This attachment's data never reached the browser.");
     return;
   }
 
@@ -1659,7 +1662,11 @@ function MessageAttachments({ message, onNotice, onOpenImage }) {
               <strong>{attachment.fileName || "Attachment"}</strong>
               <span>{attachmentLabel(attachment)}{attachment.size ? ` - ${Math.round(attachment.size / 1024)} KB` : ""}</span>
             </div>
-            <button type="button" onClick={() => saveDataUrlAttachment(attachment, onNotice)}>Save</button>
+            {/* An image whose bytes are still being fetched from phone-media/{mediaId}
+                says so, instead of offering a Save that can only fail. */}
+            {attachment.mediaId && !attachment.dataUrl
+              ? <span className="dp-attachment-pending">Loading image…</span>
+              : <button type="button" onClick={() => saveDataUrlAttachment(attachment, onNotice)}>Save</button>}
             </div>
           ) : null}
           </React.Fragment>
@@ -4911,6 +4918,13 @@ const css = `
 .dp-attachment-row.is-outgoing span {
   color: var(--dp-bubble-outgoing-muted);
 }
+.dp-attachment-row .dp-attachment-pending {
+  min-width: 56px;
+  text-align: right;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--dp-muted);
+}
 .dp-attachment-row button {
   min-width: 56px;
   height: 28px;
@@ -6382,6 +6396,18 @@ export function DeskPhoneWebPanel({
           messagesSigRef.current = msgSig;
           setMessages(merged);
         }
+        // Picture texts on the cloud-relay path carry only a mediaId — the bytes
+        // live in phone-media/{mediaId} and have to be fetched, or the message
+        // renders as a dead "Image" chip whose Save button says the data is not
+        // in the browser yet (owner ticket 8RbMKKO9PTQX7ZRfkwmF). Runs outside
+        // the signature guard because the image can land minutes after the text.
+        // Resolves to the same array when there is nothing to fetch, so a steady
+        // relay tick costs one Set walk and no re-render.
+        hydrateMessagesWithMedia(merged).then((hydrated) => {
+          if (hydrated === merged || messagesFeedCacheRef.current !== merged) return;
+          messagesFeedCacheRef.current = hydrated;
+          setMessages(hydrated);
+        }).catch(() => {});
       }
       if (nextCalls.ok) {
         const callList = mergeCallFeeds(callsFeedCacheRef.current, getApiList(nextCalls.data));
