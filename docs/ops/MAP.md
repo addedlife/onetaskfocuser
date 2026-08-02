@@ -70,12 +70,40 @@ verifies every one of them exists, and shorthand would defeat that check.
 | `apps/shailos` | `npm run build` |
 | `apps/phone-host-windows` | `dotnet build -c Release -p:Platform=ARM64` — **needs a `changelog.json` entry first**, see `CLAUDE.md` |
 
-## Open tickets — one document, not a collection
+## Open tickets — the two buglogs, in full, copy-paste ready
 
-`firestore_get_document` on `users/rabbidanziger/meta/openTickets`. Never dump
-`users/rabbidanziger/bugs`. Fetch an individual `bugs/{id}` only when you need one
-ticket's full history. The mirror can be stale in both directions; compare `createdAtMs`
-against session start. Re-check it before ending any session that did buglog work.
+Two apps, two Firebase projects, two different addressing schemes. Both are below in
+full so nobody has to go looking again. Firestore MCP defaults to the wrong project, so
+always pass the **whole** resource name, starting at `projects/`.
+
+**Shamash** — read the mirror doc, never the collection:
+
+```
+projects/onetaskonly-app/databases/(default)/documents/users/rabbidanziger/meta/openTickets
+```
+
+One small document holding every open ticket (`items[]`, each with `id`, `summary`,
+`status`, `createdAtMs`). To write a note or resolve one, address the ticket itself:
+`…/users/rabbidanziger/bugs/{id}`. **Never list or dump `users/rabbidanziger/bugs`** —
+it is hundreds of documents. The mirror rebuilds only on app-side changes, so it can be
+stale in both directions; compare `createdAtMs` against session start, and re-check it
+before ending any session that did buglog work.
+
+**RabbiMetrics** (separate repo, `C:\Users\ydanz\OneDrive\Documents\Rabbi Changelog`) —
+no mirror doc exists, so list the collection directly with a field mask:
+
+```
+projects/rabbi-s-metrics/databases/(default)/documents/users/TDvjmJMtnShbi6IeA4XFDV9jPjK2/bugs
+```
+
+That path segment is a raw Firebase Auth uid, not an email prefix like Shamash's — it is
+not guessable, which is why it is written out here. Use `firestore_list_documents` with
+`mask: {fieldPaths: ["text","status","createdAtMs"]}` (`firestore_query_collection`
+rejects the nested path). Open tickets are `status: "unresolved"`.
+
+**Writing to either one:** `firestore_update_document` with `document` and `updateMask`
+as separate parameters. `notes` is an array of maps (`{at, text}`) and is REPLACED, not
+appended — re-send the existing notes alongside the new one, or they are gone.
 
 ## Deeper reading — only when the task actually needs it
 
