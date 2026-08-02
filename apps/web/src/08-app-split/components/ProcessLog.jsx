@@ -94,11 +94,38 @@ function CopyButton({ getText, label = 'Copy for prompt', C }) {
 }
 
 // ── The mini popup ──────────────────────────────────────────────────────────
-// Appears the moment a run opens on THIS surface, streams its steps, and stays
-// up after the run ends so the copy button is reachable. A successful run
-// self-dismisses (nothing to read); a failure waits to be dismissed, because a
-// failure is the case the owner wants to paste into a prompt.
+// Appears the moment a run opens on THIS surface and streams its steps. It is a
+// LIVE readout of something happening right now, and nothing else — the owner's
+// correction, 8/2: "its for reference while connection processes and dlogs can
+// be accesible in settings, but not a obsuring mainscreen persisten popup."
+//
+// Three rules follow from that, and each fixes something this popup actually
+// did wrong:
+//
+//   1. Only a run that STARTED while this popup was mounted is ever shown. Runs
+//      are persisted to localStorage for the Settings log, and the popup asked
+//      for "the newest run on this surface" with no regard for when it happened
+//      — so a failure from any earlier session came straight back on the next
+//      page load, forever, until some later run replaced it. That is the
+//      "persisting after closeout" the owner is seeing: it was never the same
+//      popup surviving a dismissal, it was a new one resurrecting a dead run.
+//   2. Once a run ends the card collapses to its one-line header. The full step
+//      list is worth the screen while it is being written and not afterwards;
+//      afterwards it is a block sitting on top of the main screen.
+//   3. Everything self-dismisses, failures included. A failure used to wait
+//      forever for a click, on the reasoning that a failure is what you want to
+//      copy — but the run is in Settings → Process log with the same copy
+//      button on it, so nothing is lost by letting the card go. It gets a much
+//      longer window than a success, which is the part of that reasoning that
+//      was right.
 const SUCCESS_DISMISS_MS = 6000;
+const FAILURE_DISMISS_MS = 20000;
+
+// Dismissals live outside React. The popup is mounted by phone surfaces that
+// mount and unmount as the owner moves around the app, and component state took
+// the dismissal with it — closing the card and navigating brought the same run
+// straight back.
+const dismissedRuns = new Set();
 
 // The popup is mounted by every phone surface, and more than one of those can be
 // on screen at once (the NerveCenter phone card and the embedded DeskPhone panel
@@ -127,25 +154,40 @@ export function ProcessLogPopup({ C, surfaceId = null, zIndex = 9200 }) {
     const release = claimPopup(token);
     return () => { popupWatchers.delete(watcher); release(); };
   }, [token]);
-  const [dismissedId, setDismissedId] = useState('');
-  const [expanded, setExpanded] = useState(true);
-  const run = latestProcessRun(mySurface);
+  // Nothing that started before this popup existed is its business. Held in a
+  // ref-shaped state initialiser so it is fixed at first render and a re-render
+  // can never quietly move it forward.
+  const [mountedAt] = useState(() => Date.now());
+  const [, setDismissTick] = useState(0);
+  const dismiss = useCallback(id => { dismissedRuns.add(id); setDismissTick(t => t + 1); }, []);
+  const [manualExpand, setManualExpand] = useState(null);   // null = follow the run's state
+  const latest = latestProcessRun(mySurface);
+  const run = latest && latest.at >= mountedAt ? latest : null;
 
-  // Auto-dismiss a clean run once it has been visible long enough to read.
+  // Every run self-dismisses; a failure just gets longer on screen than a
+  // success. The timer is computed from `endedAt` rather than set when the run
+  // finishes, so a card that was already up before this component re-rendered
+  // still goes away on schedule instead of restarting its clock.
+  const settled = run && run.status !== 'running';
   useEffect(() => {
-    if (!run || run.status !== 'ok') return undefined;
-    const remaining = SUCCESS_DISMISS_MS - (Date.now() - (run.endedAt || Date.now()));
-    if (remaining <= 0) { setDismissedId(run.id); return undefined; }
-    const timer = setTimeout(() => setDismissedId(run.id), remaining);
+    if (!settled) return undefined;
+    const life = run.status === 'ok' ? SUCCESS_DISMISS_MS : FAILURE_DISMISS_MS;
+    const remaining = life - (Date.now() - (run.endedAt || Date.now()));
+    if (remaining <= 0) { dismiss(run.id); return undefined; }
+    const timer = setTimeout(() => dismiss(run.id), remaining);
     return () => clearTimeout(timer);
-  }, [run?.id, run?.status, run?.endedAt]);
+  }, [run?.id, run?.status, run?.endedAt, settled, dismiss]);
 
-  // A new run supersedes a dismissal — the popup must come back for the next send.
-  useEffect(() => { if (run && run.id !== dismissedId) setExpanded(true); }, [run?.id]);
+  // A new run is a fresh card: whatever the owner had collapsed or expanded on
+  // the last one does not carry over.
+  useEffect(() => { setManualExpand(null); }, [run?.id]);
 
   if (popupMounts[0] !== token) return null;
-  if (!run || run.id === dismissedId) return null;
+  if (!run || dismissedRuns.has(run.id)) return null;
   const running = run.status === 'running';
+  // Expanded while the steps are still arriving, collapsed to the header once
+  // they stop — unless the owner has said otherwise on this particular run.
+  const expanded = manualExpand == null ? running : manualExpand;
   const failed = run.status === 'failed';
   const total = run.endedAt ? run.endedAt - run.at : Date.now() - run.at;
   const accent = failed ? C.danger : running ? C.accent : C.success;
@@ -166,15 +208,20 @@ export function ProcessLogPopup({ C, surfaceId = null, zIndex = 9200 }) {
           <div style={{ fontSize: NC_TYPE.body, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {run.label || run.kind}
           </div>
-          <div style={{ fontSize: NC_TYPE.small, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {surfaceLabel(run.surfaceId)}{run.transport ? ` · ${run.transport}` : ''} · {formatElapsed(total)}
+          {/* Collapsed, the subtitle carries the verdict rather than the
+              plumbing: a failed card that has folded itself up must still say
+              what went wrong without being reopened. */}
+          <div style={{ fontSize: NC_TYPE.small, color: !expanded && failed ? C.danger : C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {!expanded && failed && run.error
+              ? run.error
+              : `${surfaceLabel(run.surfaceId)}${run.transport ? ` · ${run.transport}` : ''} · ${formatElapsed(total)}`}
           </div>
         </div>
         <IconBtn icon={expanded ? 'expand_more' : 'expand_less'} iconSize={16} size={32} color={C.muted}
           title={expanded ? 'Collapse' : 'Expand'} aria-label={expanded ? 'Collapse process log' : 'Expand process log'}
-          onClick={() => setExpanded(e => !e)} />
+          onClick={() => setManualExpand(!expanded)} />
         <IconBtn icon="close" iconSize={16} size={32} color={C.muted}
-          title="Dismiss" aria-label="Dismiss process log" onClick={() => setDismissedId(run.id)} />
+          title="Dismiss" aria-label="Dismiss process log" onClick={() => dismiss(run.id)} />
       </div>
 
       {expanded && (
