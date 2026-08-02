@@ -909,7 +909,19 @@ function MobileSection({ id, icon, title, accentColor, count, primaryBtn, menuIt
 // When onToggleExpand is provided the header tap toggles expand instead of opening the full
 // surface; onOpen moves to a small trailing open_in_new button. collapsed=true renders the
 // header only (content hidden via display:none so embedded pollers — Phone — keep running).
-function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, count = null, narrowActions = false }) {
+// headerScrolls: the card's header travels with its list instead of being frozen
+// above it (owner ticket tbtjtb55bwkBM38cIxfw, 8/2: "Get rid of sticky headers is
+// nc tablet portrait and lanscape. It wastes scrollable area and causes misfire
+// taps"). He is right on both counts. Five cards each holding a 56px header out
+// of the scroll spend ~280px of a tablet screen on chrome that never changes, and
+// a frozen bar sitting exactly where a thumb lands while scrolling a list is a
+// misfire waiting to happen — the header is a button (it expands the card).
+// Scrolling it with the content costs nothing: it is back at the top of the list,
+// one flick away, and every pixel it was holding goes to rows.
+//
+// It stays frozen in the 5-column desktop layout, where the header is the
+// column's identity and the column is tall enough not to care.
+function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, style, statusDot = null, dense = false, expanded = false, collapsed = false, onToggleExpand = null, headerActions = null, count = null, narrowActions = false, headerScrolls = false }) {
   const scrollRef = useRef(null);
   const tint = hexToRgba(accentColor, 0.05);
   const chipBg = hexToRgba(accentColor, 0.16) || C.hover;
@@ -944,7 +956,12 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
       style={{ position: "relative", background: `color-mix(in srgb, ${C.bg} 94%, ${accentColor || C.accent} 6%)`, borderRadius: RADIUS.lg, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden",
         // Feed card: height comes from content. No fixed fifth, so no clipped row
         // and no dead gap under a short card.
-        minHeight: 0, ...style }}>
+        minHeight: 0,
+        // When the header travels with the list, the CARD is the scroller and the
+        // body below is just content — otherwise the header sits outside the
+        // scrolling box by construction, whatever it is styled as.
+        ...(headerScrolls ? { overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" } : {}),
+        ...style }}>
       {(
         // Collapsing header: hides when the card content scrolls (mobile default).
         // dense = aggressively compact: a thin single-line header that reclaims vertical space.
@@ -1037,7 +1054,11 @@ function MobileBox({ icon, title, accentColor, summary, children, C, onOpen, sty
           Phone. Clipping was never the feature; the "+N more" chip is, and it still
           leads the way in. */}
       <div ref={scrollRef}
-        style={{ flex: 1, minHeight: 0, overflowX: "hidden", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", paddingBottom: 4, backgroundColor: "inherit", ...(collapsed ? { display: "none" } : {}) }}>
+        style={{ flex: 1, minHeight: 0, overflowX: "hidden", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch", paddingBottom: 4, backgroundColor: "inherit",
+          // The card above is the scroller in this mode; a second scrolling box
+          // inside it would trap the gesture and leave the header frozen anyway.
+          ...(headerScrolls ? { flex: "0 0 auto", overflowY: "visible", overscrollBehavior: "auto" } : {}),
+          ...(collapsed ? { display: "none" } : {}) }}>
         {typeof children === "function" ? children() : children}
       </div>
       {/* No gradient scrim: M3 clips scrolling lists cleanly at the padded
@@ -1831,7 +1852,34 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
   };
 
   const isShailaWork = t => isNerveTaskShailaWork(t, priorities);
-  const primaryTaskQueue = tasks.filter(t => !isShailaWork(t));
+  // Pins on top, here, at render (owner tickets mEyXdMpnpv411HyWo8Eg and
+  // s0wx0jmnqGL5C4ESV4mk, 8/2: "task card on nerve center ignoring pinned tasks
+  // not putting them on top", "mobile version at least, does not show tasks that
+  // are pinned, list starts with direct donations").
+  //
+  // The queue's stored order IS pin-ordered at the moment you pin (moveTop
+  // rewrites the array) and optTasks re-establishes it on every add — but this
+  // card renders the stored array verbatim, so it inherits any later edit that
+  // moved a row without re-running either. Nothing here should depend on that:
+  // "the pinned ones are at the top" is a property of the DISPLAY, and a display
+  // that can only be right if six unrelated mutations all remembered to re-sort
+  // is a display that will be wrong again.
+  //
+  // Group-aware in the same way optTasks is — a group whose subtasks are pinned
+  // travels as one block — and stable everywhere else, so within the pinned set
+  // and within the rest the queue's own order is untouched.
+  const orderPinnedFirst = list => {
+    const pinnedGroups = new Set(list.filter(t => t.parentTask && t.pinned).map(t => t.parentTask));
+    const isPinned = t => (t.parentTask ? pinnedGroups.has(t.parentTask) || !!t.pinned : !!t.pinned);
+    return [...list.filter(isPinned), ...list.filter(t => !isPinned(t))];
+  };
+  const primaryTaskQueue = orderPinnedFirst(tasks.filter(t => !isShailaWork(t)));
+  // Which rows earn the pin glyph. Being first in the list is not by itself
+  // visible as "pinned" — something is always first — so the rows say it.
+  const pinnedTaskIds = new Set((() => {
+    const groups = new Set(primaryTaskQueue.filter(t => t.parentTask && t.pinned).map(t => t.parentTask));
+    return primaryTaskQueue.filter(t => (t.parentTask ? groups.has(t.parentTask) || !!t.pinned : !!t.pinned)).map(t => t.id);
+  })());
   // No cap: the Tasks pane renders the whole queue and scrolls (ticket 3waTrsYloL01D6nFLhfW).
   const primaryTasks = primaryTaskQueue;
   const visibleShailos = shailos.filter(Boolean);
@@ -3234,7 +3282,10 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     // CARD (not the page) is too narrow to hold a title plus several 48dp buttons on
     // one line — otherwise the title ellipsises to a single letter ("M…" over "Up…").
     const narrowCardActions = colW < 480;
-    const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, narrowActions: narrowCardActions };
+    // Headers scroll with their list everywhere except the 5-column desktop
+    // layout — that is the tablet portrait/landscape case the ticket is about,
+    // and the phone rows layout has exactly the same complaint at a smaller size.
+    const boxCtx = { C, menuId: mobileMenuOpen, onMenuToggle: menuToggle, onMenuClose: menuClose, narrowActions: narrowCardActions, headerScrolls: !boxesFiveCol };
     // Height of a sibling card while another card is expanded: exactly its header,
     // so it stays tappable (one tap switches which card is expanded) without
     // claiming any of the expanded card's space.
@@ -3249,6 +3300,35 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
     const upcomingCal = (calendarRows || []).filter(r => !r.past);
 
     const cardStyle = { minWidth: 0 }; // grid handles all sizing in both orientations
+    // ── Expanding a card in LANDSCAPE (owner ticket pRxHFdM14jRsCgjzQy8G, 8/2:
+    // "Portrait mode tablet is now excellent, each card on nerve center expands
+    // cleanly to give it more room. Improve landscape tablet to be like that now
+    // it just expands a little.") ──
+    //
+    // Both orientations ran the same rule — expanded card on top, siblings as
+    // strips underneath — and that rule spends the screen's HEIGHT, which is the
+    // dimension landscape does not have. On an iPad the arithmetic is stark:
+    // portrait leaves the expanded card ~800 of ~1030px, landscape ~420 of ~700,
+    // because four sibling strips and their gutters cost the same in both. So
+    // landscape expanded "a little" — correctly, by a rule aimed at the wrong
+    // axis.
+    //
+    // Landscape has width instead, so it spends that: the expanded card takes the
+    // left column at FULL height, and the four siblings stack in a narrow right
+    // column, each a quarter of the height. Same gesture, same escape, and the
+    // siblings end up more readable than the 56px strips they replace rather than
+    // less. The test is the viewport's own shape, not a width threshold — a short
+    // wide window is the case, whatever device it is.
+    const expandLandscape = !!expandedBoxId && !boxesFiveCol
+      && availableW >= NC_FEED_2COL && sizeClass.h < availableW;
+    const landscapeStrips = BOX_ORDER.filter(id => id !== expandedBoxId);
+    // Explicit placement for all five: with one item spanning every row, letting
+    // the other four auto-place would flow them back into column 1 underneath it.
+    const cardStyleFor = id => {
+      if (!expandLandscape) return cardStyle;
+      if (id === expandedBoxId) return { ...cardStyle, gridColumn: 1, gridRow: "1 / -1" };
+      return { ...cardStyle, gridColumn: 2, gridRow: landscapeStrips.indexOf(id) + 1 };
+    };
     const emptyMsg = txt => <div style={{ padding:"12px 14px", fontSize:ncType.meta, color:C.faint, fontFamily:NC_FONT_STACK }}>{txt}</div>;
     // Density (compact vs comfortable) is hoisted to the component top as `dense`.
     // Expanded = comfortable. Compact = roughly twice the density: minimal padding, tight
@@ -3332,6 +3412,11 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
             ...(boxesFiveCol ? {
               gridTemplateColumns: boxCols,
               gridTemplateRows: "1fr",
+            } : expandLandscape ? {
+              // Left column: the expanded card, full height. Right column: the
+              // other four, a quarter of the height each and still live.
+              gridTemplateColumns: "minmax(0,1fr) minmax(220px,0.3fr)",
+              gridTemplateRows: "repeat(4, minmax(0,1fr))",
             } : expandedBoxId ? {
               // Expanded card always gets the single-column treatment — predictable
               // in both widths (in 2-col the expanded card can't cleanly span).
@@ -3364,7 +3449,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           }}>
 
           {/* Mail */}
-          <MobileBox {...boxCtx} narrowActions={colW < 480} {...boxProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} count={feedCounts.mail} summary={cardSummary("Mail")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} narrowActions={colW < 480} {...boxProps("mail")} icon="mail" title="Mail" accentColor={CAT_MAIL} count={feedCounts.mail} summary={cardSummary("Mail")} style={cardStyleFor("mail")} dense={dense}
             onOpen={openGmailInbox}
             /* Account picker + refresh ride the card's own header row instead of a second
                toolbar row underneath it (owner ticket 7/14: "two rows when they need only
@@ -3421,7 +3506,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           </MobileBox>
 
           {/* Phone */}
-          <MobileBox {...boxCtx} {...boxProps("phone")} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} count={feedCounts.phone} summary={cardSummary("Phone")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} {...boxProps("phone")} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} count={feedCounts.phone} summary={cardSummary("Phone")} style={cardStyleFor("phone")} dense={dense}
             statusDot={phoneDotColor} onOpen={onOpenPhone}>
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
                 gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
@@ -3431,7 +3516,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           </MobileBox>
 
           {/* Tasks */}
-          <MobileBox {...boxCtx} narrowActions={colW < 480} {...boxProps("tasks")} icon="rule" title="Tasks" accentColor={C.accent} count={feedCounts.tasks} summary={cardSummary("Tasks")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} narrowActions={colW < 480} {...boxProps("tasks")} icon="rule" title="Tasks" accentColor={C.accent} count={feedCounts.tasks} summary={cardSummary("Tasks")} style={cardStyleFor("tasks")} dense={dense}
             onOpen={onOpenQueue}
             /* Parity gap found by the ticket-PCkGDtd sweep: this card RENDERS the
                task composer but had no control that opens it, so on the card grid
@@ -3508,7 +3593,14 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 <div key={t.id}>
                   <ListItem type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
                     <span slot="start" style={{ width: 7, height: 7, borderRadius:RADIUS.pill, background:priColor }} />
-                    <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>{nerveDisplaySummary(t,"Untitled task")}</span>
+                    <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>
+                      {pinnedTaskIds.has(t.id) && (
+                        <span title="Pinned" aria-label="Pinned" style={{ display:"inline-flex", verticalAlign:"text-bottom", marginRight:4, color:priColor }}>
+                          {suiteIcon("push_pin", 12)}
+                        </span>
+                      )}
+                      {nerveDisplaySummary(t,"Untitled task")}
+                    </span>
                     {!hideRowActions && (
                       <TaskRowActions id={t.id} C={C} open={openTaskActionsId === t.id}
                         onToggle={() => setOpenTaskActionsId(prev => prev === t.id ? null : t.id)}
@@ -3525,7 +3617,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           </MobileBox>
 
           {/* Shailos */}
-          <MobileBox {...boxCtx} {...boxProps("shailos")} icon="question_mark" title="Shailos" accentColor={GOLD} count={feedCounts.shailos} summary={cardSummary("Shailos")} style={cardStyle} dense={dense}
+          <MobileBox {...boxCtx} {...boxProps("shailos")} icon="question_mark" title="Shailos" accentColor={GOLD} count={feedCounts.shailos} summary={cardSummary("Shailos")} style={cardStyleFor("shailos")} dense={dense}
             onOpen={onOpenShailos}
             /* Same parity gap: Add shaila existed on the stacked layout and on the
                full panel, and nowhere on the card grid. */
@@ -3550,7 +3642,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
 
           {/* Calendar */}
           <MobileBox {...boxCtx} narrowActions={calColW < 480} {...boxProps("calendar")} icon="calendar_today" title="Calendar" accentColor={C.warning} count={feedCounts.calendar} summary={cardSummary("Calendar")}
-            style={calSpansFull ? { ...cardStyle, gridColumn: "1 / -1" } : cardStyle} dense={dense}
+            style={calSpansFull ? { ...cardStyle, gridColumn: "1 / -1" } : cardStyleFor("calendar")} dense={dense}
             onOpen={() => window.open("https://calendar.google.com/calendar/r","_blank")}
             /* Account picker + refresh + Agenda/Live-time toggle ride the card's own header
                row instead of a second toolbar row underneath it (owner ticket 7/14: "two
@@ -3837,7 +3929,14 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                 <div key={t.id}>
                   <ListItem data-nc-task-row="true" type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
                     <span slot="start" style={{ width: 7,height: 7,borderRadius:RADIUS.pill,background:priColor }} />
-                    <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>{nerveDisplaySummary(t,"Untitled task")}</span>
+                    <span slot="headline" style={{ color:C.text, fontWeight:500, wordBreak:"break-word" }}>
+                      {pinnedTaskIds.has(t.id) && (
+                        <span title="Pinned" aria-label="Pinned" style={{ display:"inline-flex", verticalAlign:"text-bottom", marginRight:4, color:priColor }}>
+                          {suiteIcon("push_pin", 12)}
+                        </span>
+                      )}
+                      {nerveDisplaySummary(t,"Untitled task")}
+                    </span>
                     <TaskRowActions id={t.id} C={C} open={openTaskActionsId === t.id}
                       onToggle={() => setOpenTaskActionsId(prev => prev === t.id ? null : t.id)}
                       onClose={() => setOpenTaskActionsId(prev => prev === t.id ? null : prev)}
@@ -4157,7 +4256,16 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
                   <div key={t.id} data-nc-task-row="true">
                     <ListItem type="button" title="Click to edit" onClick={() => { setEditingTaskId(t.id); setEditText(t.text); }} style={{ borderRadius: RADIUS.sm }}>
                       <span slot="start" style={{ width: 7, height: 7, borderRadius: RADIUS.pill, background: priColor }} />
-                      <span slot="headline" style={{ color: C.text, fontWeight: 500, wordBreak: "break-word" }}>{displayText}</span>
+                      <span slot="headline" style={{ color: C.text, fontWeight: 500, wordBreak: "break-word" }}>
+                        {/* Inline rather than a leading slot: an md-item slot costs
+                            16px of gap on every row in the list, pinned or not. */}
+                        {pinnedTaskIds.has(t.id) && (
+                          <span title="Pinned" aria-label="Pinned" style={{ display: "inline-flex", verticalAlign: "text-bottom", marginRight: 4, color: priColor }}>
+                            {suiteIcon("push_pin", 12)}
+                          </span>
+                        )}
+                        {displayText}
+                      </span>
                       <TaskRowActions id={t.id} C={C} open={actionsOpen}
                         onToggle={() => setOpenTaskActionsId(prev => prev === t.id ? null : t.id)}
                         onClose={() => setOpenTaskActionsId(prev => prev === t.id ? null : prev)}
