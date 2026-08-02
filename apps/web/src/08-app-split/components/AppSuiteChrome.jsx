@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { cleanTheme, DUR, EASE, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, suiteIcon, M3_MIN_TARGET } from '../ui-tokens.jsx';
+import { cleanTheme, DUR, EASE, ELEV, NC_FONT_STACK, NC_MONO_STACK, NC_TYPE, RADIUS, suiteIcon, M3_MIN_TARGET } from '../ui-tokens.jsx';
 import { APP_VERSION, formatVersionStamp, versionStampShort } from '../../version.js';
 import { Store, textOnColor } from '../../01-core.js';
 import { subscribeOwner, setPreferredHost, ownerIsLive, HOST_LABEL, OWNER_LIVE_WINDOW_MS } from '../phone-host-control.js';
@@ -13,7 +13,7 @@ import { isMobilePhoneDevice } from './NerveCenterPhoneSurface.jsx';
 // nav items stay hand-coded with <md-ripple> for M3-quality press feedback.
 // Swap in md-navigation-rail-item when shipped.
 import {
-  Fab, OutlinedIconButton, Divider, Ripple, SegmentedButtonSet, SegmentedButton,
+  Fab, OutlinedIconButton, Divider, Ripple, SegmentedButtonSet, SegmentedButton, IconBtn, ActionBtn,
   FilterChip, TextButton, Dialog, IconButton,
 } from '../m3.jsx';
 
@@ -24,8 +24,10 @@ import {
 const BUGLOG_OPEN_EVENT = 'shamash-buglog:open';
 const BUGLOG_COUNT_EVENT = 'shamash-buglog:count';
 
-function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffset = 0, forceCompact = false, clockTime = null, onSettings, features = {}, onEnsurePcHost, onOpenFocusSuggest, aiLaneCatalog = null }) {
+function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffset = 0, forceCompact = false, clockTime = null, onSettings, features = {}, onEnsurePcHost, onOpenFocusSuggest, aiLaneCatalog = null, penFailedCount = 0, onRetryPen, onOpenPen, onDismissPenAlert }) {
   const [bugLogCount, setBugLogCount] = React.useState(0);
+  // The failed-transcription bubble's own menu (retry / open / dismiss).
+  const [penMenuOpen, setPenMenuOpen] = React.useState(false);
   React.useEffect(() => {
     const onCount = (e) => setBugLogCount(e.detail?.unresolved || 0);
     window.addEventListener(BUGLOG_COUNT_EVENT, onCount);
@@ -404,19 +406,61 @@ function AppSuiteChrome({ T, active, onSelect, open, onToggle, onRecord, topOffs
       }}>
 
       {/* Record — real M3 FAB. Primary cross-app action lives at top of rail per M3 spec.
-          Extended FAB (icon + label) when rail is open; standard FAB (icon only) when collapsed. */}
-      <Fab
-        label={displayOpen ? "Record" : ""}
-        aria-label="Record — tasks, shailos, notes, got-backs"
-        onClick={onRecord}
-        style={{
-          width: displayOpen ? "100%" : "56px",
-          marginBottom: `${px(16)}px`,
-          flexShrink: 0,
-          alignSelf: displayOpen ? "stretch" : "center",
-        }}>
-        <span slot="icon" className="material-symbols-rounded" style={{ fontSize: 24 }}>mic</span>
-      </Fab>
+          Extended FAB (icon + label) when rail is open; standard FAB (icon only) when collapsed.
+
+          The badge on its corner is the failed-transcription bubble (owner ticket
+          KFPaNgpboyELUSr0tpXV, 8/2: "If a parse fails, put a retry bubble on the
+          corner of the top left record button in neevecenter till the retry is
+          successful, with option to dismiss the bubble"). It is deliberately here
+          and nowhere else: a recording that failed to transcribe belongs to the
+          button that made it, and the floating launcher that used to carry this
+          news sat over the dashboard permanently — the same ticket asks for that
+          to go, since the pen itself is reachable from Settings.
+
+          The bubble survives until the retry succeeds (the entry clears its error,
+          so the count falls on its own) or until it is dismissed by hand. */}
+      <div style={{ position: "relative", alignSelf: displayOpen ? "stretch" : "center", flexShrink: 0, marginBottom: `${px(16)}px` }}>
+        <Fab
+          label={displayOpen ? "Record" : ""}
+          aria-label="Record — tasks, shailos, notes, got-backs"
+          onClick={onRecord}
+          style={{ width: displayOpen ? "100%" : "56px" }}>
+          <span slot="icon" className="material-symbols-rounded" style={{ fontSize: 24 }}>mic</span>
+        </Fab>
+        {penFailedCount > 0 && (
+          <>
+            <IconBtn variant="filled" icon="error" iconSize={14} size={24}
+              containerColor={C.danger} color="#fff"
+              onClick={e => { e.stopPropagation(); setPenMenuOpen(o => !o); }}
+              aria-haspopup="menu" aria-expanded={penMenuOpen}
+              title={`${penFailedCount} recording${penFailedCount === 1 ? '' : 's'} failed to transcribe — retry or dismiss`}
+              aria-label={`${penFailedCount} recording${penFailedCount === 1 ? '' : 's'} failed to transcribe — retry or dismiss`}
+              style={{ position: "absolute", top: -6, right: -6, zIndex: 2, borderRadius: RADIUS.pill, boxShadow: `0 0 0 2px ${C.bg}` }} />
+            {penMenuOpen && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 9100 }} onClick={() => setPenMenuOpen(false)} />
+                <div role="menu" style={{
+                  position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 9101, minWidth: 190,
+                  background: C.bg, border: `1px solid ${C.divider}`, borderRadius: RADIUS.sm, boxShadow: ELEV[3], overflow: "hidden",
+                }}>
+                  {[
+                    { icon: "replay", label: "Retry transcription", run: onRetryPen },
+                    { icon: "graphic_eq", label: "Open recordings", run: onOpenPen },
+                    { icon: "close", label: "Dismiss", run: onDismissPenAlert },
+                  ].map((item, i) => (
+                    <ActionBtn key={i} variant="text" icon={item.icon} iconSize={16} height={44} labelSize={NC_TYPE.meta}
+                      labelColor={C.text} onClick={() => { setPenMenuOpen(false); item.run?.(); }}
+                      title={item.label} aria-label={item.label}
+                      style={{ width: "100%", justifyContent: "flex-start", borderBottom: i < 2 ? `1px solid ${C.divider}` : "none" }}>
+                      {item.label}
+                    </ActionBtn>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
 
       {/* NerveCenter — hub */}
       <button onClick={() => onSelect("nervecenter")} title="NerveCenter" aria-label="NerveCenter"

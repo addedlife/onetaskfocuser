@@ -1,7 +1,7 @@
 {
-  "total": 762,
+  "total": 761,
   "byRule": {
-    "no hex color literals": 344,
+    "no hex color literals": 343,
     "no literal corner radii above 2px": 37,
     "no literal font sizes": 66,
     "use ActionBtn / IconBtn from m3": 222,
@@ -10,5 +10,5 @@
     "use OutlinedSelect + SelectOption from m3": 10,
     "never 'transition: all'": 2
   },
-  "updated": "2026-07-30"
+  "updated": "2026-08-02"
 }

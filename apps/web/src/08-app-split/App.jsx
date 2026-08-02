@@ -361,6 +361,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
   const [chiefProfileLoading, setChiefProfileLoading] = useState(false);
   const [pendingRecordings, setPendingRecordings] = useState([]);
   const [pendingRetryId, setPendingRetryId] = useState(null);
+  // Failed transcriptions the owner has waved off. Ids, not a boolean: dismissing
+  // the bubble must not also silence the NEXT recording that fails. Session-only
+  // by design — a fresh load is a fresh look at what is still broken.
+  const [penAlertDismissed, setPenAlertDismissed] = useState(() => new Set());
   const [pendingTranscripts, setPendingTranscripts] = useState({});
   const [cloudPen, setCloudPen] = useState([]);            // account-wide pen entries (Firestore)
   const [showPenPanel, setShowPenPanel] = useState(false); // Holding Pen browser modal
@@ -1783,6 +1787,21 @@ function App({ user, onSignOut, onSessionLostAccess }) {
     for (const l of pendingRecordings) { if (l?.id) map.set(l.id, { ...(map.get(l.id) || {}), ...l, local: true }); }
     return Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }, [cloudPen, pendingRecordings]);
+
+  // Recordings whose transcription actually failed — the only thing the pen now
+  // interrupts anyone about. `error` is written by retryHeldTranscription and
+  // cleared on a successful pass, so a retry that works removes its own bubble
+  // with no extra bookkeeping ("till the retry is successful").
+  const penFailed = penEntries.filter(rec => rec?.error && !penAlertDismissed.has(rec.id));
+  const retryFailedPen = () => {
+    const next = penFailed[0];
+    if (next) { setShowPenPanel(true); retryHeldTranscription(next); }
+  };
+  const dismissPenAlert = () => setPenAlertDismissed(prev => {
+    const s = new Set(prev);
+    penFailed.forEach(rec => s.add(rec.id));
+    return s;
+  });
 
   // ── Pen one-liners (owner: "very terse ai summary description and date stamp") ──
   // A pen row previously identified itself only by kind and size — "conversation ·
@@ -3928,15 +3947,15 @@ function App({ user, onSignOut, onSessionLostAccess }) {
         onOpenRecordingPen={() => { setShowSet(false); setShowPenPanel(true); }}
       />}
 
-      {/* Holding Pen launcher — floating icon with count; recordings + transcripts
-          live behind it for the 10-day retention window, synced to the account. */}
-      {penEntries.length > 0 && !showPenPanel && (
-        <div style={{position:"fixed",right:16,bottom:16,zIndex:Z.nudgeCard,animation:"ot-fade 0.2s"}}>
-          <IconBtn variant="filled" icon="graphic_eq" iconSize={22} size={48} containerColor={C.accent} color="#fff"
-            onClick={()=>setShowPenPanel(true)} aria-label="Open Transcription Holding Pen" title="Recordings & transcripts"/>
-          <span style={{position:"absolute",top:-4,right:-4,minWidth:18,height:18,borderRadius:RADIUS.pill,background:C.danger,color:"#fff",fontSize:NC_TYPE.small,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px",fontFamily:NC_FONT_STACK,pointerEvents:"none"}}>{penEntries.length}</span>
-        </div>
-      )}
+      {/* The floating Holding Pen launcher used to live here — a filled button
+          parked over the bottom-right corner of every screen whenever the pen held
+          anything at all, which on a 10-day retention window is most of the time.
+          Removed on owner ticket KFPaNgpboyELUSr0tpXV, 8/2: "Take recording pen
+          shortcut off neecenfer screen, it's already in settings." It is: Settings
+          → the pen's own entry opens this same panel.
+          What replaced it is narrower and only appears when something is actually
+          wrong — a count bubble on the rail's Record FAB for recordings that FAILED
+          to transcribe, with retry/open/dismiss on it. See penFailedCount below. */}
 
       {showPenPanel && (
         <div style={{position:"fixed",inset:0,zIndex:Z.overlay,background:"rgba(0,0,0,0.38)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowPenPanel(false)}>
@@ -4120,6 +4139,10 @@ function App({ user, onSignOut, onSessionLostAccess }) {
           open={sidebarOpen}
           onToggle={() => { const next = !sidebarOpen; setSidebarOpen(next); try { localStorage.setItem("shamash_sidebar_open", String(next)); } catch {} }}
           onRecord={() => { setConvCallMode(false); setShowConvCapture(true); }}
+          penFailedCount={penFailed.length}
+          onRetryPen={retryFailedPen}
+          onOpenPen={() => setShowPenPanel(true)}
+          onDismissPenAlert={dismissPenAlert}
           onSettings={() => { setSettingsInitialTab("queue"); setShowSet(true); }}
           currentTask={curT}
           onGoodEnough={() => curT && goodEnoughTask(curT.id)}
