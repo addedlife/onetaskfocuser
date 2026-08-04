@@ -89,6 +89,23 @@ it is hundreds of documents. The mirror rebuilds only on app-side changes, so it
 stale in both directions; compare `createdAtMs` against session start, and re-check it
 before ending any session that did buglog work.
 
+To audit **resolved** tickets (they are not in the mirror), one call — not the bridge,
+not `firestore_query_collection`, which cannot take a path and defaults to the wrong
+project:
+
+```
+firestore_list_documents
+  parent:       projects/onetaskonly-app/databases/(default)/documents/users/rabbidanziger
+  collectionId: bugs
+  orderBy:      createdAtMs desc
+  pageSize:     30
+  mask:         status, summary, createdAtMs      (or notes, when auditing claims)
+```
+
+The mask is what makes this safe — it is the "never dump the collection" rule satisfied,
+not broken. Without a mask this is hundreds of full documents; with one it is a page of
+one-liners.
+
 **RabbiMetrics** (separate repo, `C:\Users\ydanz\OneDrive\Documents\Rabbi Changelog`) —
 no mirror doc exists, so list the collection directly with a field mask:
 
