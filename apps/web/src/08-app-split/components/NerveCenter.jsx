@@ -849,6 +849,12 @@ const agendaNowBarRef = el => {
 // aria-label and touch target. The fork that remains is by ROLE, not by width,
 // and a prop is the honest way to say that. (Container queries are used in this
 // codebase where the difference genuinely is cosmetic — see 10-deskphone-web.jsx.)
+// The phone card's embedded surface is the one card body that is NOT a list of
+// auto-height rows — its activity feed is `flex:1 1 0`, which needs a parent with a
+// definite height or it computes to zero. Every layout that hosts it therefore sets
+// this floor, from one place.
+const NC_PHONE_CARD_MIN_H = 380;
+
 const NC_CARD_METRICS = {
   card: {
     root: { minHeight: 0 },
@@ -3648,8 +3654,17 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           <NcCard {...boxCtx} {...boxProps("phone")} icon="phone_in_talk" title="Phone" accentColor={CAT_PHONE} count={feedCounts.phone} caption={cardSummary("Phone")} style={cardStyleFor("phone")} dense={dense}
             statusDot={phoneDotColor} onOpen={onOpenPhone}>
             {/* Flex column with a real height so the phone surface's flex:1 activity feed
-                gets space. A plain block wrapper collapsed the feed to zero height → blank. */}
-            <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0, padding: "0 8px 6px", boxSizing:"border-box" }}>
+                gets space. A plain block wrapper collapsed the feed to zero height → blank.
+                `height:100%` alone is not a real height in headerScrolls mode (every layout
+                under 1500px): there the CARD is the scroller, so NcCard's body is
+                `flex:0 0 auto` and its height is indefinite — a percentage against it
+                resolves to auto, and the phone feed's `flex:1 1 0` then computes to ZERO.
+                Every other card is a list of auto-height rows and never noticed; the phone
+                card renders nothing BUT that feed once the link is up, so it went blank
+                with a live green status dot still in the corner (owner ticket j7A0ZuVe,
+                8/4). minHeight gives the column a definite height in that mode — the same
+                380px floor the stacked layout has always set explicitly. */}
+            <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:NC_PHONE_CARD_MIN_H, padding: "0 8px 6px", boxSizing:"border-box" }}>
               <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact dense={dense} rowActions={rowActionsFit} rowMeta={rowMetaFit} onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </NcCard>
@@ -4159,7 +4174,7 @@ function NerveCenter({ T, user = null, sections = [], tasks = [], shailos = [], 
           >
             {/* Real height so the phone surface's flex:1 activity feed (texts + calls) gets
                 space — a plain block wrapper collapsed it to zero, so calls never showed. */}
-            <div style={{ padding: dense?"2px 12px 8px":"4px 12px 10px", borderTop: `1px solid ${C.divider}`, height: 380, boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
+            <div style={{ padding: dense?"2px 12px 8px":"4px 12px 10px", borderTop: `1px solid ${C.divider}`, height: NC_PHONE_CARD_MIN_H, boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
               <NerveCenterPhoneSurface T={T} user={user} onOnlineChange={onOnlineChange} onStatusSummary={handlePhoneStatusSummary} onActivitySnapshot={handlePhoneActivitySummary} compact dense={dense} onRecordConversation={onRecordConversation} onRecordCall={onRecordCall} onMoreHistory={onOpenPhone} />
             </div>
           </NcCard>
