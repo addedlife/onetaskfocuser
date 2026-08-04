@@ -602,9 +602,11 @@ async function firestoreDelete(args = {}) {
 const RTDB_WRITE_DENY = [/^relay\/(commands|queue)(\/|$)/i, /^presence(\/|$)/i, /^hosts(\/|$)/i];
 
 async function rtdbGet(args = {}) {
+  // Empty or "/" means the root, which is the honest first call on a database
+  // nobody has mapped yet — paired with shallow:true it answers "what is in here"
+  // in one line instead of downloading the whole tree.
   const path = String(args.path || "").trim().replace(/^\/+|\/+$/g, "");
-  if (!path) throw new Error("path is required");
-  const ref = getAdminDatabase().ref(path);
+  const ref = path ? getAdminDatabase().ref(path) : getAdminDatabase().ref();
   if (args.shallow) {
     // No shallow flag on the Admin SDK, so read keys and report only those. Still
     // the right first call on an unknown node: the ANSWER stays small even when
